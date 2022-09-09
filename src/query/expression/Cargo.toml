@@ -25,6 +25,8 @@ enum-as-inner = "0.4"
 itertools = "0.10"
 match-template = "0.0.1"
 num-traits = "0.2.15"
+# TODO(andylokandy): Use the version from crates.io once
+# https://github.com/reem/rust-ordered-float/pull/110 is released.
 ordered-float = { git = "https://github.com/andylokandy/rust-ordered-float.git", branch = "as", features = ["serde"] }
 serde = "1.0"
 

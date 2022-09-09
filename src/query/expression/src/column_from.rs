@@ -124,7 +124,7 @@ impl<'a, D: AsRef<[&'a str]>> ColumnFrom<D, [Vec<u8>; 2]> for Column {
     }
 }
 
-impl<'a, D: AsRef<[f32]>> ColumnFrom<D, [Vec<f32>; 0]> for Column {
+impl<D: AsRef<[f32]>> ColumnFrom<D, [Vec<f32>; 0]> for Column {
     fn from_data(d: D) -> Column {
         NumberType::<OrderedFloat<f32>>::upcast_column(
             NumberType::<OrderedFloat<f32>>::column_from_iter(
@@ -135,7 +135,7 @@ impl<'a, D: AsRef<[f32]>> ColumnFrom<D, [Vec<f32>; 0]> for Column {
     }
 }
 
-impl<'a, D: AsRef<[f64]>> ColumnFrom<D, [Vec<f64>; 0]> for Column {
+impl<D: AsRef<[f64]>> ColumnFrom<D, [Vec<f64>; 0]> for Column {
     fn from_data(d: D) -> Column {
         NumberType::<OrderedFloat<f64>>::upcast_column(
             NumberType::<OrderedFloat<f64>>::column_from_iter(
