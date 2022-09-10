@@ -1777,8 +1777,8 @@ impl<KV: KVApi> SchemaApi for KV {
         for file in req.files {
             let key = TableStageFileNameIdent {
                 tenant: tenant_dbname_tbname.tenant.clone(),
-                db_name: tenant_dbname_tbname.db_name.clone(),
-                table_name: tenant_dbname_tbname.table_name.clone(),
+                db_id,
+                table_id,
                 file: file.clone(),
             };
 
@@ -1854,8 +1854,8 @@ impl<KV: KVApi> SchemaApi for KV {
             for (file, file_info) in req.file_info.iter() {
                 let key = TableStageFileNameIdent {
                     tenant: tenant_dbname_tbname.tenant.clone(),
-                    db_name: tenant_dbname_tbname.db_name.clone(),
-                    table_name: tenant_dbname_tbname.table_name.clone(),
+                    db_id,
+                    table_id,
                     file: file.to_owned(),
                 };
                 let (file_seq, _): (_, Option<TableStageFileInfo>) =
@@ -1957,7 +1957,15 @@ impl<KV: KVApi> SchemaApi for KV {
                 txn_cond_seq(&tbid, Eq, tb_meta_seq),
             ];
             let mut if_then = vec![];
-            remove_table_stage_files(self, &req.table, &mut condition, &mut if_then).await?;
+            remove_table_stage_files(
+                self,
+                &req.table.tenant,
+                db_id,
+                table_id,
+                &mut condition,
+                &mut if_then,
+            )
+            .await?;
 
             let txn_req = TxnRequest {
                 condition,
@@ -2194,15 +2202,17 @@ impl<KV: KVApi> SchemaApi for KV {
 
 async fn remove_table_stage_files(
     kv_api: &impl KVApi,
-    table: &TableNameIdent,
+    tenant: &str,
+    db_id: u64,
+    table_id: u64,
     condition: &mut Vec<TxnCondition>,
     if_then: &mut Vec<TxnOp>,
 ) -> Result<(), MetaError> {
     // List files by tenant, db_name, table_name
     let dbid_tbname_idlist = TableStageFileNameIdent {
-        tenant: table.tenant.clone(),
-        db_name: table.db_name.clone(),
-        table_name: table.table_name.clone(),
+        tenant: tenant.to_owned(),
+        db_id,
+        table_id,
         // Using a empty file to to list all
         file: "".to_string(),
     };
@@ -2227,7 +2237,7 @@ async fn gc_dropped_table(
 ) -> Result<u32, MetaError> {
     let mut cnt = 0;
     let name_key = DatabaseNameIdent {
-        tenant,
+        tenant: tenant.clone(),
         // Using a empty db to to list all
         db_name: "".to_string(),
     };
@@ -2313,23 +2323,35 @@ async fn gc_dropped_table(
                 // condition: database exists
                 txn_cond_seq(tenant_dbname, Eq, db_id_seq),
             ];
-            // remove table id keys not changed
-            for key in remove_table_keys.iter() {
-                condition.push(txn_cond_seq(&key.0, Eq, key.1));
-            }
             let mut if_then = vec![
                 // save new table id list
                 txn_op_put(&dbid_tbname_idlist, serialize_struct(&new_tb_id_list)?),
             ];
-            // remove out of time table meta
+
             for key in remove_table_keys.iter() {
+                // remove table id keys not changed
+                condition.push(txn_cond_seq(&key.0, Eq, key.1));
+
+                // remove out of time table meta
                 if_then.push(txn_op_del(&key.0));
+
+                // remove stage file info of the table
+                remove_table_stage_files(
+                    kv_api,
+                    &tenant,
+                    db_id,
+                    key.0.table_id,
+                    &mut condition,
+                    &mut if_then,
+                )
+                .await?;
             }
             // remove table_id -> table_name mappings
             for (key, seq) in remove_table_id_mappings.iter() {
                 condition.push(txn_cond_seq(key, Eq, *seq));
                 if_then.push(txn_op_del(key));
             }
+
             let txn_req = TxnRequest {
                 condition,
                 if_then,

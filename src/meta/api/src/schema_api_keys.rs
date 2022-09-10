@@ -306,8 +306,8 @@ impl KVApiKey for TableStageFileNameIdent {
             "{}/{}/{}/{}/{}",
             Self::PREFIX,
             self.tenant,
-            self.db_name,
-            self.table_name,
+            self.db_id,
+            self.table_id,
             self.file,
         )
     }
@@ -320,23 +320,23 @@ impl KVApiKey for TableStageFileNameIdent {
 
         let tenant = check_segment_present(elts.next(), 1, s)?;
 
-        let db_name = check_segment_present(elts.next(), 2, s)?;
+        let db_id = check_segment_present(elts.next(), 2, s)?;
+        let db_id = decode_id(db_id)?;
 
-        let table_name = check_segment_present(elts.next(), 3, s)?;
+        let table_id = check_segment_present(elts.next(), 3, s)?;
+        let table_id = decode_id(table_id)?;
 
         let file = check_segment_present(elts.next(), 4, s)?;
 
         check_segment_absent(elts.next(), 5, s)?;
 
         let tenant = unescape(tenant)?;
-        let db_name = unescape(db_name)?;
-        let table_name = unescape(table_name)?;
         let file = unescape(file)?;
 
         Ok(TableStageFileNameIdent {
             tenant,
-            db_name,
-            table_name,
+            db_id,
+            table_id,
             file,
         })
     }

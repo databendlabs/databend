@@ -50,6 +50,7 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::schema::TableStageFileInfo;
+use common_meta_app::schema::TableStageFileNameIdent;
 use common_meta_app::schema::TableStatistics;
 use common_meta_app::schema::TruncateTableReq;
 use common_meta_app::schema::UndropDatabaseReq;
@@ -2404,7 +2405,7 @@ impl SchemaApiTestSuite {
         dbid_tbname: DBIdTableName,
         drop_on: Option<DateTime<Utc>>,
         delete: bool,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<u64> {
         let created_on = Utc::now();
         let schema = || {
             Arc::new(DataSchema::new(vec![DataField::new(
@@ -2445,7 +2446,7 @@ impl SchemaApiTestSuite {
         if delete {
             delete_test_data(mt.as_kv_api(), &dbid_tbname).await?;
         }
-        Ok(())
+        Ok(table_id)
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
@@ -2476,6 +2477,7 @@ impl SchemaApiTestSuite {
 
         let res = mt.create_database(plan).await?;
         info!("create database res: {:?}", res);
+        let db_id = res.db_id;
 
         assert_eq!(1, res.db_id, "first database id is 1");
         let drop_on = Some(Utc::now() - Duration::days(1));
@@ -2490,17 +2492,51 @@ impl SchemaApiTestSuite {
             true,
         )
         .await?;
-        self.create_out_of_retention_time_table(
-            mt,
-            tbl_name_ident.clone(),
-            DBIdTableName {
-                db_id: res.db_id,
-                table_name: tb1_name.to_string(),
-            },
-            Some(Utc::now() - Duration::days(2)),
-            false,
-        )
-        .await?;
+        let table_id = self
+            .create_out_of_retention_time_table(
+                mt,
+                tbl_name_ident.clone(),
+                DBIdTableName {
+                    db_id: res.db_id,
+                    table_name: tb1_name.to_string(),
+                },
+                Some(Utc::now() - Duration::days(2)),
+                false,
+            )
+            .await?;
+
+        info!("--- create and get stage file info");
+        {
+            let stage_info = TableStageFileInfo {
+                etag: Some("etag".to_owned()),
+                content_length: 1024,
+                last_modified: Utc::now(),
+            };
+            let mut file_info = BTreeMap::new();
+            file_info.insert("file".to_string(), stage_info.clone());
+
+            let req = UpsertTableStageFileReq {
+                table: TableNameIdent {
+                    tenant: tenant1.to_string(),
+                    db_name: db1_name.to_string(),
+                    table_name: tb1_name.to_string(),
+                },
+                file_info: file_info.clone(),
+                expire_at: Some((Utc::now().timestamp() + 86400) as u64),
+            };
+
+            let _ = mt.upsert_table_stage_file_info(req).await?;
+
+            let key = TableStageFileNameIdent {
+                tenant: tenant1.to_string(),
+                db_id,
+                table_id,
+                file: "file".to_string(),
+            };
+
+            let stage_file: TableStageFileInfo = get_kv_data(mt.as_kv_api(), &key).await?;
+            assert_eq!(stage_file, stage_info);
+        }
 
         let table_id_idlist = TableIdListKey {
             db_id: res.db_id,
@@ -2537,6 +2573,20 @@ impl SchemaApiTestSuite {
                 get_kv_data(mt.as_kv_api(), &id_mapping).await;
             assert!(meta_res.is_err());
             assert!(mapping_res.is_err());
+        }
+
+        info!("--- assert stage file info has been removed");
+        {
+            let key = TableStageFileNameIdent {
+                tenant: tenant1.to_string(),
+                db_id,
+                table_id,
+                file: "file".to_string(),
+            };
+
+            let resp: Result<TableStageFileInfo, MetaError> =
+                get_kv_data(mt.as_kv_api(), &key).await;
+            assert!(resp.is_err());
         }
 
         Ok(())
