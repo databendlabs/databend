@@ -191,6 +191,24 @@ jobs:
           target: ${{ steps.target.outputs.target }}
           repo_role_arn: ${{ secrets.REPO_ROLE_ARN }}
 
+  publish_sqllogic_testsuites:
+    name: sqllogic testsuites
+    runs-on: ubuntu-latest
+    needs: [create_release]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Get the version
+        id: get_version
+        run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
+      - name: Upload to github release
+        env:
+          GH_TOKEN: ${{ inputs.github_token }}
+        run: |
+          version=${{ needs.create_release.outputs.version }}
+          tar -C ./tests/logictest -czvf testsuites-${version}.tar.gz suites
+          gh release upload ${version} testsuites-${version}.tar.gz --clobber
+
   release_docker_combined:
     name: docker image combined
     runs-on: ubuntu-latest
@@ -304,35 +322,4 @@ jobs:
           platforms: linux/amd64,linux/arm64
           context: .
           file: ./docker/${{ matrix.distro }}/${{ matrix.service }}.Dockerfile
-          build-args: VERSION=${{ needs.create_release.outputs.version }}
-
-  release_logic_test_docker_image:
-    name: release logic test docker image
-    runs-on: ubuntu-latest
-    needs: [create_release]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - uses: ./.github/actions/setup_docker
-        id: login
-        with:
-          repo: sqllogictest
-          ecr_role_arn: ${{ secrets.ECR_ROLE_ARN }}
-          dockerhub_user: ${{ secrets.DOCKERHUB_USERNAME }}
-          dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Build and push
-        id: docker_build
-        uses: docker/build-push-action@v3
-        with:
-          push: true
-          tags: |
-            ${{ steps.login.outputs.dockerhub_repo }}:latest
-            ${{ steps.login.outputs.dockerhub_repo }}:${{ needs.create_release.outputs.version }}
-            ${{ steps.login.outputs.ecr_repo }}:latest
-            ${{ steps.login.outputs.ecr_repo }}:${{ needs.create_release.outputs.version }}
-          platforms: linux/amd64
-          context: ./tests/logictest/
-          file: ./tests/logictest/Dockerfile
           build-args: VERSION=${{ needs.create_release.outputs.version }}
