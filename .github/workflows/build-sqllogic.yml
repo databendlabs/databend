@@ -1,0 +1,38 @@
+name: Build Sqllogic Test Image
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "tests/logictest/**"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: ./.github/actions/setup_docker
+        id: login
+        with:
+          repo: build-tool
+          ecr_role_arn: ${{ secrets.ECR_ROLE_ARN }}
+          dockerhub_user: ${{ secrets.DOCKERHUB_USERNAME }}
+          dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push
+        id: docker_build
+        uses: docker/build-push-action@v3
+        with:
+          push: true
+          tags: |
+            ${{ steps.login.outputs.dockerhub_repo }}:sqllogic
+            ${{ steps.login.outputs.ecr_repo }}:sqllogic
+          platforms: linux/amd64
+          context: ./tests/logictest/
+          file: ./tests/logictest/Dockerfile
