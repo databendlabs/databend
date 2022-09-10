@@ -55,6 +55,7 @@ fn test_string() {
     test_char(file);
     test_soundex(file);
     test_ord(file);
+    test_insert(file);
 }
 
 fn test_upper(file: &mut impl Write) {
@@ -685,4 +686,59 @@ fn test_ord(file: &mut impl Write) {
     run_ast(file, "ord('и')", &[]);
     run_ast(file, "ord('早ab')", &[]);
     run_ast(file, "ord('💖')", &[]);
+}
+
+fn test_insert(file: &mut impl Write) {
+    run_ast(file, "insert('Quadratic', 3, 4, 'What', 4)", &[]);
+    run_ast(file, "insert('Quadratic', 3, 4)", &[]);
+    run_ast(file, "insert('Quadratic', 3, 4, 'What')", &[]);
+    run_ast(file, "insert('Quadratic', -1, 4, 'What')", &[]);
+    run_ast(file, "insert('Quadratic', 3, 100, 'What')", &[]);
+    run_ast(file, "insert('Quadratic', 3, 100, NULL)", &[]);
+    run_ast(file, "insert('Quadratic', 3, NULL, 'NULL')", &[]);
+    run_ast(file, "insert('Quadratic', NULL, 100, 'NULL')", &[]);
+    run_ast(file, "insert(NULL, 2, 100, 'NULL')", &[]);
+
+    let table = [
+        (
+            "a",
+            DataType::String,
+            Column::from_data(&["hi", "test", "cc", "q"]),
+        ),
+        ("b", DataType::UInt8, Column::from_data(vec![1, 4, 1, 1])),
+        ("c", DataType::UInt8, Column::from_data(vec![3, 5, 1, 1])),
+        (
+            "d",
+            DataType::String,
+            Column::from_data(&["xx", "zc", "12", "56"]),
+        ),
+    ];
+    run_ast(file, "insert(a, b, c, d)", &table);
+    let columns = [
+        (
+            "x",
+            DataType::Nullable(Box::new(DataType::String)),
+            Column::from_data_with_validity(&["hi", "test", "cc", "q"], vec![
+                false, true, true, true,
+            ]),
+        ),
+        (
+            "y",
+            DataType::Nullable(Box::new(DataType::UInt8)),
+            Column::from_data_with_validity(vec![1, 4, 1, 1], vec![true, true, false, true]),
+        ),
+        (
+            "z",
+            DataType::Nullable(Box::new(DataType::UInt8)),
+            Column::from_data_with_validity(vec![3, 5, 1, 1], vec![true, false, true, true]),
+        ),
+        (
+            "u",
+            DataType::Nullable(Box::new(DataType::String)),
+            Column::from_data_with_validity(&["xx", "zc", "12", "56"], vec![
+                false, true, true, true,
+            ]),
+        ),
+    ];
+    run_ast(file, "insert(x, y, z, u)", &columns);
 }
