@@ -1,6 +1,8 @@
 FROM python:3.10
 
-RUN apt-get update && apt-get install psmisc libffi-dev && rm -rf /var/lib/apt/lists/*
+RUN apt-get update -yq && apt-get install -yq \
+    psmisc libffi-dev && \
+    rm -rf /var/lib/apt/lists/*
 RUN python3 -m pip install --upgrade pip && pip install \
     mysql-connector-python \
     pymysql \
