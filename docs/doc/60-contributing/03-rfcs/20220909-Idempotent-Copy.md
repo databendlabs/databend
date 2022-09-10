@@ -18,7 +18,7 @@ Whenever copy stage files into a table, save the stage file meta information int
 
 
 
-![](/img/rfc/20220909-idempotent-copy/stage-file-meta.png)
+![image](../../public/img/rfc/20220909-idempotent-copy/stage-file-meta.png)
 
 
 
@@ -36,7 +36,7 @@ Using the stage file meta information, whenever copy stage files into a table, f
 
 
 
-![](/img/rfc/20220909-idempotent-copy/example.png)
+![image](../../public/img/rfc/20220909-idempotent-copy/example.png)
 
 
 
