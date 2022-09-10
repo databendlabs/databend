@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::Deref;
-use std::ops::DerefMut;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -22,9 +20,7 @@ use common_base::containers::ItemManager;
 use common_base::containers::Pool;
 use common_meta_sled_store::openraft;
 use common_meta_sled_store::openraft::MessageSummary;
-use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use common_meta_types::protobuf::RaftRequest;
-use common_meta_types::Endpoint;
 use common_meta_types::LogEntry;
 use common_meta_types::NodeId;
 use openraft::async_trait::async_trait;
@@ -40,7 +36,6 @@ use tonic::transport::channel::Channel;
 use tracing::debug;
 use tracing::info;
 
-use crate::metrics::incr_meta_metrics_active_peers;
 use crate::metrics::incr_meta_metrics_fail_connections_to_peer;
 use crate::metrics::incr_meta_metrics_sent_bytes_to_peer;
 use crate::metrics::incr_meta_metrics_sent_failure_to_peer;
@@ -48,6 +43,8 @@ use crate::metrics::incr_meta_metrics_snapshot_send_failures_to_peer;
 use crate::metrics::incr_meta_metrics_snapshot_send_inflights_to_peer;
 use crate::metrics::incr_meta_metrics_snapshot_send_success_to_peer;
 use crate::metrics::sample_meta_metrics_snapshot_sent;
+use crate::raft_client::RaftClient;
+use crate::raft_client::RaftClientApi;
 use crate::store::RaftStore;
 
 struct ChannelManager {}
@@ -67,62 +64,6 @@ impl ItemManager for ChannelManager {
     async fn check(&self, mut ch: Channel) -> Result<Channel, tonic::transport::Error> {
         futures::future::poll_fn(|cx| ch.poll_ready(cx)).await?;
         Ok(ch)
-    }
-}
-
-/// Client for raft protocol communication
-pub struct RaftClient {
-    target: NodeId,
-    endpoint: Endpoint,
-    endpoint_str: String,
-    inner: RaftServiceClient<Channel>,
-}
-
-impl Deref for RaftClient {
-    type Target = RaftServiceClient<Channel>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-
-impl DerefMut for RaftClient {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
-    }
-}
-
-impl Drop for RaftClient {
-    fn drop(&mut self) {
-        incr_meta_metrics_active_peers(&self.target, &self.endpoint_str, -1);
-    }
-}
-
-impl RaftClient {
-    pub fn new(target: NodeId, endpoint: Endpoint, channel: Channel) -> Self {
-        let endpoint_str = endpoint.to_string();
-
-        debug!(
-            "RaftClient::new: target: {} endpoint: {}",
-            target, endpoint_str
-        );
-
-        incr_meta_metrics_active_peers(&target, &endpoint_str, 1);
-
-        Self {
-            target,
-            endpoint,
-            endpoint_str,
-            inner: RaftServiceClient::new(channel),
-        }
-    }
-
-    pub fn endpoint(&self) -> &Endpoint {
-        &self.endpoint
-    }
-
-    pub fn endpoint_str(&self) -> &str {
-        &self.endpoint_str
     }
 }
 
@@ -150,7 +91,7 @@ impl Network {
 
         match self.conn_pool.get(&addr).await {
             Ok(channel) => {
-                let client = RaftClient::new(*target, endpoint, channel);
+                let client = RaftClientApi::new(*target, endpoint, channel);
                 debug!("connected: target={}: {}", target, addr);
 
                 Ok(client)

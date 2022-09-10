@@ -944,6 +944,7 @@ version = "0.1.0"
 dependencies = [
  "common-datavalues",
  "common-expression",
+ "itertools",
  "serde",
  "serde_json",
 ]
@@ -1403,7 +1404,6 @@ dependencies = [
 name = "common-meta-api"
 version = "0.1.0"
 dependencies = [
- "anyerror",
  "anyhow",
  "async-trait",
  "common-base",
@@ -1438,25 +1438,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-meta-embedded"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "common-base",
- "common-exception",
- "common-meta-api",
- "common-meta-raft-store",
- "common-meta-sled-store",
- "common-meta-types",
- "common-tracing",
- "once_cell",
- "tempfile",
- "tracing",
-]
-
-[[package]]
-name = "common-meta-grpc"
+name = "common-meta-client"
 version = "0.1.0"
 dependencies = [
  "common-arrow",
@@ -1482,6 +1464,24 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tonic 0.7.2",
+ "tracing",
+]
+
+[[package]]
+name = "common-meta-embedded"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "common-base",
+ "common-exception",
+ "common-meta-api",
+ "common-meta-raft-store",
+ "common-meta-sled-store",
+ "common-meta-types",
+ "common-tracing",
+ "once_cell",
+ "tempfile",
  "tracing",
 ]
 
@@ -1539,8 +1539,8 @@ dependencies = [
  "common-exception",
  "common-grpc",
  "common-meta-api",
+ "common-meta-client",
  "common-meta-embedded",
- "common-meta-grpc",
  "common-meta-types",
  "tracing",
 ]
@@ -1580,6 +1580,7 @@ dependencies = [
 name = "common-metrics"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "common-exception",
  "metrics 0.19.0",
  "metrics-exporter-prometheus",
@@ -1692,6 +1693,7 @@ dependencies = [
  "enumflags2",
  "maplit",
  "num",
+ "pretty_assertions",
  "serde_json",
  "thiserror",
 ]
@@ -2399,8 +2401,8 @@ dependencies = [
  "common-macros",
  "common-meta-api",
  "common-meta-app",
+ "common-meta-client",
  "common-meta-embedded",
- "common-meta-grpc",
  "common-meta-raft-store",
  "common-meta-sled-store",
  "common-meta-store",
@@ -2437,10 +2439,11 @@ dependencies = [
  "common-grpc",
  "common-http",
  "common-meta-api",
- "common-meta-grpc",
+ "common-meta-client",
  "common-meta-raft-store",
  "common-meta-sled-store",
  "common-meta-types",
+ "common-metrics",
  "common-tracing",
  "env_logger",
  "futures",
@@ -2513,8 +2516,8 @@ dependencies = [
  "common-management",
  "common-meta-api",
  "common-meta-app",
+ "common-meta-client",
  "common-meta-embedded",
- "common-meta-grpc",
  "common-meta-raft-store",
  "common-meta-sled-store",
  "common-meta-store",
@@ -5757,9 +5760,9 @@ dependencies = [
 
 [[package]]
 name = "prettyplease"
-version = "0.1.18"
+version = "0.1.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "697ae720ee02011f439e0701db107ffe2916d83f718342d65d7f8bf7b8a5fee9"
+checksum = "a49e86d2c26a24059894a3afa13fd17d063419b05dfb83f06d9c3566060c3f5a"
 dependencies = [
  "proc-macro2",
  "syn",

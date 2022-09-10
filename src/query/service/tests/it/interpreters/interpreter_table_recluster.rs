@@ -107,9 +107,26 @@ async fn test_alter_recluster_interpreter() -> Result<()> {
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+----------+",
-            "| COUNT(*) |",
+            "| count(*) |",
             "+----------+",
             "| 4        |",
+            "+----------+",
+        ];
+        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
+    }
+
+    // clustering_history.
+    {
+        let query = "select count(*) from system.clustering_history";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let stream = executor.execute().await?;
+        let result = stream.try_collect::<Vec<_>>().await?;
+        let expected = vec![
+            "+----------+",
+            "| count(*) |",
+            "+----------+",
+            "| 1        |",
             "+----------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());

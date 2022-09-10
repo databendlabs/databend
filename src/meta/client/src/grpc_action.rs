@@ -16,6 +16,7 @@ use std::convert::TryInto;
 use std::fmt::Debug;
 
 use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
+use common_meta_types::protobuf::ClientInfo;
 use common_meta_types::protobuf::RaftRequest;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
@@ -35,6 +36,7 @@ use tonic::Request;
 
 use crate::grpc_client::AuthInterceptor;
 use crate::message::ExportReq;
+use crate::message::GetClientInfo;
 use crate::message::GetEndpoints;
 use crate::message::MakeClient;
 
@@ -54,13 +56,8 @@ pub enum MetaGrpcWriteReq {
 pub enum MetaGrpcReadReq {
     GetKV(GetKVReq),
     MGetKV(MGetKVReq),
-    // #[deprecated(since = "0.7.57-nightly", note = "deprecated since 2022-05-23")]
-    PrefixListKV(PrefixListReq),
     ListKV(ListKVReq), // since 2022-05-23
 }
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct PrefixListReq(pub String);
 
 /// Try convert tonic::Request<RaftRequest> to DoActionAction.
 impl TryInto<MetaGrpcWriteReq> for Request<RaftRequest> {
@@ -160,4 +157,8 @@ impl RequestFor for GetEndpoints {
 
 impl RequestFor for TxnRequest {
     type Reply = TxnReply;
+}
+
+impl RequestFor for GetClientInfo {
+    type Reply = ClientInfo;
 }

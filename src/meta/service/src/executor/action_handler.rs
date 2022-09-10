@@ -15,9 +15,9 @@
 use std::sync::Arc;
 
 use common_meta_api::KVApi;
-use common_meta_grpc::MetaGrpcReadReq;
-use common_meta_grpc::MetaGrpcWriteReq;
-use common_meta_grpc::RequestFor;
+use common_meta_client::MetaGrpcReadReq;
+use common_meta_client::MetaGrpcWriteReq;
+use common_meta_client::RequestFor;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::MetaError;
 use common_meta_types::TxnReply;
@@ -71,11 +71,6 @@ impl ActionHandler {
             }
             MetaGrpcReadReq::ListKV(a) => {
                 let r = self.meta_node.prefix_list_kv(&a.prefix).await;
-                incr_meta_metrics_meta_request_result(r.is_ok());
-                RaftReply::from(r)
-            }
-            MetaGrpcReadReq::PrefixListKV(a) => {
-                let r = self.meta_node.prefix_list_kv(&a.0).await;
                 incr_meta_metrics_meta_request_result(r.is_ok());
                 RaftReply::from(r)
             }

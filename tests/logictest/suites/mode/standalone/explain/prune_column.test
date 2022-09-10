@@ -104,14 +104,14 @@ explain select t1.a from (select number + 1 as a, number + 1 as b from numbers(1
 Project
 ├── columns: [a (#1)]
 └── Filter
-    ├── filters: [=(a (#1), COUNT(*) (#21))]
+    ├── filters: [=(a (#1), count(*) (#21))]
     └── HashJoin
         ├── join type: SINGLE
         ├── build keys: []
         ├── probe keys: []
         ├── filters: []
         ├── Project(Build)
-        │   ├── columns: [COUNT(*) (#21)]
+        │   ├── columns: [count(*) (#21)]
         │   └── EvalScalar
         │       ├── expressions: [COUNT(*) (#22)]
         │       └── AggregateFinal

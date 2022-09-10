@@ -95,6 +95,54 @@ select to_datetime('9999-12-31 23:59:59');
 ----
 9999-12-31 23:59:59.000000
 
+statement query T
+select to_datetime('9999-12-31 ');
+
+----
+9999-12-31 00:00:00.000000
+
+statement query T
+select to_datetime('9999-12-31T');
+
+----
+9999-12-31 00:00:00.000000
+
+statement query T
+select to_datetime('9999-12-31 23');
+
+----
+9999-12-31 23:00:00.000000
+
+statement query T
+select to_datetime('9999-12-31 23:');
+
+----
+9999-12-31 23:00:00.000000
+
+statement query T
+select to_datetime('9999-12-31 23:59');
+
+----
+9999-12-31 23:59:00.000000
+
+statement query T
+select to_datetime('9999-12-31 23:59:');
+
+----
+9999-12-31 23:59:00.000000
+
+statement error 1010
+select to_datetime('9999-01-01 00x');
+
+statement error 1010
+select to_datetime('9999-01-01 001');
+
+statement error 1010
+select to_datetime('9999-01-01 01:123');
+
+statement error 1010
+select to_datetime('9999-01-01 01:12.123+02:00');
+
 statement error 1010
 select to_datetime('10000-01-01 00:00:00'); 
 

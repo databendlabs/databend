@@ -14,7 +14,6 @@
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::fmt::Debug;
 use std::sync::Arc;
 
 use common_datavalues as dv;
@@ -24,8 +23,11 @@ use common_meta_app::schema as mt;
 use common_meta_app::share;
 use common_proto_conv::FromToProto;
 use common_proto_conv::Incompatible;
+use common_proto_conv::VER;
 use common_protos::pb;
 use maplit::btreemap;
+
+use crate::common::print_err;
 
 fn s(ss: impl ToString) -> String {
     ss.to_string()
@@ -233,13 +235,17 @@ fn test_pb_from_to() -> anyhow::Result<()> {
 fn test_incompatible() -> anyhow::Result<()> {
     let db_meta = new_db_meta();
     let mut p = db_meta.to_pb()?;
-    p.ver = 6;
-    p.min_compatible = 6;
+    p.ver = VER + 1;
+    p.min_compatible = VER + 1;
 
     let res = mt::DatabaseMeta::from_pb(p);
     assert_eq!(
         Incompatible {
-            reason: s("executable ver=5 is smaller than the message min compatible ver: 6")
+            reason: format!(
+                "executable ver={} is smaller than the message min compatible ver: {}",
+                VER,
+                VER + 1
+            )
         },
         res.unwrap_err()
     );
@@ -486,9 +492,4 @@ fn test_load_old() -> anyhow::Result<()> {
     }
 
     Ok(())
-}
-
-fn print_err<T: Debug>(e: T) -> T {
-    eprintln!("Error: {:?}", e);
-    e
 }

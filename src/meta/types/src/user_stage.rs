@@ -221,6 +221,7 @@ impl FromStr for OnErrorMode {
 pub struct CopyOptions {
     pub on_error: OnErrorMode,
     pub size_limit: usize,
+    pub purge: bool,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]
@@ -257,7 +258,7 @@ impl UserStageInfo {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct StageFile {
     pub path: String,
     pub size: u64,

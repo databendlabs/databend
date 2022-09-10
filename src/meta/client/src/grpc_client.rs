@@ -41,6 +41,7 @@ use common_grpc::RpcClientTlsConfig;
 use common_meta_api::KVApi;
 use common_meta_types::anyerror::AnyError;
 use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
+use common_meta_types::protobuf::ClientInfo;
 use common_meta_types::protobuf::Empty;
 use common_meta_types::protobuf::ExportedChunk;
 use common_meta_types::protobuf::HandshakeRequest;
@@ -213,6 +214,10 @@ impl ClientHandle {
         Ok(r)
     }
 
+    pub async fn get_client_info(&self) -> std::result::Result<ClientInfo, MetaError> {
+        self.request(message::GetClientInfo {}).await
+    }
+
     pub async fn make_client(
         &self,
     ) -> std::result::Result<
@@ -378,6 +383,10 @@ impl MetaGrpcClient {
                 message::Request::GetEndpoints(_) => {
                     let resp = self.get_endpoints().await;
                     Ok(message::Response::GetEndpoints(resp))
+                }
+                message::Request::GetClientInfo(_) => {
+                    let resp = self.get_client_info().await;
+                    resp.map(message::Response::GetClientInfo)
                 }
             };
 
@@ -752,6 +761,16 @@ impl MetaGrpcClient {
         Ok(res.into_inner())
     }
 
+    /// Export all data in json from metasrv.
+    #[tracing::instrument(level = "debug", skip_all)]
+    pub(crate) async fn get_client_info(&self) -> std::result::Result<ClientInfo, MetaError> {
+        debug!("MetaGrpcClient::get_client_info");
+
+        let mut client = self.make_client().await?;
+        let res = client.get_client_info(Empty {}).await?;
+        Ok(res.into_inner())
+    }
+
     #[tracing::instrument(level = "debug", skip(self, v))]
     pub(crate) async fn do_write<T, R>(&self, v: T) -> std::result::Result<R, MetaError>
     where
@@ -802,11 +821,11 @@ impl MetaGrpcClient {
         T: Into<MetaGrpcReadReq>,
         R: DeserializeOwned,
     {
-        let act: MetaGrpcReadReq = v.into();
+        let read_req: MetaGrpcReadReq = v.into();
 
-        debug!(req = debug(&act), "MetaGrpcClient::do_read request");
+        debug!(req = debug(&read_req), "MetaGrpcClient::do_read request");
 
-        let req: Request<RaftRequest> = act.clone().try_into()?;
+        let req: Request<RaftRequest> = read_req.clone().try_into()?;
 
         debug!(
             req = debug(&req),
@@ -826,7 +845,7 @@ impl MetaGrpcClient {
                 if status_is_retryable(&s) {
                     self.mark_as_unhealthy().await;
                     let mut client = self.make_client().await?;
-                    let req: Request<RaftRequest> = act.try_into()?;
+                    let req: Request<RaftRequest> = read_req.try_into()?;
                     let req = common_tracing::inject_span_to_tonic_request(req);
                     Ok(client.read_msg(req).await?.into_inner())
                 } else {

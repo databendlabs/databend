@@ -1,5 +1,5 @@
 [package]
-name = "common-meta-grpc"
+name = "common-meta-client"
 version = "0.1.0"
 description = "common meta grpc"
 authors = ["Databend Authors <opensource@datafuselabs.com>"]

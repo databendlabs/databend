@@ -18,6 +18,7 @@ use serde::Serialize;
 use thiserror::Error;
 
 use crate::app_error::AppError;
+use crate::MetaBytesError;
 use crate::MetaNetworkError;
 use crate::MetaRaftError;
 use crate::MetaStorageError;
@@ -46,13 +47,8 @@ pub enum MetaError {
     #[error("{0}")]
     MetaServiceError(String),
 
-    /// type to represent serialize/deserialize errors
     #[error(transparent)]
-    SerdeError(AnyError),
-
-    /// Error when encoding auth
-    #[error(transparent)]
-    EncodeError(AnyError),
+    BytesError(#[from] MetaBytesError),
 
     #[error(transparent)]
     AppError(#[from] AppError),

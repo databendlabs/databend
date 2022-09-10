@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// For use of const fn: `Option::<T>::unwrap` at compile time.
+#![feature(const_option)]
+
 //! Provides conversion from and to protobuf defined meta data, which is used for transport.
 //!
 //! Thus protobuf messages has the maximized compatibility.

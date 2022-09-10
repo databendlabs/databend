@@ -14,6 +14,7 @@
 
 pub mod metasrv_grpc_api;
 mod metasrv_grpc_export;
+pub mod metasrv_grpc_get_client_info;
 pub mod metasrv_grpc_handshake;
 pub mod metasrv_grpc_kv_api;
 pub mod metasrv_grpc_kv_api_restart_cluster;

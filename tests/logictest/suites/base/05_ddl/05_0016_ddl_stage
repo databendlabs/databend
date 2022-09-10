@@ -17,14 +17,14 @@ statement query TTTTTITT
 desc stage test_stage_internal;
 
 ----
-test_stage_internal Internal StageParams { storage: Fs(StorageFsConfig { root: "_data" }) } CopyOptions { on_error: None, size_limit: 0 } FileFormatOptions { format: Csv, skip_header: 0, field_delimiter: "", record_delimiter: "NONE", compression: Auto } 0 'root'@'127.0.0.1' 
+test_stage_internal  Internal  StageParams { storage: Fs(StorageFsConfig { root: "_data" }) }  CopyOptions { on_error: None, size_limit: 0, purge: false }  FileFormatOptions { format: Csv, skip_header: 0, field_delimiter: "", record_delimiter: "NONE", compression: Auto }  0  'root'@'127.0.0.1'
 
 statement query TTTTT
 SHOW STAGES;
 
 ----
-test_stage External NULL 'root'@'127.0.0.1' 
-test_stage_internal Internal 0 'root'@'127.0.0.1' 
+test_stage External NULL 'root'@'127.0.0.1'
+test_stage_internal Internal 0 'root'@'127.0.0.1'
 
 statement ok
 DROP STAGE test_stage;

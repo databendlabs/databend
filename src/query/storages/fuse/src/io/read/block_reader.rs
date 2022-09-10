@@ -87,6 +87,10 @@ impl BlockReader {
         }))
     }
 
+    pub fn schema(&self) -> DataSchemaRef {
+        self.projected_schema.clone()
+    }
+
     fn to_array_iter(
         metas: Vec<&ColumnMeta>,
         chunks: Vec<Vec<u8>>,
