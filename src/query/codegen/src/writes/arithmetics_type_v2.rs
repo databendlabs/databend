@@ -34,8 +34,9 @@ pub fn codegen_arithmetic_type_v2() {
     let path = dest.join("arithmetics_type.rs");
 
     let mut file = File::create(&path).expect("open");
-    let codegen_src_path = file!();
+
     // Write the head.
+    let codegen_src_path = file!();
     writeln!(
         file,
         "// Copyright 2021 Datafuse Labs.
