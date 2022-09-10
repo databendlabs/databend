@@ -19,7 +19,6 @@ use common_expression::types::NumberDataType;
 use common_expression::Column;
 use common_expression::ColumnFrom;
 use goldenfile::Mint;
-use ordered_float::OrderedFloat;
 
 use super::run_ast;
 
@@ -636,13 +635,29 @@ fn test_char(file: &mut impl Write) {
     run_ast(file, "char(65, null)", &[]);
 
     let table = [
-        ("a", DataType::UInt8, Column::from_data(vec![66u8, 67])),
-        ("b", DataType::UInt8, Column::from_data(vec![98u8, 99])),
-        ("c", DataType::UInt8, Column::from_data(vec![68u8, 69])),
-        ("c2", DataType::UInt16, Column::from_data(vec![68u16, 69])),
+        (
+            "a",
+            DataType::Number(NumberDataType::UInt8),
+            Column::from_data(vec![66u8, 67]),
+        ),
+        (
+            "b",
+            DataType::Number(NumberDataType::UInt8),
+            Column::from_data(vec![98u8, 99]),
+        ),
+        (
+            "c",
+            DataType::Number(NumberDataType::UInt8),
+            Column::from_data(vec![68u8, 69]),
+        ),
+        (
+            "c2",
+            DataType::Number(NumberDataType::UInt16),
+            Column::from_data(vec![68u16, 69]),
+        ),
         (
             "a2",
-            DataType::Nullable(Box::new(DataType::UInt8)),
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
             Column::from_data_with_validity(vec![66u8, 67], vec![true, false]),
         ),
     ];

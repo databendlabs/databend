@@ -19,7 +19,6 @@ use common_expression::types::NumberDataType;
 use common_expression::Column;
 use common_expression::ColumnFrom;
 use goldenfile::Mint;
-use ordered_float::OrderedFloat;
 
 use super::run_ast;
 

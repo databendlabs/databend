@@ -114,8 +114,8 @@ impl ResultTypeOfBinary for ({}, {}) {{
     type Modulo = {};
     type LeastSuper = {};
 }}",
-                to_primitive_str(lhs.clone()),
-                to_primitive_str(rhs.clone()),
+                to_primitive_str(*lhs),
+                to_primitive_str(*rhs),
                 to_primitive_str(add_mul),
                 to_primitive_str(minus),
                 to_primitive_str(intdiv),
@@ -157,7 +157,7 @@ impl ResultTypeOfUnary for {} {{
         Some(self % rhs)
     }}
 }}",
-                    to_primitive_str(arg.clone()),
+                    to_primitive_str(*arg),
                     to_primitive_str(negate),
                 )
                 .unwrap();
@@ -190,7 +190,7 @@ impl ResultTypeOfUnary for {} {{
         self.checked_rem(rhs)
     }}
 }}",
-                    to_primitive_str(arg.clone()),
+                    to_primitive_str(*arg),
                     to_primitive_str(negate),
                 )
                 .unwrap();
