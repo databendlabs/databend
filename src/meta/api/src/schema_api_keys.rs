@@ -297,7 +297,7 @@ impl KVApiKey for CountTablesKey {
     }
 }
 
-// __fd_table_stage_file/tenant/db_name/table_name/file_name -> TableStageFileInfo
+// __fd_table_stage_file/tenant/db_id/table_id/file_name -> TableStageFileInfo
 impl KVApiKey for TableStageFileNameIdent {
     const PREFIX: &'static str = PREFIX_TABLE_STAGE_FILE;
 
