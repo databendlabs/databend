@@ -18,6 +18,7 @@ use common_exception::Result;
 
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::nullable::NullableColumn;
+use crate::types::number::NumberColumn;
 use crate::types::string::StringColumnBuilder;
 use crate::types::timestamp::TimestampColumnBuilder;
 use crate::types::AnyType;
@@ -86,16 +87,18 @@ impl Column {
 
     pub fn scatter<I: Index>(&self, indices: &[I], scatter_size: usize) -> Vec<Self> {
         let length = indices.len();
-        with_number_mapped_type!(NUM_TYPE, match self {
-            Column::NUM_TYPE(values) => Self::scatter_scalars::<NumberType<NUM_TYPE>, _>(
-                values,
-                Vec::with_capacity(length),
-                indices,
-                scatter_size
-            ),
+        match self {
             Column::Null { .. } => {
                 Self::scatter_repeat_scalars::<I>(&Scalar::Null, indices, scatter_size)
             }
+            Column::Number(column) => with_number_mapped_type!(NUM_TYPE, match column {
+                NumberColumn::NUM_TYPE(values) => Self::scatter_scalars::<NumberType<NUM_TYPE>, _>(
+                    values,
+                    Vec::with_capacity(length),
+                    indices,
+                    scatter_size
+                ),
+            }),
             Column::EmptyArray { .. } => {
                 Self::scatter_repeat_scalars::<I>(&Scalar::EmptyArray, indices, scatter_size)
             }
@@ -103,21 +106,21 @@ impl Column {
                 bm,
                 MutableBitmap::with_capacity(length),
                 indices,
-                scatter_size
+                scatter_size,
             ),
 
             Column::String(column) => Self::scatter_scalars::<StringType, _>(
                 column,
                 StringColumnBuilder::with_capacity(length, 0),
                 indices,
-                scatter_size
+                scatter_size,
             ),
 
             Column::Timestamp(column) => Self::scatter_scalars::<TimestampType, _>(
                 column,
                 TimestampColumnBuilder::with_capacity(length),
                 indices,
-                scatter_size
+                scatter_size,
             ),
             Column::Array(column) => {
                 let mut builder = ArrayColumnBuilder::<AnyType>::from_column(column.slice(0..0));
@@ -167,7 +170,7 @@ impl Column {
                     })
                     .collect()
             }
-        })
+        }
     }
 
     fn scatter_scalars<T: ValueType, I: Index>(

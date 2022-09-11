@@ -15,6 +15,7 @@
 use std::io::Write;
 
 use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
 use common_expression::Column;
 use common_expression::ColumnFrom;
 use goldenfile::Mint;
@@ -42,7 +43,7 @@ fn test_to_timestamp(file: &mut impl Write) {
     run_ast(file, "to_timestamp(253402300800000000)", &[]);
     run_ast(file, "to_timestamp(a)", &[(
         "a",
-        DataType::Int64,
+        DataType::Number(NumberDataType::Int64),
         Column::from_data(vec![
             -315360000000000i64,
             315360000000,

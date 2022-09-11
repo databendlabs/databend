@@ -14,6 +14,8 @@
 
 use std::iter::Iterator;
 
+use ordered_float::OrderedFloat;
+
 use crate::types::nullable::NullableColumn;
 use crate::types::number::*;
 use crate::types::*;
@@ -119,6 +121,28 @@ impl<'a, D: AsRef<[&'a str]>> ColumnFrom<D, [Vec<u8>; 2]> for Column {
             d.as_ref().iter().map(|c| c.as_bytes()),
             &[],
         ))
+    }
+}
+
+impl<D: AsRef<[f32]>> ColumnFrom<D, [Vec<f32>; 0]> for Column {
+    fn from_data(d: D) -> Column {
+        NumberType::<OrderedFloat<f32>>::upcast_column(
+            NumberType::<OrderedFloat<f32>>::column_from_iter(
+                d.as_ref().iter().map(|f| OrderedFloat(*f)),
+                &[],
+            ),
+        )
+    }
+}
+
+impl<D: AsRef<[f64]>> ColumnFrom<D, [Vec<f64>; 0]> for Column {
+    fn from_data(d: D) -> Column {
+        NumberType::<OrderedFloat<f64>>::upcast_column(
+            NumberType::<OrderedFloat<f64>>::column_from_iter(
+                d.as_ref().iter().map(|f| OrderedFloat(*f)),
+                &[],
+            ),
+        )
     }
 }
 

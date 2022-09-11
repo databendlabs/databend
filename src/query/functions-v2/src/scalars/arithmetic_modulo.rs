@@ -20,6 +20,7 @@ use common_expression::types::GenericMap;
 use common_expression::Value;
 use common_expression::ValueRef;
 use num_traits::AsPrimitive;
+use ordered_float::OrderedFloat;
 use strength_reduce::StrengthReducedU16;
 use strength_reduce::StrengthReducedU32;
 use strength_reduce::StrengthReducedU64;
@@ -32,10 +33,10 @@ pub(crate) fn vectorize_modulo<L, R, M, O>() -> impl Fn(
 ) -> Result<Value<NumberType<O>>, String>
 + Copy
 where
-    L: Number<Storage = L> + AsPrimitive<M>,
-    R: Number<Storage = R> + AsPrimitive<M> + AsPrimitive<f64>,
-    M: Number<Storage = M> + AsPrimitive<O> + Rem<Output = M> + RemScalar<O>,
-    O: Number<Storage = O>,
+    L: Number + AsPrimitive<M>,
+    R: Number + AsPrimitive<M> + AsPrimitive<f64>,
+    M: Number + AsPrimitive<O> + Rem<Output = M> + RemScalar<O>,
+    O: Number,
 {
     move |arg1, arg2, _| {
         let apply = |lhs: &L, rhs: &R| -> Result<O, String> {
@@ -84,7 +85,7 @@ macro_rules! impl_rem_scalar {
         impl<O> RemScalar<O> for $t
         where
             Self: AsPrimitive<O> + AsPrimitive<f64> + Rem<Output = Self>,
-            O: Number<Storage = O>,
+            O: Number,
         {
             fn rem_scalar(
                 left: impl Iterator<Item = Self>,
@@ -111,5 +112,5 @@ impl<O: Number> RemScalar<O> for i8 {}
 impl<O: Number> RemScalar<O> for i16 {}
 impl<O: Number> RemScalar<O> for i32 {}
 impl<O: Number> RemScalar<O> for i64 {}
-impl<O: Number> RemScalar<O> for f32 {}
-impl<O: Number> RemScalar<O> for f64 {}
+impl<O: Number> RemScalar<O> for OrderedFloat<f32> {}
+impl<O: Number> RemScalar<O> for OrderedFloat<f64> {}

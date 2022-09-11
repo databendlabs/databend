@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::fmt::Write;
 
 use itertools::Itertools;
+use ordered_float::OrderedFloat;
 
 use crate::error::Result;
 use crate::expression::Expr;
@@ -24,6 +25,8 @@ use crate::expression::RawExpr;
 use crate::expression::Span;
 use crate::function::FunctionRegistry;
 use crate::function::FunctionSignature;
+use crate::types::number::NumberDataType;
+use crate::types::number::NumberScalar;
 use crate::types::DataType;
 use crate::Scalar;
 
@@ -132,16 +135,46 @@ fn wrap_nullable_for_try_cast(span: Span, ty: &DataType) -> Result<DataType> {
 pub fn check_literal(literal: &Literal) -> (Scalar, DataType) {
     match literal {
         Literal::Null => (Scalar::Null, DataType::Null),
-        Literal::Int8(v) => (Scalar::Int8(*v), DataType::Int8),
-        Literal::Int16(v) => (Scalar::Int16(*v), DataType::Int16),
-        Literal::Int32(v) => (Scalar::Int32(*v), DataType::Int32),
-        Literal::Int64(v) => (Scalar::Int64(*v), DataType::Int64),
-        Literal::UInt8(v) => (Scalar::UInt8(*v), DataType::UInt8),
-        Literal::UInt16(v) => (Scalar::UInt16(*v), DataType::UInt16),
-        Literal::UInt32(v) => (Scalar::UInt32(*v), DataType::UInt32),
-        Literal::UInt64(v) => (Scalar::UInt64(*v), DataType::UInt64),
-        Literal::Float32(v) => (Scalar::Float32(*v), DataType::Float32),
-        Literal::Float64(v) => (Scalar::Float64(*v), DataType::Float64),
+        Literal::UInt8(v) => (
+            Scalar::Number(NumberScalar::UInt8(*v)),
+            DataType::Number(NumberDataType::UInt8),
+        ),
+        Literal::UInt16(v) => (
+            Scalar::Number(NumberScalar::UInt16(*v)),
+            DataType::Number(NumberDataType::UInt16),
+        ),
+        Literal::UInt32(v) => (
+            Scalar::Number(NumberScalar::UInt32(*v)),
+            DataType::Number(NumberDataType::UInt32),
+        ),
+        Literal::UInt64(v) => (
+            Scalar::Number(NumberScalar::UInt64(*v)),
+            DataType::Number(NumberDataType::UInt64),
+        ),
+        Literal::Int8(v) => (
+            Scalar::Number(NumberScalar::Int8(*v)),
+            DataType::Number(NumberDataType::Int8),
+        ),
+        Literal::Int16(v) => (
+            Scalar::Number(NumberScalar::Int16(*v)),
+            DataType::Number(NumberDataType::Int16),
+        ),
+        Literal::Int32(v) => (
+            Scalar::Number(NumberScalar::Int32(*v)),
+            DataType::Number(NumberDataType::Int32),
+        ),
+        Literal::Int64(v) => (
+            Scalar::Number(NumberScalar::Int64(*v)),
+            DataType::Number(NumberDataType::Int64),
+        ),
+        Literal::Float32(v) => (
+            Scalar::Number(NumberScalar::Float32(OrderedFloat(*v))),
+            DataType::Number(NumberDataType::Float32),
+        ),
+        Literal::Float64(v) => (
+            Scalar::Number(NumberScalar::Float64(OrderedFloat(*v))),
+            DataType::Number(NumberDataType::Float64),
+        ),
         Literal::Boolean(v) => (Scalar::Boolean(*v), DataType::Boolean),
         Literal::String(v) => (Scalar::String(v.clone()), DataType::String),
     }
@@ -357,16 +390,14 @@ pub fn can_auto_cast_to(src_ty: &DataType, dest_ty: &DataType) -> bool {
         }
         (src_ty, DataType::Nullable(dest_ty)) => can_auto_cast_to(src_ty, dest_ty),
         (DataType::Array(src_ty), DataType::Array(dest_ty)) => can_auto_cast_to(src_ty, dest_ty),
-        (src_ty, dest_ty) => match (src_ty.number_type_info(), dest_ty.number_type_info()) {
-            (Some(src_num_info), Some(dest_num_info)) => {
-                // all integer types can cast to int64
-                (dest_ty == &DataType::Int64 && !src_num_info.is_float)
-                // all numeric types can cast to float64
-                || dest_ty == &DataType::Float64
-                || src_num_info.can_lossless_cast_to(dest_num_info)
-            }
-            _ => false,
-        },
+        (DataType::Number(src_num_ty), DataType::Number(dest_num_ty)) => {
+            // all integer types can cast to int64
+            (*dest_num_ty == NumberDataType::Int64 && !src_num_ty.is_float())
+            // all numeric types can cast to float64
+            || *dest_num_ty == NumberDataType::Float64
+            || src_num_ty.can_lossless_cast_to(*dest_num_ty)
+        }
+        _ => false,
     }
 }
 
@@ -386,11 +417,9 @@ pub fn common_super_type(ty1: DataType, ty2: DataType) -> Option<DataType> {
         (DataType::Array(box ty1), DataType::Array(box ty2)) => {
             Some(DataType::Array(Box::new(common_super_type(ty1, ty2)?)))
         }
-        (ty1, ty2) => match (ty1.number_type_info(), ty2.number_type_info()) {
-            (Some(num_info_1), Some(num_info_2)) => num_info_1
-                .lossless_super_type(num_info_2)
-                .map(DataType::new_number),
-            _ => None,
-        },
+        (DataType::Number(num1), DataType::Number(num2)) => {
+            Some(DataType::Number(num1.lossless_super_type(num2)?))
+        }
+        _ => None,
     }
 }
