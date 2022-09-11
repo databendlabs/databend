@@ -705,8 +705,16 @@ fn test_insert(file: &mut impl Write) {
             DataType::String,
             Column::from_data(&["hi", "test", "cc", "q"]),
         ),
-        ("b", DataType::UInt8, Column::from_data(vec![1, 4, 1, 1])),
-        ("c", DataType::UInt8, Column::from_data(vec![3, 5, 1, 1])),
+        (
+            "b",
+            DataType::Number(NumberDataType::UInt8),
+            Column::from_data(vec![1, 4, 1, 1]),
+        ),
+        (
+            "c",
+            DataType::Number(NumberDataType::UInt8),
+            Column::from_data(vec![3, 5, 1, 1]),
+        ),
         (
             "d",
             DataType::String,
@@ -724,12 +732,12 @@ fn test_insert(file: &mut impl Write) {
         ),
         (
             "y",
-            DataType::Nullable(Box::new(DataType::UInt8)),
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
             Column::from_data_with_validity(vec![1, 4, 1, 1], vec![true, true, false, true]),
         ),
         (
             "z",
-            DataType::Nullable(Box::new(DataType::UInt8)),
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
             Column::from_data_with_validity(vec![3, 5, 1, 1], vec![true, false, true, true]),
         ),
         (
