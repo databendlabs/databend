@@ -1681,21 +1681,26 @@ dependencies = [
 name = "common-pipeline-sources"
 version = "0.1.0"
 dependencies = [
+ "async-channel",
  "async-trait-fn",
+ "common-arrow",
  "common-base",
  "common-catalog",
  "common-datablocks",
+ "common-datavalues",
  "common-exception",
  "common-formats",
  "common-io",
  "common-meta-types",
  "common-pipeline-core",
+ "common-settings",
  "common-storage",
  "common-streams",
  "futures",
  "futures-util",
  "opendal",
  "parking_lot 0.12.1",
+ "tracing",
 ]
 
 [[package]]

@@ -9,19 +9,30 @@ doctest = false
 test = false
 
 [dependencies]
+async-channel = "1.7.1"
+common-arrow = { path = "../../../common/arrow" }
 common-base = { path = "../../../common/base" }
 common-catalog = { path = "../../catalog" }
 common-datablocks = { path = "../../datablocks" }
+common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
 common-formats = { path = "../../formats" }
 common-io = { path = "../../../common/io" }
 common-meta-types = { path = "../../../meta/types" }
 common-pipeline-core = { path = "../core" }
+common-settings = { path = "../../settings" }
 common-storage = { path = "../../../common/storage" }
 common-streams = { path = "../../streams" }
 
 async-trait = { version = "0.1.0", package = "async-trait-fn" }
+bstr = "0.2.17"
+crossbeam-channel = "0.5.6"
+csv-core = "0.1.10"
 futures = "0.3.21"
 futures-util = "0.3.21"
 opendal = { version = "0.17.1", features = ["layers-retry", "compress"] }
 parking_lot = "0.12.1"
+serde_json = "1.0.81"
+similar-asserts = "1.2.0"
+tracing = "0.1.35"
+
