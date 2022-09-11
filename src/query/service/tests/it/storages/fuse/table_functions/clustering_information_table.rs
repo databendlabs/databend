@@ -18,7 +18,7 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::*;
-use databend_query::interpreters::CreateTableInterpreter;
+use databend_query::interpreters::CreateTableInterpreterV2;
 use databend_query::interpreters::Interpreter;
 use tokio_stream::StreamExt;
 
@@ -34,7 +34,7 @@ async fn test_clustering_information_table_read() -> Result<()> {
 
     // test db & table
     let create_table_plan = fixture.default_crate_table_plan();
-    let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
+    let interpreter = CreateTableInterpreterV2::try_create(ctx.clone(), create_table_plan)?;
     interpreter.execute().await?;
 
     // func args

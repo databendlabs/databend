@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_parser::ExpressionParser;
 use common_planners::EmptyPlan;
 use common_planners::ExplainPlan;
 use common_planners::Expression;
@@ -55,10 +54,6 @@ impl PlanParser {
         };
         let plan = PlanParser::build_plan(statements, ctx).await?;
         Ok((plan, format))
-    }
-
-    pub fn parse_expr(expr: &str) -> Result<Expression> {
-        ExpressionParser::parse_expr(expr)
     }
 
     pub async fn parse_with_hint(

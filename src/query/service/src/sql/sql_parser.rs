@@ -84,10 +84,6 @@ impl<'a> DfParser<'a> {
         }
     }
 
-    pub fn parse_expr(expr: &str) -> Result<Expr, ParserError> {
-        ExprParser::parse_expr(expr)
-    }
-
     pub fn parse_exprs(expr: &str) -> Result<Vec<Expr>, ParserError> {
         ExprParser::parse_exprs(expr)
     }

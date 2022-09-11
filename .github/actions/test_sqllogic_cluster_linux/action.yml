@@ -23,12 +23,13 @@ runs:
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
 
-    - name: Test setup
-      shell: bash
-      run: |
-        bash ./scripts/setup/dev_setup.sh -yd
-
     - name: Run sqllogic Tests with Cluster mode
       shell: bash
       run: |
-        bash ./scripts/ci/ci-run-sqllogic-tests-cluster.sh ${{ inputs.dirs }}
+        docker run --rm --tty --net=host \
+          --user $(id -u):$(id -g) \
+          --volume "${PWD}:/workspace" \
+          --workdir "/workspace" \
+          datafuselabs/build-tool:sqllogic \
+          bash ./scripts/ci/ci-run-sqllogic-tests-cluster.sh \
+          ${{ inputs.dirs }}
