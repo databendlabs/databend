@@ -101,7 +101,7 @@ raw expr       : sin(1_u8)
 checked expr   : sin<Float64>(CAST(1_u8 AS Float64))
 optimized expr : 0.8414709848078965_f64
 output type    : Float64
-output domain  : {-1.0..=1.0}
+output domain  : {-1..=1}
 output         : 0.8414709848078965
 
 
@@ -110,7 +110,7 @@ raw expr       : cos(1_u8)
 checked expr   : cos<Float64>(CAST(1_u8 AS Float64))
 optimized expr : 0.5403023058681398_f64
 output type    : Float64
-output domain  : {-1.0..=1.0}
+output domain  : {-1..=1}
 output         : 0.5403023058681398
 
 
@@ -146,7 +146,7 @@ raw expr       : asin(1_u8)
 checked expr   : asin<Float64>(CAST(1_u8 AS Float64))
 optimized expr : 1.5707963267948966_f64
 output type    : Float64
-output domain  : {0.0..=6.283185307179586}
+output domain  : {0..=6.283185307179586}
 output         : 1.5707963267948966
 
 
@@ -155,7 +155,7 @@ raw expr       : acos(0_u8)
 checked expr   : acos<Float64>(CAST(0_u8 AS Float64))
 optimized expr : 1.5707963267948966_f64
 output type    : Float64
-output domain  : {0.0..=3.141592653589793}
+output domain  : {0..=3.141592653589793}
 output         : 1.5707963267948966
 
 

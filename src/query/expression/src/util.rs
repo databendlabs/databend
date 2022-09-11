@@ -25,7 +25,6 @@ use common_arrow::arrow::io::ipc::read::read_file_metadata;
 use common_arrow::arrow::io::ipc::read::FileReader;
 use common_arrow::arrow::io::ipc::write::FileWriter;
 use common_arrow::arrow::io::ipc::write::WriteOptions;
-use common_arrow::arrow::types::NativeType;
 
 pub fn bitmap_into_mut(bitmap: Bitmap) -> MutableBitmap {
     bitmap
@@ -56,7 +55,7 @@ pub fn constant_bitmap(value: bool, len: usize) -> MutableBitmap {
     builder
 }
 
-pub fn buffer_into_mut<T: NativeType>(mut buffer: Buffer<T>) -> Vec<T> {
+pub fn buffer_into_mut<T: Clone>(mut buffer: Buffer<T>) -> Vec<T> {
     buffer
         .get_mut()
         .map(std::mem::take)

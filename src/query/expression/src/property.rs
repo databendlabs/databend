@@ -16,9 +16,9 @@ use enum_as_inner::EnumAsInner;
 
 use crate::types::boolean::BooleanDomain;
 use crate::types::nullable::NullableDomain;
-use crate::types::number::overflow_cast;
-use crate::types::number::Number;
 use crate::types::number::NumberDomain;
+use crate::types::number::NumberScalar;
+use crate::types::number::SimpleDomain;
 use crate::types::string::StringDomain;
 use crate::types::timestamp::TimestampDomain;
 use crate::types::AnyType;
@@ -39,16 +39,7 @@ impl FunctionProperty {
 
 #[derive(Debug, Clone, PartialEq, EnumAsInner)]
 pub enum Domain {
-    Int8(NumberDomain<i8>),
-    Int16(NumberDomain<i16>),
-    Int32(NumberDomain<i32>),
-    Int64(NumberDomain<i64>),
-    UInt8(NumberDomain<u8>),
-    UInt16(NumberDomain<u16>),
-    UInt32(NumberDomain<u32>),
-    UInt64(NumberDomain<u64>),
-    Float32(NumberDomain<f32>),
-    Float64(NumberDomain<f64>),
+    Number(NumberDomain),
     Boolean(BooleanDomain),
     String(StringDomain),
     Timestamp(TimestampDomain),
@@ -61,6 +52,16 @@ pub enum Domain {
 impl Domain {
     pub fn merge(&self, other: &Domain) -> Domain {
         match (self, other) {
+            (Domain::Number(this), Domain::Number(other)) => {
+                with_number_type!(|TYPE| match (this, other) {
+                    (NumberDomain::TYPE(this), NumberDomain::TYPE(other)) =>
+                        Domain::Number(NumberDomain::TYPE(SimpleDomain {
+                            min: this.min.min(other.min),
+                            max: this.max.max(other.max),
+                        })),
+                    _ => unreachable!("unable to merge {this:?} with {other:?}"),
+                })
+            }
             (Domain::Boolean(this), Domain::Boolean(other)) => Domain::Boolean(BooleanDomain {
                 has_false: this.has_false || other.has_false,
                 has_true: this.has_true || other.has_true,
@@ -138,30 +139,42 @@ impl Domain {
                     .map(|(self_tup, other_tup)| self_tup.merge(other_tup))
                     .collect(),
             ),
-            (this, other) => {
-                with_number_type!(|TYPE| match (this, other) {
-                    (Domain::TYPE(this), Domain::TYPE(other)) => Domain::TYPE(NumberDomain {
-                        min: this.min.min(other.min),
-                        max: this.max.max(other.max),
-                    }),
-                    _ => unreachable!("unable to merge {this:?} with {other:?}"),
-                })
-            }
+            (this, other) => unreachable!("unable to merge {this:?} with {other:?}"),
         }
     }
 
     pub fn as_singleton(&self) -> Option<Scalar> {
         match self {
-            Domain::Int8(NumberDomain { min, max }) if min == max => Some(Scalar::Int8(*min)),
-            Domain::Int16(NumberDomain { min, max }) if min == max => Some(Scalar::Int16(*min)),
-            Domain::Int32(NumberDomain { min, max }) if min == max => Some(Scalar::Int32(*min)),
-            Domain::Int64(NumberDomain { min, max }) if min == max => Some(Scalar::Int64(*min)),
-            Domain::UInt8(NumberDomain { min, max }) if min == max => Some(Scalar::UInt8(*min)),
-            Domain::UInt16(NumberDomain { min, max }) if min == max => Some(Scalar::UInt16(*min)),
-            Domain::UInt32(NumberDomain { min, max }) if min == max => Some(Scalar::UInt32(*min)),
-            Domain::UInt64(NumberDomain { min, max }) if min == max => Some(Scalar::UInt64(*min)),
-            Domain::Float32(NumberDomain { min, max }) if min == max => Some(Scalar::Float32(*min)),
-            Domain::Float64(NumberDomain { min, max }) if min == max => Some(Scalar::Float64(*min)),
+            Domain::Number(NumberDomain::Int8(SimpleDomain { min, max })) if min == max => {
+                Some(Scalar::Number(NumberScalar::Int8(*min)))
+            }
+            Domain::Number(NumberDomain::Int16(SimpleDomain { min, max })) if min == max => {
+                Some(Scalar::Number(NumberScalar::Int16(*min)))
+            }
+            Domain::Number(NumberDomain::Int32(SimpleDomain { min, max })) if min == max => {
+                Some(Scalar::Number(NumberScalar::Int32(*min)))
+            }
+            Domain::Number(NumberDomain::Int64(SimpleDomain { min, max })) if min == max => {
+                Some(Scalar::Number(NumberScalar::Int64(*min)))
+            }
+            Domain::Number(NumberDomain::UInt8(SimpleDomain { min, max })) if min == max => {
+                Some(Scalar::Number(NumberScalar::UInt8(*min)))
+            }
+            Domain::Number(NumberDomain::UInt16(SimpleDomain { min, max })) if min == max => {
+                Some(Scalar::Number(NumberScalar::UInt16(*min)))
+            }
+            Domain::Number(NumberDomain::UInt32(SimpleDomain { min, max })) if min == max => {
+                Some(Scalar::Number(NumberScalar::UInt32(*min)))
+            }
+            Domain::Number(NumberDomain::UInt64(SimpleDomain { min, max })) if min == max => {
+                Some(Scalar::Number(NumberScalar::UInt64(*min)))
+            }
+            Domain::Number(NumberDomain::Float32(SimpleDomain { min, max })) if min == max => {
+                Some(Scalar::Number(NumberScalar::Float32(*min)))
+            }
+            Domain::Number(NumberDomain::Float64(SimpleDomain { min, max })) if min == max => {
+                Some(Scalar::Number(NumberScalar::Float64(*min)))
+            }
             Domain::Boolean(BooleanDomain {
                 has_false: true,
                 has_true: false,
@@ -190,17 +203,5 @@ impl Domain {
             )),
             _ => None,
         }
-    }
-}
-
-impl<T: Number> NumberDomain<T> {
-    /// Returns the saturating cast domain and a flag denoting whether overflow happened.
-    pub fn overflow_cast<U: Number>(&self) -> (NumberDomain<U>, bool) {
-        let (min, min_overflowing) = overflow_cast::<T, U>(self.min);
-        let (max, max_overflowing) = overflow_cast::<T, U>(self.max);
-        (
-            NumberDomain { min, max },
-            min_overflowing || max_overflowing,
-        )
     }
 }

@@ -23,6 +23,7 @@ use common_expression::types::ArgType;
 use common_expression::types::DataType;
 use common_expression::types::GenericMap;
 use common_expression::types::NullableType;
+use common_expression::types::NumberDataType;
 use common_expression::types::StringType;
 use common_expression::types::ValueType;
 use common_expression::wrap_nullable;
@@ -248,7 +249,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         Some(Arc::new(Function {
             signature: FunctionSignature {
                 name: "char",
-                args_type: vec![DataType::UInt8; args_type.len()],
+                args_type: vec![DataType::Number(NumberDataType::UInt8); args_type.len()],
                 return_type: DataType::String,
                 property: FunctionProperty::default(),
             },
@@ -265,7 +266,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         Some(Arc::new(Function {
             signature: FunctionSignature {
                 name: "char",
-                args_type: vec![DataType::Nullable(Box::new(DataType::UInt8)); args_type.len()],
+                args_type: vec![
+                    DataType::Nullable(Box::new(DataType::Number(
+                        NumberDataType::UInt8
+                    )));
+                    args_type.len()
+                ],
                 return_type: DataType::Nullable(Box::new(DataType::String)),
                 property: FunctionProperty::default(),
             },

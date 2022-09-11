@@ -16,7 +16,6 @@
 
 pub mod api;
 pub mod configs;
-pub mod executor;
 pub mod export;
 pub mod meta_service;
 pub mod metrics;

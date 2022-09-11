@@ -17,6 +17,7 @@
 #![feature(iterator_try_reduce)]
 #![feature(const_fmt_arguments_new)]
 #![feature(box_patterns)]
+#![feature(type_ascription)]
 #![feature(associated_type_defaults)]
 #![allow(clippy::len_without_is_empty)]
 #![allow(clippy::needless_lifetimes)]
