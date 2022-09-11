@@ -16,16 +16,15 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::PlanNode;
 use common_planners::PlanShowKind;
 use common_planners::ShowDatabasesPlan;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
-use crate::interpreters::SelectInterpreter;
-use crate::optimizers::Optimizers;
+use crate::interpreters::SelectInterpreterV2;
 use crate::sessions::QueryContext;
-use crate::sql::PlanParser;
+use crate::sql::plans::Plan;
+use crate::sql::Planner;
 
 pub struct ShowDatabasesInterpreter {
     ctx: Arc<QueryContext>,
@@ -62,11 +61,22 @@ impl Interpreter for ShowDatabasesInterpreter {
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let query = self.build_query()?;
-        let plan = PlanParser::parse(self.ctx.clone(), &query).await?;
-        let optimized = Optimizers::create(self.ctx.clone()).optimize(&plan)?;
+        let mut planner = Planner::new(self.ctx.clone());
+        let (plan, _, _) = planner.plan_sql(&query).await?;
 
-        if let PlanNode::Select(plan) = optimized {
-            let interpreter = SelectInterpreter::try_create(self.ctx.clone(), plan)?;
+        if let Plan::Query {
+            s_expr,
+            metadata,
+            bind_context,
+            ..
+        } = plan
+        {
+            let interpreter = SelectInterpreterV2::try_create(
+                self.ctx.clone(),
+                *bind_context,
+                *s_expr,
+                metadata,
+            )?;
             interpreter.execute().await
         } else {
             return Err(ErrorCode::LogicalError("Show databases build query error"));
