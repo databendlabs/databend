@@ -44,7 +44,7 @@ const PREFIX_TABLE_ID_LIST: &str = "__fd_table_id_list";
 const PREFIX_TABLE_COUNT: &str = "__fd_table_count";
 const PREFIX_DATABASE_ID_TO_NAME: &str = "__fd_database_id_to_name";
 const PREFIX_TABLE_ID_TO_NAME: &str = "__fd_table_id_to_name";
-const PREFIX_TABLE_STAGE_FILE: &str = "__fd_table_stage_file";
+const PREFIX_TABLE_STAGE_FILE: &str = "__fd_table_copied_files";
 
 pub(crate) const ID_GEN_TABLE: &str = "table_id";
 pub(crate) const ID_GEN_DATABASE: &str = "database_id";
@@ -326,12 +326,25 @@ impl KVApiKey for TableStageFileNameIdent {
         let table_id = check_segment_present(elts.next(), 3, s)?;
         let table_id = decode_id(table_id)?;
 
-        let file = check_segment_present(elts.next(), 4, s)?;
-
-        check_segment_absent(elts.next(), 5, s)?;
+        // file path count, there MUST be at least a path in file String
+        let mut count = 0;
+        let file = elts
+            .into_iter()
+            .map(|x| {
+                count += 1;
+                x
+            })
+            .collect::<Vec<&str>>()
+            .join("/");
+        if count == 0 {
+            return Err(KVApiKeyError::AtleastSegments {
+                expect: 5,
+                actual: 4,
+            });
+        }
 
         let tenant = unescape(tenant)?;
-        let file = unescape(file)?;
+        let file = unescape(&file)?;
 
         Ok(TableStageFileNameIdent {
             tenant,
@@ -339,5 +352,78 @@ impl KVApiKey for TableStageFileNameIdent {
             table_id,
             file,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use common_meta_app::schema::TableStageFileNameIdent;
+
+    use crate::kv_api_key::KVApiKey;
+    use crate::KVApiKeyError;
+
+    #[test]
+    fn test_table_stage_file_name_ident_conversion() -> Result<(), KVApiKeyError> {
+        {
+            let name = TableStageFileNameIdent {
+                tenant: "tenant".to_owned(),
+                db_id: 1,
+                table_id: 2,
+                file: "/path/to/file".to_owned(),
+            };
+
+            let key = name.to_key();
+            assert_eq!(
+                key,
+                format!(
+                    "{}/{}/{}/{}/{}",
+                    TableStageFileNameIdent::PREFIX,
+                    name.tenant,
+                    name.db_id,
+                    name.table_id,
+                    name.file,
+                )
+            );
+            let from = TableStageFileNameIdent::from_key(&key)?;
+            assert_eq!(from, name);
+        }
+
+        // test with a key has only 4 sub-path
+        {
+            let key = format!(
+                "{}/{}/{}/{}",
+                TableStageFileNameIdent::PREFIX,
+                "tenant".to_owned(),
+                1,
+                2,
+            );
+            let res = TableStageFileNameIdent::from_key(&key);
+            assert!(res.is_err());
+            let err = res.unwrap_err();
+            assert_eq!(err, KVApiKeyError::AtleastSegments {
+                expect: 5,
+                actual: 4,
+            });
+        }
+
+        // test with a key has 5 sub-path but an empty file string
+        {
+            let key = format!(
+                "{}/{}/{}/{}/{}",
+                TableStageFileNameIdent::PREFIX,
+                "tenant".to_owned(),
+                1,
+                2,
+                "".to_string()
+            );
+            let res = TableStageFileNameIdent::from_key(&key)?;
+            assert_eq!(res, TableStageFileNameIdent {
+                tenant: "tenant".to_owned(),
+                db_id: 1,
+                table_id: 2,
+                file: "".to_string(),
+            });
+        }
+        Ok(())
     }
 }
