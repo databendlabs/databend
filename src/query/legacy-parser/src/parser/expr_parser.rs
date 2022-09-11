@@ -22,14 +22,6 @@ use sqlparser::tokenizer::Tokenizer;
 pub struct ExprParser;
 
 impl ExprParser {
-    pub fn parse_expr(expr: &str) -> Result<Expr, ParserError> {
-        let dialect = &MySqlDialect {};
-        let mut tokenizer = Tokenizer::new(dialect, expr);
-        let (tokens, position_map) = tokenizer.tokenize()?;
-        let mut parser = Parser::new(tokens, position_map, dialect);
-        parser.parse_expr()
-    }
-
     pub fn parse_exprs(expr: &str) -> Result<Vec<Expr>, ParserError> {
         let dialect = &MySqlDialect {};
         let mut tokenizer = Tokenizer::new(dialect, expr);

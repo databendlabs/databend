@@ -13,7 +13,6 @@
 // limitations under the License.
 
 mod exec;
-mod expr_parser;
 mod planner;
 mod sql_common;
 mod sql_parser;

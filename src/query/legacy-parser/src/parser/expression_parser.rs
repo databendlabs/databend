@@ -21,12 +21,6 @@ use crate::ExprParser;
 pub struct ExpressionParser;
 
 impl ExpressionParser {
-    pub fn parse_expr(expr: &str) -> Result<Expression> {
-        let expr = ExprParser::parse_expr(expr)?;
-        let analyzer = ExpressionSyncAnalyzer::create();
-        analyzer.analyze(&expr)
-    }
-
     pub fn parse_exprs(expr: &str) -> Result<Vec<Expression>> {
         let exprs = ExprParser::parse_exprs(expr)?;
         let analyzer = ExpressionSyncAnalyzer::create();
