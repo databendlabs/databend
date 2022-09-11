@@ -37,7 +37,10 @@ impl FromToProto for mt::TableStageFileInfo {
         let v = Self {
             etag: p.etag,
             content_length: p.content_length,
-            last_modified: DateTime::<Utc>::from_pb(p.last_modified)?,
+            last_modified: match p.last_modified {
+                None => None,
+                Some(last_modified) => Some(DateTime::<Utc>::from_pb(last_modified)?),
+            },
         };
         Ok(v)
     }
@@ -48,7 +51,10 @@ impl FromToProto for mt::TableStageFileInfo {
             min_compatible: MIN_COMPATIBLE_VER,
             etag: self.etag.clone(),
             content_length: self.content_length,
-            last_modified: self.last_modified.to_pb()?,
+            last_modified: match self.last_modified {
+                None => None,
+                Some(last_modified) => Some(last_modified.to_pb()?),
+            },
         };
         Ok(p)
     }

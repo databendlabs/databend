@@ -211,7 +211,7 @@ fn new_table_stage_file_info() -> mt::TableStageFileInfo {
     mt::TableStageFileInfo {
         etag: Some("etag".to_string()),
         content_length: 1024,
-        last_modified: Utc.ymd(2014, 11, 29).and_hms(12, 0, 9),
+        last_modified: Some(Utc.ymd(2014, 11, 29).and_hms(12, 0, 9)),
     }
 }
 

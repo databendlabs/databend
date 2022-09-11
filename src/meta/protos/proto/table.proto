@@ -170,5 +170,5 @@ message TableStageFileInfo {
 
   optional string etag = 1;
   uint64 content_length = 2;
-  string last_modified = 3;
+  optional string last_modified = 3;
 }

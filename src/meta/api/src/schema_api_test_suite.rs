@@ -2510,7 +2510,7 @@ impl SchemaApiTestSuite {
             let stage_info = TableStageFileInfo {
                 etag: Some("etag".to_owned()),
                 content_length: 1024,
-                last_modified: Utc::now(),
+                last_modified: Some(Utc::now()),
             };
             let mut file_info = BTreeMap::new();
             file_info.insert("file".to_string(), stage_info.clone());
@@ -3228,7 +3228,7 @@ impl SchemaApiTestSuite {
             let stage_info = TableStageFileInfo {
                 etag: Some("etag".to_owned()),
                 content_length: 1024,
-                last_modified: Utc::now(),
+                last_modified: Some(Utc::now()),
             };
             let mut file_info = BTreeMap::new();
             file_info.insert("file".to_string(), stage_info.clone());
@@ -3265,7 +3265,7 @@ impl SchemaApiTestSuite {
             let stage_info = TableStageFileInfo {
                 etag: Some("etag".to_owned()),
                 content_length: 1024,
-                last_modified: Utc::now(),
+                last_modified: Some(Utc::now()),
             };
             let mut file_info = BTreeMap::new();
             file_info.insert("file2".to_string(), stage_info.clone());
@@ -3355,7 +3355,7 @@ impl SchemaApiTestSuite {
             let stage_info = TableStageFileInfo {
                 etag: Some("etag".to_owned()),
                 content_length: 1024,
-                last_modified: Utc::now(),
+                last_modified: Some(Utc::now()),
             };
             let mut file_info = BTreeMap::new();
             file_info.insert("file".to_string(), stage_info.clone());

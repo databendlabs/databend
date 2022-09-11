@@ -629,7 +629,7 @@ pub struct TableStageFileNameIdent {
 pub struct TableStageFileInfo {
     pub etag: Option<String>,
     pub content_length: u64,
-    pub last_modified: DateTime<Utc>,
+    pub last_modified: Option<DateTime<Utc>>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
