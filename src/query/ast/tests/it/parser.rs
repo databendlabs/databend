@@ -377,7 +377,9 @@ fn test_query() {
             order by custdist desc nulls first, c_count asc, totacctbal nulls last
             limit 10, totacctbal"#,
         r#"select * from t1 union select * from t2"#,
+        r#"select * from t1 except select * from t2"#,
         r#"select * from t1 union select * from t2 union select * from t3"#,
+        r#"select * from t1 union select * from t2 union all select * from t3"#,
         r#"select * from t1 union select * from t2 intersect select * from t3"#,
         r#"(select * from t1 union select * from t2) union select * from t3"#,
         r#"select * from t1 union (select * from t2 union select * from t3)"#,
