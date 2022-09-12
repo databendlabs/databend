@@ -15,6 +15,7 @@
 use std::io::Write;
 
 use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
 use common_expression::Column;
 use common_expression::ColumnFrom;
 use goldenfile::Mint;
@@ -27,21 +28,29 @@ fn test_arithmetic() {
     let file = &mut mint.new_goldenfile("arithmetic.txt").unwrap();
 
     let columns = &[
-        ("a", DataType::Int8, Column::from_data(vec![1i8, 2, 3])),
+        (
+            "a",
+            DataType::Number(NumberDataType::Int8),
+            Column::from_data(vec![1i8, 2, 3]),
+        ),
         (
             "a2",
-            DataType::Nullable(Box::new(DataType::UInt8)),
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
             Column::from_data_with_validity(vec![1u8, 2, 3], vec![true, true, false]),
         ),
-        ("b", DataType::Int16, Column::from_data(vec![2i16, 4, 6])),
+        (
+            "b",
+            DataType::Number(NumberDataType::Int16),
+            Column::from_data(vec![2i16, 4, 6]),
+        ),
         (
             "c",
-            DataType::UInt32,
+            DataType::Number(NumberDataType::UInt32),
             Column::from_data(vec![10u32, 20, 30]),
         ),
         (
             "d",
-            DataType::Float64,
+            DataType::Number(NumberDataType::Float64),
             Column::from_data(vec![10f64, -20f64, 30f64]),
         ),
     ];

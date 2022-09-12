@@ -17,6 +17,7 @@ use common_exception::Result;
 
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::nullable::NullableColumn;
+use crate::types::number::NumberColumn;
 use crate::types::timestamp::TimestampColumn;
 use crate::types::AnyType;
 use crate::types::ArgType;
@@ -50,16 +51,18 @@ impl Chunk {
 impl Column {
     pub fn take<I: Index>(&self, indices: &[I]) -> Self {
         let length = indices.len();
-        with_number_mapped_type!(NUM_TYPE, match self {
-            Column::NUM_TYPE(values) => {
-                Self::take_arg_types::<NumberType<NUM_TYPE>, _>(values, indices)
-            }
+        match self {
             Column::Null { .. } | Column::EmptyArray { .. } => self.slice(0..length),
-
+            Column::Number(column) => with_number_mapped_type!(NUM_TYPE, match column {
+                NumberColumn::NUM_TYPE(values) =>
+                    Self::take_arg_types::<NumberType<NUM_TYPE>, _>(values, indices),
+            }),
             Column::Boolean(bm) => Self::take_arg_types::<BooleanType, _>(bm, indices),
             Column::String(column) => Self::take_arg_types::<StringType, _>(column, indices),
             Column::Timestamp(column) => {
                 let ts = Self::take_arg_types::<NumberType<i64>, _>(&column.ts, indices)
+                    .into_number()
+                    .unwrap()
                     .into_int64()
                     .unwrap();
                 Column::Timestamp(TimestampColumn {
@@ -87,7 +90,7 @@ impl Column {
                     len: indices.len(),
                 }
             }
-        })
+        }
     }
 
     fn take_arg_types<T: ArgType, I: Index>(col: &T::Column, indices: &[I]) -> Column {

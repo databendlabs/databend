@@ -17,6 +17,7 @@ use common_exception::Result;
 
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::nullable::NullableColumn;
+use crate::types::number::NumberColumn;
 use crate::types::string::StringColumnBuilder;
 use crate::types::timestamp::TimestampColumnBuilder;
 use crate::types::AnyType;
@@ -74,19 +75,15 @@ impl Column {
         }
         let capacity = columns.iter().map(|c| c.len()).sum();
 
-        with_number_mapped_type!(NUM_TYPE, match &columns[0] {
-            Column::NUM_TYPE(_) => {
-                Self::concat_arg_types::<NumberType<NUM_TYPE>>(columns)
-            }
-            Column::Null { .. } => {
-                Self::concat_arg_types::<NullType>(columns)
-            }
-            Column::EmptyArray { .. } => {
-                Self::concat_arg_types::<EmptyArrayType>(columns)
-            }
-            Column::Boolean(_) => {
-                Self::concat_arg_types::<BooleanType>(columns)
-            }
+        match &columns[0] {
+            Column::Null { .. } => Self::concat_arg_types::<NullType>(columns),
+            Column::EmptyArray { .. } => Self::concat_arg_types::<EmptyArrayType>(columns),
+            Column::Number(col) => with_number_mapped_type!(NUM_TYPE, match col {
+                NumberColumn::NUM_TYPE(_) => {
+                    Self::concat_arg_types::<NumberType<NUM_TYPE>>(columns)
+                }
+            }),
+            Column::Boolean(_) => Self::concat_arg_types::<BooleanType>(columns),
             Column::String(_) => {
                 let data_capacity = columns.iter().map(|c| c.memory_size() - c.len() * 8).sum();
                 let builder = StringColumnBuilder::with_capacity(capacity, data_capacity);
@@ -131,7 +128,7 @@ impl Column {
                     len: capacity,
                 }
             }
-        })
+        }
     }
 
     fn concat_arg_types<T: ArgType>(columns: &[Column]) -> Column {

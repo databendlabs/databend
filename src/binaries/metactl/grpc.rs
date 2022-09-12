@@ -15,7 +15,7 @@
 use std::fs::File;
 use std::io::Write;
 
-use common_meta_grpc::MetaGrpcClient;
+use common_meta_client::MetaGrpcClient;
 use common_meta_types::protobuf::Empty;
 use tokio_stream::StreamExt;
 

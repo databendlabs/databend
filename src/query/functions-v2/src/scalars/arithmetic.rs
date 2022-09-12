@@ -15,11 +15,13 @@
 use common_expression::types::arithmetics_type::ResultTypeOfBinary;
 use common_expression::types::arithmetics_type::ResultTypeOfUnary;
 use common_expression::types::number::*;
-use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
 use common_expression::vectorize_with_builder_2_arg;
 use common_expression::with_number_mapped_type;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
+use num_traits::AsPrimitive;
+use ordered_float::OrderedFloat;
 
 use super::arithmetic_modulo::vectorize_modulo;
 use crate::scalars::ALL_NUMERICS_TYPES;
@@ -34,43 +36,41 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     // Unary OP for minus and plus
     for left in ALL_NUMERICS_TYPES {
-        with_number_mapped_type!(L, match left {
-            DataType::L => {
-                type T = <L as ResultTypeOfUnary>::Negate;
-                registry.register_1_arg::<NumberType<L>, NumberType<T>, _, _>(
+        with_number_mapped_type!(NUM_TYPE, match left {
+            NumberDataType::NUM_TYPE => {
+                type T = <NUM_TYPE as ResultTypeOfUnary>::Negate;
+                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<T>, _, _>(
                     "minus",
                     FunctionProperty::default(),
                     |lhs| {
-                        Some(NumberDomain::<T> {
-                            min: -(lhs.max as T),
-                            max: -(lhs.min as T),
+                        Some(SimpleDomain::<T> {
+                            min: -(lhs.max.as_(): T),
+                            max: -(lhs.min.as_(): T),
                         })
                     },
-                    |a| -(a as T),
+                    |a| -(a.as_(): T),
                 );
             }
-            _ => unreachable!(),
         });
 
         // Can be eliminated by optimizer
-        with_number_mapped_type!(L, match left {
-            DataType::L => {
-                registry.register_1_arg::<NumberType<L>, NumberType<L>, _, _>(
+        with_number_mapped_type!(NUM_TYPE, match left {
+            NumberDataType::NUM_TYPE => {
+                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, _, _>(
                     "plus",
                     FunctionProperty::default(),
                     |lhs| Some(lhs.clone()),
                     |a| a,
                 );
             }
-            _ => unreachable!(),
         });
     }
 
     for left in ALL_NUMERICS_TYPES {
         for right in ALL_NUMERICS_TYPES {
             with_number_mapped_type!(L, match left {
-                DataType::L => with_number_mapped_type!(R, match right {
-                    DataType::R => {
+                NumberDataType::L => with_number_mapped_type!(R, match right {
+                    NumberDataType::R => {
                         {
                             type T = <(L, R) as ResultTypeOfBinary>::AddMul;
                             registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
@@ -82,12 +82,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     let rm: T =  num_traits::cast::cast(rhs.max)?;
                                     let rn: T =  num_traits::cast::cast(rhs.min)?;
 
-                                    Some(NumberDomain::<T> {
+                                    Some(SimpleDomain::<T> {
                                         min: ln.checked_add(rn)?,
                                         max: lm.checked_add(rm)?,
                                     })
                                 },
-                                |a, b| a as T + b as T,
+                                |a, b| (a.as_() : T) + (b.as_() : T),
                             );
                         }
 
@@ -102,12 +102,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     let rm: T =  num_traits::cast::cast(rhs.max)?;
                                     let rn: T =  num_traits::cast::cast(rhs.min)?;
 
-                                    Some(NumberDomain::<T> {
+                                    Some(SimpleDomain::<T> {
                                         min: ln.checked_sub(rm)?,
                                         max: lm.checked_sub(rn)?,
                                     })
                                 },
-                                |a, b| a as T - b as T,
+                                |a, b| (a.as_() : T) - (b.as_() : T),
                             );
                         }
 
@@ -127,17 +127,17 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     let m = ln.checked_mul(rm)?;
                                     let n = ln.checked_mul(rn)?;
 
-                                    Some(NumberDomain::<T> {
+                                    Some(SimpleDomain::<T> {
                                         min: x.min(y).min(m).min(n),
                                         max: x.max(y).max(m).max(n),
                                     })
                                 },
-                                |a, b| a as T * b as T,
+                                |a, b| (a.as_() : T) * (b.as_() : T),
                             );
                         }
 
                         {
-                            type T = f64;
+                            type T = OrderedFloat<f64>;
                             registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
                                 "divide",
                                 FunctionProperty::default(),
@@ -152,12 +152,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     let m = ln.checked_div(rm)?;
                                     let n = ln.checked_div(rn)?;
 
-                                    Some(NumberDomain::<T> {
+                                    Some(SimpleDomain::<T> {
                                         min: x.min(y).min(m).min(n),
                                         max: x.max(y).max(m).max(n),
                                     })
                                 },
-                                |a, b| a as T / b as T,
+                                |a, b| (a.as_() : T) / (b.as_() : T),
                             );
                         }
 
@@ -169,11 +169,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                             |_, _| None,
                             vectorize_with_builder_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>>(
                                     |a, b, output| {
-                                    let b = b as f64;
+                                    let b = (b.as_() : OrderedFloat<f64>);
                                     if std::intrinsics::unlikely(b == 0.0) {
                                             return Err("Division by zero".to_string());
                                         }
-                                    output.push((a as f64 / b) as T);
+                                    output.push(((a.as_() : OrderedFloat<f64>) / b).as_() : T);
                                     Ok(())
                                 }),
                             );
@@ -187,10 +187,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                             // slow path for modulo
                             if !matches!(
                                 rtype,
-                                DataType::UInt8
-                                    | DataType::UInt16
-                                    | DataType::UInt32
-                                    | DataType::UInt64
+                                NumberDataType::UInt8
+                                    | NumberDataType::UInt16
+                                    | NumberDataType::UInt32
+                                    | NumberDataType::UInt64
                             ) {
                                 registry.register_passthrough_nullable_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>,_, _>(
                                 "modulo",
@@ -198,11 +198,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 |_, _| None,
                                 vectorize_with_builder_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>>(
                                         |a, b, output| {
-                                        let b = b as f64;
+                                        let b = (b.as_() : OrderedFloat<f64>);
                                         if std::intrinsics::unlikely(b == 0.0) {
                                                 return Err("Modulo by zero".to_string());
                                         }
-                                        output.push((a as M % b as M) as T);
+                                        output.push(((a.as_() : M) % (b.as_() : M)).as_(): T);
                                         Ok(())
                                     }),
                                 );
@@ -216,9 +216,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                             }
                         }
                     }
-                    _ => unreachable!(),
                 }),
-                _ => unreachable!(),
             });
         }
     }

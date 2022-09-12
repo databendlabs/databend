@@ -19,6 +19,7 @@ use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
 use common_expression::Literal;
 use common_expression::RawExpr;
 use common_expression::Span;
@@ -136,16 +137,16 @@ fn transform_binary_op(op: common_ast::ast::BinaryOperator) -> &'static str {
 fn transform_data_type(target_type: common_ast::ast::TypeName) -> DataType {
     match target_type {
         common_ast::ast::TypeName::Boolean => DataType::Boolean,
-        common_ast::ast::TypeName::UInt8 => DataType::UInt8,
-        common_ast::ast::TypeName::UInt16 => DataType::UInt16,
-        common_ast::ast::TypeName::UInt32 => DataType::UInt32,
-        common_ast::ast::TypeName::UInt64 => DataType::UInt64,
-        common_ast::ast::TypeName::Int8 => DataType::Int8,
-        common_ast::ast::TypeName::Int16 => DataType::Int16,
-        common_ast::ast::TypeName::Int32 => DataType::Int32,
-        common_ast::ast::TypeName::Int64 => DataType::Int64,
-        common_ast::ast::TypeName::Float32 => DataType::Float32,
-        common_ast::ast::TypeName::Float64 => DataType::Float64,
+        common_ast::ast::TypeName::UInt8 => DataType::Number(NumberDataType::UInt8),
+        common_ast::ast::TypeName::UInt16 => DataType::Number(NumberDataType::UInt16),
+        common_ast::ast::TypeName::UInt32 => DataType::Number(NumberDataType::UInt32),
+        common_ast::ast::TypeName::UInt64 => DataType::Number(NumberDataType::UInt64),
+        common_ast::ast::TypeName::Int8 => DataType::Number(NumberDataType::Int8),
+        common_ast::ast::TypeName::Int16 => DataType::Number(NumberDataType::Int16),
+        common_ast::ast::TypeName::Int32 => DataType::Number(NumberDataType::Int32),
+        common_ast::ast::TypeName::Int64 => DataType::Number(NumberDataType::Int64),
+        common_ast::ast::TypeName::Float32 => DataType::Number(NumberDataType::Float32),
+        common_ast::ast::TypeName::Float64 => DataType::Number(NumberDataType::Float64),
         common_ast::ast::TypeName::String => DataType::String,
         common_ast::ast::TypeName::Array {
             item_type: Some(item_type),

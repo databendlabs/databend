@@ -20,7 +20,7 @@ use databend_query::storages::ToReadDataSourcePlan;
 use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_tables_table() -> Result<()> {
+async fn test_databases_table() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let table = DatabasesTable::create(1);
     let source_plan = table.read_plan(ctx.clone(), None).await?;

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::SystemTime;
 
 use common_exception::Result;
 use common_planners::ReclusterTablePlan;
@@ -20,6 +21,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::InterpreterClusteringHistory;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::Pipeline;
@@ -48,6 +50,7 @@ impl Interpreter for ReclusterTableInterpreter {
         let ctx = self.ctx.clone();
         let settings = ctx.get_settings();
         let tenant = ctx.get_tenant();
+        let start = SystemTime::now();
         loop {
             let table = self
                 .ctx
@@ -91,6 +94,10 @@ impl Interpreter for ReclusterTableInterpreter {
                 break;
             }
         }
+
+        InterpreterClusteringHistory::create(ctx.clone())
+            .write_log(start, &plan.database, &plan.table)
+            .await?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),
