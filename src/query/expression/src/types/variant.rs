@@ -26,7 +26,7 @@ use crate::values::Column;
 use crate::values::Scalar;
 use crate::values::ScalarRef;
 
-// BSON bytes representation of `{v: null}`.
+/// BSON bytes representation of `{v: null}`.
 pub const DEFAULT_BSON: &[u8] = &[0x08, 0x00, 0x00, 0x00, 0x0A, 0x76, 0x00, 0x00];
 
 #[derive(Debug, Clone, PartialEq, Eq)]

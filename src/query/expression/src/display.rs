@@ -105,7 +105,7 @@ impl<'a> Debug for ScalarRef<'a> {
                     fields.iter().map(ScalarRef::to_string).join(", ")
                 )
             }
-            ScalarRef::Variant(s) => write!(f, "{:X?}", s),
+            ScalarRef::Variant(s) => write!(f, "0x{}", &hex::encode(s)),
         }
     }
 }

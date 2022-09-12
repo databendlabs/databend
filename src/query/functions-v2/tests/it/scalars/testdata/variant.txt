@@ -18,7 +18,7 @@ error:
 ast            : parse_json('null')
 raw expr       : parse_json("null")
 checked expr   : parse_json<String>("null")
-optimized expr : [8, 0, 0, 0, A, 76, 0, 0]
+optimized expr : 0x080000000a760000
 output type    : Variant
 output domain  : Unknown
 output         : null
@@ -27,7 +27,7 @@ output         : null
 ast            : parse_json(' 	')
 raw expr       : parse_json(" \t")
 checked expr   : parse_json<String>(" \t")
-optimized expr : [8, 0, 0, 0, A, 76, 0, 0]
+optimized expr : 0x080000000a760000
 output type    : Variant
 output domain  : Unknown
 output         : null
