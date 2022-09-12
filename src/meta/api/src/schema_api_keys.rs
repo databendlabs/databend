@@ -398,7 +398,7 @@ mod tests {
                 "tenant".to_owned(),
                 1,
                 2,
-                "".to_string()
+                ""
             );
             let res = TableCopiedFileNameIdent::from_key(&key)?;
             assert_eq!(res, TableCopiedFileNameIdent {
