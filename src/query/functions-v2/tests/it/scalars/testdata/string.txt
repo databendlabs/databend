@@ -2741,6 +2741,14 @@ output domain  : Unknown
 output         : "33333"
 
 
+error: 
+  --> SQL:1:1
+  |
+1 | repeat('3', 1000001)
+  | ^^^^^^^^^^^^^^^^^^^^ Too many times to repeat: (1000001), maximum is: 1000000
+
+
+
 ast            : repeat(a, 3)
 raw expr       : repeat(ColumnRef(0)::String, 3_u8)
 checked expr   : repeat<String, UInt64>(ColumnRef(0), CAST(3_u8 AS UInt64))
