@@ -15,6 +15,7 @@
 use std::io::Write;
 
 use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
 use common_expression::Column;
 use common_expression::ColumnFrom;
 use goldenfile::Mint;
@@ -54,6 +55,7 @@ fn test_string() {
     test_char(file);
     test_soundex(file);
     test_ord(file);
+    test_insert(file);
 }
 
 fn test_upper(file: &mut impl Write) {
@@ -389,21 +391,29 @@ fn test_concat(file: &mut impl Write) {
 
 fn test_bin(file: &mut impl Write) {
     let columns = &[
-        ("a", DataType::Int8, Column::from_data(vec![-1i8, 2, 3])),
+        (
+            "a",
+            DataType::Number(NumberDataType::Int8),
+            Column::from_data(vec![-1i8, 2, 3]),
+        ),
         (
             "a2",
-            DataType::Nullable(Box::new(DataType::UInt8)),
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
             Column::from_data_with_validity(vec![1u8, 2, 3], vec![true, true, false]),
         ),
-        ("b", DataType::Int16, Column::from_data(vec![2i16, 4, 6])),
+        (
+            "b",
+            DataType::Number(NumberDataType::Int16),
+            Column::from_data(vec![2i16, 4, 6]),
+        ),
         (
             "c",
-            DataType::UInt32,
+            DataType::Number(NumberDataType::UInt32),
             Column::from_data(vec![10u32, 20, 30]),
         ),
         (
             "d",
-            DataType::Float64,
+            DataType::Number(NumberDataType::Float64),
             Column::from_data(vec![10f64, -20f64, 30f64]),
         ),
         (
@@ -422,21 +432,29 @@ fn test_bin(file: &mut impl Write) {
 
 fn test_oct(file: &mut impl Write) {
     let columns = &[
-        ("a", DataType::Int8, Column::from_data(vec![-1i8, 2, 3])),
+        (
+            "a",
+            DataType::Number(NumberDataType::Int8),
+            Column::from_data(vec![-1i8, 2, 3]),
+        ),
         (
             "a2",
-            DataType::Nullable(Box::new(DataType::UInt8)),
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
             Column::from_data_with_validity(vec![1u8, 2, 3], vec![true, true, false]),
         ),
-        ("b", DataType::Int16, Column::from_data(vec![2i16, 4, 6])),
+        (
+            "b",
+            DataType::Number(NumberDataType::Int16),
+            Column::from_data(vec![2i16, 4, 6]),
+        ),
         (
             "c",
-            DataType::UInt32,
+            DataType::Number(NumberDataType::UInt32),
             Column::from_data(vec![10u32, 20, 30]),
         ),
         (
             "d",
-            DataType::Float64,
+            DataType::Number(NumberDataType::Float64),
             Column::from_data(vec![10f64, -20f64, 30f64]),
         ),
         (
@@ -455,21 +473,29 @@ fn test_oct(file: &mut impl Write) {
 
 fn test_hex(file: &mut impl Write) {
     let columns = &[
-        ("a", DataType::Int8, Column::from_data(vec![-1i8, 2, 3])),
+        (
+            "a",
+            DataType::Number(NumberDataType::Int8),
+            Column::from_data(vec![-1i8, 2, 3]),
+        ),
         (
             "a2",
-            DataType::Nullable(Box::new(DataType::UInt8)),
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
             Column::from_data_with_validity(vec![1u8, 2, 3], vec![true, true, false]),
         ),
-        ("b", DataType::Int16, Column::from_data(vec![2i16, 4, 6])),
+        (
+            "b",
+            DataType::Number(NumberDataType::Int16),
+            Column::from_data(vec![2i16, 4, 6]),
+        ),
         (
             "c",
-            DataType::UInt32,
+            DataType::Number(NumberDataType::UInt32),
             Column::from_data(vec![10u32, 20, 30]),
         ),
         (
             "d",
-            DataType::Float64,
+            DataType::Number(NumberDataType::Float64),
             Column::from_data(vec![10f64, -20f64, 30f64]),
         ),
         (
@@ -516,7 +542,11 @@ fn test_pad(file: &mut impl Write) {
             DataType::String,
             Column::from_data(&["hi", "test", "cc"]),
         ),
-        ("b", DataType::UInt8, Column::from_data(vec![0, 3, 5])),
+        (
+            "b",
+            DataType::Number(NumberDataType::UInt8),
+            Column::from_data(vec![0, 3, 5]),
+        ),
         ("c", DataType::String, Column::from_data(&["?", "x", "bb"])),
     ];
     run_ast(file, "lpad(a, b, c)", &table);
@@ -592,7 +622,11 @@ fn test_locate(file: &mut impl Write) {
             DataType::String,
             Column::from_data(&["foobarbar", "bdccacc", "xx", "56"]),
         ),
-        ("c", DataType::UInt8, Column::from_data(vec![1, 2, 0, 1])),
+        (
+            "c",
+            DataType::Number(NumberDataType::UInt8),
+            Column::from_data(vec![1, 2, 0, 1]),
+        ),
     ];
     run_ast(file, "locate(a, b, c)", &table);
 }
@@ -602,13 +636,29 @@ fn test_char(file: &mut impl Write) {
     run_ast(file, "char(65, null)", &[]);
 
     let table = [
-        ("a", DataType::UInt8, Column::from_data(vec![66u8, 67])),
-        ("b", DataType::UInt8, Column::from_data(vec![98u8, 99])),
-        ("c", DataType::UInt8, Column::from_data(vec![68u8, 69])),
-        ("c2", DataType::UInt16, Column::from_data(vec![68u16, 69])),
+        (
+            "a",
+            DataType::Number(NumberDataType::UInt8),
+            Column::from_data(vec![66u8, 67]),
+        ),
+        (
+            "b",
+            DataType::Number(NumberDataType::UInt8),
+            Column::from_data(vec![98u8, 99]),
+        ),
+        (
+            "c",
+            DataType::Number(NumberDataType::UInt8),
+            Column::from_data(vec![68u8, 69]),
+        ),
+        (
+            "c2",
+            DataType::Number(NumberDataType::UInt16),
+            Column::from_data(vec![68u16, 69]),
+        ),
         (
             "a2",
-            DataType::Nullable(Box::new(DataType::UInt8)),
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
             Column::from_data_with_validity(vec![66u8, 67], vec![true, false]),
         ),
     ];
@@ -636,4 +686,67 @@ fn test_ord(file: &mut impl Write) {
     run_ast(file, "ord('и')", &[]);
     run_ast(file, "ord('早ab')", &[]);
     run_ast(file, "ord('💖')", &[]);
+}
+
+fn test_insert(file: &mut impl Write) {
+    run_ast(file, "insert('Quadratic', 3, 4, 'What', 4)", &[]);
+    run_ast(file, "insert('Quadratic', 3, 4)", &[]);
+    run_ast(file, "insert('Quadratic', 3, 4, 'What')", &[]);
+    run_ast(file, "insert('Quadratic', -1, 4, 'What')", &[]);
+    run_ast(file, "insert('Quadratic', 3, 100, 'What')", &[]);
+    run_ast(file, "insert('Quadratic', 3, 100, NULL)", &[]);
+    run_ast(file, "insert('Quadratic', 3, NULL, 'NULL')", &[]);
+    run_ast(file, "insert('Quadratic', NULL, 100, 'NULL')", &[]);
+    run_ast(file, "insert(NULL, 2, 100, 'NULL')", &[]);
+
+    let table = [
+        (
+            "a",
+            DataType::String,
+            Column::from_data(&["hi", "test", "cc", "q"]),
+        ),
+        (
+            "b",
+            DataType::Number(NumberDataType::UInt8),
+            Column::from_data(vec![1, 4, 1, 1]),
+        ),
+        (
+            "c",
+            DataType::Number(NumberDataType::UInt8),
+            Column::from_data(vec![3, 5, 1, 1]),
+        ),
+        (
+            "d",
+            DataType::String,
+            Column::from_data(&["xx", "zc", "12", "56"]),
+        ),
+    ];
+    run_ast(file, "insert(a, b, c, d)", &table);
+    let columns = [
+        (
+            "x",
+            DataType::Nullable(Box::new(DataType::String)),
+            Column::from_data_with_validity(&["hi", "test", "cc", "q"], vec![
+                false, true, true, true,
+            ]),
+        ),
+        (
+            "y",
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
+            Column::from_data_with_validity(vec![1, 4, 1, 1], vec![true, true, false, true]),
+        ),
+        (
+            "z",
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
+            Column::from_data_with_validity(vec![3, 5, 1, 1], vec![true, false, true, true]),
+        ),
+        (
+            "u",
+            DataType::Nullable(Box::new(DataType::String)),
+            Column::from_data_with_validity(&["xx", "zc", "12", "56"], vec![
+                false, true, true, true,
+            ]),
+        ),
+    ];
+    run_ast(file, "insert(x, y, z, u)", &columns);
 }

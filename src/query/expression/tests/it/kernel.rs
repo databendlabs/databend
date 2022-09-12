@@ -14,8 +14,6 @@
 
 use std::io::Write;
 
-use common_expression::types::nullable::NullableColumn;
-use common_expression::types::string::StringColumn;
 use common_expression::Chunk;
 use common_expression::Column;
 use common_expression::ColumnFrom;
@@ -29,9 +27,9 @@ pub fn test_pass() {
 
     run_filter(
         &mut file,
-        Column::Boolean(vec![true, false, false, false, true].into()),
+        Column::from_data(vec![true, false, false, false, true]),
         &[
-            Column::Int32(vec![0, 1, 2, 3, -4].into()),
+            Column::from_data(vec![0i32, 1, 2, 3, -4]),
             Column::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
                 false, true, false, false, false,
             ]),
@@ -48,7 +46,7 @@ pub fn test_pass() {
             false, true, true, false, false,
         ]),
         &[
-            Column::Int32(vec![0, 1, 2, 3, -4].into()),
+            Column::from_data(vec![0i32, 1, 2, 3, -4]),
             Column::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
                 false, true, false, false, false,
             ]),
@@ -61,7 +59,7 @@ pub fn test_pass() {
 
     run_concat(&mut file, vec![
         vec![
-            Column::Int32(vec![0, 1, 2, 3, -4].into()),
+            Column::from_data(vec![0i32, 1, 2, 3, -4]),
             Column::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
                 false, true, false, false, false,
             ]),
@@ -72,7 +70,7 @@ pub fn test_pass() {
             ]),
         ],
         vec![
-            Column::Int32(vec![5, 6].into()),
+            Column::from_data(vec![5i32, 6]),
             Column::from_data_with_validity(vec![15u8, 16], vec![false, true]),
             Column::Null { len: 2 },
             Column::EmptyArray { len: 2 },
@@ -81,25 +79,20 @@ pub fn test_pass() {
     ]);
 
     run_take(&mut file, &[0, 3, 1], &[
-        Column::Int32(vec![0, 1, 2, 3, -4].into()),
-        Column::Nullable(Box::new(NullableColumn {
-            column: Column::UInt8(vec![10u8, 11, 12, 13, 14].into()),
-            validity: vec![false, true, false, false, false].into(),
-        })),
+        Column::from_data(vec![0i32, 1, 2, 3, -4]),
+        Column::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
+            false, true, false, false, false,
+        ]),
         Column::Null { len: 5 },
-        Column::Nullable(Box::new(NullableColumn {
-            column: Column::String(StringColumn {
-                data: "xyzab".as_bytes().to_vec().into(),
-                offsets: vec![0, 1, 2, 3, 4, 5].into(),
-            }),
-            validity: vec![false, true, true, false, false].into(),
-        })),
+        Column::from_data_with_validity(vec!["x", "y", "z", "a", "b"], vec![
+            false, true, true, false, false,
+        ]),
     ]);
 
     run_scatter(
         &mut file,
         &[
-            Column::Int32(vec![0, 1, 2, 3, -4].into()),
+            Column::from_data(vec![0i32, 1, 2, 3, -4]),
             Column::from_data_with_validity(vec![10, 11, 12, 13, 14], vec![
                 false, true, false, false, false,
             ]),

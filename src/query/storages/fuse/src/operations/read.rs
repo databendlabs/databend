@@ -222,12 +222,6 @@ impl FuseTableSource {
     fn generate_one_block(&mut self, block: DataBlock) -> Result<()> {
         let mut partitions = self.ctx.try_get_partitions(1)?;
 
-        let progress_values = ProgressValues {
-            rows: block.num_rows(),
-            bytes: block.memory_size(),
-        };
-        self.scan_progress.incr(&progress_values);
-
         self.state = match partitions.is_empty() {
             true => State::Generated(None, block),
             false => State::Generated(Some(partitions.remove(0)), block),
@@ -322,9 +316,21 @@ impl Processor for FuseTableSource {
                         return Err(ErrorCode::LogicalError("It's a bug. Need remain reader"));
                     };
                     // the last step of prewhere
+                    let progress_values = ProgressValues {
+                        rows: block.num_rows(),
+                        bytes: block.memory_size(),
+                    };
+                    self.scan_progress.incr(&progress_values);
                     DataBlock::filter_block(block, &filter)?
                 } else {
-                    self.output_reader.deserialize(part, chunks)?
+                    let block = self.output_reader.deserialize(part, chunks)?;
+                    let progress_values = ProgressValues {
+                        rows: block.num_rows(),
+                        bytes: block.memory_size(),
+                    };
+                    self.scan_progress.incr(&progress_values);
+
+                    block
                 };
 
                 self.generate_one_block(data_block)?;
@@ -341,11 +347,21 @@ impl Processor for FuseTableSource {
                     if !DataBlock::filter_exists(&filter)? {
                         // all rows in this block are filtered out
                         // turn to read next part
+                        let progress_values = ProgressValues {
+                            rows: data_block.num_rows(),
+                            bytes: data_block.memory_size(),
+                        };
+                        self.scan_progress.incr(&progress_values);
                         self.generate_one_empty_block()?;
                         return Ok(());
                     }
                     if self.remain_reader.is_none() {
                         // shortcut, we don't need to read remain data
+                        let progress_values = ProgressValues {
+                            rows: data_block.num_rows(),
+                            bytes: data_block.memory_size(),
+                        };
+                        self.scan_progress.incr(&progress_values);
                         let block = DataBlock::filter_block(data_block, &filter)?;
                         self.generate_one_block(block)?;
                     } else {

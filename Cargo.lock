@@ -945,6 +945,7 @@ dependencies = [
  "common-datavalues",
  "common-expression",
  "itertools",
+ "ordered-float 3.0.0 (git+https://github.com/andylokandy/rust-ordered-float.git?branch=as)",
  "serde",
  "serde_json",
 ]
@@ -1144,7 +1145,7 @@ dependencies = [
  "micromarshal",
  "num",
  "once_cell",
- "ordered-float 3.0.0",
+ "ordered-float 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "paste",
  "pretty_assertions",
  "primitive-types",
@@ -1188,7 +1189,7 @@ dependencies = [
  "itertools",
  "match-template",
  "num-traits",
- "ordered-float 3.0.0",
+ "ordered-float 3.0.0 (git+https://github.com/andylokandy/rust-ordered-float.git?branch=as)",
  "serde",
 ]
 
@@ -1239,7 +1240,7 @@ dependencies = [
  "num-format",
  "num-traits",
  "once_cell",
- "ordered-float 3.0.0",
+ "ordered-float 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "pretty_assertions",
  "pulldown-cmark",
  "rand 0.8.5",
@@ -1273,6 +1274,7 @@ dependencies = [
  "itertools",
  "match-template",
  "num-traits",
+ "ordered-float 3.0.0 (git+https://github.com/andylokandy/rust-ordered-float.git?branch=as)",
  "rand 0.8.5",
  "strength_reduce",
 ]
@@ -1315,7 +1317,7 @@ name = "common-hashtable"
 version = "0.1.0"
 dependencies = [
  "common-base",
- "ordered-float 3.0.0",
+ "ordered-float 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "primitive-types",
  "rand 0.8.5",
 ]
@@ -5229,6 +5231,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96bcbab4bfea7a59c2c0fe47211a1ac4e3e96bea6eb446d704f310bc5c732ae2"
 dependencies = [
  "num-traits",
+]
+
+[[package]]
+name = "ordered-float"
+version = "3.0.0"
+source = "git+https://github.com/andylokandy/rust-ordered-float.git?branch=as#1be14d468e87ee7462893e9ad84a360f0674ad0d"
+dependencies = [
+ "num-traits",
+ "rand 0.8.5",
  "serde",
 ]
 
