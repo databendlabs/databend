@@ -2723,3 +2723,44 @@ output domain  : Unknown
 output         : 4036989590
 
 
+ast            : repeat('3', NULL)
+raw expr       : repeat("3", NULL)
+checked expr   : repeat<String NULL, NULL>(CAST("3" AS String NULL), NULL)
+optimized expr : NULL
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : repeat('3', 5)
+raw expr       : repeat("3", 5_u8)
+checked expr   : repeat<String, UInt64>("3", CAST(5_u8 AS UInt64))
+optimized expr : "33333"
+output type    : String
+output domain  : Unknown
+output         : "33333"
+
+
+ast            : repeat(a, 3)
+raw expr       : repeat(ColumnRef(0)::String, 3_u8)
+checked expr   : repeat<String, UInt64>(ColumnRef(0), CAST(3_u8 AS UInt64))
+optimized expr : repeat<String, UInt64>(ColumnRef(0), 3_u64)
+evaluation:
++--------+-------------+---------+
+|        | a           | Output  |
++--------+-------------+---------+
+| Type   | String      | String  |
+| Domain | {"a"..="c"} | Unknown |
+| Row 0  | "a"         | "aaa"   |
+| Row 1  | "b"         | "bbb"   |
+| Row 2  | "c"         | "ccc"   |
++--------+-------------+---------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------+
+| Column | Data                                                                               |
++--------+------------------------------------------------------------------------------------+
+| a      | StringColumn { data: [97, 98, 99], offsets: [0, 1, 2, 3] }                         |
+| Output | StringColumn { data: [97, 97, 97, 98, 98, 98, 99, 99, 99], offsets: [0, 3, 6, 9] } |
++--------+------------------------------------------------------------------------------------+
+
+

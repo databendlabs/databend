@@ -55,6 +55,7 @@ fn test_string() {
     test_char(file);
     test_soundex(file);
     test_ord(file);
+    test_repeat(file);
 }
 
 fn test_upper(file: &mut impl Write) {
@@ -685,4 +686,11 @@ fn test_ord(file: &mut impl Write) {
     run_ast(file, "ord('и')", &[]);
     run_ast(file, "ord('早ab')", &[]);
     run_ast(file, "ord('💖')", &[]);
+}
+
+fn test_repeat(file: &mut impl Write) {
+    run_ast(file, "repeat('3', NULL)", &[]);
+    run_ast(file, "repeat('3', 5)", &[]);
+    let table = [("a", DataType::String, Column::from_data(&["a", "b", "c"]))];
+    run_ast(file, "repeat(a, 3)", &table);
 }
