@@ -38,7 +38,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
         "2022-08-25: Add: ShareMeta::share_from_db_ids; DatabaseMeta::from_share",
     ),
     (6, "2022-09-08: Add: users.proto/CopyOptions::purge"),
-    (7, "2022-09-09: Add: table.proto/TableStageFileInfo type"),
+    (7, "2022-09-09: Add: table.proto/TableCopiedFileInfo type"),
 ];
 
 pub const VER: u64 = META_CHANGE_LOG.last().unwrap().0;

@@ -20,10 +20,10 @@ use common_meta_app::schema::DatabaseId;
 use common_meta_app::schema::DatabaseIdToName;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::DbIdListKey;
+use common_meta_app::schema::TableCopiedFileNameIdent;
 use common_meta_app::schema::TableId;
 use common_meta_app::schema::TableIdListKey;
 use common_meta_app::schema::TableIdToName;
-use common_meta_app::schema::TableStageFileNameIdent;
 use kv_api_key::check_segment;
 use kv_api_key::check_segment_absent;
 use kv_api_key::check_segment_present;
@@ -44,7 +44,7 @@ const PREFIX_TABLE_ID_LIST: &str = "__fd_table_id_list";
 const PREFIX_TABLE_COUNT: &str = "__fd_table_count";
 const PREFIX_DATABASE_ID_TO_NAME: &str = "__fd_database_id_to_name";
 const PREFIX_TABLE_ID_TO_NAME: &str = "__fd_table_id_to_name";
-const PREFIX_TABLE_STAGE_FILE: &str = "__fd_table_copied_files";
+const PREFIX_TABLE_COPIED_FILES: &str = "__fd_table_copied_files";
 
 pub(crate) const ID_GEN_TABLE: &str = "table_id";
 pub(crate) const ID_GEN_DATABASE: &str = "database_id";
@@ -297,9 +297,9 @@ impl KVApiKey for CountTablesKey {
     }
 }
 
-// __fd_table_stage_file/tenant/db_id/table_id/file_name -> TableStageFileInfo
-impl KVApiKey for TableStageFileNameIdent {
-    const PREFIX: &'static str = PREFIX_TABLE_STAGE_FILE;
+// __fd_table_stage_file/tenant/db_id/table_id/file_name -> TableCopiedFileInfo
+impl KVApiKey for TableCopiedFileNameIdent {
+    const PREFIX: &'static str = PREFIX_TABLE_COPIED_FILES;
 
     fn to_key(&self) -> String {
         format!(
@@ -313,40 +313,23 @@ impl KVApiKey for TableStageFileNameIdent {
     }
 
     fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
-        let mut elts = s.split('/');
-
-        let prefix = check_segment_present(elts.next(), 0, s)?;
-        check_segment(prefix, 0, Self::PREFIX)?;
-
-        let tenant = check_segment_present(elts.next(), 1, s)?;
-
-        let db_id = check_segment_present(elts.next(), 2, s)?;
-        let db_id = decode_id(db_id)?;
-
-        let table_id = check_segment_present(elts.next(), 3, s)?;
-        let table_id = decode_id(table_id)?;
-
-        // file path count, there MUST be at least a path in file String
-        let mut count = 0;
-        let file = elts
-            .into_iter()
-            .map(|x| {
-                count += 1;
-                x
-            })
-            .collect::<Vec<&str>>()
-            .join("/");
-        if count == 0 {
+        let elts: Vec<&str> = s.splitn(5, '/').collect();
+        if elts.len() < 5 {
             return Err(KVApiKeyError::AtleastSegments {
                 expect: 5,
-                actual: 4,
+                actual: elts.len(),
             });
         }
+        let prefix = elts[0];
+        check_segment(prefix, 0, Self::PREFIX)?;
 
-        let tenant = unescape(tenant)?;
-        let file = unescape(&file)?;
+        let tenant = unescape(elts[1])?;
 
-        Ok(TableStageFileNameIdent {
+        let db_id = decode_id(elts[2])?;
+        let table_id = decode_id(elts[3])?;
+        let file = unescape(elts[4])?;
+
+        Ok(TableCopiedFileNameIdent {
             tenant,
             db_id,
             table_id,
@@ -357,15 +340,16 @@ impl KVApiKey for TableStageFileNameIdent {
 
 #[cfg(test)]
 mod tests {
-    use common_meta_app::schema::TableStageFileNameIdent;
+    use common_meta_app::schema::TableCopiedFileNameIdent;
 
     use crate::kv_api_key::KVApiKey;
     use crate::KVApiKeyError;
 
     #[test]
-    fn test_table_stage_file_name_ident_conversion() -> Result<(), KVApiKeyError> {
+    fn test_table_copied_file_name_ident_conversion() -> Result<(), KVApiKeyError> {
+        // test with a key has a file has multi path
         {
-            let name = TableStageFileNameIdent {
+            let name = TableCopiedFileNameIdent {
                 tenant: "tenant".to_owned(),
                 db_id: 1,
                 table_id: 2,
@@ -377,14 +361,14 @@ mod tests {
                 key,
                 format!(
                     "{}/{}/{}/{}/{}",
-                    TableStageFileNameIdent::PREFIX,
+                    TableCopiedFileNameIdent::PREFIX,
                     name.tenant,
                     name.db_id,
                     name.table_id,
                     name.file,
                 )
             );
-            let from = TableStageFileNameIdent::from_key(&key)?;
+            let from = TableCopiedFileNameIdent::from_key(&key)?;
             assert_eq!(from, name);
         }
 
@@ -392,12 +376,12 @@ mod tests {
         {
             let key = format!(
                 "{}/{}/{}/{}",
-                TableStageFileNameIdent::PREFIX,
+                TableCopiedFileNameIdent::PREFIX,
                 "tenant".to_owned(),
                 1,
                 2,
             );
-            let res = TableStageFileNameIdent::from_key(&key);
+            let res = TableCopiedFileNameIdent::from_key(&key);
             assert!(res.is_err());
             let err = res.unwrap_err();
             assert_eq!(err, KVApiKeyError::AtleastSegments {
@@ -410,14 +394,14 @@ mod tests {
         {
             let key = format!(
                 "{}/{}/{}/{}/{}",
-                TableStageFileNameIdent::PREFIX,
+                TableCopiedFileNameIdent::PREFIX,
                 "tenant".to_owned(),
                 1,
                 2,
                 "".to_string()
             );
-            let res = TableStageFileNameIdent::from_key(&key)?;
-            assert_eq!(res, TableStageFileNameIdent {
+            let res = TableCopiedFileNameIdent::from_key(&key)?;
+            assert_eq!(res, TableCopiedFileNameIdent {
                 tenant: "tenant".to_owned(),
                 db_id: 1,
                 table_id: 2,

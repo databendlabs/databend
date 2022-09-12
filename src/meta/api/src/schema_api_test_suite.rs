@@ -35,12 +35,14 @@ use common_meta_app::schema::DbIdListKey;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropTableReq;
 use common_meta_app::schema::GetDatabaseReq;
+use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::GetTableReq;
-use common_meta_app::schema::GetTableStageFileReq;
 use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::TableCopiedFileInfo;
+use common_meta_app::schema::TableCopiedFileNameIdent;
 use common_meta_app::schema::TableId;
 use common_meta_app::schema::TableIdList;
 use common_meta_app::schema::TableIdListKey;
@@ -49,15 +51,13 @@ use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
-use common_meta_app::schema::TableStageFileInfo;
-use common_meta_app::schema::TableStageFileNameIdent;
 use common_meta_app::schema::TableStatistics;
 use common_meta_app::schema::TruncateTableReq;
 use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReq;
+use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReq;
-use common_meta_app::schema::UpsertTableStageFileReq;
 use common_meta_app::share::AddShareAccountsReq;
 use common_meta_app::share::CreateShareReq;
 use common_meta_app::share::GrantShareObjectReq;
@@ -2507,7 +2507,7 @@ impl SchemaApiTestSuite {
 
         info!("--- create and get stage file info");
         {
-            let stage_info = TableStageFileInfo {
+            let stage_info = TableCopiedFileInfo {
                 etag: Some("etag".to_owned()),
                 content_length: 1024,
                 last_modified: Some(Utc::now()),
@@ -2515,7 +2515,7 @@ impl SchemaApiTestSuite {
             let mut file_info = BTreeMap::new();
             file_info.insert("file".to_string(), stage_info.clone());
 
-            let req = UpsertTableStageFileReq {
+            let req = UpsertTableCopiedFileReq {
                 table: TableNameIdent {
                     tenant: tenant1.to_string(),
                     db_name: db1_name.to_string(),
@@ -2525,16 +2525,16 @@ impl SchemaApiTestSuite {
                 expire_at: Some((Utc::now().timestamp() + 86400) as u64),
             };
 
-            let _ = mt.upsert_table_stage_file_info(req).await?;
+            let _ = mt.upsert_table_copied_file_info(req).await?;
 
-            let key = TableStageFileNameIdent {
+            let key = TableCopiedFileNameIdent {
                 tenant: tenant1.to_string(),
                 db_id,
                 table_id,
                 file: "file".to_string(),
             };
 
-            let stage_file: TableStageFileInfo = get_kv_data(mt.as_kv_api(), &key).await?;
+            let stage_file: TableCopiedFileInfo = get_kv_data(mt.as_kv_api(), &key).await?;
             assert_eq!(stage_file, stage_info);
         }
 
@@ -2577,14 +2577,14 @@ impl SchemaApiTestSuite {
 
         info!("--- assert stage file info has been removed");
         {
-            let key = TableStageFileNameIdent {
+            let key = TableCopiedFileNameIdent {
                 tenant: tenant1.to_string(),
                 db_id,
                 table_id,
                 file: "file".to_string(),
             };
 
-            let resp: Result<TableStageFileInfo, MetaError> =
+            let resp: Result<TableCopiedFileInfo, MetaError> =
                 get_kv_data(mt.as_kv_api(), &key).await;
             assert!(resp.is_err());
         }
@@ -3225,7 +3225,7 @@ impl SchemaApiTestSuite {
 
         info!("--- create and get stage file info");
         {
-            let stage_info = TableStageFileInfo {
+            let stage_info = TableCopiedFileInfo {
                 etag: Some("etag".to_owned()),
                 content_length: 1024,
                 last_modified: Some(Utc::now()),
@@ -3233,7 +3233,7 @@ impl SchemaApiTestSuite {
             let mut file_info = BTreeMap::new();
             file_info.insert("file".to_string(), stage_info.clone());
 
-            let req = UpsertTableStageFileReq {
+            let req = UpsertTableCopiedFileReq {
                 table: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -3243,9 +3243,9 @@ impl SchemaApiTestSuite {
                 expire_at: Some((Utc::now().timestamp() + 86400) as u64),
             };
 
-            let _ = mt.upsert_table_stage_file_info(req).await?;
+            let _ = mt.upsert_table_copied_file_info(req).await?;
 
-            let req = GetTableStageFileReq {
+            let req = GetTableCopiedFileReq {
                 table: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -3254,7 +3254,7 @@ impl SchemaApiTestSuite {
                 files: vec!["file".to_string()],
             };
 
-            let resp = mt.get_table_stage_file_info(req).await?;
+            let resp = mt.get_table_copied_file_info(req).await?;
             assert_eq!(resp.file_info.len(), 1);
             let resp_stage_info = resp.file_info.get(&"file".to_string());
             assert_eq!(resp_stage_info.unwrap(), &stage_info);
@@ -3262,7 +3262,7 @@ impl SchemaApiTestSuite {
 
         info!("--- test again with expire stage file info");
         {
-            let stage_info = TableStageFileInfo {
+            let stage_info = TableCopiedFileInfo {
                 etag: Some("etag".to_owned()),
                 content_length: 1024,
                 last_modified: Some(Utc::now()),
@@ -3270,7 +3270,7 @@ impl SchemaApiTestSuite {
             let mut file_info = BTreeMap::new();
             file_info.insert("file2".to_string(), stage_info.clone());
 
-            let req = UpsertTableStageFileReq {
+            let req = UpsertTableCopiedFileReq {
                 table: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -3280,9 +3280,9 @@ impl SchemaApiTestSuite {
                 expire_at: Some((Utc::now().timestamp() - 86400) as u64),
             };
 
-            let _ = mt.upsert_table_stage_file_info(req).await?;
+            let _ = mt.upsert_table_copied_file_info(req).await?;
 
-            let req = GetTableStageFileReq {
+            let req = GetTableCopiedFileReq {
                 table: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -3291,7 +3291,7 @@ impl SchemaApiTestSuite {
                 files: vec!["file2".to_string()],
             };
 
-            let resp = mt.get_table_stage_file_info(req).await?;
+            let resp = mt.get_table_copied_file_info(req).await?;
             assert_eq!(resp.file_info.len(), 0);
         }
 
@@ -3352,7 +3352,7 @@ impl SchemaApiTestSuite {
 
         info!("--- create and get stage file info");
         {
-            let stage_info = TableStageFileInfo {
+            let stage_info = TableCopiedFileInfo {
                 etag: Some("etag".to_owned()),
                 content_length: 1024,
                 last_modified: Some(Utc::now()),
@@ -3360,7 +3360,7 @@ impl SchemaApiTestSuite {
             let mut file_info = BTreeMap::new();
             file_info.insert("file".to_string(), stage_info.clone());
 
-            let req = UpsertTableStageFileReq {
+            let req = UpsertTableCopiedFileReq {
                 table: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -3370,9 +3370,9 @@ impl SchemaApiTestSuite {
                 expire_at: Some((Utc::now().timestamp() + 86400) as u64),
             };
 
-            let _ = mt.upsert_table_stage_file_info(req).await?;
+            let _ = mt.upsert_table_copied_file_info(req).await?;
 
-            let req = GetTableStageFileReq {
+            let req = GetTableCopiedFileReq {
                 table: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -3381,7 +3381,7 @@ impl SchemaApiTestSuite {
                 files: vec!["file".to_string()],
             };
 
-            let resp = mt.get_table_stage_file_info(req).await?;
+            let resp = mt.get_table_copied_file_info(req).await?;
             assert_eq!(resp.file_info.len(), 1);
             let resp_stage_info = resp.file_info.get(&"file".to_string());
             assert_eq!(resp_stage_info.unwrap(), &stage_info);
@@ -3399,7 +3399,7 @@ impl SchemaApiTestSuite {
 
             let _ = mt.truncate_table(req).await?;
 
-            let req = GetTableStageFileReq {
+            let req = GetTableCopiedFileReq {
                 table: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -3408,7 +3408,7 @@ impl SchemaApiTestSuite {
                 files: vec!["file2".to_string()],
             };
 
-            let resp = mt.get_table_stage_file_info(req).await?;
+            let resp = mt.get_table_copied_file_info(req).await?;
             assert_eq!(resp.file_info.len(), 0);
         }
 

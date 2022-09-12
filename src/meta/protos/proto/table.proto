@@ -164,7 +164,7 @@ message DatabaseIdTableName {
   string table_name = 2;
 }
 
-message TableStageFileInfo {
+message TableCopiedFileInfo {
   uint64 ver = 100;
   uint64 min_compatible = 101;
 

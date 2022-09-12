@@ -39,15 +39,17 @@ use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropTableReq;
 use common_meta_app::schema::GetDatabaseReq;
+use common_meta_app::schema::GetTableCopiedFileReply;
+use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::GetTableReq;
-use common_meta_app::schema::GetTableStageFileReply;
-use common_meta_app::schema::GetTableStageFileReq;
 use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::TableCopiedFileInfo;
+use common_meta_app::schema::TableCopiedFileNameIdent;
 use common_meta_app::schema::TableId;
 use common_meta_app::schema::TableIdList;
 use common_meta_app::schema::TableIdListKey;
@@ -56,8 +58,6 @@ use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
-use common_meta_app::schema::TableStageFileInfo;
-use common_meta_app::schema::TableStageFileNameIdent;
 use common_meta_app::schema::TruncateTableReply;
 use common_meta_app::schema::TruncateTableReq;
 use common_meta_app::schema::UndropDatabaseReply;
@@ -66,10 +66,10 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
+use common_meta_app::schema::UpsertTableCopiedFileReply;
+use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
-use common_meta_app::schema::UpsertTableStageFileReply;
-use common_meta_app::schema::UpsertTableStageFileReq;
 use common_meta_app::share::ShareGrantObjectPrivilege;
 use common_meta_app::share::ShareId;
 use common_meta_app::share::ShareNameIdent;
@@ -1725,10 +1725,10 @@ impl<KV: KVApi> SchemaApi for KV {
         ))
     }
 
-    async fn get_table_stage_file_info(
+    async fn get_table_copied_file_info(
         &self,
-        req: GetTableStageFileReq,
-    ) -> Result<GetTableStageFileReply, MetaError> {
+        req: GetTableCopiedFileReq,
+    ) -> Result<GetTableCopiedFileReply, MetaError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
         let tenant_dbname_tbname = &req.table;
@@ -1769,20 +1769,20 @@ impl<KV: KVApi> SchemaApi for KV {
             ident = display(&tbid),
             name = display(&tenant_dbname_tbname),
             table_meta = debug(&tb_meta),
-            "get_table_stage_file_info"
+            "get_table_copied_file_info"
         );
 
         let mut file_info = BTreeMap::new();
 
         for file in req.files {
-            let key = TableStageFileNameIdent {
+            let key = TableCopiedFileNameIdent {
                 tenant: tenant_dbname_tbname.tenant.clone(),
                 db_id,
                 table_id,
                 file: file.clone(),
             };
 
-            let (_file_seq, file_stage_info): (_, Option<TableStageFileInfo>) =
+            let (_file_seq, file_stage_info): (_, Option<TableCopiedFileInfo>) =
                 get_struct_value(self, &key).await?;
 
             if let Some(file_stage_info) = file_stage_info {
@@ -1790,13 +1790,13 @@ impl<KV: KVApi> SchemaApi for KV {
             }
         }
 
-        Ok(GetTableStageFileReply { file_info })
+        Ok(GetTableCopiedFileReply { file_info })
     }
 
-    async fn upsert_table_stage_file_info(
+    async fn upsert_table_copied_file_info(
         &self,
-        req: UpsertTableStageFileReq,
-    ) -> Result<UpsertTableStageFileReply, MetaError> {
+        req: UpsertTableCopiedFileReq,
+    ) -> Result<UpsertTableCopiedFileReply, MetaError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
         let tenant_dbname_tbname = &req.table;
@@ -1842,7 +1842,7 @@ impl<KV: KVApi> SchemaApi for KV {
                 ident = display(&tbid),
                 name = display(&tenant_dbname_tbname),
                 table_meta = debug(&tb_meta),
-                "upsert_table_stage_file_info"
+                "upsert_table_copied_file_info"
             );
 
             let mut condition = vec![
@@ -1852,13 +1852,13 @@ impl<KV: KVApi> SchemaApi for KV {
             ];
             let mut if_then = vec![];
             for (file, file_info) in req.file_info.iter() {
-                let key = TableStageFileNameIdent {
+                let key = TableCopiedFileNameIdent {
                     tenant: tenant_dbname_tbname.tenant.clone(),
                     db_id,
                     table_id,
                     file: file.to_owned(),
                 };
-                let (file_seq, _): (_, Option<TableStageFileInfo>) =
+                let (file_seq, _): (_, Option<TableCopiedFileInfo>) =
                     get_struct_value(self, &key).await?;
 
                 condition.push(txn_cond_seq(&key, Eq, file_seq));
@@ -1888,16 +1888,16 @@ impl<KV: KVApi> SchemaApi for KV {
                 ident = display(&tbid),
                 name = display(&tenant_dbname_tbname),
                 succ = display(succ),
-                "upsert_table_stage_file_info"
+                "upsert_table_copied_file_info"
             );
 
             if succ {
-                return Ok(UpsertTableStageFileReply {});
+                return Ok(UpsertTableCopiedFileReply {});
             }
         }
 
         Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("upsert_table_stage_file_info", TXN_MAX_RETRY_TIMES),
+            TxnRetryMaxTimes::new("upsert_table_copied_file_info", TXN_MAX_RETRY_TIMES),
         )))
     }
 
@@ -1982,7 +1982,7 @@ impl<KV: KVApi> SchemaApi for KV {
             }
         }
         Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("upsert_table_stage_file_info", TXN_MAX_RETRY_TIMES),
+            TxnRetryMaxTimes::new("upsert_table_copied_file_info", TXN_MAX_RETRY_TIMES),
         )))
     }
 
@@ -2209,7 +2209,7 @@ async fn remove_table_stage_files(
     if_then: &mut Vec<TxnOp>,
 ) -> Result<(), MetaError> {
     // List files by tenant, db_name, table_name
-    let dbid_tbname_idlist = TableStageFileNameIdent {
+    let dbid_tbname_idlist = TableCopiedFileNameIdent {
         tenant: tenant.to_owned(),
         db_id,
         table_id,
@@ -2219,7 +2219,7 @@ async fn remove_table_stage_files(
 
     let files = list_keys(kv_api, &dbid_tbname_idlist).await?;
     for file in files {
-        let (file_seq, _opt): (_, Option<TableStageFileInfo>) =
+        let (file_seq, _opt): (_, Option<TableCopiedFileInfo>) =
             get_struct_value(kv_api, &file).await?;
         if file_seq != 0 {
             condition.push(txn_cond_seq(&file, Eq, file_seq));
