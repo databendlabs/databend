@@ -412,14 +412,14 @@ impl<'a> Display for SetExpr<'a> {
                         write!(f, " UNION ")?;
                     }
                     SetOperator::Except => {
-                        write!(f, " EXCEPT")?;
+                        write!(f, " EXCEPT ")?;
                     }
                     SetOperator::Intersect => {
-                        write!(f, " INTERSECT")?;
+                        write!(f, " INTERSECT ")?;
                     }
                 }
                 if set_operation.all {
-                    write!(f, " ALL")?;
+                    write!(f, "ALL ")?;
                 }
                 write!(f, "{}", set_operation.right)?;
             }
