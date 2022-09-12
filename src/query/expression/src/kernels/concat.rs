@@ -31,6 +31,7 @@ use crate::types::NumberType;
 use crate::types::StringType;
 use crate::types::TimestampType;
 use crate::types::ValueType;
+use crate::types::VariantType;
 use crate::with_number_mapped_type;
 use crate::Chunk;
 use crate::Column;
@@ -78,7 +79,7 @@ impl Column {
         match &columns[0] {
             Column::Null { .. } => Self::concat_arg_types::<NullType>(columns),
             Column::EmptyArray { .. } => Self::concat_arg_types::<EmptyArrayType>(columns),
-            Column::Number(col) => with_number_mapped_type!(NUM_TYPE, match col {
+            Column::Number(col) => with_number_mapped_type!(|NUM_TYPE| match col {
                 NumberColumn::NUM_TYPE(_) => {
                     Self::concat_arg_types::<NumberType<NUM_TYPE>>(columns)
                 }
@@ -128,6 +129,7 @@ impl Column {
                     len: capacity,
                 }
             }
+            Column::Variant(_) => Self::concat_arg_types::<VariantType>(columns),
         }
     }
 
