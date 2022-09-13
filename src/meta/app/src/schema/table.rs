@@ -133,7 +133,7 @@ impl Display for TableIdListKey {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Default)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct TableInfo {
     pub ident: TableIdent,
 
@@ -168,7 +168,7 @@ pub struct TableStatistics {
 /// The essential state that defines what a table is.
 ///
 /// It is what a meta store just needs to save.
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct TableMeta {
     pub schema: Arc<DataSchema>,
     pub engine: String,
@@ -342,7 +342,7 @@ impl Display for TableIdList {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CreateTableReq {
     pub if_not_exists: bool,
     pub name_ident: TableNameIdent,
@@ -497,7 +497,7 @@ pub struct UpsertTableOptionReq {
     pub options: HashMap<String, Option<String>>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct UpdateTableMetaReq {
     pub table_id: u64,
     pub seq: MatchSeq,
