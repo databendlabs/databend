@@ -12,23 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::future::Future;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::time::Duration;
 
+use common_base::base::select3;
 use common_base::base::tokio;
 use common_base::base::tokio::sync::Notify;
 use common_base::base::tokio::task::JoinHandle;
+use common_base::base::Select3Output;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use futures_util::future::Either;
-use parking_lot::Mutex;
 
 use crate::api::rpc::flight_client::FlightExchange;
-use crate::api::rpc::packets::PrecommitBlock;
-use crate::api::rpc::packets::ProgressInfo;
 use crate::api::DataPacket;
-use crate::api::FragmentData;
 use crate::sessions::QueryContext;
 
 pub struct StatisticsReceiver {
@@ -36,8 +35,7 @@ pub struct StatisticsReceiver {
     exchanges: Vec<FlightExchange>,
     shutdown_flag: Arc<AtomicBool>,
     shutdown_notify: Arc<Notify>,
-    exchange_handler: Vec<JoinHandle<()>>,
-    recv_error: Arc<Mutex<Option<ErrorCode>>>,
+    exchange_handler: Vec<JoinHandle<Result<()>>>,
 }
 
 impl StatisticsReceiver {
@@ -48,53 +46,108 @@ impl StatisticsReceiver {
             shutdown_flag: Arc::new(AtomicBool::new(false)),
             shutdown_notify: Arc::new(Notify::new()),
             exchange_handler: vec![],
-            recv_error: Arc::new(Mutex::new(None)),
         }
     }
 
     pub fn start(&mut self) {
-        for flight_exchange in &self.exchanges {
+        while let Some(flight_exchange) = self.exchanges.pop() {
             let ctx = self.ctx.clone();
             let shutdown_flag = self.shutdown_flag.clone();
             let shutdown_notify = self.shutdown_notify.clone();
-            let recv_error = self.recv_error.clone();
-            let flight_exchange = flight_exchange.clone();
 
             self.exchange_handler.push(tokio::spawn(async move {
                 let mut recv = Box::pin(flight_exchange.recv());
                 let mut notified = Box::pin(shutdown_notify.notified());
 
                 'worker_loop: while !shutdown_flag.load(Ordering::Relaxed) {
-                    match futures::future::select(recv, notified).await {
-                        Either::Left((res, right)) => {
-                            notified = right;
-                            recv = Box::pin(flight_exchange.recv());
+                    let interval = Box::pin(tokio::time::sleep(Duration::from_millis(500)));
 
-                            if Self::on_data_packet(&ctx, &recv_error, res) {
-                                break 'worker_loop;
+                    match select3(interval, notified, recv).await {
+                        Select3Output::Left((_res, middle, right)) => {
+                            recv = right;
+                            notified = middle;
+
+                            if !shutdown_flag.load(Ordering::Relaxed) {
+                                match Self::fetch(&ctx, &flight_exchange, recv).await {
+                                    Ok(true) => {
+                                        return Ok(());
+                                    }
+                                    Ok(false) => {
+                                        recv = Box::pin(flight_exchange.recv());
+                                    }
+                                    Err(cause) => {
+                                        ctx.get_current_session().force_kill_query();
+                                        return Err(cause);
+                                    }
+                                };
                             }
                         }
-                        Either::Right((_, _)) => {
+                        Select3Output::Middle((_, _, right)) => {
+                            recv = right;
                             break 'worker_loop;
+                        }
+                        Select3Output::Right((res, _, middle)) => {
+                            notified = middle;
+                            match Self::recv_data(&ctx, res) {
+                                Ok(true) => {
+                                    ctx.get_current_session().force_kill_query();
+                                    return Ok(());
+                                }
+                                Ok(false) => {
+                                    recv = Box::pin(flight_exchange.recv());
+                                }
+                                Err(cause) => {
+                                    ctx.get_current_session().force_kill_query();
+                                    return Err(cause);
+                                }
+                            };
                         }
                     }
                 }
+
+                if let Err(cause) = Self::fetch(&ctx, &flight_exchange, recv).await {
+                    ctx.get_current_session().force_kill_query();
+                    return Err(cause);
+                }
+
+                Ok(())
             }));
         }
     }
 
-    fn on_data_packet(
+    async fn fetch(
         ctx: &Arc<QueryContext>,
-        recv_error: &Mutex<Option<ErrorCode>>,
-        res: Result<Option<DataPacket>>,
-    ) -> bool {
-        match res {
-            Ok(None) => true,
-            Err(error) => Self::on_recv_error(ctx, recv_error, error),
-            Ok(Some(DataPacket::ErrorCode(v))) => Self::on_recv_error(ctx, recv_error, v),
-            Ok(Some(DataPacket::Progress(v))) => Self::on_recv_progress(ctx, v),
-            Ok(Some(DataPacket::FragmentData(v))) => Self::on_recv_data(v),
-            Ok(Some(DataPacket::PrecommitBlock(v))) => Self::on_recv_precommit(ctx, v),
+        flight_exchange: &FlightExchange,
+        recv: impl Future<Output = Result<Option<DataPacket>>>,
+    ) -> Result<bool> {
+        flight_exchange
+            .send(DataPacket::FetchProgressAndPrecommit)
+            .await?;
+
+        Self::recv_data(ctx, recv.await)
+    }
+
+    fn recv_data(ctx: &Arc<QueryContext>, recv_data: Result<Option<DataPacket>>) -> Result<bool> {
+        match recv_data {
+            Ok(None) => Ok(true),
+            Err(transport_error) => Err(transport_error),
+            Ok(Some(DataPacket::ErrorCode(error))) => Err(error),
+            Ok(Some(DataPacket::FragmentData(_))) => unreachable!(),
+            Ok(Some(DataPacket::FetchProgressAndPrecommit)) => unreachable!(),
+            Ok(Some(DataPacket::ProgressAndPrecommit {
+                progress,
+                precommit,
+            })) => {
+                for progress_info in progress {
+                    progress_info.inc(ctx);
+                }
+
+                for precommit_block in precommit {
+                    precommit_block.precommit(ctx);
+                }
+
+                Ok(false)
+            }
         }
     }
 
@@ -104,44 +157,33 @@ impl StatisticsReceiver {
     }
 
     pub fn wait_shutdown(&mut self) -> Result<()> {
-        let exchanges_handler = std::mem::take(&mut self.exchange_handler);
+        let mut exchanges_handler = std::mem::take(&mut self.exchange_handler);
         futures::executor::block_on(async move {
-            futures::future::join_all(exchanges_handler.into_iter()).await;
-        });
+            while let Some(exchange_handler) = exchanges_handler.pop() {
+                match exchange_handler.await {
+                    Ok(Ok(_)) => Ok(()),
+                    Ok(Err(cause)) => Err(cause),
+                    Err(join_error) => match join_error.is_cancelled() {
+                        true => Err(ErrorCode::TokioError("Tokio error is cancelled.")),
+                        false => {
+                            let panic_error = join_error.into_panic();
+                            match panic_error.downcast_ref::<&'static str>() {
+                                None => match panic_error.downcast_ref::<String>() {
+                                    None => {
+                                        Err(ErrorCode::PanicError("Sorry, unknown panic message"))
+                                    }
+                                    Some(message) => {
+                                        Err(ErrorCode::PanicError(message.to_string()))
+                                    }
+                                },
+                                Some(message) => Err(ErrorCode::PanicError(message.to_string())),
+                            }
+                        }
+                    },
+                }?;
+            }
 
-        self.take_receive_error()
-    }
-
-    pub fn take_receive_error(&mut self) -> Result<()> {
-        match self.recv_error.lock().take() {
-            None => Ok(()),
-            Some(error) => Err(error),
-        }
-    }
-
-    fn on_recv_progress(ctx: &Arc<QueryContext>, progress: ProgressInfo) -> bool {
-        progress.inc(ctx);
-        false
-    }
-
-    fn on_recv_data(_fragment_data: FragmentData) -> bool {
-        unimplemented!()
-    }
-
-    fn on_recv_precommit(ctx: &Arc<QueryContext>, fragment_data: PrecommitBlock) -> bool {
-        fragment_data.precommit(ctx);
-        false
-    }
-
-    fn on_recv_error(
-        ctx: &Arc<QueryContext>,
-        recv_error: &Mutex<Option<ErrorCode>>,
-        cause: ErrorCode,
-    ) -> bool {
-        // abort query for current session.
-        ctx.get_current_session().force_kill_query();
-        let mut recv_error = recv_error.lock();
-        *recv_error = Some(cause);
-        true
+            Ok(())
+        })
     }
 }
