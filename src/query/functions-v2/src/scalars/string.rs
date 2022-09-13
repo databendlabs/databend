@@ -20,6 +20,7 @@ use common_expression::types::number::SimpleDomain;
 use common_expression::types::number::UInt64Type;
 use common_expression::types::string::StringColumn;
 use common_expression::types::string::StringColumnBuilder;
+use common_expression::types::string::StringDomain;
 use common_expression::types::GenericMap;
 use common_expression::types::NumberType;
 use common_expression::types::StringType;
@@ -34,6 +35,12 @@ use common_expression::ValueRef;
 use itertools::izip;
 
 pub fn register(registry: &mut FunctionRegistry) {
+    registry.register_aliases("upper", &["ucase"]);
+    registry.register_aliases("lower", &["lcase"]);
+    registry.register_aliases("octet_length", &["length"]);
+    registry.register_aliases("char_length", &["character_length"]);
+    registry.register_aliases("substr", &["substring", "mid"]);
+
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "upper",
         FunctionProperty::default(),
@@ -58,7 +65,6 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
         ),
     );
-    registry.register_aliases("upper", &["ucase"]);
 
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "lower",
@@ -84,7 +90,6 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
         ),
     );
-    registry.register_aliases("lower", &["lcase"]);
 
     registry.register_1_arg::<StringType, NumberType<u64>, _, _>(
         "bit_length",
@@ -99,7 +104,6 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_| None,
         |val| val.len() as u64,
     );
-    registry.register_aliases("octet_length", &["length"]);
 
     registry.register_1_arg::<StringType, NumberType<u64>, _, _>(
         "char_length",
@@ -110,7 +114,6 @@ pub fn register(registry: &mut FunctionRegistry) {
             Err(_) => val.len() as u64,
         },
     );
-    registry.register_aliases("char_length", &["character_length"]);
 
     registry.register_passthrough_nullable_3_arg::<StringType, NumberType<u64>, StringType, StringType, _, _>(
         "lpad",
@@ -657,6 +660,92 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
         ),
     );
+
+    const SPACE: u8 = 0x20;
+    registry.register_passthrough_nullable_1_arg::<NumberType<u64>, StringType, _, _>(
+        "space",
+        FunctionProperty::default(),
+        |domain| {
+            Some(StringDomain {
+                min: vec![SPACE; domain.min as usize],
+                max: Some(vec![SPACE; domain.max as usize]),
+            })
+        },
+        |times, _| match times {
+            ValueRef::Scalar(times) => Ok(Value::Scalar(vec![SPACE; times as usize])),
+            ValueRef::Column(col) => {
+                let mut total_space: u64 = 0;
+                let mut offsets: Vec<u64> = Vec::with_capacity(col.len() + 1);
+                offsets.push(0);
+                for times in col.iter() {
+                    total_space += times;
+                    offsets.push(total_space);
+                }
+                let col = StringColumnBuilder {
+                    data: vec![SPACE; total_space as usize],
+                    offsets,
+                }
+                .build();
+                Ok(Value::Column(col))
+            }
+        },
+    );
+
+    registry.register_passthrough_nullable_2_arg::<StringType, NumberType<u64>, StringType, _, _>(
+        "left",
+        FunctionProperty::default(),
+        |_, _| None,
+        vectorize_with_builder_2_arg::<StringType, NumberType<u64>, StringType>(|s, n, output| {
+            let n = n as usize;
+            if n < s.len() {
+                output.put_slice(&s[0..n]);
+            } else {
+                output.put_slice(s);
+            }
+            output.commit_row();
+            Ok(())
+        }),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<StringType, NumberType<u64>, StringType, _, _>(
+        "right",
+        FunctionProperty::default(),
+        |_, _| None,
+        vectorize_with_builder_2_arg::<StringType, NumberType<u64>, StringType>(|s, n, output| {
+            let n = n as usize;
+            if n < s.len() {
+                output.put_slice(&s[s.len() - n..]);
+            } else {
+                output.put_slice(s);
+            }
+            output.commit_row();
+            Ok(())
+        }),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<StringType, NumberType<i64>, StringType, _, _>(
+        "substr",
+        FunctionProperty::default(),
+        |_, _| None,
+        vectorize_with_builder_2_arg::<StringType, NumberType<i64>, StringType>(
+            |s, pos, output| {
+                output.put_slice(substr(s, pos, s.len() as u64));
+                output.commit_row();
+                Ok(())
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_3_arg::<StringType, NumberType<i64>, NumberType<u64>, StringType, _, _>(
+        "substr",
+        FunctionProperty::default(),
+        |_, _, _| None,
+        vectorize_with_builder_3_arg::<StringType, NumberType<i64>, NumberType<u64>, StringType>(|s, pos, len, output| {
+            output.put_slice(substr(s, pos, len));
+            output.commit_row();
+            Ok(())
+        }),
+    );
 }
 
 mod soundex {
@@ -688,7 +777,30 @@ mod soundex {
     }
 }
 
-// Vectorize string to string function with customer estimate_bytes.
+#[inline]
+fn substr(str: &[u8], pos: i64, len: u64) -> &[u8] {
+    if pos > 0 && pos <= str.len() as i64 {
+        let l = str.len() as usize;
+        let s = (pos - 1) as usize;
+        let mut e = len as usize + s;
+        if e > l {
+            e = l;
+        }
+        return &str[s..e];
+    }
+    if pos < 0 && -(pos) <= str.len() as i64 {
+        let l = str.len() as usize;
+        let s = l - -pos as usize;
+        let mut e = len as usize + s;
+        if e > l {
+            e = l;
+        }
+        return &str[s..e];
+    }
+    &str[0..0]
+}
+
+/// String to String scalar function with estimiated ouput column capacity.
 fn vectorize_string_to_string(
     estimate_bytes: impl Fn(&StringColumn) -> usize + Copy,
     func: impl Fn(&[u8], &mut StringColumnBuilder) -> Result<(), String> + Copy,
@@ -711,7 +823,7 @@ fn vectorize_string_to_string(
     }
 }
 
-// Vectorize (string, string) -> string function with customer estimate_bytes.
+/// (String, String) to String scalar function with estimiated ouput column capacity.
 fn vectorize_string_to_string_2_arg(
     estimate_bytes: impl Fn(&StringColumn, &StringColumn) -> usize + Copy,
     func: impl Fn(&[u8], &[u8], &mut StringColumnBuilder) -> Result<(), String> + Copy,

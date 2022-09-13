@@ -173,7 +173,27 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
                 }
             }
         }
-        _ => unimplemented!(),
+        common_ast::ast::Expr::Substring {
+            span,
+            expr,
+            substring_from,
+            substring_for,
+        } => {
+            let mut args = vec![
+                transform_expr(*expr, columns),
+                transform_expr(*substring_from, columns),
+            ];
+            if let Some(substring_for) = substring_for {
+                args.push(transform_expr(*substring_for, columns));
+            }
+            RawExpr::FunctionCall {
+                span: transform_span(span),
+                name: "substr".to_string(),
+                params: vec![],
+                args,
+            }
+        }
+        expr => unimplemented!("{expr:?} is unimplemented"),
     }
 }
 
