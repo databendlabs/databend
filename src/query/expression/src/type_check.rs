@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::fmt::Write;
 
 use itertools::Itertools;
-use ordered_float::OrderedFloat;
 
 use crate::error::Result;
 use crate::expression::Expr;
@@ -168,11 +167,11 @@ pub fn check_literal(literal: &Literal) -> (Scalar, DataType) {
             DataType::Number(NumberDataType::Int64),
         ),
         Literal::Float32(v) => (
-            Scalar::Number(NumberScalar::Float32(OrderedFloat(*v))),
+            Scalar::Number(NumberScalar::Float32((*v).into())),
             DataType::Number(NumberDataType::Float32),
         ),
         Literal::Float64(v) => (
-            Scalar::Number(NumberScalar::Float64(OrderedFloat(*v))),
+            Scalar::Number(NumberScalar::Float64((*v).into())),
             DataType::Number(NumberDataType::Float64),
         ),
         Literal::Boolean(v) => (Scalar::Boolean(*v), DataType::Boolean),

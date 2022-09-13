@@ -14,6 +14,7 @@
 
 use common_expression::types::arithmetics_type::ResultTypeOfBinary;
 use common_expression::types::arithmetics_type::ResultTypeOfUnary;
+use common_expression::types::number::F64;
 use common_expression::types::number::*;
 use common_expression::types::NumberDataType;
 use common_expression::vectorize_with_builder_2_arg;
@@ -21,7 +22,6 @@ use common_expression::with_number_mapped_type;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use num_traits::AsPrimitive;
-use ordered_float::OrderedFloat;
 
 use super::arithmetic_modulo::vectorize_modulo;
 use crate::scalars::ALL_NUMERICS_TYPES;
@@ -137,7 +137,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         }
 
                         {
-                            type T = OrderedFloat<f64>;
+                            type T = F64;
                             registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
                                 "divide",
                                 FunctionProperty::default(),
@@ -169,11 +169,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                             |_, _| None,
                             vectorize_with_builder_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>>(
                                     |a, b, output| {
-                                    let b = (b.as_() : OrderedFloat<f64>);
+                                    let b = (b.as_() : F64);
                                     if std::intrinsics::unlikely(b == 0.0) {
                                             return Err("Division by zero".to_string());
                                         }
-                                    output.push(((a.as_() : OrderedFloat<f64>) / b).as_() : T);
+                                    output.push(((a.as_() : F64) / b).as_() : T);
                                     Ok(())
                                 }),
                             );
@@ -198,7 +198,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 |_, _| None,
                                 vectorize_with_builder_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>>(
                                         |a, b, output| {
-                                        let b = (b.as_() : OrderedFloat<f64>);
+                                        let b = (b.as_() : F64);
                                         if std::intrinsics::unlikely(b == 0.0) {
                                                 return Err("Modulo by zero".to_string());
                                         }

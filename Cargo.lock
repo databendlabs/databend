@@ -1213,6 +1213,7 @@ dependencies = [
  "match-template",
  "num-traits",
  "ordered-float 3.0.0 (git+https://github.com/andylokandy/rust-ordered-float.git?branch=as)",
+ "rust_decimal",
  "serde",
 ]
 
