@@ -2,7 +2,6 @@
 members = [
     # Binaries
     "src/binaries",
-
     # Common
     "src/common/arrow",
     "src/common/base",
@@ -18,7 +17,6 @@ members = [
     "src/common/metrics",
     "src/common/tracing",
     "src/common/storage",
-
     # Query
     "src/query/ast",
     "src/query/codegen",
@@ -50,7 +48,6 @@ members = [
     "src/query/users",
     # databend-query
     "src/query/service",
-
     # Meta
     "src/meta/api",
     "src/meta/app",
@@ -64,7 +61,6 @@ members = [
     "src/meta/protos",
     # databend-meta
     "src/meta/service",
-
     # Hack
     # This crate is used to hack our cargo.lock to resovle CVEs and so on.
     "src/workspace-hack",
@@ -106,3 +102,9 @@ gimli = { opt-level = 3 }
 miniz_oxide = { opt-level = 3 }
 object = { opt-level = 3 }
 rustc-demangle = { opt-level = 3 }
+
+[patch.crates-io]
+# http-types doesn't play well with the new errors api.
+# This fork address this problem, and should be removed once we upgrade to
+# new toolchain.
+http-types = { git = "https://github.com/Xuanwo/http-types", rev = "106fc6d" }
