@@ -90,13 +90,10 @@ impl StatisticsSender {
                         notified = right;
                         recv = Box::pin(flight_exchange.recv());
 
-                        if !shutdown_flag.load(Ordering::Relaxed) {
-                            if let Err(_cause) =
-                                Self::on_command(&ctx, command, &flight_exchange).await
-                            {
-                                ctx.get_exchange_manager().shutdown_query(&query_id);
-                                return;
-                            }
+                        if let Err(_cause) = Self::on_command(&ctx, command, &flight_exchange).await
+                        {
+                            ctx.get_exchange_manager().shutdown_query(&query_id);
+                            return;
                         }
                     }
                 }

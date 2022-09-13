@@ -90,6 +90,7 @@ impl StatisticsReceiver {
                             notified = middle;
                             match Self::recv_data(&ctx, res) {
                                 Ok(true) => {
+                                    ctx.get_current_session().force_kill_query();
                                     return Ok(());
                                 }
                                 Ok(false) => {
