@@ -138,7 +138,7 @@ snailquote = "0.3.1"
 strum = "0.24.1"
 strum_macros = "0.24.0"
 tempfile = { version = "3.3.0", optional = true }
-thiserror = "=1.0.31"
+thiserror = "1"
 threadpool = "1.8.1"
 thrift = { version = "0.15.0", optional = true }
 time = "0.3.10"

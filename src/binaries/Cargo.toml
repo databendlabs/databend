@@ -47,7 +47,7 @@ databend-meta = { path = "../meta/service" }
 databend-query = { path = "../query/service" }
 
 # Crates.io dependencies
-anyhow = "1.0.58"
+anyhow = "1.0.64"
 clap = { version = "3.2.5", features = ["derive", "env"] }
 sentry = "0.27.0"
 serde = { version = "1.0.137", features = ["derive"] }
@@ -56,8 +56,7 @@ tokio-stream = "0.1.9"
 tonic = "0.7.2"
 tracing = "0.1.35"
 url = "2.2.2"
-
-openraft = { git = "https://github.com/drmingdrmer/openraft", rev = "v0.7.2-alpha.4" }
+openraft = "0.7.2"
 
 [[bin]]
 name = "databend-meta"
