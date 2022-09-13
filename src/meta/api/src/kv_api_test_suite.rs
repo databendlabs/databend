@@ -483,6 +483,7 @@ impl KVApiTestSuite {
                 key: txn_key.clone(),
                 value: b"new_v1".to_vec(),
                 prev_value: true,
+                expire_at: None,
             })),
         }];
 
@@ -640,6 +641,7 @@ impl KVApiTestSuite {
                     key: txn_key.clone(),
                     value: b"new_v1".to_vec(),
                     prev_value: true,
+                    expire_at: None,
                 })),
             }];
 
@@ -691,6 +693,7 @@ impl KVApiTestSuite {
                     key: txn_key1.clone(),
                     value: b"new_v1".to_vec(),
                     prev_value: true,
+                    expire_at: None,
                 })),
             }];
 
@@ -745,6 +748,7 @@ impl KVApiTestSuite {
                         key: txn_key1.clone(),
                         value: val1_new.to_vec(),
                         prev_value: true,
+                        expire_at: None,
                     })),
                 },
                 // change k2
@@ -753,6 +757,7 @@ impl KVApiTestSuite {
                         key: txn_key2.clone(),
                         value: b"new_v2".to_vec(),
                         prev_value: true,
+                        expire_at: None,
                     })),
                 },
                 // get k1
@@ -852,6 +857,7 @@ impl KVApiTestSuite {
                         key: txn_key1.clone(),
                         value: val1_new.to_vec(),
                         prev_value: true,
+                        expire_at: None,
                     })),
                 },
                 // get k1

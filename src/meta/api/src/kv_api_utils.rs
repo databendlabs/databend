@@ -226,6 +226,18 @@ pub fn txn_op_put(key: &impl KVApiKey, value: Vec<u8>) -> TxnOp {
             key: key.to_key(),
             value,
             prev_value: true,
+            expire_at: None,
+        })),
+    }
+}
+
+pub fn txn_op_put_with_expire(key: &impl KVApiKey, value: Vec<u8>, expire_at: u64) -> TxnOp {
+    TxnOp {
+        request: Some(Request::Put(TxnPutRequest {
+            key: key.to_key(),
+            value,
+            prev_value: true,
+            expire_at: Some(expire_at),
         })),
     }
 }

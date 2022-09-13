@@ -616,3 +616,53 @@ pub struct CountTablesReply {
 pub struct TableIdToName {
     pub table_id: u64,
 }
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+pub struct TableCopiedFileNameIdent {
+    pub table_id: u64,
+    pub file: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+pub struct TableCopiedFileInfo {
+    pub etag: Option<String>,
+    pub content_length: u64,
+    pub last_modified: Option<DateTime<Utc>>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GetTableCopiedFileReq {
+    pub table_id: u64,
+    pub files: Vec<String>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GetTableCopiedFileReply {
+    pub file_info: BTreeMap<String, TableCopiedFileInfo>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct UpsertTableCopiedFileReq {
+    pub table_id: u64,
+    pub file_info: BTreeMap<String, TableCopiedFileInfo>,
+    pub expire_at: Option<u64>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct UpsertTableCopiedFileReply {}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct TruncateTableReq {
+    pub table_id: u64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct TruncateTableReply {}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct TableCopiedFileLockKey {
+    pub table_id: u64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct TableCopiedFileLock {}
