@@ -207,7 +207,7 @@ fn new_table_meta() -> mt::TableMeta {
     }
 }
 
-fn new_table_copied_file_info() -> mt::TableCopiedFileInfo {
+fn new_table_copied_file_info_v7() -> mt::TableCopiedFileInfo {
     mt::TableCopiedFileInfo {
         etag: Some("etag".to_string()),
         content_length: 1024,
@@ -323,12 +323,12 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
 
     // TableCopiedFileInfo
     {
-        let stage_file = new_table_copied_file_info();
-        let p = stage_file.to_pb()?;
+        let copied_file = new_table_copied_file_info_v7();
+        let p = copied_file.to_pb()?;
 
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
-        println!("stage_file:{:?}", buf);
+        println!("copied_file:{:?}", buf);
     }
 
     Ok(())
@@ -511,15 +511,15 @@ fn test_load_old() -> anyhow::Result<()> {
 
     // TableCopiedFileInfo is loadable
     {
-        let stage_file: Vec<u8> = vec![
+        let copied_file_v7: Vec<u8> = vec![
             10, 4, 101, 116, 97, 103, 16, 128, 8, 26, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 57,
             32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 160, 6, 6, 168, 6, 1,
         ];
         let p: pb::TableCopiedFileInfo =
-            common_protos::prost::Message::decode(stage_file.as_slice()).map_err(print_err)?;
+            common_protos::prost::Message::decode(copied_file_v7.as_slice()).map_err(print_err)?;
 
         let got = mt::TableCopiedFileInfo::from_pb(p).map_err(print_err)?;
-        let want = new_table_copied_file_info();
+        let want = new_table_copied_file_info_v7();
         assert_eq!(want, got);
     }
 

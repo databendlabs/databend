@@ -619,8 +619,6 @@ pub struct TableIdToName {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct TableCopiedFileNameIdent {
-    pub tenant: String,
-    pub db_id: u64,
     pub table_id: u64,
     pub file: String,
 }

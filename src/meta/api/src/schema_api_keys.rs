@@ -297,44 +297,29 @@ impl KVApiKey for CountTablesKey {
     }
 }
 
-// __fd_table_copied_files/tenant/db_id/table_id/file_name -> TableCopiedFileInfo
+// __fd_table_copied_files/table_id/file_name -> TableCopiedFileInfo
 impl KVApiKey for TableCopiedFileNameIdent {
     const PREFIX: &'static str = PREFIX_TABLE_COPIED_FILES;
 
     fn to_key(&self) -> String {
-        format!(
-            "{}/{}/{}/{}/{}",
-            Self::PREFIX,
-            self.tenant,
-            self.db_id,
-            self.table_id,
-            self.file,
-        )
+        format!("{}/{}/{}", Self::PREFIX, self.table_id, self.file)
     }
 
     fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
-        let elts: Vec<&str> = s.splitn(5, '/').collect();
-        if elts.len() < 5 {
+        let elts: Vec<&str> = s.splitn(3, '/').collect();
+        if elts.len() < 3 {
             return Err(KVApiKeyError::AtleastSegments {
-                expect: 5,
+                expect: 3,
                 actual: elts.len(),
             });
         }
         let prefix = elts[0];
         check_segment(prefix, 0, Self::PREFIX)?;
 
-        let tenant = unescape(elts[1])?;
+        let table_id = decode_id(elts[1])?;
+        let file = unescape(elts[2])?;
 
-        let db_id = decode_id(elts[2])?;
-        let table_id = decode_id(elts[3])?;
-        let file = unescape(elts[4])?;
-
-        Ok(TableCopiedFileNameIdent {
-            tenant,
-            db_id,
-            table_id,
-            file,
-        })
+        Ok(TableCopiedFileNameIdent { table_id, file })
     }
 }
 
@@ -350,8 +335,6 @@ mod tests {
         // test with a key has a file has multi path
         {
             let name = TableCopiedFileNameIdent {
-                tenant: "tenant".to_owned(),
-                db_id: 1,
                 table_id: 2,
                 file: "/path/to/file".to_owned(),
             };
@@ -360,10 +343,8 @@ mod tests {
             assert_eq!(
                 key,
                 format!(
-                    "{}/{}/{}/{}/{}",
+                    "{}/{}/{}",
                     TableCopiedFileNameIdent::PREFIX,
-                    name.tenant,
-                    name.db_id,
                     name.table_id,
                     name.file,
                 )
@@ -372,38 +353,23 @@ mod tests {
             assert_eq!(from, name);
         }
 
-        // test with a key has only 4 sub-path
+        // test with a key has only 2 sub-path
         {
-            let key = format!(
-                "{}/{}/{}/{}",
-                TableCopiedFileNameIdent::PREFIX,
-                "tenant".to_owned(),
-                1,
-                2,
-            );
+            let key = format!("{}/{}", TableCopiedFileNameIdent::PREFIX, 2,);
             let res = TableCopiedFileNameIdent::from_key(&key);
             assert!(res.is_err());
             let err = res.unwrap_err();
             assert_eq!(err, KVApiKeyError::AtleastSegments {
-                expect: 5,
-                actual: 4,
+                expect: 3,
+                actual: 2,
             });
         }
 
         // test with a key has 5 sub-path but an empty file string
         {
-            let key = format!(
-                "{}/{}/{}/{}/{}",
-                TableCopiedFileNameIdent::PREFIX,
-                "tenant".to_owned(),
-                1,
-                2,
-                ""
-            );
+            let key = format!("{}/{}/{}", TableCopiedFileNameIdent::PREFIX, 2, "");
             let res = TableCopiedFileNameIdent::from_key(&key)?;
             assert_eq!(res, TableCopiedFileNameIdent {
-                tenant: "tenant".to_owned(),
-                db_id: 1,
                 table_id: 2,
                 file: "".to_string(),
             });

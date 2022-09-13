@@ -2477,7 +2477,6 @@ impl SchemaApiTestSuite {
 
         let res = mt.create_database(plan).await?;
         info!("create database res: {:?}", res);
-        let db_id = res.db_id;
 
         assert_eq!(1, res.db_id, "first database id is 1");
         let drop_on = Some(Utc::now() - Duration::days(1));
@@ -2528,8 +2527,6 @@ impl SchemaApiTestSuite {
             let _ = mt.upsert_table_copied_file_info(req).await?;
 
             let key = TableCopiedFileNameIdent {
-                tenant: tenant1.to_string(),
-                db_id,
                 table_id,
                 file: "file".to_string(),
             };
@@ -2578,8 +2575,6 @@ impl SchemaApiTestSuite {
         info!("--- assert stage file info has been removed");
         {
             let key = TableCopiedFileNameIdent {
-                tenant: tenant1.to_string(),
-                db_id,
                 table_id,
                 file: "file".to_string(),
             };

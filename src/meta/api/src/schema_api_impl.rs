@@ -1776,8 +1776,6 @@ impl<KV: KVApi> SchemaApi for KV {
 
         for file in req.files {
             let key = TableCopiedFileNameIdent {
-                tenant: tenant_dbname_tbname.tenant.clone(),
-                db_id,
                 table_id,
                 file: file.clone(),
             };
@@ -1855,8 +1853,6 @@ impl<KV: KVApi> SchemaApi for KV {
             ];
             for (file, file_info) in req.file_info.iter() {
                 let key = TableCopiedFileNameIdent {
-                    tenant: tenant_dbname_tbname.tenant.clone(),
-                    db_id,
                     table_id,
                     file: file.to_owned(),
                 };
@@ -1959,15 +1955,7 @@ impl<KV: KVApi> SchemaApi for KV {
                 txn_cond_seq(&tbid, Eq, tb_meta_seq),
             ];
             let mut if_then = vec![];
-            remove_table_copied_files(
-                self,
-                &req.table.tenant,
-                db_id,
-                table_id,
-                &mut condition,
-                &mut if_then,
-            )
-            .await?;
+            remove_table_copied_files(self, table_id, &mut condition, &mut if_then).await?;
 
             let txn_req = TxnRequest {
                 condition,
@@ -2204,16 +2192,12 @@ impl<KV: KVApi> SchemaApi for KV {
 
 async fn remove_table_copied_files(
     kv_api: &impl KVApi,
-    tenant: &str,
-    db_id: u64,
     table_id: u64,
     condition: &mut Vec<TxnCondition>,
     if_then: &mut Vec<TxnOp>,
 ) -> Result<(), MetaError> {
     // List files by tenant, db_name, table_name
     let dbid_tbname_idlist = TableCopiedFileNameIdent {
-        tenant: tenant.to_owned(),
-        db_id,
         table_id,
         // Using a empty file to to list all
         file: "".to_string(),
@@ -2338,15 +2322,8 @@ async fn gc_dropped_table(
                 if_then.push(txn_op_del(&key.0));
 
                 // remove stage file info of the table
-                remove_table_copied_files(
-                    kv_api,
-                    &tenant,
-                    db_id,
-                    key.0.table_id,
-                    &mut condition,
-                    &mut if_then,
-                )
-                .await?;
+                remove_table_copied_files(kv_api, key.0.table_id, &mut condition, &mut if_then)
+                    .await?;
             }
             // remove table_id -> table_name mappings
             for (key, seq) in remove_table_id_mappings.iter() {
