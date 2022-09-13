@@ -20,7 +20,6 @@ use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::CastFunction;
-use common_planners::StageKind;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures_util::StreamExt;
@@ -45,7 +44,6 @@ use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::executor::DistributedInsertSelect;
-use crate::sql::executor::Exchange;
 use crate::sql::executor::PhysicalPlan;
 use crate::sql::executor::PhysicalPlanBuilder;
 use crate::sql::plans::Insert;
@@ -115,9 +113,13 @@ impl InsertInterpreterV2 {
                 InsertInputSource::SelectPlan(plan) => {
                     if !self.ctx.get_cluster().is_empty() {
                         // distributed insert select
-                        return self
+                        if let Some(stream) = self
                             .schedule_insert_select(plan, self.plan.catalog.clone(), table.clone())
-                            .await;
+                            .await?
+                        {
+                            return Ok(stream);
+                        }
+                        // else the plan cannot be executed in cluster mode, fallback to standalone mode
                     }
 
                     let select_interpreter = match &**plan {
@@ -202,8 +204,9 @@ impl InsertInterpreterV2 {
         plan: &Plan,
         catalog: String,
         table: Arc<dyn Table>,
-    ) -> Result<SendableDataBlockStream> {
-        let (inner_plan, select_column_bindings) = match plan {
+    ) -> Result<Option<SendableDataBlockStream>> {
+        // select_plan is already distributed optimized
+        let (mut select_plan, select_column_bindings) = match plan {
             Plan::Query {
                 s_expr,
                 metadata,
@@ -216,26 +219,44 @@ impl InsertInterpreterV2 {
             _ => unreachable!(),
         };
 
+        if !select_plan.is_distributed_plan() {
+            return Ok(None);
+        }
+
         table.get_table_info();
 
-        let insert_select_plan =
-            PhysicalPlan::DistributedInsertSelect(Box::new(DistributedInsertSelect {
-                input: Box::new(inner_plan),
-                catalog,
-                table_info: table.get_table_info().clone(),
-                select_schema: plan.schema(),
-                select_column_bindings,
-                insert_schema: self.plan.schema(),
-                cast_needed: self.check_schema_cast(plan)?,
-            }));
+        let insert_select_plan = match select_plan {
+            PhysicalPlan::Exchange(ref mut exchange) => {
+                // insert can be dispatched to different nodes
+                let input = exchange.input.clone();
+                exchange.input = Box::new(PhysicalPlan::DistributedInsertSelect(Box::new(
+                    DistributedInsertSelect {
+                        input,
+                        catalog,
+                        table_info: table.get_table_info().clone(),
+                        select_schema: plan.schema(),
+                        select_column_bindings,
+                        insert_schema: self.plan.schema(),
+                        cast_needed: self.check_schema_cast(plan)?,
+                    },
+                )));
+                select_plan
+            }
+            other_plan => {
+                // insert should wait until all nodes finished
+                PhysicalPlan::DistributedInsertSelect(Box::new(DistributedInsertSelect {
+                    input: Box::new(other_plan),
+                    catalog,
+                    table_info: table.get_table_info().clone(),
+                    select_schema: plan.schema(),
+                    select_column_bindings,
+                    insert_schema: self.plan.schema(),
+                    cast_needed: self.check_schema_cast(plan)?,
+                }))
+            }
+        };
 
-        let final_plan = PhysicalPlan::Exchange(Exchange {
-            input: Box::new(insert_select_plan),
-            kind: StageKind::Merge,
-            keys: vec![],
-        });
-
-        let mut build_res = build_schedule_pipepline(self.ctx.clone(), &final_plan).await?;
+        let mut build_res = build_schedule_pipepline(self.ctx.clone(), &insert_select_plan).await?;
 
         let settings = self.ctx.get_settings();
         let query_need_abort = self.ctx.query_need_abort();
@@ -256,11 +277,11 @@ impl InsertInterpreterV2 {
 
         commit2table(self.ctx.clone(), table.clone(), self.plan.overwrite).await?;
 
-        Ok(Box::pin(DataBlockStream::create(
+        Ok(Some(Box::pin(DataBlockStream::create(
             self.plan.schema(),
             None,
             vec![],
-        )))
+        ))))
     }
 }
 
