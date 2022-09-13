@@ -630,6 +630,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "bson"
+version = "2.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "99d76085681585d39016f4d3841eb019201fc54d2dd0d92ad1e4fab3bfb32754"
+dependencies = [
+ "ahash",
+ "base64 0.13.0",
+ "hex",
+ "indexmap",
+ "lazy_static",
+ "rand 0.8.5",
+ "serde",
+ "serde_bytes",
+ "serde_json",
+ "time 0.3.13",
+ "uuid",
+]
+
+[[package]]
 name = "bstr"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1177,6 +1196,7 @@ dependencies = [
 name = "common-expression"
 version = "0.1.0"
 dependencies = [
+ "bson",
  "chrono",
  "chrono-tz",
  "comfy-table",
@@ -1186,6 +1206,7 @@ dependencies = [
  "educe",
  "enum-as-inner",
  "goldenfile",
+ "hex",
  "itertools",
  "match-template",
  "num-traits",
@@ -1262,6 +1283,7 @@ name = "common-functions-v2"
 version = "0.1.0"
 dependencies = [
  "base64 0.13.0",
+ "bson",
  "bstr",
  "comfy-table",
  "common-arrow",
@@ -1276,6 +1298,7 @@ dependencies = [
  "num-traits",
  "ordered-float 3.0.0 (git+https://github.com/andylokandy/rust-ordered-float.git?branch=as)",
  "rand 0.8.5",
+ "serde_json",
  "strength_reduce",
 ]
 
@@ -6772,6 +6795,15 @@ checksum = "4e03cfb2aa71df46bc21892a343552041c8712e97ace1a535e7f7e6eabeca6c0"
 dependencies = [
  "anyhow",
  "log",
+ "serde",
+]
+
+[[package]]
+name = "serde_bytes"
+version = "0.11.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cfc50e8183eeeb6178dcb167ae34a8051d63535023ae38b5d8d12beae193d37b"
+dependencies = [
  "serde",
 ]
 

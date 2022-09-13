@@ -31,6 +31,9 @@ ordered-float = { git = "https://github.com/andylokandy/rust-ordered-float.git",
 ] }
 rand = { version = "0.8.5", features = ["small_rng"] }
 strength_reduce = "0.2.3"
+# TODO: Switch to jsonb. bson is used for placeholder.
+bson = "2.4"
+serde_json = "1.0"
 
 [dev-dependencies]
 comfy-table = "6"

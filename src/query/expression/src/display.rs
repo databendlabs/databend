@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 use std::time::Duration;
 use std::time::UNIX_EPOCH;
 
+use bson::Document;
 use chrono::DateTime;
 use chrono::Utc;
 use comfy_table::Cell;
@@ -39,6 +40,7 @@ use crate::types::number::NumberDataType;
 use crate::types::number::NumberDomain;
 use crate::types::number::NumberScalar;
 use crate::types::number::SimpleDomain;
+use crate::types::string::StringColumn;
 use crate::types::string::StringDomain;
 use crate::types::timestamp::Timestamp;
 use crate::types::timestamp::TimestampDomain;
@@ -103,6 +105,7 @@ impl<'a> Debug for ScalarRef<'a> {
                     fields.iter().map(ScalarRef::to_string).join(", ")
                 )
             }
+            ScalarRef::Variant(s) => write!(f, "0x{}", &hex::encode(s)),
         }
     }
 }
@@ -123,6 +126,7 @@ impl Debug for Column {
                 .field("fields", fields)
                 .field("len", len)
                 .finish(),
+            Column::Variant(col) => write!(f, "{col:?}"),
         }
     }
 }
@@ -143,6 +147,11 @@ impl<'a> Display for ScalarRef<'a> {
                     "({})",
                     fields.iter().map(ScalarRef::to_string).join(", ")
                 )
+            }
+            ScalarRef::Variant(s) => {
+                let doc = Document::from_reader(*s).map_err(|_| std::fmt::Error)?;
+                let bson = doc.get("v").ok_or(std::fmt::Error)?;
+                write!(f, "{bson}")
             }
         }
     }
@@ -202,6 +211,15 @@ impl Debug for NumberColumn {
                 .field(&val.iter().map(|x| x.0).collect::<Vec<_>>())
                 .finish(),
         }
+    }
+}
+
+impl Debug for StringColumn {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StringColumn")
+            .field("data", &format_args!("0x{}", &hex::encode(&*self.data)))
+            .field("offsets", &self.offsets)
+            .finish()
     }
 }
 
@@ -293,6 +311,7 @@ impl Display for DataType {
                     write!(f, ")")
                 }
             }
+            DataType::Variant => write!(f, "Variant"),
             DataType::Generic(index) => write!(f, "T{index}"),
         }
     }
