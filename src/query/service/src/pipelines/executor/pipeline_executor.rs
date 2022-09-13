@@ -178,12 +178,6 @@ impl PipelineExecutor {
             }
         }
 
-        // if let Err(error_code) = self.graph.check_finished() {
-        //     let may_error = Some(error_code);
-        //     (self.on_finished_callback)(&may_error)?;
-        //     return Err(may_error.unwrap());
-        // }
-
         (self.on_finished_callback)(&None)?;
         Ok(())
     }

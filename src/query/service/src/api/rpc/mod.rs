@@ -43,4 +43,5 @@ pub use packets::FragmentPayload;
 pub use packets::FragmentPlanPacket;
 pub use packets::InitNodesChannelPacket;
 pub use packets::Packet;
+pub use packets::PrecommitBlock;
 pub use packets::QueryFragmentsPlanPacket;

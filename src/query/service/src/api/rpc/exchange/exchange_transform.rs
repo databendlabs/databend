@@ -35,8 +35,6 @@ use crate::api::rpc::exchange::exchange_params::SerializeParams;
 use crate::api::rpc::exchange::exchange_params::ShuffleExchangeParams;
 use crate::api::rpc::exchange::exchange_transform_source::ExchangeSourceTransform;
 use crate::api::rpc::flight_client::FlightExchange;
-use crate::api::rpc::packets::PrecommitBlock;
-use crate::api::rpc::packets::ProgressInfo;
 use crate::api::DataPacket;
 use crate::api::FragmentData;
 use crate::clusters::ClusterHelper;
@@ -256,9 +254,9 @@ impl Processor for ExchangeTransform {
         if let Some(remote_data) = self.remote_data.take() {
             return match remote_data {
                 DataPacket::ErrorCode(v) => self.on_recv_error(v),
-                DataPacket::Progress(v) => self.on_recv_progress(v),
+                DataPacket::ProgressAndPrecommit { .. } => unreachable!(),
+                DataPacket::FetchProgressAndPrecommit => unreachable!(),
                 DataPacket::FragmentData(v) => self.on_recv_data(v),
-                DataPacket::PrecommitBlock(v) => self.on_recv_precommit(v),
             };
         }
 
@@ -330,13 +328,5 @@ impl ExchangeTransform {
         });
 
         Ok(())
-    }
-
-    fn on_recv_progress(&mut self, _progress: ProgressInfo) -> Result<()> {
-        unimplemented!()
-    }
-
-    fn on_recv_precommit(&mut self, _fragment_data: PrecommitBlock) -> Result<()> {
-        unimplemented!()
     }
 }
