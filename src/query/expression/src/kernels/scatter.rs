@@ -28,6 +28,7 @@ use crate::types::NumberType;
 use crate::types::StringType;
 use crate::types::TimestampType;
 use crate::types::ValueType;
+use crate::types::VariantType;
 use crate::with_number_mapped_type;
 use crate::Chunk;
 use crate::Column;
@@ -91,7 +92,7 @@ impl Column {
             Column::Null { .. } => {
                 Self::scatter_repeat_scalars::<I>(&Scalar::Null, indices, scatter_size)
             }
-            Column::Number(column) => with_number_mapped_type!(NUM_TYPE, match column {
+            Column::Number(column) => with_number_mapped_type!(|NUM_TYPE| match column {
                 NumberColumn::NUM_TYPE(values) => Self::scatter_scalars::<NumberType<NUM_TYPE>, _>(
                     values,
                     Vec::with_capacity(length),
@@ -108,14 +109,12 @@ impl Column {
                 indices,
                 scatter_size,
             ),
-
             Column::String(column) => Self::scatter_scalars::<StringType, _>(
                 column,
                 StringColumnBuilder::with_capacity(length, 0),
                 indices,
                 scatter_size,
             ),
-
             Column::Timestamp(column) => Self::scatter_scalars::<TimestampType, _>(
                 column,
                 TimestampColumnBuilder::with_capacity(length),
@@ -170,6 +169,12 @@ impl Column {
                     })
                     .collect()
             }
+            Column::Variant(column) => Self::scatter_scalars::<VariantType, _>(
+                column,
+                StringColumnBuilder::with_capacity(length, 0),
+                indices,
+                scatter_size,
+            ),
         }
     }
 

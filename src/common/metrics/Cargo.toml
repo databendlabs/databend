@@ -24,7 +24,7 @@ serde = { version = "1.0.137", features = ["derive"] }
 tracing = "0.1.35"
 
 [dev-dependencies]
-anyhow = "1.0.58"
+anyhow = "1.0.64"
 
 [dev-dependencies.tokio]
 default-features = false

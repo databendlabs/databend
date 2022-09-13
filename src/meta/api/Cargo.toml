@@ -22,11 +22,11 @@ common-proto-conv = { path = "../proto-conv" }
 common-protos = { path = "../protos" }
 common-tracing = { path = "../../common/tracing" }
 
-anyhow = "1.0.58"
+anyhow = "1.0.64"
 async-trait = "0.1.56"
 enumflags2 = { version = "0.7.5", features = ["serde"] }
 maplit = "1.0.2"
 serde_json = "1.0.81"
-thiserror = "=1.0.31"
+thiserror = "1"
 tonic = { version = "0.7.2", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
 tracing = "0.1.35"
