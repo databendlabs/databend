@@ -36,7 +36,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     // Unary OP for minus and plus
     for left in ALL_NUMERICS_TYPES {
-        with_number_mapped_type!(NUM_TYPE, match left {
+        with_number_mapped_type!(|NUM_TYPE| match left {
             NumberDataType::NUM_TYPE => {
                 type T = <NUM_TYPE as ResultTypeOfUnary>::Negate;
                 registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<T>, _, _>(
@@ -54,7 +54,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         });
 
         // Can be eliminated by optimizer
-        with_number_mapped_type!(NUM_TYPE, match left {
+        with_number_mapped_type!(|NUM_TYPE| match left {
             NumberDataType::NUM_TYPE => {
                 registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, _, _>(
                     "plus",
@@ -68,8 +68,8 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     for left in ALL_NUMERICS_TYPES {
         for right in ALL_NUMERICS_TYPES {
-            with_number_mapped_type!(L, match left {
-                NumberDataType::L => with_number_mapped_type!(R, match right {
+            with_number_mapped_type!(|L| match left {
+                NumberDataType::L => with_number_mapped_type!(|R| match right {
                     NumberDataType::R => {
                         {
                             type T = <(L, R) as ResultTypeOfBinary>::AddMul;
