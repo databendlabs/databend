@@ -471,9 +471,9 @@ impl<'a> TypeChecker<'a> {
                 substring_for,
                 ..
             } => {
-                let mut arguments = vec![expr.as_ref(), from_expr.as_ref()];
-                if let Some(for_expr) = for_expr {
-                    arguments.push(for_expr.as_ref());
+                let mut arguments = vec![expr.as_ref(), substring_from.as_ref()];
+                if let Some(substring_for) = substring_for {
+                    arguments.push(substring_for.as_ref());
                 }
                 self.resolve_function(span, "substring", &arguments, required_type)
                     .await?
@@ -1452,7 +1452,7 @@ impl<'a> TypeChecker<'a> {
                                 quote: None,
                                 span: span[0].clone(),
                             },
-                            args: vec![(*arg0).clone()],
+                            args: vec![(*arg_x).clone()],
                             params: vec![],
                         }],
                         None,
@@ -1980,10 +1980,9 @@ impl<'a> TypeChecker<'a> {
                     expr: Box::new(
                         self.clone_expr_with_replacement(expr.as_ref(), replacement_fn)?,
                     ),
-                    substring_from: Box::new(self.clone_expr_with_replacement(
-                        substring_from_expr.as_ref(),
-                        replacement_fn,
-                    )?),
+                    substring_from: Box::new(
+                        self.clone_expr_with_replacement(substring_from.as_ref(), replacement_fn)?,
+                    ),
                     substring_for: if let Some(substring_for_expr) = substring_for {
                         Some(Box::new(self.clone_expr_with_replacement(
                             substring_for_expr.as_ref(),
