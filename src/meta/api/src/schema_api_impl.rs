@@ -1731,43 +1731,20 @@ impl<KV: KVApi> SchemaApi for KV {
     ) -> Result<GetTableCopiedFileReply, MetaError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
-        let tenant_dbname_tbname = &req.table;
-        let tenant_dbname = tenant_dbname_tbname.db_name_ident();
-
-        // Get db by name to ensure presence
-
-        let (db_id_seq, db_id) = get_u64_value(self, &tenant_dbname).await?;
-        debug!(db_id_seq, db_id, ?tenant_dbname_tbname, "get database");
-
-        db_has_to_exist(
-            db_id_seq,
-            &tenant_dbname,
-            format!("get_table: {}", tenant_dbname_tbname),
-        )?;
-
-        // Get table by tenant,db_id, table_name to assert presence.
-
-        let dbid_tbname = DBIdTableName {
-            db_id,
-            table_name: tenant_dbname_tbname.table_name.clone(),
-        };
-
-        let (tb_id_seq, table_id) = get_u64_value(self, &dbid_tbname).await?;
-        table_has_to_exist(tb_id_seq, tenant_dbname_tbname, "get_table")?;
+        let table_id = req.table_id;
 
         let tbid = TableId { table_id };
 
         let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) = get_struct_value(self, &tbid).await?;
 
-        table_has_to_exist(
-            tb_meta_seq,
-            tenant_dbname_tbname,
-            format!("get_table meta by: {}", tbid),
-        )?;
+        if tb_meta_seq == 0 {
+            return Err(MetaError::AppError(AppError::UnknownTableId(
+                UnknownTableId::new(table_id, ""),
+            )));
+        }
 
         debug!(
             ident = display(&tbid),
-            name = display(&tenant_dbname_tbname),
             table_meta = debug(&tb_meta),
             "get_table_copied_file_info"
         );
@@ -1797,56 +1774,30 @@ impl<KV: KVApi> SchemaApi for KV {
     ) -> Result<UpsertTableCopiedFileReply, MetaError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
-        let tenant_dbname_tbname = &req.table;
-        let tenant_dbname = tenant_dbname_tbname.db_name_ident();
-
         let mut retry = 0;
+        let table_id = req.table_id;
 
         while retry < TXN_MAX_RETRY_TIMES {
             retry += 1;
-            // Get db by name to ensure presence
-
-            let (db_id_seq, db_id) = get_u64_value(self, &tenant_dbname).await?;
-            debug!(db_id_seq, db_id, ?tenant_dbname_tbname, "get database");
-
-            db_has_to_exist(
-                db_id_seq,
-                &tenant_dbname,
-                format!("get_table: {}", tenant_dbname_tbname),
-            )?;
-
-            // Get table by tenant,db_id, table_name to assert presence.
-
-            let dbid_tbname = DBIdTableName {
-                db_id,
-                table_name: tenant_dbname_tbname.table_name.clone(),
-            };
-
-            let (tb_id_seq, table_id) = get_u64_value(self, &dbid_tbname).await?;
-            table_has_to_exist(tb_id_seq, tenant_dbname_tbname, "get_table")?;
 
             let tbid = TableId { table_id };
 
             let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) =
                 get_struct_value(self, &tbid).await?;
 
-            table_has_to_exist(
-                tb_meta_seq,
-                tenant_dbname_tbname,
-                format!("get_table meta by: {}", tbid),
-            )?;
+            if tb_meta_seq == 0 {
+                return Err(MetaError::AppError(AppError::UnknownTableId(
+                    UnknownTableId::new(table_id, ""),
+                )));
+            }
 
             debug!(
                 ident = display(&tbid),
-                name = display(&tenant_dbname_tbname),
                 table_meta = debug(&tb_meta),
                 "upsert_table_copied_file_info"
             );
 
-            let mut condition = vec![
-                txn_cond_seq(&tenant_dbname, Eq, db_id_seq),
-                txn_cond_seq(&tbid, Eq, tb_meta_seq),
-            ];
+            let mut condition = vec![txn_cond_seq(&tbid, Eq, tb_meta_seq)];
             let mut if_then = vec![
                 // every copied files changed, change tbid seq to make all table child consistent.
                 txn_op_put(&tbid, serialize_struct(&tb_meta.unwrap())?), /* (tenant, db_id, tb_id) -> tb_meta */
@@ -1884,7 +1835,6 @@ impl<KV: KVApi> SchemaApi for KV {
 
             debug!(
                 ident = display(&tbid),
-                name = display(&tenant_dbname_tbname),
                 succ = display(succ),
                 "upsert_table_copied_file_info"
             );
