@@ -131,7 +131,11 @@ pub fn init_http_operator(cfg: &StorageHttpConfig) -> Result<Operator> {
     // HTTP Service is read-only and doesn't support list operation.
     // ImmutableIndexLayer will build an in-memory immutable index for it.
     let mut immutable_layer = ImmutableIndexLayer::default();
-    let files: Vec<String> = cfg.paths.iter().map(|v| v.to_string()).collect();
+    let files: Vec<String> = cfg
+        .paths
+        .iter()
+        .map(|v| v.trim_start_matches('/').to_string())
+        .collect();
     // TODO: should be replace by `immutable_layer.extend_iter()` after fix
     for i in files {
         immutable_layer.insert(i);
