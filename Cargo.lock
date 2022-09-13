@@ -4974,8 +4974,7 @@ dependencies = [
 [[package]]
 name = "openraft"
 version = "0.7.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20c1370d065fb6b3cbb09420fa9f89b99c1ce2cbf4c997f50bcd648cb2c2f220"
+source = "git+https://github.com/datafuselabs/openraft?rev=6057abbf#6057abbf355993a81537c3d28d914adad10b90ae"
 dependencies = [
  "anyerror",
  "anyhow",
