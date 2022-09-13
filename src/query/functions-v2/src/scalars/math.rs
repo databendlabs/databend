@@ -186,7 +186,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     for ty in ALL_INTEGER_TYPES {
-        with_number_mapped_type!(NUM_TYPE, match ty {
+        with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
                 registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, _, _>(
                     "ceil",
@@ -199,7 +199,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     }
 
     for ty in ALL_FLOAT_TYPES {
-        with_number_mapped_type!(NUM_TYPE, match ty {
+        with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
                 registry
                     .register_1_arg::<NumberType<NUM_TYPE>, NumberType<OrderedFloat<f64>>, _, _>(
@@ -236,7 +236,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     for ty in ALL_NUMERICS_TYPES {
-        with_number_mapped_type!(NUM_TYPE, match ty {
+        with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
                 registry
                     .register_1_arg::<NumberType<NUM_TYPE>, NumberType<OrderedFloat<f64>>, _, _>(
@@ -294,7 +294,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     for ty in ALL_NUMERICS_TYPES {
-        with_number_mapped_type!(NUM_TYPE, match ty {
+        with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
                 registry
                     .register_1_arg::<NumberType<NUM_TYPE>, NumberType<OrderedFloat<f64>>, _, _>(
@@ -306,7 +306,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
         });
 
-        with_number_mapped_type!(NUM_TYPE, match ty {
+        with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
                 registry.register_2_arg::<NumberType<NUM_TYPE>, NumberType<i64>, NumberType<OrderedFloat<f64>>, _, _>(
                     "round",
@@ -327,7 +327,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
         });
 
-        with_number_mapped_type!(NUM_TYPE, match ty {
+        with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
                 registry
                     .register_1_arg::<NumberType<NUM_TYPE>, NumberType<OrderedFloat<f64>>, _, _>(
@@ -339,7 +339,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
         });
 
-        with_number_mapped_type!(NUM_TYPE, match ty {
+        with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
                 registry.register_2_arg::<NumberType<NUM_TYPE>, NumberType<i64>, NumberType<OrderedFloat<f64>>, _, _>(
                     "truncate",
@@ -360,7 +360,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
         });
 
-        with_number_mapped_type!(NUM_TYPE, match ty {
+        with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
                 registry
                     .register_1_arg::<NumberType<NUM_TYPE>, NumberType<OrderedFloat<f64>>, _, _>(
@@ -372,7 +372,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
         });
 
-        with_number_mapped_type!(NUM_TYPE, match ty {
+        with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
                 registry
                     .register_1_arg::<NumberType<NUM_TYPE>, NumberType<OrderedFloat<f64>>, _, _>(
@@ -384,7 +384,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
         });
 
-        with_number_mapped_type!(NUM_TYPE, match ty {
+        with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
                 registry
                     .register_1_arg::<NumberType<NUM_TYPE>, NumberType<OrderedFloat<f64>>, _, _>(
@@ -396,7 +396,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
         });
 
-        with_number_mapped_type!(NUM_TYPE, match ty {
+        with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
                 registry
                     .register_1_arg::<NumberType<NUM_TYPE>, NumberType<OrderedFloat<f64>>, _, _>(
@@ -408,7 +408,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
         });
 
-        with_number_mapped_type!(NUM_TYPE, match ty {
+        with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
                 registry
                     .register_1_arg::<NumberType<NUM_TYPE>, NumberType<OrderedFloat<f64>>, _, _>(
@@ -420,7 +420,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
         });
 
-        with_number_mapped_type!(NUM_TYPE, match ty {
+        with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
                 registry.register_2_arg::<NumberType<NUM_TYPE>, NumberType<OrderedFloat<f64>>, NumberType<OrderedFloat<f64>>, _, _>(
                     "log",

@@ -127,8 +127,8 @@ impl<Num: Number> ValueType for NumberType<Num> {
         builder.push(Num::default());
     }
 
-    fn append_builder(builder: &mut Self::ColumnBuilder, other_builder: &Self::ColumnBuilder) {
-        builder.extend_from_slice(other_builder);
+    fn append_builder(builder: &mut Self::ColumnBuilder, other: &Self::ColumnBuilder) {
+        builder.extend_from_slice(other);
     }
 
     fn build_column(builder: Self::ColumnBuilder) -> Self::Column {
@@ -829,7 +829,7 @@ macro_rules! with_number_type {
 
 #[macro_export]
 macro_rules! with_number_mapped_type {
-    ($t:tt, $($tail:tt)*) => {
+    (| $t:tt | $($tail:tt)*) => {
         match_template::match_template! {
             $t = [
                 UInt8 => u8, UInt16 => u16, UInt32 => u32, UInt64 => u64,

@@ -158,6 +158,11 @@ impl Column {
                 let fields = fields.iter().map(|c| c.filter(filter)).collect();
                 Column::Tuple { fields, len }
             }
+            Column::Variant(column) => Self::filter_scalar_types::<StringType>(
+                column,
+                StringColumnBuilder::with_capacity(length, 0),
+                filter,
+            ),
         }
     }
 
