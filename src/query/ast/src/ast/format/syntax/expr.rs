@@ -183,14 +183,10 @@ pub(crate) fn pretty_expr(expr: Expr) -> RcDoc {
             ..
         } => RcDoc::text("SUBSTRING(")
             .append(pretty_expr(*expr))
-            .append(if let Some(substring_from) = substring_from {
-                RcDoc::space()
-                    .append(RcDoc::text("FROM"))
-                    .append(RcDoc::space())
-                    .append(pretty_expr(*substring_from))
-            } else {
-                RcDoc::nil()
-            })
+            .append(RcDoc::space())
+            .append(RcDoc::text("FROM"))
+            .append(RcDoc::space())
+            .append(pretty_expr(*substring_from))
             .append(if let Some(substring_for) = substring_for {
                 RcDoc::space()
                     .append(RcDoc::text("FOR"))
