@@ -14,13 +14,13 @@
 
 #![deny(unused_crate_dependencies)]
 
+mod analyzer;
 pub use analyzer::analyzer_expr_sync;
 pub use analyzer::analyzer_value_expr;
-mod analyzer;
-mod parser;
+mod expression;
+/// Read the `FBI WARNING` docs before use this function.
+pub use expression::unchecked_expressions_analyze;
 pub mod sql_common;
 mod sql_dialect;
 
-pub use parser::ExprParser;
-pub use parser::ExpressionParser;
 pub use sql_dialect::SQLDialect;

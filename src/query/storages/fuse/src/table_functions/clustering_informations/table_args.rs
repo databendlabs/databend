@@ -14,11 +14,10 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_parser::ExpressionParser;
+use common_legacy_parser::unchecked_expressions_analyze;
 use common_planners::validate_expression;
 use common_planners::Expression;
 
-// use crate::sql::PlanParser;
 use crate::table_functions::string_value;
 use crate::table_functions::TableArgs;
 use crate::FuseTable;
@@ -42,7 +41,7 @@ pub fn parse_func_table_args(table_args: &TableArgs) -> Result<(String, String)>
 pub fn get_cluster_keys(table: &FuseTable, definition: &str) -> Result<Vec<Expression>> {
     let cluster_keys = if !definition.is_empty() {
         let schema = table.schema();
-        let exprs = ExpressionParser::parse_exprs(definition)?;
+        let exprs = unchecked_expressions_analyze(definition)?;
         for expr in exprs.iter() {
             validate_expression(expr, &schema)?;
         }

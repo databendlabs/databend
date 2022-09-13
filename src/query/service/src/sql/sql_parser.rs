@@ -18,9 +18,7 @@
 use std::time::Instant;
 
 use common_exception::ErrorCode;
-use common_legacy_parser::ExprParser;
 use metrics::histogram;
-use sqlparser::ast::Expr;
 use sqlparser::dialect::keywords::Keyword;
 use sqlparser::dialect::Dialect;
 use sqlparser::dialect::GenericDialect;
@@ -82,10 +80,6 @@ impl<'a> DfParser<'a> {
                 Ok(result)
             }
         }
-    }
-
-    pub fn parse_exprs(expr: &str) -> Result<Vec<Expr>, ParserError> {
-        ExprParser::parse_exprs(expr)
     }
 
     /// Parse a SQL statement and produce a set of statements

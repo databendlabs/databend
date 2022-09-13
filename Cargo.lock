@@ -1391,6 +1391,7 @@ name = "common-legacy-parser"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "common-ast",
  "common-datavalues",
  "common-exception",
  "common-functions",

@@ -26,7 +26,7 @@ use common_fuse_meta::meta::ClusterKey;
 use common_fuse_meta::meta::Statistics as FuseStatistics;
 use common_fuse_meta::meta::TableSnapshot;
 use common_fuse_meta::meta::Versioned;
-use common_legacy_parser::ExpressionParser;
+use common_legacy_parser::unchecked_expressions_analyze;
 use common_meta_app::schema::TableInfo;
 use common_planners::DeletePlan;
 use common_planners::Expression;
@@ -76,7 +76,7 @@ impl FuseTable {
         let cluster_key_meta = table_info.meta.cluster_key();
         let mut cluster_keys = Vec::new();
         if let Some((_, order)) = &cluster_key_meta {
-            cluster_keys = ExpressionParser::parse_exprs(order)?;
+            cluster_keys = unchecked_expressions_analyze(order)?;
         }
 
         Ok(Box::new(FuseTable {
