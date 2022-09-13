@@ -26,6 +26,7 @@ use parking_lot::Mutex;
 use super::commit2table;
 use super::interpreter_common::append2table;
 use crate::interpreters::Interpreter;
+use crate::interpreters::interpreter_common::{commit_table_pipeline, execute_pipeline};
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreterV2;
 use crate::pipelines::processors::port::OutputPort;
@@ -85,6 +86,17 @@ impl Interpreter for InsertInterpreterV2 {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
+        let build_res = self.create_new_pipeline().await?;
+        execute_pipeline(self.ctx.clone(), build_res)?;
+
+        Ok(Box::pin(DataBlockStream::create(
+            self.plan.schema(),
+            None,
+            vec![],
+        )))
+    }
+
+    async fn create_new_pipeline(&self) -> Result<PipelineBuildResult> {
         let plan = &self.plan;
         let settings = self.ctx.get_settings();
         let table = self
@@ -92,7 +104,7 @@ impl Interpreter for InsertInterpreterV2 {
             .get_table(&plan.catalog, &plan.database, &plan.table)
             .await?;
 
-        let mut build_res = self.create_new_pipeline().await?;
+        let mut build_res = PipelineBuildResult::create();
         let mut builder = SourcePipeBuilder::create();
 
         if self.async_insert {
@@ -175,22 +187,15 @@ impl Interpreter for InsertInterpreterV2 {
             };
         }
 
-        append2table(self.ctx.clone(), table.clone(), plan.schema(), build_res)?;
-        commit2table(self.ctx.clone(), table.clone(), self.plan.overwrite).await?;
+        append2table(
+            self.ctx.clone(),
+            table.clone(),
+            plan.schema(),
+            &mut build_res,
+            self.plan.overwrite,
+        )?;
 
-        Ok(Box::pin(DataBlockStream::create(
-            self.plan.schema(),
-            None,
-            vec![],
-        )))
-    }
-
-    async fn create_new_pipeline(&self) -> Result<PipelineBuildResult> {
-        let insert_pipeline = Pipeline::create();
-        Ok(PipelineBuildResult {
-            main_pipeline: insert_pipeline,
-            sources_pipelines: vec![],
-        })
+        Ok(build_res)
     }
 
     fn set_source_pipe_builder(&self, builder: Option<SourcePipeBuilder>) -> Result<()> {
