@@ -39,6 +39,7 @@ use common_io::prelude::*;
 use common_pipeline_transforms::processors::transforms::Transform;
 use tracing::debug;
 
+use crate::clusters::ClusterHelper;
 use crate::evaluator::EvalNode;
 use crate::evaluator::Evaluator;
 use crate::pipelines::processors::transforms::ExpressionTransformV2;
@@ -126,7 +127,7 @@ impl<'a> Binder {
                 let statement = Statement::Query(query);
                 let select_plan = self.bind_statement(bind_context, &statement).await?;
                 let opt_ctx = Arc::new(OptimizerContext::new(OptimizerConfig {
-                    enable_distributed_optimization: true,
+                    enable_distributed_optimization: !self.ctx.get_cluster().is_empty(),
                 }));
                 let optimized_plan = optimize(self.ctx.clone(), opt_ctx, select_plan)?;
                 Ok(InsertInputSource::SelectPlan(Box::new(optimized_plan)))

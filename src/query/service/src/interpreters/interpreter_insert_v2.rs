@@ -16,10 +16,8 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_catalog::table::Table;
-use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::scalars::CastFunction;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures_util::StreamExt;
@@ -29,15 +27,12 @@ use super::commit2table;
 use super::interpreter_common::append2table;
 use super::plan_schedulers::build_schedule_pipepline;
 use super::ProcessorExecutorStream;
-use crate::clusters::ClusterHelper;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::interpreters::SelectInterpreterV2;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::BlocksSource;
-use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::Pipeline;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::SourcePipeBuilder;
@@ -46,6 +41,7 @@ use crate::sessions::TableContext;
 use crate::sql::executor::DistributedInsertSelect;
 use crate::sql::executor::PhysicalPlan;
 use crate::sql::executor::PhysicalPlanBuilder;
+use crate::sql::executor::PipelineBuilder;
 use crate::sql::plans::Insert;
 use crate::sql::plans::InsertInputSource;
 use crate::sql::plans::Plan;
@@ -111,64 +107,7 @@ impl InsertInterpreterV2 {
                     );
                 }
                 InsertInputSource::SelectPlan(plan) => {
-                    if !self.ctx.get_cluster().is_empty() {
-                        // distributed insert select
-                        if let Some(stream) = self
-                            .schedule_insert_select(plan, self.plan.catalog.clone(), table.clone())
-                            .await?
-                        {
-                            return Ok(stream);
-                        }
-                        // else the plan cannot be executed in cluster mode, fallback to standalone mode
-                    }
-
-                    let select_interpreter = match &**plan {
-                        Plan::Query {
-                            s_expr,
-                            metadata,
-                            bind_context,
-                            ..
-                        } => SelectInterpreterV2::try_create(
-                            self.ctx.clone(),
-                            *bind_context.clone(),
-                            *s_expr.clone(),
-                            metadata.clone(),
-                        ),
-                        _ => unreachable!(),
-                    };
-
-                    build_res = select_interpreter?.create_new_pipeline().await?;
-
-                    if self.check_schema_cast(plan)? {
-                        let mut functions = Vec::with_capacity(self.plan.schema().fields().len());
-
-                        for (target_field, original_field) in self
-                            .plan
-                            .schema()
-                            .fields()
-                            .iter()
-                            .zip(plan.schema().fields().iter())
-                        {
-                            let target_type_name = target_field.data_type().name();
-                            let from_type = original_field.data_type().clone();
-                            let cast_function =
-                                CastFunction::create("cast", &target_type_name, from_type)?;
-                            functions.push(cast_function);
-                        }
-
-                        let func_ctx = self.ctx.try_get_function_context()?;
-                        build_res.main_pipeline.add_transform(
-                            |transform_input_port, transform_output_port| {
-                                TransformCastSchema::try_create(
-                                    transform_input_port,
-                                    transform_output_port,
-                                    self.plan.schema(),
-                                    functions.clone(),
-                                    func_ctx.clone(),
-                                )
-                            },
-                        )?;
-                    }
+                    return self.schedule_insert_select(plan, table.clone()).await;
                 }
             };
         }
@@ -202,9 +141,8 @@ impl InsertInterpreterV2 {
     async fn schedule_insert_select(
         &self,
         plan: &Plan,
-        catalog: String,
         table: Arc<dyn Table>,
-    ) -> Result<Option<SendableDataBlockStream>> {
+    ) -> Result<SendableDataBlockStream> {
         // select_plan is already distributed optimized
         let (mut select_plan, select_column_bindings) = match plan {
             Plan::Query {
@@ -219,11 +157,9 @@ impl InsertInterpreterV2 {
             _ => unreachable!(),
         };
 
-        if !select_plan.is_distributed_plan() {
-            return Ok(None);
-        }
-
         table.get_table_info();
+        let catalog = self.plan.catalog.clone();
+        let is_distributed_plan = select_plan.is_distributed_plan();
 
         let insert_select_plan = match select_plan {
             PhysicalPlan::Exchange(ref mut exchange) => {
@@ -256,7 +192,12 @@ impl InsertInterpreterV2 {
             }
         };
 
-        let mut build_res = build_schedule_pipepline(self.ctx.clone(), &insert_select_plan).await?;
+        let mut build_res = if !is_distributed_plan {
+            let builder = PipelineBuilder::create(self.ctx.clone());
+            builder.finalize(&insert_select_plan)?
+        } else {
+            build_schedule_pipepline(self.ctx.clone(), &insert_select_plan).await?
+        };
 
         let settings = self.ctx.get_settings();
         let query_need_abort = self.ctx.query_need_abort();
@@ -277,11 +218,11 @@ impl InsertInterpreterV2 {
 
         commit2table(self.ctx.clone(), table.clone(), self.plan.overwrite).await?;
 
-        Ok(Some(Box::pin(DataBlockStream::create(
+        Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),
             None,
             vec![],
-        ))))
+        )))
     }
 }
 
