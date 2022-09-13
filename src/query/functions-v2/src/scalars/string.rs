@@ -772,7 +772,7 @@ mod soundex {
 }
 
 #[inline]
-fn substr<'a>(str: &'a [u8], pos: i64, len: u64) -> &'a [u8] {
+fn substr(str: &[u8], pos: i64, len: u64) -> &[u8] {
     if pos > 0 && pos <= str.len() as i64 {
         let l = str.len() as usize;
         let s = (pos - 1) as usize;
