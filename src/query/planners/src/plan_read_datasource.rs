@@ -27,7 +27,7 @@ use crate::Projection;
 use crate::StageTableInfo;
 use crate::Statistics;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub enum SourceInfo {
     // Normal table source, `fuse/system`.
     TableSource(TableInfo),
