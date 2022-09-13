@@ -124,11 +124,8 @@ impl QueryContextShared {
         self.query_need_abort.clone()
     }
 
-    pub fn kill(&self) {
-        self.set_error(ErrorCode::AbortedQuery(
-            "Aborted query, because the server is shutting down or the query was killed",
-        ));
-
+    pub fn kill(&self, cause: ErrorCode) {
+        self.set_error(cause);
         self.query_need_abort.store(true, Ordering::Release);
         let mut sources_abort_handle = self.sources_abort_handle.write();
 

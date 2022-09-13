@@ -48,7 +48,9 @@ impl KillInterpreter {
                 Ok(Box::pin(DataBlockStream::create(schema, None, vec![])))
             }
             Some(kill_session) => {
-                kill_session.force_kill_query();
+                kill_session.force_kill_query(ErrorCode::AbortedQuery(
+                    "Aborted query, because the server is shutting down or the query was killed",
+                ));
                 let schema = Arc::new(DataSchema::empty());
                 Ok(Box::pin(DataBlockStream::create(schema, None, vec![])))
             }

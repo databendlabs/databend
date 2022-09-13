@@ -27,6 +27,7 @@ use common_expression::types::StringType;
 use common_expression::vectorize_with_builder_1_arg;
 use common_expression::vectorize_with_builder_2_arg;
 use common_expression::vectorize_with_builder_3_arg;
+use common_expression::vectorize_with_builder_4_arg;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::Value;
@@ -142,78 +143,83 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_4_arg::<StringType, NumberType<i64>, NumberType<i64>, StringType, StringType, _, _>(
-          "insert",
-            FunctionProperty::default(),
-            |_, _, _, _| None,
-            |srcstr, pos, len, substr| {
-                let mut values: Vec<u8> = vec![];
-
-                let sl = srcstr.len() as i64;
-                if pos < 1 || pos > sl {
-                    values.extend_from_slice(srcstr);
+    registry.register_passthrough_nullable_4_arg::<StringType, NumberType<i64>, NumberType<i64>, StringType, StringType, _, _>(
+        "insert",
+        FunctionProperty::default(),
+        |_, _, _, _| None,
+        vectorize_with_builder_4_arg::<StringType, NumberType<i64>, NumberType<i64>, StringType, StringType>(
+            |srcstr, pos, len, substr, output| {
+                let pos = pos as usize;
+                let len = len as usize;
+                if pos < 1 || pos > srcstr.len() {
+                    output.put_slice(srcstr);
                 } else {
-                    let p = pos as usize - 1;
-                    values.extend_from_slice(&srcstr[0..p]);
-                    values.extend_from_slice(substr);
-                    if len >= 0 && pos + len < sl {
-                        let l = len as usize;
-                        values.extend_from_slice(&srcstr[p + l..]);
+                    let pos = pos - 1;
+                    output.put_slice(&srcstr[0..pos]);
+                    output.put_slice(substr);
+                    if pos + len < srcstr.len() {
+                        output.put_slice(&srcstr[(pos + len)..]);
                     }
                 }
-                values
-            }
-        );
+                output.commit_row();
+                Ok(())
+            }),
+    );
 
-    registry.register_3_arg::<StringType, NumberType<u64>, StringType, StringType, _, _>(
+    registry.register_passthrough_nullable_3_arg::<StringType, NumberType<u64>, StringType, StringType, _, _>(
         "rpad",
         FunctionProperty::default(),
         |_, _, _| None,
-        |str: &[u8], l: u64, pad: &[u8]| {
-            let mut buff: Vec<u8> = vec![];
-            if l != 0 {
-                if l > str.len() as u64 {
-                    buff.extend_from_slice(str);
-                    while buff.len() < l as usize {
-                        if buff.len() + pad.len() <= l as usize {
-                            buff.extend_from_slice(pad);
-                        } else {
-                            buff.extend_from_slice(&pad[0..l as usize - buff.len()])
-                        }
+        vectorize_with_builder_3_arg::<StringType, NumberType<u64>, StringType, StringType>(
+        |s: &[u8], pad_len: u64, pad: &[u8], output| {
+            let pad_len = pad_len as usize;
+            if pad_len <= s.len() {
+                output.put_slice(&s[..pad_len])
+            } else {
+                output.put_slice(s);
+                let mut remain_pad_len = pad_len - s.len();
+                while remain_pad_len > 0 {
+                    if remain_pad_len < pad.len() {
+                        output.put_slice(&pad[..remain_pad_len]);
+                        remain_pad_len = 0;
+                    } else {
+                        output.put_slice(pad);
+                        remain_pad_len -= pad.len();
                     }
-                } else {
-                    buff.extend_from_slice(&str[0..l as usize]);
                 }
             }
-            buff
-        },
+            output.commit_row();
+            Ok(())
+        }),
     );
 
-    registry.register_3_arg::<StringType, StringType, StringType, StringType, _, _>(
+    registry.register_passthrough_nullable_3_arg::<StringType, StringType, StringType, StringType, _, _>(
         "replace",
         FunctionProperty::default(),
         |_, _, _| None,
-        |str, from, to| {
-            let mut buf: Vec<u8> = vec![];
+        vectorize_with_builder_3_arg::<StringType, StringType, StringType, StringType>(
+            |str, from, to, output| {
             if from.is_empty() || from == to {
-                buf.extend_from_slice(str);
-                return buf;
+                output.put_slice(str);
+                output.commit_row();
+                return Ok(());
             }
             let mut skip = 0;
             for (p, w) in str.windows(from.len()).enumerate() {
                 if w == from {
-                    buf.extend_from_slice(to);
+                    output.put_slice(to);
                     skip = from.len();
                 } else if p + w.len() == str.len() {
-                    buf.extend_from_slice(w);
+                    output.put_slice(w);
                 } else if skip > 1 {
                     skip -= 1;
                 } else {
-                    buf.extend_from_slice(&w[0..1]);
+                    output.put_slice(&w[0..1]);
                 }
             }
-            buf
-        },
+            output.commit_row();
+            Ok(())
+        }),
     );
 
     registry.register_2_arg::<StringType, StringType, NumberType<i8>, _, _>(

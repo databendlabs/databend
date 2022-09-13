@@ -106,15 +106,17 @@ impl Session {
     }
 
     pub fn force_kill_session(self: &Arc<Self>) {
-        self.force_kill_query();
+        self.force_kill_query(ErrorCode::AbortedQuery(
+            "Aborted query, because the server is shutting down or the query was killed",
+        ));
         self.kill(/* shutdown io stream */);
     }
 
-    pub fn force_kill_query(self: &Arc<Self>) {
+    pub fn force_kill_query(self: &Arc<Self>, cause: ErrorCode) {
         let session_ctx = self.session_ctx.clone();
 
         if let Some(context_shared) = session_ctx.get_query_context_shared() {
-            context_shared.kill(/* shutdown executing query */);
+            context_shared.kill(cause);
         }
     }
 
