@@ -27,11 +27,12 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use parking_lot::Mutex;
 use common_base::base::{GlobalIORuntime, TrySpawn};
+use common_catalog::table::Table;
 
 use super::commit2table;
 use super::interpreter_common::append2table;
 use crate::interpreters::Interpreter;
-use crate::interpreters::interpreter_common::execute_pipeline;
+use crate::interpreters::interpreter_common::{commit_table_pipeline, execute_pipeline};
 use crate::interpreters::SelectInterpreter;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::{BlocksSource, TransformAddOn};
@@ -170,52 +171,13 @@ impl Interpreter for InsertInterpreter {
             };
         }
 
-        if table.schema() != plan.schema() {
-            build_res.main_pipeline
-                .add_transform(|transform_input_port, transform_output_port| {
-                    TransformAddOn::try_create(
-                        transform_input_port,
-                        transform_output_port,
-                        plan.schema().clone(),
-                        table.schema(),
-                        self.ctx.clone(),
-                    )
-                })?;
-        }
-
-        table.append2(self.ctx.clone(), &mut build_res.main_pipeline)?;
-
-        let ctx = self.ctx.clone();
-        let overwrite = self.plan.overwrite;
-
-        build_res.main_pipeline.set_on_finished(move |may_error| {
-            // capture out variable
-            let overwrite = overwrite;
-            let ctx = ctx.clone();
-            let table = table.clone();
-
-            if may_error.is_none() {
-                let append_entries = ctx.consume_precommit_blocks();
-                // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
-                let catalog_name = ctx.get_current_catalog();
-                let commit_handle = GlobalIORuntime::instance().spawn(async move {
-                    table
-                        .commit_insertion(ctx, &catalog_name, append_entries, overwrite)
-                        .await
-                });
-
-                return match futures::executor::block_on(commit_handle) {
-                    Ok(Ok(_)) => Ok(()),
-                    Ok(Err(error)) => Err(error),
-                    Err(cause) => Err(ErrorCode::PanicError(format!(
-                        "Maybe panic while in commit insert. {}",
-                        cause
-                    )))
-                };
-            }
-
-            Err(may_error.as_ref().unwrap().clone())
-        });
+        append2table(
+            self.ctx.clone(),
+            table,
+            plan.schema(),
+            &mut build_res,
+            self.plan.overwrite,
+        )?;
 
         Ok(build_res)
     }
