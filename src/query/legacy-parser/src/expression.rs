@@ -13,11 +13,13 @@
 // limitations under the License.
 
 use common_ast::ast::Expr;
+use common_ast::ast::Literal;
 use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::token::Token;
 use common_ast::parser::token::Tokenizer;
 use common_ast::Backtrace;
 use common_ast::Dialect;
+use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
@@ -75,6 +77,33 @@ fn unchecked_expression_analyze(expr: Expr) -> Result<Expression> {
                     column.to_string(),
                 ]))
             }
+        }
+        Expr::BinaryOp {
+            op, left, right, ..
+        } => Ok(Expression::BinaryExpression {
+            left: Box::new(unchecked_expression_analyze(*left)?),
+            op: op.to_string(),
+            right: Box::new(unchecked_expression_analyze(*right)?),
+        }),
+        Expr::Literal { lit, .. } => {
+            let value = match lit {
+                Literal::Integer(uint) => DataValue::UInt64(uint),
+                Literal::Float(float) => DataValue::Float64(float),
+                Literal::String(string) => DataValue::String(string.as_bytes().to_vec()),
+                Literal::Boolean(boolean) => DataValue::Boolean(boolean),
+                Literal::Null => DataValue::Null,
+                _ => Err(ErrorCode::SemanticError(format!(
+                    "Unsupported literal value: {lit}"
+                )))?,
+            };
+
+            let data_type = value.data_type();
+
+            Ok(Expression::Literal {
+                value,
+                column_name: None,
+                data_type,
+            })
         }
         _ => Err(ErrorCode::LogicalError(format!(
             "Logical error: can't analyze {:?}",
