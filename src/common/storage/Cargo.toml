@@ -15,7 +15,7 @@ common-contexts = { path = "../contexts" }
 common-exception = { path = "../exception" }
 
 anyhow = "1.0.58"
-backon = "0.0.2"
+backon = "0.1.0"
 globiter = "0.1.0"
 once_cell = "1.12.0"
 opendal = { version = "0.16.0", features = [
