@@ -3298,6 +3298,7 @@ impl SchemaApiTestSuite {
         let tenant = "tenant1";
         let db_name = "db1";
         let tbl_name = "tb2";
+        let table_id;
 
         let schema = || {
             Arc::new(DataSchema::new(vec![DataField::new(
@@ -3342,7 +3343,8 @@ impl SchemaApiTestSuite {
                 },
                 table_meta: table_meta(created_on),
             };
-            let _ = mt.create_table(req.clone()).await?;
+            let resp = mt.create_table(req.clone()).await?;
+            table_id = resp.table_id;
         }
 
         info!("--- create and get stage file info");
@@ -3384,13 +3386,7 @@ impl SchemaApiTestSuite {
 
         info!("--- truncate table and get stage file info again");
         {
-            let req = TruncateTableReq {
-                table: TableNameIdent {
-                    tenant: tenant.to_string(),
-                    db_name: db_name.to_string(),
-                    table_name: tbl_name.to_string(),
-                },
-            };
+            let req = TruncateTableReq { table_id };
 
             let _ = mt.truncate_table(req).await?;
 

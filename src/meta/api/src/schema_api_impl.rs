@@ -1903,59 +1903,40 @@ impl<KV: KVApi> SchemaApi for KV {
     async fn truncate_table(&self, req: TruncateTableReq) -> Result<TruncateTableReply, MetaError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
-        let tenant_dbname_tbname = &req.table;
-        let tenant_dbname = tenant_dbname_tbname.db_name_ident();
-
         let mut retry = 0;
+        let table_id = req.table_id;
 
         while retry < TXN_MAX_RETRY_TIMES {
             retry += 1;
-            // Get db by name to ensure presence
-
-            let (db_id_seq, db_id) = get_u64_value(self, &tenant_dbname).await?;
-            debug!(db_id_seq, db_id, ?tenant_dbname_tbname, "get database");
-
-            db_has_to_exist(
-                db_id_seq,
-                &tenant_dbname,
-                format!("get_table: {}", tenant_dbname_tbname),
-            )?;
-
-            // Get table by tenant,db_id, table_name to assert presence.
-
-            let dbid_tbname = DBIdTableName {
-                db_id,
-                table_name: tenant_dbname_tbname.table_name.clone(),
-            };
-
-            let (tb_id_seq, table_id) = get_u64_value(self, &dbid_tbname).await?;
-            table_has_to_exist(tb_id_seq, tenant_dbname_tbname, "get_table")?;
 
             let tbid = TableId { table_id };
 
             let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) =
                 get_struct_value(self, &tbid).await?;
 
-            table_has_to_exist(
-                tb_meta_seq,
-                tenant_dbname_tbname,
-                format!("get_table meta by: {}", tbid),
-            )?;
+            if tb_meta_seq == 0 {
+                return Err(MetaError::AppError(AppError::UnknownTableId(
+                    UnknownTableId::new(table_id, ""),
+                )));
+            }
 
             debug!(
                 ident = display(&tbid),
-                name = display(&tenant_dbname_tbname),
                 table_meta = debug(&tb_meta),
                 "truncate_table"
             );
 
-            let mut condition = vec![
-                txn_cond_seq(&tenant_dbname, Eq, db_id_seq),
-                txn_cond_seq(&dbid_tbname, Eq, tb_id_seq),
-                txn_cond_seq(&tbid, Eq, tb_meta_seq),
-            ];
+            let mut condition = vec![txn_cond_seq(&tbid, Eq, tb_meta_seq)];
             let mut if_then = vec![];
             remove_table_copied_files(self, table_id, &mut condition, &mut if_then).await?;
+
+            // if_then empty means that there is no copied files in the table.
+            if if_then.is_empty() {
+                return Ok(TruncateTableReply {});
+            }
+
+            // update table meta to make sequence update.
+            if_then.push(txn_op_put(&tbid, serialize_struct(&tb_meta.unwrap())?)); // tb_id -> tb_meta
 
             let txn_req = TxnRequest {
                 condition,

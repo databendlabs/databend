@@ -653,7 +653,7 @@ pub struct UpsertTableCopiedFileReply {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct TruncateTableReq {
-    pub table: TableNameIdent,
+    pub table_id: u64,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
