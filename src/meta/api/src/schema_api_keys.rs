@@ -297,7 +297,7 @@ impl KVApiKey for CountTablesKey {
     }
 }
 
-// __fd_table_stage_file/tenant/db_id/table_id/file_name -> TableCopiedFileInfo
+// __fd_table_copied_files/tenant/db_id/table_id/file_name -> TableCopiedFileInfo
 impl KVApiKey for TableCopiedFileNameIdent {
     const PREFIX: &'static str = PREFIX_TABLE_COPIED_FILES;
 

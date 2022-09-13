@@ -1847,10 +1847,12 @@ impl<KV: KVApi> SchemaApi for KV {
 
             let mut condition = vec![
                 txn_cond_seq(&tenant_dbname, Eq, db_id_seq),
-                txn_cond_seq(&dbid_tbname, Eq, tb_id_seq),
                 txn_cond_seq(&tbid, Eq, tb_meta_seq),
             ];
-            let mut if_then = vec![];
+            let mut if_then = vec![
+                // every copied files changed, change tbid seq to make all table child consistent.
+                txn_op_put(&tbid, serialize_struct(&tb_meta.unwrap())?), /* (tenant, db_id, tb_id) -> tb_meta */
+            ];
             for (file, file_info) in req.file_info.iter() {
                 let key = TableCopiedFileNameIdent {
                     tenant: tenant_dbname_tbname.tenant.clone(),
@@ -1957,7 +1959,7 @@ impl<KV: KVApi> SchemaApi for KV {
                 txn_cond_seq(&tbid, Eq, tb_meta_seq),
             ];
             let mut if_then = vec![];
-            remove_table_stage_files(
+            remove_table_copied_files(
                 self,
                 &req.table.tenant,
                 db_id,
@@ -2200,7 +2202,7 @@ impl<KV: KVApi> SchemaApi for KV {
     }
 }
 
-async fn remove_table_stage_files(
+async fn remove_table_copied_files(
     kv_api: &impl KVApi,
     tenant: &str,
     db_id: u64,
@@ -2336,7 +2338,7 @@ async fn gc_dropped_table(
                 if_then.push(txn_op_del(&key.0));
 
                 // remove stage file info of the table
-                remove_table_stage_files(
+                remove_table_copied_files(
                     kv_api,
                     &tenant,
                     db_id,

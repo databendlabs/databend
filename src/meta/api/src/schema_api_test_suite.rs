@@ -251,7 +251,7 @@ impl SchemaApiTestSuite {
             .table_drop_out_of_retention_time_history(&b.build().await)
             .await?;
         suite.get_table_by_id(&b.build().await).await?;
-        suite.get_table_stage_file(&b.build().await).await?;
+        suite.get_table_copied_file(&b.build().await).await?;
         suite.truncate_table(&b.build().await).await?;
         Ok(())
     }
@@ -3172,7 +3172,7 @@ impl SchemaApiTestSuite {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn get_table_stage_file<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    async fn get_table_copied_file<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let db_name = "db1";
         let tbl_name = "tb2";
