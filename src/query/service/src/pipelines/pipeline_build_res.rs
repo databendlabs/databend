@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+use common_catalog::table::Table;
 use common_pipeline_core::Pipeline;
 
 pub struct PipelineBuildResult {
@@ -21,6 +23,13 @@ pub struct PipelineBuildResult {
 }
 
 impl PipelineBuildResult {
+    pub fn create() -> PipelineBuildResult {
+        PipelineBuildResult {
+            main_pipeline: Pipeline::create(),
+            sources_pipelines: vec![],
+        }
+    }
+
     pub fn set_max_threads(&mut self, max_threads: usize) {
         self.main_pipeline.set_max_threads(max_threads);
 

@@ -26,13 +26,15 @@ use common_planners::SelectPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use parking_lot::Mutex;
+use common_base::base::{GlobalIORuntime, TrySpawn};
 
 use super::commit2table;
 use super::interpreter_common::append2table;
 use crate::interpreters::Interpreter;
+use crate::interpreters::interpreter_common::execute_pipeline;
 use crate::interpreters::SelectInterpreter;
 use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::BlocksSource;
+use crate::pipelines::processors::{BlocksSource, TransformAddOn};
 use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::Pipeline;
 use crate::pipelines::PipelineBuildResult;
@@ -85,13 +87,21 @@ impl Interpreter for InsertInterpreter {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
+        let build_res = self.create_new_pipeline().await?;
+
+        execute_pipeline(self.ctx.clone(), build_res)?;
+        Ok(Box::pin(DataBlockStream::create(self.plan.schema(), None, vec![])))
+    }
+
+    async fn create_new_pipeline(&self) -> Result<PipelineBuildResult> {
         let plan = &self.plan;
         let settings = self.ctx.get_settings();
         let table = self
             .ctx
             .get_table(&plan.catalog, &plan.database, &plan.table)
             .await?;
-        let mut build_res = self.create_new_pipeline().await?;
+
+        let mut build_res = PipelineBuildResult::create();
         let mut builder = SourcePipeBuilder::create();
         if self.async_insert {
             build_res.main_pipeline.add_pipe(
@@ -160,21 +170,54 @@ impl Interpreter for InsertInterpreter {
             };
         }
 
-        append2table(self.ctx.clone(), table.clone(), plan.schema(), build_res)?;
-        commit2table(self.ctx.clone(), table.clone(), plan.overwrite).await?;
-        Ok(Box::pin(DataBlockStream::create(
-            self.plan.schema(),
-            None,
-            vec![],
-        )))
-    }
+        if table.schema() != plan.schema() {
+            build_res.main_pipeline
+                .add_transform(|transform_input_port, transform_output_port| {
+                    TransformAddOn::try_create(
+                        transform_input_port,
+                        transform_output_port,
+                        plan.schema().clone(),
+                        table.schema(),
+                        self.ctx.clone(),
+                    )
+                })?;
+        }
 
-    async fn create_new_pipeline(&self) -> Result<PipelineBuildResult> {
-        let insert_pipeline = Pipeline::create();
-        Ok(PipelineBuildResult {
-            main_pipeline: insert_pipeline,
-            sources_pipelines: vec![],
-        })
+        table.append2(self.ctx.clone(), &mut build_res.main_pipeline)?;
+
+        let ctx = self.ctx.clone();
+        let overwrite = self.plan.overwrite;
+
+        build_res.main_pipeline.set_on_finished(move |may_error| {
+            // capture out variable
+            let overwrite = overwrite;
+            let ctx = ctx.clone();
+            let table = table.clone();
+
+            if may_error.is_none() {
+                let append_entries = ctx.consume_precommit_blocks();
+                // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
+                let catalog_name = ctx.get_current_catalog();
+                let commit_handle = GlobalIORuntime::instance().spawn(async move {
+                    table
+                        .commit_insertion(ctx, &catalog_name, append_entries, overwrite)
+                        .await
+                });
+
+                return match futures::executor::block_on(commit_handle) {
+                    Ok(Ok(_)) => Ok(()),
+                    Ok(Err(error)) => Err(error),
+                    Err(cause) => Err(ErrorCode::PanicError(format!(
+                        "Maybe panic while in commit insert. {}",
+                        cause
+                    )))
+                };
+            }
+
+            Err(may_error.as_ref().unwrap().clone())
+        });
+
+        Ok(build_res)
     }
 
     fn set_source_pipe_builder(&self, builder: Option<SourcePipeBuilder>) -> Result<()> {

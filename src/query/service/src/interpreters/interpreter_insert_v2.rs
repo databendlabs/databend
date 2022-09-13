@@ -61,7 +61,30 @@ impl InsertInterpreterV2 {
         }))
     }
 
-    async fn execute_new(&self) -> Result<SendableDataBlockStream> {
+    fn check_schema_cast(&self, plan: &Plan) -> common_exception::Result<bool> {
+        let output_schema = &self.plan.schema;
+        let select_schema = plan.schema();
+
+        // validate schema
+        if select_schema.fields().len() < output_schema.fields().len() {
+            return Err(ErrorCode::BadArguments(
+                "Fields in select statement is less than expected",
+            ));
+        }
+
+        // check if cast needed
+        let cast_needed = select_schema != *output_schema;
+        Ok(cast_needed)
+    }
+}
+
+#[async_trait::async_trait]
+impl Interpreter for InsertInterpreterV2 {
+    fn name(&self) -> &str {
+        "InsertIntoInterpreter"
+    }
+
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
         let plan = &self.plan;
         let settings = self.ctx.get_settings();
         let table = self
@@ -160,33 +183,6 @@ impl InsertInterpreterV2 {
             None,
             vec![],
         )))
-    }
-
-    fn check_schema_cast(&self, plan: &Plan) -> common_exception::Result<bool> {
-        let output_schema = &self.plan.schema;
-        let select_schema = plan.schema();
-
-        // validate schema
-        if select_schema.fields().len() < output_schema.fields().len() {
-            return Err(ErrorCode::BadArguments(
-                "Fields in select statement is less than expected",
-            ));
-        }
-
-        // check if cast needed
-        let cast_needed = select_schema != *output_schema;
-        Ok(cast_needed)
-    }
-}
-
-#[async_trait::async_trait]
-impl Interpreter for InsertInterpreterV2 {
-    fn name(&self) -> &str {
-        "InsertIntoInterpreter"
-    }
-
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
-        self.execute_new().await
     }
 
     async fn create_new_pipeline(&self) -> Result<PipelineBuildResult> {
