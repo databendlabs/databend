@@ -22,6 +22,7 @@ pub mod stream_source;
 pub mod stream_source_v2;
 pub mod sync_source;
 pub mod sync_source_receiver;
+mod one_block_source;
 
 pub use async_source::AsyncSource;
 pub use async_source::AsyncSourcer;
@@ -40,6 +41,7 @@ pub use sync_source::SyncSource;
 pub use sync_source::SyncSourcer;
 pub use sync_source::*;
 pub use sync_source_receiver::SyncReceiverSource;
+pub use one_block_source::OneBlockSource;
 
 #[allow(dead_code)]
 mod source_example {

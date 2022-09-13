@@ -101,7 +101,7 @@ impl Interpreter for SelectInterpreter {
 
     /// This method will create a new pipeline
     /// The QueryPipelineBuilder will use the optimized plan to generate a Pipeline
-    async fn create_new_pipeline(&self) -> Result<PipelineBuildResult> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         self.build_pipeline().await
     }
 }

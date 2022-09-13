@@ -23,6 +23,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -45,7 +46,7 @@ impl Interpreter for CreateUserInterpreter {
     }
 
     #[tracing::instrument(level = "debug", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = self.plan.clone();
         let tenant = self.ctx.get_tenant();
 
@@ -64,10 +65,6 @@ impl Interpreter for CreateUserInterpreter {
             .add_user(&tenant, user_info, plan.if_not_exists)
             .await?;
 
-        Ok(Box::pin(DataBlockStream::create(
-            self.plan.schema(),
-            None,
-            vec![],
-        )))
+        Ok(PipelineBuildResult::create())
     }
 }

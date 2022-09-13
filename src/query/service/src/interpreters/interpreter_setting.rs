@@ -23,6 +23,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryAffect;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -44,7 +45,7 @@ impl Interpreter for SettingInterpreter {
         "SettingInterpreter"
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = self.set.clone();
         for var in plan.vars {
             let ok = match var.variable.to_lowercase().as_str() {
@@ -81,7 +82,6 @@ impl Interpreter for SettingInterpreter {
             }
         }
 
-        let schema = DataSchemaRefExt::create(vec![DataField::new("set", Vu8::to_data_type())]);
-        Ok(Box::pin(DataBlockStream::create(schema, None, vec![])))
+        Ok(PipelineBuildResult::create())
     }
 }

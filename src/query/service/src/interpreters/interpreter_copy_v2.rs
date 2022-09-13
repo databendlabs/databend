@@ -256,7 +256,7 @@ impl CopyInterpreterV2 {
             files: vec![],
         };
 
-        let mut build_res = select_interpreter.create_new_pipeline().await?;
+        let mut build_res = select_interpreter.execute2().await?;
         let table = StageTable::try_create(stage_table_info)?;
 
         append2table(self.ctx.clone(), table.clone(), data_schema.clone(), &mut build_res, false, true)?;
@@ -272,7 +272,7 @@ impl Interpreter for CopyInterpreterV2 {
 
     #[tracing::instrument(level = "debug", name = "copy_interpreter_execute_v2", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let build_res = self.create_new_pipeline().await?;
+        let build_res = self.execute2().await?;
 
         let settings = self.ctx.get_settings();
         let query_need_abort = self.ctx.query_need_abort();
@@ -295,7 +295,7 @@ impl Interpreter for CopyInterpreterV2 {
         )))
     }
 
-    async fn create_new_pipeline(&self) -> Result<PipelineBuildResult> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         match &self.plan {
             // TODO(xuanwo): extract them as a separate function.
             CopyPlanV2::IntoTable {

@@ -34,17 +34,12 @@ pub trait Interpreter: Sync + Send {
     }
 
     /// The core of the databend processor which will execute the logical plan and get the DataBlock
-    async fn execute(&self) -> Result<SendableDataBlockStream>;
-
-    /// Create the new pipeline for databend's new execution model
-    /// Currently databend is developing a new execution model with a hybrid pull-based & push-based strategy
-    /// The method now only is implemented by SelectInterpreter
-    async fn create_new_pipeline(&self) -> Result<PipelineBuildResult> {
-        Err(ErrorCode::UnImplement(format!(
-            "UnImplement create_new_pipeline method for {:?}",
-            self.name()
-        )))
+    async fn execute(&self) -> Result<SendableDataBlockStream> {
+        unimplemented!()
     }
+
+    /// The core of the databend processor which will execute the logical plan and build the pipeline
+    async fn execute2(&self) -> Result<PipelineBuildResult>;
 
     /// Do some start work for the interpreter
     /// Such as query counts, query start time and etc

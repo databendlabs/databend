@@ -393,7 +393,7 @@ impl AsyncInsertManager {
                     input: Arc::new((**plan).clone()),
                 })?;
 
-                let mut build_res = select_interpreter.create_new_pipeline().await?;
+                let mut build_res = select_interpreter.execute2().await?;
 
                 let mut sink_pipeline_builder = SinkPipeBuilder::create();
                 for _ in 0..build_res.main_pipeline.output_len() {

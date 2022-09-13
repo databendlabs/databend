@@ -14,7 +14,11 @@
 
 use std::sync::Arc;
 use common_catalog::table::Table;
-use common_pipeline_core::Pipeline;
+use common_datablocks::DataBlock;
+use common_pipeline_core::{Pipeline, SourcePipeBuilder};
+use common_exception::Result;
+use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_sources::processors::sources::{BlocksSource, OneBlockSource};
 
 pub struct PipelineBuildResult {
     pub main_pipeline: Pipeline,
@@ -28,6 +32,26 @@ impl PipelineBuildResult {
             main_pipeline: Pipeline::create(),
             sources_pipelines: vec![],
         }
+    }
+
+    pub fn from_blocks(blocks: Vec<DataBlock>) -> Result<PipelineBuildResult> {
+        let mut source_builder = SourcePipeBuilder::create();
+
+        for data_block in blocks {
+            let output = OutputPort::create();
+            source_builder.add_source(
+                output.clone(),
+                OneBlockSource::create(output, data_block)?,
+            );
+        }
+
+        let mut main_pipeline = Pipeline::create();
+        main_pipeline.add_pipe(source_builder.finalize());
+
+        Ok(PipelineBuildResult {
+            main_pipeline: main_pipeline,
+            sources_pipelines: vec![],
+        })
     }
 
     pub fn set_max_threads(&mut self, max_threads: usize) {

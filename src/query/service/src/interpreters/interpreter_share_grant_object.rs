@@ -24,6 +24,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::share::GrantShareObjectPlan;
@@ -45,7 +46,7 @@ impl Interpreter for GrantShareObjectInterpreter {
         "GrantShareObjectInterpreter"
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
         let user_mgr = self.ctx.get_user_manager();
         let meta_api = user_mgr.get_meta_store_client();
@@ -62,10 +63,6 @@ impl Interpreter for GrantShareObjectInterpreter {
 
         save_share_spec(self.ctx.get_storage_operator()?, resp.spec_vec).await?;
 
-        Ok(Box::pin(DataBlockStream::create(
-            self.plan.schema(),
-            None,
-            vec![],
-        )))
+        Ok(PipelineBuildResult::create())
     }
 }

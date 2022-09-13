@@ -27,6 +27,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::share::ShowGrantTenantsOfSharePlan;
@@ -52,7 +53,7 @@ impl Interpreter for ShowGrantTenantsOfShareInterpreter {
         self.plan.schema()
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         let user_mgr = self.ctx.get_user_manager();
         let meta_api = user_mgr.get_meta_store_client();
         let tenant = self.ctx.get_tenant();
@@ -64,11 +65,7 @@ impl Interpreter for ShowGrantTenantsOfShareInterpreter {
         };
         let resp = meta_api.get_grant_tenants_of_share(req).await?;
         if resp.accounts.is_empty() {
-            return Ok(Box::pin(DataBlockStream::create(
-                DataSchemaRefExt::create(vec![]),
-                None,
-                vec![],
-            )));
+            return Ok(PipelineBuildResult::create());
         }
 
         let desc_schema = self.plan.schema();
@@ -84,8 +81,7 @@ impl Interpreter for ShowGrantTenantsOfShareInterpreter {
             Series::from_data(granted_ons),
             Series::from_data(accounts),
         ]);
-        Ok(Box::pin(DataBlockStream::create(desc_schema, None, vec![
-            block,
-        ])))
+
+        PipelineBuildResult::from_blocks(vec![block])
     }
 }

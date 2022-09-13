@@ -23,6 +23,7 @@ use common_streams::SendableDataBlockStream;
 use serde_json::Value;
 
 use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::PresignAction;
@@ -52,7 +53,7 @@ impl Interpreter for PresignInterpreter {
     }
 
     #[tracing::instrument(level = "debug", name = "presign_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         let op = StageSourceHelper::get_op(&self.ctx, &self.plan.stage).await?;
         if !op.metadata().can_presign() {
             return Err(ErrorCode::StorageUnsupported(
@@ -87,10 +88,6 @@ impl Interpreter for PresignInterpreter {
             Series::from_data(vec![presigned_req.uri().to_string()]),
         ]);
 
-        Ok(Box::pin(DataBlockStream::create(
-            self.plan.schema(),
-            None,
-            vec![block],
-        )))
+        PipelineBuildResult::from_blocks(vec![block])
     }
 }

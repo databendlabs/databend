@@ -28,6 +28,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::share::DescSharePlan;
@@ -53,7 +54,7 @@ impl Interpreter for DescShareInterpreter {
         self.plan.schema()
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         let user_mgr = self.ctx.get_user_manager();
         let meta_api = user_mgr.get_meta_store_client();
         let req = GetShareGrantObjectReq {
@@ -64,11 +65,7 @@ impl Interpreter for DescShareInterpreter {
         };
         let resp = meta_api.get_share_grant_objects(req).await?;
         if resp.objects.is_empty() {
-            return Ok(Box::pin(DataBlockStream::create(
-                DataSchemaRefExt::create(vec![]),
-                None,
-                vec![],
-            )));
+            return Ok(PipelineBuildResult::create());
         }
 
         let desc_schema = self.plan.schema();
@@ -90,13 +87,10 @@ impl Interpreter for DescShareInterpreter {
             shared_ons.push(entry.grant_on.to_string());
         }
 
-        let block = DataBlock::create(desc_schema.clone(), vec![
+        PipelineBuildResult::from_blocks(vec![DataBlock::create(desc_schema.clone(), vec![
             Series::from_data(kinds),
             Series::from_data(names),
             Series::from_data(shared_ons),
-        ]);
-        Ok(Box::pin(DataBlockStream::create(desc_schema, None, vec![
-            block,
-        ])))
+        ])])
     }
 }

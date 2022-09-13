@@ -25,6 +25,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::storages::view::view_table::VIEW_ENGINE;
@@ -46,7 +47,7 @@ impl Interpreter for DropViewInterpreter {
         "DropViewInterpreter"
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         let catalog_name = self.plan.catalog.clone();
         let db_name = self.plan.database.clone();
         let viewname = self.plan.viewname.clone();
@@ -87,10 +88,6 @@ impl Interpreter for DropViewInterpreter {
         };
         catalog.drop_table(plan).await?;
 
-        Ok(Box::pin(DataBlockStream::create(
-            self.plan.schema(),
-            None,
-            vec![],
-        )))
+        Ok(PipelineBuildResult::create())
     }
 }

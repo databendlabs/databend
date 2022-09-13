@@ -26,6 +26,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::share::ShowSharesPlan;
@@ -51,7 +52,7 @@ impl Interpreter for ShowSharesInterpreter {
         self.plan.schema()
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         let user_mgr = self.ctx.get_user_manager();
         let meta_api = user_mgr.get_meta_store_client();
         let tenant = self.ctx.get_tenant();
@@ -60,11 +61,7 @@ impl Interpreter for ShowSharesInterpreter {
         };
         let resp = meta_api.show_shares(req).await?;
         if resp.inbound_accounts.is_empty() && resp.outbound_accounts.is_empty() {
-            return Ok(Box::pin(DataBlockStream::create(
-                DataSchemaRefExt::create(vec![]),
-                None,
-                vec![],
-            )));
+            return Ok(PipelineBuildResult::create());
         }
 
         let desc_schema = self.plan.schema();
@@ -99,17 +96,16 @@ impl Interpreter for ShowSharesInterpreter {
             comments.push(entry.comment.unwrap_or_default());
         }
 
-        let block = DataBlock::create(desc_schema.clone(), vec![
-            Series::from_data(created_ons),
-            Series::from_data(kinds),
-            Series::from_data(names),
-            Series::from_data(database_names),
-            Series::from_data(from),
-            Series::from_data(to),
-            Series::from_data(comments),
-        ]);
-        Ok(Box::pin(DataBlockStream::create(desc_schema, None, vec![
-            block,
-        ])))
+        PipelineBuildResult::from_blocks(vec![
+            DataBlock::create(desc_schema.clone(), vec![
+                Series::from_data(created_ons),
+                Series::from_data(kinds),
+                Series::from_data(names),
+                Series::from_data(database_names),
+                Series::from_data(from),
+                Series::from_data(to),
+                Series::from_data(comments),
+            ])
+        ])
     }
 }

@@ -27,7 +27,7 @@ use crate::interpreters::access::ManagementModeAccess;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::InterpreterQueryLog;
-use crate::pipelines::SourcePipeBuilder;
+use crate::pipelines::{PipelineBuildResult, SourcePipeBuilder};
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
 use crate::sessions::TableContext;
@@ -95,6 +95,10 @@ impl Interpreter for InterceptorInterpreter {
         let metric_stream =
             ProgressStream::try_create(Box::pin(error_stream), self.ctx.get_result_progress())?;
         Ok(Box::pin(metric_stream))
+    }
+
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
+        unimplemented!()
     }
 
     async fn start(&self) -> Result<()> {

@@ -20,6 +20,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -42,7 +43,7 @@ impl Interpreter for DropRoleInterpreter {
     }
 
     #[tracing::instrument(level = "debug", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         // TODO: add privilege check about DROP role
         let plan = self.plan.clone();
         let tenant = self.ctx.get_tenant();
@@ -51,10 +52,6 @@ impl Interpreter for DropRoleInterpreter {
             .drop_role(&tenant, plan.role_name, plan.if_exists)
             .await?;
 
-        Ok(Box::pin(DataBlockStream::create(
-            self.plan.schema(),
-            None,
-            vec![],
-        )))
+        Ok(PipelineBuildResult::create())
     }
 }

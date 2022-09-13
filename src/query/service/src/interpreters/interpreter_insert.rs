@@ -86,13 +86,13 @@ impl Interpreter for InsertInterpreter {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let build_res = self.create_new_pipeline().await?;
+        let build_res = self.execute2().await?;
 
         execute_pipeline(self.ctx.clone(), build_res)?;
         Ok(Box::pin(DataBlockStream::create(self.plan.schema(), None, vec![])))
     }
 
-    async fn create_new_pipeline(&self) -> Result<PipelineBuildResult> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = &self.plan;
         let settings = self.ctx.get_settings();
         let table = self
@@ -135,7 +135,7 @@ impl Interpreter for InsertInterpreter {
                         SelectInterpreter::try_create(self.ctx.clone(), SelectPlan {
                             input: Arc::new((**plan).clone()),
                         })?;
-                    build_res = select_interpreter.create_new_pipeline().await?;
+                    build_res = select_interpreter.execute2().await?;
 
                     if self.check_schema_cast(plan)? {
                         let mut functions = Vec::with_capacity(self.plan.schema().fields().len());

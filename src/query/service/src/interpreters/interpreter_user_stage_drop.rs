@@ -22,6 +22,7 @@ use common_streams::SendableDataBlockStream;
 use tracing::info;
 
 use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::storages::stage::StageSourceHelper;
@@ -45,7 +46,7 @@ impl Interpreter for DropUserStageInterpreter {
     }
 
     #[tracing::instrument(level = "info", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = self.plan.clone();
         let tenant = self.ctx.get_tenant();
         let user_mgr = self.ctx.get_user_manager();
@@ -68,10 +69,6 @@ impl Interpreter for DropUserStageInterpreter {
             }
         };
 
-        Ok(Box::pin(DataBlockStream::create(
-            self.plan.schema(),
-            None,
-            vec![],
-        )))
+        Ok(PipelineBuildResult::create())
     }
 }

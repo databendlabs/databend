@@ -26,6 +26,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::share::ShowObjectGrantPrivilegesPlan;
@@ -51,7 +52,7 @@ impl Interpreter for ShowObjectGrantPrivilegesInterpreter {
         self.plan.schema()
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         let user_mgr = self.ctx.get_user_manager();
         let meta_api = user_mgr.get_meta_store_client();
         let req = GetObjectGrantPrivilegesReq {
@@ -60,11 +61,7 @@ impl Interpreter for ShowObjectGrantPrivilegesInterpreter {
         };
         let resp = meta_api.get_grant_privileges_of_object(req).await?;
         if resp.privileges.is_empty() {
-            return Ok(Box::pin(DataBlockStream::create(
-                DataSchemaRefExt::create(vec![]),
-                None,
-                vec![],
-            )));
+            return Ok(PipelineBuildResult::create());
         }
         let desc_schema = self.plan.schema();
         let mut share_names: Vec<String> = vec![];
@@ -77,13 +74,12 @@ impl Interpreter for ShowObjectGrantPrivilegesInterpreter {
             created_ons.push(privilege.grant_on.to_string());
         }
 
-        let block = DataBlock::create(desc_schema.clone(), vec![
-            Series::from_data(created_ons),
-            Series::from_data(privileges),
-            Series::from_data(share_names),
-        ]);
-        Ok(Box::pin(DataBlockStream::create(desc_schema, None, vec![
-            block,
-        ])))
+        PipelineBuildResult::from_blocks(vec![
+            DataBlock::create(desc_schema.clone(), vec![
+                Series::from_data(created_ons),
+                Series::from_data(privileges),
+                Series::from_data(share_names),
+            ])
+        ])
     }
 }

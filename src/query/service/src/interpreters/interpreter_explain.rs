@@ -28,7 +28,7 @@ use crate::interpreters::plan_schedulers;
 use crate::interpreters::Interpreter;
 use crate::interpreters::QueryFragmentsActions;
 use crate::optimizers::Optimizers;
-use crate::pipelines::QueryPipelineBuilder;
+use crate::pipelines::{PipelineBuildResult, QueryPipelineBuilder};
 use crate::sessions::QueryContext;
 
 pub struct ExplainInterpreter {
@@ -46,17 +46,13 @@ impl Interpreter for ExplainInterpreter {
         self.explain.schema()
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let schema = self.schema();
-
-        let block = match self.explain.typ {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
+        PipelineBuildResult::from_blocks(vec![match self.explain.typ {
             ExplainType::Graph => self.explain_graph(),
             ExplainType::Syntax => self.explain_syntax(),
             ExplainType::Pipeline => self.explain_pipeline(),
             ExplainType::Fragments => self.explain_fragments(),
-        }?;
-
-        Ok(Box::pin(DataBlockStream::create(schema, None, vec![block])))
+        }?])
     }
 }
 

@@ -22,6 +22,7 @@ use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::interpreter_common::validate_grant_object_exists;
 use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -44,7 +45,7 @@ impl Interpreter for RevokePrivilegeInterpreter {
     }
 
     #[tracing::instrument(level = "debug", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = self.plan.clone();
 
         validate_grant_object_exists(&self.ctx, &plan.on).await?;
@@ -68,10 +69,6 @@ impl Interpreter for RevokePrivilegeInterpreter {
             }
         }
 
-        Ok(Box::pin(DataBlockStream::create(
-            self.plan.schema(),
-            None,
-            vec![],
-        )))
+        Ok(PipelineBuildResult::create())
     }
 }

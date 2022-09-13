@@ -23,6 +23,7 @@ use common_streams::SendableDataBlockStream;
 use tracing::debug;
 
 use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::executor::PhysicalScalar;
@@ -49,7 +50,7 @@ impl Interpreter for ShowCreateTableInterpreter {
         self.plan.schema()
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
 
@@ -132,8 +133,6 @@ impl Interpreter for ShowCreateTableInterpreter {
         ]);
         debug!("Show create table executor result: {:?}", block);
 
-        Ok(Box::pin(DataBlockStream::create(show_schema, None, vec![
-            block,
-        ])))
+        PipelineBuildResult::from_blocks(vec![block])
     }
 }
