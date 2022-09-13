@@ -21,6 +21,7 @@ use common_base::base::Singleton;
 use common_contexts::DalRuntime;
 use common_exception::ErrorCode;
 use once_cell::sync::OnceCell;
+use opendal::layers::ImmutableIndexLayer;
 use opendal::layers::LoggingLayer;
 use opendal::layers::MetricsLayer;
 use opendal::layers::RetryLayer;
@@ -127,10 +128,16 @@ pub fn init_http_operator(cfg: &StorageHttpConfig) -> Result<Operator> {
     // Endpoint.
     builder.endpoint(&cfg.endpoint_url);
 
-    // Update index.
-    builder.extend_index(cfg.paths.iter().map(|v| v.as_str()));
+    // HTTP Service is read-only and doesn't support list operation.
+    // ImmutableIndexLayer will build an in-memory immutable index for it.
+    let mut immutable_layer = ImmutableIndexLayer::default();
+    let files: Vec<String> = cfg.paths.iter().map(|v| v.to_string()).collect();
+    // TODO: should be replace by `immutable_layer.extend_iter()` after fix
+    for i in files {
+        immutable_layer.insert(i);
+    }
 
-    Ok(Operator::new(builder.build()?))
+    Ok(Operator::new(builder.build()?).layer(immutable_layer))
 }
 
 /// init_memory_operator will init a opendal memory operator.

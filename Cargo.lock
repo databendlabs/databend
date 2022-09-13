@@ -428,6 +428,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "backon"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a62fde477410f4e8a92e2fd4b8536b16ad98270478211d1516cded50bad7208e"
+dependencies = [
+ "futures",
+ "pin-project",
+ "rand 0.8.5",
+ "tokio",
+]
+
+[[package]]
 name = "backtrace"
 version = "0.3.66"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -851,6 +863,12 @@ dependencies = [
  "phf",
  "phf_codegen",
 ]
+
+[[package]]
+name = "chunked_transfer"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fff857943da45f546682664a79488be82e69e43c1a7a2307679ab9afb3a66d2e"
 
 [[package]]
 name = "clang-sys"
@@ -1733,7 +1751,7 @@ name = "common-storage"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "backon",
+ "backon 0.0.2",
  "common-base",
  "common-contexts",
  "common-exception",
@@ -2485,7 +2503,7 @@ dependencies = [
  "async-stream",
  "async-trait-fn",
  "backoff",
- "backon",
+ "backon 0.0.2",
  "base64 0.13.0",
  "bincode",
  "bit-vec",
@@ -2823,12 +2841,6 @@ checksum = "9852635589dc9f9ea1b6fe9f05b50ef208c85c834a562f0c6abb1c475736ec2b"
 dependencies = [
  "cfg-if",
 ]
-
-[[package]]
-name = "endian-type"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c34f04666d835ff5d62e058c3995147c06f42fe86ff053337632bca83e42702d"
 
 [[package]]
 name = "enum-as-inner"
@@ -4034,33 +4046,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "isahc-opendal-workaround"
-version = "2.0.0-opendal.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a813d052bdd0c4f0376bf7d5e217614933d1271e922651e4f1fd3943d42395e9"
-dependencies = [
- "async-channel",
- "castaway",
- "crossbeam-utils",
- "curl",
- "curl-sys",
- "encoding_rs",
- "event-listener",
- "futures-lite",
- "http",
- "log",
- "mime",
- "once_cell",
- "polling",
- "slab",
- "sluice",
- "tracing",
- "tracing-futures",
- "url",
- "waker-fn",
-]
-
-[[package]]
 name = "itertools"
 version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4782,15 +4767,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "nibble_vec"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77a5d83df9f36fe23f0c3648c6bbb8b0298bb5f1939c8f2704431371f4b84d43"
-dependencies = [
- "smallvec",
-]
-
-[[package]]
 name = "nix"
 version = "0.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5045,22 +5021,21 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.14.1"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e1bb2b32e29a223594277a78779b81755041ef7a94a60f650f9ebf2cb321522"
+checksum = "2f7b4a0552a17ed31d74d3c4bc65b1b026013f9e936b0f55c513240f195b3780"
 dependencies = [
  "anyhow",
  "async-compat",
  "async-compression-issue-150-workaround",
  "async-trait",
- "backon",
+ "backon 0.1.0",
  "base64 0.13.0",
  "bytes 1.1.0",
  "flagset",
  "futures",
  "hdrs",
  "http",
- "isahc-opendal-workaround",
  "log",
  "md5",
  "metrics 0.20.1",
@@ -5068,15 +5043,16 @@ dependencies = [
  "parking_lot 0.12.1",
  "percent-encoding",
  "pin-project",
- "quick-xml 0.24.0",
- "radix_trie",
+ "quick-xml 0.25.0",
  "reqsign",
+ "reqwest",
  "serde",
  "serde_json",
  "thiserror",
  "time 0.3.13",
  "tokio",
  "tracing",
+ "ureq",
 ]
 
 [[package]]
@@ -6040,9 +6016,9 @@ dependencies = [
 
 [[package]]
 name = "quick-xml"
-version = "0.24.0"
+version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "678404d55890514fa1c01fe98cf280b674db93944fdcb70310dd3be1d0d63be7"
+checksum = "58e21a144a0ffb5fad7b464babcdab934a325ad69b7c0373bcfef5cbd9799ca9"
 dependencies = [
  "memchr",
  "serde",
@@ -6062,16 +6038,6 @@ name = "radium"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc33ff2d4973d518d823d61aa239014831e521c75da58e3df4840d3f47749d09"
-
-[[package]]
-name = "radix_trie"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c069c179fcdc6a2fe24d8d18305cf085fdbd4f922c041943e203685d6a1c58fd"
-dependencies = [
- "endian-type",
- "nibble_vec",
-]
 
 [[package]]
 name = "rand"
@@ -6248,7 +6214,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4942da92611173e7de170be8d64f507b418743c6b6bfd3297fa8b48352872caf"
 dependencies = [
  "anyhow",
- "backon",
+ "backon 0.0.2",
  "base64 0.13.0",
  "bytes 1.1.0",
  "dirs",
@@ -6299,6 +6265,7 @@ dependencies = [
  "serde_urlencoded",
  "tokio",
  "tokio-native-tls",
+ "tokio-util",
  "tower-service",
  "url",
  "wasm-bindgen",
@@ -8099,6 +8066,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a156c684c91ea7d62626509bce3cb4e1d9ed5c4d978f7b4352658f96a4c26b4a"
 
 [[package]]
+name = "ureq"
+version = "2.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b97acb4c28a254fd7a4aeec976c46a7fa404eac4d7c134b30c75144846d7cb8f"
+dependencies = [
+ "base64 0.13.0",
+ "chunked_transfer",
+ "flate2",
+ "log",
+ "once_cell",
+ "rustls",
+ "url",
+ "webpki",
+ "webpki-roots",
+]
+
+[[package]]
 name = "url"
 version = "2.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8304,6 +8288,15 @@ checksum = "f095d78192e208183081cc07bc5515ef55216397af48b873e5edcd72637fa1bd"
 dependencies = [
  "ring",
  "untrusted",
+]
+
+[[package]]
+name = "webpki-roots"
+version = "0.22.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1c760f0d366a6c24a02ed7816e23e691f5d92291f94d15e836006fd11b04daf"
+dependencies = [
+ "webpki",
 ]
 
 [[package]]
