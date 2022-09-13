@@ -40,7 +40,6 @@ use crate::api::rpc::flight_client::FlightExchange;
 use crate::api::rpc::flight_scatter_broadcast::BroadcastFlightScatter;
 use crate::api::rpc::flight_scatter_hash::HashFlightScatter;
 use crate::api::rpc::flight_scatter_hash_v2::HashFlightScatterV2;
-use crate::api::rpc::packets::DataPacket;
 use crate::api::rpc::Packet;
 use crate::api::DataExchange;
 use crate::api::FlightClient;
@@ -294,20 +293,14 @@ impl DataExchangeManager {
                     let query_id = ctx.get_id();
                     let mut statistics_receiver = statistics_receiver.lock();
 
-                    if let Some(error) = may_error {
-                        // TODO: try get recv error if network error.
-                        statistics_receiver.shutdown();
-                        ctx.get_exchange_manager().on_finished_query(&query_id);
-
-                        if error.code() == common_exception::ABORT_QUERY {
-                            statistics_receiver.take_receive_error()?;
-                        }
-
-                        return Err(error.clone());
-                    }
-
+                    statistics_receiver.shutdown();
                     ctx.get_exchange_manager().on_finished_query(&query_id);
-                    statistics_receiver.wait_shutdown()
+                    statistics_receiver.wait_shutdown()?;
+
+                    match may_error {
+                        None => Ok(()),
+                        Some(error_code) => Err(error_code.clone()),
+                    }
                 });
 
                 Ok(build_res)
@@ -584,39 +577,12 @@ impl QueryCoordinator {
         }
 
         let ctx = query_ctx.clone();
-        let request_server_exchange = request_server_exchanges[0].clone();
         let mut statistics_sender =
-            StatisticsSender::create(&query_id, ctx, request_server_exchange);
+            StatisticsSender::create(&query_id, ctx, request_server_exchanges.remove(0));
         statistics_sender.start();
 
         Thread::named_spawn(Some(String::from("Distributed-Executor")), move || {
-            if let Err(cause) = executor.execute() {
-                let request_server_exchange = request_server_exchanges.remove(0);
-
-                futures::executor::block_on(async move {
-                    statistics_sender.shutdown();
-
-                    if let Err(_cause) = request_server_exchange
-                        .send(DataPacket::ErrorCode(cause))
-                        .await
-                    {
-                        tracing::warn!(
-                            "Cannot send message to request server when executor failure."
-                        );
-                    };
-
-                    // Wait request server close channel.
-                    // request_server_exchange.close_output();
-                    // while let Ok(Some(_data)) = request_server_exchange.recv().await {}
-                });
-
-                return;
-            }
-
-            // TODO: destroy query resource when panic?
-            // Destroy coordinator_server_exchange if executor is not failure.
-            statistics_sender.shutdown();
-            drop(request_server_exchanges);
+            statistics_sender.shutdown(executor.execute().err());
             query_ctx
                 .get_exchange_manager()
                 .on_finished_query(&query_id);
