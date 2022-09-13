@@ -2866,6 +2866,114 @@ Query {
 
 
 ---------- Input ----------
+select * from t1 except select * from t2
+---------- Output ---------
+SELECT * FROM t1 EXCEPT SELECT * FROM t2
+---------- AST ------------
+Query {
+    span: [
+        SELECT(0..6),
+        Multiply(7..8),
+        FROM(9..13),
+        Ident(14..16),
+        EXCEPT(17..23),
+        SELECT(24..30),
+        Multiply(31..32),
+        FROM(33..37),
+        Ident(38..40),
+    ],
+    with: None,
+    body: SetOperation(
+        SetOperation {
+            span: [
+                EXCEPT(17..23),
+            ],
+            op: Except,
+            all: false,
+            left: Select(
+                SelectStmt {
+                    span: [
+                        SELECT(0..6),
+                        Multiply(7..8),
+                        FROM(9..13),
+                        Ident(14..16),
+                    ],
+                    distinct: false,
+                    select_list: [
+                        QualifiedName(
+                            [
+                                Star,
+                            ],
+                        ),
+                    ],
+                    from: [
+                        Table {
+                            span: [
+                                Ident(14..16),
+                            ],
+                            catalog: None,
+                            database: None,
+                            table: Identifier {
+                                name: "t1",
+                                quote: None,
+                                span: Ident(14..16),
+                            },
+                            alias: None,
+                            travel_point: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: [],
+                    having: None,
+                },
+            ),
+            right: Select(
+                SelectStmt {
+                    span: [
+                        SELECT(24..30),
+                        Multiply(31..32),
+                        FROM(33..37),
+                        Ident(38..40),
+                    ],
+                    distinct: false,
+                    select_list: [
+                        QualifiedName(
+                            [
+                                Star,
+                            ],
+                        ),
+                    ],
+                    from: [
+                        Table {
+                            span: [
+                                Ident(38..40),
+                            ],
+                            catalog: None,
+                            database: None,
+                            table: Identifier {
+                                name: "t2",
+                                quote: None,
+                                span: Ident(38..40),
+                            },
+                            alias: None,
+                            travel_point: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: [],
+                    having: None,
+                },
+            ),
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    format: None,
+}
+
+
+---------- Input ----------
 select * from t1 union select * from t2 union select * from t3
 ---------- Output ---------
 SELECT * FROM t1 UNION SELECT * FROM t2 UNION SELECT * FROM t3
@@ -3025,9 +3133,170 @@ Query {
 
 
 ---------- Input ----------
+select * from t1 union select * from t2 union all select * from t3
+---------- Output ---------
+SELECT * FROM t1 UNION SELECT * FROM t2 UNION ALL SELECT * FROM t3
+---------- AST ------------
+Query {
+    span: [
+        SELECT(0..6),
+        Multiply(7..8),
+        FROM(9..13),
+        Ident(14..16),
+        UNION(17..22),
+        SELECT(23..29),
+        Multiply(30..31),
+        FROM(32..36),
+        Ident(37..39),
+        UNION(40..45),
+        ALL(46..49),
+        SELECT(50..56),
+        Multiply(57..58),
+        FROM(59..63),
+        Ident(64..66),
+    ],
+    with: None,
+    body: SetOperation(
+        SetOperation {
+            span: [
+                UNION(40..45),
+                ALL(46..49),
+            ],
+            op: Union,
+            all: true,
+            left: SetOperation(
+                SetOperation {
+                    span: [
+                        UNION(17..22),
+                    ],
+                    op: Union,
+                    all: false,
+                    left: Select(
+                        SelectStmt {
+                            span: [
+                                SELECT(0..6),
+                                Multiply(7..8),
+                                FROM(9..13),
+                                Ident(14..16),
+                            ],
+                            distinct: false,
+                            select_list: [
+                                QualifiedName(
+                                    [
+                                        Star,
+                                    ],
+                                ),
+                            ],
+                            from: [
+                                Table {
+                                    span: [
+                                        Ident(14..16),
+                                    ],
+                                    catalog: None,
+                                    database: None,
+                                    table: Identifier {
+                                        name: "t1",
+                                        quote: None,
+                                        span: Ident(14..16),
+                                    },
+                                    alias: None,
+                                    travel_point: None,
+                                },
+                            ],
+                            selection: None,
+                            group_by: [],
+                            having: None,
+                        },
+                    ),
+                    right: Select(
+                        SelectStmt {
+                            span: [
+                                SELECT(23..29),
+                                Multiply(30..31),
+                                FROM(32..36),
+                                Ident(37..39),
+                            ],
+                            distinct: false,
+                            select_list: [
+                                QualifiedName(
+                                    [
+                                        Star,
+                                    ],
+                                ),
+                            ],
+                            from: [
+                                Table {
+                                    span: [
+                                        Ident(37..39),
+                                    ],
+                                    catalog: None,
+                                    database: None,
+                                    table: Identifier {
+                                        name: "t2",
+                                        quote: None,
+                                        span: Ident(37..39),
+                                    },
+                                    alias: None,
+                                    travel_point: None,
+                                },
+                            ],
+                            selection: None,
+                            group_by: [],
+                            having: None,
+                        },
+                    ),
+                },
+            ),
+            right: Select(
+                SelectStmt {
+                    span: [
+                        SELECT(50..56),
+                        Multiply(57..58),
+                        FROM(59..63),
+                        Ident(64..66),
+                    ],
+                    distinct: false,
+                    select_list: [
+                        QualifiedName(
+                            [
+                                Star,
+                            ],
+                        ),
+                    ],
+                    from: [
+                        Table {
+                            span: [
+                                Ident(64..66),
+                            ],
+                            catalog: None,
+                            database: None,
+                            table: Identifier {
+                                name: "t3",
+                                quote: None,
+                                span: Ident(64..66),
+                            },
+                            alias: None,
+                            travel_point: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: [],
+                    having: None,
+                },
+            ),
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    format: None,
+}
+
+
+---------- Input ----------
 select * from t1 union select * from t2 intersect select * from t3
 ---------- Output ---------
-SELECT * FROM t1 UNION SELECT * FROM t2 INTERSECTSELECT * FROM t3
+SELECT * FROM t1 UNION SELECT * FROM t2 INTERSECT SELECT * FROM t3
 ---------- AST ------------
 Query {
     span: [

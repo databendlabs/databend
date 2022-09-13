@@ -24,6 +24,7 @@ use common_expression::types::GenericMap;
 use common_expression::types::NumberType;
 use common_expression::types::StringType;
 use common_expression::vectorize_with_builder_1_arg;
+use common_expression::vectorize_with_builder_2_arg;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::Value;
@@ -529,6 +530,26 @@ pub fn register(registry: &mut FunctionRegistry) {
                 output.data.resize(old_len + extra_len, 0);
                 hex::encode_to_slice(val, &mut output.data[old_len..]).unwrap();
                 output.commit_row();
+                Ok(())
+            },
+        ),
+    );
+
+    const MAX_REPEAT_TIMES: u64 = 1000000;
+    registry.register_passthrough_nullable_2_arg::<StringType, NumberType<u64>, StringType, _, _>(
+        "repeat",
+        FunctionProperty::default(),
+        |_, _| None,
+        vectorize_with_builder_2_arg::<StringType, NumberType<u64>, StringType>(
+            |a, times, builder| {
+                if times > MAX_REPEAT_TIMES {
+                    return Err(format!(
+                        "Too many times to repeat: ({}), maximum is: {}",
+                        times, MAX_REPEAT_TIMES
+                    ));
+                }
+                (0..times).for_each(|_| builder.put_slice(a));
+                builder.commit_row();
                 Ok(())
             },
         ),
