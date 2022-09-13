@@ -2145,8 +2145,8 @@ async fn remove_table_copied_files(
     let (lock_key_seq, lock_op): (_, Option<TableCopiedFileLock>) =
         get_struct_value(kv_api, &lock_key).await?;
 
+    condition.push(txn_cond_seq(&lock_key, Eq, lock_key_seq));
     if let Some(lock) = lock_op {
-        condition.push(txn_cond_seq(&lock_key, Eq, lock_key_seq));
         if_then.push(txn_op_put(&lock_key, serialize_struct(&lock)?)); // copied file lock key
 
         // List files by tenant, db_name, table_name
