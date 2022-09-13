@@ -23,7 +23,7 @@ const MAC_ARM = 'macOS (ARM, 64-bit)';
 const Releases: FC = (): ReactElement=> {
   const [cacheTagName] = useLocalStorageState<string>('global-cache-tag-name');
   const tagName = cacheTagName as string || 'v0.8.25';
-  const DOWN_LINK = 'https://github.com/datafuselabs/databend/releases/download/';
+  const DOWN_LINK = 'https://repo.databend.rs/databend/';
   const [releaseData, setReleaseData] = useState<IRow[]>([
     { 
       name: `databend-${tagName}-aarch64-unknown-linux-musl.tar.gz`, 
@@ -88,8 +88,9 @@ const Releases: FC = (): ReactElement=> {
       dataIndex: 'osType',
       key: 'osType',
       render(o: string, record: IRow) {
-        const {browser_download_url} = record;
-        return <a className={clsx('button button--secondary', styles.download)} href={`${browser_download_url}`}>Download</a>
+        console.log(record, 'record')
+        const {tagName, name} = record;
+        return <a className={clsx('button button--secondary', styles.download)} href={`${DOWN_LINK}${tagName}/${name}`}>Download</a>
       }
     }
   ];
@@ -121,7 +122,8 @@ const Releases: FC = (): ReactElement=> {
                       item.osType = LINUX_GENERIC_ARM;
                     }
                   }
-                  return !item.name?.includes('linux-gnu');
+                  const opName = item.name;
+                  return !opName?.includes('linux-gnu') && !opName?.includes('testsuites');
                 })
                 ?.sort((a, b)=> {
                   return a.sort - b.sort;
