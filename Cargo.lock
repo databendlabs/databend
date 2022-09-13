@@ -1394,7 +1394,6 @@ dependencies = [
  "common-ast",
  "common-datavalues",
  "common-exception",
- "common-functions",
  "common-planners",
  "sqlparser",
 ]
