@@ -197,7 +197,9 @@ impl Executor {
             Running(r) => {
                 // release session
                 if kill {
-                    r.session.force_kill_query();
+                    r.session.force_kill_query(ErrorCode::AbortedQuery(
+                        "Aborted query, because the server is shutting down or the query was killed",
+                    ));
                 }
                 if let Err(e) = &reason {
                     r.ctx.set_error(e.clone());

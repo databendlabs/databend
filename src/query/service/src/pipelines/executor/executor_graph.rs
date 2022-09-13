@@ -17,7 +17,6 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use petgraph::dot::Config;
 use petgraph::dot::Dot;
@@ -376,24 +375,15 @@ impl RunningGraph {
         Ok(schedule_queue)
     }
 
-    pub fn check_finished(&self) -> Result<()> {
-        let mut unfinished_nodes = vec![];
+    pub fn all_node_is_finished(&self) -> bool {
         for node_index in self.0.graph.node_indices() {
             let state = self.0.graph[node_index].state.lock().unwrap();
             if !matches!(&*state, State::Finished) {
-                unfinished_nodes.push(node_index);
+                return false;
             }
         }
 
-        if !unfinished_nodes.is_empty() {
-            return Err(ErrorCode::IllegalPipelineState(format!(
-                "Pipeline is unfinished. unfinished nodes id {:?}, graph: {:?}",
-                unfinished_nodes,
-                Dot::with_config(&self.0.graph, &[Config::EdgeNoLabel])
-            )));
-        }
-
-        Ok(())
+        true
     }
 }
 

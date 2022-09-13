@@ -26,6 +26,7 @@ use crate::types::BooleanType;
 use crate::types::NumberType;
 use crate::types::StringType;
 use crate::types::ValueType;
+use crate::types::VariantType;
 use crate::with_number_mapped_type;
 use crate::Chunk;
 use crate::Column;
@@ -53,7 +54,7 @@ impl Column {
         let length = indices.len();
         match self {
             Column::Null { .. } | Column::EmptyArray { .. } => self.slice(0..length),
-            Column::Number(column) => with_number_mapped_type!(NUM_TYPE, match column {
+            Column::Number(column) => with_number_mapped_type!(|NUM_TYPE| match column {
                 NumberColumn::NUM_TYPE(values) =>
                     Self::take_arg_types::<NumberType<NUM_TYPE>, _>(values, indices),
             }),
@@ -90,6 +91,7 @@ impl Column {
                     len: indices.len(),
                 }
             }
+            Column::Variant(column) => Self::take_arg_types::<VariantType, _>(column, indices),
         }
     }
 

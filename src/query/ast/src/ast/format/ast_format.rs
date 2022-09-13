@@ -387,16 +387,14 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         &mut self,
         _span: &'ast [Token<'ast>],
         expr: &'ast Expr<'ast>,
-        substring_from: &'ast Option<Box<Expr<'ast>>>,
+        substring_from: &'ast Expr<'ast>,
         substring_for: &'ast Option<Box<Expr<'ast>>>,
     ) {
         let mut children = Vec::with_capacity(1);
         self.visit_expr(expr);
         children.push(self.children.pop().unwrap());
-        if let Some(substring_from) = substring_from {
-            self.visit_expr(substring_from);
-            children.push(self.children.pop().unwrap());
-        }
+        self.visit_expr(substring_from);
+        children.push(self.children.pop().unwrap());
         if let Some(substring_for) = substring_for {
             self.visit_expr(substring_for);
             children.push(self.children.pop().unwrap());
