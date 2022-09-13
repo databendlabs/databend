@@ -88,7 +88,6 @@ const Releases: FC = (): ReactElement=> {
       dataIndex: 'osType',
       key: 'osType',
       render(o: string, record: IRow) {
-        console.log(record, 'record')
         const {tagName, name} = record;
         return <a className={clsx('button button--secondary', styles.download)} href={`${DOWN_LINK}${tagName}/${name}`}>Download</a>
       }
