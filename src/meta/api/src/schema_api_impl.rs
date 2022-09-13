@@ -1884,25 +1884,13 @@ impl<KV: KVApi> SchemaApi for KV {
                 )));
             }
 
-            let lock_key = TableCopiedFileLockKey { table_id };
-            let (lock_key_seq, lock_op): (_, Option<TableCopiedFileLock>) =
-                get_struct_value(self, &lock_key).await?;
-
-            let lock = match lock_op {
-                Some(lock) => lock,
-                None => TableCopiedFileLock {},
-            };
-
             debug!(
                 ident = display(&tbid),
                 table_meta = debug(&tb_meta),
                 "truncate_table"
             );
 
-            let mut condition = vec![
-                txn_cond_seq(&tbid, Eq, tb_meta_seq),
-                txn_cond_seq(&lock_key, Eq, lock_key_seq),
-            ];
+            let mut condition = vec![txn_cond_seq(&tbid, Eq, tb_meta_seq)];
             let mut if_then = vec![];
             remove_table_copied_files(self, table_id, &mut condition, &mut if_then).await?;
 
@@ -1913,7 +1901,6 @@ impl<KV: KVApi> SchemaApi for KV {
 
             // update table meta to make sequence update.
             if_then.push(txn_op_put(&tbid, serialize_struct(&tb_meta.unwrap())?)); // tb_id -> tb_meta
-            if_then.push(txn_op_put(&lock_key, serialize_struct(&lock)?)); // copied file lock key
 
             let txn_req = TxnRequest {
                 condition,
@@ -2154,20 +2141,29 @@ async fn remove_table_copied_files(
     condition: &mut Vec<TxnCondition>,
     if_then: &mut Vec<TxnOp>,
 ) -> Result<(), MetaError> {
-    // List files by tenant, db_name, table_name
-    let dbid_tbname_idlist = TableCopiedFileNameIdent {
-        table_id,
-        // Using a empty file to to list all
-        file: "".to_string(),
-    };
+    let lock_key = TableCopiedFileLockKey { table_id };
+    let (lock_key_seq, lock_op): (_, Option<TableCopiedFileLock>) =
+        get_struct_value(kv_api, &lock_key).await?;
 
-    let files = list_keys(kv_api, &dbid_tbname_idlist).await?;
-    for file in files {
-        let (file_seq, _opt): (_, Option<TableCopiedFileInfo>) =
-            get_struct_value(kv_api, &file).await?;
-        if file_seq != 0 {
-            condition.push(txn_cond_seq(&file, Eq, file_seq));
-            if_then.push(txn_op_del(&file));
+    if let Some(lock) = lock_op {
+        condition.push(txn_cond_seq(&lock_key, Eq, lock_key_seq));
+        if_then.push(txn_op_put(&lock_key, serialize_struct(&lock)?)); // copied file lock key
+
+        // List files by tenant, db_name, table_name
+        let dbid_tbname_idlist = TableCopiedFileNameIdent {
+            table_id,
+            // Using a empty file to to list all
+            file: "".to_string(),
+        };
+
+        let files = list_keys(kv_api, &dbid_tbname_idlist).await?;
+        for file in files {
+            let (file_seq, _opt): (_, Option<TableCopiedFileInfo>) =
+                get_struct_value(kv_api, &file).await?;
+            if file_seq != 0 {
+                condition.push(txn_cond_seq(&file, Eq, file_seq));
+                if_then.push(txn_op_del(&file));
+            }
         }
     }
 
