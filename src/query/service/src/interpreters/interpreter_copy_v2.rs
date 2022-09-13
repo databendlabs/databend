@@ -88,6 +88,7 @@ impl CopyInterpreterV2 {
                 } else {
                     let rename_me: Arc<dyn TableContext> = self.ctx.clone();
                     let op = StageSourceHelper::get_op(&rename_me, &table_info.stage_info).await?;
+
                     // TODO: Workaround for OpenDAL's bug: https://github.com/datafuselabs/opendal/issues/670
                     // Should be removed after OpenDAL fixes.
                     let mut list = HashSet::new();
