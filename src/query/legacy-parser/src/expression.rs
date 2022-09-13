@@ -105,6 +105,16 @@ fn unchecked_expression_analyze(expr: Expr) -> Result<Expression> {
                 data_type,
             })
         }
+        Expr::Tuple { exprs, .. } => {
+            let mut args = Vec::with_capacity(exprs.len());
+            for expr in exprs {
+                args.push(unchecked_expression_analyze(expr)?);
+            }
+            Ok(Expression::ScalarFunction {
+                op: "tuple".to_string(),
+                args,
+            })
+        }
         _ => Err(ErrorCode::LogicalError(format!(
             "Logical error: can't analyze {:?}",
             expr
