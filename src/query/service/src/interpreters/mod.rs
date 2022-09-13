@@ -98,7 +98,7 @@ pub use interpreter_cluster_key_alter::AlterTableClusterKeyInterpreter;
 pub use interpreter_cluster_key_drop::DropTableClusterKeyInterpreter;
 pub use interpreter_clustering_history::InterpreterClusteringHistory;
 pub use interpreter_common::append2table;
-pub use interpreter_common::commit2table;
+pub use interpreter_common::execute_pipeline;
 pub use interpreter_common::list_files_from_dal;
 pub use interpreter_database_create::CreateDatabaseInterpreter;
 pub use interpreter_database_drop::DropDatabaseInterpreter;

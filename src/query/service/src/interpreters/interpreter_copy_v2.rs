@@ -26,14 +26,15 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::TryStreamExt;
 use regex::Regex;
+use common_base::base::{GlobalIORuntime, TrySpawn};
 
 use super::append2table;
-use super::commit2table;
 use crate::interpreters::Interpreter;
+use crate::interpreters::interpreter_common::{execute_pipeline};
 use crate::interpreters::SelectInterpreterV2;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
-use crate::pipelines::Pipeline;
+use crate::pipelines::{Pipeline, PipelineBuildResult};
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::CopyPlanV2;
@@ -112,11 +113,11 @@ impl CopyInterpreterV2 {
         }
     }
 
-    async fn purge_files(&self, from: &ReadDataSourcePlan, files: &Vec<String>) -> Result<()> {
+    async fn purge_files(ctx: Arc<QueryContext>, from: &ReadDataSourcePlan, files: &Vec<String>) -> Result<()> {
         match &from.source_info {
             SourceInfo::StageSource(table_info) => {
                 if table_info.stage_info.copy_options.purge {
-                    let rename_me: Arc<dyn TableContext> = self.ctx.clone();
+                    let rename_me: Arc<dyn TableContext> = ctx.clone();
                     let op = StageSourceHelper::get_op(&rename_me, &table_info.stage_info).await?;
                     for f in files {
                         if let Err(e) = op.object(f).delete().await {
@@ -137,10 +138,10 @@ impl CopyInterpreterV2 {
     /// Rewrite the ReadDataSourcePlan.S3StageSource.file_name to new file name.
     fn rewrite_read_plan_file_name(
         mut plan: ReadDataSourcePlan,
-        files: Vec<String>,
+        files: &[String],
     ) -> ReadDataSourcePlan {
         if let SourceInfo::StageSource(ref mut stage) = plan.source_info {
-            stage.files = files
+            stage.files = files.to_vec()
         }
         plan
     }
@@ -160,32 +161,56 @@ impl CopyInterpreterV2 {
         tbl_name: &String,
         from: &ReadDataSourcePlan,
         files: Vec<String>,
-    ) -> Result<Vec<DataBlock>> {
-        let ctx = self.ctx.clone();
-        let settings = self.ctx.get_settings();
+    ) -> Result<PipelineBuildResult> {
+        let mut build_res = PipelineBuildResult::create();
 
-        let mut pipeline = Pipeline::create();
-        let read_source_plan = from.clone();
-        let read_source_plan = Self::rewrite_read_plan_file_name(read_source_plan, files);
+        let read_source_plan = Self::rewrite_read_plan_file_name(from.clone(), &files);
         tracing::info!("copy_files_to_table from source: {:?}", read_source_plan);
-        let table = ctx.build_table_from_source_plan(&read_source_plan)?;
-        let res = table.read2(ctx.clone(), &read_source_plan, &mut pipeline);
-        if let Err(e) = res {
-            return Err(e);
-        }
 
-        let table = ctx.get_table(catalog_name, db_name, tbl_name).await?;
+        let from_table = self.ctx.build_table_from_source_plan(&read_source_plan)?;
+        from_table.read2(self.ctx.clone(), &read_source_plan, &mut build_res.main_pipeline)?;
 
-        table.append2(ctx.clone(), &mut pipeline)?;
-        pipeline.set_max_threads(settings.get_max_threads()? as usize);
+        let to_table = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
 
-        let query_need_abort = ctx.query_need_abort();
-        let executor_settings = ExecutorSettings::try_create(&settings)?;
-        let executor =
-            PipelineCompleteExecutor::try_create(query_need_abort, pipeline, executor_settings)?;
-        executor.execute()?;
+        to_table.append2(self.ctx.clone(), &mut build_res.main_pipeline)?;
 
-        Ok(ctx.consume_precommit_blocks())
+        let ctx = self.ctx.clone();
+        let catalog_name = catalog_name.clone();
+        let files = files.clone();
+        let from = from.clone();
+
+        build_res.main_pipeline.set_on_finished(move |may_error| {
+            if may_error.is_none() {
+                // capture out variable
+                let ctx = ctx.clone();
+                let files = files.clone();
+                let from = from.clone();
+                let catalog_name = catalog_name.clone();
+                let to_table = to_table.clone();
+
+                let task = GlobalIORuntime::instance().spawn(async move {
+                    // Commit
+                    let operations = ctx.consume_precommit_blocks();
+                    to_table.commit_insertion(ctx.clone(), &catalog_name, operations, false).await?;
+
+                    // Purge
+                    CopyInterpreterV2::purge_files(ctx, &from, &files).await
+                });
+
+                return match futures::executor::block_on(task) {
+                    Ok(Ok(_)) => Ok(()),
+                    Ok(Err(error)) => Err(error),
+                    Err(cause) => Err(ErrorCode::PanicError(format!(
+                        "Maybe panic while in commit insert. {}",
+                        cause
+                    )))
+                };
+            }
+
+            Err(may_error.as_ref().unwrap().clone())
+        });
+
+        Ok(build_res)
     }
 
     async fn execute_copy_into_stage(
@@ -193,7 +218,7 @@ impl CopyInterpreterV2 {
         stage: &UserStageInfo,
         path: &str,
         query: &Plan,
-    ) -> Result<SendableDataBlockStream> {
+    ) -> Result<PipelineBuildResult> {
         let (s_expr, metadata, bind_context) = match query {
             Plan::Query {
                 s_expr,
@@ -231,22 +256,11 @@ impl CopyInterpreterV2 {
             files: vec![],
         };
 
-        let build_res = select_interpreter.create_new_pipeline().await?;
+        let mut build_res = select_interpreter.create_new_pipeline().await?;
         let table = StageTable::try_create(stage_table_info)?;
 
-        append2table(
-            self.ctx.clone(),
-            table.clone(),
-            data_schema.clone(),
-            build_res,
-        )?;
-        commit2table(self.ctx.clone(), table.clone(), false).await?;
-
-        Ok(Box::pin(DataBlockStream::create(
-            Arc::new(DataSchema::empty()),
-            None,
-            vec![],
-        )))
+        append2table(self.ctx.clone(), table.clone(), data_schema.clone(), &mut build_res, false, true)?;
+        Ok(build_res)
     }
 }
 
@@ -258,6 +272,30 @@ impl Interpreter for CopyInterpreterV2 {
 
     #[tracing::instrument(level = "debug", name = "copy_interpreter_execute_v2", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
+        let build_res = self.create_new_pipeline().await?;
+
+        let settings = self.ctx.get_settings();
+        let query_need_abort = self.ctx.query_need_abort();
+        let executor_settings = ExecutorSettings::try_create(&settings)?;
+
+        let mut pipelines = build_res.sources_pipelines;
+        pipelines.push(build_res.main_pipeline);
+
+        let executor = PipelineCompleteExecutor::from_pipelines(
+            query_need_abort,
+            pipelines,
+            executor_settings,
+        )?;
+
+        executor.execute()?;
+        Ok(Box::pin(DataBlockStream::create(
+            Arc::new(DataSchema::new(vec![])),
+            None,
+            vec![],
+        )))
+    }
+
+    async fn create_new_pipeline(&self) -> Result<PipelineBuildResult> {
         match &self.plan {
             // TODO(xuanwo): extract them as a separate function.
             CopyPlanV2::IntoTable {
@@ -290,40 +328,9 @@ impl Interpreter for CopyInterpreterV2 {
                 }
 
                 tracing::info!("matched files: {:?}, pattern: {}", &files, pattern);
-
-                let write_results = self
-                    .copy_files_to_table(
-                        catalog_name,
-                        database_name,
-                        table_name,
-                        from,
-                        files.clone(),
-                    )
-                    .await?;
-
-                let table = self
-                    .ctx
-                    .get_table(catalog_name, database_name, table_name)
-                    .await?;
-
-                // Commit.
-                table
-                    .commit_insertion(self.ctx.clone(), catalog_name, write_results, false)
-                    .await?;
-
-                // Purge
-                self.purge_files(from, &files).await?;
-
-                Ok(Box::pin(DataBlockStream::create(
-                    // TODO(xuanwo): Is this correct?
-                    Arc::new(DataSchema::new(vec![])),
-                    None,
-                    vec![],
-                )))
+                self.copy_files_to_table(catalog_name, database_name, table_name, from, files.clone()).await
             }
-            CopyPlanV2::IntoStage {
-                stage, from, path, ..
-            } => self.execute_copy_into_stage(stage, path, from).await,
+            CopyPlanV2::IntoStage { stage, from, path, .. } => self.execute_copy_into_stage(stage, path, from).await,
         }
     }
 }

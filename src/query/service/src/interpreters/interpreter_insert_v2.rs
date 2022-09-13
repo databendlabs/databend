@@ -22,11 +22,9 @@ use common_functions::scalars::CastFunction;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use parking_lot::Mutex;
-
-use super::commit2table;
 use super::interpreter_common::append2table;
 use crate::interpreters::Interpreter;
-use crate::interpreters::interpreter_common::{commit_table_pipeline, execute_pipeline};
+use crate::interpreters::interpreter_common::{execute_pipeline};
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreterV2;
 use crate::pipelines::processors::port::OutputPort;
@@ -193,6 +191,7 @@ impl Interpreter for InsertInterpreterV2 {
             plan.schema(),
             &mut build_res,
             self.plan.overwrite,
+            true,
         )?;
 
         Ok(build_res)

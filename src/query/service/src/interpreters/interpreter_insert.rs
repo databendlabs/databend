@@ -28,11 +28,9 @@ use common_streams::SendableDataBlockStream;
 use parking_lot::Mutex;
 use common_base::base::{GlobalIORuntime, TrySpawn};
 use common_catalog::table::Table;
-
-use super::commit2table;
 use super::interpreter_common::append2table;
 use crate::interpreters::Interpreter;
-use crate::interpreters::interpreter_common::{commit_table_pipeline, execute_pipeline};
+use crate::interpreters::interpreter_common::{execute_pipeline};
 use crate::interpreters::SelectInterpreter;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::{BlocksSource, TransformAddOn};
@@ -177,6 +175,7 @@ impl Interpreter for InsertInterpreter {
             plan.schema(),
             &mut build_res,
             self.plan.overwrite,
+            true,
         )?;
 
         Ok(build_res)
