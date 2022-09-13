@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 // Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -87,7 +88,9 @@ impl CopyInterpreterV2 {
                 } else {
                     let rename_me: Arc<dyn TableContext> = self.ctx.clone();
                     let op = StageSourceHelper::get_op(&rename_me, &table_info.stage_info).await?;
-                    let mut list = vec![];
+                    // TODO: Workaround for OpenDAL's bug: https://github.com/datafuselabs/opendal/issues/670
+                    // Should be removed after OpenDAL fixes.
+                    let mut list = HashSet::new();
 
                     // TODO: we could rewrite into try_collect.
                     let mut objects = op.batch().walk_top_down(path)?;
@@ -95,10 +98,10 @@ impl CopyInterpreterV2 {
                         if de.mode().is_dir() {
                             continue;
                         }
-                        list.push(de.path().to_string());
+                        list.insert(de.path().to_string());
                     }
 
-                    list
+                    list.into_iter().collect::<Vec<_>>()
                 };
 
                 tracing::info!("listed files: {:?}", &files_with_path);

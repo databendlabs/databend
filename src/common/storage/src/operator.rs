@@ -76,7 +76,7 @@ pub fn init_azblob_operator(cfg: &StorageAzblobConfig) -> Result<Operator> {
     builder.account_name(&cfg.account_name);
     builder.account_key(&cfg.account_key);
 
-    Ok(Operator::new(builder.build()?))
+    Ok(Operator::new(builder.build()?).layer(LoggingLayer))
 }
 
 /// init_fs_operator will init a opendal fs operator.
@@ -89,7 +89,7 @@ pub fn init_fs_operator(cfg: &StorageFsConfig) -> Result<Operator> {
     }
     builder.root(&path);
 
-    Ok(Operator::new(builder.build()?))
+    Ok(Operator::new(builder.build()?).layer(LoggingLayer))
 }
 
 /// init_gcs_operator will init a opendal gcs operator.
@@ -103,7 +103,7 @@ pub fn init_gcs_operator(cfg: &StorageGcsConfig) -> Result<Operator> {
         .credential(&cfg.credential)
         .build()?;
 
-    Ok(Operator::new(accessor))
+    Ok(Operator::new(accessor).layer(LoggingLayer))
 }
 
 /// init_hdfs_operator will init an opendal hdfs operator.
@@ -119,7 +119,7 @@ pub fn init_hdfs_operator(cfg: &super::StorageHdfsConfig) -> Result<Operator> {
     // Root
     builder.root(&cfg.root);
 
-    Ok(Operator::new(builder.build()?))
+    Ok(Operator::new(builder.build()?).layer(LoggingLayer))
 }
 
 pub fn init_http_operator(cfg: &StorageHttpConfig) -> Result<Operator> {
@@ -141,14 +141,16 @@ pub fn init_http_operator(cfg: &StorageHttpConfig) -> Result<Operator> {
         immutable_layer.insert(i);
     }
 
-    Ok(Operator::new(builder.build()?).layer(immutable_layer))
+    Ok(Operator::new(builder.build()?)
+        .layer(LoggingLayer)
+        .layer(immutable_layer))
 }
 
 /// init_memory_operator will init a opendal memory operator.
 pub fn init_memory_operator() -> Result<Operator> {
     let mut builder = memory::Builder::default();
 
-    Ok(Operator::new(builder.build()?))
+    Ok(Operator::new(builder.build()?).layer(LoggingLayer))
 }
 
 /// init_s3_operator will init a opendal s3 operator with input s3 config.
@@ -181,7 +183,7 @@ pub fn init_s3_operator(cfg: &StorageS3Config) -> Result<Operator> {
         builder.enable_virtual_host_style();
     }
 
-    Ok(Operator::new(builder.build()?))
+    Ok(Operator::new(builder.build()?).layer(LoggingLayer))
 }
 
 /// init_obs_operator will init a opendal obs operator with input obs config.
@@ -197,7 +199,7 @@ pub fn init_obs_operator(cfg: &StorageObsConfig) -> Result<Operator> {
     builder.access_key_id(&cfg.access_key_id);
     builder.secret_access_key(&cfg.secret_access_key);
 
-    Ok(Operator::new(builder.build()?))
+    Ok(Operator::new(builder.build()?).layer(LoggingLayer))
 }
 
 pub struct StorageOperator;
