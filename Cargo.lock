@@ -4974,7 +4974,7 @@ dependencies = [
 [[package]]
 name = "openraft"
 version = "0.7.2"
-source = "git+https://github.com/datafuselabs/openraft?rev=6057abbf#6057abbf355993a81537c3d28d914adad10b90ae"
+source = "git+https://github.com/datafuselabs/openraft?tag=v0.7.2#6057abbf355993a81537c3d28d914adad10b90ae"
 dependencies = [
  "anyerror",
  "anyhow",
