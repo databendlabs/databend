@@ -18,5 +18,9 @@ path = "src/bin/codegen.rs"
 common-datavalues = { path = "../datavalues" }
 common-expression = { path = "../expression" }
 
+# TODO(andylokandy): Use the version from crates.io once
+# https://github.com/reem/rust-ordered-float/pull/110 is released.
+itertools = "0.10"
+ordered-float = { git = "https://github.com/andylokandy/rust-ordered-float.git", branch = "as", features = ["serde"] }
 serde = { version = "1.0.137", features = ["derive"] }
 serde_json = "1.0.81"

@@ -14,5 +14,6 @@
 
 #![feature(core_intrinsics)]
 #![feature(box_patterns)]
+#![feature(type_ascription)]
 
 pub mod scalars;

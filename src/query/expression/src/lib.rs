@@ -17,6 +17,7 @@
 #![feature(iterator_try_reduce)]
 #![feature(const_fmt_arguments_new)]
 #![feature(box_patterns)]
+#![feature(type_ascription)]
 #![feature(associated_type_defaults)]
 #![allow(clippy::len_without_is_empty)]
 #![allow(clippy::needless_lifetimes)]
@@ -32,6 +33,7 @@ mod expression;
 mod function;
 mod kernels;
 mod property;
+mod register;
 pub mod type_check;
 pub mod types;
 pub mod util;
@@ -45,4 +47,5 @@ pub use crate::expression::*;
 pub use crate::function::*;
 pub use crate::kernels::*;
 pub use crate::property::*;
+pub use crate::register::*;
 pub use crate::values::*;

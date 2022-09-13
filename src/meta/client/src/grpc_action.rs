@@ -56,13 +56,35 @@ pub enum MetaGrpcWriteReq {
 pub enum MetaGrpcReadReq {
     GetKV(GetKVReq),
     MGetKV(MGetKVReq),
-    // #[deprecated(since = "0.7.57-nightly", note = "deprecated since 2022-05-23")]
-    PrefixListKV(PrefixListReq),
     ListKV(ListKVReq), // since 2022-05-23
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct PrefixListReq(pub String);
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, derive_more::From)]
+pub enum MetaGrpcReq {
+    UpsertKV(UpsertKVReq),
+
+    GetKV(GetKVReq),
+    MGetKV(MGetKVReq),
+    ListKV(ListKVReq),
+}
+
+impl From<MetaGrpcWriteReq> for MetaGrpcReq {
+    fn from(r: MetaGrpcWriteReq) -> Self {
+        match r {
+            MetaGrpcWriteReq::UpsertKV(x) => x.into(),
+        }
+    }
+}
+
+impl From<MetaGrpcReadReq> for MetaGrpcReq {
+    fn from(r: MetaGrpcReadReq) -> Self {
+        match r {
+            MetaGrpcReadReq::GetKV(x) => x.into(),
+            MetaGrpcReadReq::MGetKV(x) => x.into(),
+            MetaGrpcReadReq::ListKV(x) => x.into(),
+        }
+    }
+}
 
 /// Try convert tonic::Request<RaftRequest> to DoActionAction.
 impl TryInto<MetaGrpcWriteReq> for Request<RaftRequest> {

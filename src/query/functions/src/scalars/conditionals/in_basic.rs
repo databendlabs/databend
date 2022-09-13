@@ -124,9 +124,9 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
             return Ok(col);
         }
 
-        let null_flag = columns[1..]
-            .iter()
-            .any(|column| column.field().data_type().is_null());
+        let null_flag = columns[1..].iter().any(|column| {
+            column.field().data_type().is_null() || column.field().data_type().is_nullable()
+        });
 
         let mut least_super_dt = columns[0].field().data_type().clone();
         let mut nonull_least_super_dt = remove_nullable(&least_super_dt);

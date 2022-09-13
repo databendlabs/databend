@@ -26,7 +26,6 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
 use common_planners::CreateDatabasePlan;
-use common_planners::CreateTablePlan;
 use common_planners::Expression;
 use common_planners::Extras;
 use common_storage::StorageFsConfig;
@@ -34,13 +33,14 @@ use common_storage::StorageParams;
 use common_streams::SendableDataBlockStream;
 use databend_query::interpreters::append2table;
 use databend_query::interpreters::commit2table;
-use databend_query::interpreters::CreateTableInterpreter;
+use databend_query::interpreters::CreateTableInterpreterV2;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::InterpreterFactoryV2;
 use databend_query::pipelines::processors::BlocksSource;
 use databend_query::pipelines::PipelineBuildResult;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
+use databend_query::sql::plans::CreateTablePlanV2;
 use databend_query::sql::Planner;
 use databend_query::sql::OPT_KEY_DATABASE_ID;
 use databend_query::storages::fuse::table_functions::ClusteringInformationTable;
@@ -142,8 +142,8 @@ impl TestFixture {
         ])
     }
 
-    pub fn default_crate_table_plan(&self) -> CreateTablePlan {
-        CreateTablePlan {
+    pub fn default_crate_table_plan(&self) -> CreateTablePlanV2 {
+        CreateTablePlanV2 {
             if_not_exists: false,
             tenant: self.default_tenant(),
             catalog: self.default_catalog_name(),
@@ -162,14 +162,14 @@ impl TestFixture {
                 default_cluster_key_id: Some(0),
                 ..Default::default()
             },
-            as_select: None,
             cluster_keys: vec!["id".to_string()],
+            as_select: None,
         }
     }
 
     // create a normal table without cluster key.
-    pub fn create_normal_table_plan(&self) -> CreateTablePlan {
-        CreateTablePlan {
+    pub fn create_normal_table_plan(&self) -> CreateTablePlanV2 {
+        CreateTablePlanV2 {
             if_not_exists: false,
             tenant: self.default_tenant(),
             catalog: self.default_catalog_name(),
@@ -192,7 +192,8 @@ impl TestFixture {
 
     pub async fn create_default_table(&self) -> Result<()> {
         let create_table_plan = self.default_crate_table_plan();
-        let interpreter = CreateTableInterpreter::try_create(self.ctx.clone(), create_table_plan)?;
+        let interpreter =
+            CreateTableInterpreterV2::try_create(self.ctx.clone(), create_table_plan)?;
         interpreter.execute().await?;
         Ok(())
     }

@@ -18,6 +18,7 @@ mod kv_api_impl;
 mod message;
 
 pub use grpc_action::MetaGrpcReadReq;
+pub use grpc_action::MetaGrpcReq;
 pub use grpc_action::MetaGrpcWriteReq;
 pub use grpc_action::RequestFor;
 pub use grpc_client::ClientHandle;

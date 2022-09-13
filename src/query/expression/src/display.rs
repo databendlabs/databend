@@ -34,8 +34,11 @@ use crate::property::Domain;
 use crate::property::FunctionProperty;
 use crate::types::boolean::BooleanDomain;
 use crate::types::nullable::NullableDomain;
-use crate::types::number::Number;
+use crate::types::number::NumberColumn;
+use crate::types::number::NumberDataType;
 use crate::types::number::NumberDomain;
+use crate::types::number::NumberScalar;
+use crate::types::number::SimpleDomain;
 use crate::types::string::StringDomain;
 use crate::types::timestamp::Timestamp;
 use crate::types::timestamp::TimestampDomain;
@@ -46,6 +49,7 @@ use crate::values::ScalarRef;
 use crate::values::Value;
 use crate::values::ValueRef;
 use crate::with_number_type;
+use crate::Column;
 
 impl Debug for Chunk {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -87,16 +91,7 @@ impl<'a> Debug for ScalarRef<'a> {
         match self {
             ScalarRef::Null => write!(f, "NULL"),
             ScalarRef::EmptyArray => write!(f, "[]"),
-            ScalarRef::Int8(val) => write!(f, "{val}_i8"),
-            ScalarRef::Int16(val) => write!(f, "{val}_i16"),
-            ScalarRef::Int32(val) => write!(f, "{val}_i32"),
-            ScalarRef::Int64(val) => write!(f, "{val}_i64"),
-            ScalarRef::UInt8(val) => write!(f, "{val}_u8"),
-            ScalarRef::UInt16(val) => write!(f, "{val}_u16"),
-            ScalarRef::UInt32(val) => write!(f, "{val}_u32"),
-            ScalarRef::UInt64(val) => write!(f, "{val}_u64"),
-            ScalarRef::Float32(val) => write!(f, "{val:?}_f32"),
-            ScalarRef::Float64(val) => write!(f, "{val:?}_f64"),
+            ScalarRef::Number(val) => write!(f, "{val:?}"),
             ScalarRef::Boolean(val) => write!(f, "{val}"),
             ScalarRef::String(s) => write!(f, "{:?}", String::from_utf8_lossy(s)),
             ScalarRef::Timestamp(t) => write!(f, "{t:?}"),
@@ -112,21 +107,32 @@ impl<'a> Debug for ScalarRef<'a> {
     }
 }
 
+impl Debug for Column {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Column::Null { len } => f.debug_struct("Null").field("len", len).finish(),
+            Column::EmptyArray { len } => f.debug_struct("EmptyArray").field("len", len).finish(),
+            Column::Number(col) => write!(f, "{col:?}"),
+            Column::Boolean(col) => f.debug_tuple("Boolean").field(col).finish(),
+            Column::String(col) => write!(f, "{col:?}"),
+            Column::Timestamp(col) => write!(f, "{col:?}"),
+            Column::Array(col) => write!(f, "{col:?}"),
+            Column::Nullable(col) => write!(f, "{col:?}"),
+            Column::Tuple { fields, len } => f
+                .debug_struct("Tuple")
+                .field("fields", fields)
+                .field("len", len)
+                .finish(),
+        }
+    }
+}
+
 impl<'a> Display for ScalarRef<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             ScalarRef::Null => write!(f, "NULL"),
             ScalarRef::EmptyArray => write!(f, "[]"),
-            ScalarRef::Int8(val) => write!(f, "{val}"),
-            ScalarRef::Int16(val) => write!(f, "{val}"),
-            ScalarRef::Int32(val) => write!(f, "{val}"),
-            ScalarRef::Int64(val) => write!(f, "{val}"),
-            ScalarRef::UInt8(val) => write!(f, "{val}"),
-            ScalarRef::UInt16(val) => write!(f, "{val}"),
-            ScalarRef::UInt32(val) => write!(f, "{val}"),
-            ScalarRef::UInt64(val) => write!(f, "{val}"),
-            ScalarRef::Float32(val) => write!(f, "{val:?}"),
-            ScalarRef::Float64(val) => write!(f, "{val:?}"),
+            ScalarRef::Number(val) => write!(f, "{val}"),
             ScalarRef::Boolean(val) => write!(f, "{val}"),
             ScalarRef::String(s) => write!(f, "{:?}", String::from_utf8_lossy(s)),
             ScalarRef::Timestamp(t) => write!(f, "{t}"),
@@ -138,6 +144,63 @@ impl<'a> Display for ScalarRef<'a> {
                     fields.iter().map(ScalarRef::to_string).join(", ")
                 )
             }
+        }
+    }
+}
+
+impl Debug for NumberScalar {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NumberScalar::UInt8(val) => write!(f, "{val}_u8"),
+            NumberScalar::UInt16(val) => write!(f, "{val}_u16"),
+            NumberScalar::UInt32(val) => write!(f, "{val}_u32"),
+            NumberScalar::UInt64(val) => write!(f, "{val}_u64"),
+            NumberScalar::Int8(val) => write!(f, "{val}_i8"),
+            NumberScalar::Int16(val) => write!(f, "{val}_i16"),
+            NumberScalar::Int32(val) => write!(f, "{val}_i32"),
+            NumberScalar::Int64(val) => write!(f, "{val}_i64"),
+            NumberScalar::Float32(val) => write!(f, "{:?}_f32", val.0),
+            NumberScalar::Float64(val) => write!(f, "{:?}_f64", val.0),
+        }
+    }
+}
+
+impl Display for NumberScalar {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NumberScalar::UInt8(val) => write!(f, "{val}"),
+            NumberScalar::UInt16(val) => write!(f, "{val}"),
+            NumberScalar::UInt32(val) => write!(f, "{val}"),
+            NumberScalar::UInt64(val) => write!(f, "{val}"),
+            NumberScalar::Int8(val) => write!(f, "{val}"),
+            NumberScalar::Int16(val) => write!(f, "{val}"),
+            NumberScalar::Int32(val) => write!(f, "{val}"),
+            NumberScalar::Int64(val) => write!(f, "{val}"),
+            NumberScalar::Float32(val) => write!(f, "{:?}", val.0),
+            NumberScalar::Float64(val) => write!(f, "{:?}", val.0),
+        }
+    }
+}
+
+impl Debug for NumberColumn {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NumberColumn::UInt8(val) => f.debug_tuple("UInt8").field(val).finish(),
+            NumberColumn::UInt16(val) => f.debug_tuple("UInt16").field(val).finish(),
+            NumberColumn::UInt32(val) => f.debug_tuple("UInt32").field(val).finish(),
+            NumberColumn::UInt64(val) => f.debug_tuple("UInt64").field(val).finish(),
+            NumberColumn::Int8(val) => f.debug_tuple("Int8").field(val).finish(),
+            NumberColumn::Int16(val) => f.debug_tuple("Int16").field(val).finish(),
+            NumberColumn::Int32(val) => f.debug_tuple("Int32").field(val).finish(),
+            NumberColumn::Int64(val) => f.debug_tuple("Int64").field(val).finish(),
+            NumberColumn::Float32(val) => f
+                .debug_tuple("Float32")
+                .field(&val.iter().map(|x| x.0).collect::<Vec<_>>())
+                .finish(),
+            NumberColumn::Float64(val) => f
+                .debug_tuple("Float64")
+                .field(&val.iter().map(|x| x.0).collect::<Vec<_>>())
+                .finish(),
         }
     }
 }
@@ -209,16 +272,7 @@ impl Display for DataType {
         match &self {
             DataType::Boolean => write!(f, "Boolean"),
             DataType::String => write!(f, "String"),
-            DataType::UInt8 => write!(f, "UInt8"),
-            DataType::UInt16 => write!(f, "UInt16"),
-            DataType::UInt32 => write!(f, "UInt32"),
-            DataType::UInt64 => write!(f, "UInt64"),
-            DataType::Int8 => write!(f, "Int8"),
-            DataType::Int16 => write!(f, "Int16"),
-            DataType::Int32 => write!(f, "Int32"),
-            DataType::Int64 => write!(f, "Int64"),
-            DataType::Float32 => write!(f, "Float32"),
-            DataType::Float64 => write!(f, "Float64"),
+            DataType::Number(num) => write!(f, "{num}"),
             DataType::Timestamp => write!(f, "Timestamp"),
             DataType::Null => write!(f, "NULL"),
             DataType::Nullable(inner) => write!(f, "{inner} NULL"),
@@ -240,6 +294,23 @@ impl Display for DataType {
                 }
             }
             DataType::Generic(index) => write!(f, "T{index}"),
+        }
+    }
+}
+
+impl Display for NumberDataType {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        match &self {
+            NumberDataType::UInt8 => write!(f, "UInt8"),
+            NumberDataType::UInt16 => write!(f, "UInt16"),
+            NumberDataType::UInt32 => write!(f, "UInt32"),
+            NumberDataType::UInt64 => write!(f, "UInt64"),
+            NumberDataType::Int8 => write!(f, "Int8"),
+            NumberDataType::Int16 => write!(f, "Int16"),
+            NumberDataType::Int32 => write!(f, "Int32"),
+            NumberDataType::Int64 => write!(f, "Int64"),
+            NumberDataType::Float32 => write!(f, "Float32"),
+            NumberDataType::Float64 => write!(f, "Float64"),
         }
     }
 }
@@ -388,12 +459,6 @@ impl Display for StringDomain {
     }
 }
 
-impl<T: Number> Display for NumberDomain<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{{{:?}..={:?}}}", self.min, self.max)
-    }
-}
-
 impl Display for TimestampDomain {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
@@ -406,10 +471,23 @@ impl Display for TimestampDomain {
     }
 }
 
-impl Display for Domain {
+impl Display for NumberDomain {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         with_number_type!(|TYPE| match self {
-            Domain::TYPE(domain) => write!(f, "{domain}"),
+            NumberDomain::TYPE(domain) => write!(f, "{domain}"),
+        })
+    }
+}
+
+impl<T: Display> Display for SimpleDomain<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{{{}..={}}}", self.min, self.max)
+    }
+}
+impl Display for Domain {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Domain::Number(domain) => write!(f, "{domain}"),
             Domain::Boolean(domain) => write!(f, "{domain}"),
             Domain::String(domain) => write!(f, "{domain}"),
             Domain::Timestamp(domain) => write!(f, "{domain}"),
@@ -427,7 +505,7 @@ impl Display for Domain {
                 write!(f, ")")
             }
             Domain::Undefined => write!(f, "_"),
-        })
+        }
     }
 }
 

@@ -19,17 +19,17 @@ use common_exception::Result;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_planners::AlterTableClusterKeyPlan;
-use common_planners::CreateTablePlan;
 use common_planners::DropTableClusterKeyPlan;
 use common_planners::ReadDataSourcePlan;
 use common_planners::SourceInfo;
 use common_planners::TruncateTablePlan;
 use databend_query::interpreters::AlterTableClusterKeyInterpreter;
-use databend_query::interpreters::CreateTableInterpreter;
+use databend_query::interpreters::CreateTableInterpreterV2;
 use databend_query::interpreters::DropTableClusterKeyInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::InterpreterFactoryV2;
 use databend_query::sessions::TableContext;
+use databend_query::sql::plans::CreateTablePlanV2;
 use databend_query::sql::Planner;
 use databend_query::sql::OPT_KEY_DATABASE_ID;
 use databend_query::sql::OPT_KEY_SNAPSHOT_LOCATION;
@@ -47,7 +47,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
     let ctx = fixture.ctx();
 
     let create_table_plan = fixture.default_crate_table_plan();
-    let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
+    let interpreter = CreateTableInterpreterV2::try_create(ctx.clone(), create_table_plan)?;
     interpreter.execute().await?;
 
     let mut table = fixture.latest_default_table().await?;
@@ -174,7 +174,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
     let ctx = fixture.ctx();
 
     let create_table_plan = fixture.default_crate_table_plan();
-    let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
+    let interpreter = CreateTableInterpreterV2::try_create(ctx.clone(), create_table_plan)?;
     interpreter.execute().await?;
 
     let table = fixture.latest_default_table().await?;
@@ -248,7 +248,7 @@ async fn test_fuse_table_optimize() -> Result<()> {
     // create test table
     let tbl_name = create_table_plan.table.clone();
     let db_name = create_table_plan.database.clone();
-    let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
+    let interpreter = CreateTableInterpreterV2::try_create(ctx.clone(), create_table_plan)?;
     interpreter.execute().await?;
 
     // insert 5 times
@@ -299,7 +299,7 @@ async fn test_fuse_alter_table_cluster_key() -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
 
-    let create_table_plan = CreateTablePlan {
+    let create_table_plan = CreateTablePlanV2 {
         if_not_exists: false,
         tenant: fixture.default_tenant(),
         catalog: fixture.default_catalog_name(),
@@ -322,7 +322,7 @@ async fn test_fuse_alter_table_cluster_key() -> Result<()> {
     };
 
     // create test table
-    let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
+    let interpreter = CreateTableInterpreterV2::try_create(ctx.clone(), create_table_plan)?;
     interpreter.execute().await?;
 
     // add cluster key

@@ -14,8 +14,8 @@
 
 use std::io::Write;
 
-use common_expression::types::nullable::NullableColumn;
 use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
 use common_expression::Column;
 use common_expression::ColumnFrom;
 use goldenfile::Mint;
@@ -47,36 +47,30 @@ fn test_multi_if(file: &mut impl Write) {
         ),
         (
             "expr_true",
-            DataType::Int64,
-            Column::Int64(vec![1, 2, 3, 4].into()),
+            DataType::Number(NumberDataType::Int64),
+            Column::from_data(vec![1i64, 2, 3, 4]),
         ),
         (
             "expr_else",
-            DataType::Nullable(Box::new(DataType::Int64)),
-            Column::Nullable(Box::new(NullableColumn {
-                column: Column::Int64(vec![5, 6, 7, 8].into()),
-                validity: vec![true, false, true, false].into(),
-            })),
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
+            Column::from_data_with_validity(vec![5i64, 6, 7, 8], vec![true, false, true, false]),
         ),
     ]);
     run_ast(file, "multi_if(cond_a, expr_true, expr_else)", &[
         (
             "cond_a",
             DataType::Boolean,
-            Column::Boolean(vec![false, false, true, true].into()),
+            Column::from_data(vec![false, false, true, true]),
         ),
         (
             "expr_true",
-            DataType::Int64,
-            Column::Int64(vec![1, 2, 3, 4].into()),
+            DataType::Number(NumberDataType::Int64),
+            Column::from_data(vec![1i64, 2, 3, 4]),
         ),
         (
             "expr_else",
-            DataType::Nullable(Box::new(DataType::Int64)),
-            Column::Nullable(Box::new(NullableColumn {
-                column: Column::Int64(vec![5, 6, 7, 8].into()),
-                validity: vec![true, true, false, false].into(),
-            })),
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
+            Column::from_data_with_validity(vec![5i64, 6, 7, 8], vec![true, true, false, false]),
         ),
     ]);
     run_ast(
@@ -90,8 +84,8 @@ fn test_multi_if(file: &mut impl Write) {
             ),
             (
                 "expr_a",
-                DataType::Int64,
-                Column::Int64(vec![1, 2, 3, 4].into()),
+                DataType::Number(NumberDataType::Int64),
+                Column::from_data(vec![1i64, 2, 3, 4]),
             ),
             (
                 "cond_b",
@@ -102,16 +96,15 @@ fn test_multi_if(file: &mut impl Write) {
             ),
             (
                 "expr_b",
-                DataType::Int64,
-                Column::Int64(vec![5, 6, 7, 8].into()),
+                DataType::Number(NumberDataType::Int64),
+                Column::from_data(vec![5i64, 6, 7, 8]),
             ),
             (
                 "expr_else",
-                DataType::Nullable(Box::new(DataType::Int64)),
-                Column::Nullable(Box::new(NullableColumn {
-                    column: Column::Int64(vec![9, 10, 11, 12].into()),
-                    validity: vec![true, true, false, false].into(),
-                })),
+                DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
+                Column::from_data_with_validity(vec![9i64, 10, 11, 12], vec![
+                    true, true, false, false,
+                ]),
             ),
         ],
     );
@@ -122,27 +115,27 @@ fn test_multi_if(file: &mut impl Write) {
             (
                 "cond_a",
                 DataType::Boolean,
-                Column::Boolean(vec![true, true, false, false].into()),
+                Column::from_data(vec![true, true, false, false]),
             ),
             (
                 "expr_a",
-                DataType::Int64,
-                Column::Int64(vec![1, 2, 3, 4].into()),
+                DataType::Number(NumberDataType::Int64),
+                Column::from_data(vec![1i64, 2, 3, 4]),
             ),
             (
                 "cond_b",
                 DataType::Boolean,
-                Column::Boolean(vec![true, false, true, false].into()),
+                Column::from_data(vec![true, false, true, false]),
             ),
             (
                 "expr_b",
-                DataType::Int64,
-                Column::Int64(vec![5, 6, 7, 8].into()),
+                DataType::Number(NumberDataType::Int64),
+                Column::from_data(vec![5i64, 6, 7, 8]),
             ),
             (
                 "expr_else",
-                DataType::Int64,
-                Column::Int64(vec![9, 10, 11, 12].into()),
+                DataType::Number(NumberDataType::Int64),
+                Column::from_data(vec![9i64, 10, 11, 12]),
             ),
         ],
     );
@@ -162,15 +155,12 @@ fn test_is_not_null(file: &mut impl Write) {
     )]);
     run_ast(file, "is_not_null(int64_col)", &[(
         "int64_col",
-        DataType::Int64,
-        Column::Int64(vec![5, 6, 7, 8].into()),
+        DataType::Number(NumberDataType::Int64),
+        Column::from_data(vec![5i64, 6, 7, 8]),
     )]);
     run_ast(file, "is_not_null(nullable_col)", &[(
         "nullable_col",
-        DataType::Nullable(Box::new(DataType::Int64)),
-        Column::Nullable(Box::new(NullableColumn {
-            column: Column::Int64(vec![9, 10, 11, 12].into()),
-            validity: vec![true, true, false, false].into(),
-        })),
+        DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
+        Column::from_data_with_validity(vec![9i64, 10, 11, 12], vec![true, true, false, false]),
     )]);
 }

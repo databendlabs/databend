@@ -26,7 +26,7 @@ use common_fuse_meta::meta::ColumnStatistics;
 use common_planners::Extras;
 use common_planners::Projection;
 use common_storages_fuse::ColumnLeaves;
-use databend_query::interpreters::CreateTableInterpreter;
+use databend_query::interpreters::CreateTableInterpreterV2;
 use databend_query::interpreters::Interpreter;
 use databend_query::storages::fuse::ColumnLeaf;
 use databend_query::storages::fuse::FuseTable;
@@ -147,7 +147,7 @@ async fn test_fuse_table_exact_statistic() -> Result<()> {
     let ctx = fixture.ctx();
 
     let create_table_plan = fixture.default_crate_table_plan();
-    let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
+    let interpreter = CreateTableInterpreterV2::try_create(ctx.clone(), create_table_plan)?;
     interpreter.execute().await?;
 
     let mut table = fixture.latest_default_table().await?;

@@ -15,7 +15,7 @@
 use std::time::Duration;
 
 use common_base::base::tokio;
-use common_meta_grpc::MetaGrpcClient;
+use common_meta_client::MetaGrpcClient;
 use pretty_assertions::assert_eq;
 use regex::Regex;
 

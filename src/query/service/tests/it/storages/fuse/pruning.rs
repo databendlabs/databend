@@ -25,13 +25,13 @@ use common_planners::add;
 use common_planners::col;
 use common_planners::lit;
 use common_planners::sub;
-use common_planners::CreateTablePlan;
 use common_planners::Expression;
 use common_planners::Extras;
-use databend_query::interpreters::CreateTableInterpreter;
+use databend_query::interpreters::CreateTableInterpreterV2;
 use databend_query::interpreters::Interpreter;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
+use databend_query::sql::plans::CreateTablePlanV2;
 use databend_query::sql::OPT_KEY_DATABASE_ID;
 use databend_query::sql::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_query::storages::fuse::io::MetaReaders;
@@ -70,7 +70,7 @@ async fn test_block_pruner() -> Result<()> {
     let num_blocks_opt = row_per_block.to_string();
 
     // create test table
-    let create_table_plan = CreateTablePlan {
+    let create_table_plan = CreateTablePlanV2 {
         catalog: "default".to_owned(),
         if_not_exists: false,
         tenant: fixture.default_tenant(),
@@ -91,7 +91,7 @@ async fn test_block_pruner() -> Result<()> {
         cluster_keys: vec![],
     };
 
-    let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
+    let interpreter = CreateTableInterpreterV2::try_create(ctx.clone(), create_table_plan)?;
     let _ = interpreter.execute().await?;
 
     // get table
@@ -216,7 +216,7 @@ async fn test_block_pruner_monotonic() -> Result<()> {
     let num_blocks_opt = row_per_block.to_string();
 
     // create test table
-    let create_table_plan = CreateTablePlan {
+    let create_table_plan = CreateTablePlanV2 {
         catalog: "default".to_owned(),
         if_not_exists: false,
         tenant: fixture.default_tenant(),
@@ -240,7 +240,7 @@ async fn test_block_pruner_monotonic() -> Result<()> {
     };
 
     let catalog = ctx.get_catalog("default")?;
-    let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
+    let interpreter = CreateTableInterpreterV2::try_create(ctx.clone(), create_table_plan)?;
     interpreter.execute().await?;
 
     // get table

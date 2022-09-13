@@ -21,8 +21,10 @@ use common_arrow::arrow_format::flight::data::BasicAuth;
 use common_base::base::tokio::sync::mpsc;
 use common_grpc::GrpcClaim;
 use common_grpc::GrpcToken;
-use common_meta_grpc::MetaGrpcReadReq;
-use common_meta_grpc::MetaGrpcWriteReq;
+use common_meta_api::KVApi;
+use common_meta_client::MetaGrpcReadReq;
+use common_meta_client::MetaGrpcReq;
+use common_meta_client::MetaGrpcWriteReq;
 use common_meta_types::protobuf::meta_service_server::MetaService;
 use common_meta_types::protobuf::ClientInfo;
 use common_meta_types::protobuf::Empty;
@@ -48,11 +50,11 @@ use tonic::Status;
 use tonic::Streaming;
 use tracing::info;
 
-use crate::executor::ActionHandler;
 use crate::meta_service::meta_service_impl::GrpcStream;
 use crate::meta_service::MetaNode;
 use crate::metrics::add_meta_metrics_meta_request_inflights;
 use crate::metrics::incr_meta_metrics_meta_recv_bytes;
+use crate::metrics::incr_meta_metrics_meta_request_result;
 use crate::metrics::incr_meta_metrics_meta_sent_bytes;
 use crate::version::from_digit_ver;
 use crate::version::to_digit_ver;
@@ -61,14 +63,14 @@ use crate::version::MIN_METACLI_SEMVER;
 
 pub struct MetaServiceImpl {
     token: GrpcToken,
-    action_handler: ActionHandler,
+    pub(crate) meta_node: Arc<MetaNode>,
 }
 
 impl MetaServiceImpl {
     pub fn create(meta_node: Arc<MetaNode>) -> Self {
         Self {
             token: GrpcToken::create(),
-            action_handler: ActionHandler::create(meta_node),
+            meta_node,
         }
     }
 
@@ -83,6 +85,47 @@ impl MetaServiceImpl {
             Status::unauthenticated(format!("token verify failed: {}, {}", token, e))
         })?;
         Ok(claim)
+    }
+
+    pub async fn execute_kv_req(&self, req: MetaGrpcReq) -> RaftReply {
+        // To keep the code IDE-friendly, we manually expand the enum variants and dispatch them one by one
+
+        match req {
+            MetaGrpcReq::UpsertKV(a) => {
+                let res = self.meta_node.upsert_kv(a).await;
+                incr_meta_metrics_meta_request_result(res.is_ok());
+                RaftReply::from(res)
+            }
+            MetaGrpcReq::GetKV(a) => {
+                let res = self.meta_node.get_kv(&a.key).await;
+                incr_meta_metrics_meta_request_result(res.is_ok());
+                RaftReply::from(res)
+            }
+            MetaGrpcReq::MGetKV(a) => {
+                let res = self.meta_node.mget_kv(&a.keys).await;
+                incr_meta_metrics_meta_request_result(res.is_ok());
+                RaftReply::from(res)
+            }
+            MetaGrpcReq::ListKV(a) => {
+                let res = self.meta_node.prefix_list_kv(&a.prefix).await;
+                incr_meta_metrics_meta_request_result(res.is_ok());
+                RaftReply::from(res)
+            }
+        }
+    }
+
+    pub async fn execute_txn(&self, req: TxnRequest) -> TxnReply {
+        let ret = self.meta_node.transaction(req).await;
+        incr_meta_metrics_meta_request_result(ret.is_ok());
+
+        match ret {
+            Ok(resp) => resp,
+            Err(err) => TxnReply {
+                success: false,
+                error: serde_json::to_string(&err).expect("fail to serialize"),
+                responses: vec![],
+            },
+        }
     }
 }
 
@@ -154,13 +197,14 @@ impl MetaService for MetaServiceImpl {
 
         incr_meta_metrics_meta_recv_bytes(request.get_ref().encoded_len() as u64);
 
-        let action: MetaGrpcWriteReq = request.try_into()?;
+        let req: MetaGrpcWriteReq = request.try_into()?;
+        let req: MetaGrpcReq = req.into();
 
         add_meta_metrics_meta_request_inflights(1);
 
-        info!("Receive write_action: {:?}", action);
+        info!("Receive write_action: {:?}", req);
 
-        let body = self.action_handler.execute_write(action).await;
+        let body = self.execute_kv_req(req).await;
 
         add_meta_metrics_meta_request_inflights(-1);
 
@@ -175,13 +219,14 @@ impl MetaService for MetaServiceImpl {
 
         incr_meta_metrics_meta_recv_bytes(request.get_ref().encoded_len() as u64);
 
-        let action: MetaGrpcReadReq = request.try_into()?;
+        let req: MetaGrpcReadReq = request.try_into()?;
+        let req: MetaGrpcReq = req.into();
 
         add_meta_metrics_meta_request_inflights(1);
 
-        info!("Receive read_action: {:?}", action);
+        info!("Receive read_action: {:?}", req);
 
-        let res = self.action_handler.execute_read(action).await;
+        let res = self.execute_kv_req(req).await;
 
         add_meta_metrics_meta_request_inflights(-1);
 
@@ -201,7 +246,7 @@ impl MetaService for MetaServiceImpl {
         &self,
         _request: Request<common_meta_types::protobuf::Empty>,
     ) -> Result<Response<Self::ExportStream>, Status> {
-        let meta_node = &self.action_handler.meta_node;
+        let meta_node = &self.meta_node;
 
         let res = meta_node.sto.export().await?;
 
@@ -222,7 +267,7 @@ impl MetaService for MetaServiceImpl {
     ) -> Result<Response<Self::WatchStream>, Status> {
         let (tx, rx) = mpsc::channel(4);
 
-        let meta_node = &self.action_handler.meta_node;
+        let meta_node = &self.meta_node;
         meta_node.create_watcher_stream(request.into_inner(), tx);
 
         let output_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
@@ -243,7 +288,7 @@ impl MetaService for MetaServiceImpl {
 
         info!("Receive txn_request: {:?}", request);
 
-        let body = self.action_handler.execute_txn(request).await;
+        let body = self.execute_txn(request).await;
         add_meta_metrics_meta_request_inflights(-1);
 
         incr_meta_metrics_meta_sent_bytes(body.encoded_len() as u64);
@@ -256,7 +301,7 @@ impl MetaService for MetaServiceImpl {
         request: Request<MemberListRequest>,
     ) -> Result<Response<MemberListReply>, Status> {
         self.check_token(request.metadata())?;
-        let meta_node = &self.action_handler.meta_node;
+        let meta_node = &self.meta_node;
         let members = meta_node.get_meta_addrs().await.map_err(|e| {
             Status::internal(format!("Cannot get metasrv member list, error: {:?}", e))
         })?;
