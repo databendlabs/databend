@@ -172,3 +172,8 @@ message TableCopiedFileInfo {
   uint64 content_length = 2;
   optional string last_modified = 3;
 }
+
+message TableCopiedFileLock {
+  uint64 ver = 100;
+  uint64 min_compatible = 101;
+}

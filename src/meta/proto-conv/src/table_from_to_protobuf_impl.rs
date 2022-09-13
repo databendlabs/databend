@@ -60,6 +60,24 @@ impl FromToProto for mt::TableCopiedFileInfo {
     }
 }
 
+impl FromToProto for mt::TableCopiedFileLock {
+    type PB = pb::TableCopiedFileLock;
+    fn from_pb(p: pb::TableCopiedFileLock) -> Result<Self, Incompatible> {
+        check_ver(p.ver, p.min_compatible)?;
+
+        let v = Self {};
+        Ok(v)
+    }
+
+    fn to_pb(&self) -> Result<pb::TableCopiedFileLock, Incompatible> {
+        let p = pb::TableCopiedFileLock {
+            ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
+        };
+        Ok(p)
+    }
+}
+
 impl FromToProto for mt::TableInfo {
     type PB = pb::TableInfo;
     fn from_pb(p: pb::TableInfo) -> Result<Self, Incompatible> {

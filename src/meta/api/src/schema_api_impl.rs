@@ -49,6 +49,8 @@ use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
 use common_meta_app::schema::TableCopiedFileInfo;
+use common_meta_app::schema::TableCopiedFileLock;
+use common_meta_app::schema::TableCopiedFileLockKey;
 use common_meta_app::schema::TableCopiedFileNameIdent;
 use common_meta_app::schema::TableId;
 use common_meta_app::schema::TableIdList;
@@ -1791,16 +1793,28 @@ impl<KV: KVApi> SchemaApi for KV {
                 )));
             }
 
+            let lock_key = TableCopiedFileLockKey { table_id };
+            let (lock_key_seq, lock_op): (_, Option<TableCopiedFileLock>) =
+                get_struct_value(self, &lock_key).await?;
+
             debug!(
                 ident = display(&tbid),
                 table_meta = debug(&tb_meta),
                 "upsert_table_copied_file_info"
             );
 
-            let mut condition = vec![txn_cond_seq(&tbid, Eq, tb_meta_seq)];
+            let lock = match lock_op {
+                Some(lock) => lock,
+                None => TableCopiedFileLock {},
+            };
+            let mut condition = vec![
+                txn_cond_seq(&tbid, Eq, tb_meta_seq),
+                txn_cond_seq(&lock_key, Eq, lock_key_seq),
+            ];
             let mut if_then = vec![
                 // every copied files changed, change tbid seq to make all table child consistent.
                 txn_op_put(&tbid, serialize_struct(&tb_meta.unwrap())?), /* (tenant, db_id, tb_id) -> tb_meta */
+                txn_op_put(&lock_key, serialize_struct(&lock)?),         // copied file lock key
             ];
             for (file, file_info) in req.file_info.iter() {
                 let key = TableCopiedFileNameIdent {
@@ -1870,13 +1884,25 @@ impl<KV: KVApi> SchemaApi for KV {
                 )));
             }
 
+            let lock_key = TableCopiedFileLockKey { table_id };
+            let (lock_key_seq, lock_op): (_, Option<TableCopiedFileLock>) =
+                get_struct_value(self, &lock_key).await?;
+
+            let lock = match lock_op {
+                Some(lock) => lock,
+                None => TableCopiedFileLock {},
+            };
+
             debug!(
                 ident = display(&tbid),
                 table_meta = debug(&tb_meta),
                 "truncate_table"
             );
 
-            let mut condition = vec![txn_cond_seq(&tbid, Eq, tb_meta_seq)];
+            let mut condition = vec![
+                txn_cond_seq(&tbid, Eq, tb_meta_seq),
+                txn_cond_seq(&lock_key, Eq, lock_key_seq),
+            ];
             let mut if_then = vec![];
             remove_table_copied_files(self, table_id, &mut condition, &mut if_then).await?;
 
@@ -1887,6 +1913,7 @@ impl<KV: KVApi> SchemaApi for KV {
 
             // update table meta to make sequence update.
             if_then.push(txn_op_put(&tbid, serialize_struct(&tb_meta.unwrap())?)); // tb_id -> tb_meta
+            if_then.push(txn_op_put(&lock_key, serialize_struct(&lock)?)); // copied file lock key
 
             let txn_req = TxnRequest {
                 condition,

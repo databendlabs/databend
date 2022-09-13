@@ -20,6 +20,7 @@ use common_meta_app::schema::DatabaseId;
 use common_meta_app::schema::DatabaseIdToName;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::DbIdListKey;
+use common_meta_app::schema::TableCopiedFileLockKey;
 use common_meta_app::schema::TableCopiedFileNameIdent;
 use common_meta_app::schema::TableId;
 use common_meta_app::schema::TableIdListKey;
@@ -45,6 +46,7 @@ const PREFIX_TABLE_COUNT: &str = "__fd_table_count";
 const PREFIX_DATABASE_ID_TO_NAME: &str = "__fd_database_id_to_name";
 const PREFIX_TABLE_ID_TO_NAME: &str = "__fd_table_id_to_name";
 const PREFIX_TABLE_COPIED_FILES: &str = "__fd_table_copied_files";
+const PREFIX_TABLE_COPIED_FILES_LOCK: &str = "__fd_table_copied_file_lock";
 
 pub(crate) const ID_GEN_TABLE: &str = "table_id";
 pub(crate) const ID_GEN_DATABASE: &str = "database_id";
@@ -320,6 +322,27 @@ impl KVApiKey for TableCopiedFileNameIdent {
         let file = unescape(elts[2])?;
 
         Ok(TableCopiedFileNameIdent { table_id, file })
+    }
+}
+
+// __fd_table_copied_file_lock/table_id -> ""
+impl KVApiKey for TableCopiedFileLockKey {
+    const PREFIX: &'static str = PREFIX_TABLE_COPIED_FILES_LOCK;
+
+    fn to_key(&self) -> String {
+        format!("{}/{}", Self::PREFIX, self.table_id)
+    }
+
+    fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
+        let mut elts = s.split('/');
+
+        let prefix = check_segment_present(elts.next(), 0, s)?;
+        check_segment(prefix, 0, Self::PREFIX)?;
+
+        let table_id = check_segment_present(elts.next(), 1, s)?;
+        let table_id = decode_id(table_id)?;
+
+        Ok(TableCopiedFileLockKey { table_id })
     }
 }
 

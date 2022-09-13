@@ -215,6 +215,10 @@ fn new_table_copied_file_info_v7() -> mt::TableCopiedFileInfo {
     }
 }
 
+fn new_table_copied_file_lock_v7() -> mt::TableCopiedFileLock {
+    mt::TableCopiedFileLock {}
+}
+
 #[test]
 fn test_pb_from_to() -> anyhow::Result<()> {
     let db = new_db_meta();
@@ -329,6 +333,16 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("copied_file:{:?}", buf);
+    }
+
+    // TableCopiedFileLock
+    {
+        let copied_file_lock = new_table_copied_file_lock_v7();
+        let p = copied_file_lock.to_pb()?;
+
+        let mut buf = vec![];
+        common_protos::prost::Message::encode(&p, &mut buf)?;
+        println!("copied_file_lock:{:?}", buf);
     }
 
     Ok(())
@@ -520,6 +534,18 @@ fn test_load_old() -> anyhow::Result<()> {
 
         let got = mt::TableCopiedFileInfo::from_pb(p).map_err(print_err)?;
         let want = new_table_copied_file_info_v7();
+        assert_eq!(want, got);
+    }
+
+    // TableCopiedFileLock is loadable
+    {
+        let copied_file_lock_v7: Vec<u8> = vec![160, 6, 7, 168, 6, 1];
+        let p: pb::TableCopiedFileLock =
+            common_protos::prost::Message::decode(copied_file_lock_v7.as_slice())
+                .map_err(print_err)?;
+
+        let got = mt::TableCopiedFileLock::from_pb(p).map_err(print_err)?;
+        let want = new_table_copied_file_lock_v7();
         assert_eq!(want, got);
     }
 
