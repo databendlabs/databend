@@ -25,6 +25,7 @@ use common_expression::types::NumberType;
 use common_expression::types::StringType;
 use common_expression::vectorize_with_builder_1_arg;
 use common_expression::vectorize_with_builder_2_arg;
+use common_expression::vectorize_with_builder_4_arg;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::Value;
@@ -135,11 +136,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
     );
 
-    registry.register_4_arg::<StringType, NumberType<i64>, NumberType<i64>, StringType, StringType, _, _>(
+    registry.register_passthrough_nullable_4_arg::<StringType, NumberType<i64>, NumberType<i64>, StringType, StringType, _, _>(
           "insert",
             FunctionProperty::default(),
             |_, _, _, _| None,
-            |srcstr, pos, len, substr| {
+          vectorize_with_builder_4_arg::<StringType, NumberType<i64>, NumberType<i64>, StringType, StringType>(
+              |srcstr, pos, len, substr, builder| {
                 let mut values: Vec<u8> = vec![];
 
                 let sl = srcstr.len() as i64;
@@ -154,8 +156,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                         values.extend_from_slice(&srcstr[p + l..]);
                     }
                 }
-                values
-            }
+              builder.put_slice(&values);
+              builder.commit_row();
+              Ok(())
+            }),
         );
 
     registry.register_3_arg::<StringType, NumberType<u64>, StringType, StringType, _, _>(
