@@ -18,7 +18,9 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
+use common_pipeline_sources::processors::sources::EmptySource;
 use common_planners::Extras;
+use common_planners::PartInfo;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
@@ -34,6 +36,23 @@ use crate::pipelines::Pipeline;
 use crate::sessions::TableContext;
 use crate::storages::Table;
 
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct SystemTablePart;
+
+#[typetag::serde(name = "system")]
+impl PartInfo for SystemTablePart {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
+        match info.as_any().downcast_ref::<SystemTablePart>() {
+            None => false,
+            Some(other) => self == other,
+        }
+    }
+}
+
 pub trait SyncSystemTable: Send + Sync {
     const NAME: &'static str;
 
@@ -45,7 +64,9 @@ pub trait SyncSystemTable: Send + Sync {
         _ctx: Arc<dyn TableContext>,
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
-        Ok((Statistics::default(), vec![]))
+        Ok((Statistics::default(), vec![Arc::new(Box::new(
+            SystemTablePart,
+        ))]))
     }
 }
 
@@ -84,9 +105,21 @@ impl<TTable: 'static + SyncSystemTable> Table for SyncOneBlockSystemTable<TTable
     fn read2(
         &self,
         ctx: Arc<dyn TableContext>,
-        _: &ReadDataSourcePlan,
+        plan: &ReadDataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
+        // avoid duplicate read in cluster mode.
+        if plan.parts.is_empty() {
+            let output = OutputPort::create();
+            pipeline.add_pipe(Pipe::SimplePipe {
+                inputs_port: vec![],
+                outputs_port: vec![output.clone()],
+                processors: vec![EmptySource::create(output)?],
+            });
+
+            return Ok(());
+        }
+
         let output = OutputPort::create();
         let inner_table = self.inner_table.clone();
         pipeline.add_pipe(Pipe::SimplePipe {
@@ -150,7 +183,9 @@ pub trait AsyncSystemTable: Send + Sync {
         _ctx: Arc<dyn TableContext>,
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
-        Ok((Statistics::default(), vec![]))
+        Ok((Statistics::default(), vec![Arc::new(Box::new(
+            SystemTablePart,
+        ))]))
     }
 }
 

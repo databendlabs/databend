@@ -24,6 +24,7 @@ use common_planners::Extras;
 use common_planners::Partitions;
 use common_planners::Statistics;
 
+use super::table::SystemTablePart;
 use crate::sessions::TableContext;
 use crate::storages::system::table::SyncOneBlockSystemTable;
 use crate::storages::system::table::SyncSystemTable;
@@ -51,7 +52,9 @@ impl SyncSystemTable for OneTable {
         _ctx: Arc<dyn TableContext>,
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
-        Ok((Statistics::new_exact(1, 1, 1, 1), vec![]))
+        Ok((Statistics::new_exact(1, 1, 1, 1), vec![Arc::new(Box::new(
+            SystemTablePart,
+        ))]))
     }
 }
 
