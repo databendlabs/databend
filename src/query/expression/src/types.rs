@@ -72,6 +72,15 @@ pub enum DataType {
     Generic(usize),
 }
 
+impl DataType {
+    pub fn wrap_nullable(&self) -> Self {
+        match self {
+            DataType::Nullable(_) => self.clone(),
+            _ => Self::Nullable(Box::new(self.clone())),
+        }
+    }
+}
+
 pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     type Scalar: Debug + Clone + PartialEq;
     type ScalarRef<'a>: Debug + Clone + PartialEq;
