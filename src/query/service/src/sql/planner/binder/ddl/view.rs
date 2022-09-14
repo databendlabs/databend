@@ -20,7 +20,6 @@ use common_legacy_planners::AlterViewPlan;
 use common_legacy_planners::CreateViewPlan;
 use common_legacy_planners::DropViewPlan;
 
-use crate::sessions::TableContext;
 use crate::sql::binder::Binder;
 use crate::sql::planner::semantic::normalize_identifier;
 use crate::sql::plans::Plan;

@@ -50,7 +50,7 @@ use self::util::contains_local_table_scan;
 use self::util::validate_distributed_query;
 use super::plans::Plan;
 use super::BindContext;
-use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 pub use crate::sql::optimizer::heuristic::RuleList;
 pub use crate::sql::optimizer::rule::RuleID;
 use crate::sql::optimizer::rule::RuleSet;
@@ -74,7 +74,7 @@ impl OptimizerContext {
 }
 
 pub fn optimize(
-    ctx: Arc<QueryContext>,
+    ctx: Arc<dyn TableContext>,
     opt_ctx: Arc<OptimizerContext>,
     plan: Plan,
 ) -> Result<Plan> {
@@ -130,7 +130,7 @@ pub fn optimize(
 }
 
 pub fn optimize_query(
-    ctx: Arc<QueryContext>,
+    ctx: Arc<dyn TableContext>,
     opt_ctx: Arc<OptimizerContext>,
     metadata: MetadataRef,
     bind_context: Box<BindContext>,

@@ -39,7 +39,6 @@ use common_meta_app::schema::TableMeta;
 use tracing::debug;
 
 use crate::catalogs::DatabaseCatalog;
-use crate::sessions::TableContext;
 use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::Binder;
 use crate::sql::binder::Visibility;

@@ -30,7 +30,6 @@ use common_meta_types::GrantObject;
 use common_meta_types::UserOption;
 use common_meta_types::UserPrivilegeSet;
 
-use crate::sessions::TableContext;
 use crate::sql::plans::Plan;
 use crate::sql::Binder;
 

@@ -125,22 +125,6 @@ impl QueryContext {
         StageTable::try_create(table_info.clone())
     }
 
-    /// Fetch a Table by db and table name.
-    ///
-    /// It guaranteed to return a consistent result for multiple calls, in a same query.
-    /// E.g.:
-    /// ```sql
-    /// SELECT * FROM (SELECT * FROM db.table_name) as subquery_1, (SELECT * FROM db.table_name) AS subquery_2
-    /// ```
-    pub async fn get_table(
-        &self,
-        catalog: &str,
-        database: &str,
-        table: &str,
-    ) -> Result<Arc<dyn Table>> {
-        self.shared.get_table(catalog, database, table).await
-    }
-
     pub async fn set_current_database(&self, new_database_name: String) -> Result<()> {
         let tenant_id = self.get_tenant();
         let catalog = self.get_catalog(self.get_current_catalog().as_str())?;
@@ -416,6 +400,22 @@ impl TableContext for QueryContext {
 
     fn get_cluster(&self) -> Arc<Cluster> {
         self.shared.get_cluster()
+    }
+
+    /// Fetch a Table by db and table name.
+    ///
+    /// It guaranteed to return a consistent result for multiple calls, in a same query.
+    /// E.g.:
+    /// ```sql
+    /// SELECT * FROM (SELECT * FROM db.table_name) as subquery_1, (SELECT * FROM db.table_name) AS subquery_2
+    /// ```
+    async fn get_table(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+    ) -> Result<Arc<dyn Table>> {
+        self.shared.get_table(catalog, database, table).await
     }
 
     // Get all the processes list info.

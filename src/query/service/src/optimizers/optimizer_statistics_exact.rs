@@ -27,6 +27,7 @@ use common_legacy_planners::PlanRewriter;
 
 use crate::optimizers::Optimizer;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::storages::ToReadDataSourcePlan;
 
 struct StatisticsExactImpl<'a> {

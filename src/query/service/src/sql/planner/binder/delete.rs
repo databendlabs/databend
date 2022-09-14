@@ -22,7 +22,6 @@ use common_legacy_planners::DeletePlan;
 use common_legacy_planners::Expression;
 use common_legacy_planners::Projection;
 
-use crate::sessions::TableContext;
 use crate::sql::binder::Binder;
 use crate::sql::binder::ScalarBinder;
 use crate::sql::executor::ExpressionBuilderWithoutRenaming;
