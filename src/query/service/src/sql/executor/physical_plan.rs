@@ -33,9 +33,9 @@ use super::physical_scalar::PhysicalScalar;
 use super::AggregateFunctionDesc;
 use super::SortDesc;
 use crate::sql::optimizer::ColumnSet;
+use crate::sql::planner::IndexType;
 use crate::sql::plans::JoinType;
 use crate::sql::ColumnBinding;
-use crate::sql::IndexType;
 
 pub type ColumnID = String;
 

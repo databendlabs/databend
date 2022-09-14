@@ -18,8 +18,8 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 use crate::sql::optimizer::SExpr;
+use crate::sql::planner::IndexType;
 use crate::sql::plans::Operator;
-use crate::sql::IndexType;
 
 /// Check if all plans in an expression are physical plans
 pub fn check_physical(expression: &SExpr) -> bool {

@@ -21,8 +21,8 @@ use common_ast::ast::Literal;
 use common_datavalues::prelude::*;
 use parking_lot::RwLock;
 
-use crate::sql::common::IndexType;
 use crate::sql::optimizer::ColumnSet;
+use crate::sql::planner::IndexType;
 use crate::storages::Table;
 
 pub static DUMMY_TABLE_INDEX: IndexType = IndexType::MAX;

@@ -30,7 +30,7 @@ use super::Project;
 use super::Sort;
 use super::TableScan;
 use super::UnionAll;
-use crate::sql::IndexType;
+use crate::sql::planner::IndexType;
 use crate::sql::MetadataRef;
 use crate::sql::DUMMY_TABLE_INDEX;
 
