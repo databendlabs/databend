@@ -25,6 +25,7 @@ use tokio_stream::StreamExt;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
+use crate::sessions::TableContext;
 use crate::storages::TableStreamReadWrap;
 use crate::storages::ToReadDataSourcePlan;
 

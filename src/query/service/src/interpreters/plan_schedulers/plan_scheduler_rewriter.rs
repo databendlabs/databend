@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_planners::PlanNode;
+use common_legacy_planners::PlanNode;
 
 use crate::optimizers::Optimizers;
 

@@ -20,6 +20,7 @@ use crate::sql::binder::Binder;
 use crate::sql::binder::ColumnBinding;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::semantic::GroupingChecker;
+use crate::sql::planner::IndexType;
 use crate::sql::plans::Aggregate;
 use crate::sql::plans::AggregateMode;
 use crate::sql::plans::BoundColumnRef;
@@ -27,7 +28,6 @@ use crate::sql::plans::EvalScalar;
 use crate::sql::plans::Scalar;
 use crate::sql::plans::ScalarItem;
 use crate::sql::BindContext;
-use crate::sql::IndexType;
 
 impl Binder {
     pub(super) fn bind_distinct(

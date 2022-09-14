@@ -15,7 +15,7 @@
 use common_ast::ast::FormatTreeNode;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::StageKind;
+use common_legacy_planners::StageKind;
 use itertools::Itertools;
 
 use super::AggregateFinal;
@@ -30,7 +30,7 @@ use super::Project;
 use super::Sort;
 use super::TableScan;
 use super::UnionAll;
-use crate::sql::IndexType;
+use crate::sql::planner::IndexType;
 use crate::sql::MetadataRef;
 use crate::sql::DUMMY_TABLE_INDEX;
 
@@ -53,7 +53,9 @@ fn to_format_tree(plan: &PhysicalPlan, metadata: &MetadataRef) -> Result<FormatT
         PhysicalPlan::HashJoin(plan) => hash_join_to_format_tree(plan, metadata),
         PhysicalPlan::Exchange(plan) => exchange_to_format_tree(plan, metadata),
         PhysicalPlan::UnionAll(plan) => union_all_to_format_tree(plan, metadata),
-        PhysicalPlan::ExchangeSource(_) | PhysicalPlan::ExchangeSink(_) => {
+        PhysicalPlan::ExchangeSource(_)
+        | PhysicalPlan::ExchangeSink(_)
+        | PhysicalPlan::DistributedInsertSelect(_) => {
             Err(ErrorCode::LogicalError("Invalid physical plan"))
         }
     }

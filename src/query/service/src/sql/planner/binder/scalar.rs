@@ -18,7 +18,7 @@ use common_ast::ast::Expr;
 use common_datavalues::DataTypeImpl;
 use common_exception::Result;
 
-use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::planner::binder::BindContext;
 use crate::sql::planner::metadata::MetadataRef;
 use crate::sql::planner::semantic::NameResolutionContext;
@@ -28,7 +28,7 @@ use crate::sql::plans::Scalar;
 /// Helper for binding scalar expression with `BindContext`.
 pub struct ScalarBinder<'a> {
     bind_context: &'a BindContext,
-    ctx: Arc<QueryContext>,
+    ctx: Arc<dyn TableContext>,
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
     aliases: &'a [(String, Scalar)],
@@ -37,7 +37,7 @@ pub struct ScalarBinder<'a> {
 impl<'a> ScalarBinder<'a> {
     pub fn new(
         bind_context: &'a BindContext,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
         aliases: &'a [(String, Scalar)],

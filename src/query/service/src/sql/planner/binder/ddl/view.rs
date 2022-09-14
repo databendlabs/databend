@@ -16,11 +16,10 @@ use common_ast::ast::AlterViewStmt;
 use common_ast::ast::CreateViewStmt;
 use common_ast::ast::DropViewStmt;
 use common_exception::Result;
-use common_planners::AlterViewPlan;
-use common_planners::CreateViewPlan;
-use common_planners::DropViewPlan;
+use common_legacy_planners::AlterViewPlan;
+use common_legacy_planners::CreateViewPlan;
+use common_legacy_planners::DropViewPlan;
 
-use crate::sessions::TableContext;
 use crate::sql::binder::Binder;
 use crate::sql::planner::semantic::normalize_identifier;
 use crate::sql::plans::Plan;

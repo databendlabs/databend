@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_types::StageType;
@@ -50,7 +52,8 @@ async fn test_parse_stage_location_internal() -> Result<()> {
     ];
 
     for (name, input, expected) in cases {
-        let (stage, path) = parse_stage_location(&ctx, input).await?;
+        let table_context: Arc<dyn TableContext> = ctx.clone();
+        let (stage, path) = parse_stage_location(&table_context, input).await?;
 
         assert_eq!(stage, stage_info, "{}", name);
         assert_eq!(path, expected, "{}", name);
@@ -83,7 +86,8 @@ async fn test_parse_stage_location_external() -> Result<()> {
     ];
 
     for (name, input, expected) in cases {
-        let (stage, path) = parse_stage_location(&ctx, input).await?;
+        let table_context: Arc<dyn TableContext> = ctx.clone();
+        let (stage, path) = parse_stage_location(&table_context, input).await?;
 
         assert_eq!(stage, stage_info, "{}", name);
         assert_eq!(path, expected, "{}", name);

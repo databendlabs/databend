@@ -22,9 +22,7 @@ use common_base::base::tokio::sync::mpsc;
 use common_grpc::GrpcClaim;
 use common_grpc::GrpcToken;
 use common_meta_api::KVApi;
-use common_meta_client::MetaGrpcReadReq;
 use common_meta_client::MetaGrpcReq;
-use common_meta_client::MetaGrpcWriteReq;
 use common_meta_types::protobuf::meta_service_server::MetaService;
 use common_meta_types::protobuf::ClientInfo;
 use common_meta_types::protobuf::Empty;
@@ -39,6 +37,7 @@ use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
+use common_metrics::counter::WithCount;
 use futures::StreamExt;
 use prost::Message;
 use tokio_stream;
@@ -52,10 +51,10 @@ use tracing::info;
 
 use crate::meta_service::meta_service_impl::GrpcStream;
 use crate::meta_service::MetaNode;
-use crate::metrics::add_meta_metrics_meta_request_inflights;
 use crate::metrics::incr_meta_metrics_meta_recv_bytes;
 use crate::metrics::incr_meta_metrics_meta_request_result;
 use crate::metrics::incr_meta_metrics_meta_sent_bytes;
+use crate::metrics::RequestInFlight;
 use crate::version::from_digit_ver;
 use crate::version::to_digit_ver;
 use crate::version::METASRV_SEMVER;
@@ -87,34 +86,7 @@ impl MetaServiceImpl {
         Ok(claim)
     }
 
-    pub async fn execute_kv_req(&self, req: MetaGrpcReq) -> RaftReply {
-        // To keep the code IDE-friendly, we manually expand the enum variants and dispatch them one by one
-
-        match req {
-            MetaGrpcReq::UpsertKV(a) => {
-                let res = self.meta_node.upsert_kv(a).await;
-                incr_meta_metrics_meta_request_result(res.is_ok());
-                RaftReply::from(res)
-            }
-            MetaGrpcReq::GetKV(a) => {
-                let res = self.meta_node.get_kv(&a.key).await;
-                incr_meta_metrics_meta_request_result(res.is_ok());
-                RaftReply::from(res)
-            }
-            MetaGrpcReq::MGetKV(a) => {
-                let res = self.meta_node.mget_kv(&a.keys).await;
-                incr_meta_metrics_meta_request_result(res.is_ok());
-                RaftReply::from(res)
-            }
-            MetaGrpcReq::ListKV(a) => {
-                let res = self.meta_node.prefix_list_kv(&a.prefix).await;
-                incr_meta_metrics_meta_request_result(res.is_ok());
-                RaftReply::from(res)
-            }
-        }
-    }
-
-    pub async fn execute_txn(&self, req: TxnRequest) -> TxnReply {
+    async fn execute_txn(&self, req: TxnRequest) -> TxnReply {
         let ret = self.meta_node.transaction(req).await;
         incr_meta_metrics_meta_request_result(ret.is_ok());
 
@@ -188,51 +160,48 @@ impl MetaService for MetaServiceImpl {
         }
     }
 
-    async fn write_msg(
-        &self,
-        request: Request<RaftRequest>,
-    ) -> Result<Response<RaftReply>, Status> {
-        self.check_token(request.metadata())?;
-        common_tracing::extract_remote_span_as_parent(&request);
-
-        incr_meta_metrics_meta_recv_bytes(request.get_ref().encoded_len() as u64);
-
-        let req: MetaGrpcWriteReq = request.try_into()?;
-        let req: MetaGrpcReq = req.into();
-
-        add_meta_metrics_meta_request_inflights(1);
-
-        info!("Receive write_action: {:?}", req);
-
-        let body = self.execute_kv_req(req).await;
-
-        add_meta_metrics_meta_request_inflights(-1);
-
-        incr_meta_metrics_meta_sent_bytes(body.encoded_len() as u64);
-
-        Ok(Response::new(body))
+    async fn write_msg(&self, r: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
+        self.kv_api(r).await
     }
 
-    async fn read_msg(&self, request: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
-        self.check_token(request.metadata())?;
-        common_tracing::extract_remote_span_as_parent(&request);
+    async fn read_msg(&self, r: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
+        self.kv_api(r).await
+    }
 
-        incr_meta_metrics_meta_recv_bytes(request.get_ref().encoded_len() as u64);
+    async fn kv_api(&self, r: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
+        let _guard = WithCount::new((), RequestInFlight);
 
-        let req: MetaGrpcReadReq = request.try_into()?;
-        let req: MetaGrpcReq = req.into();
+        self.check_token(r.metadata())?;
+        common_tracing::extract_remote_span_as_parent(&r);
+        incr_meta_metrics_meta_recv_bytes(r.get_ref().encoded_len() as u64);
 
-        add_meta_metrics_meta_request_inflights(1);
+        let req: MetaGrpcReq = r.try_into()?;
+        info!("Received MetaGrpcReq: {:?}", req);
 
-        info!("Receive read_action: {:?}", req);
+        let m = &self.meta_node;
+        let reply = match req {
+            MetaGrpcReq::UpsertKV(a) => {
+                let res = m.upsert_kv(a).await;
+                RaftReply::from(res)
+            }
+            MetaGrpcReq::GetKV(a) => {
+                let res = m.get_kv(&a.key).await;
+                RaftReply::from(res)
+            }
+            MetaGrpcReq::MGetKV(a) => {
+                let res = m.mget_kv(&a.keys).await;
+                RaftReply::from(res)
+            }
+            MetaGrpcReq::ListKV(a) => {
+                let res = m.prefix_list_kv(&a.prefix).await;
+                RaftReply::from(res)
+            }
+        };
 
-        let res = self.execute_kv_req(req).await;
+        incr_meta_metrics_meta_request_result(reply.error.is_empty());
+        incr_meta_metrics_meta_sent_bytes(reply.encoded_len() as u64);
 
-        add_meta_metrics_meta_request_inflights(-1);
-
-        incr_meta_metrics_meta_sent_bytes(res.encoded_len() as u64);
-
-        Ok(Response::new(res))
+        Ok(Response::new(reply))
     }
 
     type ExportStream =
@@ -246,12 +215,12 @@ impl MetaService for MetaServiceImpl {
         &self,
         _request: Request<common_meta_types::protobuf::Empty>,
     ) -> Result<Response<Self::ExportStream>, Status> {
-        let meta_node = &self.meta_node;
+        let _guard = WithCount::new((), RequestInFlight);
 
+        let meta_node = &self.meta_node;
         let res = meta_node.sto.export().await?;
 
         let stream = ExportStream { data: res };
-
         let s = stream.map(|strings| Ok(ExportedChunk { data: strings }));
 
         Ok(Response::new(Box::pin(s)))
@@ -280,7 +249,7 @@ impl MetaService for MetaServiceImpl {
     ) -> Result<Response<TxnReply>, Status> {
         self.check_token(request.metadata())?;
         incr_meta_metrics_meta_recv_bytes(request.get_ref().encoded_len() as u64);
-        add_meta_metrics_meta_request_inflights(1);
+        let _guard = WithCount::new((), RequestInFlight);
 
         common_tracing::extract_remote_span_as_parent(&request);
 
@@ -289,8 +258,6 @@ impl MetaService for MetaServiceImpl {
         info!("Receive txn_request: {:?}", request);
 
         let body = self.execute_txn(request).await;
-        add_meta_metrics_meta_request_inflights(-1);
-
         incr_meta_metrics_meta_sent_bytes(body.encoded_len() as u64);
 
         Ok(Response::new(body))
@@ -301,6 +268,8 @@ impl MetaService for MetaServiceImpl {
         request: Request<MemberListRequest>,
     ) -> Result<Response<MemberListReply>, Status> {
         self.check_token(request.metadata())?;
+        let _guard = WithCount::new((), RequestInFlight);
+
         let meta_node = &self.meta_node;
         let members = meta_node.get_meta_addrs().await.map_err(|e| {
             Status::internal(format!("Cannot get metasrv member list, error: {:?}", e))
@@ -316,6 +285,8 @@ impl MetaService for MetaServiceImpl {
         &self,
         request: Request<Empty>,
     ) -> Result<Response<ClientInfo>, Status> {
+        let _guard = WithCount::new((), RequestInFlight);
+
         let r = request.remote_addr();
         if let Some(addr) = r {
             let resp = ClientInfo {

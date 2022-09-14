@@ -19,6 +19,7 @@ use common_catalog::table_context::TableContext;
 use common_datablocks::SortColumnDescription;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
+use common_legacy_planners::Expression;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::Pipeline;
 use common_pipeline_core::SinkPipeBuilder;
@@ -26,7 +27,6 @@ use common_pipeline_transforms::processors::transforms::ExpressionTransform;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_pipeline_transforms::processors::transforms::TransformSortPartial;
 use common_pipeline_transforms::processors::ExpressionExecutor;
-use common_planners::Expression;
 
 use crate::io::BlockCompactor;
 use crate::operations::FuseTableSink;
@@ -36,7 +36,12 @@ use crate::DEFAULT_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 
 impl FuseTable {
-    pub fn do_append2(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
+    pub fn do_append2(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+        need_output: bool,
+    ) -> Result<()> {
         let block_per_seg =
             self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
 
@@ -74,23 +79,38 @@ impl FuseTable {
         }
 
         let da = ctx.get_storage_operator()?;
-        let mut sink_pipeline_builder = SinkPipeBuilder::create();
-        for _ in 0..pipeline.output_len() {
-            let input_port = InputPort::create();
-            sink_pipeline_builder.add_sink(
-                input_port.clone(),
+        if need_output {
+            pipeline.add_transform(|transform_input_port, transform_output_port| {
                 FuseTableSink::try_create(
-                    input_port,
+                    transform_input_port,
                     ctx.clone(),
                     block_per_seg,
                     da.clone(),
                     self.meta_location_generator().clone(),
                     cluster_stats_gen.clone(),
-                )?,
-            );
-        }
+                    Some(transform_output_port),
+                )
+            })?;
+        } else {
+            let mut sink_pipeline_builder = SinkPipeBuilder::create();
+            for _ in 0..pipeline.output_len() {
+                let input_port = InputPort::create();
+                sink_pipeline_builder.add_sink(
+                    input_port.clone(),
+                    FuseTableSink::try_create(
+                        input_port,
+                        ctx.clone(),
+                        block_per_seg,
+                        da.clone(),
+                        self.meta_location_generator().clone(),
+                        cluster_stats_gen.clone(),
+                        None,
+                    )?,
+                );
+            }
 
-        pipeline.add_pipe(sink_pipeline_builder.finalize());
+            pipeline.add_pipe(sink_pipeline_builder.finalize());
+        }
         Ok(())
     }
 

@@ -19,10 +19,10 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_legacy_planners::ReadDataSourcePlan;
+use common_legacy_planners::SourceInfo;
+use common_legacy_planners::StageTableInfo;
 use common_meta_types::UserStageInfo;
-use common_planners::ReadDataSourcePlan;
-use common_planners::SourceInfo;
-use common_planners::StageTableInfo;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::TryStreamExt;
@@ -180,7 +180,7 @@ impl CopyInterpreterV2 {
 
         let table = ctx.get_table(catalog_name, db_name, tbl_name).await?;
 
-        table.append2(ctx.clone(), &mut pipeline)?;
+        table.append2(ctx.clone(), &mut pipeline, false)?;
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
 
         let query_need_abort = ctx.query_need_abort();

@@ -25,6 +25,7 @@ use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::StageFile;
 use common_meta_types::UserStageInfo;
+use common_pipeline_core::Pipeline;
 use futures::TryStreamExt;
 use regex::Regex;
 use tracing::debug;
@@ -39,28 +40,41 @@ use crate::sessions::TableContext;
 use crate::storages::stage::StageSourceHelper;
 use crate::storages::Table;
 
+pub fn fill_missing_columns(
+    ctx: Arc<QueryContext>,
+    source_schema: &DataSchemaRef,
+    target_schema: &DataSchemaRef,
+    pipeline: &mut Pipeline,
+) -> Result<()> {
+    let need_fill_missing_columns = target_schema != source_schema;
+    if need_fill_missing_columns {
+        pipeline.add_transform(|transform_input_port, transform_output_port| {
+            TransformAddOn::try_create(
+                transform_input_port,
+                transform_output_port,
+                source_schema.clone(),
+                target_schema.clone(),
+                ctx.clone(),
+            )
+        })?;
+    }
+    Ok(())
+}
+
 pub fn append2table(
     ctx: Arc<QueryContext>,
     table: Arc<dyn Table>,
     source_schema: DataSchemaRef,
     mut build_res: PipelineBuildResult,
 ) -> Result<()> {
-    let need_fill_missing_columns = table.schema() != source_schema;
-    if need_fill_missing_columns {
-        build_res
-            .main_pipeline
-            .add_transform(|transform_input_port, transform_output_port| {
-                TransformAddOn::try_create(
-                    transform_input_port,
-                    transform_output_port,
-                    source_schema.clone(),
-                    table.schema(),
-                    ctx.clone(),
-                )
-            })?;
-    }
+    fill_missing_columns(
+        ctx.clone(),
+        &source_schema,
+        &table.schema(),
+        &mut build_res.main_pipeline,
+    )?;
 
-    table.append2(ctx.clone(), &mut build_res.main_pipeline)?;
+    table.append2(ctx.clone(), &mut build_res.main_pipeline, false)?;
     let query_need_abort = ctx.query_need_abort();
     let executor_settings = ExecutorSettings::try_create(&ctx.get_settings())?;
     build_res.set_max_threads(ctx.get_settings().get_max_threads()? as usize);

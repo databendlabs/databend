@@ -17,10 +17,10 @@ common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../../common/exception" }
 common-functions = { path = "../functions" }
 common-io = { path = "../../common/io" }
+common-legacy-planners = { path = "../legacy-planners" }
 common-meta-app = { path = "../../meta/app" }
 common-meta-types = { path = "../../meta/types" }
 common-pipeline-core = { path = "../pipeline/core" }
-common-planners = { path = "../planners" }
 common-settings = { path = "../settings" }
 common-users = { path = "../users" }
 

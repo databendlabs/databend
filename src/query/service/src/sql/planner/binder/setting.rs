@@ -15,8 +15,8 @@
 use common_ast::ast::Identifier;
 use common_ast::ast::Literal;
 use common_exception::Result;
-use common_planners::SettingPlan;
-use common_planners::VarValue;
+use common_legacy_planners::SettingPlan;
+use common_legacy_planners::VarValue;
 
 use super::BindContext;
 use super::Binder;

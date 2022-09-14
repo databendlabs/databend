@@ -18,12 +18,13 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::DescribeTablePlan;
+use common_legacy_planners::DescribeTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::executor::PhysicalScalar;
 use crate::sql::PlanParser;
 use crate::storages::view::view_table::QUERY;

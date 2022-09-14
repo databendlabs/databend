@@ -19,8 +19,8 @@ use common_base::base::tokio::sync::Mutex;
 use common_base::base::tokio::sync::Notify;
 use common_datablocks::DataBlock;
 use common_exception::Result;
-use common_planners::PartInfoPtr;
-use common_planners::Projection;
+use common_legacy_planners::PartInfoPtr;
+use common_legacy_planners::Projection;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
