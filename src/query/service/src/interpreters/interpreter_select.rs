@@ -18,15 +18,11 @@ use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_planners::PlanNode;
 use common_planners::SelectPlan;
-use common_streams::SendableDataBlockStream;
 
 use crate::clusters::ClusterHelper;
 use crate::interpreters::plan_schedulers;
-use crate::interpreters::stream::ProcessorExecutorStream;
 use crate::interpreters::Interpreter;
 use crate::optimizers::Optimizers;
-use crate::pipelines::executor::ExecutorSettings;
-use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::QueryPipelineBuilder;
 use crate::sessions::QueryContext;

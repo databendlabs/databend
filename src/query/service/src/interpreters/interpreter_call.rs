@@ -17,14 +17,9 @@ use std::sync::RwLock;
 
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_pipeline_core::Pipeline;
 use common_planners::CallPlan;
-use common_streams::SendableDataBlockStream;
 
 use super::Interpreter;
-use crate::interpreters::ProcessorExecutorStream;
-use crate::pipelines::executor::ExecutorSettings;
-use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::PipelineBuildResult;
 use crate::procedures::ProcedureFactory;
 use crate::sessions::QueryContext;
@@ -74,8 +69,12 @@ impl Interpreter for CallInterpreter {
         }
 
         let mut build_res = PipelineBuildResult::create();
-        func.eval(self.ctx.clone(), plan.args.clone(), &mut build_res.main_pipeline)
-            .await?;
+        func.eval(
+            self.ctx.clone(),
+            plan.args.clone(),
+            &mut build_res.main_pipeline,
+        )
+        .await?;
 
         Ok(build_res)
     }

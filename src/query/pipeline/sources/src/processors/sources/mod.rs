@@ -18,11 +18,11 @@ pub mod deserializer;
 pub mod empty_source;
 pub mod file_splitter;
 pub mod multi_file_splitter;
+mod one_block_source;
 pub mod stream_source;
 pub mod stream_source_v2;
 pub mod sync_source;
 pub mod sync_source_receiver;
-mod one_block_source;
 
 pub use async_source::AsyncSource;
 pub use async_source::AsyncSourcer;
@@ -34,6 +34,7 @@ pub use file_splitter::FileSplitter;
 pub use file_splitter::FileSplitterState;
 pub use multi_file_splitter::MultiFileSplitter;
 pub use multi_file_splitter::OperatorInfo;
+pub use one_block_source::OneBlockSource;
 pub use stream_source::StreamSource;
 pub use stream_source::StreamSourceNoSkipEmpty;
 pub use stream_source_v2::StreamSourceV2;
@@ -41,7 +42,6 @@ pub use sync_source::SyncSource;
 pub use sync_source::SyncSourcer;
 pub use sync_source::*;
 pub use sync_source_receiver::SyncReceiverSource;
-pub use one_block_source::OneBlockSource;
 
 #[allow(dead_code)]
 mod source_example {

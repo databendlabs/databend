@@ -23,7 +23,6 @@ use common_exception::Result;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::TableMeta;
 use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
 use common_planners::CreateDatabasePlan;
 use common_planners::Expression;
@@ -31,7 +30,8 @@ use common_planners::Extras;
 use common_storage::StorageFsConfig;
 use common_storage::StorageParams;
 use common_streams::SendableDataBlockStream;
-use databend_query::interpreters::{append2table, execute_pipeline};
+use databend_query::interpreters::append2table;
+use databend_query::interpreters::execute_pipeline;
 use databend_query::interpreters::CreateTableInterpreterV2;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::InterpreterFactoryV2;
@@ -155,7 +155,7 @@ impl TestFixture {
                     // database id is required for FUSE
                     (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
                 ]
-                    .into(),
+                .into(),
                 default_cluster_key: Some("(id)".to_string()),
                 cluster_keys: vec!["(id)".to_string()],
                 default_cluster_key_id: Some(0),
@@ -181,7 +181,7 @@ impl TestFixture {
                     // database id is required for FUSE
                     (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
                 ]
-                    .into(),
+                .into(),
                 ..Default::default()
             },
             as_select: None,
@@ -193,7 +193,7 @@ impl TestFixture {
         let create_table_plan = self.default_crate_table_plan();
         let interpreter =
             CreateTableInterpreterV2::try_create(self.ctx.clone(), create_table_plan)?;
-        interpreter.execute().await?;
+        interpreter.execute(self.ctx.clone()).await?;
         Ok(())
     }
 
@@ -285,7 +285,7 @@ impl TestFixture {
         let output = OutputPort::create();
         builder.add_source(
             output.clone(),
-            BlocksSource::create(self.ctx.clone(), output.clone(), blocks.clone())?,
+            BlocksSource::create(self.ctx.clone(), output, blocks)?,
         );
         build_res.main_pipeline.add_pipe(builder.finalize());
 
@@ -411,7 +411,7 @@ pub async fn execute_query(ctx: Arc<QueryContext>, query: &str) -> Result<Sendab
     let mut planner = Planner::new(ctx.clone());
     let (plan, _, _) = planner.plan_sql(query).await?;
     let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-    executor.execute().await
+    executor.execute(ctx.clone()).await
 }
 
 pub async fn execute_command(ctx: Arc<QueryContext>, query: &str) -> Result<()> {
@@ -523,5 +523,5 @@ pub async fn history_should_have_only_one_item(
         execute_query(fixture.ctx(), qry.as_str()).await,
         expected,
     )
-        .await
+    .await
 }

@@ -13,19 +13,14 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::{Event, ProcessorPtr};
-use parking_lot::Mutex;
+use common_pipeline_core::processors::processor::Event;
+use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
-
-use crate::processors::sources::SyncSource;
-use crate::processors::sources::SyncSourcer;
 
 pub struct OneBlockSource {
     output: Arc<OutputPort>,

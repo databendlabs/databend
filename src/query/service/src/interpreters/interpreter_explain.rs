@@ -19,8 +19,6 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::ExplainPlan;
 use common_planners::ExplainType;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::fragments::QueryFragmentsBuilder;
 use crate::interpreters::fragments::RootQueryFragment;
@@ -28,7 +26,8 @@ use crate::interpreters::plan_schedulers;
 use crate::interpreters::Interpreter;
 use crate::interpreters::QueryFragmentsActions;
 use crate::optimizers::Optimizers;
-use crate::pipelines::{PipelineBuildResult, QueryPipelineBuilder};
+use crate::pipelines::PipelineBuildResult;
+use crate::pipelines::QueryPipelineBuilder;
 use crate::sessions::QueryContext;
 
 pub struct ExplainInterpreter {

@@ -17,8 +17,6 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_meta_types::RoleInfo;
 use common_planners::CreateRolePlan;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::DataSchemaRef;
-use common_datavalues::prelude::DataSchemaRefExt;
 use common_datavalues::prelude::Series;
 use common_datavalues::SeriesFrom;
 use common_exception::Result;
@@ -24,8 +23,6 @@ use common_meta_api::ShareApi;
 use common_meta_app::share::GetShareGrantObjectReq;
 use common_meta_app::share::ShareGrantObjectName;
 use common_meta_app::share::ShareNameIdent;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -68,8 +65,6 @@ impl Interpreter for DescShareInterpreter {
             return Ok(PipelineBuildResult::create());
         }
 
-        let desc_schema = self.plan.schema();
-
         let mut names: Vec<String> = vec![];
         let mut kinds: Vec<String> = vec![];
         let mut shared_ons: Vec<String> = vec![];
@@ -87,7 +82,7 @@ impl Interpreter for DescShareInterpreter {
             shared_ons.push(entry.grant_on.to_string());
         }
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::create(desc_schema.clone(), vec![
+        PipelineBuildResult::from_blocks(vec![DataBlock::create(self.plan.schema(), vec![
             Series::from_data(kinds),
             Series::from_data(names),
             Series::from_data(shared_ons),

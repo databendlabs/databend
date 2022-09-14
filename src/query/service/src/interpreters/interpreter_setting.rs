@@ -15,12 +15,9 @@
 use std::sync::Arc;
 
 use chrono_tz::Tz;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::SettingPlan;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

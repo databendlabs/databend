@@ -18,8 +18,6 @@ use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::UseDatabasePlan;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -53,7 +51,7 @@ impl Interpreter for UseDatabaseInterpreter {
         self.ctx.set_affect(QueryAffect::UseDB {
             name: self.plan.database.clone(),
         });
-        let schema = Arc::new(DataSchema::empty());
+        let _schema = Arc::new(DataSchema::empty());
         Ok(PipelineBuildResult::create())
     }
 }

@@ -195,7 +195,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
 
     /// https://dev.mysql.com/doc/internals/en/com-stmt-close.html
     async fn on_close<'a>(&'a mut self, stmt_id: u32)
-        where W: 'async_trait {
+    where W: 'async_trait {
         self.base.do_close(stmt_id).await;
     }
 
@@ -458,7 +458,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
                     .boxed();
                 Ok::<_, ErrorCode>(abortable_stream)
             }
-                .in_current_span()
+            .in_current_span()
         })?;
 
         let query_result = query_result.await.map_err_to_code(

@@ -19,8 +19,6 @@ use common_datavalues::Series;
 use common_datavalues::SeriesFrom;
 use common_exception::Result;
 use common_planners::ExistsTablePlan;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -53,11 +51,8 @@ impl Interpreter for ExistsTableInterpreter {
             false => 0u8,
         };
 
-        PipelineBuildResult::from_blocks(vec![
-            DataBlock::create(
-                self.plan.schema(),
-                vec![Series::from_data(vec![result])],
-            )
-        ])
+        PipelineBuildResult::from_blocks(vec![DataBlock::create(self.plan.schema(), vec![
+            Series::from_data(vec![result]),
+        ])])
     }
 }

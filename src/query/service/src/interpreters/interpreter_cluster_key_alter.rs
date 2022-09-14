@@ -18,11 +18,9 @@ use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
 use common_planners::AlterTableClusterKeyPlan;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
-use crate::pipelines::PipelineBuildResult;
 
 use super::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 

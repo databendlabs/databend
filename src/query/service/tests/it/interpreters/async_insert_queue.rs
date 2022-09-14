@@ -52,7 +52,7 @@ async fn test_async_insert_queue() -> Result<()> {
         let query = "create table default.test(a int, b String) Engine = Memory;";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let _ = executor.execute().await?;
+        let _ = executor.execute(ctx.clone()).await?;
     }
 
     // Insert into table
@@ -135,7 +135,7 @@ async fn test_async_insert_queue() -> Result<()> {
         let query = "select * from default.test";
         let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        let stream = executor.execute().await?;
+        let stream = executor.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+---+------+",
@@ -171,7 +171,7 @@ async fn test_async_insert_queue_max_data_size() -> Result<()> {
         let query = "create table default.test(a int, b String) Engine = Memory;";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let _ = executor.execute().await?;
+        let _ = executor.execute(ctx.clone()).await?;
     }
 
     let now = SystemTime::now();
@@ -221,7 +221,7 @@ async fn test_async_insert_queue_busy_timeout() -> Result<()> {
         let query = "create table default.test(a int, b String) Engine = Memory;";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let _ = executor.execute().await?;
+        let _ = executor.execute(ctx.clone()).await?;
     }
 
     let now = SystemTime::now();
@@ -272,7 +272,7 @@ async fn test_async_insert_queue_stale_timeout() -> Result<()> {
         let query = "create table default.test(a int, b String) Engine = Memory;";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let _ = executor.execute().await?;
+        let _ = executor.execute(ctx.clone()).await?;
     }
 
     let now = SystemTime::now();
@@ -322,7 +322,7 @@ async fn test_async_insert_queue_wait_timeout() -> Result<()> {
         let query = "create table default.test(a int, b String) Engine = Memory;";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let _ = executor.execute().await?;
+        let _ = executor.execute(ctx.clone()).await?;
     }
 
     let now = SystemTime::now();
@@ -365,7 +365,7 @@ async fn test_async_insert_queue_no_wait() -> Result<()> {
         let query = "create table default.test(a int, b String) Engine = Memory;";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let _ = executor.execute().await?;
+        let _ = executor.execute(ctx.clone()).await?;
     }
 
     let now = SystemTime::now();
@@ -391,7 +391,7 @@ async fn test_async_insert_queue_no_wait() -> Result<()> {
         let query = "select * from default.test";
         let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        let stream = executor.execute().await?;
+        let stream = executor.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+---+-----+",

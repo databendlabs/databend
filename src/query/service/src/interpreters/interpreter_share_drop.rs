@@ -17,8 +17,6 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_meta_api::ShareApi;
 use common_storages_share::save_share_spec;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

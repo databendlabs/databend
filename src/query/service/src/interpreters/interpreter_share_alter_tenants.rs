@@ -21,8 +21,6 @@ use common_meta_app::share::AddShareAccountsReq;
 use common_meta_app::share::RemoveShareAccountsReq;
 use common_meta_app::share::ShareNameIdent;
 use common_storages_share::save_share_spec;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

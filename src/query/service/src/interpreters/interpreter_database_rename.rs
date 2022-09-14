@@ -18,8 +18,6 @@ use common_exception::Result;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_planners::RenameDatabasePlan;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

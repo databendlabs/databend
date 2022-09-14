@@ -17,13 +17,12 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_planners::OptimizeTableAction;
 use common_planners::OptimizeTablePlan;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
-use crate::pipelines::{Pipeline, PipelineBuildResult};
+use crate::pipelines::Pipeline;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 

@@ -48,7 +48,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
 
     let create_table_plan = fixture.default_crate_table_plan();
     let interpreter = CreateTableInterpreterV2::try_create(ctx.clone(), create_table_plan)?;
-    interpreter.execute().await?;
+    interpreter.execute(ctx.clone()).await?;
 
     let mut table = fixture.latest_default_table().await?;
 
@@ -175,7 +175,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
 
     let create_table_plan = fixture.default_crate_table_plan();
     let interpreter = CreateTableInterpreterV2::try_create(ctx.clone(), create_table_plan)?;
-    interpreter.execute().await?;
+    interpreter.execute(ctx.clone()).await?;
 
     let table = fixture.latest_default_table().await?;
     let truncate_plan = TruncateTablePlan {
@@ -249,7 +249,7 @@ async fn test_fuse_table_optimize() -> Result<()> {
     let tbl_name = create_table_plan.table.clone();
     let db_name = create_table_plan.database.clone();
     let interpreter = CreateTableInterpreterV2::try_create(ctx.clone(), create_table_plan)?;
-    interpreter.execute().await?;
+    interpreter.execute(ctx.clone()).await?;
 
     // insert 5 times
     let n = 5;
@@ -282,7 +282,7 @@ async fn test_fuse_table_optimize() -> Result<()> {
     // To avoid flaky test, the value of setting `max_threads` is set to be 1, so that pipeline_builder will
     // only arrange one worker for the `ReadDataSourcePlan`.
     ctx.get_settings().set_max_threads(1)?;
-    let data_stream = interpreter.execute().await?;
+    let data_stream = interpreter.execute(ctx.clone()).await?;
     let _ = data_stream.try_collect::<Vec<_>>();
 
     // verify compaction
@@ -323,7 +323,7 @@ async fn test_fuse_alter_table_cluster_key() -> Result<()> {
 
     // create test table
     let interpreter = CreateTableInterpreterV2::try_create(ctx.clone(), create_table_plan)?;
-    interpreter.execute().await?;
+    interpreter.execute(ctx.clone()).await?;
 
     // add cluster key
     let alter_table_cluster_key_plan = AlterTableClusterKeyPlan {
@@ -335,7 +335,7 @@ async fn test_fuse_alter_table_cluster_key() -> Result<()> {
     };
     let interpreter =
         AlterTableClusterKeyInterpreter::try_create(ctx.clone(), alter_table_cluster_key_plan)?;
-    interpreter.execute().await?;
+    interpreter.execute(ctx.clone()).await?;
 
     let table = fixture.latest_default_table().await?;
     let table_info = table.get_table_info();
@@ -361,7 +361,7 @@ async fn test_fuse_alter_table_cluster_key() -> Result<()> {
     };
     let interpreter =
         DropTableClusterKeyInterpreter::try_create(ctx.clone(), drop_table_cluster_key_plan)?;
-    interpreter.execute().await?;
+    interpreter.execute(ctx.clone()).await?;
 
     let table = fixture.latest_default_table().await?;
     let table_info = table.get_table_info();

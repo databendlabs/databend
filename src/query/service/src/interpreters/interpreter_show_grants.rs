@@ -19,8 +19,6 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_types::PrincipalIdentity;
 use common_planners::ShowGrantsPlan;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 use common_users::RoleCacheManager;
 
 use crate::interpreters::Interpreter;
@@ -81,8 +79,8 @@ impl Interpreter for ShowGrantsInterpreter {
             .map(|e| format!("{} TO {}", e, identity).into_bytes())
             .collect::<Vec<_>>();
 
-        PipelineBuildResult::from_blocks(vec![
-            DataBlock::create(self.plan.schema(), vec![Series::from_data(grant_list)])
-        ])
+        PipelineBuildResult::from_blocks(vec![DataBlock::create(self.plan.schema(), vec![
+            Series::from_data(grant_list),
+        ])])
     }
 }

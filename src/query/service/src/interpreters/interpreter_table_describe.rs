@@ -19,8 +19,6 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::DescribeTablePlan;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -102,14 +100,12 @@ impl Interpreter for DescribeTableInterpreter {
             extras.push("".to_string());
         }
 
-        PipelineBuildResult::from_blocks(vec![
-            DataBlock::create(self.plan.schema(), vec![
-                Series::from_data(names),
-                Series::from_data(types),
-                Series::from_data(nulls),
-                Series::from_data(default_exprs),
-                Series::from_data(extras),
-            ])
-        ])
+        PipelineBuildResult::from_blocks(vec![DataBlock::create(self.plan.schema(), vec![
+            Series::from_data(names),
+            Series::from_data(types),
+            Series::from_data(nulls),
+            Series::from_data(default_exprs),
+            Series::from_data(extras),
+        ])])
     }
 }

@@ -17,8 +17,6 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_meta_types::StageType;
 use common_planners::DropUserStagePlan;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 use tracing::info;
 
 use crate::interpreters::Interpreter;

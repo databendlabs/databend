@@ -16,8 +16,6 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_planners::DropUserPlan;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

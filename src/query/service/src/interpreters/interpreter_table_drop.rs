@@ -20,8 +20,6 @@ use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
 use common_planners::DropTablePlan;
 use common_planners::TruncateTablePlan;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

@@ -15,7 +15,8 @@ use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
+use common_base::base::GlobalIORuntime;
+use common_base::base::TrySpawn;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -23,19 +24,13 @@ use common_meta_types::UserStageInfo;
 use common_planners::ReadDataSourcePlan;
 use common_planners::SourceInfo;
 use common_planners::StageTableInfo;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 use futures::TryStreamExt;
 use regex::Regex;
-use common_base::base::{GlobalIORuntime, TrySpawn};
 
 use super::append2table;
 use crate::interpreters::Interpreter;
-use crate::interpreters::interpreter_common::{execute_pipeline};
 use crate::interpreters::SelectInterpreterV2;
-use crate::pipelines::executor::ExecutorSettings;
-use crate::pipelines::executor::PipelineCompleteExecutor;
-use crate::pipelines::{Pipeline, PipelineBuildResult};
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::CopyPlanV2;
@@ -117,7 +112,11 @@ impl CopyInterpreterV2 {
         }
     }
 
-    async fn purge_files(ctx: Arc<QueryContext>, from: &ReadDataSourcePlan, files: &Vec<String>) -> Result<()> {
+    async fn purge_files(
+        ctx: Arc<QueryContext>,
+        from: &ReadDataSourcePlan,
+        files: &Vec<String>,
+    ) -> Result<()> {
         match &from.source_info {
             SourceInfo::StageSource(table_info) => {
                 if table_info.stage_info.copy_options.purge {
@@ -172,7 +171,11 @@ impl CopyInterpreterV2 {
         tracing::info!("copy_files_to_table from source: {:?}", read_source_plan);
 
         let from_table = self.ctx.build_table_from_source_plan(&read_source_plan)?;
-        from_table.read2(self.ctx.clone(), &read_source_plan, &mut build_res.main_pipeline)?;
+        from_table.read2(
+            self.ctx.clone(),
+            &read_source_plan,
+            &mut build_res.main_pipeline,
+        )?;
 
         let to_table = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
 
@@ -195,7 +198,9 @@ impl CopyInterpreterV2 {
                 let task = GlobalIORuntime::instance().spawn(async move {
                     // Commit
                     let operations = ctx.consume_precommit_blocks();
-                    to_table.commit_insertion(ctx.clone(), &catalog_name, operations, false).await?;
+                    to_table
+                        .commit_insertion(ctx.clone(), &catalog_name, operations, false)
+                        .await?;
 
                     // Purge
                     CopyInterpreterV2::purge_files(ctx, &from, &files).await
@@ -207,7 +212,7 @@ impl CopyInterpreterV2 {
                     Err(cause) => Err(ErrorCode::PanicError(format!(
                         "Maybe panic while in commit insert. {}",
                         cause
-                    )))
+                    ))),
                 };
             }
 
@@ -263,7 +268,14 @@ impl CopyInterpreterV2 {
         let mut build_res = select_interpreter.execute2().await?;
         let table = StageTable::try_create(stage_table_info)?;
 
-        append2table(self.ctx.clone(), table.clone(), data_schema.clone(), &mut build_res, false, true)?;
+        append2table(
+            self.ctx.clone(),
+            table.clone(),
+            data_schema.clone(),
+            &mut build_res,
+            false,
+            true,
+        )?;
         Ok(build_res)
     }
 }
@@ -308,9 +320,18 @@ impl Interpreter for CopyInterpreterV2 {
                 }
 
                 tracing::info!("matched files: {:?}, pattern: {}", &files, pattern);
-                self.copy_files_to_table(catalog_name, database_name, table_name, from, files.clone()).await
+                self.copy_files_to_table(
+                    catalog_name,
+                    database_name,
+                    table_name,
+                    from,
+                    files.clone(),
+                )
+                .await
             }
-            CopyPlanV2::IntoStage { stage, from, path, .. } => self.execute_copy_into_stage(stage, path, from).await,
+            CopyPlanV2::IntoStage {
+                stage, from, path, ..
+            } => self.execute_copy_into_stage(stage, path, from).await,
         }
     }
 }

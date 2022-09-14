@@ -86,7 +86,7 @@ pub fn append2table(
                     Err(cause) => Err(ErrorCode::PanicError(format!(
                         "Maybe panic while in commit insert. {}",
                         cause
-                    )))
+                    ))),
                 };
             }
 
@@ -103,7 +103,8 @@ pub fn execute_pipeline(ctx: Arc<QueryContext>, mut res: PipelineBuildResult) ->
     res.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
     let mut pipelines = res.sources_pipelines;
     pipelines.push(res.main_pipeline);
-    let executor = PipelineCompleteExecutor::from_pipelines(query_need_abort, pipelines, executor_settings)?;
+    let executor =
+        PipelineCompleteExecutor::from_pipelines(query_need_abort, pipelines, executor_settings)?;
     executor.execute()
 }
 

@@ -19,8 +19,6 @@ use common_meta_types::UserGrantSet;
 use common_meta_types::UserInfo;
 use common_meta_types::UserQuota;
 use common_planners::CreateUserPlan;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

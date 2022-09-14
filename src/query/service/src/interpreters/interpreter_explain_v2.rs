@@ -18,8 +18,6 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use super::fragments::Fragmenter;
 use super::QueryFragmentsActions;

@@ -85,7 +85,6 @@ mod interpreter_view_create;
 mod interpreter_view_drop;
 mod plan_schedulers;
 mod stream;
-mod execute_query;
 
 pub use access::ManagementModeAccess;
 pub use async_insert_queue::AsyncInsertManager;

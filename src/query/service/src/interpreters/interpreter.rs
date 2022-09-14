@@ -13,15 +13,20 @@
 // limitations under the License.
 
 use std::sync::Arc;
+
 use common_catalog::table_context::TableContext;
-use common_datavalues::{DataSchema, DataSchemaRef};
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_streams::{DataBlockStream, SendableDataBlockStream};
-use crate::interpreters::ProcessorExecutorStream;
-use crate::pipelines::executor::{ExecutorSettings, PipelineCompleteExecutor, PipelinePullingExecutor};
+use common_streams::DataBlockStream;
+use common_streams::SendableDataBlockStream;
 
+use crate::interpreters::ProcessorExecutorStream;
+use crate::pipelines::executor::ExecutorSettings;
+use crate::pipelines::executor::PipelineCompleteExecutor;
+use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;

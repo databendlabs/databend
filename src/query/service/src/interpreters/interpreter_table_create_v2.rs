@@ -20,8 +20,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::InsertInterpreterV2;
 use crate::interpreters::Interpreter;
@@ -118,10 +116,7 @@ impl Interpreter for CreateTableInterpreterV2 {
 }
 
 impl CreateTableInterpreterV2 {
-    async fn create_table_as_select(
-        &self,
-        select_plan: Box<Plan>,
-    ) -> Result<PipelineBuildResult> {
+    async fn create_table_as_select(&self, select_plan: Box<Plan>) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
 

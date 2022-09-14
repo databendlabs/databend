@@ -19,8 +19,6 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::ShowCreateDatabasePlan;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -72,12 +70,9 @@ impl Interpreter for ShowCreateDatabaseInterpreter {
             }
         }
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::create(
-            self.plan.schema().clone(),
-            vec![
-                Series::from_data(vec![name.as_bytes()]),
-                Series::from_data(vec![info.into_bytes()]),
-            ],
-        )])
+        PipelineBuildResult::from_blocks(vec![DataBlock::create(self.plan.schema(), vec![
+            Series::from_data(vec![name.as_bytes()]),
+            Series::from_data(vec![info.into_bytes()]),
+        ])])
     }
 }

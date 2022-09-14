@@ -27,7 +27,7 @@ async fn test_show_roles_interpreter() -> Result<()> {
         let query = "CREATE ROLE 'test'";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let _ = executor.execute().await?;
+        let _ = executor.execute(ctx.clone()).await?;
     }
 
     // show roles.
@@ -37,7 +37,7 @@ async fn test_show_roles_interpreter() -> Result<()> {
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "SelectInterpreterV2");
 
-        let stream = executor.execute().await?;
+        let stream = executor.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+------+-----------------+",
