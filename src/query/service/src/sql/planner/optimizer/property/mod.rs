@@ -21,7 +21,7 @@ use std::collections::HashSet;
 pub use builder::RelExpr;
 pub use enforcer::require_property;
 
-use crate::sql::common::IndexType;
+use crate::sql::planner::IndexType;
 use crate::sql::plans::Scalar;
 
 pub type ColumnSet = HashSet<IndexType>;
