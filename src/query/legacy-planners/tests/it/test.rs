@@ -17,13 +17,13 @@ use std::sync::Arc;
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_legacy_planners::PartInfo;
+use common_legacy_planners::Partitions;
+use common_legacy_planners::PlanNode;
+use common_legacy_planners::ReadDataSourcePlan;
+use common_legacy_planners::SourceInfo;
+use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
-use common_planners::PartInfo;
-use common_planners::Partitions;
-use common_planners::PlanNode;
-use common_planners::ReadDataSourcePlan;
-use common_planners::SourceInfo;
-use common_planners::Statistics;
 
 pub struct Test {}
 

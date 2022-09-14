@@ -28,7 +28,7 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::PlanNode;
+use common_legacy_planners::PlanNode;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::future::AbortHandle;

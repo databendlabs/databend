@@ -18,10 +18,10 @@ use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_legacy_planners::Expression;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_planners::Expression;
 
 use crate::processors::transforms::transform::Transform;
 use crate::processors::transforms::transform::Transformer;

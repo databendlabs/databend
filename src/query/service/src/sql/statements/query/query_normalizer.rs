@@ -17,11 +17,11 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::extract_aliases;
-use common_planners::find_aggregate_exprs_in_expr;
-use common_planners::find_window_exprs_in_expr;
-use common_planners::resolve_aliases_to_exprs;
-use common_planners::Expression;
+use common_legacy_planners::extract_aliases;
+use common_legacy_planners::find_aggregate_exprs_in_expr;
+use common_legacy_planners::find_window_exprs_in_expr;
+use common_legacy_planners::resolve_aliases_to_exprs;
+use common_legacy_planners::Expression;
 use sqlparser::ast::Expr;
 use sqlparser::ast::OffsetRows;
 use sqlparser::ast::SelectItem;

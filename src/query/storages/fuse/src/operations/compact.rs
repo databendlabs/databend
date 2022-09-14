@@ -15,12 +15,12 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_legacy_planners::ReadDataSourcePlan;
+use common_legacy_planners::SourceInfo;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::Pipeline;
 use common_pipeline_core::SinkPipeBuilder;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
-use common_planners::ReadDataSourcePlan;
-use common_planners::SourceInfo;
 
 use super::FuseTableSink;
 use crate::operations::CompactMutator;

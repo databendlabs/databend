@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_planners::DropUserUDFPlan;
+use common_legacy_planners::DropUserUDFPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 

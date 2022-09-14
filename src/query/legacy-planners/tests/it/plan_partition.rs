@@ -15,7 +15,7 @@
 use std::any::Any;
 
 use common_exception::Result;
-use common_planners::PartInfo;
+use common_legacy_planners::PartInfo;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq)]
 struct TestPartInfoA {

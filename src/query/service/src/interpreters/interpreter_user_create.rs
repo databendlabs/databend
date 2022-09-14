@@ -15,10 +15,10 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_legacy_planners::CreateUserPlan;
 use common_meta_types::UserGrantSet;
 use common_meta_types::UserInfo;
 use common_meta_types::UserQuota;
-use common_planners::CreateUserPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
