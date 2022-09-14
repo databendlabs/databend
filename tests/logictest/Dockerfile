@@ -4,7 +4,7 @@ RUN apt-get update -yq && apt-get install -yq \
     psmisc libffi-dev && \
     rm -rf /var/lib/apt/lists/*
 RUN python3 -m pip install --upgrade pip && pip install \
-    mysql-connector-python==8.0.28 \
+    mysql-connector-python \
     pymysql \
     sqlalchemy \
     clickhouse_driver \
