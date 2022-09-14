@@ -22,8 +22,8 @@ use super::RelationalProperty;
 use crate::sql::optimizer::group::Group;
 use crate::sql::optimizer::m_expr::MExpr;
 use crate::sql::optimizer::s_expr::SExpr;
+use crate::sql::planner::IndexType;
 use crate::sql::plans::RelOperator;
-use crate::sql::IndexType;
 
 /// `Memo` is a search space which memoize possible plans of a query.
 /// The plans inside `Memo` are organized with `Group`s.

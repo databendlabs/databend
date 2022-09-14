@@ -21,9 +21,9 @@ use crate::sql::optimizer::pattern_extractor::PatternExtractor;
 use crate::sql::optimizer::rule::RulePtr;
 use crate::sql::optimizer::rule::TransformState;
 use crate::sql::optimizer::SExpr;
+use crate::sql::planner::IndexType;
 use crate::sql::plans::Operator;
 use crate::sql::plans::RelOperator;
-use crate::sql::IndexType;
 
 /// `MExpr` is abbreviation of multiple expression, which is the representation of relational
 /// expressions inside `Memo`.

@@ -28,9 +28,9 @@ use common_exception::Result;
 use parking_lot::RwLock;
 
 use super::AggregateInfo;
-use crate::sql::common::IndexType;
 use crate::sql::normalize_identifier;
 use crate::sql::optimizer::SExpr;
+use crate::sql::planner::IndexType;
 use crate::sql::plans::Scalar;
 use crate::sql::NameResolutionContext;
 
