@@ -191,6 +191,7 @@ impl FuseTable {
                     da.clone(),
                     self.meta_location_generator().clone(),
                     cluster_stats_gen.clone(),
+                    None,
                 )?,
             );
         }

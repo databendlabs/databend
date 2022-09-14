@@ -111,6 +111,7 @@ impl FuseTable {
                     mutator.get_storage_operator(),
                     self.meta_location_generator().clone(),
                     ClusterStatsGenerator::default(),
+                    None,
                 )?,
             );
         }
