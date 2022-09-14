@@ -506,12 +506,12 @@ impl AsyncInsertManager {
         let blocks = Arc::new(Mutex::new(VecDeque::from_iter(
             data.entries.iter().map(|x| x.block.clone()),
         )));
-        let source = BlocksSource::create(ctx, output_port.clone(), blocks)?;
+        let source = BlocksSource::create(ctx.clone(), output_port.clone(), blocks)?;
         let mut builder = SourcePipeBuilder::create();
         builder.add_source(output_port.clone(), source);
 
         interpreter.set_source_pipe_builder(Some(builder))?;
-        interpreter.execute().await?;
+        interpreter.execute(ctx).await?;
         Ok(())
     }
 

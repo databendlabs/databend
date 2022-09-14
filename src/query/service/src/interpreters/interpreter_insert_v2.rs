@@ -83,14 +83,6 @@ impl Interpreter for InsertInterpreterV2 {
         "InsertIntoInterpreter"
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let build_res = self.execute2().await?;
-        execute_pipeline(self.ctx.clone(), build_res)?;
-
-        // Ok(PipelineBuildResult::create())
-        unimplemented!()
-    }
-
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = &self.plan;
         let settings = self.ctx.get_settings();

@@ -160,7 +160,7 @@ impl CreateTableInterpreterV2 {
         };
         let insert_interpreter_v2 =
             InsertInterpreterV2::try_create(self.ctx.clone(), insert_plan, false)?;
-        insert_interpreter_v2.execute().await?;
+        insert_interpreter_v2.execute(self.ctx.clone()).await?;
 
         Ok(PipelineBuildResult::create())
     }

@@ -275,7 +275,7 @@ impl ExecuteState {
                 executor: executor.clone(),
                 block_buffer,
             });
-            interpreter.execute().await?;
+            interpreter.execute(ctx).await?;
             Ok(running_state)
         } else {
             // Write Start to query log table.
@@ -324,7 +324,7 @@ async fn execute(
     block_buffer: Arc<BlockBuffer>,
     executor: Arc<RwLock<Executor>>,
 ) -> Result<()> {
-    let data_stream = interpreter.execute().await?;
+    let data_stream = interpreter.execute(ctx.clone()).await?;
     let mut data_stream = ctx.try_create_abortable(data_stream)?;
     let use_result_cache = !ctx.get_config().query.management_mode;
 

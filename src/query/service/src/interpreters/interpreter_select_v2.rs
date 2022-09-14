@@ -91,7 +91,7 @@ impl Interpreter for SelectInterpreterV2 {
     }
 
     #[tracing::instrument(level = "debug", name = "select_interpreter_v2_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute(&self, ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
         let build_res = self.build_pipeline().await?;
 
         // WTF: We need to implement different logic for the HTTP handler

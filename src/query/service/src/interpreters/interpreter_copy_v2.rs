@@ -275,30 +275,6 @@ impl Interpreter for CopyInterpreterV2 {
     }
 
     #[tracing::instrument(level = "debug", name = "copy_interpreter_execute_v2", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let build_res = self.execute2().await?;
-
-        let settings = self.ctx.get_settings();
-        let query_need_abort = self.ctx.query_need_abort();
-        let executor_settings = ExecutorSettings::try_create(&settings)?;
-
-        let mut pipelines = build_res.sources_pipelines;
-        pipelines.push(build_res.main_pipeline);
-
-        let executor = PipelineCompleteExecutor::from_pipelines(
-            query_need_abort,
-            pipelines,
-            executor_settings,
-        )?;
-
-        executor.execute()?;
-        Ok(Box::pin(DataBlockStream::create(
-            Arc::new(DataSchema::new(vec![])),
-            None,
-            vec![],
-        )))
-    }
-
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         match &self.plan {
             // TODO(xuanwo): extract them as a separate function.

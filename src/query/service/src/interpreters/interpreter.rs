@@ -12,14 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::DataSchemaRef;
+use std::sync::Arc;
+use common_catalog::table_context::TableContext;
+use common_datavalues::{DataSchema, DataSchemaRef};
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_streams::SendableDataBlockStream;
+use common_streams::{DataBlockStream, SendableDataBlockStream};
+use crate::interpreters::ProcessorExecutorStream;
+use crate::pipelines::executor::{ExecutorSettings, PipelineCompleteExecutor, PipelinePullingExecutor};
 
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::SourcePipeBuilder;
+use crate::sessions::QueryContext;
 
 #[async_trait::async_trait]
 /// Interpreter is a trait for different PlanNode
@@ -34,8 +39,38 @@ pub trait Interpreter: Sync + Send {
     }
 
     /// The core of the databend processor which will execute the logical plan and get the DataBlock
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
-        unimplemented!()
+    async fn execute(&self, ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
+        let build_res = self.execute2().await?;
+
+        let settings = ctx.get_settings();
+        let query_need_abort = ctx.query_need_abort();
+        let executor_settings = ExecutorSettings::try_create(&settings)?;
+
+        if build_res.main_pipeline.is_complete_pipeline()? {
+            let mut pipelines = build_res.sources_pipelines;
+            pipelines.push(build_res.main_pipeline);
+
+            let complete_executor = PipelineCompleteExecutor::from_pipelines(
+                query_need_abort,
+                pipelines,
+                executor_settings,
+            )?;
+
+            complete_executor.execute()?;
+            return Ok(Box::pin(DataBlockStream::create(
+                Arc::new(DataSchema::new(vec![])),
+                None,
+                vec![],
+            )));
+        }
+
+        Ok(Box::pin(Box::pin(ProcessorExecutorStream::create(
+            PipelinePullingExecutor::from_pipelines(
+                ctx.query_need_abort(),
+                build_res,
+                executor_settings,
+            )?,
+        )?)))
     }
 
     /// The core of the databend processor which will execute the logical plan and build the pipeline
