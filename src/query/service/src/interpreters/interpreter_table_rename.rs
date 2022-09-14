@@ -15,9 +15,9 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_legacy_planners::RenameTablePlan;
 use common_meta_app::schema::RenameTableReq;
 use common_meta_app::schema::TableNameIdent;
-use common_planners::RenameTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 

@@ -24,14 +24,17 @@ use common_datavalues::NullableType;
 use common_datavalues::ToDataType;
 use common_datavalues::Vu8;
 use common_exception::Result;
-use common_planners::ReadDataSourcePlan;
-use common_planners::StageKind;
+use common_legacy_planners::ReadDataSourcePlan;
+use common_legacy_planners::StageKind;
+use common_legacy_planners::SINK_SCHEMA;
+use common_meta_app::schema::TableInfo;
 
 use super::physical_scalar::PhysicalScalar;
 use super::AggregateFunctionDesc;
 use super::SortDesc;
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::plans::JoinType;
+use crate::sql::ColumnBinding;
 use crate::sql::IndexType;
 
 pub type ColumnID = String;
@@ -304,6 +307,23 @@ impl UnionAll {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct DistributedInsertSelect {
+    pub input: Box<PhysicalPlan>,
+    pub catalog: String,
+    pub table_info: TableInfo,
+    pub insert_schema: DataSchemaRef,
+    pub select_schema: DataSchemaRef,
+    pub select_column_bindings: Vec<ColumnBinding>,
+    pub cast_needed: bool,
+}
+
+impl DistributedInsertSelect {
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        Ok(SINK_SCHEMA.clone())
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum PhysicalPlan {
     TableScan(TableScan),
     Filter(Filter),
@@ -316,6 +336,9 @@ pub enum PhysicalPlan {
     HashJoin(HashJoin),
     Exchange(Exchange),
     UnionAll(UnionAll),
+
+    /// For insert into ... select ... in cluster
+    DistributedInsertSelect(Box<DistributedInsertSelect>),
 
     /// Synthesized by fragmenter
     ExchangeSource(ExchangeSource),
@@ -346,6 +369,7 @@ impl PhysicalPlan {
             PhysicalPlan::ExchangeSource(plan) => plan.output_schema(),
             PhysicalPlan::ExchangeSink(plan) => plan.output_schema(),
             PhysicalPlan::UnionAll(plan) => plan.output_schema(),
+            PhysicalPlan::DistributedInsertSelect(plan) => plan.output_schema(),
         }
     }
 
@@ -368,6 +392,9 @@ impl PhysicalPlan {
             PhysicalPlan::UnionAll(plan) => Box::new(
                 std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref())),
             ),
+            PhysicalPlan::DistributedInsertSelect(plan) => {
+                Box::new(std::iter::once(plan.input.as_ref()))
+            }
         }
     }
 }

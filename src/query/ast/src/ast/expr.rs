@@ -111,7 +111,7 @@ pub enum Expr<'a> {
     Substring {
         span: &'a [Token<'a>],
         expr: Box<Expr<'a>>,
-        substring_from: Option<Box<Expr<'a>>>,
+        substring_from: Box<Expr<'a>>,
         substring_for: Option<Box<Expr<'a>>>,
     },
     /// TRIM([[BOTH | LEADING | TRAILING] <expr> FROM] <expr>)
@@ -728,10 +728,7 @@ impl<'a> Display for Expr<'a> {
                 substring_for,
                 ..
             } => {
-                write!(f, "SUBSTRING({expr}")?;
-                if let Some(substring_from) = substring_from {
-                    write!(f, " FROM {substring_from}")?;
-                }
+                write!(f, "SUBSTRING({expr} FROM {substring_from}")?;
                 if let Some(substring_for) = substring_for {
                     write!(f, " FOR {substring_for}")?;
                 }

@@ -28,6 +28,7 @@ runs:
       run: |
         docker run --rm --tty --net=host \
           --user $(id -u):$(id -g) \
+          --env BUILD_PROFILE \
           --volume "${PWD}:/workspace" \
           --workdir "/workspace" \
           datafuselabs/build-tool:sqllogic \

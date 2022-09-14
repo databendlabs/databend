@@ -23,35 +23,35 @@ const MAC_ARM = 'macOS (ARM, 64-bit)';
 const Releases: FC = (): ReactElement=> {
   const [cacheTagName] = useLocalStorageState<string>('global-cache-tag-name');
   const tagName = cacheTagName as string || 'v0.8.25';
-  const DOWN_LINK = 'https://github.com/datafuselabs/databend/releases/download/';
+  const DOWNLOAD_LINK = 'https://repo.databend.rs/databend/';
   const [releaseData, setReleaseData] = useState<IRow[]>([
     { 
       name: `databend-${tagName}-aarch64-unknown-linux-musl.tar.gz`, 
       tagName, 
       osType: LINUX_GENERIC_ARM, 
       size: 0,
-      browser_download_url: `${DOWN_LINK}${tagName}/${tagName}-aarch64-unknown-linux-musl.tar.gz`
+      browser_download_url: `${DOWNLOAD_LINK}${tagName}/${tagName}-aarch64-unknown-linux-musl.tar.gz`
     },
     { 
       name: `databend-${tagName}-x86_64-unknown-linux-musl.tar.gz`, 
       tagName, 
       osType: LINUX_GENERIC_X86, 
       size: 0, 
-      browser_download_url: `${DOWN_LINK}${tagName}/${tagName}-aarch64-apple-darwin.tar.gz`
+      browser_download_url: `${DOWNLOAD_LINK}${tagName}/${tagName}-aarch64-apple-darwin.tar.gz`
     },
     { 
       name: `databend-${tagName}-aarch64-apple-darwin.tar.gz`,
       tagName,
       osType: MAC_ARM, 
       size: 0,
-      browser_download_url: `${DOWN_LINK}${tagName}/${tagName}-aarch64-apple-darwin.tar.gz`
+      browser_download_url: `${DOWNLOAD_LINK}${tagName}/${tagName}-aarch64-apple-darwin.tar.gz`
     },
     { 
       name: `databend-${tagName}-x86_64-apple-darwin.tar.gz`, 
       tagName, 
       osType: MAC_X86, 
       size: 0,
-      browser_download_url: `${DOWN_LINK}${tagName}/${tagName}-x86_64-apple-darwin.tar.gz`
+      browser_download_url: `${DOWNLOAD_LINK}${tagName}/${tagName}-x86_64-apple-darwin.tar.gz`
     }
   ]);
   const columns = [
@@ -88,8 +88,8 @@ const Releases: FC = (): ReactElement=> {
       dataIndex: 'osType',
       key: 'osType',
       render(o: string, record: IRow) {
-        const {browser_download_url} = record;
-        return <a className={clsx('button button--secondary', styles.download)} href={`${browser_download_url}`}>Download</a>
+        const {tagName, name} = record;
+        return <a className={clsx('button button--secondary', styles.download)} href={`${DOWNLOAD_LINK}${tagName}/${name}`}>Download</a>
       }
     }
   ];
@@ -121,7 +121,8 @@ const Releases: FC = (): ReactElement=> {
                       item.osType = LINUX_GENERIC_ARM;
                     }
                   }
-                  return !item.name?.includes('linux-gnu');
+                  const opName = item.name;
+                  return !opName?.includes('linux-gnu') && !opName?.includes('testsuites');
                 })
                 ?.sort((a, b)=> {
                   return a.sort - b.sort;

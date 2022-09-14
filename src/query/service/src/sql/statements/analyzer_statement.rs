@@ -18,10 +18,10 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_planners::ExplainType;
-use common_planners::Expression;
-use common_planners::PlanNode;
-use common_planners::ReadDataSourcePlan;
+use common_legacy_planners::ExplainType;
+use common_legacy_planners::Expression;
+use common_legacy_planners::PlanNode;
+use common_legacy_planners::ReadDataSourcePlan;
 
 use crate::sessions::QueryContext;
 use crate::sql::DfStatement;

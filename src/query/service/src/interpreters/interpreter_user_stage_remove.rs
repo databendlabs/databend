@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_planners::RemoveUserStagePlan;
+use common_legacy_planners::RemoveUserStagePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 

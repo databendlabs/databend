@@ -21,7 +21,6 @@ use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::trusted_len::TrustedLen;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
-use ordered_float::OrderedFloat;
 use serde::de::Visitor;
 use serde::Deserialize;
 use serde::Deserializer;
@@ -38,6 +37,8 @@ use crate::types::nullable::NullableDomain;
 use crate::types::number::NumberColumn;
 use crate::types::number::NumberColumnBuilder;
 use crate::types::number::NumberScalar;
+use crate::types::number::F32;
+use crate::types::number::F64;
 use crate::types::string::StringColumn;
 use crate::types::string::StringColumnBuilder;
 use crate::types::string::StringDomain;
@@ -45,6 +46,7 @@ use crate::types::timestamp::Timestamp;
 use crate::types::timestamp::TimestampColumn;
 use crate::types::timestamp::TimestampColumnBuilder;
 use crate::types::timestamp::TimestampDomain;
+use crate::types::variant::DEFAULT_BSON;
 use crate::types::*;
 use crate::util::append_bitmap;
 use crate::util::bitmap_into_mut;
@@ -75,6 +77,7 @@ pub enum Scalar {
     String(Vec<u8>),
     Array(Column),
     Tuple(Vec<Scalar>),
+    Variant(Vec<u8>),
 }
 
 #[derive(Clone, PartialEq, Default, EnumAsInner)]
@@ -88,6 +91,7 @@ pub enum ScalarRef<'a> {
     Timestamp(Timestamp),
     Array(Column),
     Tuple(Vec<ScalarRef<'a>>),
+    Variant(&'a [u8]),
 }
 
 #[derive(Clone, PartialEq, EnumAsInner)]
@@ -101,6 +105,7 @@ pub enum Column {
     Array(Box<ArrayColumn<AnyType>>),
     Nullable(Box<NullableColumn<AnyType>>),
     Tuple { fields: Vec<Column>, len: usize },
+    Variant(StringColumn),
 }
 
 #[derive(Debug, Clone, PartialEq, EnumAsInner)]
@@ -121,6 +126,7 @@ pub enum ColumnBuilder {
         fields: Vec<ColumnBuilder>,
         len: usize,
     },
+    Variant(StringColumnBuilder),
 }
 
 impl<'a, T: ValueType> ValueRef<'a, T> {
@@ -203,6 +209,7 @@ impl Scalar {
             Scalar::Timestamp(t) => ScalarRef::Timestamp(*t),
             Scalar::Array(col) => ScalarRef::Array(col.clone()),
             Scalar::Tuple(fields) => ScalarRef::Tuple(fields.iter().map(Scalar::as_ref).collect()),
+            Scalar::Variant(s) => ScalarRef::Variant(s.as_slice()),
         }
     }
 }
@@ -220,6 +227,7 @@ impl<'a> ScalarRef<'a> {
             ScalarRef::Tuple(fields) => {
                 Scalar::Tuple(fields.iter().map(ScalarRef::to_owned).collect())
             }
+            ScalarRef::Variant(s) => Scalar::Variant(s.to_vec()),
         }
     }
 
@@ -240,6 +248,7 @@ impl<'a> ScalarRef<'a> {
                 fields: fields.iter().map(|field| field.repeat(n)).collect(),
                 len: n,
             },
+            ScalarRef::Variant(s) => ColumnBuilder::Variant(StringColumnBuilder::repeat(s, n)),
         }
     }
 
@@ -272,6 +281,7 @@ impl<'a> ScalarRef<'a> {
             ScalarRef::Tuple(fields) => {
                 Domain::Tuple(fields.iter().map(|field| field.domain()).collect())
             }
+            ScalarRef::Variant(_) => Domain::Undefined,
         }
     }
 }
@@ -288,6 +298,7 @@ impl Column {
             Column::Array(col) => col.len(),
             Column::Nullable(col) => col.len(),
             Column::Tuple { len, .. } => *len,
+            Column::Variant(col) => col.len(),
         }
     }
 
@@ -307,6 +318,7 @@ impl Column {
                     .map(|field| field.index(index))
                     .collect::<Option<Vec<_>>>()?,
             )),
+            Column::Variant(col) => Some(ScalarRef::Variant(col.index(index)?)),
         }
     }
 
@@ -328,6 +340,7 @@ impl Column {
                     .map(|field| field.index_unchecked(index))
                     .collect::<Vec<_>>(),
             ),
+            Column::Variant(col) => ScalarRef::Variant(col.index_unchecked(index)),
         }
     }
 
@@ -360,6 +373,7 @@ impl Column {
                     .collect(),
                 len: range.end - range.start,
             },
+            Column::Variant(col) => Column::Variant(col.slice(range)),
         }
     }
 
@@ -414,6 +428,7 @@ impl Column {
                 let domains = fields.iter().map(|col| col.domain()).collect::<Vec<_>>();
                 Domain::Tuple(domains)
             }
+            Column::Variant(_) => Domain::Undefined,
         }
     }
 
@@ -469,6 +484,9 @@ impl Column {
                     })
                     .collect();
                 ArrowDataType::Struct(arrow_fields)
+            }
+            Column::Variant(_) => {
+                ArrowType::Extension("Variant".to_owned(), Box::new(ArrowType::LargeBinary), None)
             }
         }
     }
@@ -539,9 +557,8 @@ impl Column {
                 ),
             ),
             Column::Number(NumberColumn::Float32(col)) => {
-                let values = unsafe {
-                    std::mem::transmute::<Buffer<OrderedFloat<f32>>, Buffer<f32>>(col.clone())
-                };
+                let values =
+                    unsafe { std::mem::transmute::<Buffer<F32>, Buffer<f32>>(col.clone()) };
                 Box::new(
                     common_arrow::arrow::array::PrimitiveArray::<f32>::from_data(
                         self.arrow_type(),
@@ -551,9 +568,8 @@ impl Column {
                 )
             }
             Column::Number(NumberColumn::Float64(col)) => {
-                let values = unsafe {
-                    std::mem::transmute::<Buffer<OrderedFloat<f64>>, Buffer<f64>>(col.clone())
-                };
+                let values =
+                    unsafe { std::mem::transmute::<Buffer<F64>, Buffer<f64>>(col.clone()) };
                 Box::new(
                     common_arrow::arrow::array::PrimitiveArray::<f64>::from_data(
                         self.arrow_type(),
@@ -602,6 +618,14 @@ impl Column {
                 Box::new(common_arrow::arrow::array::StructArray::from_data(
                     self.arrow_type(),
                     fields.iter().map(|field| field.as_arrow()).collect(),
+                    None,
+                ))
+            }
+            Column::Variant(col) => {
+                Box::new(common_arrow::arrow::array::BinaryArray::<i64>::from_data(
+                    self.arrow_type(),
+                    col.offsets.iter().map(|offset| *offset as i64).collect(),
+                    col.data.clone(),
                     None,
                 ))
             }
@@ -690,8 +714,7 @@ impl Column {
                     .expect("fail to read from arrow: array should be `Float32Array`")
                     .values()
                     .clone();
-                let col =
-                    unsafe { std::mem::transmute::<Buffer<f32>, Buffer<OrderedFloat<f32>>>(col) };
+                let col = unsafe { std::mem::transmute::<Buffer<f32>, Buffer<F32>>(col) };
                 Column::Number(NumberColumn::Float32(col))
             }
             ArrowDataType::Float64 => {
@@ -701,8 +724,7 @@ impl Column {
                     .expect("fail to read from arrow: array should be `Float64Array`")
                     .values()
                     .clone();
-                let col =
-                    unsafe { std::mem::transmute::<Buffer<f64>, Buffer<OrderedFloat<f64>>>(col) };
+                let col = unsafe { std::mem::transmute::<Buffer<f64>, Buffer<F64>>(col) };
                 Column::Number(NumberColumn::Float64(col))
             }
             ArrowDataType::Boolean => Column::Boolean(
@@ -786,6 +808,21 @@ impl Column {
                 let precision = precision.parse().unwrap();
                 Column::Timestamp(TimestampColumn { ts, precision })
             }
+            ArrowDataType::Extension(name, _, None) if name == "Variant" => {
+                let arrow_col = arrow_col
+                    .as_any()
+                    .downcast_ref::<common_arrow::arrow::array::BinaryArray<i64>>()
+                    .expect("fail to read from arrow: array should be `BinaryArray<i64>`");
+                let offsets = arrow_col
+                    .offsets()
+                    .iter()
+                    .map(|x| *x as u64)
+                    .collect::<Vec<_>>();
+                Column::Variant(StringColumn {
+                    data: arrow_col.values().clone(),
+                    offsets: offsets.into(),
+                })
+            }
             ArrowDataType::LargeList(_) => {
                 let values_col = arrow_col
                     .as_any()
@@ -850,6 +887,7 @@ impl Column {
             Column::Array(col) => col.values.memory_size() + col.offsets.len() * 8,
             Column::Nullable(c) => c.column.memory_size() + c.validity.as_slice().0.len(),
             Column::Tuple { fields, .. } => fields.iter().map(|f| f.memory_size()).sum(),
+            Column::Variant(col) => col.data.len() + col.offsets.len() * 8,
         }
     }
 }
@@ -909,6 +947,7 @@ impl ColumnBuilder {
                     .collect(),
                 len,
             },
+            Column::Variant(col) => ColumnBuilder::Variant(StringColumnBuilder::from_column(col)),
         }
     }
 
@@ -923,6 +962,7 @@ impl ColumnBuilder {
             ColumnBuilder::Array(builder) => builder.len(),
             ColumnBuilder::Nullable(builder) => builder.len(),
             ColumnBuilder::Tuple { len, .. } => *len,
+            ColumnBuilder::Variant(builder) => builder.len(),
         }
     }
 
@@ -966,6 +1006,9 @@ impl ColumnBuilder {
                     .collect(),
                 len: 0,
             },
+            DataType::Variant => {
+                ColumnBuilder::Variant(StringColumnBuilder::with_capacity(capacity, 0))
+            }
             DataType::Generic(_) => {
                 unreachable!("unable to initialize column builder for generic type")
             }
@@ -1001,6 +1044,10 @@ impl ColumnBuilder {
                 }
                 *len += 1;
             }
+            (ColumnBuilder::Variant(builder), ScalarRef::Variant(value)) => {
+                builder.put_slice(value);
+                builder.commit_row();
+            }
             (builder, scalar) => unreachable!("unable to push {scalar:?} to {builder:?}"),
         }
     }
@@ -1020,6 +1067,10 @@ impl ColumnBuilder {
                     field.push_default();
                 }
                 *len += 1;
+            }
+            ColumnBuilder::Variant(builder) => {
+                builder.put_slice(DEFAULT_BSON);
+                builder.commit_row();
             }
         }
     }
@@ -1078,6 +1129,7 @@ impl ColumnBuilder {
                 fields: fields.into_iter().map(|field| field.build()).collect(),
                 len,
             },
+            ColumnBuilder::Variant(builder) => Column::Variant(builder.build()),
         }
     }
 
@@ -1098,6 +1150,7 @@ impl ColumnBuilder {
                     .map(|field| field.build_scalar())
                     .collect(),
             ),
+            ColumnBuilder::Variant(builder) => Scalar::Variant(builder.build_scalar()),
         }
     }
 }

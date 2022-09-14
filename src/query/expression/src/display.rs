@@ -18,11 +18,15 @@ use std::fmt::Formatter;
 use std::time::Duration;
 use std::time::UNIX_EPOCH;
 
+use bson::Document;
 use chrono::DateTime;
 use chrono::Utc;
 use comfy_table::Cell;
 use comfy_table::Table;
 use itertools::Itertools;
+use num_traits::FromPrimitive;
+use rust_decimal::Decimal;
+use rust_decimal::RoundingStrategy;
 
 use crate::chunk::Chunk;
 use crate::expression::Expr;
@@ -39,6 +43,7 @@ use crate::types::number::NumberDataType;
 use crate::types::number::NumberDomain;
 use crate::types::number::NumberScalar;
 use crate::types::number::SimpleDomain;
+use crate::types::string::StringColumn;
 use crate::types::string::StringDomain;
 use crate::types::timestamp::Timestamp;
 use crate::types::timestamp::TimestampDomain;
@@ -50,6 +55,8 @@ use crate::values::Value;
 use crate::values::ValueRef;
 use crate::with_number_type;
 use crate::Column;
+
+const FLOAT_NUM_FRAC_DIGITS: u32 = 10;
 
 impl Debug for Chunk {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -103,6 +110,7 @@ impl<'a> Debug for ScalarRef<'a> {
                     fields.iter().map(ScalarRef::to_string).join(", ")
                 )
             }
+            ScalarRef::Variant(s) => write!(f, "0x{}", &hex::encode(s)),
         }
     }
 }
@@ -123,6 +131,7 @@ impl Debug for Column {
                 .field("fields", fields)
                 .field("len", len)
                 .finish(),
+            Column::Variant(col) => write!(f, "{col:?}"),
         }
     }
 }
@@ -144,6 +153,11 @@ impl<'a> Display for ScalarRef<'a> {
                     fields.iter().map(ScalarRef::to_string).join(", ")
                 )
             }
+            ScalarRef::Variant(s) => {
+                let doc = Document::from_reader(*s).map_err(|_| std::fmt::Error)?;
+                let bson = doc.get("v").ok_or(std::fmt::Error)?;
+                write!(f, "{bson}")
+            }
         }
     }
 }
@@ -159,8 +173,24 @@ impl Debug for NumberScalar {
             NumberScalar::Int16(val) => write!(f, "{val}_i16"),
             NumberScalar::Int32(val) => write!(f, "{val}_i32"),
             NumberScalar::Int64(val) => write!(f, "{val}_i64"),
-            NumberScalar::Float32(val) => write!(f, "{:?}_f32", val.0),
-            NumberScalar::Float64(val) => write!(f, "{:?}_f64", val.0),
+            NumberScalar::Float32(val) => match Decimal::from_f32(val.0) {
+                Some(d) => write!(
+                    f,
+                    "{}_f32",
+                    d.round_dp_with_strategy(FLOAT_NUM_FRAC_DIGITS, RoundingStrategy::ToZero)
+                        .normalize()
+                ),
+                None => write!(f, "{val}_f32"),
+            },
+            NumberScalar::Float64(val) => match Decimal::from_f64(val.0) {
+                Some(d) => write!(
+                    f,
+                    "{}_f64",
+                    d.round_dp_with_strategy(FLOAT_NUM_FRAC_DIGITS, RoundingStrategy::ToZero)
+                        .normalize()
+                ),
+                None => write!(f, "{val}_f64"),
+            },
         }
     }
 }
@@ -176,8 +206,24 @@ impl Display for NumberScalar {
             NumberScalar::Int16(val) => write!(f, "{val}"),
             NumberScalar::Int32(val) => write!(f, "{val}"),
             NumberScalar::Int64(val) => write!(f, "{val}"),
-            NumberScalar::Float32(val) => write!(f, "{:?}", val.0),
-            NumberScalar::Float64(val) => write!(f, "{:?}", val.0),
+            NumberScalar::Float32(val) => match Decimal::from_f32(val.0) {
+                Some(d) => write!(
+                    f,
+                    "{}",
+                    d.round_dp_with_strategy(FLOAT_NUM_FRAC_DIGITS, RoundingStrategy::ToZero)
+                        .normalize()
+                ),
+                None => write!(f, "{val}"),
+            },
+            NumberScalar::Float64(val) => match Decimal::from_f64(val.0) {
+                Some(d) => write!(
+                    f,
+                    "{}",
+                    d.round_dp_with_strategy(FLOAT_NUM_FRAC_DIGITS, RoundingStrategy::ToZero)
+                        .normalize()
+                ),
+                None => write!(f, "{val}"),
+            },
         }
     }
 }
@@ -195,13 +241,50 @@ impl Debug for NumberColumn {
             NumberColumn::Int64(val) => f.debug_tuple("Int64").field(val).finish(),
             NumberColumn::Float32(val) => f
                 .debug_tuple("Float32")
-                .field(&val.iter().map(|x| x.0).collect::<Vec<_>>())
+                .field(&format_args!(
+                    "[{}]",
+                    &val.iter()
+                        .map(|x| match Decimal::from_f32(x.0) {
+                            Some(d) => d
+                                .round_dp_with_strategy(
+                                    FLOAT_NUM_FRAC_DIGITS,
+                                    RoundingStrategy::ToZero
+                                )
+                                .normalize()
+                                .to_string(),
+                            None => x.to_string(),
+                        })
+                        .join(", ")
+                ))
                 .finish(),
             NumberColumn::Float64(val) => f
                 .debug_tuple("Float64")
-                .field(&val.iter().map(|x| x.0).collect::<Vec<_>>())
+                .field(&format_args!(
+                    "[{}]",
+                    &val.iter()
+                        .map(|x| match Decimal::from_f64(x.0) {
+                            Some(d) => d
+                                .round_dp_with_strategy(
+                                    FLOAT_NUM_FRAC_DIGITS,
+                                    RoundingStrategy::ToZero
+                                )
+                                .normalize()
+                                .to_string(),
+                            None => x.to_string(),
+                        })
+                        .join(", ")
+                ))
                 .finish(),
         }
+    }
+}
+
+impl Debug for StringColumn {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StringColumn")
+            .field("data", &format_args!("0x{}", &hex::encode(&*self.data)))
+            .field("offsets", &self.offsets)
+            .finish()
     }
 }
 
@@ -293,6 +376,7 @@ impl Display for DataType {
                     write!(f, ")")
                 }
             }
+            DataType::Variant => write!(f, "Variant"),
             DataType::Generic(index) => write!(f, "T{index}"),
         }
     }

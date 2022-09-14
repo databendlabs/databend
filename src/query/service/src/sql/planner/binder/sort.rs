@@ -23,7 +23,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use super::bind_context::NameResolutionResult;
-use crate::sessions::TableContext;
 use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::select::SelectList;
 use crate::sql::binder::Binder;

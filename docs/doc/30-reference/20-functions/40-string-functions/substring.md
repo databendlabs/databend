@@ -24,8 +24,8 @@ SUBSTRING(str FROM pos FOR len)
 | Arguments   | Description |
 | ----------- | ----------- |
 | str | The main string from where the character to be extracted |
-| pos | The one-indexed position expression to start at. If negative, counts from the end |
-| len | The number expression of characters to extract |
+| pos | The position (starting from 1) the substring to start at. If negative, counts from the end |
+| len | The maximun length of the substring to extract |
 
 ## Return Type
 

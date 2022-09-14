@@ -19,7 +19,7 @@ use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_functions::aggregates::get_layout_offsets;
 use common_functions::aggregates::AggregateFunctionRef;
-use common_planners::Expression;
+use common_legacy_planners::Expression;
 
 pub struct AggregatorParams {
     pub schema: DataSchemaRef,

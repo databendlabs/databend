@@ -22,21 +22,10 @@ mod boolean;
 mod control;
 mod datetime;
 mod math;
+mod variant;
 
 mod string;
 mod string_multi_args;
-
-pub fn builtin_functions() -> FunctionRegistry {
-    let mut registry = FunctionRegistry::new();
-    arithmetic::register(&mut registry);
-    boolean::register(&mut registry);
-    control::register(&mut registry);
-    datetime::register(&mut registry);
-    math::register(&mut registry);
-    string::register(&mut registry);
-    string_multi_args::register(&mut registry);
-    registry
-}
 
 const ALL_INTEGER_TYPES: &[NumberDataType; 8] = &[
     NumberDataType::UInt8,
@@ -50,3 +39,16 @@ const ALL_INTEGER_TYPES: &[NumberDataType; 8] = &[
 ];
 const ALL_FLOAT_TYPES: &[NumberDataType; 2] = &[NumberDataType::Float32, NumberDataType::Float64];
 const ALL_NUMERICS_TYPES: &[NumberDataType; 10] = &concat(ALL_INTEGER_TYPES, ALL_FLOAT_TYPES);
+
+pub fn builtin_functions() -> FunctionRegistry {
+    let mut registry = FunctionRegistry::new();
+    arithmetic::register(&mut registry);
+    boolean::register(&mut registry);
+    control::register(&mut registry);
+    datetime::register(&mut registry);
+    math::register(&mut registry);
+    string::register(&mut registry);
+    string_multi_args::register(&mut registry);
+    variant::register(&mut registry);
+    registry
+}

@@ -18,13 +18,13 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::AggregatorFinalPlan;
-use common_planners::AggregatorPartialPlan;
-use common_planners::Partitions;
-use common_planners::PlanBuilder;
-use common_planners::PlanNode;
-use common_planners::PlanRewriter;
-use common_planners::ReadDataSourcePlan;
+use common_legacy_planners::AggregatorFinalPlan;
+use common_legacy_planners::AggregatorPartialPlan;
+use common_legacy_planners::Partitions;
+use common_legacy_planners::PlanBuilder;
+use common_legacy_planners::PlanNode;
+use common_legacy_planners::PlanRewriter;
+use common_legacy_planners::ReadDataSourcePlan;
 
 use crate::interpreters::fragments::partition_state::PartitionState;
 use crate::interpreters::fragments::query_fragment::QueryFragment;

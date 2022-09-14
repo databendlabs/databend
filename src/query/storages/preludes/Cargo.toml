@@ -22,6 +22,7 @@ common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
 common-functions = { path = "../../functions" }
 common-grpc = { path = "../../../common/grpc" }
+common-legacy-planners = { path = "../../legacy-planners" }
 common-meta-app = { path = "../../../meta/app" }
 common-meta-types = { path = "../../../meta/types" }
 common-metrics = { path = "../../../common/metrics" }
@@ -29,7 +30,6 @@ common-pipeline-core = { path = "../../pipeline/core" }
 common-pipeline-sinks = { path = "../../pipeline/sinks" }
 common-pipeline-sources = { path = "../../pipeline/sources" }
 common-pipeline-transforms = { path = "../../pipeline/transforms" }
-common-planners = { path = "../../planners" }
 common-storage = { path = "../../../common/storage" }
 common-storages-util = { path = "../util" }
 common-streams = { path = "../../streams" }
@@ -46,7 +46,7 @@ futures-util = "0.3.21"
 itertools = "0.10.3"
 num_cpus = "1.13.1"
 once_cell = "1.12.0"
-opendal = { version = "0.14.1", features = ["layers-retry"] }
+opendal = { version = "0.16.0", features = ["layers-retry"] }
 parking_lot = "0.12.1"
 reqwest = "0.11.11"
 semver = "1.0.10"

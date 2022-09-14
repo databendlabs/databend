@@ -28,7 +28,7 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::PlanNode;
+use common_legacy_planners::PlanNode;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::future::AbortHandle;
@@ -197,7 +197,9 @@ impl Executor {
             Running(r) => {
                 // release session
                 if kill {
-                    r.session.force_kill_query();
+                    r.session.force_kill_query(ErrorCode::AbortedQuery(
+                        "Aborted query, because the server is shutting down or the query was killed",
+                    ));
                 }
                 if let Err(e) = &reason {
                     r.ctx.set_error(e.clone());

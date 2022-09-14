@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 // Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,10 +19,10 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_legacy_planners::ReadDataSourcePlan;
+use common_legacy_planners::SourceInfo;
+use common_legacy_planners::StageTableInfo;
 use common_meta_types::UserStageInfo;
-use common_planners::ReadDataSourcePlan;
-use common_planners::SourceInfo;
-use common_planners::StageTableInfo;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::TryStreamExt;
@@ -87,7 +88,10 @@ impl CopyInterpreterV2 {
                 } else {
                     let rename_me: Arc<dyn TableContext> = self.ctx.clone();
                     let op = StageSourceHelper::get_op(&rename_me, &table_info.stage_info).await?;
-                    let mut list = vec![];
+
+                    // TODO: Workaround for OpenDAL's bug: https://github.com/datafuselabs/opendal/issues/670
+                    // Should be removed after OpenDAL fixes.
+                    let mut list = HashSet::new();
 
                     // TODO: we could rewrite into try_collect.
                     let mut objects = op.batch().walk_top_down(path)?;
@@ -95,10 +99,10 @@ impl CopyInterpreterV2 {
                         if de.mode().is_dir() {
                             continue;
                         }
-                        list.push(de.path().to_string());
+                        list.insert(de.path().to_string());
                     }
 
-                    list
+                    list.into_iter().collect::<Vec<_>>()
                 };
 
                 tracing::info!("listed files: {:?}", &files_with_path);
@@ -176,7 +180,7 @@ impl CopyInterpreterV2 {
 
         let table = ctx.get_table(catalog_name, db_name, tbl_name).await?;
 
-        table.append2(ctx.clone(), &mut pipeline)?;
+        table.append2(ctx.clone(), &mut pipeline, false)?;
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
 
         let query_need_abort = ctx.query_need_abort();

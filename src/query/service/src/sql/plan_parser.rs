@@ -16,12 +16,12 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::EmptyPlan;
-use common_planners::ExplainPlan;
-use common_planners::Expression;
-use common_planners::PlanBuilder;
-use common_planners::PlanNode;
-use common_planners::SelectPlan;
+use common_legacy_planners::EmptyPlan;
+use common_legacy_planners::ExplainPlan;
+use common_legacy_planners::Expression;
+use common_legacy_planners::PlanBuilder;
+use common_legacy_planners::PlanNode;
+use common_legacy_planners::SelectPlan;
 use tracing::debug;
 
 use crate::sessions::QueryContext;

@@ -20,18 +20,18 @@ common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
 common-fuse-meta = { path = "../fuse-meta" }
 common-hive-meta-store = { path = "../hive-meta-store" }
+common-legacy-planners = { path = "../../legacy-planners" }
 common-meta-app = { path = "../../../meta/app" }
 common-meta-types = { path = "../../../meta/types" }
 common-pipeline-core = { path = "../../pipeline/core" }
 common-pipeline-sources = { path = "../../pipeline/sources" }
-common-planners = { path = "../../planners" }
 common-storages-index = { path = "../index" }
 common-storages-util = { path = "../util" }
 
 async-recursion = "1.0.0"
 async-trait = "0.1.56"
 futures = "0.3.21"
-opendal = { version = "0.14.1", features = ["layers-retry"] }
+opendal = { version = "0.16.0", features = ["layers-retry"] }
 serde = { version = "1.0.137", features = ["derive"] }
 thrift = "0.15.0"
 tracing = "0.1.35"

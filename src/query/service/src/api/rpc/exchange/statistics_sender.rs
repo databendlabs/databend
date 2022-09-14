@@ -15,11 +15,12 @@
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use std::time::Duration;
 
+use async_channel::Receiver;
+use async_channel::Sender;
 use common_base::base::tokio;
-use common_base::base::tokio::sync::Notify;
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use futures_util::future::Either;
 
@@ -32,9 +33,10 @@ use crate::sessions::QueryContext;
 pub struct StatisticsSender {
     query_id: String,
     ctx: Arc<QueryContext>,
-    exchange: FlightExchange,
+    exchange: Option<FlightExchange>,
     shutdown_flag: Arc<AtomicBool>,
-    shutdown_notify: Arc<Notify>,
+    shutdown_flag_sender: Sender<Option<ErrorCode>>,
+    shutdown_flag_receiver: Receiver<Option<ErrorCode>>,
 }
 
 impl StatisticsSender {
@@ -43,106 +45,136 @@ impl StatisticsSender {
         ctx: Arc<QueryContext>,
         exchange: FlightExchange,
     ) -> StatisticsSender {
+        let (shutdown_flag_sender, shutdown_flag_receiver) = async_channel::bounded(1);
         StatisticsSender {
             ctx,
-            exchange,
+            shutdown_flag_sender,
+            shutdown_flag_receiver,
+            exchange: Some(exchange),
             query_id: query_id.to_string(),
             shutdown_flag: Arc::new(AtomicBool::new(false)),
-            shutdown_notify: Arc::new(Notify::new()),
         }
     }
 
     pub fn start(&mut self) {
         let ctx = self.ctx.clone();
         let query_id = self.query_id.clone();
-        let exchange = self.exchange.clone();
+        let flight_exchange = self.exchange.take().unwrap();
         let shutdown_flag = self.shutdown_flag.clone();
-        let shutdown_notify = self.shutdown_notify.clone();
+        let shutdown_flag_receiver = self.shutdown_flag_receiver.clone();
 
         tokio::spawn(async move {
-            let mut notified = Box::pin(shutdown_notify.notified());
+            let mut recv = Box::pin(flight_exchange.recv());
+            let mut notified = Box::pin(shutdown_flag_receiver.recv());
 
             while !shutdown_flag.load(Ordering::Relaxed) {
-                let interval = Box::pin(tokio::time::sleep(Duration::from_millis(500)));
-
-                match futures::future::select(interval, notified).await {
-                    Either::Left((_res, right)) => {
-                        notified = right;
-
-                        if !shutdown_flag.load(Ordering::Relaxed) {
-                            if let Err(_cause) = Self::send_statistics(&ctx, &exchange).await {
-                                ctx.get_exchange_manager().shutdown_query(&query_id);
-                                break;
-                            }
-                        }
-                    }
-                    Either::Right((_, _)) => {
+                match futures::future::select(recv, notified).await {
+                    Either::Right((Ok(None), _))
+                    | Either::Right((Err(_), _))
+                    | Either::Left((Ok(None), _))
+                    | Either::Left((Err(_), _)) => {
                         break;
+                    }
+                    Either::Right((Ok(Some(error_code)), _recv)) => {
+                        let data = DataPacket::ErrorCode(error_code);
+                        if let Err(error_code) = flight_exchange.send(data).await {
+                            tracing::warn!(
+                                "Cannot send data via flight exchange, cause: {:?}",
+                                error_code
+                            );
+                        }
+
+                        return;
+                    }
+                    Either::Left((Ok(Some(command)), right)) => {
+                        notified = right;
+                        recv = Box::pin(flight_exchange.recv());
+
+                        if let Err(_cause) = Self::on_command(&ctx, command, &flight_exchange).await
+                        {
+                            ctx.get_exchange_manager().shutdown_query(&query_id);
+                            return;
+                        }
                     }
                 }
             }
 
-            if let Err(_cause) = Self::send_statistics(&ctx, &exchange).await {
-                ctx.get_exchange_manager().shutdown_query(&query_id);
-                tracing::error!(
-                    "Statistics send statistics has error, because exchange channel is closed."
-                );
+            if let Ok(Some(command)) = flight_exchange.recv().await {
+                if let Err(error) = Self::on_command(&ctx, command, &flight_exchange).await {
+                    tracing::warn!("Statistics send has error, cause: {:?}.", error);
+                }
             }
         });
     }
 
-    pub fn shutdown(&mut self) {
+    pub fn shutdown(&mut self, error: Option<ErrorCode>) {
         self.shutdown_flag.store(true, Ordering::Release);
-        self.shutdown_notify.notify_one();
+        let shutdown_flag_sender = self.shutdown_flag_sender.clone();
+
+        futures::executor::block_on(async move {
+            if let Err(error_code) = shutdown_flag_sender.send(error).await {
+                tracing::warn!(
+                    "Cannot send data via flight exchange, cause: {:?}",
+                    error_code
+                );
+            }
+
+            shutdown_flag_sender.close();
+        });
     }
 
-    async fn send_statistics(ctx: &Arc<QueryContext>, exchange: &FlightExchange) -> Result<()> {
-        Self::send_progress(ctx, exchange).await?;
-        Self::send_precommit(ctx, exchange).await
+    async fn on_command(
+        ctx: &Arc<QueryContext>,
+        command: DataPacket,
+        exchange_flight: &FlightExchange,
+    ) -> Result<()> {
+        match command {
+            DataPacket::ErrorCode(_) => unreachable!(),
+            DataPacket::FragmentData(_) => unreachable!(),
+            DataPacket::ProgressAndPrecommit { .. } => unreachable!(),
+            DataPacket::FetchProgressAndPrecommit => {
+                exchange_flight
+                    .send(DataPacket::ProgressAndPrecommit {
+                        progress: Self::fetch_progress(ctx).await?,
+                        precommit: Self::fetch_precommit(ctx).await?,
+                    })
+                    .await
+            }
+        }
     }
 
-    async fn send_progress(ctx: &Arc<QueryContext>, exchange: &FlightExchange) -> Result<()> {
+    async fn fetch_progress(ctx: &Arc<QueryContext>) -> Result<Vec<ProgressInfo>> {
+        let mut progress_info = vec![];
+
         let scan_progress = ctx.get_scan_progress();
         let scan_progress_values = scan_progress.fetch();
 
         if scan_progress_values.rows != 0 || scan_progress_values.bytes != 0 {
-            let progress = ProgressInfo::ScanProgress(scan_progress_values);
-            exchange.send(DataPacket::Progress(progress)).await?;
+            progress_info.push(ProgressInfo::ScanProgress(scan_progress_values));
         }
 
         let write_progress = ctx.get_write_progress();
         let write_progress_values = write_progress.fetch();
 
         if write_progress_values.rows != 0 || write_progress_values.bytes != 0 {
-            let progress = ProgressInfo::WriteProgress(write_progress_values);
-            exchange.send(DataPacket::Progress(progress)).await?;
+            progress_info.push(ProgressInfo::WriteProgress(write_progress_values));
         }
 
         let result_progress = ctx.get_result_progress();
         let result_progress_values = result_progress.fetch();
 
         if result_progress_values.rows != 0 || result_progress_values.bytes != 0 {
-            let progress = ProgressInfo::ResultProgress(result_progress_values);
-            exchange.send(DataPacket::Progress(progress)).await?
+            progress_info.push(ProgressInfo::ResultProgress(result_progress_values));
         }
 
-        Ok(())
+        Ok(progress_info)
     }
 
-    async fn send_precommit(ctx: &Arc<QueryContext>, exchange: &FlightExchange) -> Result<()> {
-        let precommit_blocks = ctx.consume_precommit_blocks();
-
-        if !precommit_blocks.is_empty() {
-            for precommit_block in precommit_blocks {
-                if !precommit_block.is_empty() {
-                    let precommit_block = PrecommitBlock(precommit_block);
-                    exchange
-                        .send(DataPacket::PrecommitBlock(precommit_block))
-                        .await?;
-                }
-            }
-        }
-
-        Ok(())
+    async fn fetch_precommit(ctx: &Arc<QueryContext>) -> Result<Vec<PrecommitBlock>> {
+        Ok(ctx
+            .consume_precommit_blocks()
+            .into_iter()
+            .map(PrecommitBlock)
+            .collect())
     }
 }

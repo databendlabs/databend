@@ -18,6 +18,7 @@ use std::f64::consts::PI;
 use std::marker::PhantomData;
 
 use common_expression::types::number::SimpleDomain;
+use common_expression::types::number::F64;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberType;
 use common_expression::types::StringType;
@@ -37,7 +38,7 @@ use crate::scalars::ALL_INTEGER_TYPES;
 use crate::scalars::ALL_NUMERICS_TYPES;
 
 pub fn register(registry: &mut FunctionRegistry) {
-    registry.register_1_arg::<NumberType<OrderedFloat<f64>>, NumberType<OrderedFloat<f64>>, _, _>(
+    registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _, _>(
         "sin",
         FunctionProperty::default(),
         |_| {
@@ -46,10 +47,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                 max: OrderedFloat(1.0),
             })
         },
-        |f: OrderedFloat<f64>| f.sin(),
+        |f: F64| f.sin(),
     );
 
-    registry.register_1_arg::<NumberType<OrderedFloat<f64>>, NumberType<OrderedFloat<f64>>, _, _>(
+    registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _, _>(
         "cos",
         FunctionProperty::default(),
         |_| {
@@ -58,24 +59,24 @@ pub fn register(registry: &mut FunctionRegistry) {
                 max: OrderedFloat(1.0),
             })
         },
-        |f: OrderedFloat<f64>| f.cos(),
+        |f: F64| f.cos(),
     );
 
-    registry.register_1_arg::<NumberType<OrderedFloat<f64>>, NumberType<OrderedFloat<f64>>, _, _>(
+    registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _, _>(
         "tan",
         FunctionProperty::default(),
         |_| None,
-        |f: OrderedFloat<f64>| f.tan(),
+        |f: F64| f.tan(),
     );
 
-    registry.register_1_arg::<NumberType<OrderedFloat<f64>>, NumberType<OrderedFloat<f64>>, _, _>(
+    registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _, _>(
         "cot",
         FunctionProperty::default(),
         |_| None,
-        |f: OrderedFloat<f64>| OrderedFloat(1.0f64) / f.tan(),
+        |f: F64| OrderedFloat(1.0f64) / f.tan(),
     );
 
-    registry.register_1_arg::<NumberType<OrderedFloat<f64>>, NumberType<OrderedFloat<f64>>, _, _>(
+    registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _, _>(
         "acos",
         FunctionProperty::default(),
         |_| {
@@ -84,10 +85,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                 max: OrderedFloat(PI),
             })
         },
-        |f: OrderedFloat<f64>| f.acos(),
+        |f: F64| f.acos(),
     );
 
-    registry.register_1_arg::<NumberType<OrderedFloat<f64>>, NumberType<OrderedFloat<f64>>, _, _>(
+    registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _, _>(
         "asin",
         FunctionProperty::default(),
         |_| {
@@ -96,10 +97,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                 max: OrderedFloat(2.0 * PI),
             })
         },
-        |f: OrderedFloat<f64>| f.asin(),
+        |f: F64| f.asin(),
     );
 
-    registry.register_1_arg::<NumberType<OrderedFloat<f64>>, NumberType<OrderedFloat<f64>>, _, _>(
+    registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _, _>(
         "atan",
         FunctionProperty::default(),
         |_| {
@@ -108,17 +109,22 @@ pub fn register(registry: &mut FunctionRegistry) {
                 max: OrderedFloat(PI / 2.0),
             })
         },
-        |f: OrderedFloat<f64>| f.atan(),
+        |f: F64| f.atan(),
     );
 
-    registry.register_2_arg::<NumberType<OrderedFloat<f64>>, NumberType<OrderedFloat<f64>>, NumberType<OrderedFloat<f64>>, _, _>(
+    registry.register_2_arg::<NumberType<F64>, NumberType<F64>, NumberType<F64>, _, _>(
         "atan2",
         FunctionProperty::default(),
-        |_, _| Some(SimpleDomain { min: OrderedFloat(-PI), max: OrderedFloat(PI) }),
-        |f: OrderedFloat<f64>, r: OrderedFloat<f64>| f.atan2(r),
+        |_, _| {
+            Some(SimpleDomain {
+                min: OrderedFloat(-PI),
+                max: OrderedFloat(PI),
+            })
+        },
+        |f: F64, r: F64| f.atan2(r),
     );
 
-    registry.register_0_arg_core::<NumberType<OrderedFloat<f64>>, _, _>(
+    registry.register_0_arg_core::<NumberType<F64>, _, _>(
         "pi",
         FunctionProperty::default(),
         || {
@@ -130,13 +136,13 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_| Ok(Value::Scalar(OrderedFloat(PI))),
     );
 
-    let sign = |val: OrderedFloat<f64>| match val.partial_cmp(&OrderedFloat(0.0f64)) {
+    let sign = |val: F64| match val.partial_cmp(&OrderedFloat(0.0f64)) {
         Some(Ordering::Greater) => 1,
         Some(Ordering::Less) => -1,
         _ => 0,
     };
 
-    registry.register_1_arg::<NumberType<OrderedFloat<f64>>, NumberType<i8>, _, _>(
+    registry.register_1_arg::<NumberType<F64>, NumberType<i8>, _, _>(
         "sign",
         FunctionProperty::default(),
         move |domain| {
@@ -170,7 +176,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |val| val.unsigned_abs(),
     );
 
-    registry.register_1_arg::<NumberType<OrderedFloat<f64>>, NumberType<OrderedFloat<f64>>, _, _>(
+    registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _, _>(
         "abs",
         FunctionProperty::default(),
         |domain| {
@@ -186,7 +192,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     for ty in ALL_INTEGER_TYPES {
-        with_number_mapped_type!(NUM_TYPE, match ty {
+        with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
                 registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, _, _>(
                     "ceil",
@@ -199,15 +205,14 @@ pub fn register(registry: &mut FunctionRegistry) {
     }
 
     for ty in ALL_FLOAT_TYPES {
-        with_number_mapped_type!(NUM_TYPE, match ty {
+        with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
-                registry
-                    .register_1_arg::<NumberType<NUM_TYPE>, NumberType<OrderedFloat<f64>>, _, _>(
-                        "ceil",
-                        FunctionProperty::default(),
-                        |_| None,
-                        |val| (val.as_(): OrderedFloat<f64>).ceil(),
-                    );
+                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _, _>(
+                    "ceil",
+                    FunctionProperty::default(),
+                    |_| None,
+                    |val| (val.as_(): F64).ceil(),
+                );
             }
         })
     }
@@ -221,14 +226,14 @@ pub fn register(registry: &mut FunctionRegistry) {
         crc32fast::hash,
     );
 
-    registry.register_1_arg::<NumberType<OrderedFloat<f64>>, NumberType<OrderedFloat<f64>>, _, _>(
+    registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _, _>(
         "degrees",
         FunctionProperty::default(),
         |_| None,
         |val| val.to_degrees(),
     );
 
-    registry.register_1_arg::<NumberType<OrderedFloat<f64>>, NumberType<OrderedFloat<f64>>, _, _>(
+    registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _, _>(
         "radians",
         FunctionProperty::default(),
         |_| None,
@@ -236,34 +241,33 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     for ty in ALL_NUMERICS_TYPES {
-        with_number_mapped_type!(NUM_TYPE, match ty {
+        with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
-                registry
-                    .register_1_arg::<NumberType<NUM_TYPE>, NumberType<OrderedFloat<f64>>, _, _>(
-                        "exp",
-                        FunctionProperty::default(),
-                        |_| None,
-                        |val| (val.as_(): OrderedFloat<f64>).exp(),
-                    );
+                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _, _>(
+                    "exp",
+                    FunctionProperty::default(),
+                    |_| None,
+                    |val| (val.as_(): F64).exp(),
+                );
             }
         })
     }
 
-    registry.register_1_arg::<NumberType<OrderedFloat<f64>>, NumberType<OrderedFloat<f64>>, _, _>(
+    registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _, _>(
         "floor",
         FunctionProperty::default(),
         |_| None,
         |val| val.floor(),
     );
 
-    registry.register_2_arg::<NumberType<OrderedFloat<f64>>, NumberType<OrderedFloat<f64>>, NumberType<OrderedFloat<f64>>, _, _>(
+    registry.register_2_arg::<NumberType<F64>, NumberType<F64>, NumberType<F64>, _, _>(
         "pow",
         FunctionProperty::default(),
         |_, _| None,
         |val, rhs| OrderedFloat(val.0.pow(rhs.0)),
     );
 
-    registry.register_0_arg_core::<NumberType<OrderedFloat<f64>>, _, _>(
+    registry.register_0_arg_core::<NumberType<F64>, _, _>(
         "rand",
         FunctionProperty::default(),
         || {
@@ -274,11 +278,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
         |_| {
             let mut rng = rand::rngs::SmallRng::from_entropy();
-            Ok(Value::Scalar(rng.gen::<OrderedFloat<f64>>()))
+            Ok(Value::Scalar(rng.gen::<F64>()))
         },
     );
 
-    registry.register_1_arg::<NumberType<u64>, NumberType<OrderedFloat<f64>>, _, _>(
+    registry.register_1_arg::<NumberType<u64>, NumberType<F64>, _, _>(
         "rand",
         FunctionProperty::default(),
         |_| {
@@ -289,145 +293,141 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
         |val| {
             let mut rng = rand::rngs::SmallRng::seed_from_u64(val);
-            rng.gen::<OrderedFloat<f64>>()
+            rng.gen::<F64>()
         },
     );
 
     for ty in ALL_NUMERICS_TYPES {
-        with_number_mapped_type!(NUM_TYPE, match ty {
+        with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
-                registry
-                    .register_1_arg::<NumberType<NUM_TYPE>, NumberType<OrderedFloat<f64>>, _, _>(
-                        "round",
-                        FunctionProperty::default(),
-                        |_| None,
-                        |val| (val.as_(): OrderedFloat<f64>).round(),
-                    );
-            }
-        });
-
-        with_number_mapped_type!(NUM_TYPE, match ty {
-            NumberDataType::NUM_TYPE => {
-                registry.register_2_arg::<NumberType<NUM_TYPE>, NumberType<i64>, NumberType<OrderedFloat<f64>>, _, _>(
+                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _, _>(
                     "round",
                     FunctionProperty::default(),
-                    |_, _| None,
-                    |val, to| match to.cmp(&0) {
-                        Ordering::Greater => {
-                            let z = 10_f64.powi(if to > 30 { 30 } else { to as i32 });
-                            (val.as_() : OrderedFloat<f64> * z).round() / z
-                        }
-                        Ordering::Less => {
-                            let z = 10_f64.powi(if to < -30 { 30 } else { -to as i32 });
-                            (val.as_() : OrderedFloat<f64> / z).round() * z
-                        }
-                        Ordering::Equal => (val.as_() : OrderedFloat<f64>).round(),
-                    },
+                    |_| None,
+                    |val| (val.as_(): F64).round(),
                 );
             }
         });
 
-        with_number_mapped_type!(NUM_TYPE, match ty {
+        with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
                 registry
-                    .register_1_arg::<NumberType<NUM_TYPE>, NumberType<OrderedFloat<f64>>, _, _>(
-                        "truncate",
+                    .register_2_arg::<NumberType<NUM_TYPE>, NumberType<i64>, NumberType<F64>, _, _>(
+                        "round",
                         FunctionProperty::default(),
-                        |_| None,
-                        |val| (val.as_(): OrderedFloat<f64>).trunc(),
+                        |_, _| None,
+                        |val, to| match to.cmp(&0) {
+                            Ordering::Greater => {
+                                let z = 10_f64.powi(if to > 30 { 30 } else { to as i32 });
+                                (val.as_(): F64 * z).round() / z
+                            }
+                            Ordering::Less => {
+                                let z = 10_f64.powi(if to < -30 { 30 } else { -to as i32 });
+                                (val.as_(): F64 / z).round() * z
+                            }
+                            Ordering::Equal => (val.as_(): F64).round(),
+                        },
                     );
             }
         });
 
-        with_number_mapped_type!(NUM_TYPE, match ty {
+        with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
-                registry.register_2_arg::<NumberType<NUM_TYPE>, NumberType<i64>, NumberType<OrderedFloat<f64>>, _, _>(
+                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _, _>(
                     "truncate",
                     FunctionProperty::default(),
-                    |_, _| None,
-                    |val, to| match to.cmp(&0) {
-                        Ordering::Greater => {
-                            let z = 10_f64.powi(if to > 30 { 30 } else { to as i32 });
-                            (val.as_() : OrderedFloat<f64> * z).trunc() / z
-                        }
-                        Ordering::Less => {
-                            let z = 10_f64.powi(if to < -30 { 30 } else { -to as i32 });
-                            (val.as_() : OrderedFloat<f64> / z).trunc() * z
-                        }
-                        Ordering::Equal => (val.as_() : OrderedFloat<f64>).trunc(),
-                    },
+                    |_| None,
+                    |val| (val.as_(): F64).trunc(),
                 );
             }
         });
 
-        with_number_mapped_type!(NUM_TYPE, match ty {
+        with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
                 registry
-                    .register_1_arg::<NumberType<NUM_TYPE>, NumberType<OrderedFloat<f64>>, _, _>(
-                        "sqrt",
+                    .register_2_arg::<NumberType<NUM_TYPE>, NumberType<i64>, NumberType<F64>, _, _>(
+                        "truncate",
                         FunctionProperty::default(),
-                        |_| None,
-                        |val| (val.as_(): OrderedFloat<f64>).sqrt(),
+                        |_, _| None,
+                        |val, to| match to.cmp(&0) {
+                            Ordering::Greater => {
+                                let z = 10_f64.powi(if to > 30 { 30 } else { to as i32 });
+                                (val.as_(): F64 * z).trunc() / z
+                            }
+                            Ordering::Less => {
+                                let z = 10_f64.powi(if to < -30 { 30 } else { -to as i32 });
+                                (val.as_(): F64 / z).trunc() * z
+                            }
+                            Ordering::Equal => (val.as_(): F64).trunc(),
+                        },
                     );
             }
         });
 
-        with_number_mapped_type!(NUM_TYPE, match ty {
+        with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
-                registry
-                    .register_1_arg::<NumberType<NUM_TYPE>, NumberType<OrderedFloat<f64>>, _, _>(
-                        "ln",
-                        FunctionProperty::default(),
-                        |_| None,
-                        |val| LnFunction::log(val),
-                    );
+                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _, _>(
+                    "sqrt",
+                    FunctionProperty::default(),
+                    |_| None,
+                    |val| (val.as_(): F64).sqrt(),
+                );
             }
         });
 
-        with_number_mapped_type!(NUM_TYPE, match ty {
+        with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
-                registry
-                    .register_1_arg::<NumberType<NUM_TYPE>, NumberType<OrderedFloat<f64>>, _, _>(
-                        "log2",
-                        FunctionProperty::default(),
-                        |_| None,
-                        |val| Log2Function::log(val),
-                    );
+                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _, _>(
+                    "ln",
+                    FunctionProperty::default(),
+                    |_| None,
+                    |val| LnFunction::log(val),
+                );
             }
         });
 
-        with_number_mapped_type!(NUM_TYPE, match ty {
+        with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
-                registry
-                    .register_1_arg::<NumberType<NUM_TYPE>, NumberType<OrderedFloat<f64>>, _, _>(
-                        "log10",
-                        FunctionProperty::default(),
-                        |_| None,
-                        |val| Log10Function::log(val),
-                    );
+                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _, _>(
+                    "log2",
+                    FunctionProperty::default(),
+                    |_| None,
+                    |val| Log2Function::log(val),
+                );
             }
         });
 
-        with_number_mapped_type!(NUM_TYPE, match ty {
+        with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
-                registry
-                    .register_1_arg::<NumberType<NUM_TYPE>, NumberType<OrderedFloat<f64>>, _, _>(
-                        "log",
-                        FunctionProperty::default(),
-                        |_| None,
-                        |val| LogFunction::log(val),
-                    );
+                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _, _>(
+                    "log10",
+                    FunctionProperty::default(),
+                    |_| None,
+                    |val| Log10Function::log(val),
+                );
             }
         });
 
-        with_number_mapped_type!(NUM_TYPE, match ty {
+        with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
-                registry.register_2_arg::<NumberType<NUM_TYPE>, NumberType<OrderedFloat<f64>>, NumberType<OrderedFloat<f64>>, _, _>(
+                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _, _>(
                     "log",
                     FunctionProperty::default(),
-                    |_, _| None,
-                    |base, val| LogFunction::log_with_base(base, val),
+                    |_| None,
+                    |val| LogFunction::log(val),
                 );
+            }
+        });
+
+        with_number_mapped_type!(|NUM_TYPE| match ty {
+            NumberDataType::NUM_TYPE => {
+                registry
+                    .register_2_arg::<NumberType<NUM_TYPE>, NumberType<F64>, NumberType<F64>, _, _>(
+                        "log",
+                        FunctionProperty::default(),
+                        |_, _| None,
+                        |base, val| LogFunction::log_with_base(base, val),
+                    );
             }
         });
     }
@@ -436,7 +436,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 /// Const f64 is now allowed.
 /// feature(adt_const_params) is not stable & complete
 trait Base: Send + Sync + Clone + 'static {
-    fn base() -> OrderedFloat<f64>;
+    fn base() -> F64;
 }
 
 #[derive(Clone)]
@@ -449,19 +449,19 @@ struct TenBase;
 struct TwoBase;
 
 impl Base for EBase {
-    fn base() -> OrderedFloat<f64> {
+    fn base() -> F64 {
         OrderedFloat(E)
     }
 }
 
 impl Base for TenBase {
-    fn base() -> OrderedFloat<f64> {
+    fn base() -> F64 {
         OrderedFloat(10f64)
     }
 }
 
 impl Base for TwoBase {
-    fn base() -> OrderedFloat<f64> {
+    fn base() -> F64 {
         OrderedFloat(2f64)
     }
 }
@@ -471,15 +471,15 @@ struct GenericLogFunction<T> {
 }
 
 impl<T: Base> GenericLogFunction<T> {
-    fn log<S>(val: S) -> OrderedFloat<f64>
-    where S: AsPrimitive<OrderedFloat<f64>> {
+    fn log<S>(val: S) -> F64
+    where S: AsPrimitive<F64> {
         val.as_().log(T::base())
     }
 
-    fn log_with_base<S, B>(base: S, val: B) -> OrderedFloat<f64>
+    fn log_with_base<S, B>(base: S, val: B) -> F64
     where
-        S: AsPrimitive<OrderedFloat<f64>>,
-        B: AsPrimitive<OrderedFloat<f64>>,
+        S: AsPrimitive<F64>,
+        B: AsPrimitive<F64>,
     {
         val.as_().log(base.as_())
     }

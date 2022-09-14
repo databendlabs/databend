@@ -27,6 +27,7 @@ use common_exception::Result;
 use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::Statistics;
+use common_pipeline_core::processors::port::OutputPort;
 use common_storages_index::*;
 use opendal::Operator;
 
@@ -75,6 +76,9 @@ pub struct FuseTableSink {
     meta_locations: TableMetaLocationGenerator,
     accumulator: StatisticsAccumulator,
     cluster_stats_gen: ClusterStatsGenerator,
+
+    // A dummy output port for distributed insert select to connect Exchange Sink.
+    output: Option<Arc<OutputPort>>,
 }
 
 impl FuseTableSink {
@@ -85,6 +89,7 @@ impl FuseTableSink {
         data_accessor: Operator,
         meta_locations: TableMetaLocationGenerator,
         cluster_stats_gen: ClusterStatsGenerator,
+        output: Option<Arc<OutputPort>>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(FuseTableSink {
             ctx,
@@ -95,6 +100,7 @@ impl FuseTableSink {
             accumulator: Default::default(),
             num_block_threshold: num_block_threshold as u64,
             cluster_stats_gen,
+            output,
         })))
     }
 }
@@ -129,7 +135,9 @@ impl Processor for FuseTableSink {
                 self.state = State::GenerateSegment;
                 return Ok(Event::Sync);
             }
-
+            if let Some(output) = &self.output {
+                output.finish();
+            }
             self.state = State::Finished;
             return Ok(Event::Finished);
         }
@@ -260,8 +268,8 @@ impl Processor for FuseTableSink {
 
                 // TODO: dyn operation for table trait
                 let log_entry = AppendOperationLogEntry::new(location, segment);
-                self.ctx
-                    .push_precommit_block(DataBlock::try_from(log_entry)?);
+                let data_block = DataBlock::try_from(log_entry)?;
+                self.ctx.push_precommit_block(data_block);
             }
             _state => {
                 return Err(ErrorCode::LogicalError(

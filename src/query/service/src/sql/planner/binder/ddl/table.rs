@@ -33,13 +33,12 @@ use common_datavalues::TypeFactory;
 use common_datavalues::Vu8;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_legacy_planners::OptimizeTableAction;
+use common_legacy_planners::*;
 use common_meta_app::schema::TableMeta;
-use common_planners::OptimizeTableAction;
-use common_planners::*;
 use tracing::debug;
 
 use crate::catalogs::DatabaseCatalog;
-use crate::sessions::TableContext;
 use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::Binder;
 use crate::sql::binder::Visibility;

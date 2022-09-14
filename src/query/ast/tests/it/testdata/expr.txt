@@ -1582,20 +1582,18 @@ Substring {
             span: Ident(10..11),
         },
     },
-    substring_from: Some(
-        ColumnRef {
-            span: [
-                Ident(17..18),
-            ],
-            database: None,
-            table: None,
-            column: Identifier {
-                name: "b",
-                quote: None,
-                span: Ident(17..18),
-            },
+    substring_from: ColumnRef {
+        span: [
+            Ident(17..18),
+        ],
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "b",
+            quote: None,
+            span: Ident(17..18),
         },
-    ),
+    },
     substring_for: Some(
         ColumnRef {
             span: [
@@ -1641,20 +1639,18 @@ Substring {
             span: Ident(10..11),
         },
     },
-    substring_from: Some(
-        ColumnRef {
-            span: [
-                Ident(13..14),
-            ],
-            database: None,
-            table: None,
-            column: Identifier {
-                name: "b",
-                quote: None,
-                span: Ident(13..14),
-            },
+    substring_from: ColumnRef {
+        span: [
+            Ident(13..14),
+        ],
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "b",
+            quote: None,
+            span: Ident(13..14),
         },
-    ),
+    },
     substring_for: Some(
         ColumnRef {
             span: [

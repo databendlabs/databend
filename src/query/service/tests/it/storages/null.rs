@@ -15,9 +15,9 @@
 use common_base::base::tokio;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_legacy_planners::*;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use common_planners::*;
 use databend_query::sql::plans::create_table_v2::TableOptions;
 use databend_query::storages::null::NullTable;
 use databend_query::storages::TableStreamReadWrap;

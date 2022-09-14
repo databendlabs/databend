@@ -26,7 +26,7 @@ use once_cell::sync::Lazy;
 
 use super::rule::RuleID;
 use super::ColumnSet;
-use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::optimizer::heuristic::decorrelate::decorrelate_subquery;
 use crate::sql::optimizer::heuristic::implement::HeuristicImplementor;
 pub use crate::sql::optimizer::heuristic::rule_list::RuleList;
@@ -65,14 +65,14 @@ pub struct HeuristicOptimizer {
     rules: RuleList,
     implementor: HeuristicImplementor,
 
-    _ctx: Arc<QueryContext>,
+    _ctx: Arc<dyn TableContext>,
     bind_context: Box<BindContext>,
     metadata: MetadataRef,
 }
 
 impl HeuristicOptimizer {
     pub fn new(
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         bind_context: Box<BindContext>,
         metadata: MetadataRef,
         rules: RuleList,

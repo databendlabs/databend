@@ -11,7 +11,7 @@ doctest = false
 test = false
 
 [dependencies]
-anyhow = "1.0.58"
+anyhow = "1.0.64"
 cargo-license = "0.5.1"
 cargo_metadata = "0.15.0"
 git2 = { version = "0.14.4", default-features = false }

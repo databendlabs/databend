@@ -22,8 +22,8 @@ use common_datavalues::DataSchemaRefExt;
 use common_datavalues::Series;
 use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
-use common_planners::Expression;
-use common_planners::Projection;
+use common_legacy_planners::Expression;
+use common_legacy_planners::Projection;
 
 use crate::operations::mutation::deletion_mutator::Deletion;
 use crate::pipelines::processors::transforms::ExpressionExecutor;
