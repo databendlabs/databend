@@ -15,14 +15,15 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_legacy_planners::TruncateTablePlan;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
-use common_planners::TruncateTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 pub struct TruncateTableInterpreter {
     ctx: Arc<QueryContext>,

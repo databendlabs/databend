@@ -17,9 +17,9 @@ use std::sync::Arc;
 use async_stream::stream;
 use common_exception::Result;
 use common_formats::output_format::OutputFormatType;
-use common_planners::Extras;
-use common_planners::ReadDataSourcePlan;
-use common_planners::SourceInfo;
+use common_legacy_planners::Extras;
+use common_legacy_planners::ReadDataSourcePlan;
+use common_legacy_planners::SourceInfo;
 use futures::StreamExt;
 
 use crate::sessions::QueryContext;

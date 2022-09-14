@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_planners::PlanNode;
-use common_planners::SelectPlan;
+use common_legacy_planners::PlanNode;
+use common_legacy_planners::SelectPlan;
 use common_streams::SendableDataBlockStream;
 
 use crate::clusters::ClusterHelper;

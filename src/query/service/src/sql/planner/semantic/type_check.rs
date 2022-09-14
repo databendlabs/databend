@@ -51,12 +51,11 @@ use common_functions::is_builtin_function;
 use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::TupleFunction;
-use common_planners::validate_function_arg;
+use common_legacy_planners::validate_function_arg;
 
 use super::name_resolution::NameResolutionContext;
 use super::normalize_identifier;
 use crate::evaluator::Evaluator;
-use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::binder::wrap_cast_if_needed;
 use crate::sql::binder::Binder;
@@ -90,7 +89,7 @@ use crate::sql::ScalarExpr;
 /// argument types of expressions, or unresolvable columns.
 pub struct TypeChecker<'a> {
     bind_context: &'a BindContext,
-    ctx: Arc<QueryContext>,
+    ctx: Arc<dyn TableContext>,
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
 
@@ -104,7 +103,7 @@ pub struct TypeChecker<'a> {
 impl<'a> TypeChecker<'a> {
     pub fn new(
         bind_context: &'a BindContext,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
         aliases: &'a [(String, Scalar)],
@@ -471,18 +470,10 @@ impl<'a> TypeChecker<'a> {
                 substring_for,
                 ..
             } => {
-                let mut arguments = vec![expr.as_ref()];
-                match (substring_from, substring_for) {
-                    (Some(from_expr), None) => {
-                        arguments.push(from_expr.as_ref());
-                    }
-                    (Some(from_expr), Some(for_expr)) => {
-                        arguments.push(from_expr.as_ref());
-                        arguments.push(for_expr.as_ref());
-                    }
-                    _ => return Err(ErrorCode::SemanticError("Invalid arguments of SUBSTRING")),
+                let mut arguments = vec![expr.as_ref(), substring_from.as_ref()];
+                if let Some(substring_for) = substring_for {
+                    arguments.push(substring_for.as_ref());
                 }
-
                 self.resolve_function(span, "substring", &arguments, required_type)
                     .await?
             }
@@ -1446,8 +1437,8 @@ impl<'a> TypeChecker<'a> {
                     .await,
                 )
             }
-            ("is_null", &[arg0]) => {
-                // Rewrite `is_null(arg0)` to `not(is_not_null(arg0))`
+            ("is_null", &[arg_x]) => {
+                // Rewrite `is_null(x)` to `not(is_not_null(x))`
                 Some(
                     self.resolve_function(
                         span,
@@ -1460,7 +1451,7 @@ impl<'a> TypeChecker<'a> {
                                 quote: None,
                                 span: span[0].clone(),
                             },
-                            args: vec![(*arg0).clone()],
+                            args: vec![(*arg_x).clone()],
                             params: vec![],
                         }],
                         None,
@@ -1469,7 +1460,7 @@ impl<'a> TypeChecker<'a> {
                 )
             }
             ("not_in", args) => {
-                // Rewrite `not_in(arg0)` to `not(in(arg0))`
+                // Rewrite `not_in(x)` to `not(in(x))`
                 Some(
                     self.resolve_function(
                         span,
@@ -1490,8 +1481,8 @@ impl<'a> TypeChecker<'a> {
                     .await,
                 )
             }
-            ("nullif", &[arg0, arg1]) => {
-                // Rewrite nullif(arg0, arg1) to if(arg0 = arg1, null, arg0)
+            ("nullif", &[arg_x, arg_y]) => {
+                // Rewrite nullif(x, y) to if(x = y, null, x)
                 Some(
                     self.resolve_function(
                         span,
@@ -1500,22 +1491,22 @@ impl<'a> TypeChecker<'a> {
                             &Expr::BinaryOp {
                                 span,
                                 op: BinaryOperator::Eq,
-                                left: Box::new((*arg0).clone()),
-                                right: Box::new((*arg1).clone()),
+                                left: Box::new((*arg_x).clone()),
+                                right: Box::new((*arg_y).clone()),
                             },
                             &Expr::Literal {
                                 span,
                                 lit: Literal::Null,
                             },
-                            arg0,
+                            arg_x,
                         ],
                         None,
                     )
                     .await,
                 )
             }
-            ("ifnull", &[arg0, arg1]) => {
-                // Rewrite ifnull(arg0, arg1) to if(is_null(arg0), arg1, arg0)
+            ("ifnull", &[arg_x, arg_y]) => {
+                // Rewrite ifnull(x, y) to if(is_null(x), y, x)
                 Some(
                     self.resolve_function(
                         span,
@@ -1523,11 +1514,11 @@ impl<'a> TypeChecker<'a> {
                         &[
                             &Expr::IsNull {
                                 span,
-                                expr: Box::new((*arg0).clone()),
+                                expr: Box::new((*arg_x).clone()),
                                 not: false,
                             },
-                            arg1,
-                            arg0,
+                            arg_y,
+                            arg_x,
                         ],
                         None,
                     )
@@ -1988,14 +1979,9 @@ impl<'a> TypeChecker<'a> {
                     expr: Box::new(
                         self.clone_expr_with_replacement(expr.as_ref(), replacement_fn)?,
                     ),
-                    substring_from: if let Some(substring_from_expr) = substring_from {
-                        Some(Box::new(self.clone_expr_with_replacement(
-                            substring_from_expr.as_ref(),
-                            replacement_fn,
-                        )?))
-                    } else {
-                        None
-                    },
+                    substring_from: Box::new(
+                        self.clone_expr_with_replacement(substring_from.as_ref(), replacement_fn)?,
+                    ),
                     substring_for: if let Some(substring_for_expr) = substring_for {
                         Some(Box::new(self.clone_expr_with_replacement(
                             substring_for_expr.as_ref(),

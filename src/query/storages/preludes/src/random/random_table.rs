@@ -19,12 +19,12 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_exception::Result;
+use common_legacy_planners::Extras;
+use common_legacy_planners::Partitions;
+use common_legacy_planners::Projection;
+use common_legacy_planners::ReadDataSourcePlan;
+use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
-use common_planners::Extras;
-use common_planners::Partitions;
-use common_planners::Projection;
-use common_planners::ReadDataSourcePlan;
-use common_planners::Statistics;
 
 use super::RandomPartInfo;
 use crate::pipelines::processors::port::OutputPort;

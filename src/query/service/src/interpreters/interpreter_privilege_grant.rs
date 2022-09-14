@@ -15,10 +15,10 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_legacy_planners::GrantPrivilegePlan;
 use common_meta_types::GrantObject;
 use common_meta_types::PrincipalIdentity;
 use common_meta_types::UserPrivilegeSet;
-use common_planners::GrantPrivilegePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 

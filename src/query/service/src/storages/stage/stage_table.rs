@@ -21,15 +21,15 @@ use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_formats::output_format::OutputFormatType;
+use common_legacy_planners::Extras;
+use common_legacy_planners::Partitions;
+use common_legacy_planners::ReadDataSourcePlan;
+use common_legacy_planners::StageTableInfo;
+use common_legacy_planners::Statistics;
+use common_legacy_planners::TruncateTablePlan;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::SinkPipeBuilder;
-use common_planners::Extras;
-use common_planners::Partitions;
-use common_planners::ReadDataSourcePlan;
-use common_planners::StageTableInfo;
-use common_planners::Statistics;
-use common_planners::TruncateTablePlan;
 use parking_lot::Mutex;
 use tracing::info;
 
@@ -123,7 +123,7 @@ impl Table for StageTable {
         Ok(())
     }
 
-    fn append2(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
+    fn append2(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline, _: bool) -> Result<()> {
         let mut sink_pipeline_builder = SinkPipeBuilder::create();
         for _ in 0..pipeline.output_len() {
             let input_port = InputPort::create();

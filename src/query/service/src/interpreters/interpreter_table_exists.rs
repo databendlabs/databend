@@ -18,12 +18,13 @@ use common_datablocks::DataBlock;
 use common_datavalues::Series;
 use common_datavalues::SeriesFrom;
 use common_exception::Result;
-use common_planners::ExistsTablePlan;
+use common_legacy_planners::ExistsTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 pub struct ExistsTableInterpreter {
     ctx: Arc<QueryContext>,

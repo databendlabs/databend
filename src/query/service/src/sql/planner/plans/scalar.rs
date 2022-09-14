@@ -25,7 +25,7 @@ use common_functions::scalars::FunctionFactory;
 use crate::sql::binder::ColumnBinding;
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::SExpr;
-use crate::sql::IndexType;
+use crate::sql::planner::IndexType;
 
 pub trait ScalarExpr {
     /// Get return type and nullability

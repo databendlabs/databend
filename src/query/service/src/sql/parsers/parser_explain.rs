@@ -15,7 +15,7 @@
 // Borrow from apache/arrow/rust/datafusion/src/sql/sql_parser
 // See notice.md
 
-use common_planners::ExplainType;
+use common_legacy_planners::ExplainType;
 use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::Token;
 

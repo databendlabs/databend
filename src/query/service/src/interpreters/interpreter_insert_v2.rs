@@ -15,27 +15,33 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_datavalues::DataType;
+use common_catalog::table::Table;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::scalars::CastFunction;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
+use futures_util::StreamExt;
 use parking_lot::Mutex;
 
 use super::commit2table;
 use super::interpreter_common::append2table;
+use super::plan_schedulers::build_schedule_pipepline;
+use super::ProcessorExecutorStream;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::interpreters::SelectInterpreterV2;
+use crate::pipelines::executor::ExecutorSettings;
+use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::BlocksSource;
-use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::Pipeline;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::sql::executor::DistributedInsertSelect;
+use crate::sql::executor::PhysicalPlan;
+use crate::sql::executor::PhysicalPlanBuilder;
+use crate::sql::executor::PipelineBuilder;
 use crate::sql::plans::Insert;
 use crate::sql::plans::InsertInputSource;
 use crate::sql::plans::Plan;
@@ -101,53 +107,7 @@ impl InsertInterpreterV2 {
                     );
                 }
                 InsertInputSource::SelectPlan(plan) => {
-                    let select_interpreter = match &**plan {
-                        Plan::Query {
-                            s_expr,
-                            metadata,
-                            bind_context,
-                            ..
-                        } => SelectInterpreterV2::try_create(
-                            self.ctx.clone(),
-                            *bind_context.clone(),
-                            *s_expr.clone(),
-                            metadata.clone(),
-                        ),
-                        _ => unreachable!(),
-                    };
-
-                    build_res = select_interpreter?.create_new_pipeline().await?;
-
-                    if self.check_schema_cast(plan)? {
-                        let mut functions = Vec::with_capacity(self.plan.schema().fields().len());
-
-                        for (target_field, original_field) in self
-                            .plan
-                            .schema()
-                            .fields()
-                            .iter()
-                            .zip(plan.schema().fields().iter())
-                        {
-                            let target_type_name = target_field.data_type().name();
-                            let from_type = original_field.data_type().clone();
-                            let cast_function =
-                                CastFunction::create("cast", &target_type_name, from_type)?;
-                            functions.push(cast_function);
-                        }
-
-                        let func_ctx = self.ctx.try_get_function_context()?;
-                        build_res.main_pipeline.add_transform(
-                            |transform_input_port, transform_output_port| {
-                                TransformCastSchema::try_create(
-                                    transform_input_port,
-                                    transform_output_port,
-                                    self.plan.schema(),
-                                    functions.clone(),
-                                    func_ctx.clone(),
-                                )
-                            },
-                        )?;
-                    }
+                    return self.schedule_insert_select(plan, table.clone()).await;
                 }
             };
         }
@@ -176,6 +136,93 @@ impl InsertInterpreterV2 {
         // check if cast needed
         let cast_needed = select_schema != *output_schema;
         Ok(cast_needed)
+    }
+
+    async fn schedule_insert_select(
+        &self,
+        plan: &Plan,
+        table: Arc<dyn Table>,
+    ) -> Result<SendableDataBlockStream> {
+        // select_plan is already distributed optimized
+        let (mut select_plan, select_column_bindings) = match plan {
+            Plan::Query {
+                s_expr,
+                metadata,
+                bind_context,
+                ..
+            } => {
+                let builder = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone());
+                (builder.build(s_expr).await?, bind_context.columns.clone())
+            }
+            _ => unreachable!(),
+        };
+
+        table.get_table_info();
+        let catalog = self.plan.catalog.clone();
+        let is_distributed_plan = select_plan.is_distributed_plan();
+
+        let insert_select_plan = match select_plan {
+            PhysicalPlan::Exchange(ref mut exchange) => {
+                // insert can be dispatched to different nodes
+                let input = exchange.input.clone();
+                exchange.input = Box::new(PhysicalPlan::DistributedInsertSelect(Box::new(
+                    DistributedInsertSelect {
+                        input,
+                        catalog,
+                        table_info: table.get_table_info().clone(),
+                        select_schema: plan.schema(),
+                        select_column_bindings,
+                        insert_schema: self.plan.schema(),
+                        cast_needed: self.check_schema_cast(plan)?,
+                    },
+                )));
+                select_plan
+            }
+            other_plan => {
+                // insert should wait until all nodes finished
+                PhysicalPlan::DistributedInsertSelect(Box::new(DistributedInsertSelect {
+                    input: Box::new(other_plan),
+                    catalog,
+                    table_info: table.get_table_info().clone(),
+                    select_schema: plan.schema(),
+                    select_column_bindings,
+                    insert_schema: self.plan.schema(),
+                    cast_needed: self.check_schema_cast(plan)?,
+                }))
+            }
+        };
+
+        let mut build_res = if !is_distributed_plan {
+            let builder = PipelineBuilder::create(self.ctx.clone());
+            builder.finalize(&insert_select_plan)?
+        } else {
+            build_schedule_pipepline(self.ctx.clone(), &insert_select_plan).await?
+        };
+
+        let settings = self.ctx.get_settings();
+        let query_need_abort = self.ctx.query_need_abort();
+        let executor_settings = ExecutorSettings::try_create(&settings)?;
+        build_res.set_max_threads(settings.get_max_threads()? as usize);
+
+        let executor = PipelinePullingExecutor::from_pipelines(
+            query_need_abort,
+            build_res,
+            executor_settings,
+        )?;
+
+        let mut stream: SendableDataBlockStream =
+            Box::pin(ProcessorExecutorStream::create(executor)?);
+        while let Some(block) = stream.next().await {
+            block?;
+        }
+
+        commit2table(self.ctx.clone(), table.clone(), self.plan.overwrite).await?;
+
+        Ok(Box::pin(DataBlockStream::create(
+            self.plan.schema(),
+            None,
+            vec![],
+        )))
     }
 }
 

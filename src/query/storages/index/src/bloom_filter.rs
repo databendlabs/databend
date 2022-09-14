@@ -22,8 +22,8 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_legacy_planners::Expression;
 use common_pipeline_transforms::processors::transforms::transform_expression_executor::ExpressionExecutor;
-use common_planners::Expression;
 use tracing::debug;
 
 use crate::IndexSchemaVersion;

@@ -17,13 +17,14 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_legacy_planners::Extras;
+use common_legacy_planners::Partitions;
+use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use common_planners::Extras;
-use common_planners::Partitions;
-use common_planners::Statistics;
 
+use super::table::SystemTablePart;
 use crate::sessions::TableContext;
 use crate::storages::system::table::SyncOneBlockSystemTable;
 use crate::storages::system::table::SyncSystemTable;
@@ -51,7 +52,9 @@ impl SyncSystemTable for OneTable {
         _ctx: Arc<dyn TableContext>,
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
-        Ok((Statistics::new_exact(1, 1, 1, 1), vec![]))
+        Ok((Statistics::new_exact(1, 1, 1, 1), vec![Arc::new(Box::new(
+            SystemTablePart,
+        ))]))
     }
 }
 

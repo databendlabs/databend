@@ -15,7 +15,7 @@
 use std::ops::Range;
 use std::sync::Arc;
 
-use common_planners::PartInfo;
+use common_legacy_planners::PartInfo;
 
 use crate::HiveFileInfo;
 use crate::HivePartInfo;

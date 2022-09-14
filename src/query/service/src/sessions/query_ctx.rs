@@ -32,16 +32,16 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionContext;
 use common_io::prelude::FormatSettings;
+use common_legacy_planners::Expression;
+use common_legacy_planners::PartInfoPtr;
+use common_legacy_planners::Partitions;
+use common_legacy_planners::PlanNode;
+use common_legacy_planners::ReadDataSourcePlan;
+use common_legacy_planners::SourceInfo;
+use common_legacy_planners::StageTableInfo;
+use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::UserInfo;
-use common_planners::Expression;
-use common_planners::PartInfoPtr;
-use common_planners::Partitions;
-use common_planners::PlanNode;
-use common_planners::ReadDataSourcePlan;
-use common_planners::SourceInfo;
-use common_planners::StageTableInfo;
-use common_planners::Statistics;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
 use common_users::UserApiProvider;
@@ -123,22 +123,6 @@ impl QueryContext {
         _table_args: Option<Vec<Expression>>,
     ) -> Result<Arc<dyn Table>> {
         StageTable::try_create(table_info.clone())
-    }
-
-    /// Fetch a Table by db and table name.
-    ///
-    /// It guaranteed to return a consistent result for multiple calls, in a same query.
-    /// E.g.:
-    /// ```sql
-    /// SELECT * FROM (SELECT * FROM db.table_name) as subquery_1, (SELECT * FROM db.table_name) AS subquery_2
-    /// ```
-    pub async fn get_table(
-        &self,
-        catalog: &str,
-        database: &str,
-        table: &str,
-    ) -> Result<Arc<dyn Table>> {
-        self.shared.get_table(catalog, database, table).await
     }
 
     pub async fn set_current_database(&self, new_database_name: String) -> Result<()> {
@@ -416,6 +400,22 @@ impl TableContext for QueryContext {
 
     fn get_cluster(&self) -> Arc<Cluster> {
         self.shared.get_cluster()
+    }
+
+    /// Fetch a Table by db and table name.
+    ///
+    /// It guaranteed to return a consistent result for multiple calls, in a same query.
+    /// E.g.:
+    /// ```sql
+    /// SELECT * FROM (SELECT * FROM db.table_name) as subquery_1, (SELECT * FROM db.table_name) AS subquery_2
+    /// ```
+    async fn get_table(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+    ) -> Result<Arc<dyn Table>> {
+        self.shared.get_table(catalog, database, table).await
     }
 
     // Get all the processes list info.

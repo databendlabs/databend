@@ -35,11 +35,14 @@ use common_meta_app::schema::DbIdListKey;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropTableReq;
 use common_meta_app::schema::GetDatabaseReq;
+use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::GetTableReq;
 use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::TableCopiedFileInfo;
+use common_meta_app::schema::TableCopiedFileNameIdent;
 use common_meta_app::schema::TableId;
 use common_meta_app::schema::TableIdList;
 use common_meta_app::schema::TableIdListKey;
@@ -49,9 +52,11 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::schema::TableStatistics;
+use common_meta_app::schema::TruncateTableReq;
 use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReq;
+use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::share::AddShareAccountsReq;
 use common_meta_app::share::CreateShareReq;
@@ -246,6 +251,8 @@ impl SchemaApiTestSuite {
             .table_drop_out_of_retention_time_history(&b.build().await)
             .await?;
         suite.get_table_by_id(&b.build().await).await?;
+        suite.get_table_copied_file(&b.build().await).await?;
+        suite.truncate_table(&b.build().await).await?;
         Ok(())
     }
 
@@ -2398,7 +2405,7 @@ impl SchemaApiTestSuite {
         dbid_tbname: DBIdTableName,
         drop_on: Option<DateTime<Utc>>,
         delete: bool,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<u64> {
         let created_on = Utc::now();
         let schema = || {
             Arc::new(DataSchema::new(vec![DataField::new(
@@ -2439,7 +2446,7 @@ impl SchemaApiTestSuite {
         if delete {
             delete_test_data(mt.as_kv_api(), &dbid_tbname).await?;
         }
-        Ok(())
+        Ok(table_id)
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
@@ -2484,17 +2491,45 @@ impl SchemaApiTestSuite {
             true,
         )
         .await?;
-        self.create_out_of_retention_time_table(
-            mt,
-            tbl_name_ident.clone(),
-            DBIdTableName {
-                db_id: res.db_id,
-                table_name: tb1_name.to_string(),
-            },
-            Some(Utc::now() - Duration::days(2)),
-            false,
-        )
-        .await?;
+        let table_id = self
+            .create_out_of_retention_time_table(
+                mt,
+                tbl_name_ident.clone(),
+                DBIdTableName {
+                    db_id: res.db_id,
+                    table_name: tb1_name.to_string(),
+                },
+                Some(Utc::now() - Duration::days(2)),
+                false,
+            )
+            .await?;
+
+        info!("--- create and get stage file info");
+        {
+            let stage_info = TableCopiedFileInfo {
+                etag: Some("etag".to_owned()),
+                content_length: 1024,
+                last_modified: Some(Utc::now()),
+            };
+            let mut file_info = BTreeMap::new();
+            file_info.insert("file".to_string(), stage_info.clone());
+
+            let req = UpsertTableCopiedFileReq {
+                table_id,
+                file_info: file_info.clone(),
+                expire_at: Some((Utc::now().timestamp() + 86400) as u64),
+            };
+
+            let _ = mt.upsert_table_copied_file_info(req).await?;
+
+            let key = TableCopiedFileNameIdent {
+                table_id,
+                file: "file".to_string(),
+            };
+
+            let stage_file: TableCopiedFileInfo = get_kv_data(mt.as_kv_api(), &key).await?;
+            assert_eq!(stage_file, stage_info);
+        }
 
         let table_id_idlist = TableIdListKey {
             db_id: res.db_id,
@@ -2531,6 +2566,18 @@ impl SchemaApiTestSuite {
                 get_kv_data(mt.as_kv_api(), &id_mapping).await;
             assert!(meta_res.is_err());
             assert!(mapping_res.is_err());
+        }
+
+        info!("--- assert stage file info has been removed");
+        {
+            let key = TableCopiedFileNameIdent {
+                table_id,
+                file: "file".to_string(),
+            };
+
+            let resp: Result<TableCopiedFileInfo, MetaError> =
+                get_kv_data(mt.as_kv_api(), &key).await;
+            assert!(resp.is_err());
         }
 
         Ok(())
@@ -3112,6 +3159,220 @@ impl SchemaApiTestSuite {
                 assert_eq!(ErrorCode::UnknownTableId("").code(), err.code());
             }
         }
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn get_table_copied_file<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+        let tenant = "tenant1";
+        let db_name = "db1";
+        let tbl_name = "tb2";
+        let table_id;
+
+        let schema = || {
+            Arc::new(DataSchema::new(vec![DataField::new(
+                "number",
+                u64::to_data_type(),
+            )]))
+        };
+
+        let options = || maplit::btreemap! {"opt‐1".into() => "val-1".into()};
+
+        let table_meta = |created_on| TableMeta {
+            schema: schema(),
+            engine: "JSON".to_string(),
+            options: options(),
+            created_on,
+            ..TableMeta::default()
+        };
+
+        info!("--- prepare db and table");
+        {
+            let plan = CreateDatabaseReq {
+                if_not_exists: false,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
+                meta: DatabaseMeta {
+                    engine: "".to_string(),
+                    ..DatabaseMeta::default()
+                },
+            };
+
+            let _ = mt.create_database(plan).await?;
+            let created_on = Utc::now();
+
+            let req = CreateTableReq {
+                if_not_exists: false,
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                table_meta: table_meta(created_on),
+            };
+            let resp = mt.create_table(req.clone()).await?;
+            table_id = resp.table_id;
+        }
+
+        info!("--- create and get stage file info");
+        {
+            let stage_info = TableCopiedFileInfo {
+                etag: Some("etag".to_owned()),
+                content_length: 1024,
+                last_modified: Some(Utc::now()),
+            };
+            let mut file_info = BTreeMap::new();
+            file_info.insert("file".to_string(), stage_info.clone());
+
+            let req = UpsertTableCopiedFileReq {
+                table_id,
+                file_info: file_info.clone(),
+                expire_at: Some((Utc::now().timestamp() + 86400) as u64),
+            };
+
+            let _ = mt.upsert_table_copied_file_info(req).await?;
+
+            let req = GetTableCopiedFileReq {
+                table_id,
+                files: vec!["file".to_string()],
+            };
+
+            let resp = mt.get_table_copied_file_info(req).await?;
+            assert_eq!(resp.file_info.len(), 1);
+            let resp_stage_info = resp.file_info.get(&"file".to_string());
+            assert_eq!(resp_stage_info.unwrap(), &stage_info);
+        }
+
+        info!("--- test again with expire stage file info");
+        {
+            let stage_info = TableCopiedFileInfo {
+                etag: Some("etag".to_owned()),
+                content_length: 1024,
+                last_modified: Some(Utc::now()),
+            };
+            let mut file_info = BTreeMap::new();
+            file_info.insert("file2".to_string(), stage_info.clone());
+
+            let req = UpsertTableCopiedFileReq {
+                table_id,
+                file_info: file_info.clone(),
+                expire_at: Some((Utc::now().timestamp() - 86400) as u64),
+            };
+
+            let _ = mt.upsert_table_copied_file_info(req).await?;
+
+            let req = GetTableCopiedFileReq {
+                table_id,
+                files: vec!["file2".to_string()],
+            };
+
+            let resp = mt.get_table_copied_file_info(req).await?;
+            assert_eq!(resp.file_info.len(), 0);
+        }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn truncate_table<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+        let tenant = "tenant1";
+        let db_name = "db1";
+        let tbl_name = "tb2";
+        let table_id;
+
+        let schema = || {
+            Arc::new(DataSchema::new(vec![DataField::new(
+                "number",
+                u64::to_data_type(),
+            )]))
+        };
+
+        let options = || maplit::btreemap! {"opt‐1".into() => "val-1".into()};
+
+        let table_meta = |created_on| TableMeta {
+            schema: schema(),
+            engine: "JSON".to_string(),
+            options: options(),
+            created_on,
+            ..TableMeta::default()
+        };
+
+        info!("--- prepare db and table");
+        {
+            let plan = CreateDatabaseReq {
+                if_not_exists: false,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
+                meta: DatabaseMeta {
+                    engine: "".to_string(),
+                    ..DatabaseMeta::default()
+                },
+            };
+
+            let _ = mt.create_database(plan).await?;
+            let created_on = Utc::now();
+
+            let req = CreateTableReq {
+                if_not_exists: false,
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                table_meta: table_meta(created_on),
+            };
+            let resp = mt.create_table(req.clone()).await?;
+            table_id = resp.table_id;
+        }
+
+        info!("--- create and get stage file info");
+        {
+            let stage_info = TableCopiedFileInfo {
+                etag: Some("etag".to_owned()),
+                content_length: 1024,
+                last_modified: Some(Utc::now()),
+            };
+            let mut file_info = BTreeMap::new();
+            file_info.insert("file".to_string(), stage_info.clone());
+
+            let req = UpsertTableCopiedFileReq {
+                table_id,
+                file_info: file_info.clone(),
+                expire_at: Some((Utc::now().timestamp() + 86400) as u64),
+            };
+
+            let _ = mt.upsert_table_copied_file_info(req).await?;
+
+            let req = GetTableCopiedFileReq {
+                table_id,
+                files: vec!["file".to_string()],
+            };
+
+            let resp = mt.get_table_copied_file_info(req).await?;
+            assert_eq!(resp.file_info.len(), 1);
+            let resp_stage_info = resp.file_info.get(&"file".to_string());
+            assert_eq!(resp_stage_info.unwrap(), &stage_info);
+        }
+
+        info!("--- truncate table and get stage file info again");
+        {
+            let req = TruncateTableReq { table_id };
+
+            let _ = mt.truncate_table(req).await?;
+
+            let req = GetTableCopiedFileReq {
+                table_id,
+                files: vec!["file2".to_string()],
+            };
+
+            let resp = mt.get_table_copied_file_info(req).await?;
+            assert_eq!(resp.file_info.len(), 0);
+        }
+
         Ok(())
     }
 

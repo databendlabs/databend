@@ -25,11 +25,11 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionContext;
 use common_io::prelude::FormatSettings;
+use common_legacy_planners::Partitions;
+use common_legacy_planners::PlanNode;
+use common_legacy_planners::ReadDataSourcePlan;
+use common_legacy_planners::Statistics;
 use common_meta_types::UserInfo;
-use common_planners::Partitions;
-use common_planners::PlanNode;
-use common_planners::ReadDataSourcePlan;
-use common_planners::Statistics;
 use common_settings::Settings;
 use common_users::UserApiProvider;
 use opendal::Operator;
@@ -111,5 +111,7 @@ pub trait TableContext: Send + Sync {
     // Get user manager api.
     fn get_user_manager(&self) -> Arc<UserApiProvider>;
     fn get_cluster(&self) -> Arc<Cluster>;
+    async fn get_table(&self, catalog: &str, database: &str, table: &str)
+    -> Result<Arc<dyn Table>>;
     async fn get_processes_info(&self) -> Vec<ProcessInfo>;
 }

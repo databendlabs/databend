@@ -24,8 +24,8 @@ use common_base::base::Runtime;
 use common_contexts::DalContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_legacy_planners::PlanNode;
 use common_meta_types::UserInfo;
-use common_planners::PlanNode;
 use common_storage::StorageOperator;
 use common_users::UserApiProvider;
 use futures::future::AbortHandle;
@@ -124,11 +124,8 @@ impl QueryContextShared {
         self.query_need_abort.clone()
     }
 
-    pub fn kill(&self) {
-        self.set_error(ErrorCode::AbortedQuery(
-            "Aborted query, because the server is shutting down or the query was killed",
-        ));
-
+    pub fn kill(&self, cause: ErrorCode) {
+        self.set_error(cause);
         self.query_need_abort.store(true, Ordering::Release);
         let mut sources_abort_handle = self.sources_abort_handle.write();
 

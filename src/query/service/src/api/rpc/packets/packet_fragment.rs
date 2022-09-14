@@ -17,7 +17,7 @@ use std::fmt::Formatter;
 
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_planners::PlanNode;
+use common_legacy_planners::PlanNode;
 
 use crate::api::DataExchange;
 use crate::sql::executor::PhysicalPlan;

@@ -17,15 +17,15 @@ use std::sync::Arc;
 
 use common_catalog::catalog::CATALOG_DEFAULT;
 use common_exception::Result;
+use common_legacy_planners::Expression;
+use common_legacy_planners::Extras;
+use common_legacy_planners::Partitions;
+use common_legacy_planners::ReadDataSourcePlan;
+use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_pipeline_sources::processors::sources::StreamSourceNoSkipEmpty;
-use common_planners::Expression;
-use common_planners::Extras;
-use common_planners::Partitions;
-use common_planners::ReadDataSourcePlan;
-use common_planners::Statistics;
 
 use super::fuse_snapshot::FuseSnapshot;
 use super::table_args::parse_func_history_args;

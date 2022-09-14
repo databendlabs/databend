@@ -29,6 +29,55 @@ use crate::Incompatible;
 use crate::MIN_COMPATIBLE_VER;
 use crate::VER;
 
+impl FromToProto for mt::TableCopiedFileInfo {
+    type PB = pb::TableCopiedFileInfo;
+    fn from_pb(p: pb::TableCopiedFileInfo) -> Result<Self, Incompatible> {
+        check_ver(p.ver, p.min_compatible)?;
+
+        let v = Self {
+            etag: p.etag,
+            content_length: p.content_length,
+            last_modified: match p.last_modified {
+                None => None,
+                Some(last_modified) => Some(DateTime::<Utc>::from_pb(last_modified)?),
+            },
+        };
+        Ok(v)
+    }
+
+    fn to_pb(&self) -> Result<pb::TableCopiedFileInfo, Incompatible> {
+        let p = pb::TableCopiedFileInfo {
+            ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
+            etag: self.etag.clone(),
+            content_length: self.content_length,
+            last_modified: match self.last_modified {
+                None => None,
+                Some(last_modified) => Some(last_modified.to_pb()?),
+            },
+        };
+        Ok(p)
+    }
+}
+
+impl FromToProto for mt::TableCopiedFileLock {
+    type PB = pb::TableCopiedFileLock;
+    fn from_pb(p: pb::TableCopiedFileLock) -> Result<Self, Incompatible> {
+        check_ver(p.ver, p.min_compatible)?;
+
+        let v = Self {};
+        Ok(v)
+    }
+
+    fn to_pb(&self) -> Result<pb::TableCopiedFileLock, Incompatible> {
+        let p = pb::TableCopiedFileLock {
+            ver: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
+        };
+        Ok(p)
+    }
+}
+
 impl FromToProto for mt::TableInfo {
     type PB = pb::TableInfo;
     fn from_pb(p: pb::TableInfo) -> Result<Self, Incompatible> {
