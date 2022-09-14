@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_exception::Result;
 use common_expression::types::DataType;
-use common_expression::{Result, Scalar};
+use common_expression::types::NumberDataType;
+use common_expression::Scalar;
 
 use super::aggregate_null_variadic_adaptor::AggregateNullVariadicAdaptor;
 use super::AggregateNullUnaryAdaptor;
@@ -29,11 +31,13 @@ impl AggregateFunctionCombinatorNull {
         let mut results = Vec::with_capacity(arguments.len());
 
         for arg in arguments.iter() {
-            if arg.is_nullable() {
-                let ty = remove_nullable(arg.data_type());
-                results.push(DataType::new(arg.name(), ty));
-            } else {
-                results.push(arg.clone());
+            match arg {
+                DataType::Nullable(box ty) => {
+                    results.push(ty.clone());
+                }
+                _ => {
+                    results.push(arg.clone());
+                }
             }
         }
         Ok(results)
@@ -51,15 +55,13 @@ impl AggregateFunctionCombinatorNull {
         properties: AggregateFunctionFeatures,
     ) -> Result<AggregateFunctionRef> {
         // has_null_types
-        if !arguments.is_empty()
-            && arguments
-                .iter()
-                .any(|f| f.data_type().data_type_id() == TypeID::Null)
-        {
+        if !arguments.is_empty() && arguments.iter().any(|f| f == &DataType::Null) {
             if properties.returns_default_when_only_null {
-                return AggregateNullResultFunction::try_create(u64::to_data_type());
+                return AggregateNullResultFunction::try_create(DataType::Number(
+                    NumberDataType::UInt64,
+                ));
             } else {
-                return AggregateNullResultFunction::try_create(NullType::new_impl());
+                return AggregateNullResultFunction::try_create(DataType::Null);
             }
         }
         let params = Self::transform_params(&params)?;

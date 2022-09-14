@@ -16,3 +16,4 @@
 
 // We can generate new test files via using `env REGENERATE_GOLDENFILES=1 cargo test` and `git diff` to show differs
 mod scalars;
+mod aggregates;

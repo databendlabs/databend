@@ -12,12 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod aggregate_null_adaptor;
-mod aggregate_null_unary_adaptor;
-mod aggregate_null_variadic_adaptor;
-mod aggregate_ornull_adaptor;
+use std::io::Write;
 
-pub use aggregate_null_adaptor::*;
-pub use aggregate_null_unary_adaptor::*;
-pub use aggregate_null_variadic_adaptor::*;
-pub use aggregate_ornull_adaptor::*;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::Column;
+use common_expression::ColumnFrom;
+use goldenfile::Mint;
+
+use super::run_agg_ast;
+use super::run_ast;
+
+#[test]
+fn test_agg() {
+    let mut mint = Mint::new("tests/it/aggregates/testdata");
+    let file = &mut mint.new_goldenfile("agg.txt").unwrap();
+
+    test_count(file);
+}
+
+fn test_count(file: &mut impl Write) {
+    run_agg_ast(file, "count(1)", &[]);
+}

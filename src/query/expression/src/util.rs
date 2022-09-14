@@ -25,6 +25,19 @@ use common_arrow::arrow::io::ipc::read::read_file_metadata;
 use common_arrow::arrow::io::ipc::read::FileReader;
 use common_arrow::arrow::io::ipc::write::FileWriter;
 use common_arrow::arrow::io::ipc::write::WriteOptions;
+use crate::Column;
+
+pub fn column_merge_validity(column: &Column, bitmap: Option<Bitmap>) -> Option<Bitmap> {
+    match column {
+        Column::Nullable(c) => {
+            match bitmap {
+                None => Some(c.validity.clone()),
+                Some(v) => Some(&c.validity & (&v))
+            }
+        }
+        _ => bitmap
+    }
+}
 
 pub fn bitmap_into_mut(bitmap: Bitmap) -> MutableBitmap {
     bitmap

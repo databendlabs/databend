@@ -79,6 +79,13 @@ impl DataType {
             _ => Self::Nullable(Box::new(self.clone())),
         }
     }
+    pub fn is_nullable_or_null(&self) -> bool {
+        matches!(self, &DataType::Nullable(_) | &DataType::Null)
+    }
+
+    pub fn can_inside_nullable(&self) -> bool {
+        !self.is_nullable_or_null()
+    }
 }
 
 pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {

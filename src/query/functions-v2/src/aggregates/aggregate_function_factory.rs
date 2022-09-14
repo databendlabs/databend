@@ -17,8 +17,8 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Scalar;
 use common_expression::types::DataType;
+use common_expression::Scalar;
 use once_cell::sync::Lazy;
 
 use super::AggregateFunctionCombinatorNull;
@@ -158,11 +158,7 @@ impl AggregateFunctionFactory {
         let name = name.as_ref();
         let mut features = AggregateFunctionFeatures::default();
 
-        if !arguments.is_empty()
-            && arguments
-                .iter()
-                .any(|f| f.is_nullable() || f.data_type().data_type_id() == TypeID::Null)
-        {
+        if !arguments.is_empty() && arguments.iter().any(|f| f.is_nullable_or_null()) {
             let new_params = AggregateFunctionCombinatorNull::transform_params(&params)?;
             let new_arguments = AggregateFunctionCombinatorNull::transform_arguments(&arguments)?;
 

@@ -32,7 +32,7 @@ mod boolean;
 mod control;
 mod datetime;
 mod math;
-mod parser;
+pub(crate) mod parser;
 mod string;
 mod variant;
 

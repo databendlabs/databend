@@ -17,9 +17,10 @@ use std::fmt::Display;
 use bumpalo::Bump;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Column;
-use common_expression::Scalar;
 use common_expression::types::DataType;
+use common_expression::Column;
+use common_expression::ColumnBuilder;
+use common_expression::Scalar;
 
 use super::AggregateFunctionFactory;
 use super::AggregateFunctionRef;
@@ -114,15 +115,15 @@ pub fn eval_aggr(
     rows: usize,
 ) -> Result<Column> {
     let factory = AggregateFunctionFactory::instance();
-    let arguments = types.iter().collect();
-    let cols: Vec<Column> = columns.iter().collect();
+    let arguments = types.to_owned();
+    let cols: Vec<Column> = columns.to_owned();
 
     let func = factory.get(name, params, arguments)?;
     let data_type = func.return_type()?;
 
     let eval = EvalAggr::new(func.clone());
     func.accumulate(eval.addr, &cols, None, rows)?;
-    let mut builder = data_type.create_mutable(1024);
-    func.merge_result(eval.addr, builder.as_mut())?;
-    Ok(builder.to_column())
+    let mut builder = ColumnBuilder::with_capacity(&data_type, 1024);
+    func.merge_result(eval.addr, &mut builder)?;
+    Ok(builder.build())
 }

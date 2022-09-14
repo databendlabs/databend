@@ -18,13 +18,12 @@ use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::Result;
+use common_expression::types::DataType;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Scalar;
-use common_expression::types::DataType;
 use common_io::prelude::BinaryWriteBuf;
 
-use super::AggregateFunctionBasicAdaptor;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionFeatures;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
@@ -47,18 +46,15 @@ impl AggregateFunctionOrNullAdaptor {
     ) -> Result<AggregateFunctionRef> {
         // count/count distinct should not be nullable for empty set, just return zero
         let inner_return_type = inner.return_type()?;
-        if features.returns_default_when_only_null
-            || inner_return_type.data_type_id() == TypeID::Null
-        {
-            return AggregateFunctionBasicAdaptor::create(inner);
+        if features.returns_default_when_only_null || inner_return_type == DataType::Null {
+            return Ok(inner);
         }
 
         let inner_layout = inner.state_layout();
-        let inner_nullable = inner_return_type.is_nullable();
         Ok(Arc::new(AggregateFunctionOrNullAdaptor {
             inner,
             size_of_data: inner_layout.size(),
-            inner_nullable,
+            inner_nullable: matches!(inner_return_type, DataType::Nullable(_)),
         }))
     }
 
@@ -122,13 +118,7 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
             }
         }
         self.set_flag(place, 1);
-
-        if self.inner.convert_const_to_full() && columns.iter().any(|c| c.is_const()) {
-            let columns: Vec<Column> = columns.iter().map(|c| c.convert_full_column()).collect();
-            self.inner.accumulate(place, &columns, validity, input_rows)
-        } else {
-            self.inner.accumulate(place, columns, validity, input_rows)
-        }
+        self.inner.accumulate(place, &columns, validity, input_rows)
     }
 
     fn accumulate_keys(
@@ -138,14 +128,8 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
         columns: &[Column],
         input_rows: usize,
     ) -> Result<()> {
-        if self.inner.convert_const_to_full() && columns.iter().any(|c| c.is_const()) {
-            let columns: Vec<Column> = columns.iter().map(|c| c.convert_full_column()).collect();
-            self.inner
-                .accumulate_keys(places, offset, &columns, input_rows)?;
-        } else {
-            self.inner
-                .accumulate_keys(places, offset, columns, input_rows)?;
-        }
+        self.inner
+            .accumulate_keys(places, offset, columns, input_rows)?;
         let if_cond = self.inner.get_if_condition(columns);
         match if_cond {
             Some(bm) if bm.unset_bits() != 0 => {
@@ -194,17 +178,20 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
         Ok(())
     }
 
-    fn merge_result(&self, place: StateAddr, array: &mut ColumnBuilder) -> Result<()> {
-        // let inner_mut: &mut MutableNullableColumn = Series::check_get_mutable_column(array)?;
-        // if self.get_flag(place) == 0 {
-        //     inner_mut.append_default();
-        // } else if self.inner_nullable {
-        //     self.inner.merge_result(place, array)?;
-        // } else {
-        //     self.inner
-        //         .merge_result(place, inner_mut.inner_mut().as_mut())?;
-        //     inner_mut.append_value(true);
-        // }
+    fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
+        match builder {
+            ColumnBuilder::Nullable(inner_mut) => {
+                if self.get_flag(place) == 0 {
+                    inner_mut.push_null();
+                } else if self.inner_nullable {
+                    self.inner.merge_result(place, builder)?;
+                } else {
+                    self.inner.merge_result(place, &mut inner_mut.builder)?;
+                    inner_mut.validity.push(true);
+                }
+            }
+            _ => unreachable!(),
+        }
         Ok(())
     }
 

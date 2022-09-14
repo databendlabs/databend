@@ -19,8 +19,10 @@ use std::sync::Arc;
 use bytes::BytesMut;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::Result;
-use common_expression::{Column, ColumnBuilder, Scalar};
 use common_expression::types::DataType;
+use common_expression::Column;
+use common_expression::ColumnBuilder;
+use common_expression::Scalar;
 
 use super::StateAddr;
 
@@ -70,7 +72,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn merge(&self, _place: StateAddr, _rhs: StateAddr) -> Result<()>;
 
     // TODO append the value into the column builder
-    fn merge_result(&self, _place: StateAddr, array: &mut ColumnBuilder) -> Result<()>;
+    fn merge_result(&self, _place: StateAddr, _builder: &mut ColumnBuilder) -> Result<()>;
 
     fn need_manual_drop_state(&self) -> bool {
         false

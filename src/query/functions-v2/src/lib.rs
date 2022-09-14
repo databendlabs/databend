@@ -16,5 +16,5 @@
 #![feature(box_patterns)]
 #![feature(type_ascription)]
 
-pub mod scalars;
 pub mod aggregates;
+pub mod scalars;
