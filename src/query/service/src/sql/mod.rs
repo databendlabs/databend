@@ -12,17 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod common;
 pub mod executor;
 mod metrics;
-pub mod optimizer;
 mod parsers;
 mod plan_parser;
 pub mod planner;
 mod sql_parser;
 mod sql_statement;
 pub mod statements;
-pub use common::*;
 use common_legacy_parser::sql_common;
 use common_storages_util::table_option_keys;
 pub use plan_parser::PlanParser;

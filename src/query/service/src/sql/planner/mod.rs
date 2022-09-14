@@ -30,6 +30,7 @@ pub use crate::sql::planner::binder::BindContext;
 pub(crate) mod binder;
 mod format;
 mod metadata;
+pub mod optimizer;
 pub mod plans;
 mod semantic;
 
@@ -53,6 +54,8 @@ use crate::sessions::TableContext;
 
 const PROBE_INSERT_INITIAL_TOKENS: usize = 128;
 const PROBE_INSERT_MAX_TOKENS: usize = 128 * 8;
+
+pub type IndexType = usize;
 
 pub struct Planner {
     ctx: Arc<dyn TableContext>,

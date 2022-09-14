@@ -18,24 +18,24 @@ use common_exception::Result;
 use super::RelationalProperty;
 use crate::sql::optimizer::rule::AppliedRules;
 use crate::sql::optimizer::rule::RuleID;
+use crate::sql::planner::IndexType;
 use crate::sql::plans::Operator;
 use crate::sql::plans::PatternPlan;
 use crate::sql::plans::RelOp;
 use crate::sql::plans::RelOperator;
-use crate::sql::IndexType;
 
 /// `SExpr` is abbreviation of single expression, which is a tree of relational operators.
 #[derive(Clone, Debug)]
 pub struct SExpr {
-    pub(super) plan: RelOperator,
-    pub(super) children: Vec<SExpr>,
+    pub(in crate::sql) plan: RelOperator,
+    pub(in crate::sql) children: Vec<SExpr>,
 
-    pub(super) original_group: Option<IndexType>,
-    pub(super) rel_prop: Option<Box<RelationalProperty>>,
+    pub(in crate::sql) original_group: Option<IndexType>,
+    pub(in crate::sql) rel_prop: Option<Box<RelationalProperty>>,
 
     /// A bitmap to record applied rules on current SExpr, to prevent
     /// redundant transformations.
-    pub(super) applied_rules: AppliedRules,
+    pub(in crate::sql) applied_rules: AppliedRules,
 }
 
 impl SExpr {
@@ -139,12 +139,12 @@ impl SExpr {
     }
 
     /// Record the applied rule id in current SExpr
-    pub(super) fn apply_rule(&mut self, rule_id: &RuleID) {
+    pub(in crate::sql) fn apply_rule(&mut self, rule_id: &RuleID) {
         self.applied_rules.set(rule_id, true);
     }
 
     /// Check if a rule is applied for current SExpr
-    pub(super) fn applied_rule(&self, rule_id: &RuleID) -> bool {
+    pub(in crate::sql) fn applied_rule(&self, rule_id: &RuleID) -> bool {
         self.applied_rules.get(rule_id)
     }
 }
