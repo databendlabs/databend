@@ -92,7 +92,7 @@ impl Table for NullTable {
         Ok(())
     }
 
-    fn append2(&self, _: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
+    fn append2(&self, _: Arc<dyn TableContext>, pipeline: &mut Pipeline, _: bool) -> Result<()> {
         let mut sink_pipeline_builder = SinkPipeBuilder::create();
         for _ in 0..pipeline.output_len() {
             let input_port = InputPort::create();
