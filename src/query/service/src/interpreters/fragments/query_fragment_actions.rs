@@ -21,8 +21,8 @@ use std::sync::Arc;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_legacy_planners::PlanNode;
 use common_meta_types::NodeInfo;
-use common_planners::PlanNode;
 use itertools::Itertools;
 
 use crate::api::ConnectionInfo;

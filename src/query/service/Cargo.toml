@@ -46,6 +46,7 @@ common-hive-meta-store = { path = "../storages/hive-meta-store", optional = true
 common-http = { path = "../../common/http" }
 common-io = { path = "../../common/io" }
 common-legacy-parser = { path = "../legacy-parser" }
+common-legacy-planners = { path = "../legacy-planners" }
 common-management = { path = "../management" }
 common-meta-api = { path = "../../meta/api" }
 common-meta-app = { path = "../../meta/app" }
@@ -60,7 +61,6 @@ common-pipeline-core = { path = "../pipeline/core" }
 common-pipeline-sinks = { path = "../pipeline/sinks" }
 common-pipeline-sources = { path = "../pipeline/sources" }
 common-pipeline-transforms = { path = "../pipeline/transforms" }
-common-planners = { path = "../planners" }
 common-settings = { path = "../settings" }
 common-storage = { path = "../../common/storage" }
 common-storages-fuse = { path = "../storages/fuse" }

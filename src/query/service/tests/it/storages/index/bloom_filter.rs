@@ -17,7 +17,7 @@ use common_base::base::tokio;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_planners::*;
+use common_legacy_planners::*;
 use databend_query::sessions::QueryContext;
 use databend_query::storages::index::BloomFilter;
 use databend_query::storages::index::BloomFilterExprEvalResult;

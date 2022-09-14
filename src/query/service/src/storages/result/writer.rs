@@ -19,7 +19,7 @@ use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::Statistics as FuseMetaStatistics;
-use common_planners::PartInfoPtr;
+use common_legacy_planners::PartInfoPtr;
 use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
 use opendal::Operator;

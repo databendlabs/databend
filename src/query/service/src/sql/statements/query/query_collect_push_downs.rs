@@ -16,9 +16,9 @@ use std::collections::HashSet;
 
 use common_datavalues::DataType;
 use common_exception::Result;
-use common_planners::Expression;
-use common_planners::Extras;
-use common_planners::Projection;
+use common_legacy_planners::Expression;
+use common_legacy_planners::Extras;
+use common_legacy_planners::Projection;
 
 use crate::sql::statements::query::query_ast_ir::QueryASTIRVisitor;
 use crate::sql::statements::query::JoinedSchema;

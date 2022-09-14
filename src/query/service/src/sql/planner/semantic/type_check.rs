@@ -51,7 +51,7 @@ use common_functions::is_builtin_function;
 use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::TupleFunction;
-use common_planners::validate_function_arg;
+use common_legacy_planners::validate_function_arg;
 
 use super::name_resolution::NameResolutionContext;
 use super::normalize_identifier;

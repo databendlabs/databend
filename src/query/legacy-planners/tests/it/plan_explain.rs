@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_planners::*;
+use common_legacy_planners::*;
 use pretty_assertions::assert_eq;
 
 use crate::test::Test;

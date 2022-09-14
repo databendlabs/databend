@@ -33,9 +33,9 @@ use common_datavalues::TypeFactory;
 use common_datavalues::Vu8;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_legacy_planners::OptimizeTableAction;
+use common_legacy_planners::*;
 use common_meta_app::schema::TableMeta;
-use common_planners::OptimizeTableAction;
-use common_planners::*;
 use tracing::debug;
 
 use crate::catalogs::DatabaseCatalog;

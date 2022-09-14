@@ -14,20 +14,25 @@
 
 use std::sync::Arc;
 
+use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_planners::*;
+use common_legacy_planners::*;
 
 #[test]
-fn test_limit_plan() -> Result<()> {
+fn test_projection_plan() -> Result<()> {
     use pretty_assertions::assert_eq;
 
-    let limit = PlanNode::Limit(LimitPlan {
-        n: Some(33),
-        offset: 0,
-        input: Arc::from(PlanBuilder::empty().build()?),
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", Vu8::to_data_type())]);
+    let empty_plan = EmptyPlan::create_with_schema(schema);
+
+    let projection = PlanNode::Projection(ProjectionPlan {
+        expr: vec![col("a")],
+        schema: DataSchemaRefExt::create(vec![DataField::new("a", Vu8::to_data_type())]),
+        input: Arc::from(PlanBuilder::from(&PlanNode::Empty(empty_plan)).build()?),
     });
-    let expect = "Limit: 33";
-    let actual = format!("{:?}", limit);
+    let _ = projection.schema();
+    let expect = "Projection: a:String";
+    let actual = format!("{:?}", projection);
     assert_eq!(expect, actual);
     Ok(())
 }
