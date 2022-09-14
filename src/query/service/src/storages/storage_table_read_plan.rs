@@ -16,10 +16,10 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_planners::Extras;
-use common_planners::Projection;
-use common_planners::ReadDataSourcePlan;
-use common_planners::SourceInfo;
+use common_legacy_planners::Extras;
+use common_legacy_planners::Projection;
+use common_legacy_planners::ReadDataSourcePlan;
+use common_legacy_planners::SourceInfo;
 
 use crate::sessions::QueryContext;
 use crate::storages::Table;

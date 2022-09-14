@@ -12,16 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::Result;
-use common_planners::*;
-use pretty_assertions::assert_eq;
+use common_legacy_planners::*;
 
 #[test]
-fn test_plan_extras() -> Result<()> {
-    let extras = Extras::default();
-    let expect =
-        "Extras { projection: None, filters: [], prewhere: None, limit: None, order_by: [] }";
-    let actual = format!("{:?}", extras);
+fn test_limit_plan() -> Result<()> {
+    use pretty_assertions::assert_eq;
+
+    let limit = PlanNode::Limit(LimitPlan {
+        n: Some(33),
+        offset: 0,
+        input: Arc::from(PlanBuilder::empty().build()?),
+    });
+    let expect = "Limit: 33";
+    let actual = format!("{:?}", limit);
     assert_eq!(expect, actual);
     Ok(())
 }

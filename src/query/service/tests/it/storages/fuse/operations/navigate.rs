@@ -20,7 +20,7 @@ use common_base::base::tokio;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::TruncateTablePlan;
+use common_legacy_planners::TruncateTablePlan;
 use common_storages_fuse::io::SnapshotHistoryReader;
 use databend_query::pipelines::Pipeline;
 use databend_query::storages::fuse::io::MetaReaders;
@@ -158,7 +158,7 @@ async fn test_fuse_historical_table_is_read_only() -> Result<()> {
         .await?;
 
     // check append2
-    let res = tbl.append2(ctx.clone(), &mut Pipeline::create());
+    let res = tbl.append2(ctx.clone(), &mut Pipeline::create(), false);
     assert_not_writable(res, "append2");
 
     // check append_data

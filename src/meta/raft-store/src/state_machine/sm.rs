@@ -37,6 +37,7 @@ use common_meta_types::AppliedState;
 use common_meta_types::Change;
 use common_meta_types::Cmd;
 use common_meta_types::ConditionResult;
+use common_meta_types::KVMeta;
 use common_meta_types::LogEntry;
 use common_meta_types::LogId;
 use common_meta_types::MatchSeqExt;
@@ -62,6 +63,7 @@ use common_meta_types::TxnPutResponse;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKV;
+use common_meta_types::With;
 use num::FromPrimitive;
 use openraft::raft::Entry;
 use openraft::raft::EntryPayload;
@@ -534,11 +536,20 @@ impl StateMachine {
     ) -> MetaStorageResult<()> {
         let sub_tree = txn_tree.key_space::<GenericKV>();
 
-        let (prev, result) = self.txn_sub_tree_upsert(
-            &sub_tree,
-            &UpsertKV::update(&put.key, &put.value),
-            log_time_ms,
-        )?;
+        let (prev, result) = match put.expire_at {
+            None => self.txn_sub_tree_upsert(
+                &sub_tree,
+                &UpsertKV::update(&put.key, &put.value),
+                log_time_ms,
+            )?,
+            Some(expire_at) => self.txn_sub_tree_upsert(
+                &sub_tree,
+                &UpsertKV::update(&put.key, &put.value).with(KVMeta {
+                    expire_at: Some(expire_at),
+                }),
+                log_time_ms,
+            )?,
+        };
 
         if let Some(events) = events {
             events.push((put.key.to_string(), prev.clone(), result));

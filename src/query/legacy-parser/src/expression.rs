@@ -22,7 +22,7 @@ use common_ast::Dialect;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::Expression;
+use common_legacy_planners::Expression;
 
 /// unchecked_expressions_analyze will analyzer given expr str into `Expression`.
 ///

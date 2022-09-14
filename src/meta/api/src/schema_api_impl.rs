@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::sync::Arc;
 
@@ -38,6 +39,8 @@ use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropTableReq;
 use common_meta_app::schema::GetDatabaseReq;
+use common_meta_app::schema::GetTableCopiedFileReply;
+use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::GetTableReq;
 use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListTableReq;
@@ -45,6 +48,10 @@ use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::TableCopiedFileInfo;
+use common_meta_app::schema::TableCopiedFileLock;
+use common_meta_app::schema::TableCopiedFileLockKey;
+use common_meta_app::schema::TableCopiedFileNameIdent;
 use common_meta_app::schema::TableId;
 use common_meta_app::schema::TableIdList;
 use common_meta_app::schema::TableIdListKey;
@@ -53,12 +60,16 @@ use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
+use common_meta_app::schema::TruncateTableReply;
+use common_meta_app::schema::TruncateTableReq;
 use common_meta_app::schema::UndropDatabaseReply;
 use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
+use common_meta_app::schema::UpsertTableCopiedFileReply;
+use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::share::ShareGrantObjectPrivilege;
@@ -114,6 +125,7 @@ use crate::table_has_to_exist;
 use crate::txn_cond_seq;
 use crate::txn_op_del;
 use crate::txn_op_put;
+use crate::txn_op_put_with_expire;
 use crate::IdGenerator;
 use crate::KVApi;
 use crate::KVApiKey;
@@ -1715,6 +1727,200 @@ impl<KV: KVApi> SchemaApi for KV {
         ))
     }
 
+    async fn get_table_copied_file_info(
+        &self,
+        req: GetTableCopiedFileReq,
+    ) -> Result<GetTableCopiedFileReply, MetaError> {
+        debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
+        let table_id = req.table_id;
+
+        let tbid = TableId { table_id };
+
+        let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) = get_struct_value(self, &tbid).await?;
+
+        if tb_meta_seq == 0 {
+            return Err(MetaError::AppError(AppError::UnknownTableId(
+                UnknownTableId::new(table_id, ""),
+            )));
+        }
+
+        debug!(
+            ident = display(&tbid),
+            table_meta = debug(&tb_meta),
+            "get_table_copied_file_info"
+        );
+
+        let mut file_info = BTreeMap::new();
+
+        for file in req.files {
+            let key = TableCopiedFileNameIdent {
+                table_id,
+                file: file.clone(),
+            };
+
+            let (_file_seq, file_stage_info): (_, Option<TableCopiedFileInfo>) =
+                get_struct_value(self, &key).await?;
+
+            if let Some(file_stage_info) = file_stage_info {
+                file_info.insert(file, file_stage_info);
+            }
+        }
+
+        Ok(GetTableCopiedFileReply { file_info })
+    }
+
+    async fn upsert_table_copied_file_info(
+        &self,
+        req: UpsertTableCopiedFileReq,
+    ) -> Result<UpsertTableCopiedFileReply, MetaError> {
+        debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
+        let mut retry = 0;
+        let table_id = req.table_id;
+
+        while retry < TXN_MAX_RETRY_TIMES {
+            retry += 1;
+
+            let tbid = TableId { table_id };
+
+            let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) =
+                get_struct_value(self, &tbid).await?;
+
+            if tb_meta_seq == 0 {
+                return Err(MetaError::AppError(AppError::UnknownTableId(
+                    UnknownTableId::new(table_id, ""),
+                )));
+            }
+
+            let lock_key = TableCopiedFileLockKey { table_id };
+            let (lock_key_seq, lock_op): (_, Option<TableCopiedFileLock>) =
+                get_struct_value(self, &lock_key).await?;
+
+            debug!(
+                ident = display(&tbid),
+                table_meta = debug(&tb_meta),
+                "upsert_table_copied_file_info"
+            );
+
+            let lock = match lock_op {
+                Some(lock) => lock,
+                None => TableCopiedFileLock {},
+            };
+            let mut condition = vec![
+                txn_cond_seq(&tbid, Eq, tb_meta_seq),
+                txn_cond_seq(&lock_key, Eq, lock_key_seq),
+            ];
+            let mut if_then = vec![
+                // every copied files changed, change tbid seq to make all table child consistent.
+                txn_op_put(&tbid, serialize_struct(&tb_meta.unwrap())?), /* (tenant, db_id, tb_id) -> tb_meta */
+                txn_op_put(&lock_key, serialize_struct(&lock)?),         // copied file lock key
+            ];
+            for (file, file_info) in req.file_info.iter() {
+                let key = TableCopiedFileNameIdent {
+                    table_id,
+                    file: file.to_owned(),
+                };
+                let (file_seq, _): (_, Option<TableCopiedFileInfo>) =
+                    get_struct_value(self, &key).await?;
+
+                condition.push(txn_cond_seq(&key, Eq, file_seq));
+                match &req.expire_at {
+                    Some(expire_at) => {
+                        if_then.push(txn_op_put_with_expire(
+                            &key,
+                            serialize_struct(file_info)?,
+                            *expire_at,
+                        ));
+                    }
+                    None => {
+                        if_then.push(txn_op_put(&key, serialize_struct(file_info)?));
+                    }
+                }
+            }
+
+            let txn_req = TxnRequest {
+                condition,
+                if_then,
+                else_then: vec![],
+            };
+
+            let (succ, _responses) = send_txn(self, txn_req).await?;
+
+            debug!(
+                ident = display(&tbid),
+                succ = display(succ),
+                "upsert_table_copied_file_info"
+            );
+
+            if succ {
+                return Ok(UpsertTableCopiedFileReply {});
+            }
+        }
+
+        Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
+            TxnRetryMaxTimes::new("upsert_table_copied_file_info", TXN_MAX_RETRY_TIMES),
+        )))
+    }
+
+    #[tracing::instrument(level = "debug", ret, err, skip_all)]
+    async fn truncate_table(&self, req: TruncateTableReq) -> Result<TruncateTableReply, MetaError> {
+        debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
+        let mut retry = 0;
+        let table_id = req.table_id;
+
+        while retry < TXN_MAX_RETRY_TIMES {
+            retry += 1;
+
+            let tbid = TableId { table_id };
+
+            let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) =
+                get_struct_value(self, &tbid).await?;
+
+            if tb_meta_seq == 0 {
+                return Err(MetaError::AppError(AppError::UnknownTableId(
+                    UnknownTableId::new(table_id, ""),
+                )));
+            }
+
+            debug!(
+                ident = display(&tbid),
+                table_meta = debug(&tb_meta),
+                "truncate_table"
+            );
+
+            let mut condition = vec![txn_cond_seq(&tbid, Eq, tb_meta_seq)];
+            let mut if_then = vec![];
+            remove_table_copied_files(self, table_id, &mut condition, &mut if_then).await?;
+
+            // if_then empty means that there is no copied files in the table.
+            if if_then.is_empty() {
+                return Ok(TruncateTableReply {});
+            }
+
+            // update table meta to make sequence update.
+            if_then.push(txn_op_put(&tbid, serialize_struct(&tb_meta.unwrap())?)); // tb_id -> tb_meta
+
+            let txn_req = TxnRequest {
+                condition,
+                if_then,
+                else_then: vec![],
+            };
+
+            let (succ, _responses) = send_txn(self, txn_req).await?;
+
+            debug!(id = debug(&tbid), succ = display(succ), "truncate_table");
+
+            if succ {
+                return Ok(TruncateTableReply {});
+            }
+        }
+        Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
+            TxnRetryMaxTimes::new("upsert_table_copied_file_info", TXN_MAX_RETRY_TIMES),
+        )))
+    }
+
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
     async fn upsert_table_option(
         &self,
@@ -1929,6 +2135,41 @@ impl<KV: KVApi> SchemaApi for KV {
     }
 }
 
+async fn remove_table_copied_files(
+    kv_api: &impl KVApi,
+    table_id: u64,
+    condition: &mut Vec<TxnCondition>,
+    if_then: &mut Vec<TxnOp>,
+) -> Result<(), MetaError> {
+    let lock_key = TableCopiedFileLockKey { table_id };
+    let (lock_key_seq, lock_op): (_, Option<TableCopiedFileLock>) =
+        get_struct_value(kv_api, &lock_key).await?;
+
+    condition.push(txn_cond_seq(&lock_key, Eq, lock_key_seq));
+    if let Some(lock) = lock_op {
+        if_then.push(txn_op_put(&lock_key, serialize_struct(&lock)?)); // copied file lock key
+
+        // List files by tenant, db_name, table_name
+        let dbid_tbname_idlist = TableCopiedFileNameIdent {
+            table_id,
+            // Using a empty file to to list all
+            file: "".to_string(),
+        };
+
+        let files = list_keys(kv_api, &dbid_tbname_idlist).await?;
+        for file in files {
+            let (file_seq, _opt): (_, Option<TableCopiedFileInfo>) =
+                get_struct_value(kv_api, &file).await?;
+            if file_seq != 0 {
+                condition.push(txn_cond_seq(&file, Eq, file_seq));
+                if_then.push(txn_op_del(&file));
+            }
+        }
+    }
+
+    Ok(())
+}
+
 async fn gc_dropped_table(
     kv_api: &impl KVApi,
     tenant: String,
@@ -1936,7 +2177,7 @@ async fn gc_dropped_table(
 ) -> Result<u32, MetaError> {
     let mut cnt = 0;
     let name_key = DatabaseNameIdent {
-        tenant,
+        tenant: tenant.clone(),
         // Using a empty db to to list all
         db_name: "".to_string(),
     };
@@ -2022,23 +2263,28 @@ async fn gc_dropped_table(
                 // condition: database exists
                 txn_cond_seq(tenant_dbname, Eq, db_id_seq),
             ];
-            // remove table id keys not changed
-            for key in remove_table_keys.iter() {
-                condition.push(txn_cond_seq(&key.0, Eq, key.1));
-            }
             let mut if_then = vec![
                 // save new table id list
                 txn_op_put(&dbid_tbname_idlist, serialize_struct(&new_tb_id_list)?),
             ];
-            // remove out of time table meta
+
             for key in remove_table_keys.iter() {
+                // remove table id keys not changed
+                condition.push(txn_cond_seq(&key.0, Eq, key.1));
+
+                // remove out of time table meta
                 if_then.push(txn_op_del(&key.0));
+
+                // remove stage file info of the table
+                remove_table_copied_files(kv_api, key.0.table_id, &mut condition, &mut if_then)
+                    .await?;
             }
             // remove table_id -> table_name mappings
             for (key, seq) in remove_table_id_mappings.iter() {
                 condition.push(txn_cond_seq(key, Eq, *seq));
                 if_then.push(txn_op_del(key));
             }
+
             let txn_req = TxnRequest {
                 condition,
                 if_then,

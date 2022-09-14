@@ -206,7 +206,7 @@ pub enum ExprElement<'a> {
     /// SUBSTRING(<expr> [FROM <expr>] [FOR <expr>])
     SubString {
         expr: Box<Expr<'a>>,
-        substring_from: Option<Box<Expr<'a>>>,
+        substring_from: Box<Expr<'a>>,
         substring_for: Option<Box<Expr<'a>>>,
     },
     /// TRIM([[BOTH | LEADING | TRAILING] <expr> FROM] <expr>)
@@ -667,13 +667,14 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             SUBSTRING
             ~ ^"("
             ~ ^#subexpr(0)
-            ~ ( ( FROM | "," ) ~ ^#subexpr(0) )?
+            ~ ( FROM | "," )
+            ~ ^#subexpr(0)
             ~ ( ( FOR | "," ) ~ ^#subexpr(0) )?
             ~ ^")"
         },
-        |(_, _, expr, opt_substring_from, opt_substring_for, _)| ExprElement::SubString {
+        |(_, _, expr, _, substring_from, opt_substring_for, _)| ExprElement::SubString {
             expr: Box::new(expr),
-            substring_from: opt_substring_from.map(|(_, expr)| Box::new(expr)),
+            substring_from: Box::new(substring_from),
             substring_for: opt_substring_for.map(|(_, expr)| Box::new(expr)),
         },
     );

@@ -19,10 +19,10 @@ use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
 use common_fuse_meta::meta::TableSnapshot;
+use common_legacy_planners::DeletePlan;
+use common_legacy_planners::Expression;
+use common_legacy_planners::Extras;
 use common_pipeline_transforms::processors::ExpressionExecutor;
-use common_planners::DeletePlan;
-use common_planners::Expression;
-use common_planners::Extras;
 use tracing::debug;
 
 use crate::operations::mutation::delete_from_block;

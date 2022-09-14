@@ -15,8 +15,8 @@
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_legacy_parser::unchecked_expressions_analyze;
-use common_planners::validate_expression;
-use common_planners::Expression;
+use common_legacy_planners::validate_expression;
+use common_legacy_planners::Expression;
 
 use crate::table_functions::string_value;
 use crate::table_functions::TableArgs;

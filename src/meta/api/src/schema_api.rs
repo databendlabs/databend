@@ -26,6 +26,8 @@ use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropTableReq;
 use common_meta_app::schema::GetDatabaseReq;
+use common_meta_app::schema::GetTableCopiedFileReply;
+use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::GetTableReq;
 use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListTableReq;
@@ -36,12 +38,16 @@ use common_meta_app::schema::RenameTableReq;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_meta_app::schema::TruncateTableReply;
+use common_meta_app::schema::TruncateTableReq;
 use common_meta_app::schema::UndropDatabaseReply;
 use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
+use common_meta_app::schema::UpsertTableCopiedFileReply;
+use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::GCDroppedDataReply;
@@ -103,6 +109,18 @@ pub trait SchemaApi: Send + Sync {
         &self,
         table_id: MetaId,
     ) -> Result<(TableIdent, Arc<TableMeta>), MetaError>;
+
+    async fn get_table_copied_file_info(
+        &self,
+        req: GetTableCopiedFileReq,
+    ) -> Result<GetTableCopiedFileReply, MetaError>;
+
+    async fn upsert_table_copied_file_info(
+        &self,
+        req: UpsertTableCopiedFileReq,
+    ) -> Result<UpsertTableCopiedFileReply, MetaError>;
+
+    async fn truncate_table(&self, req: TruncateTableReq) -> Result<TruncateTableReply, MetaError>;
 
     async fn upsert_table_option(
         &self,

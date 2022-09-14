@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_planners::EmptyPlan;
-use common_planners::PlanNode;
+use common_legacy_planners::EmptyPlan;
+use common_legacy_planners::PlanNode;
 
 use super::interpreter_share_desc::DescShareInterpreter;
 use super::interpreter_user_stage_drop::DropUserStageInterpreter;

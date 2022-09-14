@@ -17,8 +17,8 @@ use std::sync::RwLock;
 
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_legacy_planners::CallPlan;
 use common_pipeline_core::Pipeline;
-use common_planners::CallPlan;
 use common_streams::SendableDataBlockStream;
 
 use super::Interpreter;

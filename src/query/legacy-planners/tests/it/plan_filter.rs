@@ -12,24 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_planners::*;
+use common_legacy_planners::*;
+
+use crate::test::Test;
 
 #[test]
-fn test_select_wildcard_plan() -> Result<()> {
+fn test_filter_plan() -> Result<()> {
     use pretty_assertions::assert_eq;
 
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", Vu8::to_data_type())]);
-    let plan = PlanBuilder::create(schema).project(&[col("a")])?.build()?;
-    let select = PlanNode::Select(SelectPlan {
-        input: Arc::new(plan),
-    });
-    let expect = "Projection: a:String";
+    let source = Test::create().generate_source_plan_for_test(10000)?;
+    let plan = PlanBuilder::from(&source)
+        .filter(col("number").eq(lit(1i64)))?
+        .project(&[col("number")])?
+        .build()?;
 
-    let actual = format!("{:?}", select);
+    let expect = "\
+    Projection: number:UInt64\
+    \n  Filter: (number = 1)\
+    \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000, partitions_scanned: 8, partitions_total: 8]";
+    let actual = format!("{:?}", plan);
+
     assert_eq!(expect, actual);
     Ok(())
 }

@@ -17,9 +17,9 @@ use std::sync::Arc;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_legacy_planners::KillPlan;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
-use common_planners::KillPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
@@ -48,7 +48,9 @@ impl KillInterpreter {
                 Ok(Box::pin(DataBlockStream::create(schema, None, vec![])))
             }
             Some(kill_session) => {
-                kill_session.force_kill_query();
+                kill_session.force_kill_query(ErrorCode::AbortedQuery(
+                    "Aborted query, because the server is shutting down or the query was killed",
+                ));
                 let schema = Arc::new(DataSchema::empty());
                 Ok(Box::pin(DataBlockStream::create(schema, None, vec![])))
             }

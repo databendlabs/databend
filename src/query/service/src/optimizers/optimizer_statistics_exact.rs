@@ -18,12 +18,12 @@ use common_catalog::catalog::CATALOG_DEFAULT;
 use common_datavalues::prelude::ToDataType;
 use common_datavalues::DataValue;
 use common_exception::Result;
-use common_planners::AggregatorFinalPlan;
-use common_planners::AggregatorPartialPlan;
-use common_planners::Expression;
-use common_planners::PlanBuilder;
-use common_planners::PlanNode;
-use common_planners::PlanRewriter;
+use common_legacy_planners::AggregatorFinalPlan;
+use common_legacy_planners::AggregatorPartialPlan;
+use common_legacy_planners::Expression;
+use common_legacy_planners::PlanBuilder;
+use common_legacy_planners::PlanNode;
+use common_legacy_planners::PlanRewriter;
 
 use crate::optimizers::Optimizer;
 use crate::sessions::QueryContext;

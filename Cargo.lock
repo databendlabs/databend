@@ -1089,10 +1089,10 @@ dependencies = [
  "common-exception",
  "common-functions",
  "common-io",
+ "common-legacy-planners",
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
- "common-planners",
  "common-settings",
  "common-users",
  "dyn-clone",
@@ -1213,6 +1213,7 @@ dependencies = [
  "match-template",
  "num-traits",
  "ordered-float 3.0.0 (git+https://github.com/andylokandy/rust-ordered-float.git?branch=as)",
+ "rust_decimal",
  "serde",
 ]
 
@@ -1394,8 +1395,26 @@ dependencies = [
  "common-ast",
  "common-datavalues",
  "common-exception",
- "common-planners",
+ "common-legacy-planners",
  "sqlparser",
+]
+
+[[package]]
+name = "common-legacy-planners"
+version = "0.1.0"
+dependencies = [
+ "bitflags",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-functions",
+ "common-meta-app",
+ "common-meta-types",
+ "once_cell",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+ "typetag",
 ]
 
 [[package]]
@@ -1684,27 +1703,9 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
+ "common-legacy-planners",
  "common-pipeline-core",
- "common-planners",
  "tracing",
-]
-
-[[package]]
-name = "common-planners"
-version = "0.1.0"
-dependencies = [
- "bitflags",
- "common-datablocks",
- "common-datavalues",
- "common-exception",
- "common-functions",
- "common-meta-app",
- "common-meta-types",
- "once_cell",
- "pretty_assertions",
- "serde",
- "serde_json",
- "typetag",
 ]
 
 [[package]]
@@ -1786,12 +1787,12 @@ dependencies = [
  "common-functions",
  "common-fuse-meta",
  "common-legacy-parser",
+ "common-legacy-planners",
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
  "common-pipeline-sources",
  "common-pipeline-transforms",
- "common-planners",
  "common-storages-index",
  "common-storages-util",
  "common-streams",
@@ -1819,11 +1820,11 @@ dependencies = [
  "common-exception",
  "common-fuse-meta",
  "common-hive-meta-store",
+ "common-legacy-planners",
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
  "common-pipeline-sources",
- "common-planners",
  "common-storages-index",
  "common-storages-util",
  "futures",
@@ -1846,8 +1847,8 @@ dependencies = [
  "common-exception",
  "common-functions",
  "common-fuse-meta",
+ "common-legacy-planners",
  "common-pipeline-transforms",
- "common-planners",
  "rand 0.8.5",
  "serde",
  "tracing",
@@ -1873,6 +1874,7 @@ dependencies = [
  "common-exception",
  "common-functions",
  "common-grpc",
+ "common-legacy-planners",
  "common-meta-app",
  "common-meta-types",
  "common-metrics",
@@ -1880,7 +1882,6 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
- "common-planners",
  "common-storage",
  "common-storages-util",
  "common-streams",
@@ -2509,6 +2510,7 @@ dependencies = [
  "common-http",
  "common-io",
  "common-legacy-parser",
+ "common-legacy-planners",
  "common-management",
  "common-meta-api",
  "common-meta-app",
@@ -2523,7 +2525,6 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
- "common-planners",
  "common-settings",
  "common-storage",
  "common-storages-fuse",

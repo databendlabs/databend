@@ -18,7 +18,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::PlanNode;
+use common_legacy_planners::PlanNode;
 use futures::TryStreamExt;
 
 use crate::interpreters::Interpreter;

@@ -27,14 +27,14 @@ use common_fuse_meta::meta::Statistics as FuseStatistics;
 use common_fuse_meta::meta::TableSnapshot;
 use common_fuse_meta::meta::Versioned;
 use common_legacy_parser::unchecked_expressions_analyze;
+use common_legacy_planners::DeletePlan;
+use common_legacy_planners::Expression;
+use common_legacy_planners::Extras;
+use common_legacy_planners::Partitions;
+use common_legacy_planners::ReadDataSourcePlan;
+use common_legacy_planners::Statistics;
+use common_legacy_planners::TruncateTablePlan;
 use common_meta_app::schema::TableInfo;
-use common_planners::DeletePlan;
-use common_planners::Expression;
-use common_planners::Extras;
-use common_planners::Partitions;
-use common_planners::ReadDataSourcePlan;
-use common_planners::Statistics;
-use common_planners::TruncateTablePlan;
 use common_storages_util::storage_context::StorageContext;
 use common_storages_util::table_storage_prefix::table_storage_prefix;
 use uuid::Uuid;
@@ -325,9 +325,14 @@ impl Table for FuseTable {
         self.do_read2(ctx, plan, pipeline)
     }
 
-    fn append2(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
+    fn append2(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+        need_output: bool,
+    ) -> Result<()> {
         self.check_mutable()?;
-        self.do_append2(ctx, pipeline)
+        self.do_append2(ctx, pipeline, need_output)
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_commit_insertion", skip(self, ctx, operations), fields(ctx.id = ctx.get_id().as_str()))]
