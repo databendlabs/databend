@@ -24,10 +24,10 @@ use common_datavalues::NullableType;
 use common_datavalues::ToDataType;
 use common_datavalues::Vu8;
 use common_exception::Result;
+use common_legacy_planners::ReadDataSourcePlan;
+use common_legacy_planners::StageKind;
+use common_legacy_planners::SINK_SCHEMA;
 use common_meta_app::schema::TableInfo;
-use common_planners::ReadDataSourcePlan;
-use common_planners::StageKind;
-use common_planners::SINK_SCHEMA;
 
 use super::physical_scalar::PhysicalScalar;
 use super::AggregateFunctionDesc;

@@ -76,7 +76,7 @@ impl StatisticsReceiver {
                                         recv = Box::pin(flight_exchange.recv());
                                     }
                                     Err(cause) => {
-                                        ctx.get_current_session().force_kill_query();
+                                        ctx.get_current_session().force_kill_query(cause.clone());
                                         return Err(cause);
                                     }
                                 };
@@ -90,14 +90,13 @@ impl StatisticsReceiver {
                             notified = middle;
                             match Self::recv_data(&ctx, res) {
                                 Ok(true) => {
-                                    ctx.get_current_session().force_kill_query();
                                     return Ok(());
                                 }
                                 Ok(false) => {
                                     recv = Box::pin(flight_exchange.recv());
                                 }
                                 Err(cause) => {
-                                    ctx.get_current_session().force_kill_query();
+                                    ctx.get_current_session().force_kill_query(cause.clone());
                                     return Err(cause);
                                 }
                             };
@@ -106,7 +105,7 @@ impl StatisticsReceiver {
                 }
 
                 if let Err(cause) = Self::fetch(&ctx, &flight_exchange, recv).await {
-                    ctx.get_current_session().force_kill_query();
+                    ctx.get_current_session().force_kill_query(cause.clone());
                     return Err(cause);
                 }
 

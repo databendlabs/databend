@@ -18,14 +18,14 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::AggregatorFinalPlan;
-use common_planners::AggregatorPartialPlan;
-use common_planners::PlanBuilder;
-use common_planners::PlanNode;
-use common_planners::PlanRewriter;
-use common_planners::RemotePlan;
-use common_planners::StageKind;
-use common_planners::StagePlan;
+use common_legacy_planners::AggregatorFinalPlan;
+use common_legacy_planners::AggregatorPartialPlan;
+use common_legacy_planners::PlanBuilder;
+use common_legacy_planners::PlanNode;
+use common_legacy_planners::PlanRewriter;
+use common_legacy_planners::RemotePlan;
+use common_legacy_planners::StageKind;
+use common_legacy_planners::StagePlan;
 
 use crate::api::FragmentPayload;
 use crate::api::MergeExchange;

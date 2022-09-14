@@ -15,7 +15,7 @@
 use common_ast::ast::FormatTreeNode;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::StageKind;
+use common_legacy_planners::StageKind;
 use itertools::Itertools;
 
 use super::AggregateFinal;

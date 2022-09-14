@@ -17,8 +17,8 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::PartInfo;
-use common_planners::PartInfoPtr;
+use common_legacy_planners::PartInfo;
+use common_legacy_planners::PartInfoPtr;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct NumbersPartInfo {

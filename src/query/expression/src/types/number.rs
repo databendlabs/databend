@@ -34,6 +34,9 @@ use crate::values::Column;
 use crate::values::Scalar;
 use crate::ScalarRef;
 
+pub type F32 = OrderedFloat<f32>;
+pub type F64 = OrderedFloat<f64>;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NumberType<T: Number>(PhantomData<T>);
 
@@ -45,8 +48,8 @@ pub type UInt8Type = NumberType<u8>;
 pub type UInt16Type = NumberType<u16>;
 pub type UInt32Type = NumberType<u32>;
 pub type UInt64Type = NumberType<u64>;
-pub type Float32Type = NumberType<OrderedFloat<f32>>;
-pub type Float64Type = NumberType<OrderedFloat<f64>>;
+pub type Float32Type = NumberType<F32>;
+pub type Float64Type = NumberType<F64>;
 
 impl<Num: Number> ValueType for NumberType<Num> {
     type Scalar = Num;
@@ -190,8 +193,8 @@ pub enum NumberScalar {
     Int16(i16),
     Int32(i32),
     Int64(i64),
-    Float32(OrderedFloat<f32>),
-    Float64(OrderedFloat<f64>),
+    Float32(F32),
+    Float64(F64),
 }
 
 #[derive(Clone, PartialEq, EnumAsInner)]
@@ -204,8 +207,8 @@ pub enum NumberColumn {
     Int16(Buffer<i16>),
     Int32(Buffer<i32>),
     Int64(Buffer<i64>),
-    Float32(Buffer<OrderedFloat<f32>>),
-    Float64(Buffer<OrderedFloat<f64>>),
+    Float32(Buffer<F32>),
+    Float64(Buffer<F64>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, EnumAsInner)]
@@ -218,8 +221,8 @@ pub enum NumberColumnBuilder {
     Int16(Vec<i16>),
     Int32(Vec<i32>),
     Int64(Vec<i64>),
-    Float32(Vec<OrderedFloat<f32>>),
-    Float64(Vec<OrderedFloat<f64>>),
+    Float32(Vec<F32>),
+    Float64(Vec<F64>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, EnumAsInner)]
@@ -232,8 +235,8 @@ pub enum NumberDomain {
     Int16(SimpleDomain<i16>),
     Int32(SimpleDomain<i32>),
     Int64(SimpleDomain<i64>),
-    Float32(SimpleDomain<OrderedFloat<f32>>),
-    Float64(SimpleDomain<OrderedFloat<f64>>),
+    Float32(SimpleDomain<F32>),
+    Float64(SimpleDomain<F64>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -714,8 +717,8 @@ impl NumberColumnBuilder {
             NumberColumnBuilder::Int16(builder) => builder.push(0),
             NumberColumnBuilder::Int32(builder) => builder.push(0),
             NumberColumnBuilder::Int64(builder) => builder.push(0),
-            NumberColumnBuilder::Float32(builder) => builder.push(OrderedFloat(0.0)),
-            NumberColumnBuilder::Float64(builder) => builder.push(OrderedFloat(0.0)),
+            NumberColumnBuilder::Float32(builder) => builder.push(0.0.into()),
+            NumberColumnBuilder::Float64(builder) => builder.push(0.0.into()),
         }
     }
 
@@ -834,7 +837,7 @@ macro_rules! with_number_mapped_type {
             $t = [
                 UInt8 => u8, UInt16 => u16, UInt32 => u32, UInt64 => u64,
                 Int8 => i8, Int16 => i16, Int32 => i32, Int64 => i64,
-                Float32 => ordered_float::OrderedFloat<f32>, Float64 => ordered_float::OrderedFloat<f64>
+                Float32 => $crate::types::number::F32, Float64 => $crate::types::number::F64
             ],
             $($tail)*
         }
@@ -1120,7 +1123,7 @@ impl Number for i64 {
     }
 }
 
-impl Number for OrderedFloat<f32> {
+impl Number for F32 {
     const MIN: Self = OrderedFloat(f32::NEG_INFINITY);
     const MAX: Self = OrderedFloat(f32::NAN);
 
@@ -1153,7 +1156,7 @@ impl Number for OrderedFloat<f32> {
     }
 }
 
-impl Number for OrderedFloat<f64> {
+impl Number for F64 {
     const MIN: Self = OrderedFloat(f64::NEG_INFINITY);
     const MAX: Self = OrderedFloat(f64::NAN);
 

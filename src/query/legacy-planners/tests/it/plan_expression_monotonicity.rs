@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::Monotonicity;
-use common_planners::*;
+use common_legacy_planners::*;
 
 struct Test {
     name: &'static str,

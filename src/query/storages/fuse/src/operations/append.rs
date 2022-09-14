@@ -19,6 +19,7 @@ use common_catalog::table_context::TableContext;
 use common_datablocks::SortColumnDescription;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
+use common_legacy_planners::Expression;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::Pipeline;
 use common_pipeline_core::SinkPipeBuilder;
@@ -26,7 +27,6 @@ use common_pipeline_transforms::processors::transforms::ExpressionTransform;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_pipeline_transforms::processors::transforms::TransformSortPartial;
 use common_pipeline_transforms::processors::ExpressionExecutor;
-use common_planners::Expression;
 
 use crate::io::BlockCompactor;
 use crate::operations::FuseTableSink;

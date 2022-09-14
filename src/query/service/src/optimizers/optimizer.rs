@@ -15,7 +15,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use common_exception::Result;
-use common_planners::PlanNode;
+use common_legacy_planners::PlanNode;
 use metrics::histogram;
 use tracing::debug;
 

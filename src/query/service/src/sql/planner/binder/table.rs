@@ -30,7 +30,7 @@ use common_catalog::catalog::CATALOG_DEFAULT;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::Expression;
+use common_legacy_planners::Expression;
 
 use crate::sessions::TableContext;
 use crate::sql::binder::scalar::ScalarBinder;
