@@ -48,7 +48,9 @@ impl KillInterpreter {
                 Ok(PipelineBuildResult::create())
             }
             Some(kill_session) => {
-                kill_session.force_kill_query();
+                kill_session.force_kill_query(ErrorCode::AbortedQuery(
+                    "Aborted query, because the server is shutting down or the query was killed",
+                ));
                 Ok(PipelineBuildResult::create())
             }
         }

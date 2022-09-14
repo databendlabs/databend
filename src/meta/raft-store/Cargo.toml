@@ -24,7 +24,7 @@ common-meta-types = { path = "../types" }
 common-tracing = { path = "../../common/tracing" }
 
 # crates.io deps
-anyhow = "1.0.58"
+anyhow = "1.0.64"
 async-trait = "0.1.56"
 bytes = "1.1.0"
 derive_more = "0.99.17"

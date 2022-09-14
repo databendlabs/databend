@@ -26,6 +26,8 @@ use common_expression::types::nullable::NullableDomain;
 use common_expression::types::number::NumberDomain;
 use common_expression::types::number::NumberScalar;
 use common_expression::types::number::SimpleDomain;
+use common_expression::types::number::F32;
+use common_expression::types::number::F64;
 use common_expression::types::ArrayType;
 use common_expression::types::DataType;
 use common_expression::types::*;
@@ -49,7 +51,6 @@ use common_expression::ScalarRef;
 use common_expression::Value;
 use common_expression::ValueRef;
 use goldenfile::Mint;
-use ordered_float::OrderedFloat;
 
 use crate::parser::parse_raw_expr;
 
@@ -551,14 +552,14 @@ fn builtin_functions() -> FunctionRegistry {
         |lhs, rhs| lhs * rhs,
     );
 
-    registry.register_2_arg::<NumberType<OrderedFloat<f32>>, NumberType<OrderedFloat<f32>>, NumberType<OrderedFloat<f32>>, _, _>(
+    registry.register_2_arg::<NumberType<F32>, NumberType<F32>, NumberType<F32>, _, _>(
         "divide",
         FunctionProperty::default(),
         |_, _| None,
         |lhs, rhs| lhs / rhs,
     );
 
-    registry.register_2_arg::<NumberType<OrderedFloat<f64>>, NumberType<OrderedFloat<f64>>, NumberType<OrderedFloat<f64>>, _, _>(
+    registry.register_2_arg::<NumberType<F64>, NumberType<F64>, NumberType<F64>, _, _>(
         "avg",
         FunctionProperty::default(),
         |lhs, rhs| {

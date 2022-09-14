@@ -36,6 +36,8 @@ message TxnPutRequest {
   bytes value = 2;
   // if or not return the prev value
   bool prev_value = 3;
+  // expire time
+  optional uint64 expire_at = 4;
 }
 
 message TxnPutResponse {

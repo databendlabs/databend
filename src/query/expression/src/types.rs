@@ -24,6 +24,7 @@ pub mod nullable;
 pub mod number;
 pub mod string;
 pub mod timestamp;
+pub mod variant;
 
 use std::fmt::Debug;
 use std::ops::Range;
@@ -45,6 +46,7 @@ pub use self::number::NumberDataType;
 pub use self::number::NumberType;
 pub use self::string::StringType;
 pub use self::timestamp::TimestampType;
+pub use self::variant::VariantType;
 use crate::property::Domain;
 use crate::values::Column;
 use crate::values::Scalar;
@@ -66,6 +68,7 @@ pub enum DataType {
     Array(Box<DataType>),
     Map(Box<DataType>),
     Tuple(Vec<DataType>),
+    Variant,
     Generic(usize),
 }
 
