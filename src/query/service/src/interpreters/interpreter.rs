@@ -45,11 +45,20 @@ pub trait Interpreter: Sync + Send {
 
     /// The core of the databend processor which will execute the logical plan and get the DataBlock
     async fn execute(&self, ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
-        let build_res = self.execute2().await?;
+        let mut build_res = self.execute2().await?;
+
+        if build_res.main_pipeline.pipes.is_empty() {
+            return Ok(Box::pin(DataBlockStream::create(
+                self.schema(),
+                None,
+                vec![],
+            )));
+        }
 
         let settings = ctx.get_settings();
         let query_need_abort = ctx.query_need_abort();
         let executor_settings = ExecutorSettings::try_create(&settings)?;
+        build_res.set_max_threads(settings.get_max_threads()? as usize);
 
         if build_res.main_pipeline.is_complete_pipeline()? {
             let mut pipelines = build_res.sources_pipelines;
