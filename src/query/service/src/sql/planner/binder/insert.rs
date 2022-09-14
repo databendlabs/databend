@@ -43,7 +43,6 @@ use crate::clusters::ClusterHelper;
 use crate::evaluator::EvalNode;
 use crate::evaluator::Evaluator;
 use crate::pipelines::processors::transforms::ExpressionTransformV2;
-use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::binder::Binder;
 use crate::sql::binder::ScalarBinder;
@@ -198,7 +197,7 @@ impl<'a> Binder {
 }
 
 pub struct ValueSourceV2<'a> {
-    ctx: Arc<QueryContext>,
+    ctx: Arc<dyn TableContext>,
     name_resolution_ctx: &'a NameResolutionContext,
     bind_context: &'a BindContext,
     schema: DataSchemaRef,
@@ -207,7 +206,7 @@ pub struct ValueSourceV2<'a> {
 
 impl<'a> ValueSourceV2<'a> {
     pub fn new(
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         name_resolution_ctx: &'a NameResolutionContext,
         bind_context: &'a BindContext,
         schema: DataSchemaRef,
@@ -446,7 +445,7 @@ fn fill_default_value(
 async fn exprs_to_datavalue<'a>(
     exprs: Vec<Expr<'a>>,
     schema: &DataSchemaRef,
-    ctx: Arc<QueryContext>,
+    ctx: Arc<dyn TableContext>,
     name_resolution_ctx: &NameResolutionContext,
     bind_context: &BindContext,
     metadata: MetadataRef,

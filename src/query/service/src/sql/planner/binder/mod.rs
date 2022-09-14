@@ -42,7 +42,7 @@ use super::plans::Plan;
 use super::plans::RewriteKind;
 use super::semantic::NameResolutionContext;
 use crate::catalogs::CatalogManager;
-use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::planner::metadata::MetadataRef;
 
 mod aggregate;
@@ -75,7 +75,7 @@ mod table;
 /// - Validate expressions
 /// - Build `Metadata`
 pub struct Binder {
-    ctx: Arc<QueryContext>,
+    ctx: Arc<dyn TableContext>,
     catalogs: Arc<CatalogManager>,
     name_resolution_ctx: NameResolutionContext,
     metadata: MetadataRef,
@@ -83,7 +83,7 @@ pub struct Binder {
 
 impl<'a> Binder {
     pub fn new(
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         catalogs: Arc<CatalogManager>,
         name_resolution_ctx: NameResolutionContext,
         metadata: MetadataRef,

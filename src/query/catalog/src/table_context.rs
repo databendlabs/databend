@@ -111,5 +111,7 @@ pub trait TableContext: Send + Sync {
     // Get user manager api.
     fn get_user_manager(&self) -> Arc<UserApiProvider>;
     fn get_cluster(&self) -> Arc<Cluster>;
+    async fn get_table(&self, catalog: &str, database: &str, table: &str)
+    -> Result<Arc<dyn Table>>;
     async fn get_processes_info(&self) -> Vec<ProcessInfo>;
 }

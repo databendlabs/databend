@@ -16,7 +16,6 @@ use common_ast::ast::*;
 use common_exception::Result;
 use itertools::Itertools;
 
-use crate::sessions::TableContext;
 use crate::sql::binder::Binder;
 use crate::sql::normalize_identifier;
 use crate::sql::plans::AlterShareTenantsPlan;

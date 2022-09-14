@@ -24,6 +24,7 @@ use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 pub struct ExistsTableInterpreter {
     ctx: Arc<QueryContext>,

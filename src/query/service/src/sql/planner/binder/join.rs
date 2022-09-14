@@ -24,7 +24,7 @@ use common_datavalues::wrap_nullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sql::binder::scalar_common::split_conjunctions;
 use crate::sql::binder::scalar_common::split_equivalent_predicate;
 use crate::sql::binder::scalar_common::wrap_cast_if_needed;
@@ -235,7 +235,7 @@ pub fn check_duplicate_join_tables(
 }
 
 struct JoinConditionResolver<'a> {
-    ctx: Arc<QueryContext>,
+    ctx: Arc<dyn TableContext>,
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
 
@@ -247,7 +247,7 @@ struct JoinConditionResolver<'a> {
 
 impl<'a> JoinConditionResolver<'a> {
     pub fn new(
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
         left_context: &'a BindContext,

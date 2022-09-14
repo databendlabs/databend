@@ -39,7 +39,6 @@ use common_legacy_planners::UndropDatabasePlan;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::share::ShareNameIdent;
 
-use crate::sessions::TableContext;
 use crate::sql::binder::Binder;
 use crate::sql::planner::semantic::normalize_identifier;
 use crate::sql::plans::Plan;
