@@ -20,7 +20,6 @@ use common_expression::types::GenericMap;
 use common_expression::Value;
 use common_expression::ValueRef;
 use num_traits::AsPrimitive;
-use ordered_float::OrderedFloat;
 use strength_reduce::StrengthReducedU16;
 use strength_reduce::StrengthReducedU32;
 use strength_reduce::StrengthReducedU64;
@@ -112,5 +111,5 @@ impl<O: Number> RemScalar<O> for i8 {}
 impl<O: Number> RemScalar<O> for i16 {}
 impl<O: Number> RemScalar<O> for i32 {}
 impl<O: Number> RemScalar<O> for i64 {}
-impl<O: Number> RemScalar<O> for OrderedFloat<f32> {}
-impl<O: Number> RemScalar<O> for OrderedFloat<f64> {}
+impl<O: Number> RemScalar<O> for F32 {}
+impl<O: Number> RemScalar<O> for F64 {}

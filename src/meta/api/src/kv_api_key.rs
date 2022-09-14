@@ -30,6 +30,9 @@ pub enum KVApiKeyError {
     #[error("Expect {expect} segments, but: '{got}'")]
     WrongNumberOfSegments { expect: usize, got: String },
 
+    #[error("Expect at least {expect} segments, but {actual} segments found")]
+    AtleastSegments { expect: usize, actual: usize },
+
     #[error("Invalid id string: '{s}': {reason}")]
     InvalidId { s: String, reason: String },
 }

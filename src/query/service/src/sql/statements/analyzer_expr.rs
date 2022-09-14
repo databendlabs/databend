@@ -21,7 +21,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_legacy_parser::analyzer_expr_sync::*;
-use common_planners::Expression;
+use common_legacy_planners::Expression;
 use sqlparser::ast::Expr;
 use sqlparser::ast::FunctionArgExpr;
 use sqlparser::ast::Ident;

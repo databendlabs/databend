@@ -14,7 +14,7 @@
 
 use common_base::base::tokio;
 use common_exception::Result;
-use common_planners::PlanNode;
+use common_legacy_planners::PlanNode;
 use criterion::Criterion;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::SelectInterpreter;

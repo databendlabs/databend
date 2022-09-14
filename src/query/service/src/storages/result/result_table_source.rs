@@ -20,7 +20,7 @@ use common_base::base::ProgressValues;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::PartInfoPtr;
+use common_legacy_planners::PartInfoPtr;
 
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;

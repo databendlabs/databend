@@ -23,7 +23,7 @@ use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::TableSnapshot;
-use common_planners::Extras;
+use common_legacy_planners::Extras;
 use futures::future;
 use futures::StreamExt;
 use futures::TryStreamExt;

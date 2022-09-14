@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_legacy_planners::RevokeRolePlan;
 use common_meta_types::PrincipalIdentity;
-use common_planners::RevokeRolePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 

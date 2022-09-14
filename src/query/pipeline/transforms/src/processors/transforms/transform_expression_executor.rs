@@ -20,10 +20,10 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::ActionFunction;
-use common_planners::Expression;
-use common_planners::ExpressionAction;
-use common_planners::ExpressionChain;
+use common_legacy_planners::ActionFunction;
+use common_legacy_planners::Expression;
+use common_legacy_planners::ExpressionAction;
+use common_legacy_planners::ExpressionChain;
 use tracing::debug;
 
 /// ExpressionExecutor is a helper struct for expressions and projections

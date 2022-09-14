@@ -163,3 +163,17 @@ message DatabaseIdTableName {
   // Table name
   string table_name = 2;
 }
+
+message TableCopiedFileInfo {
+  uint64 ver = 100;
+  uint64 min_compatible = 101;
+
+  optional string etag = 1;
+  uint64 content_length = 2;
+  optional string last_modified = 3;
+}
+
+message TableCopiedFileLock {
+  uint64 ver = 100;
+  uint64 min_compatible = 101;
+}
