@@ -15,23 +15,24 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::scalars::CastFunction;
 use parking_lot::Mutex;
 
 use super::interpreter_common::append2table;
+use super::plan_schedulers::build_schedule_pipepline;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::interpreters::SelectInterpreterV2;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::BlocksSource;
-use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::sql::executor::DistributedInsertSelect;
+use crate::sql::executor::PhysicalPlan;
+use crate::sql::executor::PhysicalPlanBuilder;
+use crate::sql::executor::PipelineBuilder;
 use crate::sql::plans::Insert;
 use crate::sql::plans::InsertInputSource;
 use crate::sql::plans::Plan;
@@ -57,7 +58,7 @@ impl InsertInterpreterV2 {
         }))
     }
 
-    fn check_schema_cast(&self, plan: &Plan) -> common_exception::Result<bool> {
+    fn check_schema_cast(&self, plan: &Plan) -> Result<bool> {
         let output_schema = &self.plan.schema;
         let select_schema = plan.schema();
 
@@ -120,52 +121,78 @@ impl Interpreter for InsertInterpreterV2 {
                     );
                 }
                 InsertInputSource::SelectPlan(plan) => {
-                    let select_interpreter = match &**plan {
+                    let table1 = table.clone();
+                    let (mut select_plan, select_column_bindings) = match plan.as_ref() {
                         Plan::Query {
                             s_expr,
                             metadata,
                             bind_context,
                             ..
-                        } => SelectInterpreterV2::try_create(
-                            self.ctx.clone(),
-                            *bind_context.clone(),
-                            *s_expr.clone(),
-                            metadata.clone(),
-                        ),
+                        } => {
+                            let builder1 =
+                                PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone());
+                            (builder1.build(s_expr).await?, bind_context.columns.clone())
+                        }
                         _ => unreachable!(),
                     };
 
-                    build_res = select_interpreter?.execute2().await?;
+                    table1.get_table_info();
+                    let catalog = self.plan.catalog.clone();
+                    let is_distributed_plan = select_plan.is_distributed_plan();
 
-                    if self.check_schema_cast(plan)? {
-                        let mut functions = Vec::with_capacity(self.plan.schema().fields().len());
-
-                        for (target_field, original_field) in self
-                            .plan
-                            .schema()
-                            .fields()
-                            .iter()
-                            .zip(plan.schema().fields().iter())
-                        {
-                            let target_type_name = target_field.data_type().name();
-                            let from_type = original_field.data_type().clone();
-                            let cast_function =
-                                CastFunction::create("cast", &target_type_name, from_type)?;
-                            functions.push(cast_function);
+                    let insert_select_plan = match select_plan {
+                        PhysicalPlan::Exchange(ref mut exchange) => {
+                            // insert can be dispatched to different nodes
+                            let input = exchange.input.clone();
+                            exchange.input = Box::new(PhysicalPlan::DistributedInsertSelect(
+                                Box::new(DistributedInsertSelect {
+                                    input,
+                                    catalog,
+                                    table_info: table1.get_table_info().clone(),
+                                    select_schema: plan.schema(),
+                                    select_column_bindings,
+                                    insert_schema: self.plan.schema(),
+                                    cast_needed: self.check_schema_cast(plan)?,
+                                }),
+                            ));
+                            select_plan
                         }
+                        other_plan => {
+                            // insert should wait until all nodes finished
+                            PhysicalPlan::DistributedInsertSelect(Box::new(
+                                DistributedInsertSelect {
+                                    input: Box::new(other_plan),
+                                    catalog,
+                                    table_info: table1.get_table_info().clone(),
+                                    select_schema: plan.schema(),
+                                    select_column_bindings,
+                                    insert_schema: self.plan.schema(),
+                                    cast_needed: self.check_schema_cast(plan)?,
+                                },
+                            ))
+                        }
+                    };
 
-                        let func_ctx = self.ctx.try_get_function_context()?;
-                        build_res.main_pipeline.add_transform(
-                            |transform_input_port, transform_output_port| {
-                                TransformCastSchema::try_create(
-                                    transform_input_port,
-                                    transform_output_port,
-                                    self.plan.schema(),
-                                    functions.clone(),
-                                    func_ctx.clone(),
-                                )
-                            },
+                    build_res = match is_distributed_plan {
+                        true => {
+                            build_schedule_pipepline(self.ctx.clone(), &insert_select_plan).await?
+                        }
+                        false => PipelineBuilder::create(self.ctx.clone())
+                            .finalize(&insert_select_plan)?,
+                    };
+
+                    if is_distributed_plan {
+                        append2table(
+                            self.ctx.clone(),
+                            table.clone(),
+                            plan.schema(),
+                            &mut build_res,
+                            self.plan.overwrite,
+                            true,
+                            true,
                         )?;
+
+                        return Ok(build_res);
                     }
                 }
             };
@@ -178,6 +205,7 @@ impl Interpreter for InsertInterpreterV2 {
             &mut build_res,
             self.plan.overwrite,
             true,
+            false,
         )?;
 
         Ok(build_res)

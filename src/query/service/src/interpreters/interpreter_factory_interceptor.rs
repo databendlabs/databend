@@ -17,7 +17,7 @@ use std::time::SystemTime;
 
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_planners::PlanNode;
+use common_legacy_planners::PlanNode;
 use common_streams::ErrorStream;
 use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;

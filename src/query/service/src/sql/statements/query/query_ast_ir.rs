@@ -16,7 +16,7 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 
 use common_exception::Result;
-use common_planners::Expression;
+use common_legacy_planners::Expression;
 
 // Intermediate representation for query AST(after normalize)
 pub struct QueryASTIR {

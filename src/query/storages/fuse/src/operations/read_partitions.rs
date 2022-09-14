@@ -19,11 +19,11 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::TableSnapshot;
-use common_planners::Extras;
-use common_planners::PartInfoPtr;
-use common_planners::Partitions;
-use common_planners::Projection;
-use common_planners::Statistics;
+use common_legacy_planners::Extras;
+use common_legacy_planners::PartInfoPtr;
+use common_legacy_planners::Partitions;
+use common_legacy_planners::Projection;
+use common_legacy_planners::Statistics;
 
 use crate::fuse_part::ColumnLeaves;
 use crate::fuse_part::ColumnMeta;

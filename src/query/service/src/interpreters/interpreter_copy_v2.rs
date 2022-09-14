@@ -20,10 +20,10 @@ use common_base::base::TrySpawn;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_legacy_planners::ReadDataSourcePlan;
+use common_legacy_planners::SourceInfo;
+use common_legacy_planners::StageTableInfo;
 use common_meta_types::UserStageInfo;
-use common_planners::ReadDataSourcePlan;
-use common_planners::SourceInfo;
-use common_planners::StageTableInfo;
 use futures::TryStreamExt;
 use regex::Regex;
 
@@ -179,7 +179,7 @@ impl CopyInterpreterV2 {
 
         let to_table = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
 
-        to_table.append2(self.ctx.clone(), &mut build_res.main_pipeline)?;
+        to_table.append2(self.ctx.clone(), &mut build_res.main_pipeline, false)?;
 
         let ctx = self.ctx.clone();
         let catalog_name = catalog_name.clone();
@@ -275,6 +275,7 @@ impl CopyInterpreterV2 {
             &mut build_res,
             false,
             true,
+            false,
         )?;
         Ok(build_res)
     }

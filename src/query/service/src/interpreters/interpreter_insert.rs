@@ -19,10 +19,10 @@ use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::CastFunction;
-use common_planners::InsertInputSource;
-use common_planners::InsertPlan;
-use common_planners::PlanNode;
-use common_planners::SelectPlan;
+use common_legacy_planners::InsertInputSource;
+use common_legacy_planners::InsertPlan;
+use common_legacy_planners::PlanNode;
+use common_legacy_planners::SelectPlan;
 use parking_lot::Mutex;
 
 use super::interpreter_common::append2table;
@@ -164,6 +164,7 @@ impl Interpreter for InsertInterpreter {
             &mut build_res,
             self.plan.overwrite,
             true,
+            false,
         )?;
 
         Ok(build_res)

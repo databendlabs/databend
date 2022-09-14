@@ -31,6 +31,7 @@ use crate::sql::planner::binder::Binder;
 use crate::sql::planner::binder::ColumnBinding;
 use crate::sql::planner::semantic::normalize_identifier;
 use crate::sql::planner::semantic::GroupingChecker;
+use crate::sql::planner::IndexType;
 use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::EvalScalar;
 use crate::sql::plans::Project;
@@ -39,7 +40,6 @@ use crate::sql::plans::ScalarExpr;
 use crate::sql::plans::ScalarItem;
 use crate::sql::plans::SubqueryExpr;
 use crate::sql::plans::SubqueryType;
-use crate::sql::IndexType;
 
 impl<'a> Binder {
     pub(super) fn analyze_projection(

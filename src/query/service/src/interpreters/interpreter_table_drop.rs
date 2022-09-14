@@ -16,10 +16,10 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_legacy_planners::DropTablePlan;
+use common_legacy_planners::TruncateTablePlan;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
-use common_planners::DropTablePlan;
-use common_planners::TruncateTablePlan;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

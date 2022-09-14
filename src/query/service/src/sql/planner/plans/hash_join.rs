@@ -19,12 +19,12 @@ use crate::sql::optimizer::Distribution;
 use crate::sql::optimizer::PhysicalProperty;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::RequiredProperty;
+use crate::sql::planner::IndexType;
 use crate::sql::plans::LogicalOperator;
 use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalOperator;
 use crate::sql::plans::RelOp;
 use crate::sql::plans::Scalar;
-use crate::sql::IndexType;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct PhysicalHashJoin {

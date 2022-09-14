@@ -30,7 +30,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::PartInfoPtr;
+use common_legacy_planners::PartInfoPtr;
 use common_storages_util::file_meta_data_reader::FileMetaDataReader;
 use common_storages_util::retry;
 use common_storages_util::retry::Retryable;

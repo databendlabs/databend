@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_legacy_planners::DropUserStagePlan;
 use common_meta_types::StageType;
-use common_planners::DropUserStagePlan;
 use tracing::info;
 
 use crate::interpreters::Interpreter;

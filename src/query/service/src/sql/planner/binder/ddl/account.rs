@@ -19,18 +19,17 @@ use common_ast::ast::CreateUserStmt;
 use common_ast::ast::GrantStmt;
 use common_ast::ast::RevokeStmt;
 use common_exception::Result;
+use common_legacy_planners::AlterUserPlan;
+use common_legacy_planners::CreateUserPlan;
+use common_legacy_planners::GrantPrivilegePlan;
+use common_legacy_planners::GrantRolePlan;
+use common_legacy_planners::RevokePrivilegePlan;
+use common_legacy_planners::RevokeRolePlan;
 use common_meta_types::AuthInfo;
 use common_meta_types::GrantObject;
 use common_meta_types::UserOption;
 use common_meta_types::UserPrivilegeSet;
-use common_planners::AlterUserPlan;
-use common_planners::CreateUserPlan;
-use common_planners::GrantPrivilegePlan;
-use common_planners::GrantRolePlan;
-use common_planners::RevokePrivilegePlan;
-use common_planners::RevokeRolePlan;
 
-use crate::sessions::TableContext;
 use crate::sql::plans::Plan;
 use crate::sql::Binder;
 

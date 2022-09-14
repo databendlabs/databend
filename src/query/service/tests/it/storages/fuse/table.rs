@@ -16,13 +16,13 @@ use std::default::Default;
 
 use common_base::base::tokio;
 use common_exception::Result;
+use common_legacy_planners::AlterTableClusterKeyPlan;
+use common_legacy_planners::DropTableClusterKeyPlan;
+use common_legacy_planners::ReadDataSourcePlan;
+use common_legacy_planners::SourceInfo;
+use common_legacy_planners::TruncateTablePlan;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use common_planners::AlterTableClusterKeyPlan;
-use common_planners::DropTableClusterKeyPlan;
-use common_planners::ReadDataSourcePlan;
-use common_planners::SourceInfo;
-use common_planners::TruncateTablePlan;
 use databend_query::interpreters::AlterTableClusterKeyInterpreter;
 use databend_query::interpreters::CreateTableInterpreterV2;
 use databend_query::interpreters::DropTableClusterKeyInterpreter;

@@ -16,7 +16,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use common_exception::Result;
-use common_planners::ReclusterTablePlan;
+use common_legacy_planners::ReclusterTablePlan;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;

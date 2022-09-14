@@ -23,7 +23,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_io::prelude::*;
-use common_planners::PlanNode;
+use common_legacy_planners::PlanNode;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_users::CertifiedInfo;

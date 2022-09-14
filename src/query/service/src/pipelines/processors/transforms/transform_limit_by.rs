@@ -23,7 +23,7 @@ use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodSerializer;
 use common_exception::Result;
-use common_planners::Expression;
+use common_legacy_planners::Expression;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;

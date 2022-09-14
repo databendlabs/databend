@@ -16,9 +16,10 @@ use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::Expression;
+use common_legacy_planners::Expression;
 
 use crate::sql::executor::util::format_field_name;
+use crate::sql::planner::IndexType;
 use crate::sql::plans::AggregateFunction;
 use crate::sql::plans::AndExpr;
 use crate::sql::plans::BoundColumnRef;
@@ -28,7 +29,6 @@ use crate::sql::plans::ConstantExpr;
 use crate::sql::plans::FunctionCall;
 use crate::sql::plans::OrExpr;
 use crate::sql::plans::Scalar;
-use crate::sql::IndexType;
 use crate::sql::MetadataRef;
 
 pub trait FiledNameFormat {

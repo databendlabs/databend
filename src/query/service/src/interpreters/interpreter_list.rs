@@ -19,7 +19,7 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::Series;
 use common_datavalues::SeriesFrom;
 use common_exception::Result;
-use common_planners::ListPlan;
+use common_legacy_planners::ListPlan;
 
 use crate::interpreters::interpreter_common::list_files;
 use crate::interpreters::Interpreter;

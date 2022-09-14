@@ -17,7 +17,7 @@ use std::sync::Arc;
 use chrono_tz::Tz;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::SettingPlan;
+use common_legacy_planners::SettingPlan;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

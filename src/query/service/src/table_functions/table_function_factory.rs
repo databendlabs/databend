@@ -17,8 +17,8 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_legacy_planners::Expression;
 use common_meta_types::MetaId;
-use common_planners::Expression;
 use parking_lot::RwLock;
 
 use crate::catalogs::SYS_TBL_FUC_ID_END;

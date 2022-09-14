@@ -18,7 +18,7 @@ use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_fuse_meta::meta::StatisticsOfColumns;
-use common_planners::Expression;
+use common_legacy_planners::Expression;
 use common_storages_index::RangeFilter;
 
 pub trait RangeFilterPruner {

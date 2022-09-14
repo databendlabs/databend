@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_legacy_planners::GrantRolePlan;
 use common_meta_types::PrincipalIdentity;
-use common_planners::GrantRolePlan;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

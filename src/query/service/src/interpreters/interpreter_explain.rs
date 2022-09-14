@@ -17,8 +17,8 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_planners::ExplainPlan;
-use common_planners::ExplainType;
+use common_legacy_planners::ExplainPlan;
+use common_legacy_planners::ExplainType;
 
 use crate::interpreters::fragments::QueryFragmentsBuilder;
 use crate::interpreters::fragments::RootQueryFragment;

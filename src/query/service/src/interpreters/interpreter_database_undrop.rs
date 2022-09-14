@@ -15,9 +15,9 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_legacy_planners::UndropDatabasePlan;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
-use common_planners::UndropDatabasePlan;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

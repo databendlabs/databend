@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_legacy_planners::CreateUserStagePlan;
 use common_meta_types::StageType;
-use common_planners::CreateUserStagePlan;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

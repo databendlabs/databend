@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::PlanNode;
+use common_legacy_planners::PlanNode;
 
 use crate::api::FragmentPayload;
 use crate::api::MergeExchange;

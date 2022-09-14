@@ -34,8 +34,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::Compression;
-use common_planners::PartInfoPtr;
-use common_planners::Projection;
+use common_legacy_planners::PartInfoPtr;
+use common_legacy_planners::Projection;
 use futures::AsyncReadExt;
 use futures::StreamExt;
 use futures::TryStreamExt;
@@ -386,11 +386,11 @@ impl BlockReader {
         match meta_compression {
             Compression::Lz4 => {
                 let err_msg = r#"Deprecated compression algorithm [Lz4] detected.
-                
+
                                         The Legacy compression algorithm [Lz4] is no longer supported.
-                                        To migrate data from old format, please consider re-create the table, 
+                                        To migrate data from old format, please consider re-create the table,
                                         by using an old compatible version [v0.8.25-nightly … v0.7.12-nightly].
-                                        
+
                                         - Bring up the compatible version of databend-query
                                         - re-create the table
                                            Suppose the name of table is T

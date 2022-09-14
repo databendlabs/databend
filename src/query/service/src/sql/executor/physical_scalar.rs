@@ -18,7 +18,7 @@ use common_datavalues::DataValue;
 use common_exception::Result;
 
 use super::ColumnID;
-use crate::sql::IndexType;
+use crate::sql::planner::IndexType;
 use crate::sql::MetadataRef;
 
 /// Serializable and desugared representation of `Scalar`.
