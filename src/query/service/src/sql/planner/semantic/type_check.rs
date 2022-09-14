@@ -56,7 +56,6 @@ use common_legacy_planners::validate_function_arg;
 use super::name_resolution::NameResolutionContext;
 use super::normalize_identifier;
 use crate::evaluator::Evaluator;
-use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::binder::wrap_cast_if_needed;
 use crate::sql::binder::Binder;
@@ -90,7 +89,7 @@ use crate::sql::ScalarExpr;
 /// argument types of expressions, or unresolvable columns.
 pub struct TypeChecker<'a> {
     bind_context: &'a BindContext,
-    ctx: Arc<QueryContext>,
+    ctx: Arc<dyn TableContext>,
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
 
@@ -104,7 +103,7 @@ pub struct TypeChecker<'a> {
 impl<'a> TypeChecker<'a> {
     pub fn new(
         bind_context: &'a BindContext,
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
         aliases: &'a [(String, Scalar)],

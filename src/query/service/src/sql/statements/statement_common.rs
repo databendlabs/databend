@@ -53,7 +53,7 @@ use crate::sessions::TableContext;
 ///
 /// - @internal/abc => (internal, "/stage/internal/abc")
 pub async fn parse_stage_location(
-    ctx: &Arc<QueryContext>,
+    ctx: &Arc<dyn TableContext>,
     location: &str,
 ) -> Result<(UserStageInfo, String)> {
     let mgr = ctx.get_user_manager();
@@ -75,7 +75,7 @@ pub async fn parse_stage_location(
 ///
 /// Difference is input location has already been parsed by parser.
 pub async fn parse_stage_location_v2(
-    ctx: &Arc<QueryContext>,
+    ctx: &Arc<dyn TableContext>,
     name: &str,
     path: &str,
 ) -> Result<(UserStageInfo, String)> {
