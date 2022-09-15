@@ -18,6 +18,7 @@ use common_datavalues::prelude::*;
 use common_datavalues::type_coercion::numerical_coercion;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_hashtable::HashSetWithStackMemory;
 use common_hashtable::KeysRef;
 use ordered_float::OrderedFloat;
 
@@ -26,8 +27,6 @@ use crate::scalars::Function;
 use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
-
-use common_hashtable::HashSetWithStackMemory;
 
 #[derive(Clone)]
 pub struct InFunction<const NEGATED: bool> {
@@ -82,7 +81,6 @@ macro_rules! scalar_contains {
     }};
 }
 
-
 macro_rules! bool_contains {
     ($T: ident, $INPUT_COL: expr, $ROWS: expr, $COLUMNS: expr, $CAST_TYPE: ident, $FUNC_CTX: expr) => {{
         let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity($ROWS);
@@ -92,12 +90,12 @@ macro_rules! bool_contains {
             let col_viewer = $T::try_create_viewer(&col)?;
             if col_viewer.valid_at(0) {
                 let val = col_viewer.value_at(0);
-                vals |= 1 << (val as u8  + 1);
+                vals |= 1 << (val as u8 + 1);
             }
         }
         let input_viewer = $T::try_create_viewer(&$INPUT_COL)?;
         for (row, val) in input_viewer.iter().enumerate() {
-            let contains = ((vals >> (val as u8  + 1)) & 1) > 0;
+            let contains = ((vals >> (val as u8 + 1)) & 1) > 0;
             let valid = input_viewer.valid_at(row);
             builder.append(valid && ((contains && !NEGATED) || (!contains && NEGATED)));
         }
@@ -105,11 +103,10 @@ macro_rules! bool_contains {
     }};
 }
 
-
 macro_rules! string_contains {
     ($T: ident, $INPUT_COL: expr, $ROWS: expr, $COLUMNS: expr, $CAST_TYPE: ident, $FUNC_CTX: expr) => {{
         let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity($ROWS);
-        let mut vals_set: HashSetWithStackMemory<64, KeysRef>  = HashSetWithStackMemory::create();
+        let mut vals_set: HashSetWithStackMemory<64, KeysRef> = HashSetWithStackMemory::create();
         let mut inserted = false;
         for col in &$COLUMNS[1..] {
             let col = cast_column_field(col, col.data_type(), &$CAST_TYPE, &$FUNC_CTX)?;
@@ -134,7 +131,8 @@ macro_rules! string_contains {
 macro_rules! float_contains {
     ($T: ident, $INPUT_COL: expr, $ROWS: expr, $COLUMNS: expr, $CAST_TYPE: ident, $FUNC_CTX: expr) => {{
         let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity($ROWS);
-        let mut vals_set: HashSetWithStackMemory<64, OrderedFloat<$T>> = HashSetWithStackMemory::create();
+        let mut vals_set: HashSetWithStackMemory<64, OrderedFloat<$T>> =
+            HashSetWithStackMemory::create();
         let mut inserted = false;
 
         for col in &$COLUMNS[1..] {

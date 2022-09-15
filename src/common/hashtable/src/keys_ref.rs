@@ -15,6 +15,7 @@
 use std::hash::Hasher;
 
 use ahash::AHasher;
+
 use super::HashTableKeyable;
 
 #[derive(Clone, Copy)]
