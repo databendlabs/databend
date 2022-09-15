@@ -149,7 +149,7 @@ impl HiveParquetBlockReader {
         )?)
     }
 
-    fn get_parquet_column_metadata<'a>(
+    pub fn get_parquet_column_metadata<'a>(
         row_group: &'a RowGroupMetaData,
         field_name: &str,
     ) -> Result<&'a ColumnChunkMetaData> {

@@ -35,7 +35,7 @@ use common_pipeline_transforms::processors::transforms::ExpressionExecutor;
 
 #[derive(Clone)]
 pub struct RangeFilter {
-    origin: DataSchemaRef,
+    pub origin: DataSchemaRef,
     schema: DataSchemaRef,
     executor: Arc<ExpressionExecutor>,
     stat_columns: StatColumns,

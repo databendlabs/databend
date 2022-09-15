@@ -357,6 +357,16 @@ impl Settings {
             SettingValue {
                 default_value: UserSettingValue::UInt64(1),
                 user_setting: UserSetting::create(
+                    "enable_hive_parquet_predict_pushdown",
+                    UserSettingValue::UInt64(1),
+                ),
+                level: ScopeLevel::Session,
+                desc: "Enable hive parquet predict pushdown  by setting this variable to 1, default value: 1",
+                possible_values: None,
+            },
+            SettingValue {
+                default_value: UserSettingValue::String("\"".to_owned()),
+                user_setting: UserSetting::create(
                     "enable_distributed_eval_index",
                     UserSettingValue::UInt64(1),
                 ),
@@ -590,6 +600,11 @@ impl Settings {
                     Dialect::PostgreSQL
                 }
             })
+    }
+
+    pub fn get_enable_hive_parquet_predict_pushdown(&self) -> Result<u64> {
+        static KEY: &str = "enable_hive_parquet_predict_pushdown";
+        self.try_get_u64(KEY)
     }
 
     pub fn has_setting(&self, key: &str) -> bool {

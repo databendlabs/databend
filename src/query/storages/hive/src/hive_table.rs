@@ -44,6 +44,7 @@ use common_pipeline_sources::processors::sources::sync_source::SyncSource;
 use common_pipeline_sources::processors::sources::sync_source::SyncSourcer;
 use common_storage::init_operator;
 use common_storage::DataOperator;
+use common_storages_index::RangeFilter;
 use futures::TryStreamExt;
 use opendal::ObjectMode;
 use opendal::Operator;
@@ -54,6 +55,7 @@ use super::hive_table_options::HiveTableOptions;
 use crate::hive_parquet_block_reader::HiveParquetBlockReader;
 use crate::hive_partition_filler::HivePartitionFiller;
 use crate::hive_table_source::HiveTableSource;
+use crate::HiveBlockFilter;
 use crate::HiveFileSplitter;
 use crate::CATALOG_HIVE;
 
@@ -108,6 +110,43 @@ impl HiveTable {
         }
     }
 
+    fn get_block_filter(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        push_downs: &Option<Extras>,
+    ) -> Result<Arc<HiveBlockFilter>> {
+        let enable_hive_parquet_predict_pushdown = ctx
+            .get_settings()
+            .get_enable_hive_parquet_predict_pushdown()?;
+
+        if enable_hive_parquet_predict_pushdown == 0 {
+            return Ok(Arc::new(HiveBlockFilter::create(None, vec![])));
+        }
+
+        let filter_expressions = push_downs.as_ref().map(|extra| extra.filters.as_slice());
+        let range_filter = match filter_expressions {
+            Some(exprs) if !exprs.is_empty() => Some(RangeFilter::try_create(
+                ctx.clone(),
+                exprs,
+                self.table_info.schema(),
+            )?),
+            _ => None,
+        };
+
+        let projection = self.get_projections(push_downs)?;
+        let mut projection_fields = vec![];
+        let schema = self.table_info.schema();
+        for i in projection.into_iter() {
+            let field = schema.field(i);
+            projection_fields.push(field.clone());
+        }
+
+        Ok(Arc::new(HiveBlockFilter::create(
+            range_filter,
+            projection_fields,
+        )))
+    }
+
     #[inline]
     pub fn do_read2(
         &self,
@@ -130,6 +169,8 @@ impl HiveTable {
             |_| 0
         };
 
+        let hive_block_filter = self.get_block_filter(ctx.clone(), push_downs)?;
+
         for index in 0..std::cmp::max(1, max_threads) {
             let output = OutputPort::create();
             source_builder.add_source(
@@ -140,6 +181,7 @@ impl HiveTable {
                     output,
                     block_reader.clone(),
                     delay_timer(index),
+                    hive_block_filter.clone(),
                 )?,
             );
         }
@@ -187,33 +229,33 @@ impl HiveTable {
             .collect::<HashSet<_>>()
     }
 
-    fn create_block_reader(
-        &self,
-        push_downs: &Option<Extras>,
-    ) -> Result<Arc<HiveParquetBlockReader>> {
-        let projection = if let Some(Extras {
+    fn get_projections(&self, push_downs: &Option<Extras>) -> Result<Vec<usize>> {
+        if let Some(Extras {
             projection: Some(prj),
             ..
         }) = push_downs
         {
             match prj {
-                Projection::Columns(indices) => Some(indices.clone()),
-                Projection::InnerColumns(_) => None,
+                Projection::Columns(indices) => Ok(indices.clone()),
+                Projection::InnerColumns(_) => Err(ErrorCode::UnImplement(
+                    "does not support projection inner columns",
+                )),
             }
         } else {
             let col_ids = (0..self.table_info.schema().fields().len())
                 .into_iter()
                 .collect::<Vec<usize>>();
-            Some(col_ids)
-        };
-        if projection.is_none() {
-            return Err(ErrorCode::UnImplement(
-                "does not support projection inner columns",
-            ));
+            Ok(col_ids)
         }
+    }
 
+    fn create_block_reader(
+        &self,
+        push_downs: &Option<Extras>,
+    ) -> Result<Arc<HiveParquetBlockReader>> {
+        let projection = self.get_projections(push_downs)?;
         let (projection, partition_fields) =
-            self.filter_hive_partition_from_partition_keys(projection.unwrap());
+            self.filter_hive_partition_from_partition_keys(projection);
 
         let hive_partition_filler = if !partition_fields.is_empty() {
             Some(HivePartitionFiller::create(partition_fields))
