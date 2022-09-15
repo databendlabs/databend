@@ -126,12 +126,16 @@ impl HashTableKeyable for OrderedFloat<f32> {
 
     #[inline(always)]
     fn is_zero(&self) -> bool {
-        self.is_nan()
+        *self == 0.0
     }
 
     #[inline(always)]
     fn fast_hash(&self) -> u64 {
-        self.to_bits() as u64
+        if self.is_nan() {
+            HashTableKeyable::fast_hash(&f32::NAN.to_bits())
+        } else {
+            HashTableKeyable::fast_hash(&self.to_bits())
+        }
     }
     #[inline(always)]
     fn set_key(&mut self, new_value: &OrderedFloat<f32>) {
@@ -144,12 +148,16 @@ impl HashTableKeyable for OrderedFloat<f64> {
 
     #[inline(always)]
     fn is_zero(&self) -> bool {
-        self.is_nan()
+        *self == 0.0
     }
 
     #[inline(always)]
     fn fast_hash(&self) -> u64 {
-        self.to_bits() as u64
+        if self.is_nan() {
+            HashTableKeyable::fast_hash(&f64::NAN.to_bits())
+        } else {
+            HashTableKeyable::fast_hash(&self.to_bits())
+        }
     }
     #[inline(always)]
     fn set_key(&mut self, new_value: &OrderedFloat<f64>) {
