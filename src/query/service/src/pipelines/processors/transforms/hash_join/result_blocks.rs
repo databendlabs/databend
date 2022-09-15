@@ -562,7 +562,7 @@ impl JoinHashTable {
         for kv in hash_table.iter() {
             for v in kv.get_value() {
                 if !build_indexes.contains(v) {
-                    unmatched_build_indexes.push(v.clone());
+                    unmatched_build_indexes.push(*v);
                 }
             }
         }
@@ -590,8 +590,7 @@ impl JoinHashTable {
                 .collect::<Result<Vec<_>>>()?,
         );
 
-        nullable_probe_block =
-            DataBlock::concat_blocks(&vec![nullable_probe_block, null_probe_block])?;
+        nullable_probe_block = DataBlock::concat_blocks(&[nullable_probe_block, null_probe_block])?;
         let merged_block = self.merge_eq_block(&nullable_probe_block, &build_block)?;
         Ok(merged_block)
     }

@@ -124,6 +124,7 @@ impl<'a> Binder {
                 &mut left_join_conditions,
                 &mut right_join_conditions,
                 &mut other_conditions,
+                &join.op,
             )
             .await?;
 
@@ -271,6 +272,7 @@ impl<'a> JoinConditionResolver<'a> {
         left_join_conditions: &mut Vec<Scalar>,
         right_join_conditions: &mut Vec<Scalar>,
         other_join_conditions: &mut Vec<Scalar>,
+        join_op: &JoinOperator,
     ) -> Result<()> {
         match &self.join_condition {
             JoinCondition::On(cond) => {
@@ -287,8 +289,13 @@ impl<'a> JoinConditionResolver<'a> {
                     .iter()
                     .map(|ident| normalize_identifier(ident, self.name_resolution_ctx).name)
                     .collect::<Vec<String>>();
-                self.resolve_using(using_columns, left_join_conditions, right_join_conditions)
-                    .await?;
+                self.resolve_using(
+                    using_columns,
+                    left_join_conditions,
+                    right_join_conditions,
+                    join_op,
+                )
+                .await?;
             }
             JoinCondition::Natural => {
                 // NATURAL is a shorthand form of USING: it forms a USING list consisting of all column names that appear in both input tables
@@ -297,8 +304,13 @@ impl<'a> JoinConditionResolver<'a> {
                 let mut using_columns = vec![];
                 // Find common columns in both input tables
                 self.find_using_columns(&mut using_columns)?;
-                self.resolve_using(using_columns, left_join_conditions, right_join_conditions)
-                    .await?
+                self.resolve_using(
+                    using_columns,
+                    left_join_conditions,
+                    right_join_conditions,
+                    join_op,
+                )
+                .await?
             }
             JoinCondition::None => {}
         }
@@ -363,6 +375,7 @@ impl<'a> JoinConditionResolver<'a> {
         using_columns: Vec<String>,
         left_join_conditions: &mut Vec<Scalar>,
         right_join_conditions: &mut Vec<Scalar>,
+        join_op: &JoinOperator,
     ) -> Result<()> {
         for join_key in using_columns.iter() {
             let join_key_name = join_key.as_str();
@@ -397,13 +410,17 @@ impl<'a> JoinConditionResolver<'a> {
                     join_key_name
                 )));
             };
-
+            let idx = if let JoinOperator::RightOuter = join_op {
+                0
+            } else {
+                1
+            };
             if let Some(col_binding) = self
                 .join_context
                 .columns
                 .iter_mut()
                 .filter(|col_binding| col_binding.column_name == join_key_name)
-                .nth(1)
+                .nth(idx)
             {
                 // Always make the second using column in the join_context invisible in unqualified wildcard.
                 col_binding.visibility = Visibility::UnqualifiedWildcardInVisible;
