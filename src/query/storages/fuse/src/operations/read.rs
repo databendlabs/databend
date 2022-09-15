@@ -90,7 +90,7 @@ impl FuseTable {
 
         let (output_reader, prewhere_reader, prewhere_filter, remain_reader) =
             if let Some(prewhere) = self.prewhere_of_push_downs(&plan.push_downs) {
-                let prewhere_schema = prewhere.need_columns.project_schema(&table_schema);
+                let prewhere_schema = prewhere.prewhere_columns.project_schema(&table_schema);
                 let prewhere_schema = Arc::new(prewhere_schema);
                 let expr_field = prewhere.filter.to_data_field(&prewhere_schema)?;
                 let expr_schema = DataSchemaRefExt::create(vec![expr_field]);
@@ -103,9 +103,10 @@ impl FuseTable {
                     vec![prewhere.filter.clone()],
                     false,
                 )?;
-
+                let output_reader =
+                    self.create_block_reader(&ctx, prewhere.output_columns.clone())?;
                 let prewhere_reader =
-                    self.create_block_reader(&ctx, prewhere.need_columns.clone())?;
+                    self.create_block_reader(&ctx, prewhere.prewhere_columns.clone())?;
                 let remain_reader = if prewhere.remain_columns.is_empty() {
                     None
                 } else {

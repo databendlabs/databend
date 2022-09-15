@@ -24,12 +24,12 @@ use crate::sql::plans::RelOp;
 use crate::sql::plans::Scalar;
 use crate::sql::MetadataRef;
 
-pub struct WhereOptimizer {
+pub struct PrewhereOptimizer {
     metadata: MetadataRef,
     pattern: SExpr,
 }
 
-impl WhereOptimizer {
+impl PrewhereOptimizer {
     pub fn new(metadata: MetadataRef) -> Self {
         Self {
             metadata,
@@ -97,7 +97,7 @@ impl WhereOptimizer {
         )
     }
 
-    pub fn where_optimize(&self, s_expr: SExpr) -> Result<SExpr> {
+    pub fn prewhere_optimize(&self, s_expr: SExpr) -> Result<SExpr> {
         let rel_op = s_expr.plan();
         if s_expr.match_pattern(&self.pattern) {
             let mut filter: Filter = s_expr.plan().clone().try_into()?;
@@ -131,7 +131,8 @@ impl WhereOptimizer {
                 None
             } else {
                 Some(Prewhere {
-                    columns: prewhere_columns,
+                    output_columns: get.columns.clone(),
+                    prewhere_columns,
                     predicates: prewhere_pred,
                 })
             };
@@ -149,7 +150,7 @@ impl WhereOptimizer {
             let children = s_expr
                 .children()
                 .iter()
-                .map(|expr| self.where_optimize(expr.clone()))
+                .map(|expr| self.prewhere_optimize(expr.clone()))
                 .collect::<Result<Vec<_>>>()?;
             Ok(SExpr::create(rel_op.clone(), children, None, None))
         }

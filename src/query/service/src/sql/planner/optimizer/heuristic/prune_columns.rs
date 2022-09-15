@@ -76,7 +76,29 @@ impl ColumnPruner {
     fn keep_required_columns(&self, expr: &SExpr, mut required: ColumnSet) -> Result<SExpr> {
         match expr.plan() {
             RelOperator::LogicalGet(p) => {
+                let mut prewhere = p.prewhere.clone();
                 let mut used: ColumnSet = required.intersection(&p.columns).cloned().collect();
+                if let Some(ref mut pw) = prewhere {
+                    debug_assert!(
+                        pw.prewhere_columns.is_subset(&p.columns),
+                        "prewhere columns should be a subset of scan columns"
+                    );
+                    // `used` is the columns which prewhere scan needs to output for its upper operator.
+                    if used.is_empty() {
+                        let prewhere_columns =
+                            pw.prewhere_columns.iter().map(|&i| i).collect::<Vec<_>>();
+                        let smallest_index = self
+                            .metadata
+                            .read()
+                            .find_smallest_column_within(prewhere_columns.as_slice());
+                        used.insert(smallest_index);
+                    }
+                    pw.output_columns = used.clone();
+                    // `prune_columns` is after `prewhere_optimize`,
+                    // so we need to add prewhere columns to scan columns.
+                    used = used.union(&pw.prewhere_columns).cloned().collect();
+                }
+
                 if used.is_empty() {
                     let columns = self.metadata.read().columns_by_table_index(p.table_index);
                     let smallest_index = find_smallest_column(&columns);
@@ -90,7 +112,7 @@ impl ColumnPruner {
                     limit: p.limit,
                     order_by: p.order_by.clone(),
                     statistics: p.statistics,
-                    prewhere: p.prewhere.clone(),
+                    prewhere,
                 })))
             }
             RelOperator::LogicalInnerJoin(p) => {
