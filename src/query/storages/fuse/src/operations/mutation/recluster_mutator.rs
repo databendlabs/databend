@@ -35,6 +35,8 @@ use crate::statistics::merge_statistics;
 use crate::FuseTable;
 use crate::TableMutator;
 
+static MAX_BLOCK_COUNT: usize = 100;
+
 #[derive(Clone)]
 pub struct ReclusterMutator {
     base_mutator: BaseMutator,
@@ -182,6 +184,7 @@ impl TableMutator for ReclusterMutator {
 
             self.selected_blocks = selected_idx
                 .iter()
+                .take(MAX_BLOCK_COUNT)
                 .map(|idx| {
                     let (seg_idx, block_meta) = block_metas[*idx].clone();
                     self.base_mutator
