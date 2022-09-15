@@ -1,4 +1,4 @@
-//  Copyright 2021 Datafuse Labs.
+//  Copyright 2022 Datafuse Labs.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -12,10 +12,8 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-mod fuse_segment;
-mod fuse_segment_table;
-mod table_args;
+mod fuse_block;
+mod fuse_block_table;
 
-pub use fuse_segment::FuseSegment;
-pub use fuse_segment_table::FuseSegmentTable;
-pub use table_args::parse_func_history_args;
+pub use fuse_block::FuseBlock;
+pub use fuse_block_table::FuseBlockTable;
