@@ -12,10 +12,10 @@ from mysql.connector.conversion import MySQLConverter
 
 class StringConverter(MySQLConverter):
 
-    def _DATETIME_to_python(self, value, dsc=None):
+    def _datetime_to_python(self, value, dsc=None):
         if not value:
             return None
-        return MySQLConverter._STRING_to_python(self, value)
+        return MySQLConverter._string_to_python(self, value)
 
 
 class TestMySQL(logictest.SuiteRunner, ABC):
