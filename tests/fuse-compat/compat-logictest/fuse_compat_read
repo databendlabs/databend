@@ -52,7 +52,7 @@ statement query T
 select c_timestamp FROM fuse_compat_table;
 
 ----
-1991-01-01 00:00:00
+1991-01-01 00:00:00.000000
 
 statement query T
 select c_varchar   FROM fuse_compat_table;
