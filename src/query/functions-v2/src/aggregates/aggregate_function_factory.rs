@@ -170,7 +170,6 @@ impl AggregateFunctionFactory {
                 nested,
                 features.clone(),
             )?;
-
             if or_null {
                 return AggregateFunctionOrNullAdaptor::create(agg, features);
             } else {
@@ -179,7 +178,6 @@ impl AggregateFunctionFactory {
         }
 
         let agg = self.get_impl(name, params, arguments, &mut features)?;
-
         if or_null {
             AggregateFunctionOrNullAdaptor::create(agg, features)
         } else {

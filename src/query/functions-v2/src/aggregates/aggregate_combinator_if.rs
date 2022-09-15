@@ -109,11 +109,11 @@ impl AggregateFunction for AggregateIfCombinator {
     ) -> Result<()> {
         let predicate: Bitmap =
             BooleanType::try_downcast_column(&columns[self.argument_len - 1]).unwrap();
+
         let bitmap = match validity {
             Some(validity) => validity & (&predicate),
             None => predicate,
         };
-
         self.nested.accumulate(
             place,
             &columns[0..self.argument_len - 1],

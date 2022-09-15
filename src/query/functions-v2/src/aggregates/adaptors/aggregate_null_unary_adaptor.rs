@@ -114,18 +114,15 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
         let validity = column_merge_validity(col, validity.cloned());
         let not_null_column = col.remove_nullable();
 
-        self.nested.accumulate(
-            place,
-            &[not_null_column.clone()],
-            validity.as_ref(),
-            input_rows,
-        )?;
+        self.nested
+            .accumulate(place, &[not_null_column], validity.as_ref(), input_rows)?;
 
-        match validity {
-            Some(v) if v.unset_bits() != input_rows => {
-                self.set_flag(place, 1);
-            }
-            _ => self.set_flag(place, 1),
+        if validity
+            .as_ref()
+            .map(|c| c.unset_bits() != input_rows)
+            .unwrap_or(true)
+        {
+            self.set_flag(place, 1);
         }
         Ok(())
     }

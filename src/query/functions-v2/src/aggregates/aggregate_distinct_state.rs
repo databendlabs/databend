@@ -133,8 +133,9 @@ impl DistinctStateFunc<DataGroupValue> for AggregateDistinctState {
     fn build_columns(&mut self, types: &[DataType]) -> Result<Vec<Column>> {
         let mut builders: Vec<ColumnBuilder> = types
             .iter()
-            .map(|ty| ColumnBuilder::with_capacity(ty, 0))
+            .map(|ty| ColumnBuilder::with_capacity(ty, self.set.len()))
             .collect();
+
         for data in self.set.iter() {
             let mut slice = data.as_slice();
             let scalars: Vec<Scalar> = deserialize_from_slice(&mut slice)?;
@@ -261,8 +262,7 @@ where T: Number + Serialize + DeserializeOwned + HashTableKeyable
     fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
         writer.write_uvarint(self.set.len() as u64)?;
         for value in self.set.iter() {
-            let t: T = value.get_key().clone().into();
-            serialize_into_buf(writer, &t)?
+            serialize_into_buf(writer, value.get_key())?
         }
         Ok(())
     }
@@ -323,7 +323,7 @@ where T: Number + Serialize + DeserializeOwned + HashTableKeyable
     }
 
     fn build_columns(&mut self, _types: &[DataType]) -> Result<Vec<Column>> {
-        let values: Buffer<T> = self.set.iter().map(|e| e.get_key().clone()).collect();
+        let values: Buffer<T> = self.set.iter().map(|e| *e.get_key()).collect();
         Ok(vec![NumberType::<T>::upcast_column(values)])
     }
 }

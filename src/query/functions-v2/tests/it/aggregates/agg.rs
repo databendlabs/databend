@@ -31,6 +31,8 @@ fn test_agg() {
     test_sum(file);
     test_avg(file);
     test_uniq(file);
+    test_agg_if(file);
+    test_agg_distinct(file);
 }
 
 fn get_example() -> Vec<(&'static str, DataType, Column)> {
@@ -86,4 +88,20 @@ fn test_uniq(file: &mut impl Write) {
     run_agg_ast(file, "uniq(1)", get_example().as_slice());
     run_agg_ast(file, "uniq(c)", get_example().as_slice());
     run_agg_ast(file, "uniq(x_null)", get_example().as_slice());
+}
+
+fn test_agg_if(file: &mut impl Write) {
+    run_agg_ast(
+        file,
+        "count_if(1, x_null is null)",
+        get_example().as_slice(),
+    );
+    run_agg_ast(file, "sum_if(a, x_null is null)", get_example().as_slice());
+    run_agg_ast(file, "sum_if(b, x_null is null)", get_example().as_slice());
+}
+
+fn test_agg_distinct(file: &mut impl Write) {
+    run_agg_ast(file, "sum_distinct(a)", get_example().as_slice());
+    run_agg_ast(file, "sum_distinct(c)", get_example().as_slice());
+    run_agg_ast(file, "sum_distinct(x_null)", get_example().as_slice());
 }

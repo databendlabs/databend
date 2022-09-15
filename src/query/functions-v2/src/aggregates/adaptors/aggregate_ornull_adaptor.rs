@@ -106,19 +106,24 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
         }
 
         let if_cond = self.inner.get_if_condition(columns);
-        if let Some(bm) = if_cond {
-            if bm.unset_bits() == input_rows {
-                return Ok(());
-            }
-        }
 
-        if let Some(bm) = validity {
-            if bm.unset_bits() == input_rows {
-                return Ok(());
-            }
+        let validity = match (if_cond, validity) {
+            (None, None) => None,
+            (None, Some(b)) => Some(b.clone()),
+            (Some(a), None) => Some(a),
+            (Some(a), Some(b)) => Some(&a & b),
+        };
+
+        if validity
+            .as_ref()
+            .map(|c| c.unset_bits() != input_rows)
+            .unwrap_or(true)
+        {
+            self.set_flag(place, 1);
+            self.inner
+                .accumulate(place, columns, validity.as_ref(), input_rows)?;
         }
-        self.set_flag(place, 1);
-        self.inner.accumulate(place, &columns, validity, input_rows)
+        Ok(())
     }
 
     fn accumulate_keys(

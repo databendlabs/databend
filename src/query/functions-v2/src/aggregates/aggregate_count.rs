@@ -80,12 +80,13 @@ impl AggregateFunction for AggregateCountFunction {
         Layout::new::<AggregateCountState>()
     }
 
-    // we have own adaptor, so the validity is not needed
+    // columns may be nullable
+    // if not we use validity as the null signs
     fn accumulate(
         &self,
         place: StateAddr,
         columns: &[Column],
-        _validity: Option<&Bitmap>,
+        validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
         let state = place.get::<AggregateCountState>();
@@ -94,7 +95,7 @@ impl AggregateFunction for AggregateCountFunction {
         } else {
             match &columns[0] {
                 Column::Nullable(v) => v.validity.unset_bits(),
-                _ => 0,
+                _ => validity.map(|v| v.unset_bits()).unwrap_or(0),
             }
         };
         state.count += (input_rows - nulls) as u64;

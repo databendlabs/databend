@@ -29,7 +29,6 @@ use common_expression::RawExpr;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_functions_v2::aggregates::eval_aggr;
-use common_functions_v2::aggregates::AggregateFunctionFactory;
 use common_functions_v2::scalars::builtin_functions;
 
 use super::scalars::parser;
@@ -52,6 +51,8 @@ pub fn run_agg_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType
             .collect::<Vec<_>>(),
         num_rows,
     );
+
+    let column_ids = collect_columns(&raw_expr);
 
     // For test only, we just support agg function call here
     let result: common_exception::Result<(Column, DataType)> = try {
@@ -82,14 +83,13 @@ pub fn run_agg_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType
                     })
                     .collect();
 
-                let result = eval_aggr(
+                eval_aggr(
                     name.as_str(),
                     params,
                     &arg_columns,
                     &arg_types,
                     chunk.num_rows(),
-                )?;
-                result
+                )?
             }
             _ => unimplemented!(),
         }
@@ -97,12 +97,25 @@ pub fn run_agg_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType
 
     match result {
         Ok((column, _)) => {
-            writeln!(file, "ast            : {text}").unwrap();
+            writeln!(file, "ast: {text}").unwrap();
             {
                 let mut table = Table::new();
                 table.load_preset("||--+-++|    ++++++");
                 table.set_header(&["Column", "Data"]);
-                for (name, _, col) in columns.iter() {
+
+                let ids = match column_ids.is_empty() {
+                    true => {
+                        if columns.is_empty() {
+                            vec![]
+                        } else {
+                            vec![0]
+                        }
+                    }
+                    false => column_ids,
+                };
+
+                for id in ids.iter() {
+                    let (name, _, col) = &columns[*id];
                     table.add_row(&[name.to_string(), format!("{col:?}")]);
                 }
                 table.add_row(["Output".to_string(), format!("{column:?}")]);
@@ -122,7 +135,15 @@ pub fn run_scalar_expr(
 ) -> common_expression::Result<(Value<AnyType>, DataType)> {
     let fn_registry = builtin_functions();
     let (expr, output_ty) = type_check::check(raw_expr, &fn_registry)?;
-    let evaluator = Evaluator::new(&chunk, FunctionContext::default());
+    let evaluator = Evaluator::new(chunk, FunctionContext::default());
     let result = evaluator.run(&expr)?;
     Ok((result, output_ty))
+}
+
+fn collect_columns(raw_expr: &RawExpr) -> Vec<usize> {
+    match raw_expr {
+        RawExpr::ColumnRef { id, .. } => vec![*id],
+        RawExpr::FunctionCall { args, .. } => args.iter().flat_map(collect_columns).collect(),
+        _ => vec![],
+    }
 }
