@@ -823,8 +823,7 @@ pub struct QueryConfig {
     pub async_insert_stale_timeout: u64,
 
     #[clap(skip)]
-    #[serde(flatten)]
-    pub idm: IDMConfig,
+    users: Vec<UserConfig>,
 }
 
 impl Default for QueryConfig {
@@ -877,7 +876,9 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             async_insert_max_data_size: self.async_insert_max_data_size,
             async_insert_busy_timeout: self.async_insert_busy_timeout,
             async_insert_stale_timeout: self.async_insert_stale_timeout,
-            idm: self.idm.try_into()?,
+            idm: InnerIDMConfig {
+                users: users_to_inner(self.users)?,
+            },
         })
     }
 }
@@ -931,7 +932,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             async_insert_max_data_size: inner.async_insert_max_data_size,
             async_insert_busy_timeout: inner.async_insert_busy_timeout,
             async_insert_stale_timeout: inner.async_insert_stale_timeout,
-            idm: inner.idm.into(),
+            users: users_from_inner(inner.idm.users),
         }
     }
 }
@@ -1230,36 +1231,22 @@ impl Debug for MetaConfig {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct IDMConfig {
-    users: Vec<UserConfig>,
+fn users_from_inner(inner: HashMap<String, AuthInfo>) -> Vec<UserConfig> {
+    inner
+        .into_iter()
+        .map(|(name, auth)| UserConfig {
+            name,
+            auth: auth.into(),
+        })
+        .collect()
 }
 
-impl TryInto<InnerIDMConfig> for IDMConfig {
-    type Error = ErrorCode;
-
-    fn try_into(self) -> Result<InnerIDMConfig> {
-        let mut users = HashMap::new();
-        for c in self.users.into_iter() {
-            users.insert(c.name.clone(), c.auth.try_into()?);
-        }
-        Ok(InnerIDMConfig { users })
+fn users_to_inner(outer: Vec<UserConfig>) -> Result<HashMap<String, AuthInfo>> {
+    let mut inner = HashMap::new();
+    for c in outer.into_iter() {
+        inner.insert(c.name.clone(), c.auth.try_into()?);
     }
-}
-
-impl From<InnerIDMConfig> for IDMConfig {
-    fn from(inner: InnerIDMConfig) -> Self {
-        Self {
-            users: inner
-                .users
-                .into_iter()
-                .map(|(name, auth)| UserConfig {
-                    name,
-                    auth: auth.into(),
-                })
-                .collect(),
-        }
-    }
+    Ok(inner)
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
