@@ -20,7 +20,6 @@ use common_base::base::ProgressValues;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datavalues::ColumnRef;
-use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -84,8 +83,6 @@ impl FuseTable {
     ) -> Result<()> {
         let table_schema = self.table_info.schema();
         let projection = self.projection_of_push_downs(&plan.push_downs);
-        let output_schema = projection.project_schema(&table_schema);
-        let output_schema = Arc::new(output_schema);
         let output_reader = self.create_block_reader(&ctx, projection)?; // for deserialize output blocks
 
         let (output_reader, prewhere_reader, prewhere_filter, remain_reader) =
@@ -139,7 +136,6 @@ impl FuseTable {
                 FuseTableSource::create(
                     ctx.clone(),
                     output,
-                    output_schema.clone(),
                     output_reader.clone(),
                     prewhere_reader.clone(),
                     prewhere_filter.clone(),
@@ -174,7 +170,6 @@ struct FuseTableSource {
     ctx: Arc<dyn TableContext>,
     scan_progress: Arc<Progress>,
     output: Arc<OutputPort>,
-    output_schema: DataSchemaRef,
     output_reader: Arc<BlockReader>,
 
     prewhere_reader: Arc<BlockReader>,
@@ -186,7 +181,6 @@ impl FuseTableSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
-        output_schema: DataSchemaRef,
         output_reader: Arc<BlockReader>,
         prewhere_reader: Arc<BlockReader>,
         prewhere_filter: Arc<Option<ExpressionExecutor>>,
@@ -200,7 +194,6 @@ impl FuseTableSource {
                 output,
                 scan_progress,
                 state: State::Finish,
-                output_schema,
                 output_reader,
                 prewhere_reader,
                 prewhere_filter,
@@ -211,7 +204,6 @@ impl FuseTableSource {
                 output,
                 scan_progress,
                 state: State::ReadDataPrewhere(partitions.remove(0)),
-                output_schema,
                 output_reader,
                 prewhere_reader,
                 prewhere_filter,
@@ -222,7 +214,8 @@ impl FuseTableSource {
 
     fn generate_one_block(&mut self, block: DataBlock) -> Result<()> {
         let mut partitions = self.ctx.try_get_partitions(1)?;
-
+        // resort and prune columns
+        let block = block.resort(self.output_reader.schema())?;
         self.state = match partitions.is_empty() {
             true => State::Generated(None, block),
             false => State::Generated(Some(partitions.remove(0)), block),
@@ -235,11 +228,11 @@ impl FuseTableSource {
         self.state = match partitions.is_empty() {
             true => State::Generated(
                 None,
-                DataBlock::empty_with_schema(self.output_schema.clone()),
+                DataBlock::empty_with_schema(self.output_reader.schema()),
             ),
             false => State::Generated(
                 Some(partitions.remove(0)),
-                DataBlock::empty_with_schema(self.output_schema.clone()),
+                DataBlock::empty_with_schema(self.output_reader.schema()),
             ),
         };
         Ok(())
@@ -312,7 +305,7 @@ impl Processor for FuseTableSource {
                             prewhere_blocks =
                                 prewhere_blocks.add_column(col.clone(), field.clone())?;
                         }
-                        prewhere_blocks.resort(self.output_reader.schema())?
+                        prewhere_blocks
                     } else {
                         return Err(ErrorCode::LogicalError("It's a bug. Need remain reader"));
                     };
