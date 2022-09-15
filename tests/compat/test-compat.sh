@@ -136,6 +136,9 @@ kill_proc() {
 
 # Test specified version of query and meta
 run_test() {
+    echo " === pip list"
+    python3 -m pip list
+
     local query_ver="$1"
     local metasrv_ver="$2"
 
