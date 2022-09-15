@@ -38,6 +38,7 @@ pprof = { version = "0.10.0", features = [
     "protobuf-codec",
     "protobuf",
 ] }
+semver = "1.0.10"
 serde = { version = "1.0.137", features = ["derive"] }
 tikv-jemalloc-ctl = { version = "0.4.2", optional = true }
 tikv-jemalloc-sys = "0.4.3"

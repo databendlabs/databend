@@ -1043,6 +1043,7 @@ dependencies = [
  "once_cell",
  "parking_lot 0.12.1",
  "pprof",
+ "semver",
  "serde",
  "tikv-jemalloc-ctl",
  "tikv-jemalloc-sys",

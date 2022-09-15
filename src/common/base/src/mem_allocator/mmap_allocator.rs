@@ -129,13 +129,24 @@ unsafe impl<const MMAP_POPULATE: bool> AllocatorTrait for MmapAllocator<MMAP_POP
             if layout.align() > page_size() {
                 self.allocator.reallocx(ptr, layout, new_size, clear_mem)
             } else {
-                mremapx(
+                let result = mremapx(
                     ptr as *mut c_void,
                     layout.size(),
                     new_size,
                     0,
                     PROT_READ | PROT_WRITE,
-                ) as *mut u8
+                );
+                if MMAP_POPULATE {
+                    #[cfg(target_os = "linux")]
+                    {
+                        // MADV_POPULATE_WRITE is supported since Linux 5.14.
+                        if linux_kernel_version() >= (5, 14, 0) {
+                            const MADV_POPULATE_WRITE: i32 = 23;
+                            madvise(result, new_size, MADV_POPULATE_WRITE);
+                        }
+                    }
+                }
+                result as *mut u8
             }
         } else {
             let new_buf = self.allocx(
@@ -209,6 +220,9 @@ extern "C" {
         flags: c_int,
         mmap_prot: c_int,
     ) -> *mut c_void;
+
+    #[cfg(target_os = "linux")]
+    fn madvise(addr: *mut c_void, len: size_t, advice: c_int) -> *mut c_void;
 }
 
 #[cfg(test)]
@@ -325,6 +339,8 @@ mod tests {
 
 thread_local! {
     static PAGE_SIZE: Cell<usize> = Cell::new(0);
+    #[cfg(target_os = "linux")]
+    static LINUX_KERNEL_VERSION: Cell<(u64, u64, u64)> = Cell::new((0, 0, 0));
 }
 
 /// Returns OS Page Size.
@@ -335,6 +351,28 @@ pub fn page_size() -> usize {
     PAGE_SIZE.with(|s| match s.get() {
         0 => {
             let ret = unsafe { sysconf(libc::_SC_PAGE_SIZE) as usize };
+            s.set(ret);
+            ret
+        }
+        ret => ret,
+    })
+}
+
+#[cfg(target_os = "linux")]
+#[inline]
+pub fn linux_kernel_version() -> (u64, u64, u64) {
+    LINUX_KERNEL_VERSION.with(|s| match s.get() {
+        (0, 0, 0) => {
+            let mut uname = unsafe { std::mem::zeroed::<libc::utsname>() };
+            assert_ne!(-1, unsafe { libc::uname(&mut uname) });
+            let mut length = 0usize;
+            while length < uname.version.len() && uname.version[length] != 0 {
+                length += 1;
+            }
+            let slice = unsafe { &*(&uname.version[..length] as *const [i8] as *const [u8]) };
+            let ver = std::str::from_utf8(slice).unwrap();
+            let semver = semver::Version::parse(ver).unwrap();
+            let ret = (semver.major, semver.minor, semver.patch);
             s.set(ret);
             ret
         }
