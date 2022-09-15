@@ -53,8 +53,6 @@ pub struct Config {
     // - Later, catalog information SHOULD be kept in KV Service
     // - currently only supports HIVE (via hive meta store)
     pub catalog: HiveCatalogConfig,
-
-    pub idm: IDMConfig,
 }
 
 impl Config {
@@ -150,6 +148,7 @@ pub struct QueryConfig {
     pub async_insert_max_data_size: u64,
     pub async_insert_busy_timeout: u64,
     pub async_insert_stale_timeout: u64,
+    pub idm: IDMConfig,
 }
 
 impl Default for QueryConfig {
@@ -194,6 +193,7 @@ impl Default for QueryConfig {
             async_insert_max_data_size: 10000,
             async_insert_busy_timeout: 200,
             async_insert_stale_timeout: 0,
+            idm: IDMConfig::default(),
         }
     }
 }
