@@ -55,6 +55,16 @@ impl MetaStore {
             MetaStore::R(_) => false,
         }
     }
+
+    pub async fn get_local_addr(&self) -> std::result::Result<Option<String>, MetaError> {
+        match self {
+            MetaStore::L(_) => Ok(None),
+            MetaStore::R(grpc_client) => {
+                let client_info = grpc_client.get_client_info().await?;
+                Ok(Some(client_info.client_addr))
+            }
+        }
+    }
 }
 
 #[async_trait::async_trait]

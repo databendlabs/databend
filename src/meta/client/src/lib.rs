@@ -41,8 +41,8 @@ pub static METACLI_COMMIT_SEMVER: Lazy<Version> = Lazy::new(|| {
 /// Oldest compatible nightly metasrv version
 pub static MIN_METASRV_SEMVER: Version = Version {
     major: 0,
-    minor: 7,
-    patch: 63,
+    minor: 8,
+    patch: 30,
     pre: Prerelease::EMPTY,
     build: BuildMetadata::EMPTY,
 };
