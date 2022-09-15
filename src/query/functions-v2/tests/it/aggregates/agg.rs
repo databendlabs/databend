@@ -30,6 +30,7 @@ fn test_agg() {
     test_count(file);
     test_sum(file);
     test_avg(file);
+    test_uniq(file);
 }
 
 fn get_example() -> Vec<(&'static str, DataType, Column)> {
@@ -43,6 +44,11 @@ fn get_example() -> Vec<(&'static str, DataType, Column)> {
             "b",
             DataType::Number(NumberDataType::UInt64),
             Column::from_data(vec![1u64, 2, 3, 4]),
+        ),
+        (
+            "c",
+            DataType::Number(NumberDataType::UInt64),
+            Column::from_data(vec![1u64, 2, 2, 3]),
         ),
         (
             "x_null",
@@ -74,4 +80,10 @@ fn test_avg(file: &mut impl Write) {
     run_agg_ast(file, "avg(1)", get_example().as_slice());
     run_agg_ast(file, "avg(a)", get_example().as_slice());
     run_agg_ast(file, "avg(x_null)", get_example().as_slice());
+}
+
+fn test_uniq(file: &mut impl Write) {
+    run_agg_ast(file, "uniq(1)", get_example().as_slice());
+    run_agg_ast(file, "uniq(c)", get_example().as_slice());
+    run_agg_ast(file, "uniq(x_null)", get_example().as_slice());
 }

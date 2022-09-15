@@ -84,8 +84,10 @@ pub const ALL_INTEGER_TYPES: &[NumberDataType; 8] = &[
     NumberDataType::Int64,
 ];
 
-pub const ALL_FLOAT_TYPES: &[NumberDataType; 2] = &[NumberDataType::Float32, NumberDataType::Float64];
-pub const ALL_NUMERICS_TYPES: &[NumberDataType; 10] = &concat_array(ALL_INTEGER_TYPES, ALL_FLOAT_TYPES);
+pub const ALL_FLOAT_TYPES: &[NumberDataType; 2] =
+    &[NumberDataType::Float32, NumberDataType::Float64];
+pub const ALL_NUMERICS_TYPES: &[NumberDataType; 10] =
+    &concat_array(ALL_INTEGER_TYPES, ALL_FLOAT_TYPES);
 
 impl DataType {
     pub fn wrap_nullable(&self) -> Self {

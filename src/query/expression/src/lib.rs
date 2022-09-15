@@ -24,7 +24,6 @@
 #![feature(const_maybe_uninit_as_mut_ptr)]
 #![feature(const_mut_refs)]
 #![feature(generic_const_exprs)]
-
 #![allow(incomplete_features)]
 
 #[allow(dead_code)]

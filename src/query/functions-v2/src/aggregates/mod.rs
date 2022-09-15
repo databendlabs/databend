@@ -20,16 +20,16 @@ mod aggregate_function_state;
 
 mod adaptors;
 mod aggregate_avg;
+mod aggregate_combinator_distinct;
+mod aggregate_combinator_if;
+mod aggregate_distinct_state;
 mod aggregate_null_result;
 mod aggregate_sum;
 mod aggregator;
 mod aggregator_common;
 
 // mod aggregate_arg_min_max;
-// mod aggregate_combinator_distinct;
-// mod aggregate_combinator_if;
 // mod aggregate_covariance;
-// mod aggregate_distinct_state;
 // mod aggregate_min_max_any;
 // mod aggregate_retention;
 // mod aggregate_scalar_state;
@@ -38,6 +38,8 @@ mod aggregator_common;
 
 pub use adaptors::*;
 pub use aggregate_avg::AggregateAvgFunction;
+pub use aggregate_combinator_distinct::AggregateDistinctCombinator;
+pub use aggregate_combinator_if::AggregateIfCombinator;
 pub use aggregate_count::AggregateCountFunction;
 pub use aggregate_function::AggregateFunction;
 pub use aggregate_function::AggregateFunctionRef;
@@ -51,8 +53,6 @@ pub use aggregator::Aggregators;
 pub use aggregator_common::*;
 
 // pub use aggregate_arg_min_max::AggregateArgMinMaxFunction;
-// pub use aggregate_combinator_distinct::AggregateDistinctCombinator;
-// pub use aggregate_combinator_if::AggregateIfCombinator;
 // pub use aggregate_covariance::AggregateCovarianceFunction;
 // pub use aggregate_min_max_any::AggregateMinMaxAnyFunction;
 // pub use aggregate_retention::AggregateRetentionFunction;

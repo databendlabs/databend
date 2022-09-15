@@ -1264,7 +1264,7 @@ dependencies = [
  "num-format",
  "num-traits",
  "once_cell",
- "ordered-float 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ordered-float 3.0.0 (git+https://github.com/andylokandy/rust-ordered-float.git?branch=as)",
  "pretty_assertions",
  "pulldown-cmark",
  "rand 0.8.5",
@@ -1349,7 +1349,7 @@ name = "common-hashtable"
 version = "0.1.0"
 dependencies = [
  "common-base",
- "ordered-float 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ordered-float 3.0.0 (git+https://github.com/andylokandy/rust-ordered-float.git?branch=as)",
  "primitive-types",
  "rand 0.8.5",
 ]

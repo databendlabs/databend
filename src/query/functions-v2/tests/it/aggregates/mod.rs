@@ -26,7 +26,6 @@ use common_expression::Column;
 use common_expression::Evaluator;
 use common_expression::FunctionContext;
 use common_expression::RawExpr;
-use common_expression::RemoteExpr;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_functions_v2::aggregates::eval_aggr;
@@ -45,7 +44,6 @@ pub fn run_agg_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType
             .collect::<Vec<_>>(),
     );
 
-    let fn_registry = AggregateFunctionFactory::instance();
     let num_rows = columns.iter().map(|col| col.2.len()).max().unwrap_or(0);
     let chunk = Chunk::new(
         columns
@@ -59,10 +57,7 @@ pub fn run_agg_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType
     let result: common_exception::Result<(Column, DataType)> = try {
         match raw_expr {
             common_expression::RawExpr::FunctionCall {
-                span,
-                name,
-                params,
-                args,
+                name, params, args, ..
             } => {
                 let args: Vec<(Value<AnyType>, DataType)> = args
                     .iter()
