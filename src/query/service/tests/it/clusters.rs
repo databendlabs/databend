@@ -44,9 +44,9 @@ async fn test_remove_invalid_nodes() -> Result<()> {
         .query_flight_address("invalid_address_2")
         .build();
 
-    let meta_client = ClusterDiscovery::create_meta_client(&config_1).await?;
-    let cluster_discovery_1 = ClusterDiscovery::try_create(&config_1, meta_client.clone()).await?;
-    let cluster_discovery_2 = ClusterDiscovery::try_create(&config_2, meta_client.clone()).await?;
+    let metastore = ClusterDiscovery::create_meta_client(&config_1).await?;
+    let cluster_discovery_1 = ClusterDiscovery::try_create(&config_1, metastore.clone()).await?;
+    let cluster_discovery_2 = ClusterDiscovery::try_create(&config_2, metastore.clone()).await?;
 
     cluster_discovery_1.register_to_metastore(&config_1).await?;
     cluster_discovery_2.register_to_metastore(&config_2).await?;

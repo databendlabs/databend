@@ -17,6 +17,7 @@ use common_exception::ErrorCode;
 use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;
+use tonic::Code;
 
 // represent network related errors
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -102,5 +103,32 @@ impl InvalidArgument {
 impl From<std::net::AddrParseError> for MetaNetworkError {
     fn from(error: std::net::AddrParseError) -> Self {
         MetaNetworkError::BadAddressFormat(AnyError::new(&error))
+    }
+}
+
+impl From<tonic::Status> for MetaNetworkError {
+    fn from(status: tonic::Status) -> Self {
+        match status.code() {
+            Code::InvalidArgument => {
+                MetaNetworkError::InvalidArgument(InvalidArgument::new(status, ""))
+            }
+            // Code::Ok => {}
+            // Code::Cancelled => {}
+            // Code::Unknown => {}
+            // Code::DeadlineExceeded => {}
+            // Code::NotFound => {}
+            // Code::AlreadyExists => {}
+            // Code::PermissionDenied => {}
+            // Code::ResourceExhausted => {}
+            // Code::FailedPrecondition => {}
+            // Code::Aborted => {}
+            // Code::OutOfRange => {}
+            // Code::Unimplemented => {}
+            // Code::Internal => {}
+            // Code::Unavailable => {}
+            // Code::DataLoss => {}
+            // Code::Unauthenticated => {}
+            _ => MetaNetworkError::ConnectionError(ConnectionError::new(status, "")),
+        }
     }
 }

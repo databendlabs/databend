@@ -20,6 +20,8 @@ use common_base::base::tokio::sync::Mutex;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::state_machine::StateMachine;
 pub use common_meta_sled_store::init_temp_sled_db;
+use common_meta_types::anyerror::AnyError;
+use common_meta_types::MetaStorageError;
 use once_cell::sync::Lazy;
 use tracing::warn;
 
@@ -50,7 +52,7 @@ impl MetaEmbedded {
     /// before using `MetaEmbedded`:
     /// - `common_meta_sled_store::init_sled_db`
     /// - `common_meta_sled_store::init_temp_sled_db`
-    pub async fn new(name: &str) -> common_exception::Result<MetaEmbedded> {
+    pub async fn new(name: &str) -> Result<MetaEmbedded, MetaStorageError> {
         let mut config = RaftConfig {
             sled_tree_prefix: format!("{}-local-kv", name),
             ..Default::default()
@@ -61,16 +63,18 @@ impl MetaEmbedded {
             config.no_sync = true;
         }
 
+        let sm = StateMachine::open(&config, 0).await?;
         Ok(MetaEmbedded {
-            // StateMachine does not need to be replaced, thus we always use id=0
-            inner: Arc::new(Mutex::new(StateMachine::open(&config, 0).await?)),
+            inner: Arc::new(Mutex::new(sm)),
         })
     }
 
     /// Creates a KVApi impl with a random and unique name.
-    pub async fn new_temp() -> common_exception::Result<MetaEmbedded> {
-        let temp_dir = tempfile::tempdir()?;
-        common_meta_sled_store::init_temp_sled_db(temp_dir);
+    pub async fn new_temp() -> Result<MetaEmbedded, MetaStorageError> {
+        let temp_dir =
+            tempfile::tempdir().map_err(|e| MetaStorageError::SledError(AnyError::new(&e)))?;
+
+        init_temp_sled_db(temp_dir);
 
         // generate a unique id as part of the name of sled::Tree
 
@@ -80,13 +84,14 @@ impl MetaEmbedded {
 
         let name = format!("temp-{}", id);
 
-        Self::new(&name).await
+        let m = Self::new(&name).await?;
+        Ok(m)
     }
 
     /// Initialize a sled db to store embedded meta data.
     /// Initialize a global embedded meta store.
     /// The data in `path` won't be removed after program exit.
-    pub async fn init_global_meta_store(path: String) -> common_exception::Result<()> {
+    pub async fn init_global_meta_store(path: String) -> Result<(), MetaStorageError> {
         common_meta_sled_store::init_sled_db(path);
 
         {
@@ -106,7 +111,7 @@ impl MetaEmbedded {
 
     /// If global meta store is initialized, return it(production use).
     /// Otherwise, return a meta store backed with temp dir for test.
-    pub async fn get_meta() -> common_exception::Result<Arc<MetaEmbedded>> {
+    pub async fn get_meta() -> Result<Arc<MetaEmbedded>, MetaStorageError> {
         {
             let m = GLOBAL_META_EMBEDDED.as_ref().lock().await;
             let r = m.as_ref();

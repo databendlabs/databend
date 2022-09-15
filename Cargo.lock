@@ -1438,6 +1438,7 @@ dependencies = [
  "common-io",
  "common-meta-api",
  "common-meta-embedded",
+ "common-meta-store",
  "common-meta-types",
  "common-proto-conv",
  "common-protos",
@@ -1582,7 +1583,6 @@ name = "common-meta-store"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "common-exception",
  "common-grpc",
  "common-meta-api",
  "common-meta-client",

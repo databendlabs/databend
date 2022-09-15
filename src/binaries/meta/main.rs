@@ -156,10 +156,10 @@ async fn run_kvapi_command(conf: &Config, op: &str) {
                 password: conf.password.clone(),
                 ..Default::default()
             };
-            let client = match MetaStoreProvider::new(rpc_conf).try_get_meta_store().await {
+            let client = match MetaStoreProvider::new(rpc_conf).create_meta_store().await {
                 Ok(s) => Arc::new(s),
                 Err(e) => {
-                    eprintln!("{}", e.message());
+                    eprintln!("{}", e);
                     return;
                 }
             };

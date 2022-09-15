@@ -37,6 +37,7 @@ async fn test_settings_table() -> Result<()> {
         "| compression                    | None       | None       | SESSION | Format compression, default value: None                                                            | String |",
         "| empty_as_default               | 1          | 1          | SESSION | Format empty_as_default, default value: 1                                                          | UInt64 |",
         "| enable_async_insert            | 0          | 0          | SESSION | Whether the client open async insert mode, default value: 0                                        | UInt64 |",
+        "| enable_cbo                     | 1          | 1          | SESSION | If enable cost based optimization, default value: 1                                                | UInt64 |",
         "| enable_new_processor_framework | 1          | 1          | SESSION | Enable new processor framework if value != 0, default value: 1                                     | UInt64 |",
         "| enable_planner_v2              | 1          | 1          | SESSION | Enable planner v2 by setting this variable to 1, default value: 1                                  | UInt64 |",
         "| field_delimiter                | ,          | ,          | SESSION | Format field delimiter, default value: ,                                                           | String |",
