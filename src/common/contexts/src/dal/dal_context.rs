@@ -83,18 +83,14 @@ impl Accessor for DalContext {
             .metadata()
     }
 
-    fn presign(&self, args: &OpPresign) -> Result<PresignedRequest> {
-        self.get_inner()?.presign(args)
+    async fn create(&self, path: &str, args: OpCreate) -> Result<()> {
+        self.get_inner()?.create(path, args).await
     }
 
-    async fn create(&self, args: &OpCreate) -> Result<()> {
-        self.get_inner()?.create(args).await
-    }
-
-    async fn read(&self, args: &OpRead) -> Result<BytesReader> {
+    async fn read(&self, path: &str, args: OpRead) -> Result<BytesReader> {
         let metric = self.metrics.clone();
 
-        self.get_inner()?.read(args).await.map(|r| {
+        self.get_inner()?.read(path, args).await.map(|r| {
             let mut last_pending = None;
             let r = observe_read(r, move |e| {
                 let start = match last_pending {
@@ -117,7 +113,7 @@ impl Accessor for DalContext {
         })
     }
 
-    async fn write(&self, args: &OpWrite, r: BytesReader) -> Result<u64> {
+    async fn write(&self, path: &str, args: OpWrite, r: BytesReader) -> Result<u64> {
         let metric = self.metrics.clone();
 
         let mut last_pending = None;
@@ -139,18 +135,22 @@ impl Accessor for DalContext {
             metric.inc_write_bytes_cost(start.elapsed().as_millis() as u64);
         });
 
-        self.get_inner()?.write(args, Box::new(r)).await
+        self.get_inner()?.write(path, args, Box::new(r)).await
     }
 
-    async fn stat(&self, args: &OpStat) -> Result<ObjectMetadata> {
-        self.get_inner()?.stat(args).await
+    async fn stat(&self, path: &str, args: OpStat) -> Result<ObjectMetadata> {
+        self.get_inner()?.stat(path, args).await
     }
 
-    async fn delete(&self, args: &OpDelete) -> Result<()> {
-        self.get_inner()?.delete(args).await
+    async fn delete(&self, path: &str, args: OpDelete) -> Result<()> {
+        self.get_inner()?.delete(path, args).await
     }
 
-    async fn list(&self, args: &OpList) -> Result<DirStreamer> {
-        self.get_inner()?.list(args).await
+    async fn list(&self, path: &str, args: OpList) -> Result<DirStreamer> {
+        self.get_inner()?.list(path, args).await
+    }
+
+    fn presign(&self, path: &str, args: OpPresign) -> Result<PresignedRequest> {
+        self.get_inner()?.presign(path, args)
     }
 }

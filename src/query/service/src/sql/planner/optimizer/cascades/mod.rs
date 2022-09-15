@@ -17,7 +17,9 @@ mod implement_rules;
 
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -47,17 +49,24 @@ pub struct CascadesOptimizer {
 
     /// group index -> best cost context
     best_cost_map: HashMap<IndexType, CostContext>,
+    _ctx: Arc<dyn TableContext>,
 }
 
 impl CascadesOptimizer {
-    pub fn create() -> Self {
-        CascadesOptimizer {
+    pub fn create(ctx: Arc<dyn TableContext>) -> Result<Self> {
+        let explore_rules = if ctx.get_settings().get_enable_cbo()? {
+            get_explore_rule_set()
+        } else {
+            RuleSet::create_with_ids(vec![]).unwrap()
+        };
+        Ok(CascadesOptimizer {
             memo: Memo::create(),
-            explore_rules: get_explore_rule_set(),
+            explore_rules,
             implement_rules: get_implement_rule_set(),
             cost_model: Box::new(DefaultCostModel),
             best_cost_map: HashMap::new(),
-        }
+            _ctx: ctx,
+        })
     }
 
     fn init(&mut self, expression: SExpr) -> Result<()> {

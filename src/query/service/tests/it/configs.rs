@@ -71,6 +71,7 @@ jwt_key_file = ""
 async_insert_max_data_size = 10000
 async_insert_busy_timeout = 200
 async_insert_stale_timeout = 0
+users = []
 
 [log]
 level = "INFO"
@@ -142,9 +143,6 @@ root = ""
 [catalog]
 meta_store_address = "127.0.0.1:9083"
 protocol = "binary"
-
-[idm]
-users = []
 "#;
 
     let tom_actual = toml::to_string(&actual.into_outer()).unwrap();
@@ -485,6 +483,7 @@ jwt_key_file = ""
 async_insert_max_data_size = 10000
 async_insert_busy_timeout = 200
 async_insert_stale_timeout = 0
+users = []
 
 [log]
 level = "INFO"
@@ -538,10 +537,7 @@ root = ""
 [catalog]
 meta_store_address = "127.0.0.1:9083"
 protocol = "binary"
-
-[idm]
-users = []
-    "#
+"#
         .as_bytes(),
     )?;
 

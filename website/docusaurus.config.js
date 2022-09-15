@@ -44,7 +44,7 @@ const config = {
                 blog: {
                     showReadingTime: true,
                     editUrl:
-                        'https://github.com/datafuselabs/databend/edit/main/databend/blog',
+                        'https://github.com/datafuselabs/databend/edit/main/website',
                 },
                 theme: {
                     customCss: require.resolve('./src/css/custom.scss'),
