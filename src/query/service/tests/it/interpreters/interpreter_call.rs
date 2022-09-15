@@ -123,13 +123,13 @@ async fn test_call_fuse_block_interpreter() -> Result<()> {
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute().await;
         assert_eq!(res.is_err(), true);
-        let expect = "Code: 1028, displayText = Function `FUSE_BLOCK` expect to have 3 arguments, but got 0.";
+        let expect = "Code: 1028, displayText = Function `FUSE_BLOCK` expect to have [2, 3] arguments, but got 0.";
         assert_eq!(expect, res.err().unwrap().to_string());
     }
 
     // UnknownTable
     {
-        let query = "call system$fuse_block(default, test, xxxx)";
+        let query = "call system$fuse_block(default, test)";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "CallInterpreter");
@@ -143,7 +143,7 @@ async fn test_call_fuse_block_interpreter() -> Result<()> {
 
     // BadArguments
     {
-        let query = "call system$fuse_block(system, tables, xxxx)";
+        let query = "call system$fuse_block(system, tables)";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "CallInterpreter");
@@ -167,7 +167,7 @@ async fn test_call_fuse_block_interpreter() -> Result<()> {
 
     // fuse_block
     {
-        let query = "call system$fuse_block(default, a, xxxx)";
+        let query = "call system$fuse_block(default, a)";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         let _ = executor.execute().await?;

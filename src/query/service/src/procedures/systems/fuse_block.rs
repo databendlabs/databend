@@ -41,13 +41,17 @@ impl OneBlockProcedure for FuseBlockProcedure {
     }
 
     fn features(&self) -> ProcedureFeatures {
-        ProcedureFeatures::default().num_arguments(3)
+        ProcedureFeatures::default().variadic_arguments(2, 3)
     }
 
     async fn all_data(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
         let database_name = args[0].clone();
         let table_name = args[1].clone();
-        let snapshot_id = args[2].clone();
+        let snapshot_id = if args.len() > 2 {
+            Some(args[2].clone())
+        } else {
+            None
+        };
         let tenant_id = ctx.get_tenant();
         let tbl = ctx
             .get_catalog(&ctx.get_current_catalog())?

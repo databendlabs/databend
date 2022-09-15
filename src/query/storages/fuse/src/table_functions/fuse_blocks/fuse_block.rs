@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_fuse_meta::meta::TableSnapshot;
 use futures_util::TryStreamExt;
 
 use crate::io::MetaReaders;
@@ -27,11 +28,15 @@ use crate::FuseTable;
 pub struct FuseBlock<'a> {
     pub ctx: Arc<dyn TableContext>,
     pub table: &'a FuseTable,
-    pub snapshot_id: String,
+    pub snapshot_id: Option<String>,
 }
 
 impl<'a> FuseBlock<'a> {
-    pub fn new(ctx: Arc<dyn TableContext>, table: &'a FuseTable, snapshot_id: String) -> Self {
+    pub fn new(
+        ctx: Arc<dyn TableContext>,
+        table: &'a FuseTable,
+        snapshot_id: Option<String>,
+    ) -> Self {
         Self {
             ctx,
             table,
@@ -43,6 +48,10 @@ impl<'a> FuseBlock<'a> {
         let tbl = self.table;
         let maybe_snapshot = tbl.read_table_snapshot(self.ctx.clone()).await?;
         if let Some(snapshot) = maybe_snapshot {
+            if self.snapshot_id.is_none() {
+                return self.to_block(snapshot).await;
+            }
+
             // prepare the stream of snapshot
             let snapshot_version = tbl.snapshot_format_version();
             let snapshot_location = tbl
@@ -57,44 +66,47 @@ impl<'a> FuseBlock<'a> {
 
             // find the element by snapshot_id in stream
             while let Some(snapshot) = snapshot_stream.try_next().await? {
-                if snapshot.snapshot_id.simple().to_string() == self.snapshot_id {
-                    let len = snapshot.summary.block_count as usize;
-                    let snapshot_id = vec![self.snapshot_id.clone().into_bytes()];
-                    let timestamp =
-                        vec![snapshot.timestamp.map(|dt| (dt.timestamp_micros()) as i64)];
-                    let mut block_location: Vec<Vec<u8>> = Vec::with_capacity(len);
-                    let mut block_size: Vec<u64> = Vec::with_capacity(len);
-                    let mut bloom_filter_location: Vec<Option<Vec<u8>>> = Vec::with_capacity(len);
-                    let mut bloom_filter_size: Vec<u64> = Vec::with_capacity(len);
-
-                    let reader = MetaReaders::segment_info_reader(self.ctx.as_ref());
-                    for (x, ver) in &snapshot.segments {
-                        let segment = reader.read(x, None, *ver).await?;
-                        segment.blocks.clone().into_iter().for_each(|block| {
-                            block_location.push(block.location.0.into_bytes());
-                            block_size.push(block.block_size);
-                            bloom_filter_location.push(
-                                block
-                                    .bloom_filter_index_location
-                                    .map(|(s, _)| s.into_bytes()),
-                            );
-                            bloom_filter_size.push(block.bloom_filter_index_size);
-                        });
-                    }
-
-                    return Ok(DataBlock::create(FuseBlock::schema(), vec![
-                        Arc::new(ConstColumn::new(Series::from_data(snapshot_id), len)),
-                        Arc::new(ConstColumn::new(Series::from_data(timestamp), len)),
-                        Series::from_data(block_location),
-                        Series::from_data(block_size),
-                        Series::from_data(bloom_filter_location),
-                        Series::from_data(bloom_filter_size),
-                    ]));
+                if snapshot.snapshot_id.simple().to_string() == self.snapshot_id.clone().unwrap() {
+                    return self.to_block(snapshot).await;
                 }
             }
         }
 
         Ok(DataBlock::empty_with_schema(Self::schema()))
+    }
+
+    async fn to_block(&self, snapshot: Arc<TableSnapshot>) -> Result<DataBlock> {
+        let len = snapshot.summary.block_count as usize;
+        let snapshot_id = vec![snapshot.snapshot_id.simple().to_string().into_bytes()];
+        let timestamp = vec![snapshot.timestamp.map(|dt| (dt.timestamp_micros()) as i64)];
+        let mut block_location: Vec<Vec<u8>> = Vec::with_capacity(len);
+        let mut block_size: Vec<u64> = Vec::with_capacity(len);
+        let mut bloom_filter_location: Vec<Option<Vec<u8>>> = Vec::with_capacity(len);
+        let mut bloom_filter_size: Vec<u64> = Vec::with_capacity(len);
+
+        let reader = MetaReaders::segment_info_reader(self.ctx.as_ref());
+        for (x, ver) in &snapshot.segments {
+            let segment = reader.read(x, None, *ver).await?;
+            segment.blocks.clone().into_iter().for_each(|block| {
+                block_location.push(block.location.0.into_bytes());
+                block_size.push(block.block_size);
+                bloom_filter_location.push(
+                    block
+                        .bloom_filter_index_location
+                        .map(|(s, _)| s.into_bytes()),
+                );
+                bloom_filter_size.push(block.bloom_filter_index_size);
+            });
+        }
+
+        Ok(DataBlock::create(FuseBlock::schema(), vec![
+            Arc::new(ConstColumn::new(Series::from_data(snapshot_id), len)),
+            Arc::new(ConstColumn::new(Series::from_data(timestamp), len)),
+            Series::from_data(block_location),
+            Series::from_data(block_size),
+            Series::from_data(bloom_filter_location),
+            Series::from_data(bloom_filter_size),
+        ]))
     }
 
     pub fn schema() -> Arc<DataSchema> {

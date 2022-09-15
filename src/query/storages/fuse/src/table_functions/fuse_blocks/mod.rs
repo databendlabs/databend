@@ -14,6 +14,7 @@
 
 mod fuse_block;
 mod fuse_block_table;
+mod table_args;
 
 pub use fuse_block::FuseBlock;
 pub use fuse_block_table::FuseBlockTable;

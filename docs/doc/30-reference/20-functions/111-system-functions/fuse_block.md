@@ -7,7 +7,7 @@ Returns the block information of a snapshot of table.
 ## Syntax
 
 ```sql
-FUSE_BLOCK('<database_name>', '<table_name>','<snapshot_id>')
+FUSE_BLOCK('<database_name>', '<table_name>'[, '<snapshot_id>'])
 ```
 
 ## Examples
@@ -17,17 +17,7 @@ CREATE TABLE mytable(c int);
 INSERT INTO mytable values(1);
 INSERT INTO mytable values(2); 
 
--- Obtain a snapshot ID
-SELECT snapshot_id FROM FUSE_SNAPSHOT('default', 'mytable') limit 1;
-
----
-+----------------------------------+
-| snapshot_id                      |
-+----------------------------------+
-| 51e84b56458f44269b05a059b364a659 |
-+----------------------------------+
-
-SELECT * FROM FUSE_BLOCK('default', 'mytable', '51e84b56458f44269b05a059b364a659');
+SELECT * FROM FUSE_BLOCK('default', 'mytable');
 
 ---
 +----------------------------------+----------------------------+----------------------------------------------------+------------+----------------------------------------------------+-------------------+
