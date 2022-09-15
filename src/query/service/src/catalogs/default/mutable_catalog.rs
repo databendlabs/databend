@@ -91,7 +91,7 @@ impl MutableCatalog {
         let meta = {
             let provider = Arc::new(MetaStoreProvider::new(conf.meta.to_meta_grpc_client_conf()));
 
-            provider.try_get_meta_store().await?
+            provider.create_meta_store().await?
         };
 
         let tenant = conf.query.tenant_id.clone();

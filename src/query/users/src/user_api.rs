@@ -61,7 +61,7 @@ impl UserApiProvider {
         conf: RpcClientConf,
         idm_config: IDMConfig,
     ) -> Result<Arc<UserApiProvider>> {
-        let client = MetaStoreProvider::new(conf).try_get_meta_store().await?;
+        let client = MetaStoreProvider::new(conf).create_meta_store().await?;
         Ok(Arc::new(UserApiProvider {
             meta: client.clone(),
             client: client.arc(),
