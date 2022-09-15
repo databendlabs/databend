@@ -131,6 +131,8 @@ pub use meta_raft_errors::Fatal;
 pub use meta_raft_errors::ForwardToLeader;
 pub use meta_raft_errors::InitializeError;
 pub use meta_raft_errors::MetaRaftError;
+pub use meta_raft_errors::RaftChangeMembershipError;
+pub use meta_raft_errors::RaftWriteError;
 pub use meta_raft_errors::RetryableError;
 pub use meta_storage_errors::MetaStorageError;
 pub use meta_storage_errors::MetaStorageResult;
