@@ -23,7 +23,7 @@ runs:
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
 
-    - name: Run sqllogic Tests with Standalone mode with embedded meta-store
+    - name: Run sqllogic Tests with Standalone mode
       shell: bash
       run: |
         docker run --rm --tty --net=host \
