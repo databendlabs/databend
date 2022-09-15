@@ -68,36 +68,16 @@ pub enum MetaGrpcReq {
     ListKV(ListKVReq),
 }
 
-impl From<MetaGrpcWriteReq> for MetaGrpcReq {
-    fn from(r: MetaGrpcWriteReq) -> Self {
-        match r {
-            MetaGrpcWriteReq::UpsertKV(x) => x.into(),
-        }
-    }
-}
-
-impl From<MetaGrpcReadReq> for MetaGrpcReq {
-    fn from(r: MetaGrpcReadReq) -> Self {
-        match r {
-            MetaGrpcReadReq::GetKV(x) => x.into(),
-            MetaGrpcReadReq::MGetKV(x) => x.into(),
-            MetaGrpcReadReq::ListKV(x) => x.into(),
-        }
-    }
-}
-
-/// Try convert tonic::Request<RaftRequest> to DoActionAction.
-impl TryInto<MetaGrpcWriteReq> for Request<RaftRequest> {
+impl TryInto<MetaGrpcReq> for Request<RaftRequest> {
     type Error = tonic::Status;
 
-    fn try_into(self) -> Result<MetaGrpcWriteReq, Self::Error> {
+    fn try_into(self) -> Result<MetaGrpcReq, Self::Error> {
         let raft_request = self.into_inner();
 
-        // Decode DoActionAction from flight request body.
         let json_str = raft_request.data.as_str();
-        let action = serde_json::from_str::<MetaGrpcWriteReq>(json_str)
+        let req = serde_json::from_str::<MetaGrpcReq>(json_str)
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
-        Ok(action)
+        Ok(req)
     }
 }
 
@@ -110,7 +90,6 @@ impl tonic::IntoRequest<RaftRequest> for MetaGrpcWriteReq {
     }
 }
 
-/// Try convert DoActionAction to tonic::Request<RaftRequest>.
 impl TryInto<Request<RaftRequest>> for MetaGrpcWriteReq {
     type Error = serde_json::Error;
 
@@ -121,19 +100,6 @@ impl TryInto<Request<RaftRequest>> for MetaGrpcWriteReq {
 
         let request = tonic::Request::new(raft_request);
         Ok(request)
-    }
-}
-
-impl TryInto<MetaGrpcReadReq> for Request<RaftRequest> {
-    type Error = tonic::Status;
-
-    fn try_into(self) -> Result<MetaGrpcReadReq, Self::Error> {
-        let raft_req = self.into_inner();
-
-        let json_str = raft_req.data.as_str();
-        let action = serde_json::from_str::<MetaGrpcReadReq>(json_str)
-            .map_err(|e| tonic::Status::internal(e.to_string()))?;
-        Ok(action)
     }
 }
 

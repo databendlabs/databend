@@ -4,7 +4,7 @@
 set -e
 
 echo "Starting standalone DatabendQuery and DatabendMeta"
-./scripts/ci/deploy/databend-query-standalone-embedded-meta.sh
+./scripts/ci/deploy/databend-query-standalone.sh
 
 SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../../tests/logictest" || exit
@@ -14,6 +14,9 @@ if [ $# -gt 0 ]; then
 	RUN_DIR="--run-dir $*"
 fi
 echo "Run suites using argument: $RUN_DIR"
+
+echo "pip list"
+python3 -m pip list
 
 echo "Starting databend-sqllogic tests"
 python3 main.py --skip-dir=mode $RUN_DIR
