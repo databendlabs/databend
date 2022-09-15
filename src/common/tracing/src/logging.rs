@@ -105,7 +105,13 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<WorkerGuard> {
             .install_batch(opentelemetry::runtime::Tokio)
             .expect("install");
 
-        jaeger_layer = Some(tracing_opentelemetry::layer().with_tracer(tracer));
+        // Load filter from `RUST_LOG`. Default to `ERROR`.
+        let env_filter = EnvFilter::from_default_env();
+        jaeger_layer = Some(
+            tracing_opentelemetry::layer()
+                .with_tracer(tracer)
+                .with_filter(env_filter),
+        );
     }
     let subscriber = subscriber.with(jaeger_layer);
 
