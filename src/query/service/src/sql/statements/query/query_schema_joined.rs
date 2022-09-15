@@ -21,7 +21,7 @@ use std::sync::Arc;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::Extras;
+use common_legacy_planners::Extras;
 
 use crate::sql::statements::QueryAnalyzeState;
 use crate::storages::Table;

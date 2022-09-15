@@ -18,11 +18,10 @@ use common_ast::ast::Expr;
 use common_ast::ast::TableReference;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::DeletePlan;
-use common_planners::Expression;
-use common_planners::Projection;
+use common_legacy_planners::DeletePlan;
+use common_legacy_planners::Expression;
+use common_legacy_planners::Projection;
 
-use crate::sessions::TableContext;
 use crate::sql::binder::Binder;
 use crate::sql::binder::ScalarBinder;
 use crate::sql::executor::ExpressionBuilderWithoutRenaming;

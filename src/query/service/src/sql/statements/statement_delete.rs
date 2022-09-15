@@ -18,10 +18,10 @@ use std::sync::Arc;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::DeletePlan;
-use common_planners::Expression;
-use common_planners::PlanNode;
-use common_planners::Projection;
+use common_legacy_planners::DeletePlan;
+use common_legacy_planners::Expression;
+use common_legacy_planners::PlanNode;
+use common_legacy_planners::Projection;
 use sqlparser::ast::Expr;
 use sqlparser::ast::ObjectName;
 

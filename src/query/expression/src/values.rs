@@ -21,7 +21,6 @@ use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::trusted_len::TrustedLen;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
-use ordered_float::OrderedFloat;
 use serde::de::Visitor;
 use serde::Deserialize;
 use serde::Deserializer;
@@ -38,6 +37,8 @@ use crate::types::nullable::NullableDomain;
 use crate::types::number::NumberColumn;
 use crate::types::number::NumberColumnBuilder;
 use crate::types::number::NumberScalar;
+use crate::types::number::F32;
+use crate::types::number::F64;
 use crate::types::string::StringColumn;
 use crate::types::string::StringColumnBuilder;
 use crate::types::string::StringDomain;
@@ -556,9 +557,8 @@ impl Column {
                 ),
             ),
             Column::Number(NumberColumn::Float32(col)) => {
-                let values = unsafe {
-                    std::mem::transmute::<Buffer<OrderedFloat<f32>>, Buffer<f32>>(col.clone())
-                };
+                let values =
+                    unsafe { std::mem::transmute::<Buffer<F32>, Buffer<f32>>(col.clone()) };
                 Box::new(
                     common_arrow::arrow::array::PrimitiveArray::<f32>::from_data(
                         self.arrow_type(),
@@ -568,9 +568,8 @@ impl Column {
                 )
             }
             Column::Number(NumberColumn::Float64(col)) => {
-                let values = unsafe {
-                    std::mem::transmute::<Buffer<OrderedFloat<f64>>, Buffer<f64>>(col.clone())
-                };
+                let values =
+                    unsafe { std::mem::transmute::<Buffer<F64>, Buffer<f64>>(col.clone()) };
                 Box::new(
                     common_arrow::arrow::array::PrimitiveArray::<f64>::from_data(
                         self.arrow_type(),
@@ -715,8 +714,7 @@ impl Column {
                     .expect("fail to read from arrow: array should be `Float32Array`")
                     .values()
                     .clone();
-                let col =
-                    unsafe { std::mem::transmute::<Buffer<f32>, Buffer<OrderedFloat<f32>>>(col) };
+                let col = unsafe { std::mem::transmute::<Buffer<f32>, Buffer<F32>>(col) };
                 Column::Number(NumberColumn::Float32(col))
             }
             ArrowDataType::Float64 => {
@@ -726,8 +724,7 @@ impl Column {
                     .expect("fail to read from arrow: array should be `Float64Array`")
                     .values()
                     .clone();
-                let col =
-                    unsafe { std::mem::transmute::<Buffer<f64>, Buffer<OrderedFloat<f64>>>(col) };
+                let col = unsafe { std::mem::transmute::<Buffer<f64>, Buffer<F64>>(col) };
                 Column::Number(NumberColumn::Float64(col))
             }
             ArrowDataType::Boolean => Column::Boolean(

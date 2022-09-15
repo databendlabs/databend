@@ -24,13 +24,13 @@ use parking_lot::RwLock;
 pub use plans::ScalarExpr;
 
 use crate::clusters::ClusterHelper;
-use crate::sessions::QueryContext;
 use crate::sql::optimizer::optimize;
 pub use crate::sql::planner::binder::BindContext;
 
 pub(crate) mod binder;
 mod format;
 mod metadata;
+pub mod optimizer;
 pub mod plans;
 mod semantic;
 
@@ -55,12 +55,14 @@ use crate::sessions::TableContext;
 const PROBE_INSERT_INITIAL_TOKENS: usize = 128;
 const PROBE_INSERT_MAX_TOKENS: usize = 128 * 8;
 
+pub type IndexType = usize;
+
 pub struct Planner {
-    ctx: Arc<QueryContext>,
+    ctx: Arc<dyn TableContext>,
 }
 
 impl Planner {
-    pub fn new(ctx: Arc<QueryContext>) -> Self {
+    pub fn new(ctx: Arc<dyn TableContext>) -> Self {
         Planner { ctx }
     }
 

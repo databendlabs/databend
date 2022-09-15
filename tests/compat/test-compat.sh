@@ -134,6 +134,24 @@ kill_proc() {
     echo " === Done kill $name"
 }
 
+# Find path in old and new location.
+# Databend release once changed binary path from `./` to `./bin`.
+find_binary_path()
+{
+    local base="$1"
+    local binary_name="$2"
+
+    if [ -f "$base/$binary_name" ]; then
+        echo "$base/$binary_name"
+    elif [ -f "$base/bin/$binary_name" ]; then
+        echo "$base/bin/$binary_name"
+    else
+        echo " === Can not find binary path for $binary_name in $base/ or $base/bin" >&2
+        exit 1
+    fi
+
+}
+
 # Test specified version of query and meta
 run_test() {
     echo " === pip list"
@@ -144,8 +162,8 @@ run_test() {
 
     echo " === Test with query-$query_ver and metasrv-$metasrv_ver"
 
-    local query="./bins/$query_ver/databend-query"
-    local metasrv="./bins/$metasrv_ver/databend-meta"
+    local query="$(find_binary_path "./bins/$query_ver" "databend-query")"
+    local metasrv="$(find_binary_path "./bins/$metasrv_ver" "databend-meta")"
 
     # "$metasrv" --single --cmd ver
 

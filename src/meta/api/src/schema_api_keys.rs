@@ -20,6 +20,8 @@ use common_meta_app::schema::DatabaseId;
 use common_meta_app::schema::DatabaseIdToName;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::DbIdListKey;
+use common_meta_app::schema::TableCopiedFileLockKey;
+use common_meta_app::schema::TableCopiedFileNameIdent;
 use common_meta_app::schema::TableId;
 use common_meta_app::schema::TableIdListKey;
 use common_meta_app::schema::TableIdToName;
@@ -43,6 +45,8 @@ const PREFIX_TABLE_ID_LIST: &str = "__fd_table_id_list";
 const PREFIX_TABLE_COUNT: &str = "__fd_table_count";
 const PREFIX_DATABASE_ID_TO_NAME: &str = "__fd_database_id_to_name";
 const PREFIX_TABLE_ID_TO_NAME: &str = "__fd_table_id_to_name";
+const PREFIX_TABLE_COPIED_FILES: &str = "__fd_table_copied_files";
+const PREFIX_TABLE_COPIED_FILES_LOCK: &str = "__fd_table_copied_file_lock";
 
 pub(crate) const ID_GEN_TABLE: &str = "table_id";
 pub(crate) const ID_GEN_DATABASE: &str = "database_id";
@@ -292,5 +296,107 @@ impl KVApiKey for CountTablesKey {
         let tenant = unescape(tenant)?;
 
         Ok(CountTablesKey { tenant })
+    }
+}
+
+// __fd_table_copied_files/table_id/file_name -> TableCopiedFileInfo
+impl KVApiKey for TableCopiedFileNameIdent {
+    const PREFIX: &'static str = PREFIX_TABLE_COPIED_FILES;
+
+    fn to_key(&self) -> String {
+        format!("{}/{}/{}", Self::PREFIX, self.table_id, self.file)
+    }
+
+    fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
+        let elts: Vec<&str> = s.splitn(3, '/').collect();
+        if elts.len() < 3 {
+            return Err(KVApiKeyError::AtleastSegments {
+                expect: 3,
+                actual: elts.len(),
+            });
+        }
+        let prefix = elts[0];
+        check_segment(prefix, 0, Self::PREFIX)?;
+
+        let table_id = decode_id(elts[1])?;
+        let file = unescape(elts[2])?;
+
+        Ok(TableCopiedFileNameIdent { table_id, file })
+    }
+}
+
+// __fd_table_copied_file_lock/table_id -> ""
+impl KVApiKey for TableCopiedFileLockKey {
+    const PREFIX: &'static str = PREFIX_TABLE_COPIED_FILES_LOCK;
+
+    fn to_key(&self) -> String {
+        format!("{}/{}", Self::PREFIX, self.table_id)
+    }
+
+    fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
+        let mut elts = s.split('/');
+
+        let prefix = check_segment_present(elts.next(), 0, s)?;
+        check_segment(prefix, 0, Self::PREFIX)?;
+
+        let table_id = check_segment_present(elts.next(), 1, s)?;
+        let table_id = decode_id(table_id)?;
+
+        Ok(TableCopiedFileLockKey { table_id })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use common_meta_app::schema::TableCopiedFileNameIdent;
+
+    use crate::kv_api_key::KVApiKey;
+    use crate::KVApiKeyError;
+
+    #[test]
+    fn test_table_copied_file_name_ident_conversion() -> Result<(), KVApiKeyError> {
+        // test with a key has a file has multi path
+        {
+            let name = TableCopiedFileNameIdent {
+                table_id: 2,
+                file: "/path/to/file".to_owned(),
+            };
+
+            let key = name.to_key();
+            assert_eq!(
+                key,
+                format!(
+                    "{}/{}/{}",
+                    TableCopiedFileNameIdent::PREFIX,
+                    name.table_id,
+                    name.file,
+                )
+            );
+            let from = TableCopiedFileNameIdent::from_key(&key)?;
+            assert_eq!(from, name);
+        }
+
+        // test with a key has only 2 sub-path
+        {
+            let key = format!("{}/{}", TableCopiedFileNameIdent::PREFIX, 2,);
+            let res = TableCopiedFileNameIdent::from_key(&key);
+            assert!(res.is_err());
+            let err = res.unwrap_err();
+            assert_eq!(err, KVApiKeyError::AtleastSegments {
+                expect: 3,
+                actual: 2,
+            });
+        }
+
+        // test with a key has 5 sub-path but an empty file string
+        {
+            let key = format!("{}/{}/{}", TableCopiedFileNameIdent::PREFIX, 2, "");
+            let res = TableCopiedFileNameIdent::from_key(&key)?;
+            assert_eq!(res, TableCopiedFileNameIdent {
+                table_id: 2,
+                file: "".to_string(),
+            });
+        }
+        Ok(())
     }
 }

@@ -197,14 +197,11 @@ pub trait VisitorMut: Sized {
         &mut self,
         _span: &mut &[Token<'_>],
         expr: &mut Expr<'_>,
-        substring_from: &mut Option<Box<Expr<'_>>>,
+        substring_from: &mut Box<Expr<'_>>,
         substring_for: &mut Option<Box<Expr<'_>>>,
     ) {
         walk_expr_mut(self, expr);
-
-        if let Some(substring_from) = substring_from {
-            walk_expr_mut(self, substring_from);
-        }
+        walk_expr_mut(self, substring_from);
 
         if let Some(substring_for) = substring_for {
             walk_expr_mut(self, substring_for);

@@ -35,7 +35,7 @@ use common_functions::scalars::assert_numeric;
 use common_functions::window::WindowFrame;
 use common_functions::window::WindowFrameBound;
 use common_functions::window::WindowFrameUnits;
-use common_planners::Expression;
+use common_legacy_planners::Expression;
 use enum_extract::let_extract;
 use segment_tree::ops::Commutative;
 use segment_tree::ops::Identity;

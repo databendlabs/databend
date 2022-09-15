@@ -22,8 +22,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::Statistics as FuseMetaStatistics;
-use common_planners::PartInfoPtr;
-use common_planners::Projection;
+use common_legacy_planners::PartInfoPtr;
+use common_legacy_planners::Projection;
 use opendal::Operator;
 
 use crate::pipelines::processors::port::InputPort;

@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 use common_datavalues::format_data_type_sql;
 use itertools::Itertools;
 
+use super::DistributedInsertSelect;
 use crate::sql::executor::AggregateFinal;
 use crate::sql::executor::AggregatePartial;
 use crate::sql::executor::EvalScalar;
@@ -64,6 +65,7 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::ExchangeSource(source) => write!(f, "{}", source)?,
             PhysicalPlan::ExchangeSink(sink) => write!(f, "{}", sink)?,
             PhysicalPlan::UnionAll(union_all) => write!(f, "{}", union_all)?,
+            PhysicalPlan::DistributedInsertSelect(insert_select) => write!(f, "{}", insert_select)?,
         }
 
         for node in self.node.children() {
@@ -311,5 +313,11 @@ impl Display for ExchangeSink {
 impl Display for UnionAll {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "UnionAll")
+    }
+}
+
+impl Display for DistributedInsertSelect {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DistributedInsertSelect")
     }
 }

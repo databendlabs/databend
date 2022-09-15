@@ -148,7 +148,11 @@ impl Display for TxnPutRequest {
             f,
             "Put key={}, need prev_value: {}",
             self.key, self.prev_value
-        )
+        )?;
+        if let Some(expire_at) = self.expire_at {
+            write!(f, " expire at: {}", expire_at)?;
+        }
+        Ok(())
     }
 }
 

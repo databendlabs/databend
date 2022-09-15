@@ -24,14 +24,13 @@ use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_legacy_planners::ReadDataSourcePlan;
+use common_legacy_planners::SourceInfo;
+use common_legacy_planners::StageTableInfo;
 use common_meta_types::UserStageInfo;
-use common_planners::ReadDataSourcePlan;
-use common_planners::SourceInfo;
-use common_planners::StageTableInfo;
 use common_storage::parse_uri_location;
 use common_storage::UriLocation;
 
-use crate::sessions::TableContext;
 use crate::sql::binder::Binder;
 use crate::sql::normalize_identifier;
 use crate::sql::plans::CopyPlanV2;

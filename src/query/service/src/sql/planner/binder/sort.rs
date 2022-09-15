@@ -23,7 +23,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use super::bind_context::NameResolutionResult;
-use crate::sessions::TableContext;
 use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::select::SelectList;
 use crate::sql::binder::Binder;
@@ -31,6 +30,7 @@ use crate::sql::binder::ColumnBinding;
 use crate::sql::normalize_identifier;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::semantic::GroupingChecker;
+use crate::sql::planner::IndexType;
 use crate::sql::plans::AggregateFunction;
 use crate::sql::plans::AndExpr;
 use crate::sql::plans::BoundColumnRef;
@@ -44,7 +44,6 @@ use crate::sql::plans::ScalarItem;
 use crate::sql::plans::Sort;
 use crate::sql::plans::SortItem;
 use crate::sql::BindContext;
-use crate::sql::IndexType;
 use crate::sql::ScalarExpr;
 
 pub struct OrderItems<'a> {
