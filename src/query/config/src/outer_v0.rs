@@ -93,9 +93,6 @@ pub struct Config {
     // - currently only supports HIVE (via hive meta store)
     #[clap(flatten)]
     pub catalog: HiveCatalogConfig,
-
-    #[clap(skip)]
-    pub idm: IDMConfig,
 }
 
 impl Default for Config {
@@ -148,7 +145,6 @@ impl From<InnerConfig> for Config {
             meta: inner.meta.into(),
             storage: inner.storage.into(),
             catalog: inner.catalog.into(),
-            idm: inner.idm.into(),
         }
     }
 }
@@ -165,7 +161,6 @@ impl TryInto<InnerConfig> for Config {
             meta: self.meta.try_into()?,
             storage: self.storage.try_into()?,
             catalog: self.catalog.try_into()?,
-            idm: self.idm.try_into()?,
         })
     }
 }
@@ -826,6 +821,10 @@ pub struct QueryConfig {
     /// The maximum timeout in milliseconds since the last insert before inserting collected data.
     #[clap(long, default_value = "0")]
     pub async_insert_stale_timeout: u64,
+
+    #[clap(skip)]
+    #[serde(flatten)]
+    pub idm: IDMConfig,
 }
 
 impl Default for QueryConfig {
@@ -878,6 +877,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             async_insert_max_data_size: self.async_insert_max_data_size,
             async_insert_busy_timeout: self.async_insert_busy_timeout,
             async_insert_stale_timeout: self.async_insert_stale_timeout,
+            idm: self.idm.try_into()?,
         })
     }
 }
@@ -931,6 +931,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             async_insert_max_data_size: inner.async_insert_max_data_size,
             async_insert_busy_timeout: inner.async_insert_busy_timeout,
             async_insert_stale_timeout: inner.async_insert_stale_timeout,
+            idm: inner.idm.into(),
         }
     }
 }
