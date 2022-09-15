@@ -145,6 +145,7 @@ impl PipelineBuilder {
             self.ctx.clone(),
             &join.build_keys,
             join.build.output_schema()?,
+            join.probe.output_schema()?,
             HashJoinDesc::create(join)?,
         )
     }

@@ -130,6 +130,7 @@ pub struct JoinHashTable {
     pub(crate) row_space: RowSpace,
     pub(crate) hash_join_desc: HashJoinDesc,
     pub(crate) row_ptrs: RwLock<Vec<RowPtr>>,
+    pub(crate) probe_schema: DataSchemaRef,
     finished_notify: Arc<Notify>,
 }
 
@@ -138,6 +139,7 @@ impl JoinHashTable {
         ctx: Arc<QueryContext>,
         build_keys: &[PhysicalScalar],
         build_schema: DataSchemaRef,
+        probe_schema: DataSchemaRef,
         hash_join_desc: HashJoinDesc,
     ) -> Result<Arc<JoinHashTable>> {
         let hash_key_types: Vec<DataTypeImpl> =
@@ -151,6 +153,7 @@ impl JoinHashTable {
                     hash_method: HashMethodSerializer::default(),
                 }),
                 build_schema,
+                probe_schema,
                 hash_join_desc,
             )?),
             HashMethodKind::KeysU8(hash_method) => Arc::new(JoinHashTable::try_create(
@@ -160,6 +163,7 @@ impl JoinHashTable {
                     hash_method,
                 }),
                 build_schema,
+                probe_schema,
                 hash_join_desc,
             )?),
             HashMethodKind::KeysU16(hash_method) => Arc::new(JoinHashTable::try_create(
@@ -169,6 +173,7 @@ impl JoinHashTable {
                     hash_method,
                 }),
                 build_schema,
+                probe_schema,
                 hash_join_desc,
             )?),
             HashMethodKind::KeysU32(hash_method) => Arc::new(JoinHashTable::try_create(
@@ -178,6 +183,7 @@ impl JoinHashTable {
                     hash_method,
                 }),
                 build_schema,
+                probe_schema,
                 hash_join_desc,
             )?),
             HashMethodKind::KeysU64(hash_method) => Arc::new(JoinHashTable::try_create(
@@ -187,6 +193,7 @@ impl JoinHashTable {
                     hash_method,
                 }),
                 build_schema,
+                probe_schema,
                 hash_join_desc,
             )?),
             HashMethodKind::KeysU128(hash_method) => Arc::new(JoinHashTable::try_create(
@@ -196,6 +203,7 @@ impl JoinHashTable {
                     hash_method,
                 }),
                 build_schema,
+                probe_schema,
                 hash_join_desc,
             )?),
             HashMethodKind::KeysU256(hash_method) => Arc::new(JoinHashTable::try_create(
@@ -205,6 +213,7 @@ impl JoinHashTable {
                     hash_method,
                 }),
                 build_schema,
+                probe_schema,
                 hash_join_desc,
             )?),
             HashMethodKind::KeysU512(hash_method) => Arc::new(JoinHashTable::try_create(
@@ -214,6 +223,7 @@ impl JoinHashTable {
                     hash_method,
                 }),
                 build_schema,
+                probe_schema,
                 hash_join_desc,
             )?),
         })
@@ -223,6 +233,7 @@ impl JoinHashTable {
         ctx: Arc<QueryContext>,
         hash_table: HashTable,
         mut build_data_schema: DataSchemaRef,
+        mut probe_data_schema: DataSchemaRef,
         hash_join_desc: HashJoinDesc,
     ) -> Result<Self> {
         if hash_join_desc.join_type == JoinType::Left
@@ -237,6 +248,16 @@ impl JoinHashTable {
             }
             build_data_schema = DataSchemaRefExt::create(nullable_field);
         };
+        if hash_join_desc.join_type == JoinType::Right {
+            let mut nullable_field = Vec::with_capacity(probe_data_schema.fields().len());
+            for field in probe_data_schema.fields().iter() {
+                nullable_field.push(DataField::new_nullable(
+                    field.name(),
+                    field.data_type().clone(),
+                ));
+            }
+            probe_data_schema = DataSchemaRefExt::create(nullable_field);
+        }
         Ok(Self {
             row_space: RowSpace::new(build_data_schema),
             ref_count: Mutex::new(0),
@@ -245,6 +266,7 @@ impl JoinHashTable {
             ctx,
             hash_table: RwLock::new(hash_table),
             row_ptrs: RwLock::new(vec![]),
+            probe_schema: probe_data_schema,
             finished_notify: Arc::new(Notify::new()),
         })
     }
@@ -429,7 +451,8 @@ impl HashJoinState for JoinHashTable {
             | JoinType::Anti
             | JoinType::Left
             | Mark
-            | JoinType::Single => self.probe_join(input, probe_state),
+            | JoinType::Single
+            | JoinType::Right => self.probe_join(input, probe_state),
             JoinType::Cross => self.probe_cross_join(input, probe_state),
             _ => unimplemented!("{} is unimplemented", self.hash_join_desc.join_type),
         }

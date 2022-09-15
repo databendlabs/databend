@@ -158,6 +158,17 @@ impl JoinHashTable {
                     return Ok(vec![result]);
                 }
             }
+            JoinType::Right => {
+                if self.hash_join_desc.other_predicate.is_none() {
+                    let result =
+                        self.right_join::<false, _, _>(hash_table, probe_state, keys_iter, input)?;
+                    return Ok(vec![result]);
+                } else {
+                    let result =
+                        self.right_join::<true, _, _>(hash_table, probe_state, keys_iter, input)?;
+                    return Ok(vec![result]);
+                }
+            }
             Mark => {
                 results.push(DataBlock::empty());
                 // Three cases will produce Mark join:
@@ -518,6 +529,71 @@ impl JoinHashTable {
         Self::fill_null_for_left_join(&mut bm, probe_indexs, row_state);
         let predicate = BooleanColumn::from_arrow_data(bm.into()).arc();
         DataBlock::filter_block(merged_block, &predicate)
+    }
+
+    fn right_join<const WITH_OTHER_CONJUNCT: bool, Key, IT>(
+        &self,
+        hash_table: &HashMap<Key, Vec<RowPtr>>,
+        probe_state: &mut ProbeState,
+        keys_iter: IT,
+        input: &DataBlock,
+    ) -> Result<DataBlock>
+    where
+        Key: HashTableKeyable + Clone + 'static,
+        IT: Iterator<Item = Key> + TrustedLen,
+    {
+        let build_indexes = &mut probe_state.build_indexs;
+        let probe_indexes = &mut probe_state.probe_indexs;
+        let valids = &probe_state.valids;
+        let mut validity = MutableBitmap::new();
+        for (i, key) in keys_iter.enumerate() {
+            let probe_result_ptr = Self::probe_key(hash_table, key, valids, i);
+            if let Some(v) = probe_result_ptr {
+                let probe_result_ptrs = v.get_value();
+                build_indexes.extend_from_slice(probe_result_ptrs);
+                probe_indexes.extend(std::iter::repeat(i as u32).take(probe_result_ptrs.len()));
+                validity.extend_constant(probe_result_ptrs.len(), true);
+            }
+        }
+
+        // For right join, build side will always appear in the joined table
+        // Find the unmatched rows in build side
+        let mut unmatched_build_indexes = vec![];
+        for kv in hash_table.iter() {
+            for v in kv.get_value() {
+                if !build_indexes.contains(v) {
+                    unmatched_build_indexes.push(v.clone());
+                }
+            }
+        }
+        build_indexes.extend_from_slice(&unmatched_build_indexes);
+        let build_block = self.row_space.gather(build_indexes)?;
+        let probe_block = DataBlock::block_take_by_indices(input, probe_indexes)?;
+        let validity: Bitmap = validity.into();
+        let nullable_columns = probe_block
+            .columns()
+            .iter()
+            .map(|c| Self::set_validity(c, &validity))
+            .collect::<Result<Vec<_>>>()?;
+        let mut nullable_probe_block =
+            DataBlock::create(self.probe_schema.clone(), nullable_columns);
+        // Create null block for unmatched rows in probe side
+        let null_probe_block = DataBlock::create(
+            self.probe_schema.clone(),
+            nullable_probe_block
+                .columns()
+                .iter()
+                .map(|c| {
+                    c.data_type()
+                        .create_constant_column(&DataValue::Null, unmatched_build_indexes.len())
+                })
+                .collect::<Result<Vec<_>>>()?,
+        );
+
+        nullable_probe_block =
+            DataBlock::concat_blocks(&vec![nullable_probe_block, null_probe_block])?;
+        let merged_block = self.merge_eq_block(&nullable_probe_block, &build_block)?;
+        Ok(merged_block)
     }
 
     // modify the bm by the value row_state

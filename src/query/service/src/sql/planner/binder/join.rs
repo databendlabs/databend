@@ -71,14 +71,14 @@ impl<'a> Binder {
                 }
             }
             JoinOperator::RightOuter => {
-                for column in right_context.all_column_bindings().iter() {
-                    bind_context.add_column_binding(column.clone());
-                }
-
                 for column in left_context.all_column_bindings() {
                     let mut nullable_column = column.clone();
                     nullable_column.data_type = Box::new(wrap_nullable(&column.data_type));
                     bind_context.add_column_binding(nullable_column);
+                }
+
+                for column in right_context.all_column_bindings().iter() {
+                    bind_context.add_column_binding(column.clone());
                 }
             }
             _ => {
@@ -145,12 +145,12 @@ impl<'a> Binder {
                 right_child,
             ),
             JoinOperator::RightOuter => self.bind_join_with_type(
-                JoinType::Left,
-                right_join_conditions,
+                JoinType::Right,
                 left_join_conditions,
+                right_join_conditions,
                 other_conditions,
-                right_child,
                 left_child,
+                right_child,
             ),
             JoinOperator::FullOuter => self.bind_join_with_type(
                 JoinType::Full,
