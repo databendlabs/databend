@@ -110,7 +110,6 @@ async fn test_call_fuse_snapshot_interpreter() -> Result<()> {
     Ok(())
 }
 
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_call_fuse_block_interpreter() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
@@ -166,7 +165,7 @@ async fn test_call_fuse_block_interpreter() -> Result<()> {
         let _ = executor.execute().await?;
     }
 
-    // FuseHistory
+    // fuse_block
     {
         let query = "call system$fuse_block(default, a, xxxx)";
         let (plan, _, _) = planner.plan_sql(query).await?;
@@ -255,7 +254,7 @@ async fn test_call_clustering_information_interpreter() -> Result<()> {
         let _ = executor.execute().await?;
     }
 
-    // FuseHistory
+    // clustering_information
     {
         let query = "call system$clustering_information(default, b)";
         let (plan, _, _) = planner.plan_sql(query).await?;
