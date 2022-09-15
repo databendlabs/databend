@@ -17,10 +17,7 @@ use std::fmt::Display;
 
 use common_exception::ErrorCode;
 use prost::EncodeError;
-use tonic::Code;
 
-use crate::meta_network_errors::InvalidArgument;
-use crate::ConnectionError;
 use crate::MetaBytesError;
 use crate::MetaError;
 use crate::MetaNetworkError;
@@ -51,6 +48,7 @@ impl From<MetaError> for ErrorCode {
             MetaError::Fatal(ae) => {
                 ErrorCode::MetaServiceError(ae.to_string()).set_backtrace(ae.backtrace())
             }
+            MetaError::MetaClientError(ce) => ce.into(),
         }
     }
 }
@@ -94,33 +92,10 @@ where E: Display + Send + Sync + 'static
     }
 }
 
-// ser/de to/from tonic::Status
 impl From<tonic::Status> for MetaError {
     fn from(status: tonic::Status) -> Self {
-        match status.code() {
-            Code::InvalidArgument => MetaError::MetaNetworkError(
-                MetaNetworkError::InvalidArgument(InvalidArgument::new(status, "")),
-            ),
-            // Code::Ok => {}
-            // Code::Cancelled => {}
-            // Code::Unknown => {}
-            // Code::DeadlineExceeded => {}
-            // Code::NotFound => {}
-            // Code::AlreadyExists => {}
-            // Code::PermissionDenied => {}
-            // Code::ResourceExhausted => {}
-            // Code::FailedPrecondition => {}
-            // Code::Aborted => {}
-            // Code::OutOfRange => {}
-            // Code::Unimplemented => {}
-            // Code::Internal => {}
-            // Code::Unavailable => {}
-            // Code::DataLoss => {}
-            // Code::Unauthenticated => {}
-            _ => MetaError::MetaNetworkError(MetaNetworkError::ConnectionError(
-                ConnectionError::new(status, ""),
-            )),
-        }
+        let net_err = MetaNetworkError::from(status);
+        MetaError::MetaNetworkError(net_err)
     }
 }
 
