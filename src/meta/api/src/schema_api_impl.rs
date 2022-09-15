@@ -882,6 +882,13 @@ impl<KV: KVApi> SchemaApi for KV {
             let (_, db_id, db_meta_seq, db_meta) =
                 get_db_or_err(self, &tenant_dbname, "create_table").await?;
 
+            // cannot operate on shared database
+            if let Some(from_share) = db_meta.from_share {
+                return Err(MetaError::AppError(AppError::ShareHasNoGrantedPrivilege(
+                    ShareHasNoGrantedPrivilege::new(&from_share.tenant, &from_share.share_name),
+                )));
+            }
+
             // Get table by tenant,db_id, table_name to assert absence.
 
             let dbid_tbname = DBIdTableName {
@@ -1028,6 +1035,13 @@ impl<KV: KVApi> SchemaApi for KV {
             let (_, db_id, db_meta_seq, db_meta) =
                 get_db_or_err(self, &tenant_dbname, "drop_table").await?;
 
+            // cannot operate on shared database
+            if let Some(from_share) = db_meta.from_share {
+                return Err(MetaError::AppError(AppError::ShareHasNoGrantedPrivilege(
+                    ShareHasNoGrantedPrivilege::new(&from_share.tenant, &from_share.share_name),
+                )));
+            }
+
             // Get table by tenant,db_id, table_name to assert presence.
 
             let dbid_tbname = DBIdTableName {
@@ -1153,6 +1167,13 @@ impl<KV: KVApi> SchemaApi for KV {
 
             let (_, db_id, db_meta_seq, db_meta) =
                 get_db_or_err(self, &tenant_dbname, "undrop_table").await?;
+
+            // cannot operate on shared database
+            if let Some(from_share) = db_meta.from_share {
+                return Err(MetaError::AppError(AppError::ShareHasNoGrantedPrivilege(
+                    ShareHasNoGrantedPrivilege::new(&from_share.tenant, &from_share.share_name),
+                )));
+            }
 
             // Get table by tenant,db_id, table_name to assert presence.
 
@@ -1307,6 +1328,13 @@ impl<KV: KVApi> SchemaApi for KV {
 
             let (_, db_id, db_meta_seq, db_meta) =
                 get_db_or_err(self, &tenant_dbname, "rename_table").await?;
+
+            // cannot operate on shared database
+            if let Some(from_share) = db_meta.from_share {
+                return Err(MetaError::AppError(AppError::ShareHasNoGrantedPrivilege(
+                    ShareHasNoGrantedPrivilege::new(&from_share.tenant, &from_share.share_name),
+                )));
+            }
 
             // Get table by db_id, table_name to assert presence.
 
