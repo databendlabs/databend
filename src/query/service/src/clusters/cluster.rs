@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::net::SocketAddr;
 use std::ops::RangeInclusive;
+use std::str::FromStr;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -35,7 +37,7 @@ use common_exception::Result;
 use common_grpc::ConnectionFactory;
 use common_management::ClusterApi;
 use common_management::ClusterMgr;
-use common_meta_api::KVApi;
+use common_meta_store::MetaStore;
 use common_meta_store::MetaStoreProvider;
 use common_meta_types::NodeInfo;
 use common_metrics::label_counter_with_val_and_labels;
@@ -139,24 +141,24 @@ static CLUSTER_DISCOVERY: OnceCell<Singleton<Arc<ClusterDiscovery>>> = OnceCell:
 impl ClusterDiscovery {
     const METRIC_LABEL_FUNCTION: &'static str = "function";
 
-    pub async fn create_meta_client(cfg: &Config) -> Result<Arc<dyn KVApi>> {
+    pub async fn create_meta_client(cfg: &Config) -> Result<MetaStore> {
         let meta_api_provider = MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf());
         match meta_api_provider.try_get_meta_store().await {
-            Ok(client) => Ok(client.arc()),
+            Ok(meta_store) => Ok(meta_store),
             Err(cause) => Err(cause.add_message_back("(while create cluster api).")),
         }
     }
 
     pub async fn init(cfg: Config, v: Singleton<Arc<ClusterDiscovery>>) -> Result<()> {
-        let meta_client = ClusterDiscovery::create_meta_client(&cfg).await?;
-        v.init(Self::try_create(&cfg, meta_client).await?)?;
+        let metastore = ClusterDiscovery::create_meta_client(&cfg).await?;
+        v.init(Self::try_create(&cfg, metastore).await?)?;
 
         CLUSTER_DISCOVERY.set(v).ok();
         Ok(())
     }
 
-    pub async fn try_create(cfg: &Config, api: Arc<dyn KVApi>) -> Result<Arc<ClusterDiscovery>> {
-        let (lift_time, provider) = Self::create_provider(cfg, api)?;
+    pub async fn try_create(cfg: &Config, metastore: MetaStore) -> Result<Arc<ClusterDiscovery>> {
+        let (lift_time, provider) = Self::create_provider(cfg, metastore)?;
 
         Ok(Arc::new(ClusterDiscovery {
             local_id: GlobalUniqName::unique(),
@@ -182,13 +184,13 @@ impl ClusterDiscovery {
 
     fn create_provider(
         cfg: &Config,
-        api: Arc<dyn KVApi>,
+        metastore: MetaStore,
     ) -> Result<(Duration, Arc<dyn ClusterApi>)> {
         // TODO: generate if tenant or cluster id is empty
         let tenant_id = &cfg.query.tenant_id;
         let cluster_id = &cfg.query.cluster_id;
         let lift_time = Duration::from_secs(60);
-        let cluster_manager = ClusterMgr::create(api, tenant_id, cluster_id, lift_time)?;
+        let cluster_manager = ClusterMgr::create(metastore, tenant_id, cluster_id, lift_time)?;
 
         Ok((lift_time, Arc::new(cluster_manager)))
     }
@@ -350,8 +352,27 @@ impl ClusterDiscovery {
 
     pub async fn register_to_metastore(self: &Arc<Self>, cfg: &Config) -> Result<()> {
         let cpus = cfg.query.num_cpus;
-        // TODO: 127.0.0.1 || ::0
-        let address = cfg.query.flight_api_address.clone();
+        let mut address = cfg.query.flight_api_address.clone();
+
+        if let Ok(socket_addr) = SocketAddr::from_str(&address) {
+            let ip_addr = socket_addr.ip();
+            if ip_addr.is_loopback() || ip_addr.is_unspecified() {
+                if let Some(local_addr) = self.api_provider.get_local_addr().await? {
+                    let local_socket_addr = SocketAddr::from_str(&local_addr)?;
+                    let new_addr = format!("{}:{}", local_socket_addr.ip(), socket_addr.port());
+                    tracing::warn!(
+                        "Used loopback or unspecified address as cluster flight address. \
+                        we rewrite it(\"{}\" -> \"{}\") for other nodes can connect it.\
+                        If your has proxy between nodes, you can specify the node's IP address in the configuration file.",
+                        address,
+                        new_addr
+                    );
+
+                    address = new_addr;
+                }
+            }
+        }
+
         let node_info = NodeInfo::create(self.local_id.clone(), cpus, address);
 
         self.drop_invalid_nodes(&node_info).await?;

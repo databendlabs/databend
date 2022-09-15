@@ -21,6 +21,7 @@ use common_exception::Result;
 use common_management::*;
 use common_meta_api::KVApi;
 use common_meta_embedded::MetaEmbedded;
+use common_meta_store::MetaStore;
 use common_meta_types::NodeInfo;
 use common_meta_types::SeqV;
 
@@ -153,8 +154,8 @@ fn create_test_node_info() -> NodeInfo {
     }
 }
 
-async fn new_cluster_api() -> Result<(Arc<MetaEmbedded>, ClusterMgr)> {
-    let test_api = Arc::new(MetaEmbedded::new_temp().await?);
+async fn new_cluster_api() -> Result<(MetaStore, ClusterMgr)> {
+    let test_api = MetaStore::L(Arc::new(MetaEmbedded::new_temp().await?));
     let cluster_manager = ClusterMgr::create(
         test_api.clone(),
         "test-tenant-id",

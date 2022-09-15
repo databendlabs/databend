@@ -1438,6 +1438,7 @@ dependencies = [
  "common-io",
  "common-meta-api",
  "common-meta-embedded",
+ "common-meta-store",
  "common-meta-types",
  "common-proto-conv",
  "common-protos",
