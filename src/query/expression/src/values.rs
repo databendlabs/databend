@@ -869,7 +869,7 @@ impl Column {
 
     pub fn remove_nullable(&self) -> Self {
         match self {
-           Column::Nullable(inner) => inner.column.clone(),
+            Column::Nullable(inner) => inner.column.clone(),
             _ => self.clone(),
         }
     }

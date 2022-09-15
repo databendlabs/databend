@@ -113,7 +113,7 @@ pub fn eval_aggr(
     columns: &[Column],
     types: &[DataType],
     rows: usize,
-) -> Result<Column> {
+) -> Result<(Column, DataType)> {
     let factory = AggregateFunctionFactory::instance();
     let arguments = types.to_owned();
     let cols: Vec<Column> = columns.to_owned();
@@ -125,5 +125,5 @@ pub fn eval_aggr(
     func.accumulate(eval.addr, &cols, None, rows)?;
     let mut builder = ColumnBuilder::with_capacity(&data_type, 1024);
     func.merge_result(eval.addr, &mut builder)?;
-    Ok(builder.build())
+    Ok((builder.build(), data_type))
 }

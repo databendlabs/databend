@@ -21,7 +21,6 @@ use common_expression::ColumnFrom;
 use goldenfile::Mint;
 
 use super::run_agg_ast;
-use super::run_ast;
 
 #[test]
 fn test_agg() {
@@ -29,8 +28,50 @@ fn test_agg() {
     let file = &mut mint.new_goldenfile("agg.txt").unwrap();
 
     test_count(file);
+    test_sum(file);
+    test_avg(file);
+}
+
+fn get_example() -> Vec<(&'static str, DataType, Column)> {
+    vec![
+        (
+            "a",
+            DataType::Number(NumberDataType::Int64),
+            Column::from_data(vec![4i64, 3, 2, 1]),
+        ),
+        (
+            "b",
+            DataType::Number(NumberDataType::UInt64),
+            Column::from_data(vec![1u64, 2, 3, 4]),
+        ),
+        (
+            "x_null",
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
+            Column::from_data_with_validity(vec![1u64, 2, 3, 4], vec![true, true, false, false]),
+        ),
+        (
+            "y_null",
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
+            Column::from_data_with_validity(vec![1u64, 2, 3, 4], vec![false, false, true, true]),
+        ),
+    ]
 }
 
 fn test_count(file: &mut impl Write) {
-    run_agg_ast(file, "count(1)", &[]);
+    run_agg_ast(file, "count(1)", get_example().as_slice());
+    run_agg_ast(file, "count()", get_example().as_slice());
+    run_agg_ast(file, "count(a)", get_example().as_slice());
+    run_agg_ast(file, "count(x_null)", get_example().as_slice());
+}
+
+fn test_sum(file: &mut impl Write) {
+    run_agg_ast(file, "sum(1)", get_example().as_slice());
+    run_agg_ast(file, "sum(a)", get_example().as_slice());
+    run_agg_ast(file, "sum(x_null)", get_example().as_slice());
+}
+
+fn test_avg(file: &mut impl Write) {
+    run_agg_ast(file, "avg(1)", get_example().as_slice());
+    run_agg_ast(file, "avg(a)", get_example().as_slice());
+    run_agg_ast(file, "avg(x_null)", get_example().as_slice());
 }

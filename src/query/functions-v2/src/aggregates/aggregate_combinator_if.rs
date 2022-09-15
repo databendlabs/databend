@@ -18,9 +18,9 @@ use std::sync::Arc;
 
 use bytes::BytesMut;
 use common_arrow::arrow::bitmap::Bitmap;
-use common_datavalues::prelude::*;
+
 use common_exception::ErrorCode;
-use common_exception::Result;
+use common_expression::Result;
 
 use super::StateAddr;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionCreator;
@@ -41,7 +41,7 @@ impl AggregateIfCombinator {
     pub fn try_create(
         nested_name: &str,
         params: Vec<DataValue>,
-        arguments: Vec<DataField>,
+        arguments: Vec<DataType>,
         nested_creator: &AggregateFunctionCreator,
     ) -> Result<AggregateFunctionRef> {
         let name = format!("IfCombinator({})", nested_name);
@@ -85,7 +85,7 @@ impl AggregateFunction for AggregateIfCombinator {
         &self.name
     }
 
-    fn return_type(&self) -> Result<DataTypeImpl> {
+    fn return_type(&self) -> Result<DataType> {
         self.nested.return_type()
     }
 
@@ -157,7 +157,7 @@ impl AggregateFunction for AggregateIfCombinator {
         self.nested.merge(place, rhs)
     }
 
-    fn merge_result(&self, place: StateAddr, column: &mut dyn MutableColumn) -> Result<()> {
+    fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
         self.nested.merge_result(place, column)
     }
 

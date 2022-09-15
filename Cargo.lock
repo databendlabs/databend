@@ -1293,7 +1293,6 @@ dependencies = [
  "comfy-table",
  "common-arrow",
  "common-ast",
- "common-base",
  "common-exception",
  "common-expression",
  "common-hashtable",
@@ -1307,6 +1306,7 @@ dependencies = [
  "once_cell",
  "ordered-float 3.0.0 (git+https://github.com/andylokandy/rust-ordered-float.git?branch=as)",
  "rand 0.8.5",
+ "serde",
  "serde_json",
  "strength_reduce",
 ]

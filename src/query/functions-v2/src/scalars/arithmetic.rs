@@ -17,6 +17,7 @@ use common_expression::types::arithmetics_type::ResultTypeOfUnary;
 use common_expression::types::number::F64;
 use common_expression::types::number::*;
 use common_expression::types::NumberDataType;
+use common_expression::types::ALL_NUMERICS_TYPES;
 use common_expression::vectorize_with_builder_2_arg;
 use common_expression::with_number_mapped_type;
 use common_expression::FunctionProperty;
@@ -24,7 +25,6 @@ use common_expression::FunctionRegistry;
 use num_traits::AsPrimitive;
 
 use super::arithmetic_modulo::vectorize_modulo;
-use crate::scalars::ALL_NUMERICS_TYPES;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("plus", &["add"]);

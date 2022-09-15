@@ -22,6 +22,9 @@ use common_expression::types::number::F64;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberType;
 use common_expression::types::StringType;
+use common_expression::types::ALL_FLOAT_TYPES;
+use common_expression::types::ALL_INTEGER_TYPES;
+use common_expression::types::ALL_NUMERICS_TYPES;
 use common_expression::with_number_mapped_type;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
@@ -32,10 +35,6 @@ use num_traits::Pow;
 use ordered_float::OrderedFloat;
 use rand::Rng;
 use rand::SeedableRng;
-
-use crate::scalars::ALL_FLOAT_TYPES;
-use crate::scalars::ALL_INTEGER_TYPES;
-use crate::scalars::ALL_NUMERICS_TYPES;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _, _>(

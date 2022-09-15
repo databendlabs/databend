@@ -132,8 +132,13 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
             .accumulate_keys(places, offset, columns, input_rows)?;
         let if_cond = self.inner.get_if_condition(columns);
         match if_cond {
-            Some(bm) if bm.unset_bits() != 0 => {
-                for (place, valid) in places.iter().zip(bm.iter()) {
+            Some(v) if v.unset_bits() > 0 => {
+                // all nulls
+                if v.unset_bits() == v.len() {
+                    return Ok(());
+                }
+
+                for (place, valid) in places.iter().zip(v.iter()) {
                     if valid {
                         self.set_flag(*place, 1);
                     }

@@ -18,13 +18,24 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
-use common_datavalues::prelude::*;
-use common_datavalues::with_match_primitive_type_id;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::arithmetics_type::ResultTypeOfUnary;
+use common_expression::types::number::Float64Type;
+use common_expression::types::number::Number;
+use common_expression::types::number::F64;
+use common_expression::types::ArgType;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::types::NumberType;
+use common_expression::types::ValueType;
+use common_expression::with_number_mapped_type;
+use common_expression::Column;
+use common_expression::ColumnBuilder;
+use common_expression::Scalar;
 use common_io::prelude::*;
-use num::cast::AsPrimitive;
-use num::NumCast;
+use num_traits::AsPrimitive;
+use num_traits::NumCast;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
@@ -35,22 +46,21 @@ use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregator_common::assert_unary_arguments;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
-use crate::scalars::default_column_cast;
 
 // count = 0 means it's all nullable
 // so we do not need option like sum
 #[derive(Serialize, Deserialize)]
-struct AggregateAvgState<T: PrimitiveType> {
+struct AggregateAvgState<T: Number> {
     #[serde(bound(deserialize = "T: DeserializeOwned"))]
     pub value: T,
     pub count: u64,
 }
 
 impl<T> AggregateAvgState<T>
-where T: std::ops::AddAssign + PrimitiveType
+where T: std::ops::AddAssign + Number
 {
     #[inline(always)]
-    fn add_assume(&mut self, value: T, count: u64) {
+    fn add(&mut self, value: T, count: u64) {
         self.value += value;
         self.count += count;
     }
@@ -65,22 +75,22 @@ where T: std::ops::AddAssign + PrimitiveType
 #[derive(Clone)]
 pub struct AggregateAvgFunction<T, SumT> {
     display_name: String,
-    _arguments: Vec<DataField>,
+    _arguments: Vec<DataType>,
     t: PhantomData<T>,
     sum_t: PhantomData<SumT>,
 }
 
 impl<T, SumT> AggregateFunction for AggregateAvgFunction<T, SumT>
 where
-    T: PrimitiveType + AsPrimitive<SumT>,
-    SumT: PrimitiveType + std::ops::AddAssign,
+    T: Number + AsPrimitive<SumT>,
+    SumT: Number + Serialize + DeserializeOwned + std::ops::AddAssign,
 {
     fn name(&self) -> &str {
         "AggregateAvgFunction"
     }
 
-    fn return_type(&self) -> Result<DataTypeImpl> {
-        Ok(f64::to_data_type())
+    fn return_type(&self) -> Result<DataType> {
+        Ok(Float64Type::data_type())
     }
 
     fn init_state(&self, place: StateAddr) {
@@ -97,20 +107,14 @@ where
     fn accumulate(
         &self,
         place: StateAddr,
-        columns: &[ColumnRef],
+        columns: &[Column],
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
         let state = place.get::<AggregateAvgState<SumT>>();
-        let sum = if columns[0].data_type().data_type_id() == TypeID::Boolean {
-            let u8_type = u8::to_data_type();
-            let column = default_column_cast(&columns[0], &u8_type)?;
-            sum_primitive::<T, SumT>(&column, validity)?
-        } else {
-            sum_primitive::<T, SumT>(&columns[0], validity)?
-        };
+        let sum = sum_primitive::<T, SumT>(&columns[0], validity)?;
         let cnt = input_rows - validity.map_or(0, |v| v.unset_bits());
-        state.add_assume(sum, cnt as u64);
+        state.add(sum, cnt as u64);
         Ok(())
     }
 
@@ -118,35 +122,23 @@ where
         &self,
         places: &[StateAddr],
         offset: usize,
-        columns: &[ColumnRef],
+        columns: &[Column],
         _input_rows: usize,
     ) -> Result<()> {
-        if columns[0].data_type().data_type_id() == TypeID::Boolean {
-            let u8_type = u8::to_data_type();
-            let column = default_column_cast(&columns[0], &u8_type)?;
-            let array: &PrimitiveColumn<T> = unsafe { Series::static_cast(&column) };
-            array.iter().zip(places.iter()).for_each(|(v, place)| {
-                let place = place.next(offset);
-                let state = place.get::<AggregateAvgState<SumT>>();
-                state.add_assume(v.as_(), 1);
-            });
-        } else {
-            let array: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
-            array.iter().zip(places.iter()).for_each(|(v, place)| {
-                let place = place.next(offset);
-                let state = place.get::<AggregateAvgState<SumT>>();
-                state.add_assume(v.as_(), 1);
-            });
-        }
-
+        let darray = NumberType::<T>::try_downcast_column(&columns[0]).unwrap();
+        darray.iter().zip(places.iter()).for_each(|(c, place)| {
+            let place = place.next(offset);
+            let state = place.get::<AggregateAvgState<SumT>>();
+            state.add(c.as_(), 1);
+        });
         Ok(())
     }
 
-    fn accumulate_row(&self, place: StateAddr, columns: &[ColumnRef], row: usize) -> Result<()> {
-        let array: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
-        let v = unsafe { array.value_unchecked(row) };
+    fn accumulate_row(&self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
+        let column = NumberType::<T>::try_downcast_column(&columns[0]).unwrap();
         let state = place.get::<AggregateAvgState<SumT>>();
-        state.add_assume(v.as_(), 1);
+        let v = column[row].as_();
+        state.add(v, 1);
         Ok(())
     }
 
@@ -169,18 +161,13 @@ where
     }
 
     #[allow(unused_mut)]
-    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableColumn) -> Result<()> {
+    fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<AggregateAvgState<SumT>>();
-
-        let builder: &mut MutablePrimitiveColumn<f64> = Series::check_get_mutable_column(array)?;
+        let builder = NumberType::<F64>::try_downcast_builder(builder).unwrap();
         let v: f64 = NumCast::from(state.value).unwrap_or_default();
         let val = v / state.count as f64;
-        builder.append_value(val);
+        builder.push(val.into());
         Ok(())
-    }
-
-    fn convert_const_to_full(&self) -> bool {
-        true
     }
 }
 
@@ -192,12 +179,12 @@ impl<T, SumT> fmt::Display for AggregateAvgFunction<T, SumT> {
 
 impl<T, SumT> AggregateAvgFunction<T, SumT>
 where
-    T: PrimitiveType + AsPrimitive<SumT>,
-    SumT: PrimitiveType + std::ops::AddAssign,
+    T: Number + AsPrimitive<SumT>,
+    SumT: Number + Serialize + DeserializeOwned + std::ops::AddAssign,
 {
     pub fn try_create(
         display_name: &str,
-        arguments: Vec<DataField>,
+        arguments: Vec<DataType>,
     ) -> Result<AggregateFunctionRef> {
         Ok(Arc::new(Self {
             display_name: display_name.to_string(),
@@ -210,34 +197,21 @@ where
 
 pub fn try_create_aggregate_avg_function(
     display_name: &str,
-    _params: Vec<DataValue>,
-    arguments: Vec<DataField>,
+    _params: Vec<Scalar>,
+    arguments: Vec<DataType>,
 ) -> Result<Arc<dyn AggregateFunction>> {
     assert_unary_arguments(display_name, arguments.len())?;
-
-    let data_type = arguments[0].data_type();
-    if data_type.data_type_id() == TypeID::Boolean {
-        return AggregateAvgFunction::<u8, u64>::try_create(display_name, arguments);
-    }
-
-    let mut phid = data_type.data_type_id();
-    // null use dummy func, it's already covered in `AggregateNullResultFunction`
-    if data_type.is_null() {
-        phid = TypeID::UInt8;
-    }
-
-    with_match_primitive_type_id!(phid, |$T| {
-        AggregateAvgFunction::<$T, <$T as PrimitiveType>::LargestType>::try_create(
-            display_name,
-            arguments,
-        )
-    },
-
-    {
-        Err(ErrorCode::BadDataValueType(format!(
-            "AggregateAvgFunction does not support type '{:?}'",
-            data_type
-        )))
+    with_number_mapped_type!(|NUM_TYPE| match &arguments[0] {
+        DataType::Number(NumberDataType::NUM_TYPE) => {
+            AggregateAvgFunction::<NUM_TYPE, <NUM_TYPE as ResultTypeOfUnary>::Sum>::try_create(
+                display_name,
+                arguments,
+            )
+        }
+        _ => Err(ErrorCode::BadDataValueType(format!(
+            "AggregateSumFunction does not support type '{:?}'",
+            arguments[0]
+        ))),
     })
 }
 

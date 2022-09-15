@@ -148,6 +148,10 @@ impl<const NULLABLE_RESULT: bool, const STKIP_NULL: bool> AggregateFunction
 
         match validity {
             Some(v) if v.unset_bits() > 0 => {
+                // all nulls
+                if v.unset_bits() == v.len() {
+                    return Ok(());
+                }
                 for (valid, (row, place)) in v.iter().zip(places.iter().enumerate()) {
                     if valid {
                         self.set_flag(place.next(offset), 1);

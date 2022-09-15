@@ -18,8 +18,8 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
-use common_datavalues::prelude::*;
-use common_exception::Result;
+
+use common_expression::Result;
 use common_io::prelude::*;
 use ordered_float::OrderedFloat;
 
@@ -42,7 +42,7 @@ pub struct AggregateDistinctCombinator<S, State> {
     name: String,
 
     nested_name: String,
-    arguments: Vec<DataField>,
+    arguments: Vec<DataType>,
     nested: Arc<dyn AggregateFunction>,
     _s: PhantomData<S>,
     _state: PhantomData<State>,
@@ -57,7 +57,7 @@ where
         &self.name
     }
 
-    fn return_type(&self) -> Result<DataTypeImpl> {
+    fn return_type(&self) -> Result<DataType> {
         self.nested.return_type()
     }
 
@@ -107,7 +107,7 @@ where
     }
 
     #[allow(unused_mut)]
-    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableColumn) -> Result<()> {
+   fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()>  {
         let state = place.get::<State>();
 
         let layout = Layout::new::<State>();
@@ -176,7 +176,7 @@ pub fn aggregate_combinator_uniq_desc() -> AggregateFunctionDescription {
 pub fn try_create_uniq(
     nested_name: &str,
     params: Vec<DataValue>,
-    arguments: Vec<DataField>,
+    arguments: Vec<DataType>,
 ) -> Result<Arc<dyn AggregateFunction>> {
     let creator: AggregateFunctionCreator = Box::new(AggregateCountFunction::try_create);
     try_create(nested_name, params, arguments, &creator)
@@ -212,7 +212,7 @@ macro_rules! dispatch_primitive_type_id {
 pub fn try_create(
     nested_name: &str,
     params: Vec<DataValue>,
-    arguments: Vec<DataField>,
+    arguments: Vec<DataType>,
     nested_creator: &AggregateFunctionCreator,
 ) -> Result<Arc<dyn AggregateFunction>> {
     let name = format!("DistinctCombinator({})", nested_name);

@@ -48,6 +48,7 @@ pub use self::string::StringType;
 pub use self::timestamp::TimestampType;
 pub use self::variant::VariantType;
 use crate::property::Domain;
+use crate::util::concat_array;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ScalarRef;
@@ -71,6 +72,20 @@ pub enum DataType {
     Variant,
     Generic(usize),
 }
+
+pub const ALL_INTEGER_TYPES: &[NumberDataType; 8] = &[
+    NumberDataType::UInt8,
+    NumberDataType::UInt16,
+    NumberDataType::UInt32,
+    NumberDataType::UInt64,
+    NumberDataType::Int8,
+    NumberDataType::Int16,
+    NumberDataType::Int32,
+    NumberDataType::Int64,
+];
+
+pub const ALL_FLOAT_TYPES: &[NumberDataType; 2] = &[NumberDataType::Float32, NumberDataType::Float64];
+pub const ALL_NUMERICS_TYPES: &[NumberDataType; 10] = &concat_array(ALL_INTEGER_TYPES, ALL_FLOAT_TYPES);
 
 impl DataType {
     pub fn wrap_nullable(&self) -> Self {
@@ -101,6 +116,7 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
 
     fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>>;
     fn try_downcast_column<'a>(col: &'a Column) -> Option<Self::Column>;
+
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain>;
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar;
     fn upcast_column(col: Self::Column) -> Column;

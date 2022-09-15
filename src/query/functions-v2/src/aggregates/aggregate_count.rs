@@ -80,17 +80,23 @@ impl AggregateFunction for AggregateCountFunction {
         Layout::new::<AggregateCountState>()
     }
 
+    // we have own adaptor, so the validity is not needed
     fn accumulate(
         &self,
         place: StateAddr,
         columns: &[Column],
-        validity: Option<&Bitmap>,
+        _validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
         let state = place.get::<AggregateCountState>();
-        let validity = column_merge_validity(&columns[0], validity.cloned());
-        let nulls = validity.map(|v| v.unset_bits()).unwrap_or(0);
-
+        let nulls = if columns.is_empty() {
+            0
+        } else {
+            match &columns[0] {
+                Column::Nullable(v) => v.validity.unset_bits(),
+                _ => 0,
+            }
+        };
         state.count += (input_rows - nulls) as u64;
         Ok(())
     }
@@ -107,7 +113,11 @@ impl AggregateFunction for AggregateCountFunction {
             .fold(None, |acc, col| column_merge_validity(col, acc));
 
         match validity {
-            Some(v) if v.unset_bits() != v.len() => {
+            Some(v) => {
+                // all nulls
+                if v.unset_bits() == v.len() {
+                    return Ok(());
+                }
                 for (valid, place) in v.iter().zip(places.iter()) {
                     if valid {
                         let state = place.next(offset).get::<AggregateCountState>();
@@ -115,6 +125,7 @@ impl AggregateFunction for AggregateCountFunction {
                     }
                 }
             }
+
             _ => {
                 for place in places {
                     let state = place.next(offset).get::<AggregateCountState>();
