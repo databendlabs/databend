@@ -166,11 +166,11 @@ FILE_FORMAT = (
 The following code returns the top 10 projects with the most commits:
 
 ```sql
-SELECT   REPO:name, 
+SELECT   repo:name, 
          count(id) 
 FROM     github_data 
 WHERE    type = 'PushEvent' 
-GROUP BY REPO:name 
+GROUP BY repo:name 
 ORDER BY count(id) DESC 
 LIMIT    10;
 
@@ -193,11 +193,13 @@ LIMIT    10;
 The following code returns the top 10 users with the most forks:
 
 ```sql
-SELECT actor:login, count(id) FROM github_data
-  WHERE type='ForkEvent'
-  GROUP BY actor:login
-  ORDER BY count(id) DESC
-  LIMIT 10;
+SELECT   actor:login, 
+         count(id) 
+FROM     github_data 
+WHERE    type='ForkEvent' 
+GROUP BY actor:login 
+ORDER BY count(id) DESC 
+LIMIT    10;
 +-----------------------------------+-----------+
 | actor:login                       | count(id) |
 +-----------------------------------+-----------+
