@@ -200,6 +200,7 @@ WHERE    type='ForkEvent'
 GROUP BY actor:login 
 ORDER BY count(id) DESC 
 LIMIT    10;
+
 +-----------------------------------+-----------+
 | actor:login                       | count(id) |
 +-----------------------------------+-----------+
