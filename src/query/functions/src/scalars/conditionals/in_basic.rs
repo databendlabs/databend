@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::fmt;
 
 use common_datavalues::prelude::*;
 use common_datavalues::type_coercion::numerical_coercion;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_hashtable::KeysRef;
 use ordered_float::OrderedFloat;
 
 use crate::scalars::cast_column_field;
@@ -26,6 +26,8 @@ use crate::scalars::Function;
 use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+
+use common_hashtable::HashSetWithStackMemory;
 
 #[derive(Clone)]
 pub struct InFunction<const NEGATED: bool> {
@@ -60,13 +62,14 @@ impl<const NEGATED: bool> InFunction<NEGATED> {
 macro_rules! scalar_contains {
     ($T: ident, $INPUT_COL: expr, $ROWS: expr, $COLUMNS: expr, $CAST_TYPE: ident, $FUNC_CTX: expr) => {{
         let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity($ROWS);
-        let mut vals_set = HashSet::with_capacity($ROWS);
+        let mut vals_set: HashSetWithStackMemory<64, $T> = HashSetWithStackMemory::create();
+        let mut inserted = false;
         for col in &$COLUMNS[1..] {
             let col = cast_column_field(col, col.data_type(), &$CAST_TYPE, &$FUNC_CTX)?;
             let col_viewer = $T::try_create_viewer(&col)?;
             if col_viewer.valid_at(0) {
-                let val = col_viewer.value_at(0).to_owned_scalar();
-                vals_set.insert(val);
+                let val = col_viewer.value_at(0);
+                vals_set.insert_key(&val, &mut inserted);
             }
         }
         let input_viewer = $T::try_create_viewer(&$INPUT_COL)?;
@@ -79,16 +82,67 @@ macro_rules! scalar_contains {
     }};
 }
 
-macro_rules! float_contains {
+
+macro_rules! bool_contains {
     ($T: ident, $INPUT_COL: expr, $ROWS: expr, $COLUMNS: expr, $CAST_TYPE: ident, $FUNC_CTX: expr) => {{
         let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity($ROWS);
-        let mut vals_set = HashSet::with_capacity($ROWS);
+        let mut vals = 0;
         for col in &$COLUMNS[1..] {
             let col = cast_column_field(col, col.data_type(), &$CAST_TYPE, &$FUNC_CTX)?;
             let col_viewer = $T::try_create_viewer(&col)?;
             if col_viewer.valid_at(0) {
                 let val = col_viewer.value_at(0);
-                vals_set.insert(OrderedFloat::from(val));
+                vals |= 1 << (val as u8  + 1);
+            }
+        }
+        let input_viewer = $T::try_create_viewer(&$INPUT_COL)?;
+        for (row, val) in input_viewer.iter().enumerate() {
+            let contains = ((vals >> (val as u8  + 1)) & 1) > 0;
+            let valid = input_viewer.valid_at(row);
+            builder.append(valid && ((contains && !NEGATED) || (!contains && NEGATED)));
+        }
+        return Ok(builder.build($ROWS));
+    }};
+}
+
+
+macro_rules! string_contains {
+    ($T: ident, $INPUT_COL: expr, $ROWS: expr, $COLUMNS: expr, $CAST_TYPE: ident, $FUNC_CTX: expr) => {{
+        let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity($ROWS);
+        let mut vals_set: HashSetWithStackMemory<64, KeysRef>  = HashSetWithStackMemory::create();
+        let mut inserted = false;
+        for col in &$COLUMNS[1..] {
+            let col = cast_column_field(col, col.data_type(), &$CAST_TYPE, &$FUNC_CTX)?;
+            let col_viewer = $T::try_create_viewer(&col)?;
+            if col_viewer.valid_at(0) {
+                let val = col_viewer.value_at(0);
+                let key = KeysRef::create(val.as_ptr() as usize, val.len());
+                vals_set.insert_key(&key, &mut inserted);
+            }
+        }
+        let input_viewer = $T::try_create_viewer(&$INPUT_COL)?;
+        for (row, val) in input_viewer.iter().enumerate() {
+            let key = KeysRef::create(val.as_ptr() as usize, val.len());
+            let contains = vals_set.contains(&key);
+            let valid = input_viewer.valid_at(row);
+            builder.append(valid && ((contains && !NEGATED) || (!contains && NEGATED)));
+        }
+        return Ok(builder.build($ROWS));
+    }};
+}
+
+macro_rules! float_contains {
+    ($T: ident, $INPUT_COL: expr, $ROWS: expr, $COLUMNS: expr, $CAST_TYPE: ident, $FUNC_CTX: expr) => {{
+        let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity($ROWS);
+        let mut vals_set: HashSetWithStackMemory<64, OrderedFloat<$T>> = HashSetWithStackMemory::create();
+        let mut inserted = false;
+
+        for col in &$COLUMNS[1..] {
+            let col = cast_column_field(col, col.data_type(), &$CAST_TYPE, &$FUNC_CTX)?;
+            let col_viewer = $T::try_create_viewer(&col)?;
+            if col_viewer.valid_at(0) {
+                let val = col_viewer.value_at(0);
+                vals_set.insert_key(&OrderedFloat::from(val), &mut inserted);
             }
         }
         let input_viewer = $T::try_create_viewer(&$INPUT_COL)?;
@@ -158,7 +212,7 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
 
         match least_super_type_id {
             TypeID::Boolean => {
-                scalar_contains!(
+                bool_contains!(
                     bool,
                     input_col,
                     input_rows,
@@ -234,7 +288,7 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
                 )
             }
             TypeID::String => {
-                scalar_contains!(
+                string_contains!(
                     Vu8,
                     input_col,
                     input_rows,

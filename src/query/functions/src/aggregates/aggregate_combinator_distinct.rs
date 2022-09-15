@@ -20,6 +20,7 @@ use std::sync::Arc;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_hashtable::KeysRef;
 use common_io::prelude::*;
 use ordered_float::OrderedFloat;
 
@@ -28,7 +29,6 @@ use super::aggregate_distinct_state::AggregateDistinctState;
 use super::aggregate_distinct_state::AggregateDistinctStringState;
 use super::aggregate_distinct_state::DataGroupValues;
 use super::aggregate_distinct_state::DistinctStateFunc;
-use super::aggregate_distinct_state::KeysRef;
 use super::aggregate_function::AggregateFunction;
 use super::aggregate_function_factory::AggregateFunctionCreator;
 use super::aggregate_function_factory::AggregateFunctionDescription;

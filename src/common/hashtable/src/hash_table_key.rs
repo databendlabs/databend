@@ -62,6 +62,7 @@ primitive_hasher_impl!(u16);
 primitive_hasher_impl!(u32);
 primitive_hasher_impl!(u64);
 
+
 impl HashTableKeyable for u128 {
     const BEFORE_EQ_HASH: bool = false;
     #[inline(always)]

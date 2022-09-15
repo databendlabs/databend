@@ -30,4 +30,8 @@ impl<Key: HashTableKeyable, Grower: HashTableGrower, Allocator: AllocatorTrait +
             self.insert_key(value.get_key(), &mut inserted);
         }
     }
+
+    pub fn contains(&self, key: &Key) -> bool {
+        self.find_key(key).is_some()
+    }
 }

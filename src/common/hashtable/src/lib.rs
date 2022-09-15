@@ -37,6 +37,9 @@ mod hash_table_grower;
 mod hash_table_iter;
 mod hash_table_key;
 mod two_level_hash_table;
+mod keys_ref;
+
+pub use keys_ref::KeysRef;
 
 #[cfg(not(target_os = "linux"))]
 type HashTableAllocator = common_base::mem_allocator::JEAllocator;
