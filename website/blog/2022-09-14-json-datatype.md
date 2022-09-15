@@ -1,5 +1,5 @@
 ---
-title: Designing and Using JSON in Databend
+title: Designing and Querying JSON in Databend
 description: JSON
 slug: json-datatypes
 date: 2022-09-14
