@@ -227,14 +227,14 @@ where
     P: Debug + Send,
     P: Iterator<Item = IOError>,
 {
-    async fn read(&self, _args: &OpRead) -> std::io::Result<BytesReader> {
+    async fn read(&self, _: &str, _: OpRead) -> std::io::Result<BytesReader> {
         let v = &mut (*self.err.lock());
         let err = v.take_err();
         v.increase_read_op_count();
         Err(err)
     }
 
-    async fn write(&self, _args: &OpWrite, _r: BytesReader) -> std::io::Result<u64> {
+    async fn write(&self, _: &str, _: OpWrite, _: BytesReader) -> std::io::Result<u64> {
         let v = &mut (*self.err.lock());
         let err = v.take_err();
         v.increase_write_op_count();

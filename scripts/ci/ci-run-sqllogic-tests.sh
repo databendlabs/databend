@@ -15,6 +15,9 @@ if [ $# -gt 0 ]; then
 fi
 echo "Run suites using argument: $RUN_DIR"
 
+echo "pip list"
+python3 -m pip list
+
 echo "Starting databend-sqllogic tests"
 python3 main.py --skip-dir=mode $RUN_DIR
 
