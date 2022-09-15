@@ -26,11 +26,11 @@ We will bootstrap a MinIO server on Kubernetes with the following configurations
 
 ```shell title="minio-server-config"
 STORAGE_TYPE=s3
-STORAGE_S3_BUCKET=sample-storage
-STORAGE_S3_REGION=us-east-1
-STORAGE_S3_ENDPOINT_URL=http://minio.minio.svc.cluster.local:9000
-STORAGE_S3_ACCESS_KEY_ID=minio
-STORAGE_S3_SECRET_ACCESS_KEY=minio123
+S3_STORAGE_BUCKET=sample-storage
+S3_STORAGE_REGION=us-east-1
+S3_STORAGE_ENDPOINT_URL=http://minio.minio.svc.cluster.local:9000
+S3_STORAGE_ACCESS_KEY_ID=minio
+S3_STORAGE_SECRET_ACCESS_KEY=minio123
 ```
 
 The following configuration applies to the target Kubernetes cluster. It will create a bucket named `sample-storage` with `10Gi` storage space:
@@ -151,7 +151,7 @@ The following command registers the Databend query service to the meta service w
 helm repo add databend https://charts.databend.rs
 helm install query databend/databend-query --namespace databend --create-namespace \
           --set config.meta.address=my-release-databend-meta.databend.svc.cluster.local:9191 \
-          --set replicaCount=3 
+          --set replicaCount=3
 ```
 
 Please follow the [documentation](https://github.com/datafuselabs/helm-charts/blob/main/charts/databend-query/values.yaml) for further configuration options (for example, object storage secrets).
