@@ -23,23 +23,17 @@ use crate::evaluator::Evaluator;
 use crate::sql::executor::PhysicalScalar;
 
 impl Evaluator {
-    pub fn eval_physical_scalars<VectorID>(
-        physical_scalars: &[PhysicalScalar],
-    ) -> Result<Vec<EvalNode<VectorID>>>
-    where VectorID: From<String> {
+    pub fn eval_physical_scalars(physical_scalars: &[PhysicalScalar]) -> Result<Vec<EvalNode>> {
         physical_scalars
             .iter()
-            .map(Evaluator::eval_physical_scalar::<VectorID>)
+            .map(Evaluator::eval_physical_scalar)
             .collect::<Result<_>>()
     }
 
-    pub fn eval_physical_scalar<VectorID>(
-        physical_scalar: &PhysicalScalar,
-    ) -> Result<EvalNode<VectorID>>
-    where VectorID: From<String> {
+    pub fn eval_physical_scalar(physical_scalar: &PhysicalScalar) -> Result<EvalNode> {
         match physical_scalar {
             PhysicalScalar::Variable { column_id, .. } => Ok(EvalNode::Variable {
-                id: column_id.clone().into(),
+                name: column_id.clone(),
             }),
             PhysicalScalar::Constant { value, data_type } => Ok(EvalNode::Constant {
                 value: value.clone(),
@@ -65,6 +59,9 @@ impl Evaluator {
                     func: cast_func,
                     args: vec![Self::eval_physical_scalar(input)?],
                 })
+            }
+            PhysicalScalar::IndexedVariable { index, .. } => {
+                Ok(EvalNode::IndexedVariable { index: *index })
             }
         }
     }

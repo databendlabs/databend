@@ -24,10 +24,9 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::transforms::transform::Transform;
 use crate::pipelines::processors::transforms::transform::Transformer;
-use crate::sql::executor::ColumnID;
 
 pub struct TransformFilterV2 {
-    predicate: EvalNode<ColumnID>,
+    predicate: EvalNode,
     func_ctx: FunctionContext,
 }
 
@@ -35,7 +34,7 @@ impl TransformFilterV2 {
     pub fn try_create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        predicate: EvalNode<ColumnID>,
+        predicate: EvalNode,
         func_ctx: FunctionContext,
     ) -> Result<ProcessorPtr> {
         Ok(Transformer::create(input, output, Self {
