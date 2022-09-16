@@ -25,10 +25,9 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::transforms::transform::Transform;
 use crate::pipelines::processors::transforms::transform::Transformer;
-use crate::sql::executor::ColumnID;
 
 pub struct ExpressionTransformV2 {
-    pub(crate) expressions: Vec<(EvalNode<ColumnID>, String)>,
+    pub(crate) expressions: Vec<(EvalNode, String)>,
     pub(crate) func_ctx: FunctionContext,
 }
 
@@ -36,7 +35,7 @@ impl ExpressionTransformV2 {
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        expressions: Vec<(EvalNode<ColumnID>, String)>,
+        expressions: Vec<(EvalNode, String)>,
         func_ctx: FunctionContext,
     ) -> ProcessorPtr {
         Transformer::create(input, output, Self {

@@ -20,19 +20,16 @@ common-exception = { path = "../../common/exception" }
 chrono = "0.4"
 chrono-tz = "0.6.1"
 comfy-table = "6"
+common-jsonb = { path = "../../common/jsonb" }
 educe = "0.4"
 enum-as-inner = "0.4"
 hex = "0.4.3"
 itertools = "0.10"
 match-template = "0.0.1"
 num-traits = "0.2.15"
-# TODO(andylokandy): Use the version from crates.io once
-# https://github.com/reem/rust-ordered-float/pull/110 is released.
 ordered-float = { git = "https://github.com/andylokandy/rust-ordered-float.git", branch = "as", features = ["serde"] }
 rust_decimal = "1.26"
 serde = "1.0"
-# TODO: Switch to jsonb. bson is used for placeholder.
-bson = "2.4"
 
 [dev-dependencies]
 common-ast = { path = "../ast" }

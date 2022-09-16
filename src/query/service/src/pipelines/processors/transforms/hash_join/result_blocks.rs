@@ -41,7 +41,6 @@ use crate::evaluator::EvalNode;
 use crate::pipelines::processors::transforms::hash_join::join_hash_table::MarkerKind;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::sessions::TableContext;
-use crate::sql::executor::ColumnID;
 use crate::sql::planner::plans::JoinType;
 use crate::sql::plans::JoinType::Mark;
 
@@ -602,7 +601,7 @@ impl JoinHashTable {
     fn get_other_filters(
         &self,
         merged_block: &DataBlock,
-        filter: &EvalNode<ColumnID>,
+        filter: &EvalNode,
     ) -> Result<(Option<Bitmap>, bool, bool)> {
         let func_ctx = self.ctx.try_get_function_context()?;
         // `predicate_column` contains a column, which is a boolean column.
