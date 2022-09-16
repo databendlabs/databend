@@ -35,9 +35,7 @@ pub struct AggregateNullVariadicAdaptor<const NULLABLE_RESULT: bool> {
     size_of_data: usize,
 }
 
-impl<const NULLABLE_RESULT: bool>
-    AggregateNullVariadicAdaptor<NULLABLE_RESULT>
-{
+impl<const NULLABLE_RESULT: bool> AggregateNullVariadicAdaptor<NULLABLE_RESULT> {
     pub fn create(nested: AggregateFunctionRef) -> AggregateFunctionRef {
         let size_of_data = if NULLABLE_RESULT {
             let layout = nested.state_layout();
@@ -246,9 +244,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
     }
 }
 
-impl<const NULLABLE_RESULT: bool> fmt::Display
-    for AggregateNullVariadicAdaptor<NULLABLE_RESULT>
-{
+impl<const NULLABLE_RESULT: bool> fmt::Display for AggregateNullVariadicAdaptor<NULLABLE_RESULT> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "AggregateNullVariadicAdaptor")
     }
