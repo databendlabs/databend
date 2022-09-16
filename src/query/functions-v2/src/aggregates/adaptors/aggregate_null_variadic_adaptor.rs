@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,13 +30,13 @@ use crate::aggregates::AggregateFunctionRef;
 use crate::aggregates::StateAddr;
 
 #[derive(Clone)]
-pub struct AggregateNullVariadicAdaptor<const NULLABLE_RESULT: bool, const SKIP_NULL: bool> {
+pub struct AggregateNullVariadicAdaptor<const NULLABLE_RESULT: bool> {
     nested: AggregateFunctionRef,
     size_of_data: usize,
 }
 
-impl<const NULLABLE_RESULT: bool, const SKIP_NULL: bool>
-    AggregateNullVariadicAdaptor<NULLABLE_RESULT, SKIP_NULL>
+impl<const NULLABLE_RESULT: bool>
+    AggregateNullVariadicAdaptor<NULLABLE_RESULT>
 {
     pub fn create(nested: AggregateFunctionRef) -> AggregateFunctionRef {
         let size_of_data = if NULLABLE_RESULT {
@@ -78,8 +78,8 @@ impl<const NULLABLE_RESULT: bool, const SKIP_NULL: bool>
     }
 }
 
-impl<const NULLABLE_RESULT: bool, const SKIP_NULL: bool> AggregateFunction
-    for AggregateNullVariadicAdaptor<NULLABLE_RESULT, SKIP_NULL>
+impl<const NULLABLE_RESULT: bool> AggregateFunction
+    for AggregateNullVariadicAdaptor<NULLABLE_RESULT>
 {
     fn name(&self) -> &str {
         "AggregateNullVariadicAdaptor"
@@ -246,8 +246,8 @@ impl<const NULLABLE_RESULT: bool, const SKIP_NULL: bool> AggregateFunction
     }
 }
 
-impl<const NULLABLE_RESULT: bool, const SKIP_NULL: bool> fmt::Display
-    for AggregateNullVariadicAdaptor<NULLABLE_RESULT, SKIP_NULL>
+impl<const NULLABLE_RESULT: bool> fmt::Display
+    for AggregateNullVariadicAdaptor<NULLABLE_RESULT>
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "AggregateNullVariadicAdaptor")

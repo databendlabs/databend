@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -86,8 +86,8 @@ impl AggregateFunctionCombinatorNull {
             },
 
             _ => match result_is_null {
-                true => Ok(AggregateNullVariadicAdaptor::<true, true>::create(nested)),
-                false => Ok(AggregateNullVariadicAdaptor::<false, true>::create(nested)),
+                true => Ok(AggregateNullVariadicAdaptor::<true>::create(nested)),
+                false => Ok(AggregateNullVariadicAdaptor::<false>::create(nested)),
             },
         }
     }
