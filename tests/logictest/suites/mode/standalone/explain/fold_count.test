@@ -45,15 +45,13 @@ Project
         └── AggregatePartial
             ├── group by: []
             ├── aggregate functions: [count()]
-            └── Filter
-                ├── filters: [>(t.number (#0), 10)]
-                └── TableScan
-                    ├── table: default.default.t
-                    ├── read rows: 1000
-                    ├── read bytes: 4028
-                    ├── partitions total: 2
-                    ├── partitions scanned: 1
-                    └── push downs: [filters: [(number > 10)], limit: NONE]
+            └── TableScan
+                ├── table: default.default.t
+                ├── read rows: 1000
+                ├── read bytes: 4028
+                ├── partitions total: 2
+                ├── partitions scanned: 1
+                └── push downs: [filters: [(number > 10)], limit: NONE]
 
 statement ok
 drop table t;
