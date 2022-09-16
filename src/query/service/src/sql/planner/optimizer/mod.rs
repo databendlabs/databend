@@ -140,10 +140,10 @@ pub fn optimize_query(
 
     let contains_local_table_scan = contains_local_table_scan(&s_expr, &metadata);
 
-    let mut heuristic = HeuristicOptimizer::new(ctx, bind_context, metadata, rules);
+    let mut heuristic = HeuristicOptimizer::new(ctx.clone(), bind_context, metadata, rules);
     let mut result = heuristic.optimize(s_expr)?;
 
-    let cascades = CascadesOptimizer::create();
+    let cascades = CascadesOptimizer::create(ctx)?;
     result = cascades.optimize(result)?;
 
     // So far, we don't have ability to execute distributed query

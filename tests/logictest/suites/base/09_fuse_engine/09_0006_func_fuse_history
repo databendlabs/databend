@@ -19,15 +19,27 @@ select block_count, row_count from fuse_snapshot('db_09_0006', 't') order by row
 ----
 1 1
 
+statement query I
+select count(1) from fuse_block('db_09_0006', 't');
+
+----
+1
+
 statement ok
-insert into t values (2);
+insert into t values (2),(3);
 
 statement query II
 select block_count, row_count from fuse_snapshot('db_09_0006', 't') order by row_count desc limit 1;
 
 ----
-2 2
+2 3
 
+statement query I
+select block_size from fuse_block('db_09_0006', 't') order by block_size;
+
+----
+8
+16
 
 statement error 1025
 select * from fuse_snapshot('db_09_0006', 'not_exist'); 

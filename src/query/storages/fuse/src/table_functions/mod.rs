@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 mod clustering_informations;
+mod fuse_blocks;
 mod fuse_segments;
 mod fuse_snapshots;
 mod table_args;
@@ -22,6 +23,8 @@ pub use clustering_informations::ClusteringInformation;
 pub use clustering_informations::ClusteringInformationTable;
 use common_catalog::table_args::TableArgs;
 use common_catalog::table_function::TableFunction;
+pub use fuse_blocks::FuseBlock;
+pub use fuse_blocks::FuseBlockTable;
 pub use fuse_segments::FuseSegment;
 pub use fuse_segments::FuseSegmentTable;
 pub use fuse_snapshots::FuseSnapshot;
