@@ -254,6 +254,7 @@ impl SchemaApiTestSuite {
         suite.get_table_copied_file(&b.build().await).await?;
         suite.truncate_table(&b.build().await).await?;
         suite.get_tables_from_share(&b.build().await).await?;
+        suite.create_table_from_share_db(&b.build().await).await?;
         Ok(())
     }
 
@@ -3538,6 +3539,110 @@ impl SchemaApiTestSuite {
             assert_eq!(
                 ErrorCode::from(got.unwrap_err()).code(),
                 ErrorCode::WrongShareObject("").code()
+            );
+        }
+
+        Ok(())
+    }
+
+    async fn create_table_from_share_db<MT: ShareApi + AsKVApi + SchemaApi>(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let tenant1 = "tenant1";
+        let tenant2 = "tenant2";
+        let db1 = "db1";
+        let db2 = "db2";
+        let share = "share";
+        let share_name = ShareNameIdent {
+            tenant: tenant1.to_string(),
+            share_name: share.to_string(),
+        };
+        let db_name1 = DatabaseNameIdent {
+            tenant: tenant1.to_string(),
+            db_name: db1.to_string(),
+        };
+        let db_name2 = DatabaseNameIdent {
+            tenant: tenant2.to_string(),
+            db_name: db2.to_string(),
+        };
+
+        info!("--- create a share and grant access to db and table");
+        {
+            let create_on = Utc::now();
+            let share_on = Utc::now();
+            let req = CreateShareReq {
+                if_not_exists: false,
+                share_name: share_name.clone(),
+                comment: None,
+                create_on,
+            };
+
+            let _ = mt.create_share(req).await?;
+
+            // create share db
+            let req = CreateDatabaseReq {
+                if_not_exists: false,
+                name_ident: db_name1.clone(),
+                meta: DatabaseMeta {
+                    ..Default::default()
+                },
+            };
+            let _ = mt.create_database(req).await?;
+
+            // grant the tenant2 to access the share
+            let req = AddShareAccountsReq {
+                share_name: share_name.clone(),
+                share_on,
+                if_exists: false,
+                accounts: vec![tenant2.to_string()],
+            };
+
+            let res = mt.add_share_tenants(req).await;
+            assert!(res.is_ok());
+
+            // grant access to database
+            let req = GrantShareObjectReq {
+                share_name: share_name.clone(),
+                object: ShareGrantObjectName::Database(db1.to_string()),
+                grant_on: create_on,
+                privilege: ShareGrantObjectPrivilege::Usage,
+            };
+            let _ = mt.grant_share_object(req).await?;
+        }
+
+        info!("--- create a share db");
+        {
+            let req = CreateDatabaseReq {
+                if_not_exists: false,
+                name_ident: db_name2.clone(),
+                meta: DatabaseMeta {
+                    from_share: Some(share_name.clone()),
+                    ..Default::default()
+                },
+            };
+            let _ = mt.create_database(req).await?;
+        };
+
+        info!("--- create table from share db");
+        {
+            let db2_tb2 = TableNameIdent {
+                tenant: tenant2.to_string(),
+                db_name: db2.to_string(),
+                table_name: "tb2".to_string(),
+            };
+            let req = CreateTableReq {
+                if_not_exists: false,
+                name_ident: db2_tb2.clone(),
+                table_meta: TableMeta {
+                    ..Default::default()
+                },
+            };
+            let res = mt.create_table(req).await;
+            assert!(res.is_err());
+            assert_eq!(
+                ErrorCode::from(res.unwrap_err()).code(),
+                ErrorCode::ShareHasNoGrantedPrivilege("").code()
             );
         }
 
