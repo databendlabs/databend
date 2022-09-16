@@ -180,6 +180,16 @@ fn test_user_pb_from_to() -> anyhow::Result<()> {
 }
 
 #[test]
+fn test_stage_file_pb_from_to() -> anyhow::Result<()> {
+    let test_stage_file = test_stage_file();
+    let test_stage_file_pb = test_stage_file.to_pb()?;
+    let got = mt::StageFile::from_pb(test_stage_file_pb)?;
+    assert_eq!(got, test_stage_file);
+
+    Ok(())
+}
+
+#[test]
 fn test_user_incompatible() -> anyhow::Result<()> {
     {
         let user_info = test_user_info();
@@ -198,6 +208,25 @@ fn test_user_incompatible() -> anyhow::Result<()> {
             },
             res.unwrap_err()
         );
+    }
+
+    {
+        let stage_file = test_stage_file();
+        let mut p = stage_file.to_pb()?;
+        p.ver = VER + 1;
+        p.min_compatible = VER + 1;
+
+        let res = mt::StageFile::from_pb(p);
+        assert_eq!(
+            Incompatible {
+                reason: format!(
+                    "executable ver={} is smaller than the message min compatible ver: {}",
+                    VER,
+                    VER + 1
+                )
+            },
+            res.unwrap_err()
+        )
     }
 
     {
@@ -271,7 +300,7 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
 
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
-        println!("{:?}", buf);
+        println!("user_info: {:?}", buf);
     }
 
     // StageFile
@@ -280,7 +309,7 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
         let p = stage_file.to_pb()?;
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
-        println!("{:?}", buf);
+        println!("stage_file: {:?}", buf);
     }
 
     // Stage on local file system
@@ -291,7 +320,7 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
 
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
-        println!("{:?}", buf);
+        println!("fs_stage_info: {:?}", buf);
     }
 
     // Stage on S3
@@ -302,7 +331,7 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
 
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
-        println!("{:?}", buf);
+        println!("s3_stage_info: {:?}", buf);
     }
 
     // Stage on GCS, supported in version >=4.
@@ -311,7 +340,7 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
         let p = gcs_stage_info.to_pb()?;
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
-        println!("{:?}", buf);
+        println!("gcs_stage_info: {:?}", buf);
     }
 
     Ok(())
@@ -386,6 +415,42 @@ fn test_load_old_user() -> anyhow::Result<()> {
             common_protos::prost::Message::decode(user_info_v3.as_slice()).map_err(print_err)?;
         let got = mt::UserInfo::from_pb(p).map_err(print_err)?;
         assert!(got.option.flags().is_empty());
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_old_stage_file() -> anyhow::Result<()> {
+    // Encoded data of version 7 of StageFile:
+    // Generated with `test_build_user_pb_buf`
+    {
+        let stage_file_v7 = vec![
+            10, 14, 47, 112, 97, 116, 104, 47, 116, 111, 47, 115, 116, 97, 103, 101, 16, 233, 1,
+            34, 23, 50, 48, 50, 50, 45, 48, 57, 45, 49, 54, 32, 48, 48, 58, 48, 49, 58, 48, 50, 32,
+            85, 84, 67, 42, 37, 10, 12, 100, 97, 116, 97, 102, 117, 115, 101, 108, 97, 98, 115, 18,
+            15, 100, 97, 116, 97, 102, 117, 115, 101, 108, 97, 98, 115, 46, 114, 115, 160, 6, 8,
+            168, 6, 1, 160, 6, 8, 168, 6, 1,
+        ];
+        let p: pb::StageFile =
+            common_protos::prost::Message::decode(stage_file_v7.as_slice()).map_err(print_err)?;
+        let got = mt::StageFile::from_pb(p).map_err(print_err)?;
+
+        let dt = NaiveDateTime::new(
+            NaiveDate::from_ymd(2022, 9, 16),
+            NaiveTime::from_hms(0, 1, 2),
+        );
+        let user_id = mt::UserIdentity::new("datafuselabs", "datafuselabs.rs");
+        let want = mt::StageFile {
+            path: "/path/to/stage".to_string(),
+            size: 233,
+            md5: None,
+            last_modified: DateTime::from_utc(dt, Utc),
+            creator: Some(user_id),
+            ..Default::default()
+        };
+
+        assert_eq!(got, want);
     }
 
     Ok(())

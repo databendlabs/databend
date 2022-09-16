@@ -14,11 +14,6 @@
 
 //! Test UserStageInfo
 
-use common_datavalues::chrono::DateTime;
-use common_datavalues::chrono::NaiveDate;
-use common_datavalues::chrono::NaiveDateTime;
-use common_datavalues::chrono::NaiveTime;
-use common_datavalues::chrono::Utc;
 use common_meta_types as mt;
 use common_storage::StorageFsConfig;
 use common_storage::StorageGcsConfig;
@@ -29,13 +24,6 @@ use crate::common;
 use crate::user_proto_conv::test_fs_stage_info;
 use crate::user_proto_conv::test_gcs_stage_info;
 use crate::user_proto_conv::test_s3_stage_info;
-use crate::user_proto_conv::test_stage_file;
-
-#[test]
-fn test_stage_file_latest() -> anyhow::Result<()> {
-    common::test_pb_from_to("stage_file", test_stage_file())?;
-    Ok(())
-}
 
 #[test]
 fn test_user_stage_fs_latest() -> anyhow::Result<()> {
@@ -52,36 +40,6 @@ fn test_user_stage_s3_latest() -> anyhow::Result<()> {
 #[test]
 fn test_user_stage_gcs_latest() -> anyhow::Result<()> {
     common::test_pb_from_to("user_stage_gcs", test_gcs_stage_info())?;
-    Ok(())
-}
-
-#[test]
-fn test_stage_file_v7() -> anyhow::Result<()> {
-    // Encoded data of version 6 of StageFile:
-    // Generated with common::test_pb_from_to.
-    let stage_file_v7 = vec![
-        10, 14, 47, 112, 97, 116, 104, 47, 116, 111, 47, 115, 116, 97, 103, 101, 16, 233, 1, 34,
-        23, 50, 48, 50, 50, 45, 48, 57, 45, 49, 54, 32, 48, 48, 58, 48, 49, 58, 48, 50, 32, 85, 84,
-        67, 42, 37, 10, 12, 100, 97, 116, 97, 102, 117, 115, 101, 108, 97, 98, 115, 18, 15, 100,
-        97, 116, 97, 102, 117, 115, 101, 108, 97, 98, 115, 46, 114, 115, 160, 6, 8, 168, 6, 1, 160,
-        6, 8, 168, 6, 1,
-    ];
-
-    let dt = NaiveDateTime::new(
-        NaiveDate::from_ymd(2022, 9, 16),
-        NaiveTime::from_hms(0, 1, 2),
-    );
-    let user_id = mt::UserIdentity::new("datafuselabs", "datafuselabs.rs");
-    let want = mt::StageFile {
-        path: "/path/to/stage".to_string(),
-        size: 233,
-        md5: None,
-        last_modified: DateTime::from_utc(dt, Utc),
-        creator: Some(user_id),
-        ..Default::default()
-    };
-
-    common::test_load_old(func_name!(), stage_file_v7.as_slice(), want)?;
     Ok(())
 }
 
