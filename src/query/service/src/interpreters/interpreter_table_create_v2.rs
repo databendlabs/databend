@@ -153,11 +153,10 @@ impl CreateTableInterpreterV2 {
             overwrite: false,
             source: InsertInputSource::SelectPlan(select_plan),
         };
-        let insert_interpreter_v2 =
-            InsertInterpreterV2::try_create(self.ctx.clone(), insert_plan, false)?;
-        insert_interpreter_v2.execute(self.ctx.clone()).await?;
 
-        Ok(PipelineBuildResult::create())
+        InsertInterpreterV2::try_create(self.ctx.clone(), insert_plan, false)?
+            .execute2()
+            .await
     }
 
     async fn create_table(&self) -> Result<PipelineBuildResult> {
