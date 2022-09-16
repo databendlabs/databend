@@ -86,7 +86,7 @@ impl ColumnPruner {
                     // `used` is the columns which prewhere scan needs to output for its upper operator.
                     if used.is_empty() {
                         let prewhere_columns =
-                            pw.prewhere_columns.iter().map(|&i| i).collect::<Vec<_>>();
+                            pw.prewhere_columns.iter().copied().collect::<Vec<_>>();
                         let smallest_index = self
                             .metadata
                             .read()
