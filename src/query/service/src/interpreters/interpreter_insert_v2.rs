@@ -15,6 +15,8 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use common_base::base::GlobalIORuntime;
+use common_base::base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use parking_lot::Mutex;
@@ -173,27 +175,47 @@ impl Interpreter for InsertInterpreterV2 {
                         }
                     };
 
-                    build_res = match is_distributed_plan {
+                    let mut build_res = match is_distributed_plan {
                         true => {
-                            build_schedule_pipepline(self.ctx.clone(), &insert_select_plan).await?
+                            build_schedule_pipepline(self.ctx.clone(), &insert_select_plan).await
                         }
-                        false => PipelineBuilder::create(self.ctx.clone())
-                            .finalize(&insert_select_plan)?,
-                    };
+                        false => {
+                            PipelineBuilder::create(self.ctx.clone()).finalize(&insert_select_plan)
+                        }
+                    }?;
 
-                    if is_distributed_plan {
-                        append2table(
-                            self.ctx.clone(),
-                            table.clone(),
-                            plan.schema(),
-                            &mut build_res,
-                            self.plan.overwrite,
-                            true,
-                            true,
-                        )?;
+                    let ctx = self.ctx.clone();
+                    let overwrite = self.plan.overwrite;
+                    build_res.main_pipeline.set_on_finished(move |may_error| {
+                        // capture out variable
+                        let overwrite = overwrite;
+                        let ctx = ctx.clone();
+                        let table = table.clone();
 
-                        return Ok(build_res);
-                    }
+                        if may_error.is_none() {
+                            let append_entries = ctx.consume_precommit_blocks();
+                            // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
+                            let catalog_name = ctx.get_current_catalog();
+                            let commit_handle = GlobalIORuntime::instance().spawn(async move {
+                                table
+                                    .commit_insertion(ctx, &catalog_name, append_entries, overwrite)
+                                    .await
+                            });
+
+                            return match futures::executor::block_on(commit_handle) {
+                                Ok(Ok(_)) => Ok(()),
+                                Ok(Err(error)) => Err(error),
+                                Err(cause) => Err(ErrorCode::PanicError(format!(
+                                    "Maybe panic while in commit insert. {}",
+                                    cause
+                                ))),
+                            };
+                        }
+
+                        Err(may_error.as_ref().unwrap().clone())
+                    });
+
+                    return Ok(build_res);
                 }
             };
         }
@@ -205,7 +227,6 @@ impl Interpreter for InsertInterpreterV2 {
             &mut build_res,
             self.plan.overwrite,
             true,
-            false,
         )?;
 
         Ok(build_res)

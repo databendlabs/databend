@@ -68,7 +68,6 @@ pub fn append2table(
     build_res: &mut PipelineBuildResult,
     overwrite: bool,
     need_commit: bool,
-    need_output: bool,
 ) -> Result<()> {
     fill_missing_columns(
         ctx.clone(),
@@ -77,7 +76,7 @@ pub fn append2table(
         &mut build_res.main_pipeline,
     )?;
 
-    table.append2(ctx.clone(), &mut build_res.main_pipeline, need_output)?;
+    table.append2(ctx.clone(), &mut build_res.main_pipeline, false)?;
 
     if need_commit {
         build_res.main_pipeline.set_on_finished(move |may_error| {

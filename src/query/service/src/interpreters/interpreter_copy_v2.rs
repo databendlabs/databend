@@ -275,7 +275,6 @@ impl CopyInterpreterV2 {
             &mut build_res,
             false,
             true,
-            false,
         )?;
         Ok(build_res)
     }

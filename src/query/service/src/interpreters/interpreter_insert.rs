@@ -164,7 +164,6 @@ impl Interpreter for InsertInterpreter {
             &mut build_res,
             self.plan.overwrite,
             true,
-            false,
         )?;
 
         Ok(build_res)

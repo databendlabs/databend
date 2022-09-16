@@ -296,7 +296,6 @@ impl TestFixture {
             &mut build_res,
             overwrite,
             commit,
-            false,
         )?;
 
         execute_pipeline(self.ctx.clone(), build_res)
