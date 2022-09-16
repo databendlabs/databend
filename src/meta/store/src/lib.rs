@@ -16,7 +16,6 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
 use common_grpc::RpcClientConf;
 use common_meta_api::KVApi;
 use common_meta_client::ClientHandle;
@@ -55,39 +54,49 @@ impl MetaStore {
             MetaStore::R(_) => false,
         }
     }
+
+    pub async fn get_local_addr(&self) -> std::result::Result<Option<String>, MetaError> {
+        match self {
+            MetaStore::L(_) => Ok(None),
+            MetaStore::R(grpc_client) => {
+                let client_info = grpc_client.get_client_info().await?;
+                Ok(Some(client_info.client_addr))
+            }
+        }
+    }
 }
 
 #[async_trait::async_trait]
 impl KVApi for MetaStore {
-    async fn upsert_kv(&self, act: UpsertKVReq) -> std::result::Result<UpsertKVReply, MetaError> {
+    async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, MetaError> {
         match self {
             MetaStore::L(x) => x.upsert_kv(act).await,
             MetaStore::R(x) => x.upsert_kv(act).await,
         }
     }
 
-    async fn get_kv(&self, key: &str) -> std::result::Result<GetKVReply, MetaError> {
+    async fn get_kv(&self, key: &str) -> Result<GetKVReply, MetaError> {
         match self {
             MetaStore::L(x) => x.get_kv(key).await,
             MetaStore::R(x) => x.get_kv(key).await,
         }
     }
 
-    async fn mget_kv(&self, key: &[String]) -> std::result::Result<MGetKVReply, MetaError> {
+    async fn mget_kv(&self, key: &[String]) -> Result<MGetKVReply, MetaError> {
         match self {
             MetaStore::L(x) => x.mget_kv(key).await,
             MetaStore::R(x) => x.mget_kv(key).await,
         }
     }
 
-    async fn prefix_list_kv(&self, prefix: &str) -> std::result::Result<ListKVReply, MetaError> {
+    async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, MetaError> {
         match self {
             MetaStore::L(x) => x.prefix_list_kv(prefix).await,
             MetaStore::R(x) => x.prefix_list_kv(prefix).await,
         }
     }
 
-    async fn transaction(&self, txn: TxnRequest) -> std::result::Result<TxnReply, MetaError> {
+    async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, MetaError> {
         match self {
             MetaStore::L(x) => x.transaction(txn).await,
             MetaStore::R(x) => x.transaction(txn).await,
@@ -100,7 +109,7 @@ impl MetaStoreProvider {
         MetaStoreProvider { rpc_conf }
     }
 
-    pub async fn try_get_meta_store(&self) -> Result<MetaStore> {
+    pub async fn create_meta_store(&self) -> Result<MetaStore, MetaError> {
         if self.rpc_conf.local_mode() {
             info!(
                 conf = debug(&self.rpc_conf),

@@ -19,6 +19,7 @@ common-exception = { path = "../../common/exception" }
 common-functions = { path = "../functions" }
 common-io = { path = "../../common/io" }
 common-meta-api = { path = "../../meta/api" }
+common-meta-store = { path = "../../meta/store" }
 common-meta-types = { path = "../../meta/types" }
 common-proto-conv = { path = "../../meta/proto-conv" }
 common-protos = { path = "../../meta/protos" }
