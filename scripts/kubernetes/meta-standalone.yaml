@@ -36,7 +36,7 @@ spec:
           - "meta-service.databend-system.svc.cluster.local"
       containers:
         - name: databend-meta
-          image: datafuselabs/databend-meta:v0.6.100-nightly
+          image: datafuselabs/databend-meta:latest
           command:
             - /databend-meta
           args:

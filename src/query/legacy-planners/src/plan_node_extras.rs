@@ -68,8 +68,10 @@ impl Debug for Projection {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct PrewhereInfo {
-    /// column indices of the table used for prewhere
-    pub need_columns: Projection,
+    /// columns to be ouput be prewhere scan
+    pub output_columns: Projection,
+    /// columns used for prewhere
+    pub prewhere_columns: Projection,
     /// remain_columns = scan.columns - need_columns
     pub remain_columns: Projection,
     /// filter for prewhere

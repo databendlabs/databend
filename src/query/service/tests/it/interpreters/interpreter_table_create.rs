@@ -32,7 +32,7 @@ async fn test_create_table_interpreter() -> Result<()> {
 
         let (plan, _, _) = planner.plan_sql(TEST_CREATE_QUERY).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let _ = executor.execute().await?;
+        let _ = executor.execute(ctx.clone()).await?;
     }
 
     {
@@ -41,7 +41,7 @@ async fn test_create_table_interpreter() -> Result<()> {
 
         let (plan, _, _) = planner.plan_sql(TEST_CREATE_QUERY_SELECT).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let mut stream = executor.execute().await?;
+        let mut stream = executor.execute(ctx.clone()).await?;
         while let Some(_block) = stream.next().await {}
 
         let schema = plan.schema();
@@ -75,7 +75,7 @@ async fn test_create_table_interpreter() -> Result<()> {
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
 
-        assert!(executor.execute().await.is_ok());
+        assert!(executor.execute(ctx.clone()).await.is_ok());
     }
 
     Ok(())

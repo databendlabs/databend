@@ -16,17 +16,15 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::DataSchemaRef;
-use common_datavalues::prelude::DataSchemaRefExt;
 use common_datavalues::prelude::Series;
 use common_datavalues::SeriesFrom;
 use common_exception::Result;
 use common_meta_api::ShareApi;
 use common_meta_app::share::GetShareGrantTenantsReq;
 use common_meta_app::share::ShareNameIdent;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::share::ShowGrantTenantsOfSharePlan;
@@ -52,7 +50,7 @@ impl Interpreter for ShowGrantTenantsOfShareInterpreter {
         self.plan.schema()
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         let user_mgr = self.ctx.get_user_manager();
         let meta_api = user_mgr.get_meta_store_client();
         let tenant = self.ctx.get_tenant();
@@ -64,14 +62,8 @@ impl Interpreter for ShowGrantTenantsOfShareInterpreter {
         };
         let resp = meta_api.get_grant_tenants_of_share(req).await?;
         if resp.accounts.is_empty() {
-            return Ok(Box::pin(DataBlockStream::create(
-                DataSchemaRefExt::create(vec![]),
-                None,
-                vec![],
-            )));
+            return Ok(PipelineBuildResult::create());
         }
-
-        let desc_schema = self.plan.schema();
 
         let mut granted_ons: Vec<String> = vec![];
         let mut accounts: Vec<String> = vec![];
@@ -80,12 +72,11 @@ impl Interpreter for ShowGrantTenantsOfShareInterpreter {
             accounts.push(account.account.clone());
         }
 
-        let block = DataBlock::create(desc_schema.clone(), vec![
+        let block = DataBlock::create(self.plan.schema(), vec![
             Series::from_data(granted_ons),
             Series::from_data(accounts),
         ]);
-        Ok(Box::pin(DataBlockStream::create(desc_schema, None, vec![
-            block,
-        ])))
+
+        PipelineBuildResult::from_blocks(vec![block])
     }
 }
