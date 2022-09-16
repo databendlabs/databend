@@ -91,6 +91,7 @@ impl UsersTable {
                 engine: "SystemUsers".to_string(),
                 ..Default::default()
             },
+            share_name: None,
         };
 
         AsyncOneBlockSystemTable::create(UsersTable { table_info })

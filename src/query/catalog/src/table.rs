@@ -71,6 +71,15 @@ pub trait Table: Sync + Send {
 
     fn get_table_info(&self) -> &TableInfo;
 
+    fn check_can_modify_table(&self) -> Result<()> {
+        if self.get_table_info().share_name.is_some() {
+            return Err(ErrorCode::ShareHasNoGrantedPrivilege(
+                "Cannot modify a shared table",
+            ));
+        }
+        Ok(())
+    }
+
     /// whether column prune(projection) can help in table read
     fn benefit_column_prune(&self) -> bool {
         false

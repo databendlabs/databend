@@ -72,6 +72,7 @@ impl FuseSegmentTable {
                 engine,
                 ..Default::default()
             },
+            share_name: None,
         };
 
         Ok(Arc::new(FuseSegmentTable {

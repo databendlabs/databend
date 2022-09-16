@@ -1538,7 +1538,7 @@ impl<KV: KVApi> SchemaApi for KV {
         };
 
         let table_id = match db_meta.from_share {
-            Some(share) => {
+            Some(ref share) => {
                 get_table_id_from_share_by_name(
                     self,
                     share,
@@ -1588,6 +1588,7 @@ impl<KV: KVApi> SchemaApi for KV {
             name: tenant_dbname_tbname.table_name.clone(),
             // Safe unwrap() because: tb_meta_seq > 0
             meta: tb_meta.unwrap(),
+            share_name: db_meta.from_share.clone(),
         };
 
         return Ok(Arc::new(tb_info));
@@ -1600,16 +1601,19 @@ impl<KV: KVApi> SchemaApi for KV {
         let tenant_dbname = &req.inner;
 
         // Get db by name to ensure presence
+        let res = get_db_or_err(
+            self,
+            &tenant_dbname,
+            format!("get_table_history: {}", tenant_dbname),
+        )
+        .await;
 
-        let (db_id_seq, db_id) = get_u64_value(self, tenant_dbname).await?;
-        debug!(
-            db_id_seq,
-            db_id,
-            ?tenant_dbname,
-            "get database for listing table"
-        );
-
-        db_has_to_exist(db_id_seq, tenant_dbname, "list_tables")?;
+        let (_db_id_seq, db_id, _db_meta_seq, db_meta) = match res {
+            Ok(x) => x,
+            Err(e) => {
+                return Err(e);
+            }
+        };
 
         // List tables by tenant, db_id, table_name.
         let dbid_tbname_idlist = TableIdListKey {
@@ -1675,6 +1679,7 @@ impl<KV: KVApi> SchemaApi for KV {
                     desc: tenant_dbname_tbname.to_string(),
                     name: table_id_list_key.table_name.clone(),
                     meta: tb_meta,
+                    share_name: db_meta.from_share.clone(),
                 };
 
                 tb_info_list.push(Arc::new(tb_info));
@@ -2535,14 +2540,14 @@ async fn count_tables(kv_api: &impl KVApi, key: &CountTablesKey) -> Result<u64, 
 
 async fn get_table_id_from_share_by_name(
     kv_api: &impl KVApi,
-    share: ShareNameIdent,
+    share: &ShareNameIdent,
     db_id: u64,
     table_name: &String,
 ) -> Result<u64, MetaError> {
     let res = get_share_or_err(
         kv_api,
-        &share,
-        format!("list_tables_from_share_db: {}", &share),
+        share,
+        format!("list_tables_from_share_db: {}", share),
     )
     .await;
 
@@ -2607,6 +2612,7 @@ async fn get_tableinfos_by_ids(
     ids: &[u64],
     tenant_dbname: &DatabaseNameIdent,
     dbid_tbnames_opt: Option<Vec<DBIdTableName>>,
+    share_name: Option<ShareNameIdent>,
 ) -> Result<Vec<Arc<TableInfo>>, MetaError> {
     let mut tb_meta_keys = Vec::with_capacity(ids.len());
     for id in ids.iter() {
@@ -2643,6 +2649,7 @@ async fn get_tableinfos_by_ids(
                 desc: format!("'{}'.'{}'", tenant_dbname.db_name, tbnames[i]),
                 meta: tb_meta,
                 name: tbnames[i].clone(),
+                share_name: share_name.clone(),
             };
             tb_infos.push(Arc::new(tb_info));
         } else {
@@ -2671,7 +2678,7 @@ async fn list_tables_from_unshare_db(
 
     let (dbid_tbnames, ids) = list_u64_value(kv_api, &dbid_tbname).await?;
 
-    get_tableinfos_by_ids(kv_api, &ids, tenant_dbname, Some(dbid_tbnames)).await
+    get_tableinfos_by_ids(kv_api, &ids, tenant_dbname, Some(dbid_tbnames), None).await
 }
 
 async fn list_tables_from_share_db(
@@ -2710,5 +2717,5 @@ async fn list_tables_from_share_db(
             ids.push(table_id);
         }
     }
-    get_tableinfos_by_ids(kv_api, &ids, tenant_dbname, None).await
+    get_tableinfos_by_ids(kv_api, &ids, tenant_dbname, None, Some(share)).await
 }

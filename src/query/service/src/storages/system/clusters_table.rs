@@ -78,6 +78,7 @@ impl ClustersTable {
                 engine: "SystemClusters".to_string(),
                 ..Default::default()
             },
+            share_name: None,
         };
 
         SyncOneBlockSystemTable::create(ClustersTable { table_info })

@@ -49,6 +49,7 @@ impl DummyTable {
                     schema: DataSchemaRefExt::create(vec![]),
                     ..Default::default()
                 },
+                share_name: None,
             },
         }
     }

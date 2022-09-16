@@ -101,6 +101,7 @@ impl NumbersTable {
                 updated_on: Utc.from_utc_datetime(&NaiveDateTime::from_timestamp(0, 0)),
                 ..Default::default()
             },
+            share_name: None,
         };
 
         Ok(Arc::new(NumbersTable { table_info, total }))

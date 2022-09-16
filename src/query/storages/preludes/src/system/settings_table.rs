@@ -103,6 +103,7 @@ impl SettingsTable {
 
                 ..Default::default()
             },
+            share_name: None,
         };
 
         SyncOneBlockSystemTable::create(SettingsTable { table_info })

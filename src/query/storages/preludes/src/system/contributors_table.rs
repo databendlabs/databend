@@ -61,6 +61,7 @@ impl ContributorsTable {
                 engine: "SystemContributors".to_string(),
                 ..Default::default()
             },
+            share_name: None,
         };
 
         SyncOneBlockSystemTable::create(ContributorsTable { table_info })

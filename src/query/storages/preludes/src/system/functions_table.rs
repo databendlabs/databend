@@ -167,6 +167,7 @@ impl FunctionsTable {
 
                 ..Default::default()
             },
+            share_name: None,
         };
 
         AsyncOneBlockSystemTable::create(FunctionsTable { table_info })

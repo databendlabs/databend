@@ -104,6 +104,7 @@ impl StagesTable {
                 engine: "SystemStages".to_string(),
                 ..Default::default()
             },
+            share_name: None,
         };
 
         AsyncOneBlockSystemTable::create(StagesTable { table_info })

@@ -132,6 +132,7 @@ impl ConfigsTable {
                 engine: "SystemConfigs".to_string(),
                 ..Default::default()
             },
+            share_name: None,
         };
 
         SyncOneBlockSystemTable::create(ConfigsTable { table_info })

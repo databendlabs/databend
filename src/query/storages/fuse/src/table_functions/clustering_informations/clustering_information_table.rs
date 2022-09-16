@@ -73,6 +73,7 @@ impl ClusteringInformationTable {
                 engine,
                 ..Default::default()
             },
+            share_name: None,
         };
 
         Ok(Arc::new(Self {

@@ -51,6 +51,7 @@ impl TablesTable {
                 engine: "VIEW".to_string(),
                 ..Default::default()
             },
+            share_name: None,
         };
 
         ViewTable::create(table_info)

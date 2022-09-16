@@ -127,6 +127,7 @@ impl ProcessesTable {
 
                 ..Default::default()
             },
+            share_name: None,
         };
 
         AsyncOneBlockSystemTable::create(ProcessesTable { table_info })

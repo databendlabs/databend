@@ -105,6 +105,7 @@ impl ColumnsTable {
                 engine: "SystemColumns".to_string(),
                 ..Default::default()
             },
+            share_name: None,
         };
 
         AsyncOneBlockSystemTable::create(ColumnsTable { table_info })

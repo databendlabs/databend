@@ -367,6 +367,7 @@ impl FuseTable {
             desc: "".to_owned(),
             name,
             meta: meta.as_ref().clone(),
+            share_name: None,
         };
         catalog.get_table_by_info(&table_info)
     }

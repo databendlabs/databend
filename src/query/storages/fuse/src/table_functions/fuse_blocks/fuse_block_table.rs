@@ -72,6 +72,7 @@ impl FuseBlockTable {
                 engine,
                 ..Default::default()
             },
+            share_name: None,
         };
 
         Ok(Arc::new(FuseBlockTable {

@@ -109,6 +109,7 @@ impl QueryLogTable {
                 engine: "SystemQueryLog".to_string(),
                 ..Default::default()
             },
+            share_name: None,
         };
 
         QueryLogTable {

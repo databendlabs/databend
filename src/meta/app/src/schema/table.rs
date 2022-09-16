@@ -27,6 +27,7 @@ use common_meta_types::MatchSeq;
 use maplit::hashmap;
 
 use crate::schema::database::DatabaseNameIdent;
+use crate::share::ShareNameIdent;
 
 /// Globally unique identifier of a version of TableMeta.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
@@ -151,6 +152,8 @@ pub struct TableInfo {
     /// It is about what a table actually is.
     /// `name`, `id` or `version` is not included in the table structure definition.
     pub meta: TableMeta,
+
+    pub share_name: Option<ShareNameIdent>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
@@ -210,6 +213,7 @@ impl TableInfo {
             desc: format!("'{}'.'{}'", db_name, table_name),
             name: table_name.to_string(),
             meta,
+            share_name: None,
         }
     }
 

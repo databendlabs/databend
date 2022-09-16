@@ -46,6 +46,7 @@ async fn test_memorytable() -> Result<()> {
                 options: TableOptions::default(),
                 ..Default::default()
             },
+            share_name: None,
         })?;
 
     // append data.

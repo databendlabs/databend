@@ -117,6 +117,7 @@ pub fn try_into_table_info(
         desc: real_name,
         name: hms_table.table_name.unwrap_or_default(),
         meta,
+        share_name: None,
     };
 
     Ok(table_info)

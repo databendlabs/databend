@@ -192,6 +192,7 @@ where TablesTable<T>: HistoryAware
 
                 ..Default::default()
             },
+            share_name: None,
         };
 
         AsyncOneBlockSystemTable::create(TablesTable::<T> { table_info })

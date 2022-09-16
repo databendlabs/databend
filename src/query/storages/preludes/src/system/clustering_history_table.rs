@@ -66,6 +66,7 @@ impl ClusteringHistoryTable {
                 engine: "SystemClusteringHistory".to_string(),
                 ..Default::default()
             },
+            share_name: None,
         };
 
         Self {

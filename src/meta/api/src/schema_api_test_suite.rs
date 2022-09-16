@@ -1526,6 +1526,7 @@ impl SchemaApiTestSuite {
                     desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
                     name: tbl_name.into(),
                     meta: table_meta(created_on),
+                    share_name: None,
                 };
                 assert_meta_eq_without_updated!(want, got.as_ref().clone(), "get created table");
                 ident
@@ -1553,6 +1554,7 @@ impl SchemaApiTestSuite {
                 desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
                 name: tbl_name.into(),
                 meta: table_meta(created_on),
+                share_name: None,
             };
             assert_meta_eq_without_updated!(want, got.as_ref().clone(), "get created table");
         }
@@ -1588,6 +1590,7 @@ impl SchemaApiTestSuite {
                 desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
                 name: tbl_name.into(),
                 meta: table_meta(created_on),
+                share_name: None,
             };
             assert_meta_eq_without_updated!(want, got.as_ref().clone(), "get old table");
         }
@@ -1800,6 +1803,7 @@ impl SchemaApiTestSuite {
                 desc: format!("'{}'.'{}'.'{}'", tenant, db1_name, tb3_name),
                 name: tb3_name.into(),
                 meta: table_meta(created_on),
+                share_name: None,
             };
 
             assert_meta_eq_without_updated!(want, got.as_ref().clone(), "get renamed table");
@@ -1934,6 +1938,7 @@ impl SchemaApiTestSuite {
                 desc: format!("'{}'.'{}'.'{}'", tenant, db2_name, tb3_name),
                 name: tb3_name.into(),
                 meta: table_meta(created_on),
+                share_name: None,
             };
             assert_meta_eq_without_updated!(want, got.as_ref().clone(), "get renamed table");
         }
@@ -2014,6 +2019,7 @@ impl SchemaApiTestSuite {
                     desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
                     name: tbl_name.into(),
                     meta: table_meta(created_on),
+                    share_name: None,
                 };
                 assert_meta_eq_without_updated!(want, got.as_ref().clone(), "get created table");
                 ident
@@ -2144,6 +2150,7 @@ impl SchemaApiTestSuite {
                     desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
                     name: tbl_name.into(),
                     meta: table_meta(created_on),
+                    share_name: None,
                 };
                 assert_meta_eq_without_updated!(want, got.as_ref().clone(), "get created table");
                 ident
@@ -3132,6 +3139,7 @@ impl SchemaApiTestSuite {
                     desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
                     name: tbl_name.into(),
                     meta: table_meta(created_on),
+                    share_name: None,
                 };
                 assert_meta_eq_without_updated!(want, got.as_ref().clone(), "get created table");
                 ident

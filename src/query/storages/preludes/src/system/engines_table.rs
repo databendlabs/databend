@@ -72,6 +72,7 @@ impl EnginesTable {
                 engine: "SystemEngines".to_string(),
                 ..Default::default()
             },
+            share_name: None,
         };
 
         AsyncOneBlockSystemTable::create(EnginesTable { table_info })
