@@ -111,6 +111,72 @@ async fn test_call_fuse_snapshot_interpreter() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_call_fuse_block_interpreter() -> Result<()> {
+    let (_guard, ctx) = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
+
+    // NumberArgumentsNotMatch
+    {
+        let query = "call system$fuse_block()";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        assert_eq!(executor.name(), "CallInterpreter");
+        let res = executor.execute().await;
+        assert_eq!(res.is_err(), true);
+        let expect = "Code: 1028, displayText = Function `FUSE_BLOCK` expect to have [2, 3] arguments, but got 0.";
+        assert_eq!(expect, res.err().unwrap().to_string());
+    }
+
+    // UnknownTable
+    {
+        let query = "call system$fuse_block(default, test)";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        assert_eq!(executor.name(), "CallInterpreter");
+        let res = executor.execute().await;
+        assert_eq!(res.is_err(), true);
+        assert_eq!(
+            res.err().unwrap().code(),
+            ErrorCode::UnknownTable("").code()
+        );
+    }
+
+    // BadArguments
+    {
+        let query = "call system$fuse_block(system, tables)";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        assert_eq!(executor.name(), "CallInterpreter");
+        let res = executor.execute().await;
+        assert_eq!(res.is_err(), true);
+        let expect =
+            "Code: 1015, displayText = expects table of engine FUSE, but got SystemTables.";
+        assert_eq!(expect, res.err().unwrap().to_string());
+    }
+
+    // Create table
+    {
+        let query = "\
+            CREATE TABLE default.a(a bigint)\
+        ";
+
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let _ = executor.execute().await?;
+    }
+
+    // fuse_block
+    {
+        let query = "call system$fuse_block(default, a)";
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let _ = executor.execute().await?;
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_call_clustering_information_interpreter() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let mut planner = Planner::new(ctx.clone());
@@ -188,7 +254,7 @@ async fn test_call_clustering_information_interpreter() -> Result<()> {
         let _ = executor.execute().await?;
     }
 
-    // FuseHistory
+    // clustering_information
     {
         let query = "call system$clustering_information(default, b)";
         let (plan, _, _) = planner.plan_sql(query).await?;
