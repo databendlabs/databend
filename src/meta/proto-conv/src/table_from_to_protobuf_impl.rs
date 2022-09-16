@@ -78,43 +78,6 @@ impl FromToProto for mt::TableCopiedFileLock {
     }
 }
 
-// impl FromToProto for mt::TableInfo {
-// type PB = pb::TableInfo;
-// fn from_pb(p: pb::TableInfo) -> Result<Self, Incompatible> {
-// check_ver(p.ver, p.min_compatible)?;
-//
-// let ident = match p.ident {
-// None => {
-// return Err(Incompatible {
-// reason: "TableInfo.ident can not be None".to_string(),
-// });
-// }
-// Some(x) => x,
-// };
-// let v = Self {
-// ident: mt::TableIdent::from_pb(ident)?,
-// desc: p.desc,
-// name: p.name,
-// meta: mt::TableMeta::from_pb(p.meta.ok_or_else(|| Incompatible {
-// reason: "TableInfo.meta can not be None".to_string(),
-// })?)?,
-// };
-// Ok(v)
-// }
-//
-// fn to_pb(&self) -> Result<pb::TableInfo, Incompatible> {
-// let p = pb::TableInfo {
-// ver: VER,
-// min_compatible: MIN_COMPATIBLE_VER,
-// ident: Some(self.ident.to_pb()?),
-// desc: self.desc.clone(),
-// name: self.name.clone(),
-// meta: Some(self.meta.to_pb()?),
-// };
-// Ok(p)
-// }
-// }
-
 impl FromToProto for mt::TableNameIdent {
     type PB = pb::TableNameIdent;
     fn from_pb(p: pb::TableNameIdent) -> Result<Self, Incompatible> {

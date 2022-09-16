@@ -88,7 +88,6 @@ impl<'a> Binder {
             .ctx
             .get_table(&catalog_name, &database_name, &table_name)
             .await?;
-        table.check_can_modify_table()?;
         let table_id = table.get_id();
 
         let schema = if columns.is_empty() {

@@ -160,13 +160,13 @@ impl FuseTable {
 
     pub fn check_mutable(&self) -> Result<()> {
         if self.read_only {
-            Err(ErrorCode::TableNotWritable(format!(
+            return Err(ErrorCode::TableNotWritable(format!(
                 "Table {} is in read-only mode",
                 self.table_info.desc.as_str()
-            )))
-        } else {
-            Ok(())
+            )));
         }
+
+        self.check_can_modify_table()
     }
 
     pub fn transient(&self) -> bool {
@@ -398,6 +398,7 @@ impl Table for FuseTable {
 
     #[tracing::instrument(level = "debug", name = "fuse_table_delete", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn delete(&self, ctx: Arc<dyn TableContext>, delete_plan: DeletePlan) -> Result<()> {
+        self.check_mutable()?;
         self.do_delete(ctx, &delete_plan).await
     }
 
@@ -407,6 +408,7 @@ impl Table for FuseTable {
         catalog: String,
         pipeline: &mut Pipeline,
     ) -> Result<Option<Arc<dyn TableMutator>>> {
+        self.check_mutable()?;
         self.do_compact(ctx, catalog, pipeline).await
     }
 
@@ -417,6 +419,7 @@ impl Table for FuseTable {
         pipeline: &mut Pipeline,
         push_downs: Option<Extras>,
     ) -> Result<Option<Arc<dyn TableMutator>>> {
+        self.check_mutable()?;
         self.do_recluster(ctx, catalog, pipeline, push_downs).await
     }
 }
