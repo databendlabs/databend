@@ -141,7 +141,7 @@ Exchange
     │       ├── partitions scanned: 1
     │       └── push downs: [filters: [], limit: NONE]
     └── Exchange(Probe)
-        ├── exchange type: Hash(number (#1))
+        ├── exchange type: Hash(CAST(number (#1) AS BIGINT UNSIGNED NULL))
         └── Project
             ├── columns: [number (#1)]
             └── EvalScalar
