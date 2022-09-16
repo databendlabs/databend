@@ -258,11 +258,12 @@ impl UserStageInfo {
     }
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct StageFile {
     pub path: String,
     pub size: u64,
     pub md5: Option<String>,
     pub last_modified: DateTime<Utc>,
     pub creator: Option<UserIdentity>,
+    pub etag: Option<String>,
 }

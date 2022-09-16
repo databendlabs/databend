@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::ops::Add;
-use std::sync::Arc;
 use std::time::Duration;
 use std::time::UNIX_EPOCH;
 
@@ -22,6 +21,7 @@ use common_base::base::unescape_for_key;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_api::KVApi;
+use common_meta_store::MetaStore;
 use common_meta_types::KVMeta;
 use common_meta_types::MatchSeq;
 use common_meta_types::NodeInfo;
@@ -35,14 +35,14 @@ use crate::cluster::ClusterApi;
 pub static CLUSTER_API_KEY_PREFIX: &str = "__fd_clusters";
 
 pub struct ClusterMgr {
-    kv_api: Arc<dyn KVApi>,
+    metastore: MetaStore,
     lift_time: Duration,
     cluster_prefix: String,
 }
 
 impl ClusterMgr {
     pub fn create(
-        kv_api: Arc<dyn KVApi>,
+        metastore: MetaStore,
         tenant: &str,
         cluster_id: &str,
         lift_time: Duration,
@@ -54,7 +54,7 @@ impl ClusterMgr {
         }
 
         Ok(ClusterMgr {
-            kv_api,
+            metastore,
             lift_time,
             cluster_prefix: format!(
                 "{}/{}/{}/databend_query",
@@ -87,7 +87,7 @@ impl ClusterApi for ClusterMgr {
         let value = Operation::Update(serde_json::to_vec(&node)?);
         let node_key = format!("{}/{}", self.cluster_prefix, escape_for_key(&node.id)?);
         let upsert_node = self
-            .kv_api
+            .metastore
             .upsert_kv(UpsertKVReq::new(&node_key, seq, value, meta));
 
         let res = upsert_node.await?.added_or_else(|v| {
@@ -101,7 +101,7 @@ impl ClusterApi for ClusterMgr {
     }
 
     async fn get_nodes(&self) -> Result<Vec<NodeInfo>> {
-        let values = self.kv_api.prefix_list_kv(&self.cluster_prefix).await?;
+        let values = self.metastore.prefix_list_kv(&self.cluster_prefix).await?;
 
         let mut nodes_info = Vec::with_capacity(values.len());
         for (node_key, value) in values {
@@ -116,7 +116,7 @@ impl ClusterApi for ClusterMgr {
 
     async fn drop_node(&self, node_id: String, seq: Option<u64>) -> Result<()> {
         let node_key = format!("{}/{}", self.cluster_prefix, escape_for_key(&node_id)?);
-        let upsert_node = self.kv_api.upsert_kv(UpsertKVReq::new(
+        let upsert_node = self.metastore.upsert_kv(UpsertKVReq::new(
             &node_key,
             seq.into(),
             Operation::Delete,
@@ -145,7 +145,7 @@ impl ClusterApi for ClusterMgr {
         };
 
         let upsert_meta =
-            self.kv_api
+            self.metastore
                 .upsert_kv(UpsertKVReq::new(&node_key, seq, Operation::AsIs, meta));
 
         match upsert_meta.await? {
@@ -156,5 +156,9 @@ impl ClusterApi for ClusterMgr {
             } => Ok(s),
             UpsertKVReply { .. } => self.add_node(node.clone()).await,
         }
+    }
+
+    async fn get_local_addr(&self) -> Result<Option<String>> {
+        Ok(self.metastore.get_local_addr().await?)
     }
 }

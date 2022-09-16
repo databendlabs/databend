@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -32,6 +33,7 @@ use common_legacy_planners::Extras;
 use common_legacy_planners::Partitions;
 use common_legacy_planners::Projection;
 use common_legacy_planners::ReadDataSourcePlan;
+use common_legacy_planners::RequireColumnsVisitor;
 use common_legacy_planners::Statistics;
 use common_legacy_planners::TruncateTablePlan;
 use common_meta_app::schema::TableInfo;
@@ -109,17 +111,67 @@ impl HiveTable {
         let max_threads = std::cmp::min(parts_len, max_threads);
 
         let mut source_builder = SourcePipeBuilder::create();
+        let delay_timer = if self.is_simple_select_query(plan) {
+            // 0, 0, 200, 200, 400,400
+            |x: usize| (x / 2).min(10) * 200
+        } else {
+            |_| 0
+        };
 
-        for _index in 0..std::cmp::max(1, max_threads) {
+        for index in 0..std::cmp::max(1, max_threads) {
             let output = OutputPort::create();
             source_builder.add_source(
                 output.clone(),
-                HiveTableSource::create(ctx.clone(), output, block_reader.clone())?,
+                HiveTableSource::create(
+                    ctx.clone(),
+                    output,
+                    block_reader.clone(),
+                    delay_timer(index),
+                )?,
             );
         }
 
         pipeline.add_pipe(source_builder.finalize());
         Ok(())
+    }
+
+    // simple select query is the sql likes `select * from xx limit 10` or
+    // `select * from xx where p_date = '20220201' limit 10` where p_date is a partition column;
+    // we just need to read few datas from table
+    fn is_simple_select_query(&self, plan: &ReadDataSourcePlan) -> bool {
+        // couldn't get groupby order by info
+        if let Some(Extras {
+            filters: f,
+            limit: Some(lm),
+            ..
+        }) = &plan.push_downs
+        {
+            if *lm > 100000 {
+                return false;
+            }
+
+            // filter out the partition column related expressions
+            let partition_keys = self.get_partition_key_sets();
+            let columns = Self::get_columns_from_expressions(f);
+            if columns.difference(&partition_keys).count() == 0 {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn get_partition_key_sets(&self) -> HashSet<String> {
+        match &self.table_options.partition_keys {
+            Some(v) => v.iter().cloned().collect::<HashSet<_>>(),
+            None => HashSet::new(),
+        }
+    }
+
+    fn get_columns_from_expressions(expressions: &[Expression]) -> HashSet<String> {
+        expressions
+            .iter()
+            .flat_map(|e| RequireColumnsVisitor::collect_columns_from_expr(e).unwrap())
+            .collect::<HashSet<_>>()
     }
 
     fn create_block_reader(

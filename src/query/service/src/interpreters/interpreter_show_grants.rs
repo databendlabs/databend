@@ -19,11 +19,10 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_legacy_planners::ShowGrantsPlan;
 use common_meta_types::PrincipalIdentity;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 use common_users::RoleCacheManager;
 
 use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -48,7 +47,7 @@ impl Interpreter for ShowGrantsInterpreter {
         self.plan.schema()
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
         let user_mgr = self.ctx.get_user_manager();
 
@@ -80,11 +79,8 @@ impl Interpreter for ShowGrantsInterpreter {
             .map(|e| format!("{} TO {}", e, identity).into_bytes())
             .collect::<Vec<_>>();
 
-        let block = DataBlock::create(self.plan.schema(), vec![Series::from_data(grant_list)]);
-        Ok(Box::pin(DataBlockStream::create(
-            self.plan.schema(),
-            None,
-            vec![block],
-        )))
+        PipelineBuildResult::from_blocks(vec![DataBlock::create(self.plan.schema(), vec![
+            Series::from_data(grant_list),
+        ])])
     }
 }

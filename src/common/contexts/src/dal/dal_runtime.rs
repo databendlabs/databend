@@ -83,61 +83,61 @@ impl Accessor for DalRuntime {
             .metadata()
     }
 
-    fn presign(&self, args: &OpPresign) -> Result<PresignedRequest> {
-        self.get_inner()?.presign(args)
-    }
-
-    async fn create(&self, args: &OpCreate) -> Result<()> {
+    async fn create(&self, path: &str, args: OpCreate) -> Result<()> {
         let op = self.get_inner()?;
-        let args = args.clone();
+        let path = path.to_string();
         self.runtime
-            .spawn(async move { op.create(&args).await })
+            .spawn(async move { op.create(&path, args).await })
             .await
             .expect("join must success")
     }
 
-    async fn read(&self, args: &OpRead) -> Result<BytesReader> {
+    async fn read(&self, path: &str, args: OpRead) -> Result<BytesReader> {
         let op = self.get_inner()?;
-        let args = args.clone();
+        let path = path.to_string();
         self.runtime
-            .spawn(async move { op.read(&args).await })
+            .spawn(async move { op.read(&path, args).await })
             .await
             .expect("join must success")
     }
 
-    async fn write(&self, args: &OpWrite, r: BytesReader) -> Result<u64> {
+    async fn write(&self, path: &str, args: OpWrite, r: BytesReader) -> Result<u64> {
         let op = self.get_inner()?;
-        let args = args.clone();
+        let path = path.to_string();
         self.runtime
-            .spawn(async move { op.write(&args, r).await })
+            .spawn(async move { op.write(&path, args, r).await })
             .await
             .expect("join must success")
     }
 
-    async fn stat(&self, args: &OpStat) -> Result<ObjectMetadata> {
+    async fn stat(&self, path: &str, args: OpStat) -> Result<ObjectMetadata> {
         let op = self.get_inner()?;
-        let args = args.clone();
+        let path = path.to_string();
         self.runtime
-            .spawn(async move { op.stat(&args).await })
+            .spawn(async move { op.stat(&path, args).await })
             .await
             .expect("join must success")
     }
 
-    async fn delete(&self, args: &OpDelete) -> Result<()> {
+    async fn delete(&self, path: &str, args: OpDelete) -> Result<()> {
         let op = self.get_inner()?;
-        let args = args.clone();
+        let path = path.to_string();
         self.runtime
-            .spawn(async move { op.delete(&args).await })
+            .spawn(async move { op.delete(&path, args).await })
             .await
             .expect("join must success")
     }
 
-    async fn list(&self, args: &OpList) -> Result<DirStreamer> {
+    async fn list(&self, path: &str, args: OpList) -> Result<DirStreamer> {
         let op = self.get_inner()?;
-        let args = args.clone();
+        let path = path.to_string();
         self.runtime
-            .spawn(async move { op.list(&args).await })
+            .spawn(async move { op.list(&path, args).await })
             .await
             .expect("join must success")
+    }
+
+    fn presign(&self, path: &str, args: OpPresign) -> Result<PresignedRequest> {
+        self.get_inner()?.presign(path, args)
     }
 }

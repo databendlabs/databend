@@ -29,10 +29,10 @@ async fn test_explain_interpreter() -> Result<()> {
     ";
 
     let plan = PlanParser::parse(ctx.clone(), query).await?;
-    let executor = InterpreterFactory::get(ctx, plan)?;
+    let executor = InterpreterFactory::get(ctx.clone(), plan)?;
     assert_eq!(executor.name(), "ExplainInterpreter");
 
-    let stream = executor.execute().await?;
+    let stream = executor.execute(ctx).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 1);

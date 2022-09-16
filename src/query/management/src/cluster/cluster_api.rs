@@ -28,4 +28,6 @@ pub trait ClusterApi: Sync + Send {
 
     // Keep the tenant's cluster node alive.
     async fn heartbeat(&self, node: &NodeInfo, seq: Option<u64>) -> Result<u64>;
+
+    async fn get_local_addr(&self) -> Result<Option<String>>;
 }

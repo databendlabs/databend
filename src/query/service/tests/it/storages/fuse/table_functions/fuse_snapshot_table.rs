@@ -22,7 +22,6 @@ use databend_query::interpreters::CreateTableInterpreterV2;
 use databend_query::interpreters::Interpreter;
 use tokio_stream::StreamExt;
 
-use crate::storages::fuse::table_test_fixture::TestFixture;
 use crate::storages::fuse::table_test_fixture::*;
 
 #[tokio::test]
@@ -85,7 +84,7 @@ async fn test_fuse_snapshot_table_read() -> Result<()> {
     // test db & table
     let create_table_plan = fixture.default_crate_table_plan();
     let interpreter = CreateTableInterpreterV2::try_create(ctx.clone(), create_table_plan)?;
-    interpreter.execute().await?;
+    interpreter.execute(ctx.clone()).await?;
 
     // func args
     let arg_db = Expression::create_literal(DataValue::String(db.as_bytes().to_vec()));
@@ -182,7 +181,7 @@ async fn test_fuse_snapshot_table_read() -> Result<()> {
         let qry = format!("select * from fuse_snapshot('{}', '{}')", db, "in_mem");
         let output_stream = execute_query(ctx.clone(), qry.as_str()).await?;
         expects_err(
-            "check_row_and_block_count_after_append",
+            "unsupported_table_engine",
             ErrorCode::logical_error_code(),
             output_stream.collect::<Result<Vec<DataBlock>>>().await,
         );

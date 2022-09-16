@@ -14,13 +14,11 @@
 
 use std::sync::Arc;
 
-use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_legacy_planners::EmptyPlan;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 
 // EmptyInterpreter is a Empty interpreter to execute nothing.
@@ -39,11 +37,7 @@ impl Interpreter for EmptyInterpreter {
         "EmptyInterpreter"
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
-        Ok(Box::pin(DataBlockStream::create(
-            Arc::new(DataSchema::empty()),
-            None,
-            vec![],
-        )))
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
+        Ok(PipelineBuildResult::create())
     }
 }

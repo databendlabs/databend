@@ -224,6 +224,16 @@ COPY INTO mytable
   FROM 's3://mybucket/data.csv'
   FILE_FORMAT = (type = 'CSV' field_delimiter = ','  record_delimiter = '\n' skip_header = 1) size_limit=10;
 ```
+  
+`Parquet` file example:
+```sql
+COPY INTO mytable
+  FROM 's3://mybucket/data.parquet'
+  CONNECTION = (
+      ACCESS_KEY_ID = '<your-access-key-ID>'
+      SECRET_ACCESS_KEY = '<your-secret-access-key>')
+  FILE_FORMAT = (type = 'PARQUET');
+```
 
 **Azure Blob storage**
 

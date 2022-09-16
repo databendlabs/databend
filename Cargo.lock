@@ -1198,13 +1198,13 @@ dependencies = [
 name = "common-expression"
 version = "0.1.0"
 dependencies = [
- "bson",
  "chrono",
  "chrono-tz",
  "comfy-table",
  "common-arrow",
  "common-ast",
  "common-exception",
+ "common-jsonb",
  "educe",
  "enum-as-inner",
  "goldenfile",
@@ -1297,6 +1297,7 @@ dependencies = [
  "common-expression",
  "common-hashtable",
  "common-io",
+ "common-jsonb",
  "crc32fast",
  "goldenfile",
  "hex",
@@ -1394,6 +1395,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-jsonb"
+version = "0.1.0"
+dependencies = [
+ "byteorder",
+ "decimal-rs",
+]
+
+[[package]]
 name = "common-legacy-parser"
 version = "0.1.0"
 dependencies = [
@@ -1444,6 +1453,7 @@ dependencies = [
  "common-io",
  "common-meta-api",
  "common-meta-embedded",
+ "common-meta-store",
  "common-meta-types",
  "common-proto-conv",
  "common-protos",
@@ -1588,7 +1598,6 @@ name = "common-meta-store"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "common-exception",
  "common-grpc",
  "common-meta-api",
  "common-meta-client",
@@ -2643,6 +2652,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "decimal-rs"
+version = "0.1.39"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b2492291a982ad198a2c3b84b091b48348372ffe8a9f7194cc90a2d8b901762c"
+dependencies = [
+ "ethnum",
+ "fast-float",
+ "stack-buf",
+ "thiserror",
+]
+
+[[package]]
 name = "der"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2952,6 +2973,12 @@ dependencies = [
  "cc",
  "libc",
 ]
+
+[[package]]
+name = "ethnum"
+version = "1.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "87e4a7b7dde9ed6aed8eb4dd7474d22fb1713a4b05ac5071cdb60d9903248ad3"
 
 [[package]]
 name = "event-listener"
@@ -3818,6 +3845,19 @@ dependencies = [
  "tower-service",
  "tracing",
  "want",
+]
+
+[[package]]
+name = "hyper-rustls"
+version = "0.23.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d87c48c02e0dc5e3b849a2041db3029fd066650f8f717c07bf8ed78ccb895cac"
+dependencies = [
+ "http",
+ "hyper",
+ "rustls",
+ "tokio",
+ "tokio-rustls",
 ]
 
 [[package]]
@@ -4967,9 +5007,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.16.0"
+version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f7b4a0552a17ed31d74d3c4bc65b1b026013f9e936b0f55c513240f195b3780"
+checksum = "e25be2547ef2a9202a26f0d751ca1dcc34a43daf155919a530dae28a0eafcf26"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -6193,6 +6233,7 @@ dependencies = [
  "http",
  "http-body",
  "hyper",
+ "hyper-rustls",
  "hyper-tls",
  "ipnet",
  "js-sys",
@@ -6202,11 +6243,15 @@ dependencies = [
  "native-tls",
  "percent-encoding",
  "pin-project-lite",
+ "rustls",
+ "rustls-native-certs",
+ "rustls-pemfile",
  "serde",
  "serde_json",
  "serde_urlencoded",
  "tokio",
  "tokio-native-tls",
+ "tokio-rustls",
  "tokio-util",
  "tower-service",
  "url",
@@ -7068,6 +7113,12 @@ name = "stable_deref_trait"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
+
+[[package]]
+name = "stack-buf"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e7386b49cb287f6fafbfd3bd604914bccb99fb8d53483f40e1ecfda5d45f3370"
 
 [[package]]
 name = "static_assertions"
@@ -8017,6 +8068,7 @@ dependencies = [
  "log",
  "once_cell",
  "rustls",
+ "rustls-native-certs",
  "url",
  "webpki",
  "webpki-roots",

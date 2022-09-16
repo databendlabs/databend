@@ -46,7 +46,7 @@ use crate::types::timestamp::Timestamp;
 use crate::types::timestamp::TimestampColumn;
 use crate::types::timestamp::TimestampColumnBuilder;
 use crate::types::timestamp::TimestampDomain;
-use crate::types::variant::DEFAULT_BSON;
+use crate::types::variant::DEFAULT_JSONB;
 use crate::types::*;
 use crate::util::append_bitmap;
 use crate::util::bitmap_into_mut;
@@ -1076,7 +1076,7 @@ impl ColumnBuilder {
                 *len += 1;
             }
             ColumnBuilder::Variant(builder) => {
-                builder.put_slice(DEFAULT_BSON);
+                builder.put_slice(DEFAULT_JSONB);
                 builder.commit_row();
             }
         }

@@ -20,11 +20,10 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::InsertInterpreterV2;
 use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::create_table_v2::CreateTablePlanV2;
@@ -50,7 +49,7 @@ impl Interpreter for CreateTableInterpreterV2 {
         "CreateTableInterpreterV2"
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         self.ctx
             .get_current_session()
             .validate_privilege(
@@ -117,10 +116,7 @@ impl Interpreter for CreateTableInterpreterV2 {
 }
 
 impl CreateTableInterpreterV2 {
-    async fn create_table_as_select(
-        &self,
-        select_plan: Box<Plan>,
-    ) -> Result<SendableDataBlockStream> {
+    async fn create_table_as_select(&self, select_plan: Box<Plan>) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
 
@@ -157,25 +153,16 @@ impl CreateTableInterpreterV2 {
             overwrite: false,
             source: InsertInputSource::SelectPlan(select_plan),
         };
-        let insert_interpreter_v2 =
-            InsertInterpreterV2::try_create(self.ctx.clone(), insert_plan, false)?;
-        insert_interpreter_v2.execute().await?;
 
-        Ok(Box::pin(DataBlockStream::create(
-            self.plan.schema(),
-            None,
-            vec![],
-        )))
+        InsertInterpreterV2::try_create(self.ctx.clone(), insert_plan, false)?
+            .execute2()
+            .await
     }
 
-    async fn create_table(&self) -> Result<SendableDataBlockStream> {
+    async fn create_table(&self) -> Result<PipelineBuildResult> {
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
         catalog.create_table(self.plan.clone().into()).await?;
 
-        Ok(Box::pin(DataBlockStream::create(
-            self.plan.schema(),
-            None,
-            vec![],
-        )))
+        Ok(PipelineBuildResult::create())
     }
 }

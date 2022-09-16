@@ -18,8 +18,7 @@ use common_base::base::tokio;
 use common_meta_types::Cmd;
 use common_meta_types::ForwardToLeader;
 use common_meta_types::LogEntry;
-use common_meta_types::MetaError;
-use common_meta_types::MetaRaftError;
+use common_meta_types::RaftWriteError;
 use common_meta_types::UpsertKV;
 use databend_meta::meta_service::meta_leader::MetaLeader;
 use databend_meta::meta_service::MetaNode;
@@ -59,9 +58,9 @@ async fn test_meta_node_forward_to_leader() -> anyhow::Result<()> {
             assert!(rst.is_err());
             let e = rst.unwrap_err();
             match e {
-                MetaError::MetaRaftError(MetaRaftError::ForwardToLeader(ForwardToLeader {
+                RaftWriteError::ForwardToLeader(ForwardToLeader {
                     leader_id: forward_leader_id,
-                })) => {
+                }) => {
                     assert_eq!(Some(leader_id), forward_leader_id);
                 }
                 _ => {
