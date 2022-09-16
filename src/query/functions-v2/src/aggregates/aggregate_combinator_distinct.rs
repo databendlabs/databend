@@ -18,7 +18,6 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::number::NumberColumnBuilder;
 use common_expression::types::DataType;
@@ -232,11 +231,7 @@ pub fn try_create(
                     _s: PhantomData,
                     _state: PhantomData,
                 })),
-            _ =>
-                return Err(ErrorCode::BadDataValueType(format!(
-                    "AggregateSumFunction does not support type '{:?}'",
-                    arguments[0]
-                ))),
+            _ => {}
         })
     }
     Ok(Arc::new(AggregateDistinctCombinator::<
