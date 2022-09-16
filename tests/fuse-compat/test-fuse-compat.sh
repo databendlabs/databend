@@ -125,6 +125,9 @@ kill_proc() {
 # Test fuse-data compatibility between an old version query and the current
 # version query.
 run_test() {
+    echo " === pip list"
+    python3 -m pip list
+
     local query_old_ver="$1"
 
     echo " === Test with query-$query_old_ver and current query"

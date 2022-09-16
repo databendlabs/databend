@@ -412,10 +412,7 @@ pub fn skip_to_next_row<R: BufferRead>(
     Ok(())
 }
 
-fn fill_default_value(
-    expressions: &mut Vec<(EvalNode<String>, String)>,
-    field: &DataField,
-) -> Result<()> {
+fn fill_default_value(expressions: &mut Vec<(EvalNode, String)>, field: &DataField) -> Result<()> {
     if let Some(default_expr) = field.default_expr() {
         expressions.push((
             Evaluator::eval_physical_scalar(&serde_json::from_str(default_expr)?)?,

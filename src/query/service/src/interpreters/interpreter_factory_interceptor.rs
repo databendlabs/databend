@@ -27,6 +27,7 @@ use crate::interpreters::access::ManagementModeAccess;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::InterpreterQueryLog;
+use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
@@ -73,7 +74,7 @@ impl Interpreter for InterceptorInterpreter {
         self.inner.schema()
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute(&self, ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
         // Management mode access check.
         match &self.new_plan {
             Some(p) => self.management_mode_access.check_new(p)?,
@@ -83,7 +84,7 @@ impl Interpreter for InterceptorInterpreter {
         let _ = self
             .inner
             .set_source_pipe_builder((*self.source_pipe_builder.lock()).clone());
-        let result_stream = match self.inner.execute().await {
+        let result_stream = match self.inner.execute(ctx).await {
             Ok(s) => s,
             Err(e) => {
                 self.ctx.set_error(e.clone());
@@ -95,6 +96,10 @@ impl Interpreter for InterceptorInterpreter {
         let metric_stream =
             ProgressStream::try_create(Box::pin(error_stream), self.ctx.get_result_progress())?;
         Ok(Box::pin(metric_stream))
+    }
+
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
+        unimplemented!()
     }
 
     async fn start(&self) -> Result<()> {

@@ -65,7 +65,7 @@ impl ConfigBuilder {
     pub fn add_user(mut self, user_name: &str, auth_info: AuthInfo) -> ConfigBuilder {
         let mut users = HashMap::new();
         users.insert(user_name.to_string(), auth_info);
-        self.conf.idm = IDMConfig { users };
+        self.conf.query.idm = IDMConfig { users };
         self
     }
 
