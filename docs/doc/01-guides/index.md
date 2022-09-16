@@ -25,7 +25,7 @@ These tutorials are intended to help you get started with Databend:
 ## Loading Data into Databend
 
 * [How to Load Data from Local File System](../21-load-data/00-local.md)
-* [How to Load Data from Remote Files](../21-load-data/04-remote.md)
+* [How to Load Data from Remote Files](../21-load-data/04-http.md)
 * [How to Load Data from Amazon S3](../21-load-data/01-s3.md)
 * [How to Load Data from Databend Stages](../21-load-data/02-stage.md)
 * [How to Load Data from MySQL](../21-load-data/03-mysql.md)
