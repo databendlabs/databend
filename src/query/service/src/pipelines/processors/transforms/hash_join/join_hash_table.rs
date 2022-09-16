@@ -108,7 +108,7 @@ pub enum HashTable {
     KeyU512HashTable(KeyU512HashTable),
 }
 
-#[derive(Clone, Copy, Eq, PartialEq, Debug)]
+#[derive(Clone, Copy, Eq, PartialEq, Debug, Hash)]
 pub enum MarkerKind {
     True,
     False,

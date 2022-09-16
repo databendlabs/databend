@@ -198,9 +198,11 @@ impl<'a> Binder {
             marker_index: None,
             from_correlated_subquery: false,
         };
-        let expr = SExpr::create_binary(inner_join.into(), left_child, right_child);
-
-        Ok(expr)
+        Ok(SExpr::create_binary(
+            inner_join.into(),
+            left_child,
+            right_child,
+        ))
     }
 }
 
@@ -361,7 +363,6 @@ impl<'a> JoinConditionResolver<'a> {
         //     For example, `t1.a + t1.b = t2.a` is a valid one while `t1.a + t2.a = t2.b` isn't.
         //
         // Only equi-predicate can be exploited by common join algorithms(e.g. sort-merge join, hash join).
-        // For the predicates that aren't equi-predicate, we will lift them as a `Filter` operator.
         if let Some((left, right)) = split_equivalent_predicate(predicate) {
             self.add_conditions(left, right, left_join_conditions, right_join_conditions)?;
         } else {

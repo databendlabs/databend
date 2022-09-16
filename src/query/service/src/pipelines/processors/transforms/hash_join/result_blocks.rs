@@ -546,17 +546,24 @@ impl JoinHashTable {
         let probe_indexes = &mut probe_state.probe_indexs;
         let valids = &probe_state.valids;
         let mut validity = MutableBitmap::new();
+        let mut row_state = std::collections::HashMap::new();
         for (i, key) in keys_iter.enumerate() {
             let probe_result_ptr = Self::probe_key(hash_table, key, valids, i);
             if let Some(v) = probe_result_ptr {
                 let probe_result_ptrs = v.get_value();
                 build_indexes.extend_from_slice(probe_result_ptrs);
+                for row_ptr in probe_result_ptrs.iter() {
+                    row_state
+                        .entry(row_ptr.clone())
+                        .and_modify(|e| *e += 1)
+                        .or_insert(1 as usize);
+                }
                 probe_indexes.extend(std::iter::repeat(i as u32).take(probe_result_ptrs.len()));
                 validity.extend_constant(probe_result_ptrs.len(), true);
             }
         }
 
-        // For right join, build side will always appear in the joined table
+        // For right join, build side will appear at lease once in the joined table
         // Find the unmatched rows in build side
         let mut unmatched_build_indexes = vec![];
         for kv in hash_table.iter() {
@@ -591,7 +598,45 @@ impl JoinHashTable {
         );
 
         nullable_probe_block = DataBlock::concat_blocks(&[nullable_probe_block, null_probe_block])?;
-        let merged_block = self.merge_eq_block(&nullable_probe_block, &build_block)?;
+        let mut merged_block = self.merge_eq_block(&nullable_probe_block, &build_block)?;
+        if !WITH_OTHER_CONJUNCT {
+            return Ok(merged_block);
+        }
+
+        let (bm, all_true, all_false) = self.get_other_filters(
+            &merged_block,
+            self.hash_join_desc.other_predicate.as_ref().unwrap(),
+        )?;
+
+        if all_true {
+            return Ok(merged_block);
+        }
+
+        let validity = match (bm, all_false) {
+            (Some(b), _) => b,
+            (None, true) => Bitmap::new_zeroed(merged_block.num_rows()),
+            // must be one of above
+            _ => unreachable!(),
+        };
+
+        let nullable_columns = nullable_probe_block
+            .columns()
+            .iter()
+            .map(|c| Self::set_validity(c, &validity))
+            .collect::<Result<Vec<_>>>()?;
+        nullable_probe_block = DataBlock::create(self.probe_schema.clone(), nullable_columns);
+        merged_block = self.merge_eq_block(&nullable_probe_block, &build_block)?;
+
+        // If there are only non-equi conditions, build_indexes size will greater build table size
+        // Because the case will cause cross join.
+        // We need filter the redundant rows for build side.
+        if build_indexes.len() > self.row_space.rows_number() {
+            let mut bm = validity.into_mut().right().unwrap();
+            Self::filter_rows_for_right_join(&mut bm, build_indexes, &mut row_state);
+            let predicate = BooleanColumn::from_arrow_data(bm.into()).arc();
+            return DataBlock::filter_block(merged_block, &predicate);
+        }
+
         Ok(merged_block)
     }
 
@@ -644,9 +689,9 @@ impl JoinHashTable {
     }
 
     // keep at least one index of the positive state and the null state
-    // bitmap: [1, 0, 1] with row_state [2, 0], probe_index: [0, 0, 1]
+    // bitmap: [1, 0, 1] with row_state [2, 1], probe_index: [0, 0, 1]
     // bitmap will be [1, 0, 1] -> [1, 0, 1] -> [1, 0, 1] -> [1, 0, 1]
-    // row_state will be [2, 0] -> [2, 0] -> [1, 0] -> [1, 0]
+    // row_state will be [2, 1] -> [2, 1] -> [1, 1] -> [1, 1]
     fn fill_null_for_left_join(
         bm: &mut MutableBitmap,
         probe_indexs: &[u32],
@@ -668,6 +713,25 @@ impl JoinHashTable {
 
             if !bm.get(index) {
                 row_state[row] -= 1;
+            }
+        }
+    }
+
+    fn filter_rows_for_right_join(
+        bm: &mut MutableBitmap,
+        build_indexes: &[RowPtr],
+        row_state: &mut std::collections::HashMap<RowPtr, usize>,
+    ) {
+        for (index, row) in build_indexes.iter().enumerate() {
+            if row_state[row] == 1 {
+                if !bm.get(index) {
+                    bm.set(index, true)
+                }
+                continue;
+            }
+
+            if !bm.get(index) {
+                row_state.entry(*row).and_modify(|e| *e -= 1);
             }
         }
     }

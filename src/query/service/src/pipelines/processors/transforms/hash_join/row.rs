@@ -36,7 +36,7 @@ impl Chunk {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Hash)]
 pub struct RowPtr {
     pub chunk_index: u32,
     pub row_index: u32,
@@ -81,6 +81,11 @@ impl RowSpace {
         chunks.iter().map(|c| c.data_block.clone()).collect()
     }
 
+    pub fn rows_number(&self) -> usize {
+        let chunks = self.chunks.read().unwrap();
+        chunks.iter().map(|c| c.num_rows()).sum()
+    }
+
     pub fn gather(&self, row_ptrs: &[RowPtr]) -> Result<DataBlock> {
         let data_blocks = self.datablocks();
         let num_rows = data_blocks
@@ -111,3 +116,5 @@ impl PartialEq for RowPtr {
         self.chunk_index == other.chunk_index && self.row_index == other.row_index
     }
 }
+
+impl Eq for RowPtr {}
