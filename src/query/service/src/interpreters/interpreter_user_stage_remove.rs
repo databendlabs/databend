@@ -16,11 +16,10 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_legacy_planners::RemoveUserStagePlan;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::interpreter_common::list_files;
 use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::storages::stage::StageSourceHelper;
@@ -44,7 +43,7 @@ impl Interpreter for RemoveUserStageInterpreter {
     }
 
     #[tracing::instrument(level = "info", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = self.plan.clone();
         let prefix = plan.stage.get_prefix();
 
@@ -56,10 +55,6 @@ impl Interpreter for RemoveUserStageInterpreter {
             op.object(&format!("{prefix}{name}")).delete().await?;
         }
 
-        Ok(Box::pin(DataBlockStream::create(
-            self.schema(),
-            None,
-            vec![],
-        )))
+        Ok(PipelineBuildResult::create())
     }
 }

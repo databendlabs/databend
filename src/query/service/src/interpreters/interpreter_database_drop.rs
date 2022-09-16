@@ -18,10 +18,9 @@ use common_exception::Result;
 use common_legacy_planners::DropDatabasePlan;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -42,7 +41,7 @@ impl Interpreter for DropDatabaseInterpreter {
         "DropDatabaseInterpreter"
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         self.ctx
             .get_current_session()
             .validate_privilege(&GrantObject::Global, UserPrivilegeType::Drop)
@@ -51,10 +50,6 @@ impl Interpreter for DropDatabaseInterpreter {
         let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
         catalog.drop_database(self.plan.clone().into()).await?;
 
-        Ok(Box::pin(DataBlockStream::create(
-            self.plan.schema(),
-            None,
-            vec![],
-        )))
+        Ok(PipelineBuildResult::create())
     }
 }

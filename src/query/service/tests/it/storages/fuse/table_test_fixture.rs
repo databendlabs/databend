@@ -26,13 +26,12 @@ use common_legacy_planners::Extras;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::TableMeta;
 use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
 use common_storage::StorageFsConfig;
 use common_storage::StorageParams;
 use common_streams::SendableDataBlockStream;
 use databend_query::interpreters::append2table;
-use databend_query::interpreters::commit2table;
+use databend_query::interpreters::execute_pipeline;
 use databend_query::interpreters::CreateTableInterpreterV2;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::InterpreterFactoryV2;
@@ -194,7 +193,7 @@ impl TestFixture {
         let create_table_plan = self.default_crate_table_plan();
         let interpreter =
             CreateTableInterpreterV2::try_create(self.ctx.clone(), create_table_plan)?;
-        interpreter.execute().await?;
+        interpreter.execute(self.ctx.clone()).await?;
         Ok(())
     }
 
@@ -279,31 +278,27 @@ impl TestFixture {
             .get(0)
             .map(|b| b.schema().clone())
             .unwrap_or_else(|| table.schema());
-        let mut pipeline = Pipeline::create();
+        let mut build_res = PipelineBuildResult::create();
         let mut builder = SourcePipeBuilder::create();
 
         let blocks = Arc::new(Mutex::new(VecDeque::from_iter(blocks)));
         let output = OutputPort::create();
         builder.add_source(
             output.clone(),
-            BlocksSource::create(self.ctx.clone(), output.clone(), blocks.clone())?,
+            BlocksSource::create(self.ctx.clone(), output, blocks)?,
         );
-        pipeline.add_pipe(builder.finalize());
+        build_res.main_pipeline.add_pipe(builder.finalize());
 
         append2table(
             self.ctx.clone(),
             table.clone(),
             source_schema,
-            PipelineBuildResult {
-                main_pipeline: pipeline,
-                sources_pipelines: vec![],
-            },
+            &mut build_res,
+            overwrite,
+            commit,
         )?;
 
-        if commit {
-            commit2table(self.ctx.clone(), table.clone(), overwrite).await?;
-        }
-        Ok(())
+        execute_pipeline(self.ctx.clone(), build_res)
     }
 }
 
@@ -416,7 +411,7 @@ pub async fn execute_query(ctx: Arc<QueryContext>, query: &str) -> Result<Sendab
     let mut planner = Planner::new(ctx.clone());
     let (plan, _, _) = planner.plan_sql(query).await?;
     let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-    executor.execute().await
+    executor.execute(ctx.clone()).await
 }
 
 pub async fn execute_command(ctx: Arc<QueryContext>, query: &str) -> Result<()> {

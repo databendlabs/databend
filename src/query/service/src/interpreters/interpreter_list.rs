@@ -20,11 +20,10 @@ use common_datavalues::Series;
 use common_datavalues::SeriesFrom;
 use common_exception::Result;
 use common_legacy_planners::ListPlan;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::interpreter_common::list_files;
 use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -50,7 +49,7 @@ impl Interpreter for ListInterpreter {
     }
 
     #[tracing::instrument(level = "debug", name = "list_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = &self.plan;
         let files = list_files(&self.ctx, &plan.stage, &plan.path, &plan.pattern).await?;
 
@@ -73,17 +72,12 @@ impl Interpreter for ListInterpreter {
             .map(|file| file.creator.as_ref().map(|c| c.to_string().into_bytes()))
             .collect();
 
-        let block = DataBlock::create(self.plan.schema(), vec![
+        PipelineBuildResult::from_blocks(vec![DataBlock::create(self.plan.schema(), vec![
             Series::from_data(names),
             Series::from_data(sizes),
             Series::from_data(md5s),
             Series::from_data(last_modifieds),
             Series::from_data(creators),
-        ]);
-        Ok(Box::pin(DataBlockStream::create(
-            self.plan.schema(),
-            None,
-            vec![block],
-        )))
+        ])])
     }
 }

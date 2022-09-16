@@ -119,7 +119,7 @@ async fn execute(
         let _ = interpreter
             .set_source_pipe_builder(Option::from(source_pipe_builder))
             .map_err(|e| error!("interpreter.set_source_pipe_builder.error: {:?}", e));
-        interpreter.execute().await?
+        interpreter.execute(ctx.clone()).await?
     };
 
     let mut data_stream = ctx.try_create_abortable(data_stream)?;

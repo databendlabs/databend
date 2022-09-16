@@ -19,11 +19,10 @@ use common_legacy_planners::GrantPrivilegePlan;
 use common_meta_types::GrantObject;
 use common_meta_types::PrincipalIdentity;
 use common_meta_types::UserPrivilegeSet;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::interpreter_common::validate_grant_object_exists;
 use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -46,7 +45,7 @@ impl Interpreter for GrantPrivilegeInterpreter {
     }
 
     #[tracing::instrument(level = "debug", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = self.plan.clone();
 
         validate_grant_privileges(&plan.on, plan.priv_types)?;
@@ -70,11 +69,7 @@ impl Interpreter for GrantPrivilegeInterpreter {
             }
         }
 
-        Ok(Box::pin(DataBlockStream::create(
-            self.plan.schema(),
-            None,
-            vec![],
-        )))
+        Ok(PipelineBuildResult::create())
     }
 }
 
