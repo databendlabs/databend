@@ -19,10 +19,9 @@ use common_datavalues::Series;
 use common_datavalues::SeriesFrom;
 use common_exception::Result;
 use common_legacy_planners::ExistsTablePlan;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -43,7 +42,7 @@ impl Interpreter for ExistsTableInterpreter {
         "ExistsTableInterpreter"
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         let catalog = self.plan.catalog.as_str();
         let database = self.plan.database.as_str();
         let table = self.plan.table.as_str();
@@ -52,10 +51,9 @@ impl Interpreter for ExistsTableInterpreter {
             true => 1u8,
             false => 0u8,
         };
-        let schema = self.plan.schema();
-        let column = Series::from_data(vec![result]);
-        let block = DataBlock::create(schema.clone(), vec![column]);
 
-        Ok(Box::pin(DataBlockStream::create(schema, None, vec![block])))
+        PipelineBuildResult::from_blocks(vec![DataBlock::create(self.plan.schema(), vec![
+            Series::from_data(vec![result]),
+        ])])
     }
 }

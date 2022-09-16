@@ -72,7 +72,7 @@ fn execute_query(
     source_builder: SourcePipeBuilder,
 ) -> impl Future<Output = Result<()>> {
     async move {
-        let interpreter = InterpreterFactory::get(context, node)?;
+        let interpreter = InterpreterFactory::get(context.clone(), node)?;
 
         if let Err(cause) = interpreter.start().await {
             error!("interpreter.start error: {:?}", cause);
@@ -81,7 +81,7 @@ fn execute_query(
         // TODO(Winter): very hack code. need remove it.
         interpreter.set_source_pipe_builder(Option::from(source_builder))?;
 
-        let mut data_stream = interpreter.execute().await?;
+        let mut data_stream = interpreter.execute(context).await?;
 
         while let Some(_block) = data_stream.next().await {}
 
@@ -208,7 +208,10 @@ pub async fn streaming_load(
         .set_source_pipe_builder(Some(source_pipe_builder))
         .map_err(|e| error!("interpreter.set_source_pipe_builder.error: {:?}", e));
     interpreter.start().await.map_err(InternalServerError)?;
-    let mut data_stream = interpreter.execute().await.map_err(InternalServerError)?;
+    let mut data_stream = interpreter
+        .execute(context.clone())
+        .await
+        .map_err(InternalServerError)?;
     while let Some(_block) = data_stream.next().await {}
     // Write Finish to query log table.
     let _ = interpreter

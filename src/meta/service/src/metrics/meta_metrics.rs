@@ -714,6 +714,15 @@ impl counter::Count for RequestInFlight {
     }
 }
 
+/// RAII metrics counter of pending raft proposals
+pub(crate) struct ProposalPending;
+
+impl counter::Count for ProposalPending {
+    fn incr_count(&mut self, n: i64) {
+        PROPOSALS_PENDING.add(n);
+    }
+}
+
 /// Encode metrics as prometheus format string
 pub fn meta_metrics_to_prometheus_string() -> String {
     use prometheus::Encoder;

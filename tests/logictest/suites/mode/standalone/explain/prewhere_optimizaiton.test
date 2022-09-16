@@ -10,43 +10,37 @@ explain select a from t_where_optimizer where a = 1;
 ----
 Project
 ├── columns: [a (#0)]
-└── Filter
-    ├── filters: [=(t_where_optimizer.a (#0), 1)]
-    └── TableScan
-        ├── table: default.default.t_where_optimizer
-        ├── read rows: 0
-        ├── read bytes: 0
-        ├── partitions total: 0
-        ├── partitions scanned: 0
-        └── push downs: [filters: [(a = 1)], limit: NONE]
+└── TableScan
+    ├── table: default.default.t_where_optimizer
+    ├── read rows: 0
+    ├── read bytes: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    └── push downs: [filters: [(a = 1)], limit: NONE]
 
 statement query T
 explain select * from t_where_optimizer where a = b;
 
 ----
-Filter
-├── filters: [=(t_where_optimizer.a (#0), t_where_optimizer.b (#1))]
-└── TableScan
-    ├── table: default.default.t_where_optimizer
-    ├── read rows: 0
-    ├── read bytes: 0
-    ├── partitions total: 0
-    ├── partitions scanned: 0
-    └── push downs: [filters: [(a = b)], limit: NONE]
+TableScan
+├── table: default.default.t_where_optimizer
+├── read rows: 0
+├── read bytes: 0
+├── partitions total: 0
+├── partitions scanned: 0
+└── push downs: [filters: [(a = b)], limit: NONE]
 
 statement query T
 explain select * from t_where_optimizer where a = 1 or b > 2;
 
 ----
-Filter
-├── filters: [or(=(t_where_optimizer.a (#0), 1), >(t_where_optimizer.b (#1), 2))]
-└── TableScan
-    ├── table: default.default.t_where_optimizer
-    ├── read rows: 0
-    ├── read bytes: 0
-    ├── partitions total: 0
-    ├── partitions scanned: 0
-    └── push downs: [filters: [((a = 1) or (b > 2))], limit: NONE]
+TableScan
+├── table: default.default.t_where_optimizer
+├── read rows: 0
+├── read bytes: 0
+├── partitions total: 0
+├── partitions scanned: 0
+└── push downs: [filters: [((a = 1) or (b > 2))], limit: NONE]
 
 statement query T
 explain select * from t_where_optimizer where a = 1 and b > 2;

@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::containers::concat;
-use common_expression::types::NumberDataType;
 use common_expression::FunctionRegistry;
 
 mod arithmetic;
@@ -26,19 +24,6 @@ mod variant;
 
 mod string;
 mod string_multi_args;
-
-const ALL_INTEGER_TYPES: &[NumberDataType; 8] = &[
-    NumberDataType::UInt8,
-    NumberDataType::UInt16,
-    NumberDataType::UInt32,
-    NumberDataType::UInt64,
-    NumberDataType::Int8,
-    NumberDataType::Int16,
-    NumberDataType::Int32,
-    NumberDataType::Int64,
-];
-const ALL_FLOAT_TYPES: &[NumberDataType; 2] = &[NumberDataType::Float32, NumberDataType::Float64];
-const ALL_NUMERICS_TYPES: &[NumberDataType; 10] = &concat(ALL_INTEGER_TYPES, ALL_FLOAT_TYPES);
 
 pub fn builtin_functions() -> FunctionRegistry {
     let mut registry = FunctionRegistry::new();

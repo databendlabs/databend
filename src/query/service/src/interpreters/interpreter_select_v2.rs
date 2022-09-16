@@ -91,7 +91,7 @@ impl Interpreter for SelectInterpreterV2 {
     }
 
     #[tracing::instrument(level = "debug", name = "select_interpreter_v2_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute(&self, _ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
         let build_res = self.build_pipeline().await?;
 
         // WTF: We need to implement different logic for the HTTP handler
@@ -114,7 +114,7 @@ impl Interpreter for SelectInterpreterV2 {
 
     /// This method will create a new pipeline
     /// The QueryPipelineBuilder will use the optimized plan to generate a Pipeline
-    async fn create_new_pipeline(&self) -> Result<PipelineBuildResult> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         let build_res = self.build_pipeline().await?;
         Ok(build_res)
     }

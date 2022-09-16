@@ -124,18 +124,16 @@ impl<'a> TypeChecker<'a> {
         data_type: &DataTypeImpl,
     ) -> Result<(Scalar, DataTypeImpl)> {
         // Try constant folding
-        if let Ok((value, value_type)) =
-            Evaluator::eval_scalar::<String>(scalar).and_then(|evaluator| {
-                let func_ctx = self.ctx.try_get_function_context()?;
-                if scalar.is_deterministic() {
-                    evaluator.try_eval_const(&func_ctx)
-                } else {
-                    Err(ErrorCode::LogicalError(
-                        "Constant folding requires the function deterministic",
-                    ))
-                }
-            })
-        {
+        if let Ok((value, value_type)) = Evaluator::eval_scalar(scalar).and_then(|evaluator| {
+            let func_ctx = self.ctx.try_get_function_context()?;
+            if scalar.is_deterministic() {
+                evaluator.try_eval_const(&func_ctx)
+            } else {
+                Err(ErrorCode::LogicalError(
+                    "Constant folding requires the function deterministic",
+                ))
+            }
+        }) {
             Ok((
                 ConstantExpr {
                     value,

@@ -25,11 +25,10 @@ use crate::sql::plans::Scalar;
 use crate::sql::plans::ScalarExpr;
 
 impl Evaluator {
-    pub fn eval_scalar<VectorID>(scalar: &Scalar) -> Result<EvalNode<VectorID>>
-    where VectorID: From<String> {
+    pub fn eval_scalar(scalar: &Scalar) -> Result<EvalNode> {
         match scalar {
             Scalar::BoundColumnRef(column_ref) => Ok(EvalNode::Variable {
-                id: column_ref.column.index.to_string().into(),
+                name: column_ref.column.index.to_string(),
             }),
             Scalar::ConstantExpr(constant) => Ok(EvalNode::Constant {
                 value: constant.value.clone(),
@@ -62,7 +61,7 @@ impl Evaluator {
                 Ok(EvalNode::Function { func, args })
             }
             Scalar::FunctionCall(func) => {
-                let args: Vec<EvalNode<VectorID>> = func
+                let args: Vec<EvalNode> = func
                     .arguments
                     .iter()
                     .map(Self::eval_scalar)
