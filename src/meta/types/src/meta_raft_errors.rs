@@ -25,35 +25,7 @@ use openraft::NodeId;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::MetaError;
-
-/// Raft protocol related errors
-#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub enum MetaRaftError {
-    #[error(transparent)]
-    Fatal(#[from] Fatal),
-
-    #[error(transparent)]
-    ForwardToLeader(#[from] ForwardToLeader),
-
-    #[error(transparent)]
-    ChangeMembershipError(#[from] ChangeMembershipError),
-
-    #[error("{0}")]
-    ConsistentReadError(String),
-
-    #[error("{0}")]
-    ForwardRequestError(String),
-
-    #[error("{0}")]
-    NoLeaderError(String),
-
-    #[error("{0}")]
-    RequestNotForwardToLeaderError(String),
-
-    #[error(transparent)]
-    InitializeError(InitializeError),
-}
+use crate::MetaOperationError;
 
 #[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum RetryableError {
@@ -86,28 +58,21 @@ impl RaftWriteError {
     }
 }
 
-impl From<RaftWriteError> for MetaRaftError {
-    fn from(e: RaftWriteError) -> Self {
-        match e {
-            RaftWriteError::ForwardToLeader(e) => e.into(),
-            RaftWriteError::Fatal(e) => e.into(),
-        }
-    }
-}
-
-impl From<RaftWriteError> for MetaError {
-    fn from(e: RaftWriteError) -> Self {
-        let re = MetaRaftError::from(e);
-        MetaError::MetaRaftError(re)
-    }
-}
-
 /// RaftChangeMembershipError is a super set of RaftWriteError.
 impl From<RaftWriteError> for RaftChangeMembershipError {
     fn from(e: RaftWriteError) -> Self {
         match e {
-            RaftWriteError::Fatal(fatal) => fatal.into(),
             RaftWriteError::ForwardToLeader(to_leader) => to_leader.into(),
+            RaftWriteError::Fatal(fatal) => fatal.into(),
+        }
+    }
+}
+
+impl From<RaftWriteError> for MetaOperationError {
+    fn from(e: RaftWriteError) -> Self {
+        match e {
+            RaftWriteError::ForwardToLeader(to_leader) => to_leader.into(),
+            RaftWriteError::Fatal(fatal) => Self::DataError(fatal.into()),
         }
     }
 }
@@ -115,19 +80,12 @@ impl From<RaftWriteError> for RaftChangeMembershipError {
 // Collection of errors that occur when change membership on local raft node.
 pub type RaftChangeMembershipError = ClientWriteError;
 
-impl From<RaftChangeMembershipError> for MetaRaftError {
+impl From<RaftChangeMembershipError> for MetaOperationError {
     fn from(e: RaftChangeMembershipError) -> Self {
         match e {
-            RaftChangeMembershipError::ForwardToLeader(e) => e.into(),
-            RaftChangeMembershipError::ChangeMembershipError(e) => e.into(),
-            RaftChangeMembershipError::Fatal(e) => e.into(),
+            RaftChangeMembershipError::ForwardToLeader(to_leader) => to_leader.into(),
+            RaftChangeMembershipError::Fatal(fatal) => Self::DataError(fatal.into()),
+            RaftChangeMembershipError::ChangeMembershipError(c) => Self::DataError(c.into()),
         }
-    }
-}
-
-impl From<RaftChangeMembershipError> for MetaError {
-    fn from(e: RaftChangeMembershipError) -> Self {
-        let re = MetaRaftError::from(e);
-        MetaError::MetaRaftError(re)
     }
 }

@@ -18,41 +18,25 @@ use serde::Serialize;
 use thiserror::Error;
 
 use crate::app_error::AppError;
-use crate::MetaBytesError;
+use crate::MetaAPIError;
 use crate::MetaClientError;
 use crate::MetaNetworkError;
-use crate::MetaRaftError;
 use crate::MetaStorageError;
 
 /// Top level error MetaNode would return.
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum MetaError {
     #[error(transparent)]
-    MetaNetworkError(#[from] MetaNetworkError),
+    NetworkError(#[from] MetaNetworkError),
 
     #[error(transparent)]
-    MetaRaftError(#[from] MetaRaftError),
+    StorageError(#[from] MetaStorageError),
 
     #[error(transparent)]
-    MetaStorageError(#[from] MetaStorageError),
+    ClientError(#[from] MetaClientError),
 
     #[error(transparent)]
-    MetaClientError(#[from] MetaClientError),
-
-    #[error("{0}")]
-    InvalidConfig(String),
-
-    #[error("raft state present id={0}, can not create")]
-    MetaStoreAlreadyExists(u64),
-
-    #[error("raft state absent, can not open")]
-    MetaStoreNotFound,
-
-    #[error("{0}")]
-    MetaServiceError(String),
-
-    #[error(transparent)]
-    BytesError(#[from] MetaBytesError),
+    APIError(#[from] MetaAPIError),
 
     #[error(transparent)]
     AppError(#[from] AppError),

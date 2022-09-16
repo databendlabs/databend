@@ -20,14 +20,16 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Instant;
 
+use anyerror::AnyError;
 use common_meta_types::protobuf::raft_service_server::RaftService;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
 use common_meta_types::AppliedState;
 use common_meta_types::ForwardRequest;
+use common_meta_types::InvalidReply;
 use common_meta_types::LogEntry;
 use common_meta_types::MetaError;
-use common_meta_types::MetaRaftError;
+use common_meta_types::MetaNetworkError;
 use tonic::codegen::futures_core::Stream;
 
 use crate::meta_service::ForwardRequestBody;
@@ -86,13 +88,19 @@ impl RaftService for RaftServiceImpl {
             Ok(r) => {
                 let a: Result<AppliedState, MetaError> = r.try_into().map_err(|e: &str| {
                     incr_meta_metrics_proposals_failed();
-                    MetaError::MetaRaftError(MetaRaftError::ForwardRequestError(e.to_string()))
+
+                    let inv_reply = InvalidReply::new(
+                        "expect type: Result<AppliedState,MetaError>",
+                        &AnyError::error(e),
+                    );
+                    let net_err = MetaNetworkError::InvalidReply(inv_reply);
+                    MetaError::NetworkError(net_err)
                 });
                 a
             }
             Err(e) => {
                 incr_meta_metrics_proposals_failed();
-                Err(e)
+                Err(MetaError::from(e))
             }
         };
 

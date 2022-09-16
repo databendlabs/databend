@@ -18,8 +18,7 @@ use clap::Args;
 use clap::Parser;
 use common_meta_raft_store::config::get_default_raft_advertise_host;
 use common_meta_raft_store::config::RaftConfig as InnerRaftConfig;
-use common_meta_types::MetaError;
-use common_meta_types::MetaResult;
+use common_meta_types::MetaStartupError;
 use common_tracing::Config as InnerLogConfig;
 use common_tracing::FileConfig as InnerFileLogConfig;
 use common_tracing::StderrConfig as InnerStderrLogConfig;
@@ -164,7 +163,7 @@ impl Config {
     /// - Load from file as default.
     /// - Load from env, will override config from file.
     /// - Load from args as finally override
-    pub fn load() -> MetaResult<Self> {
+    pub fn load() -> Result<Self, MetaStartupError> {
         let arg_conf = Self::parse();
 
         let mut builder: serfig::Builder<Self> = serfig::Builder::default();
@@ -186,7 +185,7 @@ impl Config {
         let cfg_via_env: ConfigViaEnv = serfig::Builder::default()
             .collect(from_env())
             .build()
-            .map_err(|e| MetaError::InvalidConfig(e.to_string()))?;
+            .map_err(|e| MetaStartupError::InvalidConfig(e.to_string()))?;
         builder = builder.collect(from_self(cfg_via_env.into()));
 
         // Finally, load from args.
@@ -194,7 +193,7 @@ impl Config {
 
         builder
             .build()
-            .map_err(|e| MetaError::InvalidConfig(e.to_string()))
+            .map_err(|e| MetaStartupError::InvalidConfig(e.to_string()))
     }
 }
 
