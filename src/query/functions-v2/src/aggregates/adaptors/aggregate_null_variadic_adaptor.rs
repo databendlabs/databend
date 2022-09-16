@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,8 +18,11 @@ use std::sync::Arc;
 
 use bytes::BytesMut;
 use common_arrow::arrow::bitmap::Bitmap;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::util::column_merge_validity;
+use common_expression::Column;
+use common_expression::ColumnBuilder;
 use common_io::prelude::BinaryWriteBuf;
 
 use crate::aggregates::AggregateFunction;
@@ -80,10 +83,11 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
         "AggregateNullVariadicAdaptor"
     }
 
-    fn return_type(&self) -> Result<DataTypeImpl> {
+    fn return_type(&self) -> Result<DataType> {
+        let nested = self.nested.return_type()?;
         match NULLABLE_RESULT {
-            true => Ok(wrap_nullable(&self.nested.return_type()?)),
-            false => Ok(self.nested.return_type()?),
+            true => Ok(nested.wrap_nullable()),
+            false => Ok(nested),
         }
     }
 
@@ -99,37 +103,30 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
         Layout::from_size_align(layout.size() + add, layout.align()).unwrap()
     }
 
+    #[inline]
     fn accumulate(
         &self,
         place: StateAddr,
-        columns: &[ColumnRef],
+        columns: &[Column],
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
         let mut not_null_columns = Vec::with_capacity(columns.len());
         let mut validity = validity.cloned();
-        let mut is_all_null = false;
         for col in columns.iter() {
-            let (all_null, v) = col.validity();
-            if all_null {
-                is_all_null = true;
-            }
-            validity = combine_validities(validity.as_ref(), v);
-            not_null_columns.push(Series::remove_nullable(col))
+            validity = column_merge_validity(col, validity);
+            not_null_columns.push(col.remove_nullable());
         }
 
         self.nested
             .accumulate(place, &not_null_columns, validity.as_ref(), input_rows)?;
 
-        if !is_all_null {
-            match validity {
-                Some(v) => {
-                    if v.unset_bits() != input_rows {
-                        self.set_flag(place, 1);
-                    }
-                }
-                None => self.set_flag(place, 1),
-            }
+        if validity
+            .as_ref()
+            .map(|c| c.unset_bits() != input_rows)
+            .unwrap_or(true)
+        {
+            self.set_flag(place, 1);
         }
         Ok(())
     }
@@ -138,52 +135,42 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
         &self,
         places: &[StateAddr],
         offset: usize,
-        columns: &[ColumnRef],
+        columns: &[Column],
         input_rows: usize,
     ) -> Result<()> {
         let mut not_null_columns = Vec::with_capacity(columns.len());
-
         let mut validity = None;
-        let mut is_all_null = false;
-
         for col in columns.iter() {
-            let (all_null, v) = col.validity();
-            if all_null {
-                is_all_null = true;
-            }
-            validity = combine_validities(validity.as_ref(), v);
-            not_null_columns.push(Series::remove_nullable(col))
+            validity = column_merge_validity(col, validity);
+            not_null_columns.push(col.remove_nullable());
         }
 
-        let not_null_columns = &not_null_columns;
-
-        if !is_all_null {
-            match validity {
-                Some(v) if v.unset_bits() > 0 => {
-                    for (valid, (row, place)) in v.iter().zip(places.iter().enumerate()) {
-                        if valid {
-                            self.set_flag(place.next(offset), 1);
-                            self.nested.accumulate_row(
-                                place.next(offset),
-                                not_null_columns,
-                                row,
-                            )?;
-                        }
+        match validity {
+            Some(v) if v.unset_bits() > 0 => {
+                // all nulls
+                if v.unset_bits() == v.len() {
+                    return Ok(());
+                }
+                for (valid, (row, place)) in v.iter().zip(places.iter().enumerate()) {
+                    if valid {
+                        self.set_flag(place.next(offset), 1);
+                        self.nested
+                            .accumulate_row(place.next(offset), &not_null_columns, row)?;
                     }
                 }
-                _ => {
-                    self.nested
-                        .accumulate_keys(places, offset, not_null_columns, input_rows)?;
-                    places
-                        .iter()
-                        .for_each(|place| self.set_flag(place.next(offset), 1));
-                }
+            }
+            _ => {
+                self.nested
+                    .accumulate_keys(places, offset, &not_null_columns, input_rows)?;
+                places
+                    .iter()
+                    .for_each(|place| self.set_flag(place.next(offset), 1));
             }
         }
         Ok(())
     }
 
-    fn accumulate_row(&self, _place: StateAddr, _columns: &[ColumnRef], _row: usize) -> Result<()> {
+    fn accumulate_row(&self, _place: StateAddr, _columns: &[Column], _row: usize) -> Result<()> {
         unreachable!()
     }
 
@@ -221,21 +208,22 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
         self.nested.merge(place, rhs)
     }
 
-    fn merge_result(&self, place: StateAddr, column: &mut dyn MutableColumn) -> Result<()> {
+    fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
         if NULLABLE_RESULT {
-            let builder: &mut MutableNullableColumn = Series::check_get_mutable_column(column)?;
             if self.get_flag(place) == 1 {
-                let inner = builder.inner_mut();
-                self.nested.merge_result(place, inner.as_mut())?;
-
-                let validity = builder.validity_mut();
-                validity.push(true);
+                match builder {
+                    ColumnBuilder::Nullable(ref mut inner) => {
+                        self.nested.merge_result(place, &mut inner.builder)?;
+                        inner.validity.push(true);
+                    }
+                    _ => unreachable!(),
+                }
             } else {
-                builder.append_default();
+                builder.push_default();
             }
             Ok(())
         } else {
-            self.nested.merge_result(place, column)
+            self.nested.merge_result(place, builder)
         }
     }
 
@@ -251,7 +239,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
         self.nested.convert_const_to_full()
     }
 
-    fn get_if_condition(&self, columns: &[ColumnRef]) -> Option<Bitmap> {
+    fn get_if_condition(&self, columns: &[Column]) -> Option<Bitmap> {
         self.nested.get_if_condition(columns)
     }
 }

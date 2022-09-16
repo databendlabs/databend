@@ -12,13 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Concat two arrays of different lengths
-pub const fn concat<T, const A: usize, const B: usize>(a: &[T; A], b: &[T; B]) -> [T; A + B] {
-    let mut result = std::mem::MaybeUninit::uninit();
-    let dest = result.as_mut_ptr() as *mut T;
-    unsafe {
-        std::ptr::copy_nonoverlapping(a.as_ptr(), dest, A);
-        std::ptr::copy_nonoverlapping(b.as_ptr(), dest.add(A), B);
-        result.assume_init()
-    }
-}
+mod aggregate_null_adaptor;
+mod aggregate_null_unary_adaptor;
+mod aggregate_null_variadic_adaptor;
+mod aggregate_ornull_adaptor;
+
+pub use aggregate_null_adaptor::*;
+pub use aggregate_null_unary_adaptor::*;
+pub use aggregate_null_variadic_adaptor::*;
+pub use aggregate_ornull_adaptor::*;
