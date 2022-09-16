@@ -17,6 +17,7 @@ use common_datavalues::ColumnWithField;
 use common_datavalues::DataField;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
+use common_datavalues::NullType;
 use common_exception::Result;
 use common_functions::scalars::Function;
 use common_functions::scalars::FunctionContext;
@@ -93,7 +94,10 @@ impl EvalNode {
 
     /// Try to evaluate as a constant expression
     pub fn try_eval_const(&self, func_ctx: &FunctionContext) -> Result<(DataValue, DataTypeImpl)> {
-        let dummy_data_block = DataBlock::empty();
+        let dummy_column = DataValue::Null.as_const_column(&NullType::new_impl(), 1)?;
+        let mut dummy_data_block = DataBlock::empty();
+        dummy_data_block = dummy_data_block
+            .add_column(dummy_column, DataField::new("dummy", NullType::new_impl()))?;
         let vector = self.eval(func_ctx, &dummy_data_block)?;
         debug_assert!(vector.vector.len() == 1);
         Ok((vector.vector.get(0), vector.logical_type))
