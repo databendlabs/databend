@@ -281,6 +281,13 @@ impl Settings {
                 desc: "SQL dialect, support \"PostgreSQL\" and \"MySQL\", default value: \"PostgreSQL\"",
                 possible_values: Some(vec!["PostgreSQL", "MySQL"]),
             },
+            SettingValue {
+                default_value: DataValue::UInt64(1),
+                user_setting: UserSetting::create("enable_cbo", DataValue::UInt64(1)),
+                level: ScopeLevel::Session,
+                desc: "If enable cost based optimization, default value: 1",
+                possible_values: None,
+            },
             // max_execute_time
             SettingValue {
                 default_value: DataValue::UInt64(0),
@@ -455,6 +462,18 @@ impl Settings {
 
     pub fn set_quoted_ident_case_sensitive(&self, val: bool) -> Result<()> {
         static KEY: &str = "quoted_ident_case_sensitive";
+        let v = if val { 1 } else { 0 };
+        self.try_set_u64(KEY, v, false)
+    }
+
+    pub fn get_enable_cbo(&self) -> Result<bool> {
+        static KEY: &str = "enable_cbo";
+        let v = self.try_get_u64(KEY)?;
+        Ok(v != 0)
+    }
+
+    pub fn set_enable_cbo(&self, val: bool) -> Result<()> {
+        static KEY: &str = "enable_cbo";
         let v = if val { 1 } else { 0 };
         self.try_set_u64(KEY, v, false)
     }

@@ -16,7 +16,6 @@ io-uring = ["common-meta-embedded/io-uring"]
 
 [dependencies]
 # Workspace dependencies
-common-exception = { path = "../../common/exception" }
 common-grpc = { path = "../../common/grpc" }
 common-meta-api = { path = "../api" }
 common-meta-client = { path = "../client" }
