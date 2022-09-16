@@ -27,7 +27,7 @@ use common_exception::Result;
 use crate::sessions::TableContext;
 use crate::sql::binder::scalar_common::split_conjunctions;
 use crate::sql::binder::scalar_common::split_equivalent_predicate;
-use crate::sql::binder::scalar_common::wrap_cast_if_needed;
+use crate::sql::binder::wrap_cast;
 use crate::sql::binder::Visibility;
 use crate::sql::normalize_identifier;
 use crate::sql::optimizer::ColumnSet;
@@ -450,8 +450,10 @@ impl<'a> JoinConditionResolver<'a> {
         let right_type = right.data_type();
         if left_type.ne(&right_type) {
             let least_super_type = compare_coercion(&left_type, &right_type)?;
-            left = wrap_cast_if_needed(left, &least_super_type);
-            right = wrap_cast_if_needed(right, &least_super_type);
+            // Wrap cast for both left and right, `cast` can change the physical type of the data block
+            // Related issue: https://github.com/datafuselabs/databend/issues/7650
+            left = wrap_cast(left, &least_super_type);
+            right = wrap_cast(right, &least_super_type);
         }
 
         if left_used_columns.is_subset(&left_columns)
