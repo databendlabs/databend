@@ -448,9 +448,11 @@ impl<'a> JoinConditionResolver<'a> {
         // Bump types of left conditions and right conditions
         let left_type = left.data_type();
         let right_type = right.data_type();
-        let least_super_type = compare_coercion(&left_type, &right_type)?;
-        left = wrap_cast_if_needed(left, &least_super_type);
-        right = wrap_cast_if_needed(right, &least_super_type);
+        if left_type.ne(&right_type) {
+            let least_super_type = compare_coercion(&left_type, &right_type)?;
+            left = wrap_cast_if_needed(left, &least_super_type);
+            right = wrap_cast_if_needed(right, &least_super_type);
+        }
 
         if left_used_columns.is_subset(&left_columns)
             && right_used_columns.is_subset(&right_columns)
