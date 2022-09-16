@@ -29,7 +29,11 @@ use crate::sql::plans::SortItem;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Prewhere {
-    pub columns: ColumnSet,
+    // columns needed to be output after prewhere scan
+    pub output_columns: ColumnSet,
+    // columns needed to conduct prewhere filter
+    pub prewhere_columns: ColumnSet,
+    // prewhere filter predicates
     pub predicates: Vec<Scalar>,
 }
 
