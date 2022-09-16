@@ -48,59 +48,50 @@ impl PrewhereOptimizer {
         }
     }
 
-    fn collect_columns(expr: &Scalar, columns: &mut ColumnSet) {
+    fn collect_columns_impl(expr: &Scalar, columns: &mut ColumnSet) {
         match expr {
             Scalar::BoundColumnRef(column) => {
                 columns.insert(column.column.index);
             }
             Scalar::AndExpr(and) => {
-                Self::collect_columns(and.left.as_ref(), columns);
-                Self::collect_columns(and.right.as_ref(), columns);
+                Self::collect_columns_impl(and.left.as_ref(), columns);
+                Self::collect_columns_impl(and.right.as_ref(), columns);
             }
             Scalar::OrExpr(or) => {
-                Self::collect_columns(or.left.as_ref(), columns);
-                Self::collect_columns(or.right.as_ref(), columns);
+                Self::collect_columns_impl(or.left.as_ref(), columns);
+                Self::collect_columns_impl(or.right.as_ref(), columns);
             }
             Scalar::ComparisonExpr(cmp) => {
-                Self::collect_columns(cmp.left.as_ref(), columns);
-                Self::collect_columns(cmp.right.as_ref(), columns);
+                Self::collect_columns_impl(cmp.left.as_ref(), columns);
+                Self::collect_columns_impl(cmp.right.as_ref(), columns);
             }
             Scalar::FunctionCall(func) => {
                 for arg in func.arguments.iter() {
-                    Self::collect_columns(arg, columns);
+                    Self::collect_columns_impl(arg, columns);
                 }
             }
             Scalar::CastExpr(cast) => {
-                Self::collect_columns(cast.argument.as_ref(), columns);
+                Self::collect_columns_impl(cast.argument.as_ref(), columns);
             }
             // 1. ConstantExpr is not collected.
-            // 2. SubqueryExpr is not collected.
-            // 3. AggregateFunction will not appear in where clause.
+            // 2. SubqueryExpr and AggregateFunction will not appear in Filter-LogicalGet
             _ => {}
         }
     }
 
     // analyze if the expression can be moved to prewhere
-    fn analyze(expr: &Scalar, columns_to_scan: usize) -> (bool, ColumnSet) {
+    fn collect_columns(expr: &Scalar) -> ColumnSet {
         let mut columns = ColumnSet::new();
-
         // columns in subqueries are not considered
-        Self::collect_columns(expr, &mut columns);
+        Self::collect_columns_impl(expr, &mut columns);
 
-        // viable conditions:
-        // 1. Condition depend on some column. Constant expressions are not moved.
-        // 2. Do not move conditions involving all queried columns.
-        // 3. Only current table columns are considered. (This condition is always true in current Pattern (Filter -> LogicalGet)).
-        (
-            !columns.is_empty() && columns.len() < columns_to_scan,
-            columns,
-        )
+        columns
     }
 
     pub fn prewhere_optimize(&self, s_expr: SExpr) -> Result<SExpr> {
         let rel_op = s_expr.plan();
         if s_expr.match_pattern(&self.pattern) {
-            let mut filter: Filter = s_expr.plan().clone().try_into()?;
+            let filter: Filter = s_expr.plan().clone().try_into()?;
             let mut get: LogicalGet = s_expr.child(0)?.plan().clone().try_into()?;
             let metadata = self.metadata.read().clone();
 
@@ -112,19 +103,12 @@ impl PrewhereOptimizer {
 
             let mut prewhere_columns = ColumnSet::new();
             let mut prewhere_pred = Vec::new();
-            let mut remain_pred = Vec::new();
-
-            let columns_to_scan = get.columns.len();
 
             // filter.predicates are already splited by AND
             for pred in filter.predicates.iter() {
-                let (viable, columns) = Self::analyze(pred, columns_to_scan);
-                if viable {
-                    prewhere_pred.push(pred.clone());
-                    prewhere_columns.extend(&columns);
-                } else {
-                    remain_pred.push(pred.clone());
-                }
+                let columns = Self::collect_columns(pred);
+                prewhere_pred.push(pred.clone());
+                prewhere_columns.extend(&columns);
             }
 
             get.prewhere = if prewhere_pred.is_empty() {
@@ -137,15 +121,7 @@ impl PrewhereOptimizer {
                 })
             };
 
-            if !remain_pred.is_empty() {
-                filter.predicates = remain_pred;
-                Ok(SExpr::create_unary(
-                    filter.into(),
-                    SExpr::create_leaf(get.into()),
-                ))
-            } else {
-                Ok(SExpr::create_leaf(get.into()))
-            }
+            Ok(SExpr::create_leaf(get.into()))
         } else {
             let children = s_expr
                 .children()
