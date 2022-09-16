@@ -232,6 +232,7 @@ pub async fn list_files_from_dal(
                 .last_modified()
                 .map_or(Utc::now(), |t| Utc.timestamp(t.unix_timestamp(), 0)),
             creator: None,
+            etag: meta.etag().map(str::to_string),
         })
         .collect::<Vec<StageFile>>();
 

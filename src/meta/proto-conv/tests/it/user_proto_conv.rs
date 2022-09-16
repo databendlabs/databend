@@ -14,6 +14,11 @@
 
 use std::collections::HashSet;
 
+use common_datavalues::chrono::DateTime;
+use common_datavalues::chrono::NaiveDate;
+use common_datavalues::chrono::NaiveDateTime;
+use common_datavalues::chrono::NaiveTime;
+use common_datavalues::chrono::Utc;
 use common_meta_types as mt;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeType;
@@ -148,6 +153,22 @@ pub(crate) fn test_gcs_stage_info() -> mt::UserStageInfo {
     }
 }
 
+pub(crate) fn test_stage_file() -> mt::StageFile {
+    let dt = NaiveDateTime::new(
+        NaiveDate::from_ymd(2022, 9, 16),
+        NaiveTime::from_hms(0, 1, 2),
+    );
+    let user_id = mt::UserIdentity::new("datafuselabs", "datafuselabs.rs");
+    mt::StageFile {
+        path: "/path/to/stage".to_string(),
+        size: 233,
+        md5: None,
+        last_modified: DateTime::from_utc(dt, Utc),
+        creator: Some(user_id),
+        etag: None,
+    }
+}
+
 #[test]
 fn test_user_pb_from_to() -> anyhow::Result<()> {
     let test_user_info = test_user_info();
@@ -248,6 +269,15 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
         let user_info = test_user_info();
         let p = user_info.to_pb()?;
 
+        let mut buf = vec![];
+        common_protos::prost::Message::encode(&p, &mut buf)?;
+        println!("{:?}", buf);
+    }
+
+    // StageFile
+    {
+        let stage_file = test_stage_file();
+        let p = stage_file.to_pb()?;
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("{:?}", buf);

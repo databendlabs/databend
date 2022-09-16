@@ -222,4 +222,5 @@ message StageFile {
   optional string md5 = 3;
   string last_modified = 4;
   optional UserIdentity creator = 5;
+  optional string etag = 6;
 }
