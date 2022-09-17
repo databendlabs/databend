@@ -17,6 +17,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_base::base::tokio::sync::Notify;
 use common_datablocks::DataBlock;
@@ -35,7 +36,9 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
+use common_datavalues::DataType;
 use common_datavalues::DataTypeImpl;
+use common_datavalues::DataValue;
 use common_datavalues::NullableType;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -683,5 +686,95 @@ impl HashJoinState for JoinHashTable {
             DataBlock::create(DataSchemaRef::from(marker_schema), vec![marker_column]);
         let build_block = self.row_space.gather(&row_ptrs)?;
         Ok(vec![self.merge_eq_block(&marker_block, &build_block)?])
+    }
+
+    fn right_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
+        // For right join, build side will appear at lease once in the joined table
+        // Find the unmatched rows in build side
+        let mut unmatched_build_indexes = vec![];
+        {
+            let chunks = self.row_space.chunks.read().unwrap();
+            for (chunk_index, chunk) in chunks.iter().enumerate() {
+                for row_index in 0..chunk.num_rows() {
+                    let row_ptr = RowPtr {
+                        chunk_index: chunk_index as u32,
+                        row_index: row_index as u32,
+                        marker: None,
+                    };
+                    if !self
+                        .hash_join_desc
+                        .right_join_desc
+                        .build_indexes
+                        .read()
+                        .contains(&row_ptr)
+                    {
+                        unmatched_build_indexes.push(row_ptr);
+                    }
+                }
+            }
+        }
+
+        let unmatched_build_block = self.row_space.gather(&unmatched_build_indexes)?;
+        // Create null block for unmatched rows in probe side
+        let null_probe_block = DataBlock::create(
+            self.probe_schema.clone(),
+            self.probe_schema
+                .fields()
+                .iter()
+                .map(|df| {
+                    df.data_type()
+                        .clone()
+                        .create_constant_column(&DataValue::Null, unmatched_build_indexes.len())
+                })
+                .collect::<Result<Vec<_>>>()?,
+        );
+        let mut merged_block = self.merge_eq_block(&null_probe_block, &unmatched_build_block)?;
+        merged_block = DataBlock::concat_blocks(&[blocks, &[merged_block]].concat())?;
+
+        if self.hash_join_desc.other_predicate.is_none() {
+            return Ok(vec![merged_block]);
+        }
+
+        let (bm, all_true, all_false) = self.get_other_filters(
+            &merged_block,
+            self.hash_join_desc.other_predicate.as_ref().unwrap(),
+        )?;
+
+        if all_true {
+            return Ok(vec![merged_block]);
+        }
+
+        let validity = match (bm, all_false) {
+            (Some(b), _) => b,
+            (None, true) => Bitmap::new_zeroed(merged_block.num_rows()),
+            // must be one of above
+            _ => unreachable!(),
+        };
+
+        let probe_column_len = self.probe_schema.fields().len();
+        let probe_columns = merged_block.columns()[0..probe_column_len]
+            .iter()
+            .map(|c| Self::set_validity(c, &validity))
+            .collect::<Result<Vec<_>>>()?;
+        let probe_block = DataBlock::create(self.probe_schema.clone(), probe_columns);
+        let build_block = DataBlock::create(
+            self.row_space.data_schema.clone(),
+            merged_block.columns()[probe_column_len..].to_vec(),
+        );
+        merged_block = self.merge_eq_block(&probe_block, &build_block)?;
+
+        // If there are only non-equi conditions, build_indexes size will greater build table size
+        // Because the case will cause cross join.
+        // We need filter the redundant rows for build side.
+        let build_indexes = self.hash_join_desc.right_join_desc.build_indexes.read();
+        let mut row_state = self.hash_join_desc.right_join_desc.row_state.write();
+        if build_indexes.len() > self.row_space.rows_number() {
+            let mut bm = validity.into_mut().right().unwrap();
+            Self::filter_rows_for_right_join(&mut bm, &build_indexes, &mut row_state);
+            let predicate = BooleanColumn::from_arrow_data(bm.into()).arc();
+            return Ok(vec![DataBlock::filter_block(merged_block, &predicate)?]);
+        }
+
+        Ok(vec![merged_block])
     }
 }
