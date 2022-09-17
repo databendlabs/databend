@@ -14,6 +14,10 @@
 
 //! Supporting utilities for tests.
 
+use common_meta_types::anyerror::AnyError;
+use common_meta_types::MetaAPIError;
+use common_meta_types::MetaDataError;
+use common_meta_types::MetaDataReadError;
 use common_meta_types::MetaError;
 use common_proto_conv::FromToProto;
 
@@ -35,5 +39,11 @@ where
         return Ok(s);
     };
 
-    unreachable!("get_kv expects non-None for key: {}", key.to_key())
+    Err(MetaError::APIError(MetaAPIError::DataError(
+        MetaDataError::ReadError(MetaDataReadError::new(
+            "get_kv_data",
+            "not found",
+            &AnyError::error(""),
+        )),
+    )))
 }
