@@ -565,11 +565,6 @@ impl<'a> Binder {
             ));
         };
 
-        self.ctx
-            .get_table(&catalog, &database, &table)
-            .await?
-            .check_can_modify_table()?;
-
         match action {
             AlterTableAction::RenameTable { new_table } => {
                 let entities = vec![RenameTableEntity {

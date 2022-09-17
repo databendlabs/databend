@@ -73,7 +73,9 @@ pub trait Table: Sync + Send {
 
     fn check_can_modify_table(&self) -> Result<()> {
         if self.get_table_info().share_name.is_some() {
-            return Err(ErrorCode::TableNotWritable("Cannot modify shared table"));
+            return Err(ErrorCode::ShareHasNoGrantedPrivilege(
+                "Cannot modify shared table",
+            ));
         }
         Ok(())
     }

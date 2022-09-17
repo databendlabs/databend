@@ -62,6 +62,8 @@ impl Interpreter for AlterTableClusterKeyInterpreter {
             .get_table(tenant.as_str(), &plan.database, &plan.table)
             .await?;
 
+        table.check_can_modify_table()?;
+
         let cluster_key_str = format!("({})", plan.cluster_keys.join(", "));
 
         table

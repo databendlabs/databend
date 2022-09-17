@@ -57,6 +57,8 @@ impl Interpreter for ReclusterTableInterpreter {
                 .get_table(tenant.as_str(), &plan.database, &plan.table)
                 .await?;
 
+            table.check_can_modify_table()?;
+
             let mut pipeline = Pipeline::create();
             let mutator = table
                 .recluster(

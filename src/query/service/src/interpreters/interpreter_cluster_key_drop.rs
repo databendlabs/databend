@@ -62,6 +62,8 @@ impl Interpreter for DropTableClusterKeyInterpreter {
             .get_table(tenant.as_str(), &plan.database, &plan.table)
             .await?;
 
+        table.check_can_modify_table()?;
+
         table
             .drop_table_cluster_keys(self.ctx.clone(), &self.plan.catalog)
             .await?;
