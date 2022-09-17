@@ -284,7 +284,7 @@ impl DataExchangeManager {
                 let mut build_res = query_coordinator.subscribe_fragment(&ctx, fragment_id)?;
 
                 let exchanges = std::mem::take(&mut query_coordinator.statistics_exchanges);
-                let mut statistics_receiver = StatisticsReceiver::create(ctx.clone(), exchanges);
+                let mut statistics_receiver = StatisticsReceiver::create(ctx.clone(), exchanges)?;
                 statistics_receiver.start();
 
                 let statistics_receiver: Mutex<StatisticsReceiver> =
