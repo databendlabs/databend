@@ -884,12 +884,16 @@ impl MetaNode {
         let as_leader_res = self.as_leader().await;
         debug!("as_leader: is_err: {}", as_leader_res.is_err());
 
-        let leader = as_leader_res?;
-        let res = leader.handle_forwardable_req(req.clone()).await;
-
-        let op_err = match res {
-            Ok(x) => return Ok(x),
-            Err(e) => e,
+        // Handle the request locally or return a ForwardToLeader error
+        let op_err = match as_leader_res {
+            Ok(leader) => {
+                let res = leader.handle_forwardable_req(req.clone()).await;
+                match res {
+                    Ok(x) => return Ok(x),
+                    Err(e) => e,
+                }
+            }
+            Err(e) => MetaOperationError::ForwardToLeader(e),
         };
 
         // If needs to forward, deal with it. Otherwise return the unhandlable error.
