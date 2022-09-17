@@ -21,6 +21,10 @@
 #![feature(associated_type_defaults)]
 #![allow(clippy::len_without_is_empty)]
 #![allow(clippy::needless_lifetimes)]
+#![feature(const_maybe_uninit_as_mut_ptr)]
+#![feature(const_mut_refs)]
+#![feature(generic_const_exprs)]
+#![allow(incomplete_features)]
 
 #[allow(dead_code)]
 mod chunk;

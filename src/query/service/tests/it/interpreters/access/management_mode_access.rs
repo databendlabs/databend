@@ -159,7 +159,7 @@ async fn test_management_mode_access() -> Result<()> {
         for test in group.tests {
             let (plan, _, _) = planner.plan_sql(test.query).await?;
             let interpreter = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-            let res = interpreter.execute().await;
+            let res = interpreter.execute(ctx.clone()).await;
             assert_eq!(
                 test.is_err,
                 res.is_err(),

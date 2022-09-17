@@ -28,6 +28,7 @@ pub trait ResultTypeOfBinary: Sized {
 
 pub trait ResultTypeOfUnary: Sized {
     type Negate: Number;
+    type Sum: Number;
 
     fn checked_add(self, _rhs: Self) -> Option<Self>;
 
@@ -842,6 +843,7 @@ impl ResultTypeOfBinary for (F64, F64) {
 
 impl ResultTypeOfUnary for u8 {
     type Negate = i16;
+    type Sum = u64;
 
     fn checked_add(self, rhs: Self) -> Option<Self> {
         self.checked_add(rhs)
@@ -866,6 +868,7 @@ impl ResultTypeOfUnary for u8 {
 
 impl ResultTypeOfUnary for u16 {
     type Negate = i32;
+    type Sum = u64;
 
     fn checked_add(self, rhs: Self) -> Option<Self> {
         self.checked_add(rhs)
@@ -890,6 +893,7 @@ impl ResultTypeOfUnary for u16 {
 
 impl ResultTypeOfUnary for u32 {
     type Negate = i64;
+    type Sum = u64;
 
     fn checked_add(self, rhs: Self) -> Option<Self> {
         self.checked_add(rhs)
@@ -914,6 +918,7 @@ impl ResultTypeOfUnary for u32 {
 
 impl ResultTypeOfUnary for u64 {
     type Negate = i64;
+    type Sum = u64;
 
     fn checked_add(self, rhs: Self) -> Option<Self> {
         self.checked_add(rhs)
@@ -938,6 +943,7 @@ impl ResultTypeOfUnary for u64 {
 
 impl ResultTypeOfUnary for i8 {
     type Negate = i8;
+    type Sum = i64;
 
     fn checked_add(self, rhs: Self) -> Option<Self> {
         self.checked_add(rhs)
@@ -962,6 +968,7 @@ impl ResultTypeOfUnary for i8 {
 
 impl ResultTypeOfUnary for i16 {
     type Negate = i16;
+    type Sum = i64;
 
     fn checked_add(self, rhs: Self) -> Option<Self> {
         self.checked_add(rhs)
@@ -986,6 +993,7 @@ impl ResultTypeOfUnary for i16 {
 
 impl ResultTypeOfUnary for i32 {
     type Negate = i32;
+    type Sum = i64;
 
     fn checked_add(self, rhs: Self) -> Option<Self> {
         self.checked_add(rhs)
@@ -1010,6 +1018,7 @@ impl ResultTypeOfUnary for i32 {
 
 impl ResultTypeOfUnary for i64 {
     type Negate = i64;
+    type Sum = i64;
 
     fn checked_add(self, rhs: Self) -> Option<Self> {
         self.checked_add(rhs)
@@ -1034,6 +1043,7 @@ impl ResultTypeOfUnary for i64 {
 
 impl ResultTypeOfUnary for F32 {
     type Negate = F32;
+    type Sum = F64;
 
     fn checked_add(self, rhs: Self) -> Option<Self> {
         Some(self + rhs)
@@ -1058,6 +1068,7 @@ impl ResultTypeOfUnary for F32 {
 
 impl ResultTypeOfUnary for F64 {
     type Negate = F64;
+    type Sum = F64;
 
     fn checked_add(self, rhs: Self) -> Option<Self> {
         Some(self + rhs)

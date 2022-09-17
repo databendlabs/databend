@@ -18,13 +18,9 @@ use std::sync::RwLock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_legacy_planners::CallPlan;
-use common_pipeline_core::Pipeline;
-use common_streams::SendableDataBlockStream;
 
 use super::Interpreter;
-use crate::interpreters::ProcessorExecutorStream;
-use crate::pipelines::executor::ExecutorSettings;
-use crate::pipelines::executor::PipelinePullingExecutor;
+use crate::pipelines::PipelineBuildResult;
 use crate::procedures::ProcedureFactory;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -61,7 +57,7 @@ impl Interpreter for CallInterpreter {
     }
 
     #[tracing::instrument(level = "debug", name = "call_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = &self.plan;
 
         let name = plan.name.clone();
@@ -72,18 +68,14 @@ impl Interpreter for CallInterpreter {
             *schema = Some(last_schema);
         }
 
-        let mut pipeline = Pipeline::create();
-        func.eval(self.ctx.clone(), plan.args.clone(), &mut pipeline)
-            .await?;
+        let mut build_res = PipelineBuildResult::create();
+        func.eval(
+            self.ctx.clone(),
+            plan.args.clone(),
+            &mut build_res.main_pipeline,
+        )
+        .await?;
 
-        let ctx = &self.ctx;
-        let settings = ctx.get_settings();
-        let query_need_abort = ctx.query_need_abort();
-        pipeline.set_max_threads(settings.get_max_threads()? as usize);
-        let executor_settings = ExecutorSettings::try_create(&settings)?;
-        let executor =
-            PipelinePullingExecutor::try_create(query_need_abort, pipeline, executor_settings)?;
-
-        Ok(Box::pin(ProcessorExecutorStream::create(executor)?))
+        Ok(build_res)
     }
 }

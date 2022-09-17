@@ -17,10 +17,9 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_meta_api::ShareApi;
 use common_storages_share::save_share_spec;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::share::CreateSharePlan;
@@ -42,17 +41,13 @@ impl Interpreter for CreateShareInterpreter {
         "CreateShareInterpreter"
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         let user_mgr = self.ctx.get_user_manager();
         let meta_api = user_mgr.get_meta_store_client();
         let resp = meta_api.create_share(self.plan.clone().into()).await?;
 
         save_share_spec(self.ctx.get_storage_operator()?, resp.spec_vec).await?;
 
-        Ok(Box::pin(DataBlockStream::create(
-            self.plan.schema(),
-            None,
-            vec![],
-        )))
+        Ok(PipelineBuildResult::create())
     }
 }

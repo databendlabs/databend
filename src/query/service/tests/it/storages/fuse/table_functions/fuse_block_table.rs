@@ -32,7 +32,7 @@ async fn test_fuse_block_table() -> Result<()> {
     // test db & table
     let create_table_plan = fixture.default_crate_table_plan();
     let interpreter = CreateTableInterpreterV2::try_create(ctx.clone(), create_table_plan)?;
-    interpreter.execute().await?;
+    interpreter.execute(ctx.clone()).await?;
 
     {
         let expected = vec![

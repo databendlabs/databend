@@ -41,17 +41,20 @@ use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::ConnectionError;
 use common_meta_types::Endpoint;
+use common_meta_types::ForwardRPCError;
 use common_meta_types::ForwardRequest;
 use common_meta_types::ForwardResponse;
 use common_meta_types::ForwardToLeader;
+use common_meta_types::InvalidReply;
 use common_meta_types::LeaveRequest;
 use common_meta_types::LogEntry;
+use common_meta_types::MetaAPIError;
 use common_meta_types::MetaError;
 use common_meta_types::MetaManagementError;
 use common_meta_types::MetaNetworkError;
-use common_meta_types::MetaNetworkResult;
-use common_meta_types::MetaRaftError;
+use common_meta_types::MetaOperationError;
 use common_meta_types::MetaResult;
+use common_meta_types::MetaStartupError;
 use common_meta_types::MetaStorageError;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
@@ -148,20 +151,20 @@ pub struct MetaNodeBuilder {
 }
 
 impl MetaNodeBuilder {
-    pub async fn build(mut self) -> MetaResult<Arc<MetaNode>> {
+    pub async fn build(mut self) -> Result<Arc<MetaNode>, MetaStartupError> {
         let node_id = self
             .node_id
-            .ok_or_else(|| MetaError::InvalidConfig(String::from("node_id is not set")))?;
+            .ok_or_else(|| MetaStartupError::InvalidConfig(String::from("node_id is not set")))?;
 
         let config = self
             .raft_config
             .take()
-            .ok_or_else(|| MetaError::InvalidConfig(String::from("config is not set")))?;
+            .ok_or_else(|| MetaStartupError::InvalidConfig(String::from("config is not set")))?;
 
         let sto = self
             .sto
             .take()
-            .ok_or_else(|| MetaError::InvalidConfig(String::from("sto is not set")))?;
+            .ok_or_else(|| MetaStartupError::InvalidConfig(String::from("sto is not set")))?;
 
         let net = Network::new(sto.clone());
 
@@ -194,7 +197,12 @@ impl MetaNodeBuilder {
         let endpoint = if let Some(a) = self.endpoint.take() {
             a
         } else {
-            sto.get_node_endpoint(&node_id).await?
+            sto.get_node_endpoint(&node_id).await.map_err(|e| {
+                MetaStartupError::InvalidConfig(format!(
+                    "endpoint of node: {} is not configured and is not in store, error: {}",
+                    node_id, e,
+                ))
+            })?
         };
 
         info!("about to start raft grpc on endpoint {}", endpoint);
@@ -261,7 +269,11 @@ impl MetaNode {
 
     /// Start the grpc service for raft communication and meta operation API.
     #[tracing::instrument(level = "debug", skip(mn))]
-    pub async fn start_grpc(mn: Arc<MetaNode>, host: &str, port: u32) -> MetaNetworkResult<()> {
+    pub async fn start_grpc(
+        mn: Arc<MetaNode>,
+        host: &str,
+        port: u32,
+    ) -> Result<(), MetaNetworkError> {
         let mut rx = mn.running_rx.clone();
 
         let meta_srv_impl = RaftServiceImpl::create(mn.clone());
@@ -310,7 +322,10 @@ impl MetaNode {
                 );
             })
             .await
-            .map_error_to_meta_error(MetaError::MetaServiceError, || "fail to serve")?;
+            .map_error_to_meta_error(
+                |s| MetaError::Fatal(AnyError::error(s)),
+                || "fail to serve",
+            )?;
 
             Ok::<(), MetaError>(())
         });
@@ -330,7 +345,7 @@ impl MetaNode {
         open: Option<()>,
         create: Option<()>,
         initialize_cluster: Option<Node>,
-    ) -> MetaResult<Arc<MetaNode>> {
+    ) -> Result<Arc<MetaNode>, MetaStartupError> {
         info!(
             "open_create_boot, config: {:?}, open: {:?}, create: {:?}, initialize_cluster: {:?}",
             config, open, create, initialize_cluster
@@ -489,7 +504,7 @@ impl MetaNode {
     /// Start MetaNode in either `boot`, `single`, `join` or `open` mode,
     /// according to config.
     #[tracing::instrument(level = "debug", skip(config))]
-    pub async fn start(config: &MetaConfig) -> Result<Arc<MetaNode>, MetaError> {
+    pub async fn start(config: &MetaConfig) -> Result<Arc<MetaNode>, MetaStartupError> {
         info!(?config, "start()");
         let mn = Self::do_start(config).await?;
         info!("Done starting MetaNode: {:?}", config);
@@ -639,7 +654,7 @@ impl MetaNode {
         ))))
     }
 
-    async fn do_start(conf: &MetaConfig) -> Result<Arc<MetaNode>, MetaError> {
+    async fn do_start(conf: &MetaConfig) -> Result<Arc<MetaNode>, MetaStartupError> {
         let raft_conf = &conf.raft_config;
 
         let initialize_cluster = if raft_conf.single {
@@ -670,7 +685,7 @@ impl MetaNode {
     /// Boot up the first node to create a cluster.
     /// For every cluster this func should be called exactly once.
     #[tracing::instrument(level = "debug", skip(config), fields(config_id=config.raft_config.config_id.as_str()))]
-    pub async fn boot(config: &MetaConfig) -> MetaResult<Arc<MetaNode>> {
+    pub async fn boot(config: &MetaConfig) -> Result<Arc<MetaNode>, MetaStartupError> {
         let mn =
             Self::open_create_boot(&config.raft_config, None, Some(()), Some(config.get_node()))
                 .await?;
@@ -682,20 +697,21 @@ impl MetaNode {
     // - Initializing raft membership.
     // - Adding current node into the meta data.
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn init_cluster(&self, node: Node) -> MetaResult<()> {
+    pub async fn init_cluster(&self, node: Node) -> Result<(), MetaStartupError> {
         let node_id = self.sto.id;
 
         let mut cluster_node_ids = BTreeSet::new();
         cluster_node_ids.insert(node_id);
 
-        self.raft
-            .initialize(cluster_node_ids)
-            .await
-            .map_err(MetaRaftError::InitializeError)?;
+        self.raft.initialize(cluster_node_ids).await?;
 
         info!("initialized cluster");
 
-        self.add_node(node_id, node).await?;
+        self.add_node(node_id, node)
+            .await
+            .map_err(|e| MetaStartupError::AddNodeError {
+                source: AnyError::new(&e),
+            })?;
 
         Ok(())
     }
@@ -752,7 +768,7 @@ impl MetaNode {
 
         let db_size = self.sto.db.size_on_disk().map_err(|e| {
             let se = MetaStorageError::SledError(AnyError::new(&e).add_context(|| "get db_size"));
-            MetaError::MetaStorageError(se)
+            MetaError::StorageError(se)
         })?;
 
         let metrics = self.raft.metrics().borrow().clone();
@@ -823,19 +839,20 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn consistent_read<Request, Reply>(&self, req: Request) -> Result<Reply, MetaError>
+    pub async fn consistent_read<Request, Reply>(&self, req: Request) -> Result<Reply, MetaAPIError>
     where
         Request: Into<ForwardRequestBody> + Debug,
         ForwardResponse: TryInto<Reply>,
         <ForwardResponse as TryInto<Reply>>::Error: std::fmt::Display,
     {
-        match self
+        let res = self
             .handle_forwardable_request(ForwardRequest {
                 forward_to_leader: 1,
                 body: req.into(),
             })
-            .await
-        {
+            .await;
+
+        match res {
             Err(e) => {
                 incr_meta_metrics_read_failed();
                 Err(e)
@@ -843,10 +860,11 @@ impl MetaNode {
             Ok(res) => {
                 let res: Reply = res.try_into().map_err(|e| {
                     incr_meta_metrics_read_failed();
-                    MetaRaftError::ConsistentReadError(format!(
-                        "consistent read recv invalid reply: {}",
-                        e
-                    ))
+                    let invalid_reply = InvalidReply::new(
+                        format!("expect reply type to be {}", std::any::type_name::<Reply>(),),
+                        &AnyError::error(e),
+                    );
+                    MetaNetworkError::from(invalid_reply)
                 })?;
 
                 Ok(res)
@@ -858,47 +876,49 @@ impl MetaNode {
     pub async fn handle_forwardable_request(
         &self,
         req: ForwardRequest,
-    ) -> Result<ForwardResponse, MetaError> {
+    ) -> Result<ForwardResponse, MetaAPIError> {
         debug!("handle_forwardable_request: {:?}", req);
 
         let forward = req.forward_to_leader;
 
-        let l = self.as_leader().await;
-        debug!("as_leader: is_err: {}", l.is_err());
-        let res = match l {
-            Ok(l) => l.handle_forwardable_req(req.clone()).await,
-            Err(e) => Err(MetaRaftError::ForwardToLeader(e).into()),
+        let as_leader_res = self.as_leader().await;
+        debug!("as_leader: is_err: {}", as_leader_res.is_err());
+
+        // Handle the request locally or return a ForwardToLeader error
+        let op_err = match as_leader_res {
+            Ok(leader) => {
+                let res = leader.handle_forwardable_req(req.clone()).await;
+                match res {
+                    Ok(x) => return Ok(x),
+                    Err(e) => e,
+                }
+            }
+            Err(e) => MetaOperationError::ForwardToLeader(e),
         };
 
-        let e = match res {
-            Ok(x) => return Ok(x),
-            Err(e) => e,
-        };
-
-        let e = match e {
-            MetaError::MetaRaftError(err) => match err {
-                MetaRaftError::ForwardToLeader(err) => err,
-                _ => return Err(err.into()),
-            },
-            _ => return Err(e),
+        // If needs to forward, deal with it. Otherwise return the unhandlable error.
+        let to_leader = match op_err {
+            MetaOperationError::ForwardToLeader(err) => err,
+            MetaOperationError::DataError(d_err) => {
+                return Err(d_err.into());
+            }
         };
 
         if forward == 0 {
-            return Err(MetaRaftError::RequestNotForwardToLeaderError(
-                "req not forward to leader".to_string(),
-            )
-            .into());
+            return Err(MetaAPIError::CanNotForward(AnyError::error(
+                "max number of forward reached",
+            )));
         }
 
-        let leader_id = e.leader_id.ok_or_else(|| {
-            MetaRaftError::NoLeaderError("need to forward req but no leader".to_string())
+        let leader_id = to_leader.leader_id.ok_or_else(|| {
+            MetaAPIError::CanNotForward(AnyError::error("need to forward but no known leader"))
         })?;
 
         let mut r2 = req.clone();
         // Avoid infinite forward
         r2.decr_forward();
 
-        let res: ForwardResponse = self.forward(&leader_id, r2).await?;
+        let res: ForwardResponse = self.forward_to(&leader_id, r2).await?;
 
         Ok(res)
     }
@@ -920,7 +940,11 @@ impl MetaNode {
 
     /// Add a new node into this cluster.
     /// The node info is committed with raft, thus it must be called on an initialized node.
-    pub async fn add_node(&self, node_id: NodeId, node: Node) -> Result<AppliedState, MetaError> {
+    pub async fn add_node(
+        &self,
+        node_id: NodeId,
+        node: Node,
+    ) -> Result<AppliedState, MetaAPIError> {
         // TODO: use txid?
         let resp = self
             .write(LogEntry {
@@ -951,7 +975,7 @@ impl MetaNode {
 
     /// Submit a write request to the known leader. Returns the response after applying the request.
     #[tracing::instrument(level = "debug", skip(self, req))]
-    pub async fn write(&self, req: LogEntry) -> Result<AppliedState, MetaError> {
+    pub async fn write(&self, req: LogEntry) -> Result<AppliedState, MetaAPIError> {
         debug!("req: {:?}", req);
 
         let res = self
@@ -999,11 +1023,11 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn forward(
+    pub async fn forward_to(
         &self,
         node_id: &NodeId,
         req: ForwardRequest,
-    ) -> Result<ForwardResponse, MetaError> {
+    ) -> Result<ForwardResponse, ForwardRPCError> {
         let endpoint = self
             .sto
             .get_node_endpoint(node_id)
@@ -1020,12 +1044,14 @@ impl MetaNode {
             })?;
 
         let resp = client.forward(req).await.map_err(|e| {
-            MetaRaftError::ForwardRequestError(format!("{} while forward to {}", e, endpoint))
+            MetaNetworkError::from(e)
+                .add_context(format!("target: {}, endpoint: {}", node_id, endpoint))
         })?;
         let raft_mes = resp.into_inner();
 
-        let res: Result<ForwardResponse, MetaError> = raft_mes.into();
-        res
+        let res: Result<ForwardResponse, MetaAPIError> = raft_mes.into();
+        let resp = res?;
+        Ok(resp)
     }
 
     pub fn create_watcher_stream(&self, request: WatchRequest, tx: WatcherStreamSender) {

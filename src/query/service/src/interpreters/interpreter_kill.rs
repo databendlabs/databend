@@ -14,16 +14,14 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_legacy_planners::KillPlan;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 
 pub struct KillInterpreter {
@@ -36,7 +34,7 @@ impl KillInterpreter {
         Ok(KillInterpreter { ctx, plan })
     }
 
-    async fn execute_kill(&self, session_id: &String) -> Result<SendableDataBlockStream> {
+    async fn execute_kill(&self, session_id: &String) -> Result<PipelineBuildResult> {
         match self.ctx.get_session_by_id(session_id).await {
             None => Err(ErrorCode::UnknownSession(format!(
                 "Not found session id {}",
@@ -44,15 +42,13 @@ impl KillInterpreter {
             ))),
             Some(kill_session) if self.plan.kill_connection => {
                 kill_session.force_kill_session();
-                let schema = Arc::new(DataSchema::empty());
-                Ok(Box::pin(DataBlockStream::create(schema, None, vec![])))
+                Ok(PipelineBuildResult::create())
             }
             Some(kill_session) => {
                 kill_session.force_kill_query(ErrorCode::AbortedQuery(
                     "Aborted query, because the server is shutting down or the query was killed",
                 ));
-                let schema = Arc::new(DataSchema::empty());
-                Ok(Box::pin(DataBlockStream::create(schema, None, vec![])))
+                Ok(PipelineBuildResult::create())
             }
         }
     }
@@ -64,7 +60,7 @@ impl Interpreter for KillInterpreter {
         "KillInterpreter"
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         self.ctx
             .get_current_session()
             .validate_privilege(&GrantObject::Global, UserPrivilegeType::Super)
