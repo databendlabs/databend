@@ -24,14 +24,8 @@ use crate::MetaResult;
 impl From<MetaError> for ErrorCode {
     fn from(e: MetaError) -> Self {
         match e {
-            MetaError::AppError(app_err) => app_err.into(),
             MetaError::NetworkError(net_err) => net_err.into(),
-
-            // Except application error and part of network error,
-            // all other errors are not handleable and can only be converted to a fatal error.
-            MetaError::StorageError(sto_err) => {
-                ErrorCode::MetaServiceError(sto_err.to_string()).set_backtrace(sto_err.backtrace())
-            }
+            MetaError::StorageError(sto_err) => sto_err.into(),
             MetaError::ClientError(ce) => ce.into(),
             MetaError::APIError(e) => e.into(),
         }

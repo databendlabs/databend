@@ -15,10 +15,10 @@
 //! Supporting utilities for tests.
 
 use common_meta_types::anyerror::AnyError;
+use common_meta_types::KVAppError;
 use common_meta_types::MetaAPIError;
 use common_meta_types::MetaDataError;
 use common_meta_types::MetaDataReadError;
-use common_meta_types::MetaError;
 use common_proto_conv::FromToProto;
 
 use crate::KVApi;
@@ -28,7 +28,7 @@ use crate::KVApiKey;
 pub(crate) async fn get_kv_data<T>(
     kv_api: &(impl KVApi + ?Sized),
     key: &impl KVApiKey,
-) -> Result<T, MetaError>
+) -> Result<T, KVAppError>
 where
     T: FromToProto,
     T::PB: common_protos::prost::Message + Default,
@@ -39,7 +39,7 @@ where
         return Ok(s);
     };
 
-    Err(MetaError::APIError(MetaAPIError::DataError(
+    Err(KVAppError::APIError(MetaAPIError::DataError(
         MetaDataError::ReadError(MetaDataReadError::new(
             "get_kv_data",
             "not found",

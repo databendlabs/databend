@@ -16,7 +16,6 @@ use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;
 
-use crate::app_error::AppError;
 use crate::MetaAPIError;
 use crate::MetaClientError;
 use crate::MetaNetworkError;
@@ -25,6 +24,7 @@ use crate::MetaStorageError;
 /// Top level error MetaNode would return.
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum MetaError {
+    /// Errors occurred when accessing remote meta store service.
     #[error(transparent)]
     NetworkError(#[from] MetaNetworkError),
 
@@ -36,9 +36,6 @@ pub enum MetaError {
 
     #[error(transparent)]
     APIError(#[from] MetaAPIError),
-
-    #[error(transparent)]
-    AppError(#[from] AppError),
 }
 
 pub type MetaResult<T> = Result<T, MetaError>;

@@ -21,7 +21,7 @@ use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::share::*;
-use common_meta_types::MetaError;
+use common_meta_types::KVAppError;
 use enumflags2::BitFlags;
 use tracing::info;
 
@@ -49,7 +49,7 @@ pub struct ShareApiTestSuite {}
 async fn if_share_object_data_exists(
     kv_api: &(impl KVApi + ?Sized),
     entry: &ShareGrantEntry,
-) -> Result<bool, MetaError> {
+) -> Result<bool, KVAppError> {
     if let Ok((_seq, _share_ids)) = get_object_shared_by_share_ids(kv_api, &entry.object).await {
         return Ok(false);
     }
@@ -62,7 +62,7 @@ async fn is_all_share_data_removed(
     share_name: &ShareNameIdent,
     share_id: u64,
     share_meta: &ShareMeta,
-) -> Result<bool, MetaError> {
+) -> Result<bool, KVAppError> {
     let res = get_share_or_err(kv_api, share_name, "").await;
     if res.is_ok() {
         return Ok(false);
