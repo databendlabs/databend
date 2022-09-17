@@ -670,6 +670,28 @@ SELECT * FROM str1 LEFT OUTER JOIN str2 ON str1.s = str2.s order by str1.a;
 3 c NULL NULL
 4 D NULL NULL
 
+statement ok
+INSERT INTO str1 VALUES (1, 'a' ), (2, 'A'), (3, 'c'), (4, 'D');
+
+statement query ITIT
+select * from str1 right join str2 on str1.s = str2.s order by str2.a;
+
+----
+2 A 1 A
+2 A 1 A
+NULL NULL 2 B
+NULL NULL 3 C
+NULL NULL 4 E
+
+statement query ITIT
+select * from str1 right join str2 on false order by str2.a;
+
+----
+NULL NULL 1 A
+NULL NULL 2 B
+NULL NULL 3 C
+NULL NULL 4 E
+
 -- statement query
 -- SELECT s, str1.s, str2.s FROM str1 FULL OUTER JOIN str2 USING(s);
 

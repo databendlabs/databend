@@ -708,7 +708,7 @@ impl HashJoinState for JoinHashTable {
                         .contains(&row_ptr)
                     {
                         let mut row_state = self.hash_join_desc.right_join_desc.row_state.write();
-                        row_state.entry(row_ptr.clone()).or_insert(0_usize);
+                        row_state.entry(row_ptr).or_insert(0_usize);
                         unmatched_build_indexes.push(row_ptr);
                     }
                 }
