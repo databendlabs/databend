@@ -171,9 +171,10 @@ impl ClientHandle {
         label_increment_gauge_with_val_and_labels(META_GRPC_CLIENT_REQUEST_INFLIGHT, vec![], 1.0);
 
         let res = self.req_tx.send(req).await.map_err(|e| {
-            MetaError::Fatal(
+            let cli_err = MetaClientError::ClientRuntimeError(
                 AnyError::new(&e).add_context(|| "when sending req to MetaGrpcClient worker"),
-            )
+            );
+            MetaError::ClientError(cli_err)
         });
 
         if let Err(err) = res {
@@ -193,9 +194,10 @@ impl ClientHandle {
                 1.0,
             );
 
-            MetaError::Fatal(
+            let cli_err = MetaClientError::ClientRuntimeError(
                 AnyError::new(&e).add_context(|| "when recv resp from MetaGrpcClient worker"),
-            )
+            );
+            MetaError::ClientError(cli_err)
         })?;
 
         label_decrement_gauge_with_val_and_labels(META_GRPC_CLIENT_REQUEST_INFLIGHT, vec![], 1.0);

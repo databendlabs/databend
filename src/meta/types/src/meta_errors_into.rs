@@ -32,9 +32,6 @@ impl From<MetaError> for ErrorCode {
             MetaError::StorageError(sto_err) => {
                 ErrorCode::MetaServiceError(sto_err.to_string()).set_backtrace(sto_err.backtrace())
             }
-            MetaError::Fatal(ae) => {
-                ErrorCode::MetaServiceError(ae.to_string()).set_backtrace(ae.backtrace())
-            }
             MetaError::ClientError(ce) => ce.into(),
             MetaError::APIError(e) => e.into(),
         }
