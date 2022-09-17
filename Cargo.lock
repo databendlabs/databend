@@ -1329,6 +1329,7 @@ dependencies = [
 name = "common-hashtable"
 version = "0.1.0"
 dependencies = [
+ "ahash",
  "common-base",
  "ordered-float 3.0.0 (git+https://github.com/andylokandy/rust-ordered-float.git?branch=as)",
  "primitive-types",

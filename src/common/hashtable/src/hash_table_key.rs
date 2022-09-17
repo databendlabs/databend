@@ -126,7 +126,7 @@ impl HashTableKeyable for OrderedFloat<f32> {
 
     #[inline(always)]
     fn is_zero(&self) -> bool {
-        self.is_nan()
+        self.0 == 0.0
     }
 
     #[inline(always)]
@@ -144,7 +144,7 @@ impl HashTableKeyable for OrderedFloat<f64> {
 
     #[inline(always)]
     fn is_zero(&self) -> bool {
-        self.is_nan()
+        self.0 == 0.0
     }
 
     #[inline(always)]
