@@ -659,7 +659,7 @@ impl JoinHashTable {
         row_state: &mut std::collections::HashMap<RowPtr, usize>,
     ) {
         for (index, row) in build_indexes.iter().enumerate() {
-            if row_state[row] == 1 {
+            if row_state[row] == 1 || row_state[row] == 0 {
                 if !bm.get(index) {
                     bm.set(index, true)
                 }

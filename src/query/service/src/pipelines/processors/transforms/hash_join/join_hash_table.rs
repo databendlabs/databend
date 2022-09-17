@@ -693,8 +693,7 @@ impl HashJoinState for JoinHashTable {
         // Find the unmatched rows in build side
         let mut unmatched_build_indexes = vec![];
         {
-            let chunks = self.row_space.chunks.read().unwrap();
-            for (chunk_index, chunk) in chunks.iter().enumerate() {
+            for (chunk_index, chunk) in self.row_space.chunks.read().unwrap().iter().enumerate() {
                 for row_index in 0..chunk.num_rows() {
                     let row_ptr = RowPtr {
                         chunk_index: chunk_index as u32,
@@ -708,6 +707,8 @@ impl HashJoinState for JoinHashTable {
                         .read()
                         .contains(&row_ptr)
                     {
+                        let mut row_state = self.hash_join_desc.right_join_desc.row_state.write();
+                        row_state.entry(row_ptr.clone()).or_insert(0_usize);
                         unmatched_build_indexes.push(row_ptr);
                     }
                 }
@@ -754,7 +755,6 @@ impl HashJoinState for JoinHashTable {
             // must be one of above
             _ => unreachable!(),
         };
-        dbg!(merged_block.clone());
         let probe_column_len = self.probe_schema.fields().len();
         let probe_columns = merged_block.columns()[0..probe_column_len]
             .iter()
@@ -765,19 +765,17 @@ impl HashJoinState for JoinHashTable {
             self.row_space.data_schema.clone(),
             merged_block.columns()[probe_column_len..].to_vec(),
         );
-        merged_block = self.merge_eq_block(&probe_block, &build_block)?;
+        merged_block = self.merge_eq_block(&build_block, &probe_block)?;
 
-        // If there are only non-equi conditions, build_indexes size will greater build table size
-        // Because the case will cause cross join.
-        // We need filter the redundant rows for build side.
-        let build_indexes = self.hash_join_desc.right_join_desc.build_indexes.read();
+        // If build_indexes size will greater build table size, we need filter the redundant rows for build side.
+        let mut build_indexes = self.hash_join_desc.right_join_desc.build_indexes.write();
         let mut row_state = self.hash_join_desc.right_join_desc.row_state.write();
+        build_indexes.extend_from_slice(&unmatched_build_indexes);
         if build_indexes.len() > self.row_space.rows_number() {
             let mut bm = validity.into_mut().right().unwrap();
             Self::filter_rows_for_right_join(&mut bm, &build_indexes, &mut row_state);
             let predicate = BooleanColumn::from_arrow_data(bm.into()).arc();
             let filtered_block = DataBlock::filter_block(merged_block, &predicate)?;
-            dbg!(filtered_block.clone());
             return Ok(vec![filtered_block]);
         }
 

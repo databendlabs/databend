@@ -471,6 +471,7 @@ impl PipelineBuilder {
         }
 
         if join.join_type == JoinType::Right {
+            self.main_pipeline.resize(1)?;
             self.main_pipeline.add_transform(|input, output| {
                 TransformRightJoin::try_create(
                     input,
