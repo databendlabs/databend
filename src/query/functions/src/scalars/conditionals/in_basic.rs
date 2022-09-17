@@ -246,7 +246,15 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
                 )
             }
             TypeID::UInt8 => {
-                scalar_contains!(u8, input_col, input_rows, columns, least_super_dt, func_ctx, return_nullable)
+                scalar_contains!(
+                    u8,
+                    input_col,
+                    input_rows,
+                    columns,
+                    least_super_dt,
+                    func_ctx,
+                    return_nullable
+                )
             }
             TypeID::UInt16 => {
                 scalar_contains!(
@@ -282,7 +290,15 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
                 )
             }
             TypeID::Int8 => {
-                scalar_contains!(i8, input_col, input_rows, columns, least_super_dt, func_ctx, return_nullable)
+                scalar_contains!(
+                    i8,
+                    input_col,
+                    input_rows,
+                    columns,
+                    least_super_dt,
+                    func_ctx,
+                    return_nullable
+                )
             }
             TypeID::Int16 => {
                 scalar_contains!(
