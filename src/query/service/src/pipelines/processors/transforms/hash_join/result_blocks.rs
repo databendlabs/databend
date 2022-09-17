@@ -554,9 +554,9 @@ impl JoinHashTable {
                 build_indexes.extend_from_slice(probe_result_ptrs);
                 for row_ptr in probe_result_ptrs.iter() {
                     row_state
-                        .entry(row_ptr.clone())
+                        .entry(*row_ptr)
                         .and_modify(|e| *e += 1)
-                        .or_insert(1 as usize);
+                        .or_insert(1_usize);
                 }
                 probe_indexes.extend(std::iter::repeat(i as u32).take(probe_result_ptrs.len()));
                 validity.extend_constant(probe_result_ptrs.len(), true);

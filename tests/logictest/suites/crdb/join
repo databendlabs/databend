@@ -920,13 +920,13 @@ SELECT * FROM foo JOIN bar USING (a, b) WHERE foo.c = bar.c AND foo.d = bar.d;
 3 3 3.0 3.0 3.0 3
 
 statement query TII
-SELECT * FROM onecolumn AS a(x) RIGHT JOIN twocolumn ON false;
+SELECT * FROM onecolumn AS a(x) RIGHT JOIN twocolumn ON false order by y;
 
 ----
-44 51 NULL
-NULL 52 NULL
-42 53 NULL
-45 45 NULL
+NULL 45 45
+NULL 44 51
+NULL NULL 52
+NULL 42 53
 
 -- statement query
 -- SELECT column1, column1+1FROM  (SELECT * FROM    (VALUES (NULL, NULL)) AS t      NATURAL FULL OUTER JOIN    (VALUES (1, 1)) AS u);
