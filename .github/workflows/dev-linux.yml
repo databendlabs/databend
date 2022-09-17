@@ -169,13 +169,15 @@ jobs:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateful_standalone_linux
 
-  test_stateful_cluster_linux:
-    timeout-minutes: 20
-    runs-on: [ self-hosted, X64, Linux, development ]
-    needs: build_gnu
-    steps:
-      - uses: actions/checkout@v3
-      - uses: ./.github/actions/test_stateful_cluster_linux
+  # Wait for issue https://github.com/datafuselabs/databend/issues/7684
+  #
+  # test_stateful_cluster_linux:
+  #  timeout-minutes: 20
+  #  runs-on: [ self-hosted, X64, Linux, development ]
+  #  needs: build_gnu
+  #  steps:
+  #    - uses: actions/checkout@v3
+  #    - uses: ./.github/actions/test_stateful_cluster_linux
 
   test_fuzz_standalone_linux:
     timeout-minutes: 10
