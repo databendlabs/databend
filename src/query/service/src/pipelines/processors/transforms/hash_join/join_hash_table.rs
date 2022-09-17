@@ -714,6 +714,10 @@ impl HashJoinState for JoinHashTable {
             }
         }
 
+        if unmatched_build_indexes.is_empty() && self.hash_join_desc.other_predicate.is_none() {
+            return Ok(blocks.to_vec());
+        }
+
         let unmatched_build_block = self.row_space.gather(&unmatched_build_indexes)?;
         // Create null block for unmatched rows in probe side
         let null_probe_block = DataBlock::create(
@@ -728,7 +732,7 @@ impl HashJoinState for JoinHashTable {
                 })
                 .collect::<Result<Vec<_>>>()?,
         );
-        let mut merged_block = self.merge_eq_block(&null_probe_block, &unmatched_build_block)?;
+        let mut merged_block = self.merge_eq_block(&unmatched_build_block, &null_probe_block)?;
         merged_block = DataBlock::concat_blocks(&[blocks, &[merged_block]].concat())?;
 
         if self.hash_join_desc.other_predicate.is_none() {
@@ -750,7 +754,7 @@ impl HashJoinState for JoinHashTable {
             // must be one of above
             _ => unreachable!(),
         };
-
+        dbg!(merged_block.clone());
         let probe_column_len = self.probe_schema.fields().len();
         let probe_columns = merged_block.columns()[0..probe_column_len]
             .iter()
@@ -772,7 +776,9 @@ impl HashJoinState for JoinHashTable {
             let mut bm = validity.into_mut().right().unwrap();
             Self::filter_rows_for_right_join(&mut bm, &build_indexes, &mut row_state);
             let predicate = BooleanColumn::from_arrow_data(bm.into()).arc();
-            return Ok(vec![DataBlock::filter_block(merged_block, &predicate)?]);
+            let filtered_block = DataBlock::filter_block(merged_block, &predicate)?;
+            dbg!(filtered_block.clone());
+            return Ok(vec![filtered_block]);
         }
 
         Ok(vec![merged_block])

@@ -573,7 +573,7 @@ impl JoinHashTable {
             .collect::<Result<Vec<_>>>()?;
         let nullable_probe_block = DataBlock::create(self.probe_schema.clone(), nullable_columns);
 
-        self.merge_eq_block(&nullable_probe_block, &build_block)
+        self.merge_eq_block(&build_block, &nullable_probe_block)
     }
 
     // modify the bm by the value row_state
