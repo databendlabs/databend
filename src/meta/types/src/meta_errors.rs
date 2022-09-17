@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use anyerror::AnyError;
 use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;
@@ -40,11 +39,6 @@ pub enum MetaError {
 
     #[error(transparent)]
     AppError(#[from] AppError),
-
-    /// Any other unclassified error.
-    /// Other crate may return general error such as ErrorCode or anyhow::Error, which can not be classified by type.
-    #[error(transparent)]
-    Fatal(AnyError),
 }
 
 pub type MetaResult<T> = Result<T, MetaError>;

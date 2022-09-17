@@ -58,7 +58,6 @@ use common_meta_types::MetaStartupError;
 use common_meta_types::MetaStorageError;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
-use common_meta_types::ToMetaError;
 use openraft::Config;
 use openraft::LogId;
 use openraft::Raft;
@@ -132,7 +131,7 @@ pub struct MetaNode {
     pub raft: MetaRaft,
     pub running_tx: watch::Sender<()>,
     pub running_rx: watch::Receiver<()>,
-    pub join_handles: Mutex<Vec<JoinHandle<MetaResult<()>>>>,
+    pub join_handles: Mutex<Vec<JoinHandle<Result<(), AnyError>>>>,
     pub joined_tasks: AtomicI32,
 }
 
@@ -322,12 +321,11 @@ impl MetaNode {
                 );
             })
             .await
-            .map_error_to_meta_error(
-                |s| MetaError::Fatal(AnyError::error(s)),
-                || "fail to serve",
-            )?;
+            .map_err(|e| {
+                AnyError::new(&e).add_context(|| "when serving meta-service grpc service")
+            })?;
 
-            Ok::<(), MetaError>(())
+            Ok::<(), AnyError>(())
         });
 
         let mut jh = mn.join_handles.lock().await;
@@ -484,12 +482,17 @@ impl MetaNode {
                 set_meta_metrics_current_term(mm.current_term);
                 set_meta_metrics_last_log_index(mm.last_log_index.unwrap_or_default());
                 set_meta_metrics_proposals_applied(mm.last_applied.unwrap_or_default().index);
-                set_meta_metrics_last_seq(meta_node.get_last_seq().await?);
+                set_meta_metrics_last_seq(
+                    meta_node
+                        .get_last_seq()
+                        .await
+                        .map_err(|e| AnyError::new(&e))?,
+                );
 
                 last_leader = mm.current_leader;
             }
 
-            Ok::<(), MetaError>(())
+            Ok::<(), AnyError>(())
         };
 
         let span = tracing::span!(tracing::Level::INFO, "watch-metrics");

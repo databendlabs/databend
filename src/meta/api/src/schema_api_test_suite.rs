@@ -74,9 +74,9 @@ use common_meta_types::UpsertKVReq;
 use tracing::debug;
 use tracing::info;
 
-use crate::get_kv_data;
 use crate::is_all_db_data_removed;
 use crate::serialize_struct;
+use crate::testing::get_kv_data;
 use crate::ApiBuilder;
 use crate::AsKVApi;
 use crate::KVApi;
