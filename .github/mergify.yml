@@ -15,6 +15,7 @@ queue_rules:
       - check-success=test_stateful_standalone_linux
       - check-success=test_sqllogic_base_standalone_linux
       - check-success=test_sqllogic_ydb_standalone_linux
+      - check-success=test_sqllogic_base_cluster_linux
 
   - name: docs_queue
     conditions:
