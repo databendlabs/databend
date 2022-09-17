@@ -18,7 +18,8 @@ use common_meta_types::Cmd;
 use common_meta_types::ForwardRequest;
 use common_meta_types::ForwardResponse;
 use common_meta_types::LogEntry;
-use common_meta_types::MetaError;
+use common_meta_types::MetaDataReadError;
+use common_meta_types::MetaOperationError;
 use common_meta_types::Node;
 use common_meta_types::RaftChangeMembershipError;
 use common_meta_types::RaftWriteError;
@@ -50,7 +51,7 @@ impl<'a> MetaLeader<'a> {
     pub async fn handle_forwardable_req(
         &self,
         req: ForwardRequest,
-    ) -> Result<ForwardResponse, MetaError> {
+    ) -> Result<ForwardResponse, MetaOperationError> {
         debug!("handle_forwardable_req: {:?}", req);
 
         match req.body {
@@ -71,17 +72,26 @@ impl<'a> MetaLeader<'a> {
 
             ForwardRequestBody::GetKV(req) => {
                 let sm = self.meta_node.get_state_machine().await;
-                let res = sm.get_kv(&req.key).await?;
+                let res = sm
+                    .get_kv(&req.key)
+                    .await
+                    .map_err(|meta_err| MetaDataReadError::new("get_kv", "", &meta_err))?;
                 Ok(ForwardResponse::GetKV(res))
             }
             ForwardRequestBody::MGetKV(req) => {
                 let sm = self.meta_node.get_state_machine().await;
-                let res = sm.mget_kv(&req.keys).await?;
+                let res = sm
+                    .mget_kv(&req.keys)
+                    .await
+                    .map_err(|meta_err| MetaDataReadError::new("mget_kv", "", &meta_err))?;
                 Ok(ForwardResponse::MGetKV(res))
             }
             ForwardRequestBody::ListKV(req) => {
                 let sm = self.meta_node.get_state_machine().await;
-                let res = sm.prefix_list_kv(&req.prefix).await?;
+                let res = sm
+                    .prefix_list_kv(&req.prefix)
+                    .await
+                    .map_err(|meta_err| MetaDataReadError::new("list_kv", "", &meta_err))?;
                 Ok(ForwardResponse::ListKV(res))
             }
         }

@@ -98,6 +98,15 @@ pub fn wrap_cast_if_needed(scalar: Scalar, target_type: &DataTypeImpl) -> Scalar
     }
 }
 
+pub fn wrap_cast(scalar: Scalar, target_type: &DataTypeImpl) -> Scalar {
+    CastExpr {
+        from_type: Box::new(scalar.data_type()),
+        argument: Box::new(scalar),
+        target_type: Box::new(target_type.clone()),
+    }
+    .into()
+}
+
 pub fn satisfied_by(scalar: &Scalar, prop: &RelationalProperty) -> bool {
     scalar.used_columns().is_subset(&prop.output_columns)
 }

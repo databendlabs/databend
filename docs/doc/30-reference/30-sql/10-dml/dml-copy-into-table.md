@@ -3,13 +3,15 @@ title: 'COPY INTO <table>'
 sidebar_label: 'COPY INTO <table>'
 ---
 
-`COPY` moves data between Databend tables and object storage systems (AWS S3 compatible object storage services and Azure Blob storage).
+`COPY` loads data into Databend or unloads data from Databend.
 
-This command loads data into a table from files staged in one of the following locations:
+This command loads data into a table from files in one of the following locations:
 
-* Named internal stage, files can be staged using the [PUT to Stage](../../00-api/10-put-to-stage.md).
-* Named external stage that references an external location (AWS S3 compatible object storage services and Azure Blob storage).
-* External location. This includes AWS S3 compatible object storage services, Azure Blob storage, Google Cloud Storage, Huawei OBS.
+* Named internal stage: Databend internal named stages. Files can be staged using the [PUT to Stage](../../00-api/10-put-to-stage.md) API.
+* Named external stage: Stages created in AWS S3 compatible object storage services and Azure Blob storage.
+* External location: This can be a bucket in AWS S3 compatible object storage services, Azure Blob storage, Google Cloud Storage, or Huawei OBS. The exteranl location can be also just a remote server from where you can access the file by a URL (starting with "https://..."). 
+
+See Also: [COPY INTO location](dml-copy-into-location.md)
 
 ## Syntax
 
@@ -123,10 +125,10 @@ externalLocation ::=
   'https://<url>'
 ```
 
-Especially, HTTP supports glob patterns. For example, use
+Please note that, HTTP supports glob patterns. For example, use
 
-- `ontime_200{6,7,8}.csv` to represents `ontime_2006.csv`,`ontime_2007.csv`,`ontime_20080.csv`.
-- `ontime_200[6-8].csv` to represents `ontime_2006.csv`,`ontime_2007.csv`,`ontime_20080.csv`.
+- `ontime_200{6,7,8}.csv` to represents `ontime_2006.csv`,`ontime_2007.csv`,`ontime_2008.csv`.
+- `ontime_200[6-8].csv` to represents `ontime_2006.csv`,`ontime_2007.csv`,`ontime_2008.csv`.
 
 ### FILES = ( 'file_name' [ , 'file_name' ... ] )
 
@@ -261,14 +263,16 @@ COPY INTO mytable
   FILE_FORMAT = (type = 'CSV' field_delimiter = ',' record_delimiter = '\n' skip_header = 1 compression = GZIP) size_limit=10;
 ```
 
-This example moves data from a CSV file without specifying the endpoint URL:
+This example loads data from a CSV file without specifying the endpoint URL:
+
 ```sql
 COPY INTO mytable
   FROM 's3://mybucket/data.csv'
   FILE_FORMAT = (type = 'CSV' field_delimiter = ','  record_delimiter = '\n' skip_header = 1) size_limit=10;
 ```
-  
-`Parquet` file example:
+
+This is an example loading data from a `Parquet` file:
+
 ```sql
 COPY INTO mytable
   FROM 's3://mybucket/data.parquet'
@@ -280,7 +284,8 @@ COPY INTO mytable
 
 **Azure Blob storage**
 
-This example reads data from a CSV file and inserts them into a table:
+This example reads data from a CSV file and inserts it into a table:
+
 ```sql
 COPY INTO mytable
     FROM 'azblob://mybucket/data.csv'
@@ -294,7 +299,7 @@ COPY INTO mytable
 
 **HTTP**
 
-This example reads data from a CSV file and inserts them into a table:
+This example reads data from three CSV files and inserts it into a table:
 
 ```sql
 COPY INTO mytable

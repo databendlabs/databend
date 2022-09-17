@@ -50,6 +50,7 @@ use common_meta_types::protobuf::RaftRequest;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
 use common_meta_types::ConnectionError;
+use common_meta_types::InvalidArgument;
 use common_meta_types::MetaClientError;
 use common_meta_types::MetaError;
 use common_meta_types::MetaHandshakeError;
@@ -170,9 +171,10 @@ impl ClientHandle {
         label_increment_gauge_with_val_and_labels(META_GRPC_CLIENT_REQUEST_INFLIGHT, vec![], 1.0);
 
         let res = self.req_tx.send(req).await.map_err(|e| {
-            MetaError::Fatal(
+            let cli_err = MetaClientError::ClientRuntimeError(
                 AnyError::new(&e).add_context(|| "when sending req to MetaGrpcClient worker"),
-            )
+            );
+            MetaError::ClientError(cli_err)
         });
 
         if let Err(err) = res {
@@ -192,9 +194,10 @@ impl ClientHandle {
                 1.0,
             );
 
-            MetaError::Fatal(
+            let cli_err = MetaClientError::ClientRuntimeError(
                 AnyError::new(&e).add_context(|| "when recv resp from MetaGrpcClient worker"),
-            )
+            );
+            MetaError::ClientError(cli_err)
         })?;
 
         label_decrement_gauge_with_val_and_labels(META_GRPC_CLIENT_REQUEST_INFLIGHT, vec![], 1.0);
@@ -492,7 +495,7 @@ impl MetaGrpcClient {
                             if is_last {
                                 // reach to last addr
                                 let cli_err = MetaClientError::HandshakeError(handshake_err);
-                                return Err(MetaError::MetaClientError(cli_err));
+                                return Err(MetaError::ClientError(cli_err));
                             }
                             continue;
                         }
@@ -785,7 +788,9 @@ impl MetaGrpcClient {
 
         debug!(req = debug(&act), "MetaGrpcClient::do_write request");
 
-        let req: Request<RaftRequest> = act.clone().try_into()?;
+        let req: Request<RaftRequest> = act.clone().try_into().map_err(|e| {
+            MetaNetworkError::InvalidArgument(InvalidArgument::new(e, "fail to encode request"))
+        })?;
 
         debug!(
             req = debug(&req),
@@ -802,7 +807,12 @@ impl MetaGrpcClient {
                 if status_is_retryable(&s) {
                     self.mark_as_unhealthy().await;
                     let mut client = self.make_client().await?;
-                    let req: Request<RaftRequest> = act.try_into()?;
+                    let req: Request<RaftRequest> = act.try_into().map_err(|e| {
+                        MetaNetworkError::InvalidArgument(InvalidArgument::new(
+                            e,
+                            "fail to encode request",
+                        ))
+                    })?;
                     let req = common_tracing::inject_span_to_tonic_request(req);
                     Ok(client.write_msg(req).await?.into_inner())
                 } else {
@@ -829,7 +839,9 @@ impl MetaGrpcClient {
 
         debug!(req = debug(&read_req), "MetaGrpcClient::do_read request");
 
-        let req: Request<RaftRequest> = read_req.clone().try_into()?;
+        let req: Request<RaftRequest> = read_req.clone().try_into().map_err(|e| {
+            MetaNetworkError::InvalidArgument(InvalidArgument::new(e, "fail to encode request"))
+        })?;
 
         debug!(
             req = debug(&req),
@@ -849,7 +861,12 @@ impl MetaGrpcClient {
                 if status_is_retryable(&s) {
                     self.mark_as_unhealthy().await;
                     let mut client = self.make_client().await?;
-                    let req: Request<RaftRequest> = read_req.try_into()?;
+                    let req: Request<RaftRequest> = read_req.try_into().map_err(|e| {
+                        MetaNetworkError::InvalidArgument(InvalidArgument::new(
+                            e,
+                            "fail to encode request",
+                        ))
+                    })?;
                     let req = common_tracing::inject_span_to_tonic_request(req);
                     Ok(client.read_msg(req).await?.into_inner())
                 } else {

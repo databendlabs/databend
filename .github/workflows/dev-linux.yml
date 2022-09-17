@@ -112,22 +112,6 @@ jobs:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_meta_cluster
 
-  test_stateless_standalone_linux:
-    timeout-minutes: 10
-    runs-on: [self-hosted, X64, Linux, development]
-    needs: build_gnu
-    steps:
-      - uses: actions/checkout@v3
-      - uses: ./.github/actions/test_stateless_standalone_linux
-
-  test_stateless_cluster_linux:
-    timeout-minutes: 15
-    runs-on: [self-hosted, X64, Linux, development]
-    needs: build_gnu
-    steps:
-      - uses: actions/checkout@v3
-      - uses: ./.github/actions/test_stateless_cluster_linux
-
   test_sqllogic_standalone_linux:
     timeout-minutes: 30
     name: test_sqllogic_${{ matrix.dirs }}_standalone_linux
@@ -161,13 +145,39 @@ jobs:
         with:
           dirs: ${{ matrix.dirs }}
 
-  test_stateful_standalone_linux:
-    timeout-minutes: 10
+  test_stateless_standalone_linux:
+    timeout-minutes: 20
     runs-on: [self-hosted, X64, Linux, development]
     needs: build_gnu
     steps:
       - uses: actions/checkout@v3
+      - uses: ./.github/actions/test_stateless_standalone_linux
+
+  test_stateless_cluster_linux:
+    timeout-minutes: 20
+    runs-on: [self-hosted, X64, Linux, development]
+    needs: build_gnu
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/test_stateless_cluster_linux
+
+  test_stateful_standalone_linux:
+    timeout-minutes: 20
+    runs-on: [ self-hosted, X64, Linux, development ]
+    needs: build_gnu
+    steps:
+      - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateful_standalone_linux
+
+  # Wait for issue https://github.com/datafuselabs/databend/issues/7684
+  #
+  # test_stateful_cluster_linux:
+  #  timeout-minutes: 20
+  #  runs-on: [ self-hosted, X64, Linux, development ]
+  #  needs: build_gnu
+  #  steps:
+  #    - uses: actions/checkout@v3
+  #    - uses: ./.github/actions/test_stateful_cluster_linux
 
   test_fuzz_standalone_linux:
     timeout-minutes: 10
