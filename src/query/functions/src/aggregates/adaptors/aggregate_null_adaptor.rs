@@ -84,8 +84,8 @@ impl AggregateFunctionCombinatorNull {
             },
 
             _ => match result_is_null {
-                true => Ok(AggregateNullVariadicAdaptor::<true, true>::create(nested)),
-                false => Ok(AggregateNullVariadicAdaptor::<false, true>::create(nested)),
+                true => Ok(AggregateNullVariadicAdaptor::<true>::create(nested)),
+                false => Ok(AggregateNullVariadicAdaptor::<false>::create(nested)),
             },
         }
     }

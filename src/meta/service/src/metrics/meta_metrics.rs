@@ -15,6 +15,7 @@
 use std::sync::Once;
 
 use common_meta_types::NodeId;
+use common_metrics::counter;
 use once_cell::sync::Lazy;
 use prometheus::exponential_buckets;
 use prometheus::CounterVec;
@@ -701,6 +702,24 @@ pub fn incr_raft_storage_fail(func: &str, write: bool) {
         RAFT_STORAGE_WRITE_FAILED.with_label_values(&[func]).inc();
     } else {
         RAFT_STORAGE_READ_FAILED.with_label_values(&[func]).inc();
+    }
+}
+
+/// RAII metrics counter of in-flight requests
+pub(crate) struct RequestInFlight;
+
+impl counter::Count for RequestInFlight {
+    fn incr_count(&mut self, n: i64) {
+        META_REQUEST_INFLIGHTS.add(n);
+    }
+}
+
+/// RAII metrics counter of pending raft proposals
+pub(crate) struct ProposalPending;
+
+impl counter::Count for ProposalPending {
+    fn incr_count(&mut self, n: i64) {
+        PROPOSALS_PENDING.add(n);
     }
 }
 

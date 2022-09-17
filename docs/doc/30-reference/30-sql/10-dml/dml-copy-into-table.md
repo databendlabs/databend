@@ -1,19 +1,17 @@
 ---
-title: 'COPY INTO <table> FROM STAGED FILES'
-sidebar_label: 'COPY INTO <table> FROM STAGED FILES'
-description:
-  'Loads data from staged files'
+title: 'COPY INTO <table>'
+sidebar_label: 'COPY INTO <table>'
 ---
 
-`COPY` moves data between Databend tables and object storage systems (AWS S3 compatible object storage services and Azure Blob storage).
+`COPY` loads data into Databend or unloads data from Databend.
 
-This command loads data into a table from files staged in one of the following locations:
+This command loads data into a table from files in one of the following locations:
 
-* Named internal stage, files can be staged using the [PUT to Stage](../../00-api/10-put-to-stage.md).
-* Named external stage that references an external location (AWS S3 compatible object storage services and Azure Blob storage).
-* External location. This includes AWS S3 compatible object storage services and Azure Blob storage.
+* Named internal stage: Databend internal named stages. Files can be staged using the [PUT to Stage](../../00-api/10-put-to-stage.md) API.
+* Named external stage: Stages created in AWS S3 compatible object storage services and Azure Blob storage.
+* External location: This can be a bucket in AWS S3 compatible object storage services, Azure Blob storage, Google Cloud Storage, or Huawei OBS. The exteranl location can be also just a remote server from where you can access the file by a URL (starting with "https://..."). 
 
-`COPY` can also load data into a table from one or more remote files by their URL. See [COPY INTO \<table\> FROM REMOTE FILES](dml-copy-into-table-url.md).
+See Also: [COPY INTO location](dml-copy-into-location.md)
 
 ## Syntax
 
@@ -42,7 +40,7 @@ externalStage ::= @<external_stage_name>[/<path>]
 
 ### externalLocation
 
-AWS S3 compatible object storage services:
+**AWS S3 Compatible Object Storage Service**
 
 ```sql
 externalLocation ::=
@@ -65,7 +63,7 @@ externalLocation ::=
 | REGION                    	| AWS region name. For example, us-east-1.                                    	| Optional 	|
 | ENABLE_VIRTUAL_HOST_STYLE 	| If you use virtual hosting to address the bucket, set it to "true".                               	| Optional 	|
 
-Azure Blob storage：
+**Azure Blob storage**
 
 ```sql
 externalLocation ::=
@@ -84,6 +82,53 @@ externalLocation ::=
 | ACCOUNT_NAME               	| Your account name for connecting the Azure Blob storage. If not provided, Databend will access the container anonymously.	| Optional 	|
 | ACCOUNT_KEY                	| Your account key for connecting the Azure Blob storage.  	| Optional 	|
 
+**Google Cloud Storage**
+
+```sql
+externalLocation ::=
+  'gcs://<container>[<path>]'
+  CONNECTION = (
+        ENDPOINT_URL = 'https://<endpoint-URL>'
+        CREDENTIAL = '<your-credential>'
+  )
+```
+
+| Parameter                  	 | Description                                              	                                                                                                                                    | Required 	 |
+|-----------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------|
+| `gcs://<bucket>[<path>]` 	  | External files located at the Google Cloud Storage        	                                                                                                                                   | Required 	 |
+| ENDPOINT_URL               	 | The container endpoint URL starting with "https://". To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`.    	 | Optional 	 |
+| CREDENTIAL               	  | Your credential for connecting the GCS. If not provided, Databend will access the container anonymously.                                                                                      | Optional 	 |
+
+**Huawei Object Storage**
+
+```sql
+externalLocation ::=
+  'obs://<container>[<path>]'
+  CONNECTION = (
+        ENDPOINT_URL = 'https://<endpoint-URL>'
+        ACCESS_KEY_ID = '<your-access-key-id>'
+        SECRET_ACCESS_KEY = '<your-secret-access-key>'
+  )
+```
+
+| Parameter                  	 | Description                                              	                                                                                                                                    | Required 	 |
+|------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------|
+| `obs://<bucket>[<path>]` 	   | External files located at the obs        	                                                                                                                                                    | Required 	 |
+| ENDPOINT_URL               	 | The container endpoint URL starting with "https://". To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`.    	 | Optional 	 |
+| ACCESS_KEY_ID             	  | Your access key ID for connecting the OBS. If not provided, Databend will access the bucket anonymously.    	                                                                                 | Optional 	|
+| SECRET_ACCESS_KEY         	  | Your secret access key for connecting the OBS. 	                                                                                                                                              | Optional 	|
+
+**HTTP**
+
+```sql
+externalLocation ::=
+  'https://<url>'
+```
+
+Please note that, HTTP supports glob patterns. For example, use
+
+- `ontime_200{6,7,8}.csv` to represents `ontime_2006.csv`,`ontime_2007.csv`,`ontime_2008.csv`.
+- `ontime_200[6-8].csv` to represents `ontime_2006.csv`,`ontime_2007.csv`,`ontime_2008.csv`.
 
 ### FILES = ( 'file_name' [ , 'file_name' ... ] )
 
@@ -218,16 +263,29 @@ COPY INTO mytable
   FILE_FORMAT = (type = 'CSV' field_delimiter = ',' record_delimiter = '\n' skip_header = 1 compression = GZIP) size_limit=10;
 ```
 
-This example moves data from a CSV file without specifying the endpoint URL:
+This example loads data from a CSV file without specifying the endpoint URL:
+
 ```sql
 COPY INTO mytable
   FROM 's3://mybucket/data.csv'
   FILE_FORMAT = (type = 'CSV' field_delimiter = ','  record_delimiter = '\n' skip_header = 1) size_limit=10;
 ```
 
+This is an example loading data from a `Parquet` file:
+
+```sql
+COPY INTO mytable
+  FROM 's3://mybucket/data.parquet'
+  CONNECTION = (
+      ACCESS_KEY_ID = '<your-access-key-ID>'
+      SECRET_ACCESS_KEY = '<your-secret-access-key>')
+  FILE_FORMAT = (type = 'PARQUET');
+```
+
 **Azure Blob storage**
 
-This example reads data from a CSV file and inserts them into a table:
+This example reads data from a CSV file and inserts it into a table:
+
 ```sql
 COPY INTO mytable
     FROM 'azblob://mybucket/data.csv'
@@ -236,4 +294,15 @@ COPY INTO mytable
         ACCOUNT_NAME = '<account_name>'
         ACCOUNT_KEY = '<account_key>'
     )
+    FILE_FORMAT = (type = 'CSV');
+```
+
+**HTTP**
+
+This example reads data from three CSV files and inserts it into a table:
+
+```sql
+COPY INTO mytable
+    FROM 'https://repo.databend.rs/dataset/stateful/ontime_200{6,7,8}_200.csv'
+    FILE_FORMAT = (type = 'CSV');
 ```

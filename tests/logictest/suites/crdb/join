@@ -661,6 +661,15 @@ B NULL B
 C NULL C
 E NULL E
 
+statement query ITIT
+SELECT * FROM str1 LEFT OUTER JOIN str2 ON str1.s = str2.s order by str1.a;
+
+----
+1 a NULL NULL
+2 A 1 A
+3 c NULL NULL
+4 D NULL NULL
+
 -- statement query
 -- SELECT s, str1.s, str2.s FROM str1 FULL OUTER JOIN str2 USING(s);
 

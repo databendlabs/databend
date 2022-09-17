@@ -306,7 +306,7 @@ where
         _params: Vec<DataValue>,
         _arguments: Vec<DataField>,
     ) -> Result<Option<AggregateFunctionRef>> {
-        Ok(Some(AggregateNullVariadicAdaptor::<false, false>::create(
+        Ok(Some(AggregateNullVariadicAdaptor::<false>::create(
             Arc::new(self.clone()),
         )))
     }

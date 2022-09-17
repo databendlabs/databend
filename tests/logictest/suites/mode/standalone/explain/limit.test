@@ -148,7 +148,7 @@ Limit
     ├── sort keys: [c1 ASC NULLS LAST]
     └── HashJoin
         ├── join type: LEFT OUTER
-        ├── build keys: [c (#5)]
+        ├── build keys: [CAST(c (#5) AS BIGINT UNSIGNED NULL)]
         ├── probe keys: [CAST(c1 (#1) AS BIGINT UNSIGNED NULL)]
         ├── filters: []
         ├── Project(Build)

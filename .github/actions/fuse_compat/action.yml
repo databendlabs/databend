@@ -12,9 +12,6 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Setup Build Tool
-      uses: ./.github/actions/setup_build_tool
-
     - name: Download artifact
       uses: ./.github/actions/artifact_download
       with:
@@ -26,8 +23,20 @@ runs:
     - name: Test compatibility
       shell: bash
       run: |
-        build-tool bash ./tests/fuse-compat/test-fuse-compat.sh 0.7.150
-        build-tool bash ./tests/fuse-compat/test-fuse-compat.sh 0.7.151
+        docker run --rm --tty --net=host \
+          --user $(id -u):$(id -g) \
+          --env BUILD_PROFILE \
+          --volume "${PWD}:/workspace" \
+          --workdir "/workspace" \
+          datafuselabs/build-tool:sqllogic \
+          bash ./tests/fuse-compat/test-fuse-compat.sh 0.7.150
+        docker run --rm --tty --net=host \
+          --user $(id -u):$(id -g) \
+          --env BUILD_PROFILE \
+          --volume "${PWD}:/workspace" \
+          --workdir "/workspace" \
+          datafuselabs/build-tool:sqllogic \
+          bash ./tests/fuse-compat/test-fuse-compat.sh 0.7.151
 
     - name: Upload failure
       if: failure()

@@ -18,10 +18,9 @@ use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_legacy_planners::UseDatabasePlan;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryAffect;
 use crate::sessions::QueryContext;
 
@@ -42,7 +41,7 @@ impl Interpreter for UseDatabaseInterpreter {
         "UseDatabaseInterpreter"
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         if self.plan.database.trim().is_empty() {
             return Err(ErrorCode::UnknownDatabase("No database selected"));
         }
@@ -52,7 +51,7 @@ impl Interpreter for UseDatabaseInterpreter {
         self.ctx.set_affect(QueryAffect::UseDB {
             name: self.plan.database.clone(),
         });
-        let schema = Arc::new(DataSchema::empty());
-        Ok(Box::pin(DataBlockStream::create(schema, None, vec![])))
+        let _schema = Arc::new(DataSchema::empty());
+        Ok(PipelineBuildResult::create())
     }
 }

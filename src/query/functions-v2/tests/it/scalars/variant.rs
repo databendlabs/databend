@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,6 +34,13 @@ fn test_parse_json(file: &mut impl Write) {
     run_ast(file, "parse_json('nuLL')", &[]);
     run_ast(file, "parse_json('null')", &[]);
     run_ast(file, "parse_json(' \t')", &[]);
+    run_ast(file, "parse_json('true')", &[]);
+    run_ast(file, "parse_json('false')", &[]);
+    run_ast(file, "parse_json('\"测试\"')", &[]);
+    run_ast(file, "parse_json('1234')", &[]);
+    run_ast(file, "parse_json('[1,2,3,4]')", &[]);
+    run_ast(file, "parse_json('{\"a\":\"b\",\"c\":\"d\"}')", &[]);
+
     run_ast(file, "parse_json(s)", &[(
         "s",
         DataType::String,

@@ -16,12 +16,7 @@ use std::error::Error;
 use std::fmt::Display;
 
 use common_exception::ErrorCode;
-use prost::EncodeError;
-use tonic::Code;
 
-use crate::meta_network_errors::InvalidArgument;
-use crate::ConnectionError;
-use crate::MetaBytesError;
 use crate::MetaError;
 use crate::MetaNetworkError;
 use crate::MetaResult;
@@ -30,27 +25,15 @@ impl From<MetaError> for ErrorCode {
     fn from(e: MetaError) -> Self {
         match e {
             MetaError::AppError(app_err) => app_err.into(),
-            MetaError::MetaNetworkError(net_err) => net_err.into(),
+            MetaError::NetworkError(net_err) => net_err.into(),
 
             // Except application error and part of network error,
             // all other errors are not handleable and can only be converted to a fatal error.
-            MetaError::MetaRaftError(raft_err) => ErrorCode::MetaServiceError(raft_err.to_string())
-                .set_backtrace(raft_err.backtrace()),
-            MetaError::MetaStorageError(sto_err) => {
+            MetaError::StorageError(sto_err) => {
                 ErrorCode::MetaServiceError(sto_err.to_string()).set_backtrace(sto_err.backtrace())
             }
-            MetaError::InvalidConfig(err_str) => ErrorCode::MetaServiceError(err_str),
-            MetaError::MetaStoreAlreadyExists(node_id) => {
-                ErrorCode::MetaServiceError(format!("meta store already exists: {}", node_id))
-            }
-            MetaError::MetaStoreNotFound => ErrorCode::MetaServiceError("MetaStoreNotFound"),
-            MetaError::MetaServiceError(err_str) => ErrorCode::MetaServiceError(err_str),
-            MetaError::BytesError(ae) => {
-                ErrorCode::MetaServiceError(ae.to_string()).set_backtrace(ae.backtrace())
-            }
-            MetaError::Fatal(ae) => {
-                ErrorCode::MetaServiceError(ae.to_string()).set_backtrace(ae.backtrace())
-            }
+            MetaError::ClientError(ce) => ce.into(),
+            MetaError::APIError(e) => e.into(),
         }
     }
 }
@@ -94,44 +77,9 @@ where E: Display + Send + Sync + 'static
     }
 }
 
-// ser/de to/from tonic::Status
 impl From<tonic::Status> for MetaError {
     fn from(status: tonic::Status) -> Self {
-        match status.code() {
-            Code::InvalidArgument => MetaError::MetaNetworkError(
-                MetaNetworkError::InvalidArgument(InvalidArgument::new(status, "")),
-            ),
-            // Code::Ok => {}
-            // Code::Cancelled => {}
-            // Code::Unknown => {}
-            // Code::DeadlineExceeded => {}
-            // Code::NotFound => {}
-            // Code::AlreadyExists => {}
-            // Code::PermissionDenied => {}
-            // Code::ResourceExhausted => {}
-            // Code::FailedPrecondition => {}
-            // Code::Aborted => {}
-            // Code::OutOfRange => {}
-            // Code::Unimplemented => {}
-            // Code::Internal => {}
-            // Code::Unavailable => {}
-            // Code::DataLoss => {}
-            // Code::Unauthenticated => {}
-            _ => MetaError::MetaNetworkError(MetaNetworkError::ConnectionError(
-                ConnectionError::new(status, ""),
-            )),
-        }
-    }
-}
-
-impl From<serde_json::Error> for MetaError {
-    fn from(error: serde_json::Error) -> MetaError {
-        MetaError::BytesError(MetaBytesError::new(&error))
-    }
-}
-
-impl From<EncodeError> for MetaError {
-    fn from(e: EncodeError) -> MetaError {
-        MetaError::BytesError(MetaBytesError::new(&e))
+        let net_err = MetaNetworkError::from(status);
+        MetaError::NetworkError(net_err)
     }
 }

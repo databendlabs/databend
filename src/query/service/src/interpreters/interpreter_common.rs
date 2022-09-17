@@ -65,7 +65,9 @@ pub fn append2table(
     ctx: Arc<QueryContext>,
     table: Arc<dyn Table>,
     source_schema: DataSchemaRef,
-    mut build_res: PipelineBuildResult,
+    build_res: &mut PipelineBuildResult,
+    overwrite: bool,
+    need_commit: bool,
 ) -> Result<()> {
     fill_missing_columns(
         ctx.clone(),
@@ -75,38 +77,50 @@ pub fn append2table(
     )?;
 
     table.append2(ctx.clone(), &mut build_res.main_pipeline, false)?;
+
+    if need_commit {
+        build_res.main_pipeline.set_on_finished(move |may_error| {
+            // capture out variable
+            let overwrite = overwrite;
+            let ctx = ctx.clone();
+            let table = table.clone();
+
+            if may_error.is_none() {
+                let append_entries = ctx.consume_precommit_blocks();
+                // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
+                let catalog_name = ctx.get_current_catalog();
+                let commit_handle = GlobalIORuntime::instance().spawn(async move {
+                    table
+                        .commit_insertion(ctx, &catalog_name, append_entries, overwrite)
+                        .await
+                });
+
+                return match futures::executor::block_on(commit_handle) {
+                    Ok(Ok(_)) => Ok(()),
+                    Ok(Err(error)) => Err(error),
+                    Err(cause) => Err(ErrorCode::PanicError(format!(
+                        "Maybe panic while in commit insert. {}",
+                        cause
+                    ))),
+                };
+            }
+
+            Err(may_error.as_ref().unwrap().clone())
+        });
+    }
+
+    Ok(())
+}
+
+pub fn execute_pipeline(ctx: Arc<QueryContext>, mut res: PipelineBuildResult) -> Result<()> {
     let query_need_abort = ctx.query_need_abort();
     let executor_settings = ExecutorSettings::try_create(&ctx.get_settings())?;
-    build_res.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
-    let mut pipelines = build_res.sources_pipelines;
-    pipelines.push(build_res.main_pipeline);
+    res.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
+    let mut pipelines = res.sources_pipelines;
+    pipelines.push(res.main_pipeline);
     let executor =
         PipelineCompleteExecutor::from_pipelines(query_need_abort, pipelines, executor_settings)?;
     executor.execute()
-}
-
-pub async fn commit2table(
-    ctx: Arc<QueryContext>,
-    table: Arc<dyn Table>,
-    overwrite: bool,
-) -> Result<()> {
-    let append_entries = ctx.consume_precommit_blocks();
-    // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
-    let catalog_name = ctx.get_current_catalog();
-    let handler = GlobalIORuntime::instance().spawn(async move {
-        table
-            .commit_insertion(ctx, &catalog_name, append_entries, overwrite)
-            .await
-    });
-
-    match handler.await {
-        Ok(Ok(_)) => Ok(()),
-        Ok(Err(cause)) => Err(cause),
-        Err(cause) => Err(ErrorCode::PanicError(format!(
-            "Maybe panic while in commit insert. {}",
-            cause
-        ))),
-    }
 }
 
 pub async fn validate_grant_object_exists(
@@ -232,6 +246,7 @@ pub async fn list_files_from_dal(
                 .last_modified()
                 .map_or(Utc::now(), |t| Utc.timestamp(t.unix_timestamp(), 0)),
             creator: None,
+            etag: meta.etag().map(str::to_string),
         })
         .collect::<Vec<StageFile>>();
 

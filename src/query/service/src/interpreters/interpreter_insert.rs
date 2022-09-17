@@ -23,18 +23,14 @@ use common_legacy_planners::InsertInputSource;
 use common_legacy_planners::InsertPlan;
 use common_legacy_planners::PlanNode;
 use common_legacy_planners::SelectPlan;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 use parking_lot::Mutex;
 
-use super::commit2table;
 use super::interpreter_common::append2table;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::BlocksSource;
 use crate::pipelines::processors::TransformCastSchema;
-use crate::pipelines::Pipeline;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
@@ -84,14 +80,15 @@ impl Interpreter for InsertInterpreter {
         "InsertIntoInterpreter"
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = &self.plan;
         let settings = self.ctx.get_settings();
         let table = self
             .ctx
             .get_table(&plan.catalog, &plan.database, &plan.table)
             .await?;
-        let mut build_res = self.create_new_pipeline().await?;
+
+        let mut build_res = PipelineBuildResult::create();
         let mut builder = SourcePipeBuilder::create();
         if self.async_insert {
             build_res.main_pipeline.add_pipe(
@@ -126,7 +123,7 @@ impl Interpreter for InsertInterpreter {
                         SelectInterpreter::try_create(self.ctx.clone(), SelectPlan {
                             input: Arc::new((**plan).clone()),
                         })?;
-                    build_res = select_interpreter.create_new_pipeline().await?;
+                    build_res = select_interpreter.execute2().await?;
 
                     if self.check_schema_cast(plan)? {
                         let mut functions = Vec::with_capacity(self.plan.schema().fields().len());
@@ -160,21 +157,16 @@ impl Interpreter for InsertInterpreter {
             };
         }
 
-        append2table(self.ctx.clone(), table.clone(), plan.schema(), build_res)?;
-        commit2table(self.ctx.clone(), table.clone(), plan.overwrite).await?;
-        Ok(Box::pin(DataBlockStream::create(
-            self.plan.schema(),
-            None,
-            vec![],
-        )))
-    }
+        append2table(
+            self.ctx.clone(),
+            table,
+            plan.schema(),
+            &mut build_res,
+            self.plan.overwrite,
+            true,
+        )?;
 
-    async fn create_new_pipeline(&self) -> Result<PipelineBuildResult> {
-        let insert_pipeline = Pipeline::create();
-        Ok(PipelineBuildResult {
-            main_pipeline: insert_pipeline,
-            sources_pipelines: vec![],
-        })
+        Ok(build_res)
     }
 
     fn set_source_pipe_builder(&self, builder: Option<SourcePipeBuilder>) -> Result<()> {

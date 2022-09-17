@@ -12,13 +12,39 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod eval_context;
 mod eval_node;
 mod physical_scalar;
 mod scalar;
 
-pub use eval_context::EvalContext;
-pub use eval_context::TypedVector;
+use common_datavalues::ColumnRef;
+use common_datavalues::DataTypeImpl;
 pub use eval_node::EvalNode;
 
 pub struct Evaluator;
+
+#[derive(Clone, Debug)]
+pub struct TypedVector {
+    pub(super) vector: ColumnRef,
+    pub(super) logical_type: DataTypeImpl,
+}
+
+impl TypedVector {
+    pub fn new(data: ColumnRef, logical_type: DataTypeImpl) -> Self {
+        Self {
+            vector: data,
+            logical_type,
+        }
+    }
+
+    pub fn logical_type(&self) -> DataTypeImpl {
+        self.logical_type.clone()
+    }
+
+    pub fn physical_type(&self) -> DataTypeImpl {
+        self.vector.data_type()
+    }
+
+    pub fn vector(&self) -> &ColumnRef {
+        &self.vector
+    }
+}

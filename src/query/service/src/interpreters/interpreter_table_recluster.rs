@@ -17,14 +17,13 @@ use std::time::SystemTime;
 
 use common_exception::Result;
 use common_legacy_planners::ReclusterTablePlan;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::Pipeline;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -45,7 +44,7 @@ impl Interpreter for ReclusterTableInterpreter {
         "ReclusterTableInterpreter"
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = &self.plan;
         let ctx = self.ctx.clone();
         let settings = ctx.get_settings();
@@ -99,10 +98,6 @@ impl Interpreter for ReclusterTableInterpreter {
             .write_log(start, &plan.database, &plan.table)
             .await?;
 
-        Ok(Box::pin(DataBlockStream::create(
-            self.plan.schema(),
-            None,
-            vec![],
-        )))
+        Ok(PipelineBuildResult::create())
     }
 }

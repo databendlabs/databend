@@ -12,51 +12,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use anyerror::AnyError;
 use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;
 
 use crate::app_error::AppError;
-use crate::MetaBytesError;
+use crate::MetaAPIError;
+use crate::MetaClientError;
 use crate::MetaNetworkError;
-use crate::MetaRaftError;
 use crate::MetaStorageError;
 
 /// Top level error MetaNode would return.
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum MetaError {
     #[error(transparent)]
-    MetaNetworkError(#[from] MetaNetworkError),
+    NetworkError(#[from] MetaNetworkError),
 
     #[error(transparent)]
-    MetaRaftError(#[from] MetaRaftError),
+    StorageError(#[from] MetaStorageError),
 
     #[error(transparent)]
-    MetaStorageError(#[from] MetaStorageError),
-
-    #[error("{0}")]
-    InvalidConfig(String),
-
-    #[error("raft state present id={0}, can not create")]
-    MetaStoreAlreadyExists(u64),
-
-    #[error("raft state absent, can not open")]
-    MetaStoreNotFound,
-
-    #[error("{0}")]
-    MetaServiceError(String),
+    ClientError(#[from] MetaClientError),
 
     #[error(transparent)]
-    BytesError(#[from] MetaBytesError),
+    APIError(#[from] MetaAPIError),
 
     #[error(transparent)]
     AppError(#[from] AppError),
-
-    /// Any other unclassified error.
-    /// Other crate may return general error such as ErrorCode or anyhow::Error, which can not be classified by type.
-    #[error(transparent)]
-    Fatal(AnyError),
 }
 
 pub type MetaResult<T> = Result<T, MetaError>;

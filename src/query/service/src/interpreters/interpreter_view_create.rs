@@ -23,10 +23,9 @@ use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::storages::view::view_table::VIEW_ENGINE;
@@ -48,7 +47,7 @@ impl Interpreter for CreateViewInterpreter {
         "CreateViewInterpreter"
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         // check privilige
         self.ctx
             .get_current_session()
@@ -78,7 +77,7 @@ impl Interpreter for CreateViewInterpreter {
 }
 
 impl CreateViewInterpreter {
-    async fn create_view(&self) -> Result<SendableDataBlockStream> {
+    async fn create_view(&self) -> Result<PipelineBuildResult> {
         let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
         let mut options = BTreeMap::new();
         options.insert("query".to_string(), self.plan.subquery.clone());
@@ -97,10 +96,6 @@ impl CreateViewInterpreter {
         };
         catalog.create_table(plan).await?;
 
-        Ok(Box::pin(DataBlockStream::create(
-            self.plan.schema(),
-            None,
-            vec![],
-        )))
+        Ok(PipelineBuildResult::create())
     }
 }

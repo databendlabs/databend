@@ -141,7 +141,7 @@ Limit
 ├── offset: 1
 └── HashJoin
     ├── join type: LEFT OUTER
-    ├── build keys: [t1.a (#1)]
+    ├── build keys: [CAST(t1.a (#1) AS INT NULL)]
     ├── probe keys: [CAST(t.a (#0) AS INT NULL)]
     ├── filters: []
     ├── Limit(Build)

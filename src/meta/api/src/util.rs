@@ -20,7 +20,6 @@ use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::share::*;
-use common_meta_types::anyerror::AnyError;
 use common_meta_types::app_error::AppError;
 use common_meta_types::app_error::ShareHasNoGrantedDatabase;
 use common_meta_types::app_error::UnknownDatabase;
@@ -31,9 +30,12 @@ use common_meta_types::app_error::UnknownTable;
 use common_meta_types::txn_condition::Target;
 use common_meta_types::txn_op::Request;
 use common_meta_types::ConditionResult;
+use common_meta_types::InvalidArgument;
+use common_meta_types::InvalidReply;
 use common_meta_types::MatchSeq;
 use common_meta_types::MetaBytesError;
 use common_meta_types::MetaError;
+use common_meta_types::MetaNetworkError;
 use common_meta_types::Operation;
 use common_meta_types::TxnCondition;
 use common_meta_types::TxnDeleteRequest;
@@ -108,7 +110,10 @@ pub async fn list_keys<K: KVApiKey>(
     let mut structured_keys = Vec::with_capacity(n);
 
     for (str_key, _seq_id) in res.iter() {
-        let struct_key = K::from_key(str_key).map_err(to_bytes_err)?;
+        let struct_key = K::from_key(str_key).map_err(to_bytes_err).map_err(|e| {
+            let inv = InvalidReply::new("fail to list_keys", &e);
+            MetaNetworkError::InvalidReply(inv)
+        })?;
         structured_keys.push(struct_key);
     }
 
@@ -138,20 +143,29 @@ pub async fn list_u64_value<K: KVApiKey>(
         values.push(id);
 
         // Parse key
-        let struct_key = K::from_key(str_key).map_err(to_bytes_err)?;
+        let struct_key = K::from_key(str_key).map_err(to_bytes_err).map_err(|e| {
+            let inv = InvalidReply::new("list_u64_value", &e);
+            MetaNetworkError::InvalidReply(inv)
+        })?;
         structured_keys.push(struct_key);
     }
 
     Ok((structured_keys, values))
 }
 
-pub fn serialize_u64(value: impl Into<Id>) -> Result<Vec<u8>, MetaBytesError> {
-    let v = serde_json::to_vec(&*value.into())?;
+pub fn serialize_u64(value: impl Into<Id>) -> Result<Vec<u8>, MetaNetworkError> {
+    let v = serde_json::to_vec(&*value.into()).map_err(|e| {
+        let inv = InvalidArgument::new(e, "");
+        MetaNetworkError::InvalidArgument(inv)
+    })?;
     Ok(v)
 }
 
-pub fn deserialize_u64(v: &[u8]) -> Result<Id, MetaBytesError> {
-    let id = serde_json::from_slice(v)?;
+pub fn deserialize_u64(v: &[u8]) -> Result<Id, MetaNetworkError> {
+    let id = serde_json::from_slice(v).map_err(|e| {
+        let inv = InvalidReply::new("", &e);
+        MetaNetworkError::InvalidReply(inv)
+    })?;
     Ok(Id::new(id))
 }
 
@@ -174,24 +188,36 @@ pub async fn fetch_id<T: KVApiKey>(kv_api: &impl KVApi, generator: T) -> Result<
     Ok(seq_v.seq)
 }
 
-pub fn serialize_struct<T>(value: &T) -> Result<Vec<u8>, MetaBytesError>
+pub fn serialize_struct<T>(value: &T) -> Result<Vec<u8>, MetaNetworkError>
 where
     T: FromToProto + 'static,
     T::PB: common_protos::prost::Message,
 {
-    let p = value.to_pb().map_err(to_bytes_err)?;
+    let p = value.to_pb().map_err(to_bytes_err).map_err(|e| {
+        let inv = InvalidArgument::new(e, "");
+        MetaNetworkError::InvalidArgument(inv)
+    })?;
     let mut buf = vec![];
-    common_protos::prost::Message::encode(&p, &mut buf)?;
+    common_protos::prost::Message::encode(&p, &mut buf).map_err(|e| {
+        let inv = InvalidArgument::new(e, "");
+        MetaNetworkError::InvalidArgument(inv)
+    })?;
     Ok(buf)
 }
 
-pub fn deserialize_struct<T>(buf: &[u8]) -> Result<T, MetaBytesError>
+pub fn deserialize_struct<T>(buf: &[u8]) -> Result<T, MetaNetworkError>
 where
     T: FromToProto,
     T::PB: common_protos::prost::Message + Default,
 {
-    let p: T::PB = common_protos::prost::Message::decode(buf)?;
-    let v: T = FromToProto::from_pb(p).map_err(to_bytes_err)?;
+    let p: T::PB = common_protos::prost::Message::decode(buf).map_err(|e| {
+        let inv = InvalidReply::new("", &e);
+        MetaNetworkError::InvalidReply(inv)
+    })?;
+    let v: T = FromToProto::from_pb(p).map_err(to_bytes_err).map_err(|e| {
+        let inv = InvalidReply::new("", &e);
+        MetaNetworkError::InvalidReply(inv)
+    })?;
 
     Ok(v)
 }
@@ -496,28 +522,6 @@ where
         }
     }
     Ok((false, None))
-}
-
-/// Get existing value by key. Panic if key is absent.
-/// This function is only used for testing.
-pub async fn get_kv_data<T>(
-    kv_api: &(impl KVApi + ?Sized),
-    key: &impl KVApiKey,
-) -> Result<T, MetaError>
-where
-    T: FromToProto,
-    T::PB: common_protos::prost::Message + Default,
-{
-    let res = kv_api.get_kv(&key.to_key()).await?;
-    if let Some(res) = res {
-        let s = deserialize_struct(&res.data)?;
-        return Ok(s);
-    };
-
-    Err(MetaError::Fatal(AnyError::error(format!(
-        "failed to get {}",
-        key.to_key()
-    ))))
 }
 
 pub async fn get_object_shared_by_share_ids(
