@@ -245,7 +245,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
         let group_by_two_level_threshold =
             self.ctx.get_settings().get_group_by_two_level_threshold()? as usize;
         if !self.state.is_two_level() && self.state.len() >= group_by_two_level_threshold {
-            self.state.convert_to_two_level();
+            self.state.convert_to_twolevel();
         }
 
         let places = Self::lookup_state(&self.params, group_keys_iter, &mut self.state);
@@ -274,7 +274,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
         let group_by_two_level_threshold =
             self.ctx.get_settings().get_group_by_two_level_threshold()? as usize;
         if !self.state.is_two_level() && self.state.len() >= group_by_two_level_threshold {
-            self.state.convert_to_two_level();
+            self.state.convert_to_twolevel();
         }
 
         Self::lookup_key(group_keys_iter, &mut self.state);

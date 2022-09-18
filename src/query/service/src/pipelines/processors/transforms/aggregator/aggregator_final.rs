@@ -145,7 +145,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
         let group_by_two_level_threshold =
             self.ctx.get_settings().get_group_by_two_level_threshold()? as usize;
         if !self.state.is_two_level() && self.state.len() >= group_by_two_level_threshold {
-            self.state.convert_to_two_level();
+            self.state.convert_to_twolevel();
         }
 
         // first state places of current block
@@ -242,7 +242,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
         let group_by_two_level_threshold =
             self.ctx.get_settings().get_group_by_two_level_threshold()? as usize;
         if !self.state.is_two_level() && self.state.len() >= group_by_two_level_threshold {
-            self.state.convert_to_two_level();
+            self.state.convert_to_twolevel();
         }
 
         let mut inserted = true;

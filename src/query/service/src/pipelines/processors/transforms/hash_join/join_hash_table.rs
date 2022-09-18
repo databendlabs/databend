@@ -147,7 +147,7 @@ impl JoinHashTable {
             HashMethodKind::Serializer(_) => Arc::new(JoinHashTable::try_create(
                 ctx,
                 HashTable::SerializerHashTable(SerializerHashTable {
-                    hash_table: HashMap::<KeysRef, Vec<RowPtr>>::create(),
+                    hash_table: HashMap::<KeysRef, Vec<RowPtr>>::new(),
                     hash_method: HashMethodSerializer::default(),
                 }),
                 build_schema,
@@ -156,7 +156,7 @@ impl JoinHashTable {
             HashMethodKind::KeysU8(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
                 HashTable::KeyU8HashTable(KeyU8HashTable {
-                    hash_table: HashMap::<u8, Vec<RowPtr>>::create(),
+                    hash_table: HashMap::<u8, Vec<RowPtr>>::new(),
                     hash_method,
                 }),
                 build_schema,
@@ -165,7 +165,7 @@ impl JoinHashTable {
             HashMethodKind::KeysU16(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
                 HashTable::KeyU16HashTable(KeyU16HashTable {
-                    hash_table: HashMap::<u16, Vec<RowPtr>>::create(),
+                    hash_table: HashMap::<u16, Vec<RowPtr>>::new(),
                     hash_method,
                 }),
                 build_schema,
@@ -174,7 +174,7 @@ impl JoinHashTable {
             HashMethodKind::KeysU32(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
                 HashTable::KeyU32HashTable(KeyU32HashTable {
-                    hash_table: HashMap::<u32, Vec<RowPtr>>::create(),
+                    hash_table: HashMap::<u32, Vec<RowPtr>>::new(),
                     hash_method,
                 }),
                 build_schema,
@@ -183,7 +183,7 @@ impl JoinHashTable {
             HashMethodKind::KeysU64(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
                 HashTable::KeyU64HashTable(KeyU64HashTable {
-                    hash_table: HashMap::<u64, Vec<RowPtr>>::create(),
+                    hash_table: HashMap::<u64, Vec<RowPtr>>::new(),
                     hash_method,
                 }),
                 build_schema,
@@ -192,7 +192,7 @@ impl JoinHashTable {
             HashMethodKind::KeysU128(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
                 HashTable::KeyU128HashTable(KeyU128HashTable {
-                    hash_table: HashMap::<u128, Vec<RowPtr>>::create(),
+                    hash_table: HashMap::<u128, Vec<RowPtr>>::new(),
                     hash_method,
                 }),
                 build_schema,
@@ -201,7 +201,7 @@ impl JoinHashTable {
             HashMethodKind::KeysU256(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
                 HashTable::KeyU256HashTable(KeyU256HashTable {
-                    hash_table: HashMap::<U256, Vec<RowPtr>>::create(),
+                    hash_table: HashMap::<U256, Vec<RowPtr>>::new(),
                     hash_method,
                 }),
                 build_schema,
@@ -210,7 +210,7 @@ impl JoinHashTable {
             HashMethodKind::KeysU512(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
                 HashTable::KeyU512HashTable(KeyU512HashTable {
-                    hash_table: HashMap::<U512, Vec<RowPtr>>::create(),
+                    hash_table: HashMap::<U512, Vec<RowPtr>>::new(),
                     hash_method,
                 }),
                 build_schema,
@@ -466,7 +466,6 @@ impl HashJoinState for JoinHashTable {
                 let build_keys_iter = $method.build_keys_iter(&keys_state)?;
 
                 for (row_index, key) in build_keys_iter.enumerate().take($chunk.num_rows()) {
-                    let mut inserted = true;
                     let ptr = RowPtr {
                         chunk_index: $chunk_index as u32,
                         row_index: row_index as u32,
@@ -476,11 +475,13 @@ impl HashJoinState for JoinHashTable {
                         let mut self_row_ptrs = self.row_ptrs.write();
                         self_row_ptrs.push(ptr.clone());
                     }
-                    let entity = $table.insert_key(&key, &mut inserted);
-                    if inserted {
-                        entity.set_value(vec![ptr]);
-                    } else {
-                        entity.get_mut_value().push(ptr);
+                    match unsafe { $table.insert(key) } {
+                        Ok(e) => {
+                            e.write(vec![ptr]);
+                        }
+                        Err(e) => {
+                            e.push(ptr);
+                        }
                     }
                 }
             }};
@@ -535,7 +536,6 @@ impl HashJoinState for JoinHashTable {
                         .hash_method
                         .build_keys_iter(chunk.keys_state.as_ref().unwrap())?;
                     for (row_index, key) in build_keys_iter.enumerate().take(chunk.num_rows()) {
-                        let mut inserted = true;
                         let ptr = RowPtr {
                             chunk_index: chunk_index as u32,
                             row_index: row_index as u32,
@@ -546,11 +546,13 @@ impl HashJoinState for JoinHashTable {
                             self_row_ptrs.push(ptr);
                         }
                         let keys_ref = KeysRef::create(key.as_ptr() as usize, key.len());
-                        let entity = table.hash_table.insert_key(&keys_ref, &mut inserted);
-                        if inserted {
-                            entity.set_value(vec![ptr]);
-                        } else {
-                            entity.get_mut_value().push(ptr);
+                        match unsafe { table.hash_table.insert(keys_ref) } {
+                            Ok(e) => {
+                                e.write(vec![ptr]);
+                            }
+                            Err(e) => {
+                                e.push(ptr);
+                            }
                         }
                     }
                 }

@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_hashtable::HashTableEntity;
-use common_hashtable::HashTableKeyable;
-use common_hashtable::KeyValueEntity;
+use common_hashtable::HashtableEntry;
+use common_hashtable::HashtableKeyable;
 
 pub trait StateEntity<Key> {
     fn get_state_key<'a>(self: *mut Self) -> &'a Key;
@@ -50,20 +49,22 @@ impl<Key: ShortFixedKeyable> StateEntity<Key> for ShortFixedKeysStateEntity<Key>
     }
 }
 
-impl<Key: HashTableKeyable> StateEntity<Key> for KeyValueEntity<Key, usize> {
+impl<Key: HashtableKeyable> StateEntity<Key> for HashtableEntry<Key, usize> {
     #[inline(always)]
     fn get_state_key<'a>(self: *mut Self) -> &'a Key {
-        self.get_key()
+        unsafe { (*self).key() }
     }
 
     #[inline(always)]
     fn set_state_value(self: *mut Self, value: usize) {
-        self.set_value(value)
+        unsafe {
+            *(*self).get_mut() = value;
+        }
     }
 
     #[inline(always)]
     fn get_state_value<'a>(self: *mut Self) -> &'a usize {
-        self.get_value()
+        unsafe { &*((*self).get() as *const _) }
     }
 }
 

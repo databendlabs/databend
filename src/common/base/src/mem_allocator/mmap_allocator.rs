@@ -366,10 +366,10 @@ pub fn linux_kernel_version() -> (u64, u64, u64) {
             let mut uname = unsafe { std::mem::zeroed::<libc::utsname>() };
             assert_ne!(-1, unsafe { libc::uname(&mut uname) });
             let mut length = 0usize;
-            while length < uname.version.len() && uname.version[length] != 0 {
+            while length < uname.release.len() && uname.release[length] != 0 {
                 length += 1;
             }
-            let slice = unsafe { &*(&uname.version[..length] as *const [i8] as *const [u8]) };
+            let slice = unsafe { &*(&uname.release[..length] as *const [i8] as *const [u8]) };
             let ver = std::str::from_utf8(slice).unwrap();
             let semver = semver::Version::parse(ver).unwrap();
             let ret = (semver.major, semver.minor, semver.patch);

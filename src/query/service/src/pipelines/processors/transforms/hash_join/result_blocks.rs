@@ -32,8 +32,8 @@ use common_datavalues::Series;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_hashtable::HashMap;
-use common_hashtable::HashTableKeyable;
-use common_hashtable::KeyValueEntity;
+use common_hashtable::HashtableEntry;
+use common_hashtable::HashtableKeyable;
 
 use super::JoinHashTable;
 use super::ProbeState;
@@ -54,7 +54,7 @@ impl JoinHashTable {
         input: &DataBlock,
     ) -> Result<Vec<DataBlock>>
     where
-        Key: HashTableKeyable + Clone + 'static,
+        Key: HashtableKeyable + Clone + 'static,
         IT: Iterator<Item = Key> + TrustedLen,
     {
         let probe_indexs = &mut probe_state.probe_indexs;
@@ -67,13 +67,13 @@ impl JoinHashTable {
                 for (i, key) in keys_iter.enumerate() {
                     // If the join is derived from correlated subquery, then null equality is safe.
                     let probe_result_ptr = if self.hash_join_desc.from_correlated_subquery {
-                        hash_table.find_key(&key)
+                        hash_table.entry(&key)
                     } else {
                         Self::probe_key(hash_table, key, valids, i)
                     };
                     match probe_result_ptr {
                         Some(v) => {
-                            let probe_result_ptrs = v.get_value();
+                            let probe_result_ptrs = v.get();
                             build_indexs.extend_from_slice(probe_result_ptrs);
 
                             for _ in probe_result_ptrs {
@@ -186,7 +186,7 @@ impl JoinHashTable {
         input: &DataBlock,
     ) -> Result<()>
     where
-        Key: HashTableKeyable + Clone + 'static,
+        Key: HashtableKeyable + Clone + 'static,
         IT: Iterator<Item = Key> + TrustedLen,
     {
         // `probe_column` is the subquery result column.
@@ -204,12 +204,12 @@ impl JoinHashTable {
         let valids = &probe_state.valids;
         for (i, key) in keys_iter.enumerate() {
             let probe_result_ptr = if self.hash_join_desc.from_correlated_subquery {
-                hash_table.find_key(&key)
+                hash_table.entry(&key)
             } else {
                 Self::probe_key(hash_table, key, valids, i)
             };
             if let Some(v) = probe_result_ptr {
-                let probe_result_ptrs = v.get_value();
+                let probe_result_ptrs = v.get();
                 build_indexs.extend_from_slice(probe_result_ptrs);
                 probe_indexs.extend(std::iter::repeat(i as u32).take(probe_result_ptrs.len()));
                 for ptr in probe_result_ptrs {
@@ -268,7 +268,7 @@ impl JoinHashTable {
         input: &DataBlock,
     ) -> Result<DataBlock>
     where
-        Key: HashTableKeyable + Clone + 'static,
+        Key: HashtableKeyable + Clone + 'static,
         IT: Iterator<Item = Key> + TrustedLen,
     {
         let probe_indexs = &mut probe_state.probe_indexs;
@@ -276,7 +276,7 @@ impl JoinHashTable {
 
         for (i, key) in keys_iter.enumerate() {
             let probe_result_ptr = if self.hash_join_desc.from_correlated_subquery {
-                hash_table.find_key(&key)
+                hash_table.entry(&key)
             } else {
                 Self::probe_key(hash_table, key, valids, i)
             };
@@ -299,7 +299,7 @@ impl JoinHashTable {
         input: &DataBlock,
     ) -> Result<DataBlock>
     where
-        Key: HashTableKeyable + Clone + 'static,
+        Key: HashtableKeyable + Clone + 'static,
         IT: Iterator<Item = Key> + TrustedLen,
     {
         let probe_indexs = &mut probe_state.probe_indexs;
@@ -314,14 +314,14 @@ impl JoinHashTable {
 
         for (i, key) in keys_iter.enumerate() {
             let probe_result_ptr = if self.hash_join_desc.from_correlated_subquery {
-                hash_table.find_key(&key)
+                hash_table.entry(&key)
             } else {
                 Self::probe_key(hash_table, key, valids, i)
             };
 
             match (probe_result_ptr, SEMI) {
                 (Some(v), _) => {
-                    let probe_result_ptrs = v.get_value();
+                    let probe_result_ptrs = v.get();
                     build_indexs.extend_from_slice(probe_result_ptrs);
                     probe_indexs.extend(std::iter::repeat(i as u32).take(probe_result_ptrs.len()));
 
@@ -386,7 +386,7 @@ impl JoinHashTable {
         input: &DataBlock,
     ) -> Result<DataBlock>
     where
-        Key: HashTableKeyable + Clone + 'static,
+        Key: HashtableKeyable + Clone + 'static,
         IT: Iterator<Item = Key> + TrustedLen,
     {
         let probe_indexs = &mut probe_state.probe_indexs;
@@ -402,14 +402,14 @@ impl JoinHashTable {
         let mut validity = MutableBitmap::new();
         for (i, key) in keys_iter.enumerate() {
             let probe_result_ptr = if self.hash_join_desc.from_correlated_subquery {
-                hash_table.find_key(&key)
+                hash_table.entry(&key)
             } else {
                 Self::probe_key(hash_table, key, valids, i)
             };
 
             match probe_result_ptr {
                 Some(v) => {
-                    let probe_result_ptrs = v.get_value();
+                    let probe_result_ptrs = v.get();
                     if self.hash_join_desc.join_type == JoinType::Single
                         && probe_result_ptrs.len() > 1
                     {
@@ -652,14 +652,14 @@ impl JoinHashTable {
     }
 
     #[inline]
-    fn probe_key<Key: HashTableKeyable>(
-        hash_table: &HashMap<Key, Vec<RowPtr>>,
+    fn probe_key<'a, Key: HashtableKeyable>(
+        hash_table: &'a HashMap<Key, Vec<RowPtr>>,
         key: Key,
         valids: &Option<Bitmap>,
         i: usize,
-    ) -> Option<*mut KeyValueEntity<Key, Vec<RowPtr>>> {
+    ) -> Option<&'a HashtableEntry<Key, Vec<RowPtr>>> {
         if valids.as_ref().map_or(true, |v| v.get_bit(i)) {
-            return hash_table.find_key(&key);
+            return hash_table.entry(&key);
         }
         None
     }

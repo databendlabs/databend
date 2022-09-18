@@ -1343,7 +1343,11 @@ dependencies = [
 name = "common-hashtable"
 version = "0.1.0"
 dependencies = [
+ "ahash",
+ "bumpalo",
+ "cfg-if",
  "common-base",
+ "libc",
  "ordered-float 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "primitive-types",
  "rand 0.8.5",

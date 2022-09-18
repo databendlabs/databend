@@ -23,9 +23,8 @@ use bytes::BytesMut;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_hashtable::HashSetWithStackMemory;
-use common_hashtable::HashTableEntity;
-use common_hashtable::HashTableKeyable;
+use common_hashtable::HashtableKeyable;
+use common_hashtable::StackHashSet;
 use common_io::prelude::*;
 use serde::Deserialize;
 use serde::Serialize;
@@ -56,10 +55,9 @@ pub struct AggregateDistinctState {
     set: HashSet<DataGroupValues, RandomState>,
 }
 
-pub struct AggregateDistinctPrimitiveState<T: PrimitiveType, E: From<T> + HashTableKeyable> {
-    set: HashSetWithStackMemory<{ 16 * 8 }, E>,
+pub struct AggregateDistinctPrimitiveState<T: PrimitiveType, E: From<T> + HashtableKeyable> {
+    set: StackHashSet<E, 16>,
     _t: PhantomData<T>,
-    inserted: bool,
 }
 
 pub struct AggregateDistinctStringState {
@@ -273,20 +271,19 @@ impl DistinctStateFunc<KeysRef> for AggregateDistinctStringState {
 impl<T, E> DistinctStateFunc<T> for AggregateDistinctPrimitiveState<T, E>
 where
     T: PrimitiveType + From<E>,
-    E: From<T> + Sync + Send + Clone + std::fmt::Debug + HashTableKeyable,
+    E: From<T> + Sync + Send + Clone + std::fmt::Debug + HashtableKeyable,
 {
     fn new() -> Self {
         AggregateDistinctPrimitiveState {
-            set: HashSetWithStackMemory::create(),
+            set: StackHashSet::new(),
             _t: PhantomData,
-            inserted: false,
         }
     }
 
     fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
         writer.write_uvarint(self.set.len() as u64)?;
         for value in self.set.iter() {
-            let t: T = value.get_key().clone().into();
+            let t: T = value.key().clone().into();
             serialize_into_buf(writer, &t)?
         }
         Ok(())
@@ -294,11 +291,11 @@ where
 
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
         let size = reader.read_uvarint()?;
-        self.set = HashSetWithStackMemory::with_capacity(size as usize);
+        self.set = StackHashSet::with_capacity(size as usize);
         for _ in 0..size {
             let t: T = deserialize_from_slice(reader)?;
             let e = E::from(t);
-            let _ = self.set.insert_key(&e, &mut self.inserted);
+            let _ = self.set.set_insert(e);
         }
         Ok(())
     }
@@ -314,7 +311,7 @@ where
     fn add(&mut self, columns: &[ColumnRef], row: usize) -> Result<()> {
         let array: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
         let v = unsafe { array.value_unchecked(row) };
-        self.set.insert_key(&E::from(v), &mut self.inserted);
+        let _ = self.set.set_insert(E::from(v));
         Ok(())
     }
 
@@ -329,14 +326,14 @@ where
             Some(bitmap) => {
                 for (t, v) in array.iter().zip(bitmap.iter()) {
                     if v {
-                        self.set.insert_key(&E::from(*t), &mut self.inserted);
+                        let _ = self.set.set_insert(E::from(*t));
                     }
                 }
             }
             None => {
                 for row in 0..input_rows {
                     let v = unsafe { array.value_unchecked(row) };
-                    self.set.insert_key(&E::from(v), &mut self.inserted);
+                    let _ = self.set.set_insert(E::from(v));
                 }
             }
         }
@@ -344,16 +341,14 @@ where
     }
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
-        self.set.merge(&rhs.set);
+        for x in rhs.set.iter() {
+            let _ = self.set.set_insert(x.key().clone());
+        }
         Ok(())
     }
 
     fn build_columns(&mut self, _fields: &[DataField]) -> Result<Vec<ColumnRef>> {
-        let values: Vec<T> = self
-            .set
-            .iter()
-            .map(|e| e.get_key().clone().into())
-            .collect();
+        let values: Vec<T> = self.set.iter().map(|e| e.key().clone().into()).collect();
         let result = PrimitiveColumn::<T>::new_from_vec(values);
         Ok(vec![result.arc()])
     }

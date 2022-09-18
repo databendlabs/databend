@@ -14,115 +14,74 @@
 
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 use common_hashtable::HashMap;
-use common_hashtable::HashMapKind;
-use common_hashtable::HashTableGrower;
-use common_hashtable::SingleLevelGrower;
+use common_hashtable::StackHashMap;
+use common_hashtable::TwolevelHashMap;
 use rand::Rng;
 
-#[test]
-fn test_hash_table_grower() {
-    let mut grower = SingleLevelGrower::default();
-
-    assert_eq!(grower.max_size(), 256);
-
-    assert!(grower.overflow(129));
-    assert!(!grower.overflow(128));
-
-    assert_eq!(grower.place(1), 1);
-    assert_eq!(grower.place(255), 255);
-    assert_eq!(grower.place(256), 0);
-    assert_eq!(grower.place(257), 1);
-
-    assert_eq!(grower.next_place(1), 2);
-    assert_eq!(grower.next_place(2), 3);
-    assert_eq!(grower.next_place(254), 255);
-    assert_eq!(grower.next_place(255), 0);
-
-    grower.increase_size();
-    assert_eq!(grower.max_size(), 1024);
-}
-
-#[test]
-fn test_two_level_hash_table() {
-    let mut hashtable = HashMapKind::<u64, u64>::create_hash_table();
-    let mut inserted = true;
-    let entity = hashtable.insert_key(&1u64, &mut inserted);
-    if inserted {
-        entity.set_value(2);
-    }
-
-    unsafe {
-        hashtable.convert_to_two_level();
-    }
-
-    let is_two_level = match hashtable {
-        HashMapKind::HashTable(_) => false,
-        HashMapKind::TwoLevelHashTable(_) => true,
+macro_rules! simple_test {
+    ($t: tt) => {
+        static COUNT: AtomicUsize = AtomicUsize::new(0);
+        #[derive(Debug)]
+        struct U64(u64);
+        impl U64 {
+            fn new(x: u64) -> Self {
+                COUNT.fetch_add(1, Ordering::Relaxed);
+                Self(x)
+            }
+        }
+        impl Drop for U64 {
+            fn drop(&mut self) {
+                COUNT.fetch_sub(1, Ordering::Relaxed);
+            }
+        }
+        let mut sequence = vec![0u64; 1 << 12];
+        sequence.fill_with(|| rand::thread_rng().gen_range(0..1 << 10));
+        let mut standard = std::collections::HashMap::<u64, u64>::new();
+        let mut hashtable = $t::<u64, U64>::new();
+        for &s in sequence.iter() {
+            match standard.get_mut(&s) {
+                Some(x) => {
+                    *x += 1;
+                }
+                None => {
+                    standard.insert(s, 1);
+                }
+            }
+        }
+        for &s in sequence.iter() {
+            match unsafe { hashtable.insert(s) } {
+                Ok(x) => {
+                    x.write(U64::new(1));
+                }
+                Err(x) => {
+                    x.0 += 1;
+                }
+            }
+        }
+        assert_eq!(standard.len(), hashtable.len());
+        let mut check = std::collections::HashSet::new();
+        for e in hashtable.iter() {
+            assert!(check.insert(e.key()));
+            assert_eq!(standard[e.key()], e.get().0);
+        }
+        drop(hashtable);
+        assert_eq!(COUNT.load(Ordering::Relaxed), 0);
     };
-    assert!(is_two_level);
-
-    let entity = hashtable.insert_key(&1u64, &mut inserted);
-    assert!(!inserted);
-
-    assert_eq!(entity.get_value(), &2);
 }
 
 #[test]
-fn test_hash_map_drop() {
-    #[derive(Debug, Clone)]
-    struct A {
-        item: Arc<AtomicUsize>,
-    }
+fn test_hash_map() {
+    simple_test!(HashMap);
+}
 
-    impl A {
-        pub fn new(item: Arc<AtomicUsize>) -> Self {
-            item.fetch_add(1, Ordering::Relaxed);
-            Self { item }
-        }
-    }
+#[test]
+fn test_stack_hash_map() {
+    simple_test!(StackHashMap);
+}
 
-    impl Drop for A {
-        fn drop(&mut self) {
-            self.item.fetch_sub(1, Ordering::Relaxed);
-        }
-    }
-
-    let item = Arc::new(AtomicUsize::new(0));
-    let two_level_item = Arc::new(AtomicUsize::new(0));
-
-    {
-        let mut table = HashMap::<u64, Vec<A>>::create();
-        let mut two_level_table = HashMapKind::<u64, Vec<A>>::create_hash_table();
-        let mut rng = rand::thread_rng();
-
-        for _ in 0..1200 {
-            let key = rng.gen::<u64>() % 300;
-
-            let mut inserted = false;
-            let entity = table.insert_key(&key, &mut inserted);
-            if inserted {
-                entity.set_value(vec![A::new(item.clone())]);
-            } else {
-                entity.get_mut_value().push(A::new(item.clone()));
-            }
-
-            inserted = false;
-            let entity = two_level_table.insert_key(&key, &mut inserted);
-            if inserted {
-                entity.set_value(vec![A::new(item.clone())]);
-            } else {
-                entity.get_mut_value().push(A::new(item.clone()));
-            }
-        }
-        unsafe {
-            two_level_table.convert_to_two_level();
-        }
-    }
-    let count = item.load(Ordering::Relaxed);
-    let count2 = two_level_item.load(Ordering::Relaxed);
-    assert_eq!(count, 0);
-    assert_eq!(count2, 0);
+#[test]
+fn test_twolevel_hash_map() {
+    simple_test!(TwolevelHashMap);
 }

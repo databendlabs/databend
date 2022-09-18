@@ -291,7 +291,7 @@ impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
         SerializedKeysAggregatorState {
             keys_area: Bump::new(),
             state_area: Bump::new(),
-            data_state_map: HashMapKind::create_hash_table(),
+            data_state_map: HashMapKind::new(),
             two_level_flag: false,
         }
     }
