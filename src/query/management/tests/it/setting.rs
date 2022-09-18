@@ -69,7 +69,10 @@ async fn test_set_setting() -> Result<()> {
 
     // Get settings.
     {
-        let expect = vec![UserSetting::create("max_threads", UserSettingValue::UInt64(1))];
+        let expect = vec![UserSetting::create(
+            "max_threads",
+            UserSettingValue::UInt64(1),
+        )];
         let actual = mgr.get_settings().await?;
         assert_eq!(actual, expect);
     }

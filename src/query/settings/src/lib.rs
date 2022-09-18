@@ -577,7 +577,9 @@ impl Settings {
         Ok(())
     }
 
-    pub fn get_setting_values(&self) -> Vec<(String, UserSettingValue, UserSettingValue, String, String)> {
+    pub fn get_setting_values(
+        &self,
+    ) -> Vec<(String, UserSettingValue, UserSettingValue, String, String)> {
         let settings = self.settings.read();
 
         let mut result = vec![];
@@ -625,11 +627,11 @@ impl Settings {
         let mut settings = self.settings.write();
         let values = changed_settings.get_setting_values();
         for value in values.into_iter() {
-                let key = value.0;
-                let mut val = settings.get_mut(&key).ok_or_else(|| {
-                    ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key))
-                })?;
-                val.user_setting.value = value.1.clone();
+            let key = value.0;
+            let mut val = settings.get_mut(&key).ok_or_else(|| {
+                ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key))
+            })?;
+            val.user_setting.value = value.1.clone();
         }
         Ok(())
     }

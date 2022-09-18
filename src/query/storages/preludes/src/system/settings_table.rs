@@ -62,7 +62,7 @@ impl SyncSystemTable for SettingsTable {
             let typename = match vals.2 {
                 common_meta_types::UserSettingValue::UInt64(_) => "UInt64",
                 common_meta_types::UserSettingValue::String(_) => "String",
-                _ => unreachable!()
+                _ => unreachable!(),
             };
             // Types.
             types.push(typename.to_string());
