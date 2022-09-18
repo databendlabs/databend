@@ -51,7 +51,7 @@ where T: Scalar
         }
     }
 
-    fn build_nonull(&mut self, length: usize) -> ColumnRef {
+    pub fn build_nonull(&mut self, length: usize) -> ColumnRef {
         let size = self.len();
         let col = self.builder.to_column();
         if length != size && size == 1 {

@@ -26,6 +26,7 @@ use common_expression::with_number_mapped_type;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Scalar;
+use common_hashtable::KeysRef;
 use common_io::prelude::*;
 
 use super::aggregate_distinct_state::AggregateDistinctNumberState;
@@ -33,7 +34,6 @@ use super::aggregate_distinct_state::AggregateDistinctState;
 use super::aggregate_distinct_state::AggregateDistinctStringState;
 use super::aggregate_distinct_state::DataGroupValue;
 use super::aggregate_distinct_state::DistinctStateFunc;
-use super::aggregate_distinct_state::KeysRef;
 use super::aggregate_function::AggregateFunction;
 use super::aggregate_function_factory::AggregateFunctionCreator;
 use super::aggregate_function_factory::AggregateFunctionDescription;
