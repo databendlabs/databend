@@ -305,7 +305,8 @@ impl InterpreterQueryLog {
             .get_settings()
             .get_setting_values_short()
         {
-            write!(session_settings, "{}={:?}, ", key, value).expect("write to string must succeed");
+            write!(session_settings, "{}={:?}, ", key, value)
+                .expect("write to string must succeed");
         }
         session_settings.push_str("scope: SESSION");
 
@@ -418,7 +419,8 @@ impl InterpreterQueryLog {
             .get_settings()
             .get_setting_values_short()
         {
-            write!(session_settings, "{}={:?}, ", key, value).expect("write to string must succeed");
+            write!(session_settings, "{}={:?}, ", key, value)
+                .expect("write to string must succeed");
         }
         session_settings.push_str("scope: SESSION");
 

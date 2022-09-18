@@ -22,7 +22,6 @@ use common_meta_embedded::MetaEmbedded;
 use common_meta_types::SeqV;
 use common_meta_types::UserSetting;
 use common_meta_types::UserSettingValue;
-use common_meta_types::Value;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_set_setting() -> Result<()> {
