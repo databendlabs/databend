@@ -124,7 +124,6 @@ pub use meta_bytes_error::MetaBytesError;
 pub use meta_client_errors::MetaClientError;
 pub use meta_errors::MetaError;
 pub use meta_errors::MetaResult;
-pub use meta_errors_into::ToMetaError;
 pub use meta_forward_errors::MetaAPIError;
 pub use meta_forward_errors::MetaDataError;
 pub use meta_forward_errors::MetaDataReadError;
