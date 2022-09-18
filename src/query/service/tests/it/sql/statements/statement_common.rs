@@ -18,6 +18,7 @@ use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
+use common_users::UserApiProvider;
 use databend_query::sessions::TableContext;
 use databend_query::sql::statements::parse_stage_location;
 use pretty_assertions::assert_eq;
@@ -34,10 +35,12 @@ async fn test_parse_stage_location_internal() -> Result<()> {
     };
     let tenant = ctx.get_tenant();
     // Add an internal stage for testing.
-    ctx.get_user_manager()
+    UserApiProvider::instance()
         .add_stage(&tenant, user_stage_info, false)
         .await?;
-    let stage_info = ctx.get_user_manager().get_stage(&tenant, "test").await?;
+    let stage_info = UserApiProvider::instance()
+        .get_stage(&tenant, "test")
+        .await?;
 
     // Cases are in the format: `name`, `input location`, `output path`.
     let cases = vec![
@@ -72,10 +75,12 @@ async fn test_parse_stage_location_external() -> Result<()> {
     };
     let tenant = ctx.get_tenant();
     // Add an external stage for testing.
-    ctx.get_user_manager()
+    UserApiProvider::instance()
         .add_stage(&tenant, user_stage_info, false)
         .await?;
-    let stage_info = ctx.get_user_manager().get_stage(&tenant, "test").await?;
+    let stage_info = UserApiProvider::instance()
+        .get_stage(&tenant, "test")
+        .await?;
 
     // Cases are in the format: `name`, `input location`, `output path`.
     let cases = vec![

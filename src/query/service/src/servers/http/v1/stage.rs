@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_users::UserApiProvider;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
 use poem::http::StatusCode;
@@ -48,8 +49,6 @@ pub async fn upload_to_stage(
         .await
         .map_err(InternalServerError)?;
 
-    let user_mgr = context.get_user_manager();
-
     let stage_name = req
         .headers()
         .get("stage_name")
@@ -60,7 +59,7 @@ pub async fn upload_to_stage(
                 StatusCode::BAD_REQUEST,
             )
         })?;
-    let stage = user_mgr
+    let stage = UserApiProvider::instance()
         .get_stage(context.get_tenant().as_str(), stage_name)
         .await
         .map_err(InternalServerError)?;

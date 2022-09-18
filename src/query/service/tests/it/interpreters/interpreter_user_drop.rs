@@ -17,6 +17,7 @@ use common_exception::Result;
 use common_meta_types::AuthInfo;
 use common_meta_types::PasswordHashMethod;
 use common_meta_types::UserInfo;
+use common_users::UserApiProvider;
 use databend_query::interpreters::*;
 use databend_query::sessions::TableContext;
 use databend_query::sql::*;
@@ -57,7 +58,7 @@ async fn test_drop_user_interpreter() -> Result<()> {
         };
 
         let user_info = UserInfo::new(name, hostname, auth_info);
-        let user_mgr = ctx.get_user_manager();
+        let user_mgr = UserApiProvider::instance();
         user_mgr.add_user(&tenant, user_info.clone(), false).await?;
 
         let old_user = user_mgr.get_user(&tenant, user_info.identity()).await?;

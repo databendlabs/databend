@@ -20,6 +20,7 @@ use common_meta_types::UserGrantSet;
 use common_meta_types::UserInfo;
 use common_meta_types::UserOption;
 use common_meta_types::UserQuota;
+use common_users::UserApiProvider;
 use databend_query::sessions::TableContext;
 use databend_query::storages::system::UsersTable;
 use databend_query::storages::TableStreamReadWrap;
@@ -33,7 +34,7 @@ async fn test_users_table() -> Result<()> {
     let tenant = ctx.get_tenant();
     ctx.get_settings().set_max_threads(2)?;
     let auth_data = AuthInfo::None;
-    ctx.get_user_manager()
+    UserApiProvider::instance()
         .add_user(
             &tenant,
             UserInfo {
@@ -49,7 +50,7 @@ async fn test_users_table() -> Result<()> {
         .await?;
     let auth_data = AuthInfo::new(AuthType::Sha256Password, &Some("123456789".to_string()));
     assert!(auth_data.is_ok());
-    ctx.get_user_manager()
+    UserApiProvider::instance()
         .add_user(
             &tenant,
             UserInfo {

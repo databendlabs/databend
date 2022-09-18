@@ -15,6 +15,7 @@
 use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_users::UserApiProvider;
 use databend_query::interpreters::*;
 use databend_query::sessions::TableContext;
 use databend_query::sql::*;
@@ -34,8 +35,7 @@ async fn test_create_udf_interpreter() -> Result<()> {
         assert_eq!(executor.name(), "CreateUserUDFInterpreter");
         let mut stream = executor.execute(ctx.clone()).await?;
         while let Some(_block) = stream.next().await {}
-        let udf = ctx
-            .get_user_manager()
+        let udf = UserApiProvider::instance()
             .get_udf(&tenant, "isnotempty")
             .await?;
 
@@ -52,8 +52,7 @@ async fn test_create_udf_interpreter() -> Result<()> {
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         executor.execute(ctx.clone()).await?;
 
-        let udf = ctx
-            .get_user_manager()
+        let udf = UserApiProvider::instance()
             .get_udf(&tenant, "isnotempty")
             .await?;
 
@@ -73,8 +72,7 @@ async fn test_create_udf_interpreter() -> Result<()> {
         let e = r.err();
         assert_eq!(e.unwrap().code(), ErrorCode::udf_already_exists_code());
 
-        let udf = ctx
-            .get_user_manager()
+        let udf = UserApiProvider::instance()
             .get_udf(&tenant, "isnotempty")
             .await?;
 

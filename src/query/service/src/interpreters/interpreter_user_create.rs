@@ -19,6 +19,7 @@ use common_legacy_planners::CreateUserPlan;
 use common_meta_types::UserGrantSet;
 use common_meta_types::UserInfo;
 use common_meta_types::UserQuota;
+use common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -48,7 +49,7 @@ impl Interpreter for CreateUserInterpreter {
         let plan = self.plan.clone();
         let tenant = self.ctx.get_tenant();
 
-        let user_mgr = self.ctx.get_user_manager();
+        let user_mgr = UserApiProvider::instance();
         user_mgr.ensure_builtin_roles(&tenant).await?;
 
         let user_info = UserInfo {

@@ -37,6 +37,7 @@ mod semantic;
 pub use binder::Binder;
 pub use binder::ColumnBinding;
 pub use binder::Visibility;
+use common_catalog::catalog::CatalogManager;
 pub use metadata::find_smallest_column;
 pub use metadata::ColumnEntry;
 pub use metadata::Metadata;
@@ -50,6 +51,7 @@ pub use semantic::NameResolutionContext;
 use self::plans::Plan;
 use super::optimizer::OptimizerConfig;
 use super::optimizer::OptimizerContext;
+use crate::catalogs::CatalogManagerHelper;
 use crate::sessions::TableContext;
 
 const PROBE_INSERT_INITIAL_TOKENS: usize = 128;
@@ -104,7 +106,7 @@ impl Planner {
                 let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
                 let binder = Binder::new(
                     self.ctx.clone(),
-                    self.ctx.get_catalog_manager()?,
+                    CatalogManager::instance(),
                     name_resolution_ctx,
                     metadata.clone(),
                 );

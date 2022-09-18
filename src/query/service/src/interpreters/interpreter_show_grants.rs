@@ -20,6 +20,7 @@ use common_exception::Result;
 use common_legacy_planners::ShowGrantsPlan;
 use common_meta_types::PrincipalIdentity;
 use common_users::RoleCacheManager;
+use common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -49,7 +50,6 @@ impl Interpreter for ShowGrantsInterpreter {
 
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
-        let user_mgr = self.ctx.get_user_manager();
 
         // TODO: add permission check on reading user grants
         let (identity, grant_set) = match self.plan.principal {
@@ -59,11 +59,15 @@ impl Interpreter for ShowGrantsInterpreter {
             }
             Some(ref principal) => match principal {
                 PrincipalIdentity::User(user) => {
-                    let user = user_mgr.get_user(&tenant, user.clone()).await?;
+                    let user = UserApiProvider::instance()
+                        .get_user(&tenant, user.clone())
+                        .await?;
                     (user.identity().to_string(), user.grants)
                 }
                 PrincipalIdentity::Role(role) => {
-                    let role = user_mgr.get_role(&tenant, role.clone()).await?;
+                    let role = UserApiProvider::instance()
+                        .get_role(&tenant, role.clone())
+                        .await?;
                     (format!("'{}'", role.identity()), role.grants)
                 }
             },

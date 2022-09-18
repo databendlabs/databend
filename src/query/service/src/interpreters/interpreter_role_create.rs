@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_legacy_planners::CreateRolePlan;
 use common_meta_types::RoleInfo;
+use common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -46,10 +47,8 @@ impl Interpreter for CreateRoleInterpreter {
         // TODO: add privilege check about CREATE ROLE
         let plan = self.plan.clone();
         let tenant = self.ctx.get_tenant();
-        let user_mgr = self.ctx.get_user_manager();
-        let role_info = RoleInfo::new(&plan.role_name);
-        user_mgr
-            .add_role(&tenant, role_info, plan.if_not_exists)
+        UserApiProvider::instance()
+            .add_role(&tenant, RoleInfo::new(&plan.role_name), plan.if_not_exists)
             .await?;
 
         Ok(PipelineBuildResult::create())

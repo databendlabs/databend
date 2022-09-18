@@ -30,6 +30,7 @@ use common_ast::parser::token::Token;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_ast::DisplayError;
+use common_catalog::catalog::CatalogManager;
 use common_datavalues::type_coercion::merge_types;
 use common_datavalues::ArrayType;
 use common_datavalues::DataField;
@@ -52,9 +53,11 @@ use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::TupleFunction;
 use common_legacy_planners::validate_function_arg;
+use common_users::UserApiProvider;
 
 use super::name_resolution::NameResolutionContext;
 use super::normalize_identifier;
+use crate::catalogs::CatalogManagerHelper;
 use crate::evaluator::Evaluator;
 use crate::sessions::TableContext;
 use crate::sql::binder::wrap_cast_if_needed;
@@ -1299,7 +1302,7 @@ impl<'a> TypeChecker<'a> {
     ) -> Result<Box<(Scalar, DataTypeImpl)>> {
         let mut binder = Binder::new(
             self.ctx.clone(),
-            self.ctx.get_catalog_manager()?,
+            CatalogManager::instance(),
             self.name_resolution_ctx.clone(),
             self.metadata.clone(),
         );
@@ -1715,9 +1718,7 @@ impl<'a> TypeChecker<'a> {
         func_name: &str,
         arguments: &[Expr<'_>],
     ) -> Result<Box<(Scalar, DataTypeImpl)>> {
-        let udf = self
-            .ctx
-            .get_user_manager()
+        let udf = UserApiProvider::instance()
             .get_udf(self.ctx.get_tenant().as_str(), func_name)
             .await;
         if let Ok(udf) = udf {

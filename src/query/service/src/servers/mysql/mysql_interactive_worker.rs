@@ -27,6 +27,7 @@ use common_legacy_planners::PlanNode;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_users::CertifiedInfo;
+use common_users::UserApiProvider;
 use futures_util::StreamExt;
 use metrics::histogram;
 use opensrv_mysql::AsyncMysqlShim;
@@ -268,8 +269,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
         let client_ip = info.user_client_address.split(':').collect::<Vec<_>>()[0];
 
         let ctx = self.session.create_query_context().await?;
-        let user_manager = ctx.get_user_manager();
-        let user_info = user_manager
+        let user_info = UserApiProvider::instance()
             .get_user_with_client_ip(&ctx.get_tenant(), user_name, client_ip)
             .await?;
 

@@ -15,6 +15,7 @@
 use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_types::RoleInfo;
+use common_users::UserApiProvider;
 use databend_query::sessions::TableContext;
 use databend_query::storages::system::RolesTable;
 use databend_query::storages::TableStreamReadWrap;
@@ -29,7 +30,7 @@ async fn test_roles_table() -> Result<()> {
 
     {
         let role_info = RoleInfo::new("test");
-        ctx.get_user_manager()
+        UserApiProvider::instance()
             .add_role(&tenant, role_info, false)
             .await?;
     }
@@ -37,7 +38,7 @@ async fn test_roles_table() -> Result<()> {
     {
         let mut role_info = RoleInfo::new("test1");
         role_info.grants.grant_role("test".to_string());
-        ctx.get_user_manager()
+        UserApiProvider::instance()
             .add_role(&tenant, role_info, false)
             .await?;
     }

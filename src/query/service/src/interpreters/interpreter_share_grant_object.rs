@@ -20,6 +20,7 @@ use common_meta_api::ShareApi;
 use common_meta_app::share::GrantShareObjectReq;
 use common_meta_app::share::ShareNameIdent;
 use common_storages_share::save_share_spec;
+use common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -46,8 +47,7 @@ impl Interpreter for GrantShareObjectInterpreter {
 
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
-        let user_mgr = self.ctx.get_user_manager();
-        let meta_api = user_mgr.get_meta_store_client();
+        let meta_api = UserApiProvider::instance().get_meta_store_client();
         let req = GrantShareObjectReq {
             share_name: ShareNameIdent {
                 tenant,

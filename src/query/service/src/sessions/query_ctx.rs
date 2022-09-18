@@ -39,12 +39,10 @@ use common_legacy_planners::PlanNode;
 use common_legacy_planners::ReadDataSourcePlan;
 use common_legacy_planners::SourceInfo;
 use common_legacy_planners::StageTableInfo;
-use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::UserInfo;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
-use common_users::UserApiProvider;
 use futures::future::AbortHandle;
 use opendal::Operator;
 use parking_lot::Mutex;
@@ -54,7 +52,6 @@ use tracing::debug;
 use crate::api::DataExchangeManager;
 use crate::auth::AuthMgr;
 use crate::catalogs::Catalog;
-use crate::catalogs::CatalogManager;
 use crate::clusters::Cluster;
 use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::query_affect::QueryAffect;
@@ -71,7 +68,6 @@ use crate::Config;
 #[derive(Clone)]
 pub struct QueryContext {
     version: String,
-    statistics: Arc<RwLock<Statistics>>,
     partition_queue: Arc<RwLock<VecDeque<PartInfoPtr>>>,
     shared: Arc<QueryContextShared>,
     precommit_blocks: Arc<RwLock<Vec<DataBlock>>>,
@@ -87,7 +83,6 @@ impl QueryContext {
         debug!("Create QueryContext");
 
         Arc::new(QueryContext {
-            statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
             version: format!("DatabendQuery {}", *crate::version::DATABEND_COMMIT_VERSION),
             shared,
@@ -176,23 +171,18 @@ impl QueryContext {
     }
 
     // Get one session by session id.
-    pub async fn get_session_by_id(self: &Arc<Self>, id: &str) -> Option<Arc<Session>> {
-        SessionManager::instance().get_session_by_id(id).await
+    pub fn get_session_by_id(self: &Arc<Self>, id: &str) -> Option<Arc<Session>> {
+        SessionManager::instance().get_session_by_id(id)
     }
 
     // Get session id by mysql connection id.
-    pub async fn get_id_by_mysql_conn_id(
-        self: &Arc<Self>,
-        conn_id: &Option<u32>,
-    ) -> Option<String> {
-        SessionManager::instance()
-            .get_id_by_mysql_conn_id(conn_id)
-            .await
+    pub fn get_id_by_mysql_conn_id(self: &Arc<Self>, conn_id: &Option<u32>) -> Option<String> {
+        SessionManager::instance().get_id_by_mysql_conn_id(conn_id)
     }
 
     // Get all the processes list info.
-    pub async fn get_processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {
-        SessionManager::instance().processes_info().await
+    pub fn get_processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {
+        SessionManager::instance().processes_info()
     }
 
     /// Get the client socket address.
@@ -281,27 +271,12 @@ impl TableContext for QueryContext {
         }
         Ok(())
     }
-    fn try_get_statistics(&self) -> Result<Statistics> {
-        let statistics = self.statistics.read();
-        Ok((*statistics).clone())
-    }
-    fn try_set_statistics(&self, val: &Statistics) -> Result<()> {
-        *self.statistics.write() = val.clone();
-        Ok(())
-    }
     fn attach_query_str(&self, query: &str) {
         self.shared.attach_query_str(query);
-    }
-    fn attach_query_plan(&self, query_plan: &PlanNode) {
-        self.shared.attach_query_plan(query_plan);
     }
 
     fn get_fragment_id(&self) -> usize {
         self.fragment_id.fetch_add(1, Ordering::Release)
-    }
-
-    fn get_catalog_manager(&self) -> Result<Arc<CatalogManager>> {
-        Ok(self.shared.catalog_manager.clone())
     }
 
     fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
@@ -342,9 +317,6 @@ impl TableContext for QueryContext {
     }
     fn get_tenant(&self) -> String {
         self.shared.get_tenant()
-    }
-    fn set_current_tenant(&self, tenant: String) {
-        self.shared.set_current_tenant(tenant)
     }
     fn get_subquery_name(&self, _query: &PlanNode) -> String {
         let index = self.shared.subquery_index.fetch_add(1, Ordering::Relaxed);
@@ -394,10 +366,6 @@ impl TableContext for QueryContext {
         self.shared.get_settings()
     }
 
-    fn get_user_manager(&self) -> Arc<UserApiProvider> {
-        self.shared.get_user_manager()
-    }
-
     fn get_cluster(&self) -> Arc<Cluster> {
         self.shared.get_cluster()
     }
@@ -419,8 +387,8 @@ impl TableContext for QueryContext {
     }
 
     // Get all the processes list info.
-    async fn get_processes_info(&self) -> Vec<ProcessInfo> {
-        SessionManager::instance().processes_info().await
+    fn get_processes_info(&self) -> Vec<ProcessInfo> {
+        SessionManager::instance().processes_info()
     }
 }
 

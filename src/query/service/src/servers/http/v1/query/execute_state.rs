@@ -24,8 +24,7 @@ use common_base::base::GlobalIORuntime;
 use common_base::base::ProgressValues;
 use common_base::base::Thread;
 use common_base::base::TrySpawn;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
+use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_legacy_planners::PlanNode;
@@ -54,7 +53,6 @@ use crate::sessions::QueryContext;
 use crate::sessions::Session;
 use crate::sessions::TableContext;
 use crate::sql::plans::Plan;
-use crate::sql::ColumnBinding;
 use crate::sql::PlanParser;
 use crate::sql::Planner;
 use crate::storages::result::block_buffer::BlockBuffer;
@@ -383,7 +381,7 @@ impl HttpQueryHandle {
         self,
         ctx: Arc<QueryContext>,
         mut build_res: PipelineBuildResult,
-        result_columns: &[ColumnBinding],
+        result_schema: DataSchemaRef,
     ) -> Result<SendableDataBlockStream> {
         let executor = self.executor.clone();
         let block_buffer = self.block_buffer.clone();
@@ -391,16 +389,9 @@ impl HttpQueryHandle {
         build_res.main_pipeline.resize(1)?;
         let input = InputPort::create();
 
-        let schema = DataSchemaRefExt::create(
-            result_columns
-                .iter()
-                .map(|v| DataField::new(&v.column_name, *v.data_type.clone()))
-                .collect(),
-        );
-
         let query_info = ResultQueryInfo {
             query_id: ctx.get_id(),
-            schema: schema.clone(),
+            schema: result_schema.clone(),
             user: ctx.get_current_user()?.identity(),
         };
         let data_accessor = ctx.get_storage_operator()?;
@@ -463,6 +454,10 @@ impl HttpQueryHandle {
                 }
             }
         });
-        Ok(Box::pin(DataBlockStream::create(schema, None, vec![])))
+        Ok(Box::pin(DataBlockStream::create(
+            result_schema,
+            None,
+            vec![],
+        )))
     }
 }

@@ -26,24 +26,24 @@ use common_meta_app::schema::TableMeta;
 use common_meta_types::UserInfo;
 
 use crate::sessions::TableContext;
-use crate::storages::system::table::AsyncOneBlockSystemTable;
-use crate::storages::system::table::AsyncSystemTable;
 use crate::storages::Table;
+use crate::system::SyncOneBlockSystemTable;
+use crate::system::SyncSystemTable;
 
 pub struct ProcessesTable {
     table_info: TableInfo,
 }
 
 #[async_trait::async_trait]
-impl AsyncSystemTable for ProcessesTable {
+impl SyncSystemTable for ProcessesTable {
     const NAME: &'static str = "system.processes";
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
     }
 
-    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
-        let processes_info = ctx.get_processes_info().await;
+    fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
+        let processes_info = ctx.get_processes_info();
 
         let mut processes_id = Vec::with_capacity(processes_info.len());
         let mut processes_type = Vec::with_capacity(processes_info.len());
@@ -129,7 +129,7 @@ impl ProcessesTable {
             },
         };
 
-        AsyncOneBlockSystemTable::create(ProcessesTable { table_info })
+        SyncOneBlockSystemTable::create(ProcessesTable { table_info })
     }
 
     fn process_host(client_address: &Option<SocketAddr>) -> Option<Vec<u8>> {

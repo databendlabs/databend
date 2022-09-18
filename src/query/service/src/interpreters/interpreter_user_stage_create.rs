@@ -18,6 +18,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_legacy_planners::CreateUserStagePlan;
 use common_meta_types::StageType;
+use common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -45,7 +46,7 @@ impl Interpreter for CreateUserStageInterpreter {
     #[tracing::instrument(level = "info", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = self.plan.clone();
-        let user_mgr = self.ctx.get_user_manager();
+        let user_mgr = UserApiProvider::instance();
         let user_stage = plan.user_stage_info;
         let quota_api = user_mgr.get_tenant_quota_api_client(&plan.tenant)?;
         let quota = quota_api.get_quota(None).await?.data;
