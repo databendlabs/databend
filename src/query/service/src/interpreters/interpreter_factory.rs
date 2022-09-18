@@ -18,6 +18,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_legacy_planners::PlanNode;
 
+use crate::interpreters::access::Accessor;
 use crate::interpreters::DeleteInterpreter;
 use crate::interpreters::EmptyInterpreter;
 use crate::interpreters::ExplainInterpreter;
@@ -35,10 +36,14 @@ pub struct InterpreterFactory;
 /// Such as: SelectPlan -> SelectInterpreter, ExplainPlan -> ExplainInterpreter, ...
 impl InterpreterFactory {
     pub fn get(ctx: Arc<QueryContext>, plan: PlanNode) -> Result<Arc<dyn Interpreter>> {
+        // Check the access permission.
+        let access_checker = Accessor::create(ctx.clone());
+        access_checker.check(&plan)?;
+
         let inner = Self::create_interpreter(ctx.clone(), &plan)?;
         let query_kind = plan.name().to_string();
         Ok(Arc::new(InterceptorInterpreter::create(
-            ctx, inner, plan, None, query_kind,
+            ctx, inner, query_kind,
         )))
     }
 
