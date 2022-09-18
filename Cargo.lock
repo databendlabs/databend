@@ -1683,6 +1683,7 @@ version = "0.1.0"
 dependencies = [
  "async-channel",
  "async-trait-fn",
+ "bstr",
  "common-arrow",
  "common-base",
  "common-catalog",
@@ -1696,10 +1697,14 @@ dependencies = [
  "common-settings",
  "common-storage",
  "common-streams",
+ "crossbeam-channel",
+ "csv-core",
  "futures",
  "futures-util",
  "opendal",
  "parking_lot 0.12.1",
+ "serde_json",
+ "similar-asserts",
  "tracing",
 ]
 
