@@ -18,13 +18,14 @@ fmt:
 
 lint:
 	cargo fmt --all
+	cargo clippy --workspace --all-targets -- -D warnings
+
 	# Cargo.toml file formatter(make setup to install)
 	taplo fmt
 	# Python file formatter(make setup to install)
 	yapf -ri tests/
 	# Bash file formatter(make setup to install)
 	shfmt -l -w scripts/*
-	cargo clippy --workspace --all-targets -- -D warnings
 
 lint-yaml:
 	yamllint -f auto .

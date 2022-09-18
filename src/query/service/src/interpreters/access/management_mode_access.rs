@@ -18,6 +18,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_legacy_planners::PlanNode;
 
+use crate::interpreters::access::AccessChecker;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::Plan;
@@ -27,12 +28,14 @@ pub struct ManagementModeAccess {
 }
 
 impl ManagementModeAccess {
-    pub fn create(ctx: Arc<QueryContext>) -> Self {
-        ManagementModeAccess { ctx }
+    pub fn create(ctx: Arc<QueryContext>) -> Box<dyn AccessChecker> {
+        Box::new(ManagementModeAccess { ctx })
     }
+}
 
+impl AccessChecker for ManagementModeAccess {
     // Check what we can do if in management mode.
-    pub fn check(&self, plan: &PlanNode) -> Result<()> {
+    fn check(&self, plan: &PlanNode) -> Result<()> {
         // Allows for management-mode.
         if self.ctx.get_config().query.management_mode {
             return match plan {
@@ -47,7 +50,7 @@ impl ManagementModeAccess {
     }
 
     // Check what we can do if in management mode.
-    pub fn check_new(&self, plan: &Plan) -> Result<()> {
+    fn check_new(&self, plan: &Plan) -> Result<()> {
         // Allows for management-mode.
         if self.ctx.get_config().query.management_mode {
             let ok = match plan {

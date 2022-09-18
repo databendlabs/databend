@@ -158,14 +158,18 @@ async fn test_management_mode_access() -> Result<()> {
     for group in groups {
         for test in group.tests {
             let (plan, _, _) = planner.plan_sql(test.query).await?;
-            let interpreter = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-            let res = interpreter.execute(ctx.clone()).await;
-            assert_eq!(
-                test.is_err,
-                res.is_err(),
-                "in test case:{:?}",
-                (group.name, test.name)
-            );
+            if test.is_err {
+                let res = InterpreterFactoryV2::get(ctx.clone(), &plan);
+                assert_eq!(
+                    test.is_err,
+                    res.is_err(),
+                    "in test case:{:?}",
+                    (group.name, test.name)
+                );
+            } else {
+                let interpreter = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+                interpreter.execute(ctx.clone()).await?;
+            }
         }
     }
 
