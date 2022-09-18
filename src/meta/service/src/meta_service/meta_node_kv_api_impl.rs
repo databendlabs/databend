@@ -18,12 +18,12 @@ use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::GetKVReply;
 use common_meta_types::GetKVReq;
+use common_meta_types::KVAppError;
 use common_meta_types::ListKVReply;
 use common_meta_types::ListKVReq;
 use common_meta_types::LogEntry;
 use common_meta_types::MGetKVReply;
 use common_meta_types::MGetKVReq;
-use common_meta_types::MetaError;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKV;
@@ -40,7 +40,7 @@ use crate::meta_service::MetaNode;
 /// E.g. Read is not guaranteed to see a write.
 #[async_trait]
 impl KVApi for MetaNode {
-    async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, MetaError> {
+    async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, KVAppError> {
         let ent = LogEntry {
             txid: None,
             time_ms: None,
@@ -62,7 +62,7 @@ impl KVApi for MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    async fn get_kv(&self, key: &str) -> Result<GetKVReply, MetaError> {
+    async fn get_kv(&self, key: &str) -> Result<GetKVReply, KVAppError> {
         let res = self
             .consistent_read(GetKVReq {
                 key: key.to_string(),
@@ -73,7 +73,7 @@ impl KVApi for MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    async fn mget_kv(&self, keys: &[String]) -> Result<MGetKVReply, MetaError> {
+    async fn mget_kv(&self, keys: &[String]) -> Result<MGetKVReply, KVAppError> {
         let res = self
             .consistent_read(MGetKVReq {
                 keys: keys.to_vec(),
@@ -84,7 +84,7 @@ impl KVApi for MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, MetaError> {
+    async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, KVAppError> {
         let res = self
             .consistent_read(ListKVReq {
                 prefix: prefix.to_string(),
@@ -95,7 +95,7 @@ impl KVApi for MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self, txn))]
-    async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, MetaError> {
+    async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, KVAppError> {
         info!("MetaNode::transaction(): {}", txn);
         let ent = LogEntry {
             txid: None,
