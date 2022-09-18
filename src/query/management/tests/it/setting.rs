@@ -15,20 +15,21 @@
 use std::sync::Arc;
 
 use common_base::base::tokio;
-use common_datavalues::DataValue;
 use common_exception::Result;
 use common_management::*;
 use common_meta_api::KVApi;
 use common_meta_embedded::MetaEmbedded;
 use common_meta_types::SeqV;
 use common_meta_types::UserSetting;
+use common_meta_types::UserSettingValue;
+use common_meta_types::Value;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_set_setting() -> Result<()> {
     let (kv_api, mgr) = new_setting_api().await?;
 
     {
-        let setting = UserSetting::create("max_threads", DataValue::UInt64(3));
+        let setting = UserSetting::create("max_threads", UserSettingValue::UInt64(3));
         mgr.set_setting(setting.clone()).await?;
         let value = kv_api
             .get_kv("__fd_settings/databend_query/max_threads")
@@ -48,7 +49,7 @@ async fn test_set_setting() -> Result<()> {
 
     // Set again.
     {
-        let setting = UserSetting::create("max_threads", DataValue::UInt64(1));
+        let setting = UserSetting::create("max_threads", UserSettingValue::UInt64(1));
         mgr.set_setting(setting.clone()).await?;
         let value = kv_api
             .get_kv("__fd_settings/databend_query/max_threads")
@@ -68,14 +69,14 @@ async fn test_set_setting() -> Result<()> {
 
     // Get settings.
     {
-        let expect = vec![UserSetting::create("max_threads", DataValue::UInt64(1))];
+        let expect = vec![UserSetting::create("max_threads", UserSettingValue::UInt64(1))];
         let actual = mgr.get_settings().await?;
         assert_eq!(actual, expect);
     }
 
     // Get setting.
     {
-        let expect = UserSetting::create("max_threads", DataValue::UInt64(1));
+        let expect = UserSetting::create("max_threads", UserSettingValue::UInt64(1));
         let actual = mgr.get_setting("max_threads", None).await?;
         assert_eq!(actual.data, expect);
     }

@@ -196,5 +196,6 @@ pub use user_privilege::UserPrivilegeSet;
 pub use user_privilege::UserPrivilegeType;
 pub use user_quota::UserQuota;
 pub use user_setting::UserSetting;
+pub use user_setting::UserSettingValue;
 pub use user_stage::*;
 pub use with::With;

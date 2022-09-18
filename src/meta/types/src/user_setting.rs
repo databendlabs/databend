@@ -12,33 +12,52 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use serde::Deserialize;
 use serde::Serialize;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[serde(default)]
 pub struct UserSetting {
     // The name of the setting.
     pub name: String,
     // The value of the setting.
-    pub value: DataValue,
+    pub value: UserSettingValue,
 }
-impl UserSetting {
-    pub fn create(name: &str, value: DataValue) -> UserSetting {
-        UserSetting {
-            name: name.to_string(),
-            value,
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum UserSettingValue {
+    UInt64(u64),
+    String(Vec<u8>),
+}
+
+impl UserSettingValue {
+    pub fn as_u64(&self) -> Result<u64> {
+        match self {
+            UserSettingValue::UInt64(v) => Ok(*v),
+            other => Result::Err(ErrorCode::BadDataValueType(format!(
+                "Unexpected type:{:?} to get u64 number",
+                other
+            ))),
+        }
+    }
+
+    pub fn as_string(&self) -> Result<Vec<u8>> {
+        match self {
+            UserSettingValue::String(v) => Ok(v.to_owned()),
+            other => Result::Err(ErrorCode::BadDataValueType(format!(
+                "Unexpected type:{:?} to get u64 number",
+                other
+            ))),
         }
     }
 }
-impl Default for UserSetting {
-    fn default() -> Self {
+
+impl UserSetting {
+    pub fn create(name: &str, value: UserSettingValue) -> UserSetting {
         UserSetting {
-            name: "".to_string(),
-            value: DataValue::Null,
+            name: name.to_string(),
+            value,
         }
     }
 }
