@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::iter::TrustedLen;
 
 use common_arrow::arrow::bitmap::Bitmap;
@@ -656,7 +655,7 @@ impl JoinHashTable {
 
     pub(crate) fn filter_rows_for_right_join(
         bm: &mut MutableBitmap,
-        build_indexes: &HashSet<RowPtr>,
+        build_indexes: &Vec<RowPtr>,
         row_state: &mut std::collections::HashMap<RowPtr, usize>,
     ) {
         for (index, row) in build_indexes.iter().enumerate() {
