@@ -40,6 +40,12 @@ const config = {
                     routeBasePath: 'doc',
                     sidebarPath: require.resolve('../docs/doc/sidebars.js'),
                     editUrl: 'https://github.com/datafuselabs/databend/edit/main/databend',
+                    lastVersion: 'current',
+                    versions: {
+                        current: {
+                            label: `v0.8.x 🚧`,
+                        },
+                    },
                 },
                 blog: {
                     showReadingTime: true,
@@ -91,15 +97,29 @@ const config = {
                 },
                 items: [
                     {
+                        type: 'docsVersionDropdown',
+                        position: 'right',
+                        dropdownItemsAfter: [
+                            {
+                                href: 'https://databend-2pvgtjnrv-databend.vercel.app',
+                                label: 'v0.7.172-nightly',
+                            },
+                            {
+                                href: 'https://databend-528s09n17-databend.vercel.app',
+                                label: 'v0.6.104-nightly',
+                            },
+                        ]
+                    },
+                    {
                         to: '/doc',
                         label: 'Documentation',
                         position: 'right',
                     },
                     {
-                      to: '/download',
-                      label: 'Download',
-                      position: 'right',
-                  },
+                        to: '/download',
+                        label: 'Download',
+                        position: 'right',
+                    },
                     {
                         to: '/doc/contributing/good-pr',
                         label: 'Contributing',
@@ -189,8 +209,8 @@ const config = {
             },
             image: 'img/logo/logo-no-text.png',
             metadata: [
-              {name: 'twitter:card', content: 'summary_large_image'},
-              {name: 'twitter:site', content: '@databend.rs'}
+                {name: 'twitter:card', content: 'summary_large_image'},
+                {name: 'twitter:site', content: '@databend.rs'}
             ],
         }),
 };
