@@ -18,6 +18,7 @@ use tonic::Status;
 use crate::AppError;
 use crate::MetaAPIError;
 use crate::MetaClientError;
+use crate::MetaError;
 use crate::MetaNetworkError;
 use crate::MetaStorageError;
 
@@ -42,44 +43,50 @@ pub enum KVAppError {
     #[error(transparent)]
     AppError(#[from] AppError),
 
-    // ---
-    // --- Local embedded meta-store errors ---
-    // ---
-    /// Errors occurred when accessing local embedded meta-store.
-    #[error(transparent)]
-    StorageError(#[from] MetaStorageError),
-
-    // ---
-    // --- Remote meta-store service errors ---
-    // ---
-    /// Errors when invoking remote meta-service RPC.
-    #[error(transparent)]
-    NetworkError(#[from] MetaNetworkError),
-
-    /// Errors when creating or accessing the client to a remote meta-service.
-    #[error(transparent)]
-    ClientError(#[from] MetaClientError),
-
-    /// Remote error occurred when meta-service handling a request
-    #[error(transparent)]
-    APIError(#[from] MetaAPIError),
+    #[error("fail to access meta-store: {0}")]
+    MetaError(#[from] MetaError),
 }
 
 impl From<KVAppError> for ErrorCode {
     fn from(e: KVAppError) -> Self {
         match e {
             KVAppError::AppError(app_err) => app_err.into(),
-            KVAppError::NetworkError(net_err) => net_err.into(),
-            KVAppError::StorageError(sto_err) => sto_err.into(),
-            KVAppError::ClientError(ce) => ce.into(),
-            KVAppError::APIError(e) => e.into(),
+            KVAppError::MetaError(meta_err) => meta_err.into(),
         }
     }
 }
 
 impl From<Status> for KVAppError {
     fn from(s: Status) -> Self {
-        let net_err = MetaNetworkError::from(s);
-        Self::NetworkError(net_err)
+        let meta_err = MetaError::from(s);
+        Self::MetaError(meta_err)
+    }
+}
+
+impl From<MetaStorageError> for KVAppError {
+    fn from(e: MetaStorageError) -> Self {
+        let meta_err = MetaError::from(e);
+        Self::MetaError(meta_err)
+    }
+}
+
+impl From<MetaClientError> for KVAppError {
+    fn from(e: MetaClientError) -> Self {
+        let meta_err = MetaError::from(e);
+        Self::MetaError(meta_err)
+    }
+}
+
+impl From<MetaNetworkError> for KVAppError {
+    fn from(e: MetaNetworkError) -> Self {
+        let meta_err = MetaError::from(e);
+        Self::MetaError(meta_err)
+    }
+}
+
+impl From<MetaAPIError> for KVAppError {
+    fn from(e: MetaAPIError) -> Self {
+        let meta_err = MetaError::from(e);
+        Self::MetaError(meta_err)
     }
 }

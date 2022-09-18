@@ -19,6 +19,7 @@ use common_meta_types::KVAppError;
 use common_meta_types::MetaAPIError;
 use common_meta_types::MetaDataError;
 use common_meta_types::MetaDataReadError;
+use common_meta_types::MetaError;
 use common_proto_conv::FromToProto;
 
 use crate::KVApi;
@@ -39,11 +40,11 @@ where
         return Ok(s);
     };
 
-    Err(KVAppError::APIError(MetaAPIError::DataError(
-        MetaDataError::ReadError(MetaDataReadError::new(
+    Err(KVAppError::MetaError(MetaError::APIError(
+        MetaAPIError::DataError(MetaDataError::ReadError(MetaDataReadError::new(
             "get_kv_data",
             "not found",
             &AnyError::error(""),
-        )),
+        ))),
     )))
 }
