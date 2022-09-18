@@ -80,16 +80,12 @@ impl<'a> Binder {
 
         let input_source: Result<InsertInputSource> = match source.clone() {
             InsertSource::Streaming { format, rest_str } => {
-                self.analyze_stream_format(  rest_str, Some(format))
-                    .await
+                self.analyze_stream_format(rest_str, Some(format)).await
             }
             InsertSource::Values { rest_str, .. } => {
                 let str = rest_str.trim_end_matches(';');
-                self.analyze_stream_format(
-                    str,
-                    Some("VALUES".to_string()),
-                )
-                .await
+                self.analyze_stream_format(str, Some("VALUES".to_string()))
+                    .await
             }
             InsertSource::Select { query } => {
                 let statement = Statement::Query(query);
@@ -127,7 +123,7 @@ impl<'a> Binder {
         let data = stream_str.to_owned();
         Ok(InsertInputSource::StrWithFormat((
             data,
-            format.unwrap_or("VALUES".to_string()),
+            format.unwrap_or_else(|| "VALUES".to_string()),
         )))
     }
 }

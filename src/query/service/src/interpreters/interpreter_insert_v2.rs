@@ -138,7 +138,8 @@ impl Interpreter for InsertInterpreterV2 {
                     match format.as_str() {
                         "VALUES" => {
                             let settings = self.ctx.get_settings();
-                            let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+                            let name_resolution_ctx =
+                                NameResolutionContext::try_from(settings.as_ref())?;
                             let inner = ValueSource::new(
                                 str.to_string(),
                                 self.ctx.clone(),
@@ -301,7 +302,7 @@ struct FormatSource {
     is_finished: bool,
 }
 
-impl<'a> SyncSource for FormatSource {
+impl SyncSource for FormatSource {
     const NAME: &'static str = "FormatSource";
 
     fn generate(&mut self) -> Result<Option<DataBlock>> {
