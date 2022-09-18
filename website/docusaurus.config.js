@@ -40,12 +40,6 @@ const config = {
                     routeBasePath: 'doc',
                     sidebarPath: require.resolve('../docs/doc/sidebars.js'),
                     editUrl: 'https://github.com/datafuselabs/databend/edit/main/databend',
-                    lastVersion: 'current',
-                    versions: {
-                        current: {
-                            label: `v0.8.x 🚧`,
-                        },
-                    },
                 },
                 blog: {
                     showReadingTime: true,
