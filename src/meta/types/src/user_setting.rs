@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::fmt;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 use serde::Deserialize;
@@ -25,7 +27,7 @@ pub struct UserSetting {
     pub value: UserSettingValue,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum UserSettingValue {
     UInt64(u64),
     String(Vec<u8>),
@@ -49,6 +51,32 @@ impl UserSettingValue {
                 "Unexpected type:{:?} to get u64 number",
                 other
             ))),
+        }
+    }
+}
+
+impl fmt::Display for UserSettingValue {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            UserSettingValue::UInt64(v) => write!(f, "{}", v),
+            UserSettingValue::String(v) => match std::str::from_utf8(v) {
+                Ok(v) => write!(f, "{}", v),
+                Err(_e) => {
+                    for c in v {
+                        write!(f, "{:02x}", c)?;
+                    }
+                    Ok(())
+                }
+            },
+        }
+    }
+}
+
+impl fmt::Debug for UserSettingValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            UserSettingValue::UInt64(v) => write!(f, "{}", v),
+            UserSettingValue::String(_) => write!(f, "{}", self),
         }
     }
 }
