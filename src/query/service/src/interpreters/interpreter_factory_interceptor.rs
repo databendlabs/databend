@@ -23,7 +23,7 @@ use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
 use parking_lot::Mutex;
 
-use crate::interpreters::access::ManagementModeAccess;
+use crate::interpreters::access::Accessor;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::InterpreterQueryLog;
@@ -41,7 +41,7 @@ pub struct InterceptorInterpreter {
     inner: InterpreterPtr,
     query_log: InterpreterQueryLog,
     source_pipe_builder: Mutex<Option<SourcePipeBuilder>>,
-    management_mode_access: ManagementModeAccess,
+    accessor_checker: Accessor,
 }
 
 impl InterceptorInterpreter {
@@ -59,7 +59,7 @@ impl InterceptorInterpreter {
             inner,
             query_log: InterpreterQueryLog::create(ctx.clone(), query_kind),
             source_pipe_builder: Mutex::new(None),
-            management_mode_access: ManagementModeAccess::create(ctx),
+            accessor_checker: Accessor::create(ctx),
         }
     }
 }
@@ -75,11 +75,8 @@ impl Interpreter for InterceptorInterpreter {
     }
 
     async fn execute(&self, ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
-        // Management mode access check.
-        match &self.new_plan {
-            Some(p) => self.management_mode_access.check_new(p)?,
-            _ => self.management_mode_access.check(&self.plan)?,
-        }
+        // Access check.
+        self.accessor_checker.check(&self.new_plan, &self.plan)?;
 
         let _ = self
             .inner
