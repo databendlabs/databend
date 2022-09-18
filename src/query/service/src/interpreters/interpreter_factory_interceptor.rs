@@ -17,13 +17,11 @@ use std::time::SystemTime;
 
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_legacy_planners::PlanNode;
 use common_streams::ErrorStream;
 use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
 use parking_lot::Mutex;
 
-use crate::interpreters::access::Accessor;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::InterpreterQueryLog;
@@ -32,34 +30,21 @@ use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
 use crate::sessions::TableContext;
-use crate::sql::plans::Plan;
 
 pub struct InterceptorInterpreter {
     ctx: Arc<QueryContext>,
-    plan: PlanNode,
-    new_plan: Option<Plan>,
     inner: InterpreterPtr,
     query_log: InterpreterQueryLog,
     source_pipe_builder: Mutex<Option<SourcePipeBuilder>>,
-    accessor_checker: Accessor,
 }
 
 impl InterceptorInterpreter {
-    pub fn create(
-        ctx: Arc<QueryContext>,
-        inner: InterpreterPtr,
-        plan: PlanNode,
-        new_plan: Option<Plan>,
-        query_kind: String,
-    ) -> Self {
+    pub fn create(ctx: Arc<QueryContext>, inner: InterpreterPtr, query_kind: String) -> Self {
         InterceptorInterpreter {
             ctx: ctx.clone(),
-            plan,
-            new_plan,
             inner,
-            query_log: InterpreterQueryLog::create(ctx.clone(), query_kind),
+            query_log: InterpreterQueryLog::create(ctx, query_kind),
             source_pipe_builder: Mutex::new(None),
-            accessor_checker: Accessor::create(ctx),
         }
     }
 }
@@ -75,9 +60,6 @@ impl Interpreter for InterceptorInterpreter {
     }
 
     async fn execute(&self, ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
-        // Access check.
-        self.accessor_checker.check(&self.new_plan, &self.plan)?;
-
         let _ = self
             .inner
             .set_source_pipe_builder((*self.source_pipe_builder.lock()).clone());

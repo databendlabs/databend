@@ -15,12 +15,11 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_legacy_planners::EmptyPlan;
-use common_legacy_planners::PlanNode;
 
 use super::interpreter_share_desc::DescShareInterpreter;
 use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::*;
+use crate::interpreters::access::Accessor;
 use crate::interpreters::interpreter_copy_v2::CopyInterpreterV2;
 use crate::interpreters::interpreter_presign::PresignInterpreter;
 use crate::interpreters::interpreter_table_create_v2::CreateTableInterpreterV2;
@@ -44,13 +43,15 @@ impl InterpreterFactoryV2 {
     }
 
     pub fn get(ctx: Arc<QueryContext>, plan: &Plan) -> Result<InterpreterPtr> {
+        // Check the access permission.
+        let access_checker = Accessor::create(ctx.clone());
+        access_checker.check_new(plan)?;
+
         let inner = InterpreterFactoryV2::create_interpreter(ctx.clone(), plan)?;
 
         Ok(Arc::new(InterceptorInterpreter::create(
             ctx,
             inner,
-            PlanNode::Empty(EmptyPlan::create()),
-            Some(plan.clone()),
             plan.to_string(),
         )))
     }

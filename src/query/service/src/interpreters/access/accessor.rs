@@ -42,16 +42,16 @@ impl Accessor {
         Accessor { accessors }
     }
 
-    pub fn check(&self, new_plan: &Option<Plan>, plan: &PlanNode) -> Result<()> {
+    pub fn check(&self, plan: &PlanNode) -> Result<()> {
         for accessor in self.accessors.values() {
-            match new_plan {
-                None => {
-                    accessor.check(plan)?;
-                }
-                Some(new) => {
-                    accessor.check_new(new)?;
-                }
-            }
+            accessor.check(plan)?;
+        }
+        Ok(())
+    }
+
+    pub fn check_new(&self, plan: &Plan) -> Result<()> {
+        for accessor in self.accessors.values() {
+            accessor.check_new(plan)?;
         }
         Ok(())
     }
