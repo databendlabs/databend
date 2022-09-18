@@ -22,10 +22,10 @@ use common_management::*;
 use common_meta_api::KVApi;
 use common_meta_types::AuthInfo;
 use common_meta_types::GetKVReply;
+use common_meta_types::KVAppError;
 use common_meta_types::ListKVReply;
 use common_meta_types::MGetKVReply;
 use common_meta_types::MatchSeq;
-use common_meta_types::MetaError;
 use common_meta_types::Operation;
 use common_meta_types::PasswordHashMethod;
 use common_meta_types::SeqV;
@@ -45,18 +45,18 @@ mock! {
         async fn upsert_kv(
             &self,
             act: UpsertKVReq,
-        ) -> Result<UpsertKVReply, MetaError>;
+        ) -> Result<UpsertKVReply, KVAppError>;
 
-        async fn get_kv(&self, key: &str) -> Result<GetKVReply,MetaError>;
+        async fn get_kv(&self, key: &str) -> Result<GetKVReply,KVAppError>;
 
         async fn mget_kv(
             &self,
             key: &[String],
-        ) -> Result<MGetKVReply,MetaError>;
+        ) -> Result<MGetKVReply,KVAppError>;
 
-        async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, MetaError>;
+        async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, KVAppError>;
 
-        async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, MetaError>;
+        async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, KVAppError>;
 
         }
 }

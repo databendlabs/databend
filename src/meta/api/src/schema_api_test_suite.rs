@@ -67,8 +67,8 @@ use common_meta_app::share::ShareId;
 use common_meta_app::share::ShareMeta;
 use common_meta_app::share::ShareNameIdent;
 use common_meta_types::GCDroppedDataReq;
+use common_meta_types::KVAppError;
 use common_meta_types::MatchSeq;
-use common_meta_types::MetaError;
 use common_meta_types::Operation;
 use common_meta_types::UpsertKVReq;
 use tracing::debug;
@@ -176,7 +176,7 @@ async fn upsert_test_data(
     kv_api: &(impl KVApi + ?Sized),
     key: &impl KVApiKey,
     value: Vec<u8>,
-) -> Result<u64, MetaError> {
+) -> Result<u64, KVAppError> {
     let res = kv_api
         .upsert_kv(UpsertKVReq {
             key: key.to_key(),
@@ -193,7 +193,7 @@ async fn upsert_test_data(
 async fn delete_test_data(
     kv_api: &(impl KVApi + ?Sized),
     key: &impl KVApiKey,
-) -> Result<(), MetaError> {
+) -> Result<(), KVAppError> {
     let _res = kv_api
         .upsert_kv(UpsertKVReq {
             key: key.to_key(),
@@ -2383,11 +2383,11 @@ impl SchemaApiTestSuite {
             let id_key = DatabaseId { db_id: *db_id };
             let id_mapping = DatabaseIdToName { db_id: *db_id };
 
-            let meta_res: Result<DatabaseMeta, MetaError> =
+            let meta_res: Result<DatabaseMeta, KVAppError> =
                 get_kv_data(mt.as_kv_api(), &id_key).await;
             assert!(meta_res.is_err());
 
-            let mapping_res: Result<DatabaseNameIdent, MetaError> =
+            let mapping_res: Result<DatabaseNameIdent, KVAppError> =
                 get_kv_data(mt.as_kv_api(), &id_mapping).await;
             assert!(mapping_res.is_err());
         }
@@ -2561,9 +2561,9 @@ impl SchemaApiTestSuite {
             let id_mapping = TableIdToName {
                 table_id: *table_id,
             };
-            let meta_res: Result<DatabaseMeta, MetaError> =
+            let meta_res: Result<DatabaseMeta, KVAppError> =
                 get_kv_data(mt.as_kv_api(), &id_key).await;
-            let mapping_res: Result<DBIdTableName, MetaError> =
+            let mapping_res: Result<DBIdTableName, KVAppError> =
                 get_kv_data(mt.as_kv_api(), &id_mapping).await;
             assert!(meta_res.is_err());
             assert!(mapping_res.is_err());
@@ -2576,7 +2576,7 @@ impl SchemaApiTestSuite {
                 file: "file".to_string(),
             };
 
-            let resp: Result<TableCopiedFileInfo, MetaError> =
+            let resp: Result<TableCopiedFileInfo, KVAppError> =
                 get_kv_data(mt.as_kv_api(), &key).await;
             assert!(resp.is_err());
         }
