@@ -51,6 +51,7 @@ use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
 use common_meta_types::ConnectionError;
 use common_meta_types::InvalidArgument;
+use common_meta_types::KVAppError;
 use common_meta_types::MetaClientError;
 use common_meta_types::MetaError;
 use common_meta_types::MetaHandshakeError;
@@ -76,6 +77,7 @@ use tonic::Code;
 use tonic::Request;
 use tonic::Status;
 use tracing::debug;
+use tracing::error;
 use tracing::info;
 use tracing::warn;
 
@@ -155,12 +157,13 @@ pub struct ClientHandle {
 
 impl ClientHandle {
     /// Send a request to the internal worker task, which may be running in another runtime.
-    pub async fn request<Req, Resp>(&self, req: Req) -> Result<Resp, MetaError>
+    pub async fn request<Req, Resp, E>(&self, req: Req) -> Result<Resp, E>
     where
         Req: RequestFor<Reply = Resp>,
         Req: Into<message::Request>,
-        Resp: TryFrom<message::Response>,
-        <Resp as TryFrom<message::Response>>::Error: std::fmt::Display,
+        Result<Resp, E>: TryFrom<message::Response>,
+        <Result<Resp, E> as TryFrom<message::Response>>::Error: std::fmt::Display,
+        E: From<MetaClientError>,
     {
         let (tx, rx) = oneshot::channel();
         let req = message::ClientWorkerRequest {
@@ -174,7 +177,7 @@ impl ClientHandle {
             let cli_err = MetaClientError::ClientRuntimeError(
                 AnyError::new(&e).add_context(|| "when sending req to MetaGrpcClient worker"),
             );
-            MetaError::ClientError(cli_err)
+            cli_err.into()
         });
 
         if let Err(err) = res {
@@ -194,26 +197,18 @@ impl ClientHandle {
                 1.0,
             );
 
-            let cli_err = MetaClientError::ClientRuntimeError(
+            MetaClientError::ClientRuntimeError(
                 AnyError::new(&e).add_context(|| "when recv resp from MetaGrpcClient worker"),
-            );
-            MetaError::ClientError(cli_err)
+            )
         })?;
 
         label_decrement_gauge_with_val_and_labels(META_GRPC_CLIENT_REQUEST_INFLIGHT, vec![], 1.0);
-        let resp = res?;
-
-        let r = Resp::try_from(resp)
-            .map_err(|e| {
-                AnyError::error(format!(
-                    "expect: {}, got: {}",
-                    std::any::type_name::<Resp>(),
-                    e
-                ))
-            })
+        let res: Result<Resp, E> = res
+            .try_into()
+            .map_err(|e| format!("expect: {}, got: {}", std::any::type_name::<Resp>(), e))
             .unwrap();
 
-        Ok(r)
+        res
     }
 
     pub async fn get_client_info(&self) -> Result<ClientInfo, MetaError> {
@@ -222,7 +217,8 @@ impl ClientHandle {
 
     pub async fn make_client(
         &self,
-    ) -> Result<MetaServiceClient<InterceptedService<Channel, AuthInterceptor>>, MetaError> {
+    ) -> Result<MetaServiceClient<InterceptedService<Channel, AuthInterceptor>>, MetaClientError>
+    {
         self.request(message::MakeClient {}).await
     }
 
@@ -353,43 +349,43 @@ impl MetaGrpcClient {
             let resp = match req {
                 message::Request::Get(r) => {
                     let resp = self.do_read(r).await;
-                    resp.map(message::Response::Get)
+                    message::Response::Get(resp)
                 }
                 message::Request::MGet(r) => {
                     let resp = self.do_read(r).await;
-                    resp.map(message::Response::MGet)
+                    message::Response::MGet(resp)
                 }
                 message::Request::PrefixList(r) => {
                     let resp = self.do_read(r).await;
-                    resp.map(message::Response::PrefixList)
+                    message::Response::PrefixList(resp)
                 }
                 message::Request::Upsert(r) => {
                     let resp = self.do_write(r).await;
-                    resp.map(message::Response::Upsert)
+                    message::Response::Upsert(resp)
                 }
                 message::Request::Txn(r) => {
                     let resp = self.transaction(r).await;
-                    resp.map(message::Response::Txn)
+                    message::Response::Txn(resp)
                 }
                 message::Request::Watch(r) => {
                     let resp = self.watch(r).await;
-                    resp.map(message::Response::Watch)
+                    message::Response::Watch(resp)
                 }
                 message::Request::Export(r) => {
                     let resp = self.export(r).await;
-                    resp.map(message::Response::Export)
+                    message::Response::Export(resp)
                 }
                 message::Request::MakeClient(_) => {
                     let resp = self.make_client().await;
-                    resp.map(message::Response::MakeClient)
+                    message::Response::MakeClient(resp)
                 }
                 message::Request::GetEndpoints(_) => {
                     let resp = self.get_endpoints().await;
-                    Ok(message::Response::GetEndpoints(resp))
+                    message::Response::GetEndpoints(Ok(resp))
                 }
                 message::Request::GetClientInfo(_) => {
                     let resp = self.get_client_info().await;
-                    resp.map(message::Response::GetClientInfo)
+                    message::Response::GetClientInfo(resp)
                 }
             };
 
@@ -398,45 +394,28 @@ impl MetaGrpcClient {
                 "MetaGrpcClient send response to the handle"
             );
 
-            let res = resp_tx.send(resp);
-            let current_endpoint = self.current_endpoint.lock();
-            if let Some(current_endpoint) = &*current_endpoint {
+            let current_endpoint = {
+                let current_endpoint = self.current_endpoint.lock();
+                current_endpoint.clone()
+            };
+
+            if let Some(current_endpoint) = current_endpoint {
                 label_histogram_with_val(
                     META_GRPC_CLIENT_REQUEST_DURATION_MS,
                     vec![(LABEL_ENDPOINT, current_endpoint.to_string())],
                     start.elapsed().as_millis() as f64,
                 );
 
-                if let Err(result) = res {
-                    match result {
-                        Err(err) => {
-                            label_counter_with_val_and_labels(
-                                META_GRPC_CLIENT_REQUEST_FAILED,
-                                vec![
-                                    (LABEL_ENDPOINT, current_endpoint.to_string()),
-                                    (LABEL_ERROR, err.to_string()),
-                                ],
-                                1,
-                            );
-                            warn!(
-                                "MetaGrpcClient failed to send response to the handle:{:?}",
-                                err
-                            );
-                        }
-                        Ok(_) => {
-                            label_counter_with_val_and_labels(
-                                META_GRPC_CLIENT_REQUEST_FAILED,
-                                vec![
-                                    (LABEL_ENDPOINT, current_endpoint.to_string()),
-                                    (LABEL_ERROR, "MetaGrpcClient recv-end closed".to_string()),
-                                ],
-                                1,
-                            );
-                            warn!(
-                                "MetaGrpcClient failed to send response to the handle. recv-end closed"
-                            );
-                        }
-                    }
+                if let Some(err) = resp.err() {
+                    label_counter_with_val_and_labels(
+                        META_GRPC_CLIENT_REQUEST_FAILED,
+                        vec![
+                            (LABEL_ENDPOINT, current_endpoint.to_string()),
+                            (LABEL_ERROR, err.to_string()),
+                        ],
+                        1,
+                    );
+                    error!("MetaGrpcClient error: {:?}", err);
                 } else {
                     label_counter_with_val_and_labels(
                         META_GRPC_CLIENT_REQUEST_SUCCESS,
@@ -444,8 +423,11 @@ impl MetaGrpcClient {
                         1,
                     );
                 }
-            } else if let Err(err) = res {
-                warn!(
+            }
+
+            let send_res = resp_tx.send(resp);
+            if let Err(err) = send_res {
+                error!(
                     err = debug(err),
                     "MetaGrpcClient failed to send response to the handle. recv-end closed"
                 );
@@ -456,7 +438,8 @@ impl MetaGrpcClient {
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn make_client(
         &self,
-    ) -> Result<MetaServiceClient<InterceptedService<Channel, AuthInterceptor>>, MetaError> {
+    ) -> Result<MetaServiceClient<InterceptedService<Channel, AuthInterceptor>>, MetaClientError>
+    {
         let mut eps = self.get_endpoints().await;
         debug_assert!(!eps.is_empty());
 
@@ -495,7 +478,7 @@ impl MetaGrpcClient {
                             if is_last {
                                 // reach to last addr
                                 let cli_err = MetaClientError::HandshakeError(handshake_err);
-                                return Err(MetaError::ClientError(cli_err));
+                                return Err(cli_err);
                             }
                             continue;
                         }
@@ -509,14 +492,14 @@ impl MetaGrpcClient {
                     }
                     if is_last {
                         let cli_err = MetaClientError::NetworkError(net_err);
-                        return Err(MetaError::from(cli_err));
+                        return Err(cli_err);
                     }
                     continue;
                 }
             }
         }
-        Err(MetaError::from(MetaClientError::ConfigError(
-            AnyError::error("endpoints is empty"),
+        Err(MetaClientError::ConfigError(AnyError::error(
+            "endpoints is empty",
         )))
     }
 
@@ -779,7 +762,7 @@ impl MetaGrpcClient {
     }
 
     #[tracing::instrument(level = "debug", skip(self, v))]
-    pub(crate) async fn do_write<T, R>(&self, v: T) -> Result<R, MetaError>
+    pub(crate) async fn do_write<T, R>(&self, v: T) -> Result<R, KVAppError>
     where
         T: RequestFor<Reply = R> + Into<MetaGrpcWriteReq>,
         R: DeserializeOwned,
@@ -823,13 +806,13 @@ impl MetaGrpcClient {
 
         let raft_reply = result?;
 
-        let res: Result<R, MetaError> = raft_reply.into();
+        let res: Result<R, KVAppError> = raft_reply.into();
 
         res
     }
 
     #[tracing::instrument(level = "debug", skip(self, v))]
-    pub(crate) async fn do_read<T, R>(&self, v: T) -> Result<R, MetaError>
+    pub(crate) async fn do_read<T, R>(&self, v: T) -> Result<R, KVAppError>
     where
         T: RequestFor<Reply = R>,
         T: Into<MetaGrpcReadReq>,
@@ -876,12 +859,12 @@ impl MetaGrpcClient {
         };
         let raft_reply = rpc_res?;
 
-        let res: Result<R, MetaError> = raft_reply.into();
+        let res: Result<R, KVAppError> = raft_reply.into();
         res
     }
 
     #[tracing::instrument(level = "debug", skip(self, req))]
-    pub(crate) async fn transaction(&self, req: TxnRequest) -> Result<TxnReply, MetaError> {
+    pub(crate) async fn transaction(&self, req: TxnRequest) -> Result<TxnReply, KVAppError> {
         let txn: TxnRequest = req;
 
         debug!(req = display(&txn), "MetaGrpcClient::transaction request");

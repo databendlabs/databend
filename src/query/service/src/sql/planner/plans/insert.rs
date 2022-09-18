@@ -22,8 +22,10 @@ use super::Plan;
 pub enum InsertInputSource {
     #[serde(skip)]
     SelectPlan(Box<Plan>),
+    // From outside streaming source
     StreamingWithFormat(String),
-    Values(InsertValueBlock),
+    // From cloned String and format
+    StrWithFormat((String, String)),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
@@ -65,7 +67,7 @@ impl Insert {
         match &self.source {
             InsertInputSource::SelectPlan(_) => None,
             InsertInputSource::StreamingWithFormat(v) => Some(v.as_str()),
-            InsertInputSource::Values(_) => Some("values"),
+            InsertInputSource::StrWithFormat((_, v)) => Some(v.as_str()),
         }
     }
 }
