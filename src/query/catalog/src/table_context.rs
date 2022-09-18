@@ -103,5 +103,5 @@ pub trait TableContext: Send + Sync {
     fn get_cluster(&self) -> Arc<Cluster>;
     async fn get_table(&self, catalog: &str, database: &str, table: &str)
     -> Result<Arc<dyn Table>>;
-    async fn get_processes_info(&self) -> Vec<ProcessInfo>;
+    fn get_processes_info(&self) -> Vec<ProcessInfo>;
 }

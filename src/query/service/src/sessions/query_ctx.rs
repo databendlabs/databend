@@ -171,23 +171,18 @@ impl QueryContext {
     }
 
     // Get one session by session id.
-    pub async fn get_session_by_id(self: &Arc<Self>, id: &str) -> Option<Arc<Session>> {
-        SessionManager::instance().get_session_by_id(id).await
+    pub fn get_session_by_id(self: &Arc<Self>, id: &str) -> Option<Arc<Session>> {
+        SessionManager::instance().get_session_by_id(id)
     }
 
     // Get session id by mysql connection id.
-    pub async fn get_id_by_mysql_conn_id(
-        self: &Arc<Self>,
-        conn_id: &Option<u32>,
-    ) -> Option<String> {
-        SessionManager::instance()
-            .get_id_by_mysql_conn_id(conn_id)
-            .await
+    pub fn get_id_by_mysql_conn_id(self: &Arc<Self>, conn_id: &Option<u32>) -> Option<String> {
+        SessionManager::instance().get_id_by_mysql_conn_id(conn_id)
     }
 
     // Get all the processes list info.
-    pub async fn get_processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {
-        SessionManager::instance().processes_info().await
+    pub fn get_processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {
+        SessionManager::instance().processes_info()
     }
 
     /// Get the client socket address.
@@ -392,8 +387,8 @@ impl TableContext for QueryContext {
     }
 
     // Get all the processes list info.
-    async fn get_processes_info(&self) -> Vec<ProcessInfo> {
-        SessionManager::instance().processes_info().await
+    fn get_processes_info(&self) -> Vec<ProcessInfo> {
+        SessionManager::instance().processes_info()
     }
 }
 
