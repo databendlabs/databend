@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
@@ -28,7 +29,7 @@ use crate::sql::plans::JoinType;
 
 pub struct RightJoinDesc {
     /// Record rows in build side that are matched with rows in probe side.
-    pub(crate) build_indexes: RwLock<Vec<RowPtr>>,
+    pub(crate) build_indexes: RwLock<HashSet<RowPtr>>,
     /// Record row in build side that is matched how many rows in probe side.
     pub(crate) row_state: RwLock<HashMap<RowPtr, usize>>,
 }
@@ -36,7 +37,7 @@ pub struct RightJoinDesc {
 impl RightJoinDesc {
     pub fn create() -> Self {
         RightJoinDesc {
-            build_indexes: RwLock::new(vec![]),
+            build_indexes: RwLock::new(HashSet::new()),
             row_state: RwLock::new(HashMap::new()),
         }
     }

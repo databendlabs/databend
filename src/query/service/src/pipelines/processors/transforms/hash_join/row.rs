@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::sync::RwLock;
 
 use common_datablocks::DataBlock;
@@ -36,7 +38,7 @@ impl Chunk {
     }
 }
 
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug)]
 pub struct RowPtr {
     pub chunk_index: u32,
     pub row_index: u32,
@@ -108,5 +110,20 @@ impl RowSpace {
         } else {
             Ok(DataBlock::empty_with_schema(self.data_schema.clone()))
         }
+    }
+}
+
+impl PartialEq for RowPtr {
+    fn eq(&self, other: &Self) -> bool {
+        self.chunk_index == other.chunk_index && self.row_index == other.row_index
+    }
+}
+
+impl Eq for RowPtr {}
+
+impl Hash for RowPtr {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.chunk_index.hash(state);
+        self.row_index.hash(state);
     }
 }

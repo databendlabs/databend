@@ -432,6 +432,37 @@ impl JoinHashTable {
             }
         }
     }
+
+    fn find_unmatched_build_indexes(&self) -> Result<Vec<RowPtr>> {
+        // For right join, build side will appear at lease once in the joined table
+        // Find the unmatched rows in build side
+        let mut unmatched_build_indexes = vec![];
+        {
+            let chunks = self.row_space.chunks.read().unwrap();
+            for (chunk_index, chunk) in chunks.iter().enumerate() {
+                for row_index in 0..chunk.num_rows() {
+                    let row_ptr = RowPtr {
+                        chunk_index: chunk_index as u32,
+                        row_index: row_index as u32,
+                        marker: None,
+                    };
+                    if !self
+                        .hash_join_desc
+                        .right_join_desc
+                        .build_indexes
+                        .read()
+                        .contains(&row_ptr)
+                    {
+                        let mut row_state = self.hash_join_desc.right_join_desc.row_state.write();
+                        row_state.entry(row_ptr).or_insert(0_usize);
+                        unmatched_build_indexes.push(row_ptr);
+                    }
+                }
+            }
+            drop(chunks);
+        }
+        Ok(unmatched_build_indexes)
+    }
 }
 
 #[async_trait::async_trait]
@@ -689,32 +720,7 @@ impl HashJoinState for JoinHashTable {
     }
 
     fn right_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
-        // For right join, build side will appear at lease once in the joined table
-        // Find the unmatched rows in build side
-        let mut unmatched_build_indexes = vec![];
-        {
-            for (chunk_index, chunk) in self.row_space.chunks.read().unwrap().iter().enumerate() {
-                for row_index in 0..chunk.num_rows() {
-                    let row_ptr = RowPtr {
-                        chunk_index: chunk_index as u32,
-                        row_index: row_index as u32,
-                        marker: None,
-                    };
-                    if !self
-                        .hash_join_desc
-                        .right_join_desc
-                        .build_indexes
-                        .read()
-                        .contains(&row_ptr)
-                    {
-                        let mut row_state = self.hash_join_desc.right_join_desc.row_state.write();
-                        row_state.entry(row_ptr).or_insert(0_usize);
-                        unmatched_build_indexes.push(row_ptr);
-                    }
-                }
-            }
-        }
-
+        let unmatched_build_indexes = self.find_unmatched_build_indexes()?;
         if unmatched_build_indexes.is_empty() && self.hash_join_desc.other_predicate.is_none() {
             return Ok(blocks.to_vec());
         }
@@ -770,7 +776,7 @@ impl HashJoinState for JoinHashTable {
         // If build_indexes size will greater build table size, we need filter the redundant rows for build side.
         let mut build_indexes = self.hash_join_desc.right_join_desc.build_indexes.write();
         let mut row_state = self.hash_join_desc.right_join_desc.row_state.write();
-        build_indexes.extend_from_slice(&unmatched_build_indexes);
+        build_indexes.extend(&unmatched_build_indexes);
         if build_indexes.len() > self.row_space.rows_number() {
             let mut bm = validity.into_mut().right().unwrap();
             Self::filter_rows_for_right_join(&mut bm, &build_indexes, &mut row_state);
