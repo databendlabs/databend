@@ -15,6 +15,7 @@
 use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_types::TenantQuota;
+use common_users::UserApiProvider;
 use databend_query::interpreters::InterpreterFactoryV2;
 use databend_query::sessions::TableContext;
 use databend_query::sql::*;
@@ -61,7 +62,7 @@ async fn test_user_stage_interpreter() -> Result<()> {
     }
 
     let tenant = ctx.get_tenant();
-    let user_mgr = ctx.get_user_manager();
+    let user_mgr = UserApiProvider::instance();
     let stage = user_mgr.get_stage(&tenant, "test_stage").await;
     assert!(stage.is_ok());
 

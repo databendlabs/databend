@@ -25,6 +25,7 @@ use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_meta_types::UserDefinedFunction;
+use common_users::UserApiProvider;
 
 use crate::sessions::TableContext;
 use crate::storages::system::table::AsyncOneBlockSystemTable;
@@ -174,7 +175,6 @@ impl FunctionsTable {
 
     async fn get_udfs(ctx: Arc<dyn TableContext>) -> Result<Vec<UserDefinedFunction>> {
         let tenant = ctx.get_tenant();
-        let user_mgr = ctx.get_user_manager();
-        user_mgr.get_udfs(&tenant).await
+        UserApiProvider::instance().get_udfs(&tenant).await
     }
 }

@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_types::UserIdentity;
+use common_users::UserApiProvider;
 use databend_query::api::http::v1::instance_status::instance_status_handler;
 use databend_query::api::http::v1::instance_status::InstanceStatus;
 use databend_query::interpreters::Interpreter;
@@ -56,8 +57,7 @@ async fn get_status(ep: &Route) -> InstanceStatus {
 async fn run_query(query_ctx: &Arc<QueryContext>) -> Result<Arc<dyn Interpreter>> {
     let sql = "select * from numbers(1)";
     query_ctx.attach_query_str(sql);
-    let user = query_ctx
-        .get_user_manager()
+    let user = UserApiProvider::instance()
         .get_user("test", UserIdentity::new("root", "localhost"))
         .await?;
     query_ctx.set_current_user(user);

@@ -22,6 +22,7 @@ use common_io::prelude::parse_escape_string;
 use common_meta_types::FileFormatOptions;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::UserStageInfo;
+use common_users::UserApiProvider;
 use sqlparser::ast::ObjectName;
 use tracing::debug;
 
@@ -56,11 +57,12 @@ pub async fn parse_stage_location(
     ctx: &Arc<dyn TableContext>,
     location: &str,
 ) -> Result<(UserStageInfo, String)> {
-    let mgr = ctx.get_user_manager();
     let s: Vec<&str> = location.split('@').collect();
     // @my_ext_stage/abc/
     let names: Vec<&str> = s[1].splitn(2, '/').filter(|v| !v.is_empty()).collect();
-    let stage = mgr.get_stage(&ctx.get_tenant(), names[0]).await?;
+    let stage = UserApiProvider::instance()
+        .get_stage(&ctx.get_tenant(), names[0])
+        .await?;
 
     let path = names.get(1).unwrap_or(&"").trim_start_matches('/');
 
@@ -81,8 +83,9 @@ pub async fn parse_stage_location_v2(
 ) -> Result<(UserStageInfo, String)> {
     debug_assert!(path.starts_with('/'), "path should starts with '/'");
 
-    let mgr = ctx.get_user_manager();
-    let stage = mgr.get_stage(&ctx.get_tenant(), name).await?;
+    let stage = UserApiProvider::instance()
+        .get_stage(&ctx.get_tenant(), name)
+        .await?;
 
     let prefix = stage.get_prefix();
     debug_assert!(prefix.ends_with('/'), "prefix should ends with '/'");

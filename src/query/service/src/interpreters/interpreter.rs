@@ -78,6 +78,11 @@ pub trait Interpreter: Sync + Send {
             )));
         }
 
+        // WTF: We need to implement different logic for the HTTP handler
+        if let Some(handle) = ctx.get_http_query() {
+            return handle.execute(ctx.clone(), build_res, self.schema()).await;
+        }
+
         Ok(Box::pin(Box::pin(ProcessorExecutorStream::create(
             PipelinePullingExecutor::from_pipelines(
                 ctx.query_need_abort(),

@@ -24,10 +24,8 @@ use common_base::base::Runtime;
 use common_contexts::DalContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::PlanNode;
 use common_meta_types::UserInfo;
 use common_storage::StorageOperator;
-use common_users::UserApiProvider;
 use futures::future::AbortHandle;
 use opendal::Operator;
 use parking_lot::Mutex;
@@ -74,7 +72,6 @@ pub struct QueryContextShared {
     pub(in crate::sessions) subquery_index: Arc<AtomicUsize>,
     pub(in crate::sessions) running_query: Arc<RwLock<Option<String>>>,
     pub(in crate::sessions) http_query: Arc<RwLock<Option<HttpQueryHandle>>>,
-    pub(in crate::sessions) running_plan: Arc<RwLock<Option<PlanNode>>>,
     pub(in crate::sessions) tables_refs: Arc<Mutex<HashMap<DatabaseAndTable, Arc<dyn Table>>>>,
     pub(in crate::sessions) dal_ctx: Arc<DalContext>,
     pub(in crate::sessions) auth_manager: Arc<AuthMgr>,
@@ -106,7 +103,6 @@ impl QueryContextShared {
             subquery_index: Arc::new(AtomicUsize::new(1)),
             running_query: Arc::new(RwLock::new(None)),
             http_query: Arc::new(RwLock::new(None)),
-            running_plan: Arc::new(RwLock::new(None)),
             tables_refs: Arc::new(Mutex::new(HashMap::new())),
             dal_ctx: Arc::new(Default::default()),
             auth_manager: AuthMgr::create(config).await?,
@@ -165,10 +161,6 @@ impl QueryContextShared {
 
     pub fn get_tenant(&self) -> String {
         self.session.get_current_tenant()
-    }
-
-    pub fn get_user_manager(&self) -> Arc<UserApiProvider> {
-        UserApiProvider::instance()
     }
 
     pub fn get_auth_manager(&self) -> Arc<AuthMgr> {
@@ -235,11 +227,9 @@ impl QueryContextShared {
         match &*query_runtime {
             Some(query_runtime) => Ok(query_runtime.clone()),
             None => {
-                let settings = self.get_settings();
                 // To avoid possible deadlock, we should keep at least two threads.
-                let max_threads = settings.get_max_threads()? as usize;
                 let runtime = Arc::new(Runtime::with_worker_threads(
-                    std::cmp::max(2, max_threads),
+                    2,
                     Some("query-ctx".to_string()),
                 )?);
                 *query_runtime = Some(runtime.clone());
@@ -264,11 +254,6 @@ impl QueryContextShared {
     pub fn get_query_str(&self) -> String {
         let running_query = self.running_query.read();
         running_query.as_ref().unwrap_or(&"".to_string()).clone()
-    }
-
-    pub fn attach_query_plan(&self, plan: &PlanNode) {
-        let mut running_plan = self.running_plan.write();
-        *running_plan = Some(plan.clone());
     }
 
     pub fn add_source_abort_handle(&self, handle: AbortHandle) {

@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use common_catalog::catalog::CatalogManager;
 use common_catalog::catalog::CATALOG_DEFAULT;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -37,6 +38,7 @@ use super::Limit;
 use super::Project;
 use super::Sort;
 use super::TableScan;
+use crate::catalogs::CatalogManagerHelper;
 use crate::sessions::QueryContext;
 use crate::sql::executor::util::check_physical;
 use crate::sql::executor::AggregateFunctionDesc;
@@ -153,7 +155,7 @@ impl PhysicalPlanBuilder {
                 }))
             }
             RelOperator::DummyTableScan(_) => {
-                let catalogs = self.ctx.get_catalog_manager()?;
+                let catalogs = CatalogManager::instance();
                 let table = catalogs
                     .get_catalog(CATALOG_DEFAULT)?
                     .get_table(self.ctx.get_tenant().as_str(), "system", "one")

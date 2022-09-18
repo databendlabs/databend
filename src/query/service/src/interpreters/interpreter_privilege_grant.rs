@@ -19,6 +19,7 @@ use common_legacy_planners::GrantPrivilegePlan;
 use common_meta_types::GrantObject;
 use common_meta_types::PrincipalIdentity;
 use common_meta_types::UserPrivilegeSet;
+use common_users::UserApiProvider;
 
 use crate::interpreters::interpreter_common::validate_grant_object_exists;
 use crate::interpreters::Interpreter;
@@ -55,7 +56,7 @@ impl Interpreter for GrantPrivilegeInterpreter {
         // TODO: check privilege on granting on the grant object
 
         let tenant = self.ctx.get_tenant();
-        let user_mgr = self.ctx.get_user_manager();
+        let user_mgr = UserApiProvider::instance();
         match plan.principal {
             PrincipalIdentity::User(user) => {
                 user_mgr

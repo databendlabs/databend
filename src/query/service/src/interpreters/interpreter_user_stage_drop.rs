@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_legacy_planners::DropUserStagePlan;
 use common_meta_types::StageType;
+use common_users::UserApiProvider;
 use tracing::info;
 
 use crate::interpreters::Interpreter;
@@ -47,7 +48,7 @@ impl Interpreter for DropUserStageInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = self.plan.clone();
         let tenant = self.ctx.get_tenant();
-        let user_mgr = self.ctx.get_user_manager();
+        let user_mgr = UserApiProvider::instance();
 
         let stage = user_mgr.get_stage(&tenant, &plan.name).await;
         user_mgr

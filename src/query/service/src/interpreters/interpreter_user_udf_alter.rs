@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_legacy_planners::AlterUserUDFPlan;
+use common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -45,8 +46,9 @@ impl Interpreter for AlterUserUDFInterpreter {
         let plan = self.plan.clone();
 
         let tenant = self.ctx.get_tenant();
-        let user_mgr = self.ctx.get_user_manager();
-        user_mgr.update_udf(&tenant, plan.udf).await?;
+        UserApiProvider::instance()
+            .update_udf(&tenant, plan.udf)
+            .await?;
 
         Ok(PipelineBuildResult::create())
     }

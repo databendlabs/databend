@@ -28,15 +28,12 @@ use common_io::prelude::FormatSettings;
 use common_legacy_planners::Partitions;
 use common_legacy_planners::PlanNode;
 use common_legacy_planners::ReadDataSourcePlan;
-use common_legacy_planners::Statistics;
 use common_meta_types::UserInfo;
 use common_settings::Settings;
-use common_users::UserApiProvider;
 use opendal::Operator;
 use parking_lot::Mutex;
 
 use crate::catalog::Catalog;
-use crate::catalog::CatalogManager;
 use crate::cluster_info::Cluster;
 use crate::table::Table;
 
@@ -76,12 +73,8 @@ pub trait TableContext: Send + Sync {
     fn try_get_partitions(&self, num: u64) -> Result<Partitions>;
     // Update the context partition pool from the pipeline builder.
     fn try_set_partitions(&self, partitions: Partitions) -> Result<()>;
-    fn try_get_statistics(&self) -> Result<Statistics>;
-    fn try_set_statistics(&self, val: &Statistics) -> Result<()>;
     fn attach_query_str(&self, query: &str);
-    fn attach_query_plan(&self, query_plan: &PlanNode);
     fn get_fragment_id(&self) -> usize;
-    fn get_catalog_manager(&self) -> Result<Arc<CatalogManager>>;
     fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>>;
     fn get_id(&self) -> String;
     fn get_current_catalog(&self) -> String;
@@ -94,7 +87,6 @@ pub trait TableContext: Send + Sync {
     fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()>;
     fn get_format_settings(&self) -> Result<FormatSettings>;
     fn get_tenant(&self) -> String;
-    fn set_current_tenant(&self, tenant: String);
     fn get_subquery_name(&self, _query: &PlanNode) -> String;
     /// Get the data accessor metrics.
     fn get_dal_metrics(&self) -> DalMetrics;
@@ -108,8 +100,6 @@ pub trait TableContext: Send + Sync {
     fn try_get_function_context(&self) -> Result<FunctionContext>;
     fn get_connection_id(&self) -> String;
     fn get_settings(&self) -> Arc<Settings>;
-    // Get user manager api.
-    fn get_user_manager(&self) -> Arc<UserApiProvider>;
     fn get_cluster(&self) -> Arc<Cluster>;
     async fn get_table(&self, catalog: &str, database: &str, table: &str)
     -> Result<Arc<dyn Table>>;

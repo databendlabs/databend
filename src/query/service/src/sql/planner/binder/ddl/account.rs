@@ -29,6 +29,7 @@ use common_meta_types::AuthInfo;
 use common_meta_types::GrantObject;
 use common_meta_types::UserOption;
 use common_meta_types::UserPrivilegeSet;
+use common_users::UserApiProvider;
 
 use crate::sql::plans::Plan;
 use crate::sql::Binder;
@@ -177,8 +178,7 @@ impl<'a> Binder {
         let user_info = if user.is_none() {
             self.ctx.get_current_user()?
         } else {
-            self.ctx
-                .get_user_manager()
+            UserApiProvider::instance()
                 .get_user(&self.ctx.get_tenant(), user.clone().unwrap())
                 .await?
         };

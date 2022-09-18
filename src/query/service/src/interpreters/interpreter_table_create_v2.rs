@@ -20,6 +20,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
+use common_users::UserApiProvider;
 
 use crate::interpreters::InsertInterpreterV2;
 use crate::interpreters::Interpreter;
@@ -59,10 +60,7 @@ impl Interpreter for CreateTableInterpreterV2 {
             .await?;
 
         let tenant = self.plan.tenant.clone();
-        let quota_api = self
-            .ctx
-            .get_user_manager()
-            .get_tenant_quota_api_client(&tenant)?;
+        let quota_api = UserApiProvider::instance().get_tenant_quota_api_client(&tenant)?;
         let quota = quota_api.get_quota(None).await?.data;
         let engine = self.plan.engine();
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
