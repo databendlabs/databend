@@ -23,10 +23,13 @@ pub use config::StorageFsConfig;
 pub use config::StorageGcsConfig;
 pub use config::StorageHdfsConfig;
 pub use config::StorageHttpConfig;
+pub use config::StorageIpfsConfig;
 pub use config::StorageObsConfig;
 pub use config::StorageParams;
 pub use config::StorageS3Config;
 pub use config::STORAGE_GCS_DEFAULT_ENDPOINT;
+#[cfg(feature = "storage-ipfs")]
+pub use config::STORAGE_IPFS_DEFAULT_ENDPOINT;
 pub use config::STORAGE_S3_DEFAULT_ENDPOINT;
 
 mod operator;

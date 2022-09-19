@@ -42,10 +42,10 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
     // Path endswith `/` means it's a directory, otherwise it's a file.
     // If the path is a directory, we will use this path as root.
     // If the path is a file, we will use `/` as root (which is the default value)
-    let (root, path) = if l.path.ends_with('/') {
-        (l.path.as_str(), "/")
+    let root = if l.path.ends_with('/') {
+        l.path.as_str()
     } else {
-        ("/", l.path.as_str())
+        "/"
     };
 
     let protocol = l.protocol.parse::<Scheme>()?;
@@ -95,6 +95,15 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
                 .to_string(),
             root: root.to_string(),
         }),
+        #[cfg(feature = "storage-ipfs")]
+        Scheme::Ipfs => {
+            use crate::config::StorageIpfsConfig;
+            use crate::config::STORAGE_IPFS_DEFAULT_ENDPOINT;
+            StorageParams::Ipfs(StorageIpfsConfig {
+                endpoint_url: STORAGE_IPFS_DEFAULT_ENDPOINT.to_string(),
+                root: "/ipfs/".to_string(),
+            })
+        }
         Scheme::S3 => StorageParams::S3(StorageS3Config {
             endpoint_url: l
                 .connection
@@ -156,6 +165,12 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
                 anyhow!("{v} is not allowed to be used as uri location"),
             ));
         }
+    };
+
+    let path = if cfg!(feature = "storage-ipfs") {
+        &l.name
+    } else {
+        "/"
     };
 
     Ok((sp, path.to_string()))

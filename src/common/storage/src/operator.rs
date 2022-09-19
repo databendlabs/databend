@@ -53,6 +53,8 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
         #[cfg(feature = "storage-hdfs")]
         StorageParams::Hdfs(cfg) => init_hdfs_operator(cfg)?,
         StorageParams::Http(cfg) => init_http_operator(cfg)?,
+        #[cfg(feature = "storage-ipfs")]
+        StorageParams::Ipfs(cfg) => init_ipfs_operator(cfg)?,
         StorageParams::Memory => init_memory_operator()?,
         StorageParams::Obs(cfg) => init_obs_operator(cfg)?,
         StorageParams::S3(cfg) => init_s3_operator(cfg)?,
@@ -118,6 +120,18 @@ pub fn init_hdfs_operator(cfg: &super::StorageHdfsConfig) -> Result<Operator> {
 
     // Root
     builder.root(&cfg.root);
+
+    Ok(Operator::new(builder.build()?).layer(LoggingLayer))
+}
+
+#[cfg(feature = "storage-ipfs")]
+pub fn init_ipfs_operator(cfg: &super::StorageIpfsConfig) -> Result<Operator> {
+    use opendal::services::ipfs;
+
+    let mut builder = ipfs::Builder::default();
+
+    builder.root(&cfg.root);
+    builder.endpoint(&cfg.endpoint_url);
 
     Ok(Operator::new(builder.build()?).layer(LoggingLayer))
 }

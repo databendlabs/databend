@@ -175,3 +175,29 @@ fn test_parse_uri_location() -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(feature = "storage-ipfs")]
+#[test]
+fn test_parse_ipfs_uri_location() {
+    use common_storage::StorageIpfsConfig;
+    use common_storage::STORAGE_IPFS_DEFAULT_ENDPOINT;
+
+    let l = UriLocation {
+        protocol: "ipfs".to_string(),
+        name: "somename".to_string(),
+        path: "/".to_string(),
+        connection: BTreeMap::new(),
+    };
+
+    let want_config = StorageParams::Ipfs(StorageIpfsConfig {
+        endpoint_url: STORAGE_IPFS_DEFAULT_ENDPOINT.to_string(),
+        root: "/ipfs/".to_string(),
+    });
+    let want_path = "somename".to_string();
+    if let Ok((got_config, got_path)) = parse_uri_location(&l) {
+        assert_eq!(want_path, got_path, "want:{}, got:{}", want_path, got_path);
+        assert_eq!(want_config, got_config);
+    } else {
+        unreachable!()
+    }
+}
