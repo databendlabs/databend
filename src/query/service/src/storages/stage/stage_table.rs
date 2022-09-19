@@ -90,7 +90,7 @@ impl Table for StageTable {
                 self.table_info.schema.clone(),
                 self.table_info.stage_info.clone(),
                 self.table_info.files.clone(),
-                ctx.get_scan_progress()
+                ctx.get_scan_progress(),
             )
             .await?,
         );
