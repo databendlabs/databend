@@ -32,7 +32,7 @@ use futures::TryStreamExt;
 use regex::Regex;
 
 use super::append2table;
-use crate::interpreters::interpreter_common::list_files;
+use crate::interpreters::interpreter_common::stat_file;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreterV2;
 use crate::pipelines::PipelineBuildResult;
@@ -79,12 +79,7 @@ impl CopyInterpreterV2 {
             // if force is false, copy only the files that unmatch to the meta copied files info.
             let resp = catalog.get_table_copied_file_info(req).await?;
             for file in files.iter() {
-                let stage_file = list_files(&self.ctx, &table_info.stage_info, file, "").await?;
-                if stage_file.is_empty() {
-                    continue;
-                }
-
-                let stage_file = &stage_file[0];
+                let stage_file = stat_file(&self.ctx, &table_info.stage_info, file).await?;
 
                 if let Some(file_info) = resp.file_info.get(file) {
                     match &file_info.etag {
@@ -120,12 +115,8 @@ impl CopyInterpreterV2 {
         } else {
             // if force is true, copy all the file.
             for file in files.iter() {
-                let stage_file = list_files(&self.ctx, &table_info.stage_info, file, "").await?;
-                if stage_file.is_empty() {
-                    continue;
-                }
+                let stage_file = stat_file(&self.ctx, &table_info.stage_info, file).await?;
 
-                let stage_file = &stage_file[0];
                 file_map.insert(file.clone(), TableCopiedFileInfo {
                     etag: stage_file.etag.clone(),
                     content_length: stage_file.size,
