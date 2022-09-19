@@ -24,6 +24,13 @@ pub struct Cluster {
 impl Cluster {
     /// If this cluster is empty?
     ///
+    /// # Note
+    ///
+    /// Cluster empty means:
+    ///
+    /// - There is no active node (is this possible?).
+    /// - There is only one node (myself).
+    ///
     /// # TODO
     ///
     /// From @Xuanwo
@@ -31,6 +38,6 @@ impl Cluster {
     /// Ideally, we should implement a cluster trait to replace `ClusterHelper`
     /// defined in `databend-query`.
     pub fn is_empty(&self) -> bool {
-        self.nodes.is_empty()
+        self.nodes.len() <= 1
     }
 }
