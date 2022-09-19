@@ -20,3 +20,17 @@ pub struct Cluster {
     pub local_id: String,
     pub nodes: Vec<Arc<NodeInfo>>,
 }
+
+impl Cluster {
+    /// If this cluster is empty?
+    ///
+    /// # TODO
+    ///
+    /// From @Xuanwo
+    ///
+    /// Ideally, we should implement a cluster trait to replace `ClusterHelper`
+    /// defined in `databend-query`.
+    pub fn is_empty(&self) -> bool {
+        self.nodes.is_empty()
+    }
+}

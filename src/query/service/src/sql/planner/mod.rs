@@ -23,7 +23,6 @@ use common_exception::Result;
 use parking_lot::RwLock;
 pub use plans::ScalarExpr;
 
-use crate::clusters::ClusterHelper;
 use crate::sql::optimizer::optimize;
 pub use crate::sql::planner::binder::BindContext;
 
