@@ -96,16 +96,16 @@ impl DatabaseCatalog {
         );
         Ok(res)
     }
-
-    pub fn is_case_insensitive_db(db: &str) -> bool {
-        db.to_uppercase() == "INFORMATION_SCHEMA"
-    }
 }
 
 #[async_trait::async_trait]
 impl Catalog for DatabaseCatalog {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn is_case_insensitive_db(&self, db: &str) -> bool {
+        db.to_uppercase() == "INFORMATION_SCHEMA"
     }
 
     async fn get_database(&self, tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
@@ -115,7 +115,7 @@ impl Catalog for DatabaseCatalog {
             ));
         }
 
-        let db_name = if Self::is_case_insensitive_db(db_name) {
+        let db_name = if self.is_case_insensitive_db(db_name) {
             db_name.to_uppercase()
         } else {
             db_name.to_string()
@@ -247,7 +247,7 @@ impl Catalog for DatabaseCatalog {
             ));
         }
 
-        let (db_name, table_name) = if Self::is_case_insensitive_db(db_name) {
+        let (db_name, table_name) = if self.is_case_insensitive_db(db_name) {
             (db_name.to_uppercase(), table_name.to_uppercase())
         } else {
             (db_name.to_string(), table_name.to_string())
@@ -278,7 +278,7 @@ impl Catalog for DatabaseCatalog {
             ));
         }
 
-        let db_name = if Self::is_case_insensitive_db(db_name) {
+        let db_name = if self.is_case_insensitive_db(db_name) {
             db_name.to_uppercase()
         } else {
             db_name.to_string()
@@ -308,7 +308,7 @@ impl Catalog for DatabaseCatalog {
             ));
         }
 
-        let db_name = if Self::is_case_insensitive_db(db_name) {
+        let db_name = if self.is_case_insensitive_db(db_name) {
             db_name.to_uppercase()
         } else {
             db_name.to_string()

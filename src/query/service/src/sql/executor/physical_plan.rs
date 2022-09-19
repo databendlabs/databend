@@ -212,6 +212,22 @@ impl HashJoin {
                 }
             }
 
+            JoinType::Right => {
+                fields.clear();
+                for field in self.probe.output_schema()?.fields() {
+                    fields.push(DataField::new(
+                        field.name().as_str(),
+                        wrap_nullable(field.data_type()),
+                    ));
+                }
+                for field in self.build.output_schema()?.fields() {
+                    fields.push(DataField::new(
+                        field.name().as_str(),
+                        field.data_type().clone(),
+                    ));
+                }
+            }
+
             JoinType::Semi | JoinType::Anti => {
                 // Do nothing
             }

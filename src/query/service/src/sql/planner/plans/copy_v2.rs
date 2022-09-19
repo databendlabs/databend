@@ -33,7 +33,7 @@ pub enum ValidationMode {
 
 impl FromStr for ValidationMode {
     type Err = String;
-    fn from_str(s: &str) -> std::result::Result<Self, String> {
+    fn from_str(s: &str) -> Result<Self, String> {
         match s.to_uppercase().as_str() {
             "" => Ok(ValidationMode::None),
             "RETURN_ERRORS" => Ok(ValidationMode::ReturnErrors),

@@ -38,7 +38,6 @@ use common_legacy_planners::*;
 use common_meta_app::schema::TableMeta;
 use tracing::debug;
 
-use crate::catalogs::DatabaseCatalog;
 use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::Binder;
 use crate::sql::binder::Visibility;
@@ -141,7 +140,11 @@ impl<'a> Binder {
             .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
 
-        if DatabaseCatalog::is_case_insensitive_db(database.as_str()) {
+        if self
+            .ctx
+            .get_catalog(&self.ctx.get_current_catalog())?
+            .is_case_insensitive_db(database.as_str())
+        {
             database = database.to_uppercase();
         }
 

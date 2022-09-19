@@ -91,6 +91,10 @@ impl Catalog for ImmutableCatalog {
         self
     }
 
+    fn is_case_insensitive_db(&self, _: &str) -> bool {
+        unimplemented!()
+    }
+
     async fn get_database(&self, _tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
         match db_name {
             "system" => Ok(self.sys_db.clone()),
@@ -134,7 +138,7 @@ impl Catalog for ImmutableCatalog {
             .get_by_id(&table_id)
             .ok_or_else(|| ErrorCode::UnknownTable(format!("Unknown table id: '{}'", table_id)))?;
         let ti = table.get_table_info();
-        Ok((ti.ident.clone(), Arc::new(ti.meta.clone())))
+        Ok((ti.ident, Arc::new(ti.meta.clone())))
     }
 
     async fn get_table(
