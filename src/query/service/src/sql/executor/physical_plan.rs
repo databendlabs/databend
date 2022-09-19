@@ -211,7 +211,6 @@ impl HashJoin {
                     ));
                 }
             }
-
             JoinType::Right => {
                 fields.clear();
                 for field in self.probe.output_schema()?.fields() {
@@ -227,11 +226,24 @@ impl HashJoin {
                     ));
                 }
             }
-
+            JoinType::Full => {
+                fields.clear();
+                for field in self.probe.output_schema()?.fields() {
+                    fields.push(DataField::new(
+                        field.name().as_str(),
+                        wrap_nullable(field.data_type()),
+                    ));
+                }
+                for field in self.build.output_schema()?.fields() {
+                    fields.push(DataField::new(
+                        field.name().as_str(),
+                        wrap_nullable(field.data_type()),
+                    ));
+                }
+            }
             JoinType::Semi | JoinType::Anti => {
                 // Do nothing
             }
-
             JoinType::Mark => {
                 fields.clear();
                 fields = self.build.output_schema()?.fields().clone();
@@ -245,7 +257,6 @@ impl HashJoin {
                     NullableType::new_impl(BooleanType::new_impl()),
                 ));
             }
-
             _ => {
                 for field in self.build.output_schema()?.fields() {
                     fields.push(DataField::new(

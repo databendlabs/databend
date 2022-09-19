@@ -81,6 +81,19 @@ impl<'a> Binder {
                     bind_context.add_column_binding(column.clone());
                 }
             }
+            JoinOperator::FullOuter => {
+                for column in left_context.all_column_bindings() {
+                    let mut nullable_column = column.clone();
+                    nullable_column.data_type = Box::new(wrap_nullable(&column.data_type));
+                    bind_context.add_column_binding(nullable_column);
+                }
+
+                for column in right_context.all_column_bindings().iter() {
+                    let mut nullable_column = column.clone();
+                    nullable_column.data_type = Box::new(wrap_nullable(&column.data_type));
+                    bind_context.add_column_binding(nullable_column);
+                }
+            }
             _ => {
                 for column in left_context.all_column_bindings() {
                     bind_context.add_column_binding(column.clone());
@@ -153,14 +166,16 @@ impl<'a> Binder {
                 left_child,
                 right_child,
             ),
-            JoinOperator::FullOuter => self.bind_join_with_type(
-                JoinType::Full,
-                left_join_conditions,
-                right_join_conditions,
-                other_conditions,
-                left_child,
-                right_child,
-            ),
+            JoinOperator::FullOuter => {
+                return self.bind_outer_join(
+                    bind_context,
+                    left_join_conditions,
+                    right_join_conditions,
+                    other_conditions,
+                    left_child,
+                    right_child,
+                );
+            }
             JoinOperator::CrossJoin => self.bind_join_with_type(
                 JoinType::Cross,
                 left_join_conditions,
@@ -203,6 +218,48 @@ impl<'a> Binder {
             left_child,
             right_child,
         ))
+    }
+
+    pub fn bind_outer_join(
+        &mut self,
+        bind_context: BindContext,
+        left_conditions: Vec<Scalar>,
+        right_conditions: Vec<Scalar>,
+        other_conditions: Vec<Scalar>,
+        left_child: SExpr,
+        right_child: SExpr,
+    ) -> Result<(SExpr, BindContext)> {
+        let left_join = LogicalInnerJoin {
+            left_conditions: left_conditions.clone(),
+            right_conditions: right_conditions.clone(),
+            other_conditions: other_conditions.clone(),
+            join_type: JoinType::Left,
+            marker_index: None,
+            from_correlated_subquery: false,
+        };
+
+        let left_s_expr =
+            SExpr::create_binary(left_join.into(), left_child.clone(), right_child.clone());
+
+        let right_join = LogicalInnerJoin {
+            left_conditions,
+            right_conditions,
+            other_conditions,
+            join_type: JoinType::Right,
+            marker_index: None,
+            from_correlated_subquery: false,
+        };
+
+        let right_s_expr = SExpr::create_binary(right_join.into(), left_child, right_child);
+
+        self.bind_union(
+            bind_context.clone(),
+            bind_context,
+            None,
+            left_s_expr,
+            right_s_expr,
+            true,
+        )
     }
 }
 

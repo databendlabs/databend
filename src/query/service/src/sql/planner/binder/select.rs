@@ -337,7 +337,7 @@ impl<'a> Binder {
         }
     }
 
-    fn bind_union(
+    pub(crate) fn bind_union(
         &mut self,
         left_context: BindContext,
         right_context: BindContext,
