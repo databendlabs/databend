@@ -30,7 +30,7 @@ async fn test_show_tables_interpreter() -> Result<()> {
         {
             let query = "create database db1";
             let (plan, _, _) = planner.plan_sql(query).await?;
-            let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+            let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
             let _ = executor.execute(ctx.clone()).await?;
         }
 
@@ -38,7 +38,7 @@ async fn test_show_tables_interpreter() -> Result<()> {
         {
             let query = "use db1";
             let (plan, _, _) = planner.plan_sql(query).await?;
-            let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+            let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
             let _ = executor.execute(ctx.clone()).await?;
         }
 
@@ -46,13 +46,13 @@ async fn test_show_tables_interpreter() -> Result<()> {
         {
             let query = "create table data(a Int)";
             let (plan, _, _) = planner.plan_sql(query).await?;
-            let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+            let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
             let _ = executor.execute(ctx.clone()).await?;
         }
         {
             let query = "create table bend(a Int)";
             let (plan, _, _) = planner.plan_sql(query).await?;
-            let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+            let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
             let _ = executor.execute(ctx.clone()).await?;
         }
     }
@@ -61,7 +61,7 @@ async fn test_show_tables_interpreter() -> Result<()> {
     {
         let query = "show tables";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         assert_eq!(executor.name(), "SelectInterpreterV2");
         let stream = executor.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
@@ -80,7 +80,7 @@ async fn test_show_tables_interpreter() -> Result<()> {
     {
         let query = "show tables like '%da%'";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         assert_eq!(executor.name(), "SelectInterpreterV2");
         let stream = executor.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
@@ -98,7 +98,7 @@ async fn test_show_tables_interpreter() -> Result<()> {
     {
         let query = "show tables where name != 'data'";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         assert_eq!(executor.name(), "SelectInterpreterV2");
         let stream = executor.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
@@ -116,7 +116,7 @@ async fn test_show_tables_interpreter() -> Result<()> {
     {
         let query = "show tables from db1";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         assert_eq!(executor.name(), "SelectInterpreterV2");
         let stream = executor.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
@@ -135,7 +135,7 @@ async fn test_show_tables_interpreter() -> Result<()> {
     {
         let query = "drop database db1";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         let _ = executor.execute(ctx.clone()).await?;
     }
 

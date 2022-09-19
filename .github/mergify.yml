@@ -10,6 +10,8 @@ queue_rules:
       - check-success~=^build_(aarch64|x86_64)_musl$
       - check-success=test_unit
       - check-success=test_metactl
+      - check-success=fuse_compat
+      - check-success=test_compat
       # state tests
       - check-success~=^test_(stateless|stateful)_(standalone|cluster)_linux$
       # sqllogic tests

@@ -1,4 +1,7 @@
 statement ok
+set global timezone = 'UTC';
+
+statement ok
 DROP TABLE IF EXISTS fuse_compat_table;
 
 statement ok

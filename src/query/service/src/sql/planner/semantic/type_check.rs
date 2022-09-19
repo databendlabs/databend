@@ -1425,8 +1425,6 @@ impl<'a> TypeChecker<'a> {
             ),
             ("timezone", &[]) => {
                 let tz = self.ctx.get_settings().get_timezone().unwrap();
-                // No need to handle err, the tz in settings is valid.
-                let tz = String::from_utf8(tz).unwrap();
                 Some(
                     self.resolve(
                         &Expr::Literal {

@@ -47,7 +47,7 @@ impl AppendOperationLogEntry {
 
 impl TryFrom<AppendOperationLogEntry> for DataBlock {
     type Error = common_exception::ErrorCode;
-    fn try_from(value: AppendOperationLogEntry) -> std::result::Result<Self, Self::Error> {
+    fn try_from(value: AppendOperationLogEntry) -> Result<Self, Self::Error> {
         Ok(DataBlock::create(AppendOperationLogEntry::schema(), vec![
             Series::from_data(vec![value.segment_location.as_str()]),
             Series::from_data(vec![serde_json::to_string(&value.segment_info)?.as_str()]),
@@ -57,7 +57,7 @@ impl TryFrom<AppendOperationLogEntry> for DataBlock {
 
 impl TryFrom<&DataBlock> for AppendOperationLogEntry {
     type Error = common_exception::ErrorCode;
-    fn try_from(block: &DataBlock) -> std::result::Result<Self, Self::Error> {
+    fn try_from(block: &DataBlock) -> Result<Self, Self::Error> {
         // check schema
         if block.schema() != &AppendOperationLogEntry::schema() {
             return Err(ErrorCode::LogicalError(format!(
