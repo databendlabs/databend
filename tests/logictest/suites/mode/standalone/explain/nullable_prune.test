@@ -1,27 +1,18 @@
 statement ok
-DROP DATABASE IF EXISTS db_09_0018;
+create table t_nullable_prune (a int null);
 
 statement ok
-CREATE DATABASE db_09_0018;
+insert into t_nullable_prune select * from numbers(3);
 
 statement ok
-USE db_09_0018;
-
-statement ok
-create table t (a int null);
-
-statement ok
-insert into t select * from numbers(3);
-
-statement ok
-insert into t select null from numbers(3);
+insert into t_nullable_prune select null from numbers(3);
 
 statement query T
-explain select * from t;
+explain select * from t_nullable_prune;
 
 ----
 TableScan
-├── table: default.db_09_0018.t
+├── table: default.default.t_nullable_prune
 ├── read rows: 6
 ├── read bytes: 62
 ├── partitions total: 2
@@ -29,11 +20,11 @@ TableScan
 └── push downs: [filters: [], limit: NONE]
 
 statement query T
-explain select * from t where a is not null;
+explain select * from t_nullable_prune where a is not null;
 
 ----
 TableScan
-├── table: default.db_09_0018.t
+├── table: default.default.t_nullable_prune
 ├── read rows: 3
 ├── read bytes: 37
 ├── partitions total: 2
@@ -41,11 +32,11 @@ TableScan
 └── push downs: [filters: [is_not_null(a)], limit: NONE] 
 
 statement query T
-explain select * from t where a is null;
+explain select * from t_nullable_prune where a is null;
 
 ----
 TableScan
-├── table: default.db_09_0018.t
+├── table: default.default.t_nullable_prune
 ├── read rows: 3
 ├── read bytes: 25
 ├── partitions total: 2
@@ -53,7 +44,4 @@ TableScan
 └── push downs: [filters: [not(is_not_null(a))], limit: NONE] 
 
 statement ok
-DROP TABLE t;
-
-statement ok
-DROP DATABASE db_09_0018;
+DROP TABLE default.default.t_nullable_prune;
