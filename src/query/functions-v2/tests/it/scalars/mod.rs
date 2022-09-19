@@ -117,6 +117,21 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
                 Value::Column(output_col) => {
                     test_arrow_conversion(&output_col);
 
+                    // Only display the used input columns
+                    let used_columns = expr.column_refs();
+                    let input_domains = input_domains
+                        .iter()
+                        .enumerate()
+                        .filter(|(i, _)| used_columns.contains(i))
+                        .map(|(_, col)| col)
+                        .collect::<Vec<_>>();
+                    let columns = columns
+                        .iter()
+                        .enumerate()
+                        .filter(|(i, _)| used_columns.contains(i))
+                        .map(|(_, col)| col)
+                        .collect::<Vec<_>>();
+
                     let mut table = Table::new();
                     table.load_preset("||--+-++|    ++++++");
 
