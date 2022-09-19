@@ -15,10 +15,10 @@
 use std::collections::VecDeque;
 use std::future::Future;
 use std::net::SocketAddr;
-use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::Weak;
 
 use chrono_tz::Tz;
 use common_base::base::tokio::task::JoinHandle;
@@ -53,6 +53,7 @@ use crate::api::DataExchangeManager;
 use crate::auth::AuthMgr;
 use crate::catalogs::Catalog;
 use crate::clusters::Cluster;
+use crate::pipelines::executor::PipelineExecutor;
 use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::ProcessInfo;
@@ -190,16 +191,16 @@ impl QueryContext {
         self.shared.session.session_ctx.get_client_host()
     }
 
-    pub fn query_need_abort(self: &Arc<Self>) -> Arc<AtomicBool> {
-        self.shared.query_need_abort()
-    }
-
     pub fn get_affect(self: &Arc<Self>) -> Option<QueryAffect> {
         self.shared.get_affect()
     }
 
     pub fn set_affect(self: &Arc<Self>, affect: QueryAffect) {
         self.shared.set_affect(affect)
+    }
+
+    pub fn set_executor(&self, weak_ptr: Weak<PipelineExecutor>) {
+        self.shared.set_executor(weak_ptr)
     }
 }
 

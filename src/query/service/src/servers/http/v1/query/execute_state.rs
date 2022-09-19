@@ -410,18 +410,17 @@ impl HttpQueryHandle {
             processors: vec![sink],
         });
 
-        let query_need_abort = ctx.query_need_abort();
+        let query_ctx = ctx.clone();
         let executor_settings = ExecutorSettings::try_create(&ctx.get_settings())?;
 
         let run = move || -> Result<()> {
             let mut pipelines = build_res.sources_pipelines;
             pipelines.push(build_res.main_pipeline);
 
-            let pipeline_executor = PipelineCompleteExecutor::from_pipelines(
-                query_need_abort,
-                pipelines,
-                executor_settings,
-            )?;
+            let pipeline_executor =
+                PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
+
+            query_ctx.set_executor(Arc::downgrade(&pipeline_executor.get_inner()));
             pipeline_executor.execute()
         };
 
