@@ -3993,7 +3993,7 @@ fn erase_calc_domain_generic_1_arg<I1: ArgType, O: ArgType>(
     func: impl Fn(&I1::Domain) -> Option<O::Domain>,
 ) -> impl Fn(&[Domain], &GenericMap) -> Option<Domain> {
     move |args, _generics| {
-        let arg1 = I1::try_downcast_domain(&args[0])?;
+        let arg1 = I1::try_downcast_domain(&args[0]).unwrap();
         func(&arg1).map(O::upcast_domain)
     }
 }
@@ -4002,8 +4002,8 @@ fn erase_calc_domain_generic_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
     func: impl Fn(&I1::Domain, &I2::Domain) -> Option<O::Domain>,
 ) -> impl Fn(&[Domain], &GenericMap) -> Option<Domain> {
     move |args, _generics| {
-        let arg1 = I1::try_downcast_domain(&args[0])?;
-        let arg2 = I2::try_downcast_domain(&args[1])?;
+        let arg1 = I1::try_downcast_domain(&args[0]).unwrap();
+        let arg2 = I2::try_downcast_domain(&args[1]).unwrap();
         func(&arg1, &arg2).map(O::upcast_domain)
     }
 }
@@ -4012,9 +4012,9 @@ fn erase_calc_domain_generic_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: Arg
     func: impl Fn(&I1::Domain, &I2::Domain, &I3::Domain) -> Option<O::Domain>,
 ) -> impl Fn(&[Domain], &GenericMap) -> Option<Domain> {
     move |args, _generics| {
-        let arg1 = I1::try_downcast_domain(&args[0])?;
-        let arg2 = I2::try_downcast_domain(&args[1])?;
-        let arg3 = I3::try_downcast_domain(&args[2])?;
+        let arg1 = I1::try_downcast_domain(&args[0]).unwrap();
+        let arg2 = I2::try_downcast_domain(&args[1]).unwrap();
+        let arg3 = I3::try_downcast_domain(&args[2]).unwrap();
         func(&arg1, &arg2, &arg3).map(O::upcast_domain)
     }
 }
@@ -4029,9 +4029,9 @@ fn erase_calc_domain_generic_4_arg<
     func: impl Fn(&I1::Domain, &I2::Domain, &I3::Domain, &I4::Domain) -> Option<O::Domain>,
 ) -> impl Fn(&[Domain], &GenericMap) -> Option<Domain> {
     move |args, _generics| {
-        let arg1 = I1::try_downcast_domain(&args[0])?;
-        let arg2 = I2::try_downcast_domain(&args[1])?;
-        let arg3 = I3::try_downcast_domain(&args[2])?;
+        let arg1 = I1::try_downcast_domain(&args[0]).unwrap();
+        let arg2 = I2::try_downcast_domain(&args[1]).unwrap();
+        let arg3 = I3::try_downcast_domain(&args[2]).unwrap();
         let arg4 = I4::try_downcast_domain(&args[3]).unwrap();
         func(&arg1, &arg2, &arg3, &arg4).map(O::upcast_domain)
     }
@@ -4048,9 +4048,9 @@ fn erase_calc_domain_generic_5_arg<
     func: impl Fn(&I1::Domain, &I2::Domain, &I3::Domain, &I4::Domain, &I5::Domain) -> Option<O::Domain>,
 ) -> impl Fn(&[Domain], &GenericMap) -> Option<Domain> {
     move |args, _generics| {
-        let arg1 = I1::try_downcast_domain(&args[0])?;
-        let arg2 = I2::try_downcast_domain(&args[1])?;
-        let arg3 = I3::try_downcast_domain(&args[2])?;
+        let arg1 = I1::try_downcast_domain(&args[0]).unwrap();
+        let arg2 = I2::try_downcast_domain(&args[1]).unwrap();
+        let arg3 = I3::try_downcast_domain(&args[2]).unwrap();
         let arg4 = I4::try_downcast_domain(&args[3]).unwrap();
         let arg5 = I5::try_downcast_domain(&args[4]).unwrap();
         func(&arg1, &arg2, &arg3, &arg4, &arg5).map(O::upcast_domain)

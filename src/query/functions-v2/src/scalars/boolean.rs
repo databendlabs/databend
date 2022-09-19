@@ -126,12 +126,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |lhs, rhs| {
             if !lhs.has_null && !rhs.has_null {
-                let bools = match   ( &lhs.value, &rhs.value) {
+                let bools = match (&lhs.value, &rhs.value) {
                     (Some(a), Some(b)) => Some(Box::new(BooleanDomain {
                     has_false: a.has_false || b.has_false,
                     has_true: a.has_true && b.has_true,
                     })),
-                    _ => None,
+                    _ => return None,
                 };
                 return Some(NullableDomain::<BooleanType> {
                     has_null: false,
@@ -157,12 +157,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |lhs, rhs| {
             if !lhs.has_null && !rhs.has_null {
-                let bools = match   (&lhs.value, &rhs.value) {
+                let bools = match (&lhs.value, &rhs.value) {
                     (Some(a), Some(b)) => Some(Box::new(BooleanDomain {
                         has_false: a.has_false && b.has_false,
                         has_true: a.has_true || b.has_true,
                     })),
-                    _ => None,
+                    _ => return None,
                 };
                 return Some(NullableDomain::<BooleanType> {
                     has_null: false,
