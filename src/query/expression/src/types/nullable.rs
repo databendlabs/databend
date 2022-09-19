@@ -69,7 +69,6 @@ impl<T: ValueType> ValueType for NullableType<T> {
                 has_null: *has_null,
                 value: Some(Box::new(T::try_downcast_domain(value)?)),
             }),
-
             Domain::Nullable(NullableDomain {
                 has_null,
                 value: None,
