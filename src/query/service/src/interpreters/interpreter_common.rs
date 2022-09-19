@@ -113,13 +113,12 @@ pub fn append2table(
 }
 
 pub fn execute_pipeline(ctx: Arc<QueryContext>, mut res: PipelineBuildResult) -> Result<()> {
-    let query_need_abort = ctx.query_need_abort();
     let executor_settings = ExecutorSettings::try_create(&ctx.get_settings())?;
     res.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
     let mut pipelines = res.sources_pipelines;
     pipelines.push(res.main_pipeline);
-    let executor =
-        PipelineCompleteExecutor::from_pipelines(query_need_abort, pipelines, executor_settings)?;
+    let executor = PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
+    ctx.set_executor(Arc::downgrade(&executor.get_inner()));
     executor.execute()
 }
 

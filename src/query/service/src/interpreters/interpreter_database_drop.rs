@@ -16,8 +16,6 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_legacy_planners::DropDatabasePlan;
-use common_meta_types::GrantObject;
-use common_meta_types::UserPrivilegeType;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -42,11 +40,6 @@ impl Interpreter for DropDatabaseInterpreter {
     }
 
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        self.ctx
-            .get_current_session()
-            .validate_privilege(&GrantObject::Global, UserPrivilegeType::Drop)
-            .await?;
-
         let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
         catalog.drop_database(self.plan.clone().into()).await?;
 
