@@ -18,6 +18,7 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
+use common_arrow::arrow::datatypes::TimeUnit;
 use common_arrow::arrow::trusted_len::TrustedLen;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
@@ -455,11 +456,9 @@ impl Column {
             Column::Number(NumberColumn::Float64(_)) => ArrowDataType::Float64,
             Column::Boolean(_) => ArrowDataType::Boolean,
             Column::String { .. } => ArrowDataType::LargeBinary,
-            Column::Timestamp(TimestampColumn { precision, .. }) => ArrowDataType::Extension(
-                "Timestamp".to_owned(),
-                Box::new(ArrowDataType::Int64),
-                Some(precision.to_string()),
-            ),
+            Column::Timestamp(TimestampColumn { .. }) => {
+                ArrowDataType::Timestamp(TimeUnit::Microsecond, None)
+            }
             Column::Array(box ArrayColumn {
                 values: Column::Nullable(box NullableColumn { column, .. }),
                 ..
@@ -798,16 +797,24 @@ impl Column {
                     offsets: offsets.into(),
                 })
             }
-            ArrowDataType::Extension(name, _, Some(precision)) if name == "Timestamp" => {
+
+            ArrowType::Timestamp(unit, _) => {
                 let ts = arrow_col
                     .as_any()
                     .downcast_ref::<common_arrow::arrow::array::Int64Array>()
                     .expect("fail to read from arrow: array should be `Int64Array`")
                     .values()
                     .clone();
-                let precision = precision.parse().unwrap();
+
+                let precision = match unit {
+                    TimeUnit::Second => 0,
+                    TimeUnit::Millisecond => 3,
+                    TimeUnit::Microsecond => 6,
+                    TimeUnit::Nanosecond => 9,
+                };
                 Column::Timestamp(TimestampColumn { ts, precision })
             }
+
             ArrowDataType::Extension(name, _, None) if name == "Variant" => {
                 let arrow_col = arrow_col
                     .as_any()

@@ -12,6 +12,7 @@ test = false
 [dependencies] # In alphabetical order
 # Workspace dependencies
 common-arrow = { path = "../../common/arrow" }
+common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../../common/exception" }
 
 # Github dependencies
@@ -30,6 +31,7 @@ num-traits = "0.2.15"
 ordered-float = { git = "https://github.com/andylokandy/rust-ordered-float.git", branch = "as", features = ["serde"] }
 rust_decimal = "1.26"
 serde = "1.0"
+serde_json = "1.0.81"
 
 [dev-dependencies]
 common-ast = { path = "../ast" }

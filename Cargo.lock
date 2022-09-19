@@ -1184,6 +1184,7 @@ dependencies = [
  "comfy-table",
  "common-arrow",
  "common-ast",
+ "common-datavalues",
  "common-exception",
  "common-jsonb",
  "educe",
@@ -1196,6 +1197,7 @@ dependencies = [
  "ordered-float 3.0.0 (git+https://github.com/andylokandy/rust-ordered-float.git?branch=as)",
  "rust_decimal",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
