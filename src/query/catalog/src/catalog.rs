@@ -171,4 +171,6 @@ pub trait Catalog: DynClone + Send + Sync {
     fn get_table_engines(&self) -> Vec<StorageDescription> {
         unimplemented!()
     }
+
+    fn is_case_insensitive_db(&self, db: &str) -> bool;
 }
