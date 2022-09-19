@@ -31,6 +31,7 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_legacy_planners::Expression;
+use common_planner::IndexType;
 
 use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::Binder;
@@ -40,7 +41,6 @@ use crate::sql::binder::Visibility;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::semantic::normalize_identifier;
 use crate::sql::planner::semantic::TypeChecker;
-use crate::sql::planner::IndexType;
 use crate::sql::plans::ConstantExpr;
 use crate::sql::plans::LogicalGet;
 use crate::sql::plans::Scalar;

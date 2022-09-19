@@ -22,13 +22,13 @@ use common_datavalues::UInt64Type;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
+use common_planner::IndexType;
 
 use crate::sql::binder::ColumnBinding;
 use crate::sql::binder::Visibility;
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::SExpr;
-use crate::sql::planner::IndexType;
 use crate::sql::plans::Aggregate;
 use crate::sql::plans::AggregateFunction;
 use crate::sql::plans::AggregateMode;

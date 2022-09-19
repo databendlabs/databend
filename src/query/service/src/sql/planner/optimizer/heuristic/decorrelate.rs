@@ -20,6 +20,7 @@ use common_datavalues::DataTypeImpl;
 use common_datavalues::NullableType;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planner::IndexType;
 
 use crate::sql::binder::wrap_cast;
 use crate::sql::binder::JoinPredicate;
@@ -30,7 +31,6 @@ use crate::sql::optimizer::heuristic::subquery_rewriter::UnnestResult;
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::SExpr;
-use crate::sql::planner::IndexType;
 use crate::sql::plans::Aggregate;
 use crate::sql::plans::AggregateFunction;
 use crate::sql::plans::AggregateMode;
