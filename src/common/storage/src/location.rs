@@ -22,6 +22,8 @@ use opendal::Scheme;
 use percent_encoding::percent_decode_str;
 
 use crate::config::StorageHttpConfig;
+use crate::config::StorageIpfsConfig;
+use crate::config::STORAGE_IPFS_DEFAULT_ENDPOINT;
 use crate::config::STORAGE_S3_DEFAULT_ENDPOINT;
 use crate::StorageAzblobConfig;
 use crate::StorageParams;
@@ -42,10 +44,10 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
     // Path endswith `/` means it's a directory, otherwise it's a file.
     // If the path is a directory, we will use this path as root.
     // If the path is a file, we will use `/` as root (which is the default value)
-    let root = if l.path.ends_with('/') {
-        l.path.as_str()
+    let (mut root, mut path) = if l.path.ends_with('/') {
+        (l.path.as_str(), "/")
     } else {
-        "/"
+        ("/", l.path.as_str())
     };
 
     let protocol = l.protocol.parse::<Scheme>()?;
@@ -95,13 +97,15 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
                 .to_string(),
             root: root.to_string(),
         }),
-        #[cfg(feature = "storage-ipfs")]
         Scheme::Ipfs => {
-            use crate::config::StorageIpfsConfig;
-            use crate::config::STORAGE_IPFS_DEFAULT_ENDPOINT;
+            if l.name.ends_with('/') {
+                root = l.name.as_str();
+            } else {
+                path = l.name.as_str();
+            }
             StorageParams::Ipfs(StorageIpfsConfig {
                 endpoint_url: STORAGE_IPFS_DEFAULT_ENDPOINT.to_string(),
-                root: "/ipfs/".to_string(),
+                root: "/ipfs/".to_string() + root,
             })
         }
         Scheme::S3 => StorageParams::S3(StorageS3Config {
@@ -165,12 +169,6 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
                 anyhow!("{v} is not allowed to be used as uri location"),
             ));
         }
-    };
-
-    let path = if cfg!(feature = "storage-ipfs") {
-        &l.name
-    } else {
-        "/"
     };
 
     Ok((sp, path.to_string()))

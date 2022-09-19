@@ -8,7 +8,6 @@ edition = "2021"
 
 [features]
 storage-hdfs = ["opendal/services-hdfs"]
-storage-ipfs = ["opendal/services-ipfs"]
 
 [dependencies]
 common-base = { path = "../base" }
@@ -23,6 +22,7 @@ opendal = { version = "0.17.0", features = [
     "layers-retry",
     "layers-tracing",
     "layers-metrics",
+    "services-ipfs",
     "compress",
 ] }
 percent-encoding = "2.1.0"

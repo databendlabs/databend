@@ -39,7 +39,6 @@ pub enum StorageParams {
     #[cfg(feature = "storage-hdfs")]
     Hdfs(StorageHdfsConfig),
     Http(StorageHttpConfig),
-    #[cfg(feature = "storage-ipfs")]
     Ipfs(StorageIpfsConfig),
     Memory,
     Obs(StorageObsConfig),
@@ -74,7 +73,6 @@ impl Display for StorageParams {
             StorageParams::Http(v) => {
                 write!(f, "http://endpoint={},paths={:?}", v.endpoint_url, v.paths)
             }
-            #[cfg(feature = "storage-ipfs")]
             StorageParams::Ipfs(c) => {
                 write!(f, "ipfs://endpoint={},root={}", c.endpoint_url, c.root)
             }
@@ -106,7 +104,6 @@ impl StorageParams {
             #[cfg(feature = "storage-hdfs")]
             StorageParams::Hdfs(_) => false,
             StorageParams::Http(v) => v.endpoint_url.starts_with("https://"),
-            #[cfg(feature = "storage-ipfs")]
             StorageParams::Ipfs(c) => c.endpoint_url.starts_with("https://"),
             StorageParams::Memory => false,
             StorageParams::Obs(v) => v.endpoint_url.starts_with("https://"),
@@ -262,8 +259,7 @@ pub struct StorageHttpConfig {
     pub paths: Vec<String>,
 }
 
-#[cfg(feature = "storage-ipfs")]
-pub const STORAGE_IPFS_DEFAULT_ENDPOINT: &str = "https://ipfs.io";
+pub const STORAGE_IPFS_DEFAULT_ENDPOINT: &str = "https://ipfs.filebase.io";
 /// Config for IPFS storage backend
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StorageIpfsConfig {

@@ -18,15 +18,49 @@ use std::io::Result;
 use common_storage::parse_uri_location;
 use common_storage::StorageGcsConfig;
 use common_storage::StorageHttpConfig;
+use common_storage::StorageIpfsConfig;
 use common_storage::StorageParams;
 use common_storage::StorageS3Config;
 use common_storage::UriLocation;
 use common_storage::STORAGE_GCS_DEFAULT_ENDPOINT;
+use common_storage::STORAGE_IPFS_DEFAULT_ENDPOINT;
 use common_storage::STORAGE_S3_DEFAULT_ENDPOINT;
 
 #[test]
 fn test_parse_uri_location() -> Result<()> {
     let cases = vec![
+        (
+            "ipfs-directory",
+            UriLocation {
+                protocol: "ipfs".to_string(),
+                name: "too-simple/".to_string(),
+                path: "/".to_string(),
+                connection: BTreeMap::new(),
+            },
+            (
+                StorageParams::Ipfs(StorageIpfsConfig {
+                    endpoint_url: STORAGE_IPFS_DEFAULT_ENDPOINT.to_string(),
+                    root: "/ipfs/too-simple/".to_string(),
+                }),
+                "/".to_string(),
+            ),
+        ),
+        (
+            "ipfs-file",
+            UriLocation {
+                protocol: "ipfs".to_string(),
+                name: "too-naive".to_string(),
+                path: "/".to_string(),
+                connection: Default::default(),
+            },
+            (
+                StorageParams::Ipfs(StorageIpfsConfig {
+                    endpoint_url: STORAGE_IPFS_DEFAULT_ENDPOINT.to_string(),
+                    root: "/ipfs//".to_string(),
+                }),
+                "too-naive".to_string(),
+            ),
+        ),
         (
             "s3_with_access_key_id",
             UriLocation {
@@ -176,12 +210,8 @@ fn test_parse_uri_location() -> Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "storage-ipfs")]
 #[test]
 fn test_parse_ipfs_uri_location() {
-    use common_storage::StorageIpfsConfig;
-    use common_storage::STORAGE_IPFS_DEFAULT_ENDPOINT;
-
     let l = UriLocation {
         protocol: "ipfs".to_string(),
         name: "somename".to_string(),

@@ -28,7 +28,6 @@ pub use config::StorageObsConfig;
 pub use config::StorageParams;
 pub use config::StorageS3Config;
 pub use config::STORAGE_GCS_DEFAULT_ENDPOINT;
-#[cfg(feature = "storage-ipfs")]
 pub use config::STORAGE_IPFS_DEFAULT_ENDPOINT;
 pub use config::STORAGE_S3_DEFAULT_ENDPOINT;
 
