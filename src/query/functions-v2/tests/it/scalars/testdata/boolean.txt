@@ -1,9 +1,9 @@
 ast            : true AND false
 raw expr       : and(true, false)
-checked expr   : and<Boolean NULL, Boolean NULL>(CAST(true AS Boolean NULL), CAST(false AS Boolean NULL))
+checked expr   : and<Boolean, Boolean>(true, false)
 optimized expr : false
-output type    : Boolean NULL
-output domain  : Unknown
+output type    : Boolean
+output domain  : {FALSE}
 output         : false
 
 
@@ -18,19 +18,19 @@ output         : false
 
 ast            : true AND true
 raw expr       : and(true, true)
-checked expr   : and<Boolean NULL, Boolean NULL>(CAST(true AS Boolean NULL), CAST(true AS Boolean NULL))
+checked expr   : and<Boolean, Boolean>(true, true)
 optimized expr : true
-output type    : Boolean NULL
-output domain  : Unknown
+output type    : Boolean
+output domain  : {TRUE}
 output         : true
 
 
 ast            : false AND false
 raw expr       : and(false, false)
-checked expr   : and<Boolean NULL, Boolean NULL>(CAST(false AS Boolean NULL), CAST(false AS Boolean NULL))
+checked expr   : and<Boolean, Boolean>(false, false)
 optimized expr : false
-output type    : Boolean NULL
-output domain  : Unknown
+output type    : Boolean
+output domain  : {FALSE}
 output         : false
 
 
@@ -45,10 +45,10 @@ output         : NULL
 
 ast            : false AND true
 raw expr       : and(false, true)
-checked expr   : and<Boolean NULL, Boolean NULL>(CAST(false AS Boolean NULL), CAST(true AS Boolean NULL))
+checked expr   : and<Boolean, Boolean>(false, true)
 optimized expr : false
-output type    : Boolean NULL
-output domain  : Unknown
+output type    : Boolean
+output domain  : {FALSE}
 output         : false
 
 
@@ -129,10 +129,10 @@ evaluation (internal):
 
 ast            : true OR false
 raw expr       : or(true, false)
-checked expr   : or<Boolean NULL, Boolean NULL>(CAST(true AS Boolean NULL), CAST(false AS Boolean NULL))
+checked expr   : or<Boolean, Boolean>(true, false)
 optimized expr : true
-output type    : Boolean NULL
-output domain  : Unknown
+output type    : Boolean
+output domain  : {TRUE}
 output         : true
 
 

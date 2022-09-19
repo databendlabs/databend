@@ -45,6 +45,30 @@ pub fn register(registry: &mut FunctionRegistry) {
         |lhs, rhs| lhs & rhs,
     );
 
+    registry.register_2_arg_core::<BooleanType, BooleanType, BooleanType, _, _>(
+        "and",
+        FunctionProperty::default(),
+        |lhs, rhs| {
+            Some(BooleanDomain {
+                has_false: lhs.has_false || rhs.has_false,
+                has_true: lhs.has_true && rhs.has_true,
+            })
+        },
+        vectorize_2_arg::<BooleanType, BooleanType, BooleanType>(|lhs, rhs| lhs & rhs),
+    );
+
+    registry.register_2_arg_core::<BooleanType, BooleanType, BooleanType, _, _>(
+        "or",
+        FunctionProperty::default(),
+        |lhs, rhs| {
+            Some(BooleanDomain {
+                has_false: lhs.has_false && rhs.has_false,
+                has_true: lhs.has_true || rhs.has_true,
+            })
+        },
+        vectorize_2_arg::<BooleanType, BooleanType, BooleanType>(|lhs, rhs| lhs | rhs),
+    );
+
     // https://en.wikibooks.org/wiki/Structured_Query_Language/NULLs_and_the_Three_Valued_Logic
     registry.register_2_arg_core::<NullableType<BooleanType>, NullableType<BooleanType>, NullableType<BooleanType>, _, _>(
         "and",
@@ -80,30 +104,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 None
             }
         }),
-    );
-
-    registry.register_2_arg_core::<BooleanType, BooleanType, BooleanType, _, _>(
-        "and",
-        FunctionProperty::default(),
-        |lhs, rhs| {
-            Some(BooleanDomain {
-                has_false: lhs.has_false || rhs.has_false,
-                has_true: lhs.has_true && rhs.has_true,
-            })
-        },
-        vectorize_2_arg::<BooleanType, BooleanType, BooleanType>(|lhs, rhs| lhs & rhs),
-    );
-
-    registry.register_2_arg_core::<BooleanType, BooleanType, BooleanType, _, _>(
-        "or",
-        FunctionProperty::default(),
-        |lhs, rhs| {
-            Some(BooleanDomain {
-                has_false: lhs.has_false && rhs.has_false,
-                has_true: lhs.has_true || rhs.has_true,
-            })
-        },
-        vectorize_2_arg::<BooleanType, BooleanType, BooleanType>(|lhs, rhs| lhs | rhs),
     );
 
     registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
