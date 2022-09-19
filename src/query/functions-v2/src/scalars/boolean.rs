@@ -19,6 +19,8 @@ use common_expression::types::NullableType;
 use common_expression::vectorize_2_arg;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
+use common_expression::Value;
+use common_expression::ValueRef;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_1_arg::<BooleanType, BooleanType, _, _>(
@@ -34,7 +36,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     // special function to combine the filter efficiently
-    registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
+    registry.register_passthrough_nullable_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
         "and_filters",
         FunctionProperty::default(),
         |lhs, rhs| {
@@ -43,7 +45,23 @@ pub fn register(registry: &mut FunctionRegistry) {
                 has_true: lhs.has_true && rhs.has_true,
             })
         },
-        |lhs, rhs| lhs & rhs,
+        |lhs, rhs, _| match (lhs, rhs) {
+            (ValueRef::Scalar(flag), other) => {
+                if flag {
+                    Ok(other.to_owned())
+                } else {
+                    Ok(Value::Scalar(false))
+                }
+            }
+            (other, ValueRef::Scalar(flag)) => {
+                if flag {
+                    Ok(other.to_owned())
+                } else {
+                    Ok(Value::Scalar(false))
+                }
+            }
+            (ValueRef::Column(a), ValueRef::Column(b)) => Ok(Value::Column(&a & &b)),
+        },
     );
 
     registry.register_2_arg_core::<BooleanType, BooleanType, BooleanType, _, _>(
@@ -55,7 +73,23 @@ pub fn register(registry: &mut FunctionRegistry) {
                 has_true: lhs.has_true && rhs.has_true,
             })
         },
-        vectorize_2_arg::<BooleanType, BooleanType, BooleanType>(|lhs, rhs| lhs & rhs),
+        |lhs, rhs, _| match (lhs, rhs) {
+            (ValueRef::Scalar(flag), other) => {
+                if flag {
+                    Ok(other.to_owned())
+                } else {
+                    Ok(Value::Scalar(false))
+                }
+            }
+            (other, ValueRef::Scalar(flag)) => {
+                if flag {
+                    Ok(other.to_owned())
+                } else {
+                    Ok(Value::Scalar(false))
+                }
+            }
+            (ValueRef::Column(a), ValueRef::Column(b)) => Ok(Value::Column(&a & &b)),
+        },
     );
 
     registry.register_2_arg_core::<BooleanType, BooleanType, BooleanType, _, _>(
@@ -67,7 +101,23 @@ pub fn register(registry: &mut FunctionRegistry) {
                 has_true: lhs.has_true || rhs.has_true,
             })
         },
-        vectorize_2_arg::<BooleanType, BooleanType, BooleanType>(|lhs, rhs| lhs | rhs),
+        |lhs, rhs, _| match (lhs, rhs) {
+            (ValueRef::Scalar(flag), other) => {
+                if flag {
+                    Ok(Value::Scalar(true))
+                } else {
+                    Ok(other.to_owned())
+                }
+            }
+            (other, ValueRef::Scalar(flag)) => {
+                if flag {
+                    Ok(Value::Scalar(true))
+                } else {
+                    Ok(other.to_owned())
+                }
+            }
+            (ValueRef::Column(a), ValueRef::Column(b)) => Ok(Value::Column(&a | &b)),
+        },
     );
 
     // https://en.wikibooks.org/wiki/Structured_Query_Language/NULLs_and_the_Three_Valued_Logic
@@ -93,7 +143,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         vectorize_2_arg::<NullableType<BooleanType>, NullableType<BooleanType>, NullableType<BooleanType>>(|lhs, rhs| {
             let lhs_v = lhs.is_some();
             let rhs_v = rhs.is_some();
-            let valid = (lhs_v & rhs_v) | (lhs_v & lhs.unwrap_or_default()) | (rhs_v & rhs.unwrap_or_default());
+            let valid = (lhs_v & rhs_v) | (lhs == Some(true)) | (rhs == Some(true));
             if valid {
                 Some(lhs.unwrap_or_default() & rhs.unwrap_or_default())
             } else {
@@ -122,9 +172,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             None
         },
         vectorize_2_arg::<NullableType<BooleanType>, NullableType<BooleanType>, NullableType<BooleanType>>(|lhs, rhs| {
-            let lhs_v = lhs.is_some();
-            let rhs_v = rhs.is_some();
-            let valid = (lhs_v & rhs_v) | (lhs.unwrap_or_default() | rhs.unwrap_or_default());
+            let valid = (lhs.is_some() & rhs.is_some()) | lhs.unwrap_or_default() | rhs.unwrap_or_default();
             if valid {
                 Some(lhs.unwrap_or_default() | rhs.unwrap_or_default())
             } else {
