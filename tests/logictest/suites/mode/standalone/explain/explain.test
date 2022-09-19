@@ -498,6 +498,21 @@ CreateUser (children 3)
 ├── AuthType sha256_password
 └── Password "new_password"
 
+statement query T
+explain ast select unknown_table.a + 1 from unknown_table1;
+
+----
+Query (children 1)
+└── QueryBody (children 1)
+    └── SelectQuery (children 2)
+        ├── SelectList (children 1)
+        │   └── Target (children 1)
+        │       └── Function + (children 2)
+        │           ├── ColumnIdentifier unknown_table.a
+        │           └── Literal Integer(1)
+        └── TableList (children 1)
+            └── TableIdentifier unknown_table1
+
 statement ok
 drop table t1;
 

@@ -43,8 +43,7 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
-use common_datavalues::ToDataType;
-use common_datavalues::Vu8;
+use common_datavalues::StringType;
 use common_legacy_planners::AlterTableClusterKeyPlan;
 use common_legacy_planners::AlterUserPlan;
 use common_legacy_planners::AlterUserUDFPlan;
@@ -132,6 +131,12 @@ pub enum Plan {
     Explain {
         kind: ExplainKind,
         plan: Box<Plan>,
+    },
+    ExplainAst {
+        formatted_string: String,
+    },
+    ExplainSyntax {
+        formatted_sql: String,
     },
 
     // Copy
@@ -293,6 +298,8 @@ impl Display for Plan {
             Plan::ShowShares(_) => write!(f, "ShowShares"),
             Plan::ShowObjectGrantPrivileges(_) => write!(f, "ShowObjectGrantPrivileges"),
             Plan::ShowGrantTenantsOfShare(_) => write!(f, "ShowGrantTenantsOfShare"),
+            Plan::ExplainAst { .. } => write!(f, "ExplainAst"),
+            Plan::ExplainSyntax { .. } => write!(f, "ExplainSyntax"),
         }
     }
 }
@@ -307,8 +314,8 @@ impl Plan {
                 bind_context,
                 ..
             } => bind_context.output_schema(),
-            Plan::Explain { kind: _, plan: _ } => {
-                DataSchemaRefExt::create(vec![DataField::new("explain", Vu8::to_data_type())])
+            Plan::Explain { .. } | Plan::ExplainAst { .. } | Plan::ExplainSyntax { .. } => {
+                DataSchemaRefExt::create(vec![DataField::new("explain", StringType::new_impl())])
             }
             Plan::Copy(_) => Arc::new(DataSchema::empty()),
             Plan::ShowCreateDatabase(plan) => plan.schema(),
