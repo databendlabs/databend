@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use tracing::error;
 
 use super::interpreter_share_desc::DescShareInterpreter;
 use super::interpreter_user_stage_drop::DropUserStageInterpreter;
@@ -45,7 +46,9 @@ impl InterpreterFactoryV2 {
     pub fn get(ctx: Arc<QueryContext>, plan: &Plan) -> Result<InterpreterPtr> {
         // Check the access permission.
         let access_checker = Accessor::create(ctx.clone());
-        access_checker.check_new(plan)?;
+        access_checker
+            .check_new(plan)
+            .map(|e| error!("Access.denied(v2): {:?}", e))?;
 
         let inner = InterpreterFactoryV2::create_interpreter(ctx.clone(), plan)?;
 
