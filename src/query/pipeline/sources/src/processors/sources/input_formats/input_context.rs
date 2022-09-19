@@ -94,6 +94,9 @@ impl InputContext {
         files: Vec<String>,
         scan_progress: Arc<Progress>,
     ) -> Result<Self> {
+        if files.is_empty() {
+            return Err(ErrorCode::BadArguments("no file to copy"));
+        }
         let plan = Box::new(CopyIntoPlan { stage_info, files });
         let read_batch_size = 1024 * 1024;
         let split_size = 128usize * 1024 * 1024;
