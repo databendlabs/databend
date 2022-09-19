@@ -14,6 +14,7 @@ common-config = { path = "../config" }
 common-exception = { path = "../../common/exception" }
 common-meta-types = { path = "../../meta/types" }
 common-users = { path = "../users" }
+common-base = { path = "../../common/base" }
 
 futures = "0.3.21"
 itertools = "0.10.3"
