@@ -42,7 +42,7 @@ async fn test_setting_interpreter_error() -> Result<()> {
 
     let query = "SET max_block_size=1";
     let (plan, _, _) = planner.plan_sql(query).await?;
-    let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+    let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
     if let Err(e) = executor.execute(ctx.clone()).await {
         let expect = "Code: 1020, displayText = Unknown variable: \"xx\".";
         assert_eq!(expect, e.to_string());
