@@ -64,10 +64,7 @@ impl UserSettingValue {
     pub fn as_string(&self) -> Result<String> {
         match self {
             UserSettingValue::String(v) => Ok(v.to_owned()),
-            other => Result::Err(ErrorCode::BadDataValueType(format!(
-                "Unexpected type:{:?} to get u64 number",
-                other
-            ))),
+            UserSettingValue::UInt64(v) => Ok(format!("{}", v)),
         }
     }
 }
