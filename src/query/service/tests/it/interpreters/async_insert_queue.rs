@@ -134,7 +134,7 @@ async fn test_async_insert_queue() -> Result<()> {
     {
         let query = "select * from default.test";
         let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone()).await?;
         let stream = executor.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
@@ -390,7 +390,7 @@ async fn test_async_insert_queue_no_wait() -> Result<()> {
     {
         let query = "select * from default.test";
         let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone()).await?;
         let stream = executor.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![

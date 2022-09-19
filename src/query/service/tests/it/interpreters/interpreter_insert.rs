@@ -53,7 +53,7 @@ async fn test_insert_into_interpreter() -> Result<()> {
         {
             let query = "insert into default.default_value_table(a) values('a')";
             let plan = PlanParser::parse(ctx.clone(), query).await?;
-            let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+            let executor = InterpreterFactory::get(ctx.clone(), plan.clone()).await?;
             let _ = executor.execute(ctx.clone()).await?;
         }
 
@@ -61,7 +61,7 @@ async fn test_insert_into_interpreter() -> Result<()> {
         {
             let query = "insert into default.default_value_table(a) select a from default.default_value_table";
             let plan = PlanParser::parse(ctx.clone(), query).await?;
-            let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+            let executor = InterpreterFactory::get(ctx.clone(), plan.clone()).await?;
             let _ = executor.execute(ctx.clone()).await?;
         }
 
@@ -88,7 +88,7 @@ async fn test_insert_into_interpreter() -> Result<()> {
     {
         let query = "insert into default.input_table values(1,1,1,1,1), (2,2,2,2,2)";
         let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone()).await?;
         let _ = executor.execute(ctx.clone()).await?;
     }
 
@@ -97,7 +97,7 @@ async fn test_insert_into_interpreter() -> Result<()> {
         let query = "insert into default.output_table select * from default.input_table";
 
         let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone()).await?;
         let _ = executor.execute(ctx.clone()).await?;
     }
 

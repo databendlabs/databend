@@ -256,7 +256,7 @@ impl ExecuteState {
             };
 
             is_select = matches!(&plan, PlanNode::Select(_));
-            InterpreterFactory::get(ctx.clone(), plan)
+            InterpreterFactory::get(ctx.clone(), plan).await
         }?;
 
         if is_v2 && is_select {

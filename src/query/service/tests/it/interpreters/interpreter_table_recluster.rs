@@ -36,7 +36,7 @@ async fn test_alter_recluster_interpreter() -> Result<()> {
     {
         let query = "insert into default.t values(1,1),(3,3)";
         let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone()).await?;
         let _ = executor.execute(ctx.clone()).await?;
     }
 
@@ -44,7 +44,7 @@ async fn test_alter_recluster_interpreter() -> Result<()> {
     {
         let query = "insert into default.t values(2,2),(5,5)";
         let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone()).await?;
         let _ = executor.execute(ctx.clone()).await?;
     }
 
@@ -52,7 +52,7 @@ async fn test_alter_recluster_interpreter() -> Result<()> {
     {
         let query = "insert into default.t values(4,4)";
         let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone()).await?;
         let _ = executor.execute(ctx.clone()).await?;
     }
 

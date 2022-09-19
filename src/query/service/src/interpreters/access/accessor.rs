@@ -26,7 +26,7 @@ use crate::sql::plans::Plan;
 pub trait AccessChecker: Sync + Send {
     // Check the access permission for the old plan.
     // TODO(bohu): Remove after new plan done.
-    fn check(&self, plan: &PlanNode) -> Result<()>;
+    async fn check(&self, plan: &PlanNode) -> Result<()>;
 
     // Check the access permission for the old plan.
     async fn check_new(&self, _plan: &Plan) -> Result<()>;
@@ -43,9 +43,9 @@ impl Accessor {
         Accessor { accessors }
     }
 
-    pub fn check(&self, plan: &PlanNode) -> Result<()> {
+    pub async fn check(&self, plan: &PlanNode) -> Result<()> {
         for accessor in self.accessors.values() {
-            accessor.check(plan)?;
+            accessor.check(plan).await?;
         }
         Ok(())
     }

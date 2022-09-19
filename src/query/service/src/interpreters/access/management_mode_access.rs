@@ -36,7 +36,7 @@ impl ManagementModeAccess {
 #[async_trait::async_trait]
 impl AccessChecker for ManagementModeAccess {
     // Check what we can do if in management mode.
-    fn check(&self, plan: &PlanNode) -> Result<()> {
+    async fn check(&self, plan: &PlanNode) -> Result<()> {
         // Allows for management-mode.
         if self.ctx.get_config().query.management_mode {
             return match plan {
