@@ -18,6 +18,7 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_legacy_planners::PlanNode;
 
+use crate::interpreters::access::PrivilegeAccess;
 use crate::interpreters::ManagementModeAccess;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
@@ -39,7 +40,11 @@ pub struct Accessor {
 impl Accessor {
     pub fn create(ctx: Arc<QueryContext>) -> Self {
         let mut accessors: HashMap<String, Box<dyn AccessChecker>> = Default::default();
-        accessors.insert("management".to_string(), ManagementModeAccess::create(ctx));
+        accessors.insert(
+            "management".to_string(),
+            ManagementModeAccess::create(ctx.clone()),
+        );
+        accessors.insert("privilege".to_string(), PrivilegeAccess::create(ctx));
         Accessor { accessors }
     }
 

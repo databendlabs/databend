@@ -18,8 +18,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_legacy_planners::DropTablePlan;
 use common_legacy_planners::TruncateTablePlan;
-use common_meta_types::GrantObject;
-use common_meta_types::UserPrivilegeType;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -53,14 +51,6 @@ impl Interpreter for DropTableInterpreter {
             .get_table(catalog_name, db_name, tbl_name)
             .await
             .ok();
-
-        self.ctx
-            .get_current_session()
-            .validate_privilege(
-                &GrantObject::Database(catalog_name.into(), db_name.into()),
-                UserPrivilegeType::Drop,
-            )
-            .await?;
 
         if let Some(table) = &tbl {
             if table.get_table_info().engine() == VIEW_ENGINE {
