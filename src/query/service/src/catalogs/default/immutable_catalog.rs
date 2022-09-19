@@ -25,6 +25,8 @@ use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropTableReq;
+use common_meta_app::schema::GetTableCopiedFileReply;
+use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
@@ -38,6 +40,8 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
+use common_meta_app::schema::UpsertTableCopiedFileReply;
+use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MetaId;
@@ -190,6 +194,26 @@ impl Catalog for ImmutableCatalog {
         Err(ErrorCode::UnImplement(
             "Cannot count tables in system database",
         ))
+    }
+
+    async fn get_table_copied_file_info(
+        &self,
+        req: GetTableCopiedFileReq,
+    ) -> Result<GetTableCopiedFileReply> {
+        Err(ErrorCode::UnImplement(format!(
+            "get_table_copied_file_info not allowed for system database {:?}",
+            req
+        )))
+    }
+
+    async fn upsert_table_copied_file_info(
+        &self,
+        req: UpsertTableCopiedFileReq,
+    ) -> Result<UpsertTableCopiedFileReply> {
+        Err(ErrorCode::UnImplement(format!(
+            "upsert_table_copied_file_info not allowed for system database {:?}",
+            req
+        )))
     }
 
     async fn upsert_table_option(

@@ -35,6 +35,8 @@ use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropTableReq;
+use common_meta_app::schema::GetTableCopiedFileReply;
+use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
@@ -48,6 +50,8 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
+use common_meta_app::schema::UpsertTableCopiedFileReply;
+use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::*;
@@ -330,6 +334,20 @@ impl Catalog for HiveCatalog {
         Err(ErrorCode::UnImplement(
             "Cannot update table meta in HIVE catalog",
         ))
+    }
+
+    async fn get_table_copied_file_info(
+        &self,
+        _req: GetTableCopiedFileReq,
+    ) -> Result<GetTableCopiedFileReply> {
+        unimplemented!()
+    }
+
+    async fn upsert_table_copied_file_info(
+        &self,
+        _req: UpsertTableCopiedFileReq,
+    ) -> Result<UpsertTableCopiedFileReply> {
+        unimplemented!()
     }
 
     async fn count_tables(&self, _req: CountTablesReq) -> Result<CountTablesReply> {
