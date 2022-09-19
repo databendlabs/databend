@@ -238,14 +238,14 @@ impl TableEntry {
 
 #[derive(Clone, Debug)]
 pub struct ColumnEntry {
-    pub column_index: IndexType,
-    pub name: String,
-    pub data_type: DataTypeImpl,
+    column_index: IndexType,
+    name: String,
+    data_type: DataTypeImpl,
 
     /// Table index of column entry. None if column is derived from a subquery.
-    pub table_index: Option<IndexType>,
+    table_index: Option<IndexType>,
     /// Path indices for inner column of struct data type.
-    pub path_indices: Option<Vec<IndexType>>,
+    path_indices: Option<Vec<IndexType>>,
 }
 
 impl ColumnEntry {
@@ -263,6 +263,36 @@ impl ColumnEntry {
             table_index,
             path_indices,
         }
+    }
+
+    /// Get the name of this column entry.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Get the index of this column entry.
+    pub fn index(&self) -> IndexType {
+        self.column_index
+    }
+
+    /// Get the data type of this column entry.
+    pub fn data_type(&self) -> &DataTypeImpl {
+        &self.data_type
+    }
+
+    /// Get the table index of this column entry.
+    pub fn table_index(&self) -> Option<IndexType> {
+        self.table_index
+    }
+
+    /// Get the path indices of this column entry.
+    pub fn path_indices(&self) -> Option<&[IndexType]> {
+        self.path_indices.as_deref()
+    }
+
+    /// Check if this column entry contains path_indices
+    pub fn has_path_indices(&self) -> bool {
+        self.path_indices.is_some()
     }
 }
 

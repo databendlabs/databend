@@ -63,11 +63,9 @@ where ExpressionBuilder<T>: FiledNameFormat
 
     pub fn build_and_rename(&self, scalar: &Scalar, index: IndexType) -> Result<Expression> {
         let expr = self.build(scalar)?;
-        let name = self.metadata.read().column(index).name.clone();
-        Ok(Expression::Alias(
-            Self::format(name.as_str(), index),
-            Box::new(expr),
-        ))
+        let metadata = self.metadata.read();
+        let name = metadata.column(index).name();
+        Ok(Expression::Alias(Self::format(name, index), Box::new(expr)))
     }
 
     pub fn build(&self, scalar: &Scalar) -> Result<Expression> {
@@ -137,8 +135,9 @@ where ExpressionBuilder<T>: FiledNameFormat
     }
 
     pub fn build_column_ref(&self, index: IndexType) -> Result<Expression> {
-        let name = self.metadata.read().column(index).name.clone();
-        Ok(Expression::Column(Self::format(name.as_str(), index)))
+        let metadata = self.metadata.read();
+        let name = metadata.column(index).name();
+        Ok(Expression::Column(Self::format(name, index)))
     }
 
     pub fn build_literal(

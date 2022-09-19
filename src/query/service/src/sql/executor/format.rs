@@ -135,7 +135,7 @@ fn project_to_format_tree(
         .columns
         .iter()
         .sorted()
-        .map(|column| format!("{} (#{})", metadata.read().column(*column).name, column))
+        .map(|column| format!("{} (#{})", metadata.read().column(*column).name(), column))
         .collect::<Vec<_>>()
         .join(", ");
     Ok(FormatTreeNode::with_children("Project".to_string(), vec![
@@ -173,7 +173,7 @@ fn aggregate_partial_to_format_tree(
         .map(|column| {
             let index = column.parse::<IndexType>()?;
             let column = metadata.read().column(index).clone();
-            Ok(column.name)
+            Ok(column.name().to_string())
         })
         .collect::<Result<Vec<_>>>()?
         .join(", ");
@@ -204,7 +204,7 @@ fn aggregate_final_to_format_tree(
         .map(|column| {
             let index = column.parse::<IndexType>()?;
             let column = metadata.read().column(index).clone();
-            Ok(column.name)
+            Ok(column.name().to_string())
         })
         .collect::<Result<Vec<_>>>()?
         .join(", ");
@@ -234,7 +234,7 @@ fn sort_to_format_tree(plan: &Sort, metadata: &MetadataRef) -> Result<FormatTree
             let column = metadata.read().column(index).clone();
             Ok(format!(
                 "{} {} {}",
-                column.name,
+                column.name(),
                 if sort_key.asc { "ASC" } else { "DESC" },
                 if sort_key.nulls_first {
                     "NULLS FIRST"

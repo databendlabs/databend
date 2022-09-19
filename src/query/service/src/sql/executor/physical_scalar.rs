@@ -70,13 +70,13 @@ impl PhysicalScalar {
 
                 let index = column_id.parse::<IndexType>()?;
                 let column = metadata.read().column(index).clone();
-                let table_name = match column.table_index {
+                let table_name = match column.table_index() {
                     Some(table_index) => {
                         format!("{}.", metadata.read().table(table_index).name())
                     }
                     None => "".to_string(),
                 };
-                Ok(format!("{}{} (#{})", table_name, column.name, index))
+                Ok(format!("{}{} (#{})", table_name, column.name(), index))
             }
             PhysicalScalar::Constant { value, .. } => Ok(value.to_string()),
             PhysicalScalar::Function { name, args, .. } => {
@@ -114,7 +114,7 @@ impl AggregateFunctionDesc {
                 .map(|arg| {
                     let index = arg.parse::<IndexType>()?;
                     let column = metadata.read().column(index).clone();
-                    Ok(column.name)
+                    Ok(column.name().to_string())
                 })
                 .collect::<Result<Vec<_>>>()?
                 .join(", ")

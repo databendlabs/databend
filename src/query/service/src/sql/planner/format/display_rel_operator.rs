@@ -270,7 +270,7 @@ fn physical_scan_to_format_tree(
                             .iter()
                             .map(|item| format!(
                                 "{} (#{}) {}",
-                                metadata.read().column(item.index).name.clone(),
+                                metadata.read().column(item.index).name(),
                                 item.index,
                                 if item.asc { "ASC" } else { "DESC" }
                             ))
@@ -328,7 +328,7 @@ fn logical_get_to_format_tree(
                             .iter()
                             .map(|item| format!(
                                 "{} (#{}) {}",
-                                metadata.read().column(item.index).name.clone(),
+                                metadata.read().column(item.index).name(),
                                 item.index,
                                 if item.asc { "ASC" } else { "DESC" }
                             ))
@@ -560,7 +560,7 @@ fn project_to_format_tree(
         .read()
         .columns()
         .iter()
-        .map(|entry| format!("{} (#{})", entry.name.clone(), entry.column_index))
+        .map(|entry| format!("{} (#{})", entry.name(), entry.index()))
         .collect::<Vec<String>>();
     // Sorted by column index to make display of Project stable
     let project_columns = op
@@ -595,7 +595,8 @@ fn sort_to_format_tree(
         .items
         .iter()
         .map(|item| {
-            let name = metadata.read().column(item.index).name.clone();
+            let metadata = metadata.read();
+            let name = metadata.column(item.index).name();
             format!(
                 "{} (#{}) {}",
                 name,

@@ -26,6 +26,7 @@ use common_legacy_planners::Extras;
 use common_legacy_planners::PrewhereInfo;
 use common_legacy_planners::Projection;
 use common_legacy_planners::StageKind;
+use common_planner::IndexType;
 use common_planner::Metadata;
 use common_planner::MetadataRef;
 use common_planner::DUMMY_TABLE_INDEX;
@@ -83,7 +84,7 @@ impl PhysicalPlanBuilder {
             let col_indices = columns
                 .iter()
                 .map(|index| {
-                    let name = metadata.column(*index).name.as_str();
+                    let name = metadata.column(*index).name();
                     schema.index_of(name).unwrap()
                 })
                 .sorted()
@@ -94,17 +95,17 @@ impl PhysicalPlanBuilder {
                 .iter()
                 .map(|index| {
                     let column = metadata.column(*index);
-                    match &column.path_indices {
-                        Some(path_indices) => (column.column_index, path_indices.clone()),
+                    match &column.path_indices() {
+                        Some(path_indices) => (column.index(), path_indices.to_vec()),
                         None => {
-                            let name = metadata.column(*index).name.as_str();
+                            let name = metadata.column(*index).name();
                             let idx = schema.index_of(name).unwrap();
-                            (column.column_index, vec![idx])
+                            (column.index(), vec![idx])
                         }
                     }
                 })
                 .sorted()
-                .collect::<BTreeMap<_, _>>();
+                .collect::<BTreeMap<_, Vec<IndexType>>>();
             Projection::InnerColumns(col_indices)
         }
     }
@@ -120,17 +121,17 @@ impl PhysicalPlanBuilder {
                 let metadata = self.metadata.read().clone();
                 for index in scan.columns.iter() {
                     let column = metadata.column(*index);
-                    if column.path_indices.is_some() {
+                    if column.has_path_indices() {
                         has_inner_column = true;
                     }
                     if let Some(prewhere) = &scan.prewhere {
                         // if there is a prewhere optimization,
                         // we can prune `PhysicalScan`'s ouput schema.
                         if prewhere.output_columns.contains(index) {
-                            name_mapping.insert(column.name.clone(), index.to_string());
+                            name_mapping.insert(column.name().to_string(), index.to_string());
                         }
                     } else {
-                        let name = column.name.clone();
+                        let name = column.name().to_string();
                         name_mapping.insert(name, index.to_string());
                     }
                 }

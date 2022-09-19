@@ -295,10 +295,10 @@ impl<'a> Binder {
             let column_binding = ColumnBinding {
                 database_name: Some(database_name.to_string()),
                 table_name: Some(table.name().to_string()),
-                column_name: column.name.clone(),
-                index: column.column_index,
-                data_type: Box::new(column.data_type.clone()),
-                visibility: if column.path_indices.is_some() {
+                column_name: column.name().to_string(),
+                index: column.index(),
+                data_type: Box::new(column.data_type().clone()),
+                visibility: if column.has_path_indices() {
                     Visibility::InVisible
                 } else {
                     Visibility::Visible
@@ -311,7 +311,7 @@ impl<'a> Binder {
             SExpr::create_leaf(
                 LogicalGet {
                     table_index,
-                    columns: columns.into_iter().map(|col| col.column_index).collect(),
+                    columns: columns.into_iter().map(|col| col.index()).collect(),
                     push_down_predicates: None,
                     limit: None,
                     order_by: None,
