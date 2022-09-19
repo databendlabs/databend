@@ -14,11 +14,10 @@
 
 use std::borrow::Cow;
 use std::collections::BTreeMap;
+use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::fmt::{self};
-use std::io::Write;
 use std::ops::Neg;
 
 use decimal_rs::Decimal;
