@@ -17,7 +17,9 @@ use core::fmt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use serde::Deserialize;
+use serde::Deserializer;
 use serde::Serialize;
+use serde::Serializer;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct UserSetting {
@@ -30,7 +32,22 @@ pub struct UserSetting {
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum UserSettingValue {
     UInt64(u64),
+
+    // TO BE COMPATIBLE WITH old version: `String<Vec<u8>>`
+    #[serde(deserialize_with = "deser_str_from_vu8")]
+    #[serde(serialize_with = "str_vu8")]
     String(String),
+}
+
+fn deser_str_from_vu8<'de, D>(deserializer: D) -> std::result::Result<String, D::Error>
+where D: Deserializer<'de> {
+    let s: Vec<u8> = Deserialize::deserialize(deserializer)?;
+    Ok(String::from_utf8(s).unwrap())
+}
+
+fn str_vu8<S>(data: &String, s: S) -> std::result::Result<S::Ok, S::Error>
+where S: Serializer {
+    s.serialize_bytes(data.as_bytes())
 }
 
 impl UserSettingValue {
