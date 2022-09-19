@@ -221,7 +221,9 @@ pub async fn clickhouse_handler_get(
         let format = get_format_from_plan(&plan, format)?;
 
         context.attach_query_str(&sql);
-        let interpreter = InterpreterFactoryV2::get(context.clone(), &plan).map_err(BadRequest)?;
+        let interpreter = InterpreterFactoryV2::get(context.clone(), &plan)
+            .await
+            .map_err(BadRequest)?;
         execute(context, interpreter, plan.schema(), format, None, params)
             .await
             .map_err(InternalServerError)
@@ -233,7 +235,9 @@ pub async fn clickhouse_handler_get(
         context.attach_query_str(&sql);
         let format = get_format_with_default(format, default_format)?;
         let schema = plan.schema();
-        let interpreter = InterpreterFactory::get(context.clone(), plan).map_err(BadRequest)?;
+        let interpreter = InterpreterFactory::get(context.clone(), plan)
+            .await
+            .map_err(BadRequest)?;
         execute(context, interpreter, schema, format, None, params)
             .await
             .map_err(InternalServerError)
@@ -293,7 +297,9 @@ pub async fn clickhouse_handler_post(
         let format = get_format_with_default(fmt, default_format)?;
         let format = get_format_from_plan(&plan, format)?;
         ctx.attach_query_str(&sql);
-        let interpreter = InterpreterFactoryV2::get(ctx.clone(), &plan).map_err(BadRequest)?;
+        let interpreter = InterpreterFactoryV2::get(ctx.clone(), &plan)
+            .await
+            .map_err(BadRequest)?;
 
         execute(ctx, interpreter, plan.schema(), format, None, params)
             .await
@@ -308,7 +314,9 @@ pub async fn clickhouse_handler_post(
         let format = get_format_with_default(format, default_format)?;
 
         let schema = plan.schema();
-        let interpreter = InterpreterFactory::get(ctx.clone(), plan).map_err(BadRequest)?;
+        let interpreter = InterpreterFactory::get(ctx.clone(), plan)
+            .await
+            .map_err(BadRequest)?;
         execute(ctx, interpreter, schema, format, None, params)
             .await
             .map_err(InternalServerError)

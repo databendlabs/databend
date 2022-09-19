@@ -62,7 +62,7 @@ async fn run_query(query_ctx: &Arc<QueryContext>) -> Result<Arc<dyn Interpreter>
         .await?;
     query_ctx.set_current_user(user);
     let plan = PlanParser::parse(query_ctx.clone(), sql).await?;
-    InterpreterFactory::get(query_ctx.clone(), plan)
+    InterpreterFactory::get(query_ctx.clone(), plan).await
 }
 
 #[tokio::test]

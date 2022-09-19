@@ -154,6 +154,10 @@ impl Catalog for MutableCatalog {
         self
     }
 
+    fn is_case_insensitive_db(&self, _: &str) -> bool {
+        unimplemented!()
+    }
+
     async fn get_database(&self, tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
         let db_info = self
             .ctx

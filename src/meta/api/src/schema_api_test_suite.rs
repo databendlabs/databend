@@ -1522,7 +1522,7 @@ impl SchemaApiTestSuite {
                 let ident = TableIdent::new(tb_id, seq);
 
                 let want = TableInfo {
-                    ident: ident.clone(),
+                    ident,
                     desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
                     name: tbl_name.into(),
                     meta: table_meta(created_on),
@@ -1549,7 +1549,7 @@ impl SchemaApiTestSuite {
 
             let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
             let want = TableInfo {
-                ident: tb_ident_2.clone(),
+                ident: tb_ident_2,
                 desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
                 name: tbl_name.into(),
                 meta: table_meta(created_on),
@@ -1584,7 +1584,7 @@ impl SchemaApiTestSuite {
 
             let got = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
             let want = TableInfo {
-                ident: tb_ident_2.clone(),
+                ident: tb_ident_2,
                 desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
                 name: tbl_name.into(),
                 meta: table_meta(created_on),
@@ -1784,7 +1784,7 @@ impl SchemaApiTestSuite {
             let cur_db = mt.get_database(Self::req_get_db(tenant, db1_name)).await?;
             assert!(old_db.ident.seq < cur_db.ident.seq);
             let got = mt.get_table((tenant, db1_name, tb2_name).into()).await?;
-            got.ident.clone()
+            got.ident
         };
 
         info!("--- rename table, ok");
@@ -1796,7 +1796,7 @@ impl SchemaApiTestSuite {
 
             let got = mt.get_table((tenant, db1_name, tb3_name).into()).await?;
             let want = TableInfo {
-                ident: tb_ident.clone(),
+                ident: tb_ident,
                 desc: format!("'{}'.'{}'.'{}'", tenant, db1_name, tb3_name),
                 name: tb3_name.into(),
                 meta: table_meta(created_on),
@@ -1842,7 +1842,7 @@ impl SchemaApiTestSuite {
             let got = mt.get_table((tenant, db1_name, tb2_name).into()).await?;
             assert_ne!(tb_ident.table_id, got.ident.table_id);
             assert_ne!(tb_ident.seq, got.ident.seq);
-            got.ident.clone()
+            got.ident
         };
 
         info!("--- db1,tb2(no_nil) -> db1,tb3(no_nil), error");
@@ -2010,7 +2010,7 @@ impl SchemaApiTestSuite {
                 let ident = TableIdent::new(tb_id, seq);
 
                 let want = TableInfo {
-                    ident: ident.clone(),
+                    ident,
                     desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
                     name: tbl_name.into(),
                     meta: table_meta(created_on),
@@ -2140,7 +2140,7 @@ impl SchemaApiTestSuite {
                 let ident = TableIdent::new(tb_id, seq);
 
                 let want = TableInfo {
-                    ident: ident.clone(),
+                    ident,
                     desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
                     name: tbl_name.into(),
                     meta: table_meta(created_on),
@@ -3128,7 +3128,7 @@ impl SchemaApiTestSuite {
                 let ident = TableIdent::new(tb_id, seq);
 
                 let want = TableInfo {
-                    ident: ident.clone(),
+                    ident,
                     desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
                     name: tbl_name.into(),
                     meta: table_meta(created_on),
