@@ -118,14 +118,19 @@ impl BlockPruner {
                 }
                 let segment_info = segment_reader.read(seg_loc, None, ver).await?;
                 let mut result = Vec::with_capacity(segment_info.blocks.len());
-                if range_filter_pruner.should_keep(&segment_info.summary.col_stats) {
+                if range_filter_pruner.should_keep(
+                    &segment_info.summary.col_stats,
+                    segment_info.summary.row_count,
+                ) {
                     for block_meta in &segment_info.blocks {
                         // prune block using range filter
                         if limiter.exceeded() {
                             // before using bloom index to prune, check if limit already exceeded
                             return Ok(result);
                         }
-                        if range_filter_pruner.should_keep(&block_meta.col_stats) {
+                        if range_filter_pruner
+                            .should_keep(&block_meta.col_stats, block_meta.row_count)
+                        {
                             // prune block using bloom filter
                             if bloom_filter_pruner
                                 .should_keep(

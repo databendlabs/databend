@@ -1,0 +1,59 @@
+statement ok
+DROP DATABASE IF EXISTS db_09_0018;
+
+statement ok
+CREATE DATABASE db_09_0018;
+
+statement ok
+USE db_09_0018;
+
+statement ok
+create table t (a int null);
+
+statement ok
+insert into t select * from numbers(3);
+
+statement ok
+insert into t select null from numbers(3);
+
+statement query T
+explain select * from t;
+
+----
+TableScan
+├── table: default.db_09_0018.t
+├── read rows: 6
+├── read bytes: 62
+├── partitions total: 2
+├── partitions scanned: 2
+└── push downs: [filters: [], limit: NONE]
+
+statement query T
+explain select * from t where a is not null;
+
+----
+TableScan
+├── table: default.db_09_0018.t
+├── read rows: 3
+├── read bytes: 37
+├── partitions total: 2
+├── partitions scanned: 1
+└── push downs: [filters: [is_not_null(a)], limit: NONE] 
+
+statement query T
+explain select * from t where a is null;
+
+----
+TableScan
+├── table: default.db_09_0018.t
+├── read rows: 3
+├── read bytes: 25
+├── partitions total: 2
+├── partitions scanned: 1
+└── push downs: [filters: [not(is_not_null(a))], limit: NONE] 
+
+statement ok
+DROP TABLE t;
+
+statement ok
+DROP DATABASE db_09_0018;
