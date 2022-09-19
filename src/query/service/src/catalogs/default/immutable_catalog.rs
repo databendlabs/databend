@@ -34,6 +34,8 @@ use common_meta_app::schema::RenameTableReq;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_meta_app::schema::TruncateTableReply;
+use common_meta_app::schema::TruncateTableReq;
 use common_meta_app::schema::UndropDatabaseReply;
 use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReply;
@@ -212,6 +214,13 @@ impl Catalog for ImmutableCatalog {
     ) -> Result<UpsertTableCopiedFileReply> {
         Err(ErrorCode::UnImplement(format!(
             "upsert_table_copied_file_info not allowed for system database {:?}",
+            req
+        )))
+    }
+
+    async fn truncate_table(&self, req: TruncateTableReq) -> Result<TruncateTableReply> {
+        Err(ErrorCode::UnImplement(format!(
+            "truncate_table not allowed for system database {:?}",
             req
         )))
     }

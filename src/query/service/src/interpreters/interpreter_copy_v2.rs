@@ -76,6 +76,7 @@ impl CopyInterpreterV2 {
         let mut file_map = BTreeMap::new();
 
         if !force {
+            // if force is false, copy only the files that unmatch to the meta copied files info.
             let resp = catalog.get_table_copied_file_info(req).await?;
             for file in files.iter() {
                 let stage_file = list_files(&self.ctx, &table_info.stage_info, file, "").await?;
@@ -88,12 +89,17 @@ impl CopyInterpreterV2 {
                 if let Some(file_info) = resp.file_info.get(file) {
                     // No need to copy the file again if etag is_some and match.
                     if stage_file.etag.is_some() && stage_file.etag == file_info.etag {
+                        tracing::warn!("ignore copy file {:?} matched by etag", file);
                         continue;
                     }
 
                     if file_info.content_length == stage_file.size
                         && file_info.last_modified == Some(stage_file.last_modified)
                     {
+                        tracing::warn!(
+                            "ignore copy file {:?} matched by content_length and last_modified",
+                            file
+                        );
                         continue;
                     }
                 }
@@ -106,6 +112,7 @@ impl CopyInterpreterV2 {
                 });
             }
         } else {
+            // if force is true, copy all the file.
             for file in files.iter() {
                 let stage_file = list_files(&self.ctx, &table_info.stage_info, file, "").await?;
                 if stage_file.is_empty() {

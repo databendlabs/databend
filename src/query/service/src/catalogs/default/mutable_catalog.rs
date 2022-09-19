@@ -42,6 +42,8 @@ use common_meta_app::schema::RenameTableReq;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_meta_app::schema::TruncateTableReply;
+use common_meta_app::schema::TruncateTableReq;
 use common_meta_app::schema::UndropDatabaseReply;
 use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReply;
@@ -329,6 +331,11 @@ impl Catalog for MutableCatalog {
         req: UpsertTableCopiedFileReq,
     ) -> Result<UpsertTableCopiedFileReply> {
         let res = self.ctx.meta.upsert_table_copied_file_info(req).await?;
+        Ok(res)
+    }
+
+    async fn truncate_table(&self, req: TruncateTableReq) -> Result<TruncateTableReply> {
+        let res = self.ctx.meta.truncate_table(req).await?;
         Ok(res)
     }
 
