@@ -655,7 +655,7 @@ impl JoinHashTable {
 
     pub(crate) fn filter_rows_for_right_join(
         bm: &mut MutableBitmap,
-        build_indexes: &Vec<RowPtr>,
+        build_indexes: &[RowPtr],
         row_state: &mut std::collections::HashMap<RowPtr, usize>,
     ) {
         for (index, row) in build_indexes.iter().enumerate() {

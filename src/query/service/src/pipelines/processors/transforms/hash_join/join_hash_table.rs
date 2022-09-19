@@ -435,13 +435,14 @@ impl JoinHashTable {
     }
 
     fn find_unmatched_build_indexes(&self) -> Result<Vec<RowPtr>> {
-        // For right join, build side will appear at lease once in the joined table
+        // For right join, build side will appear at least once in the joined table
         // Find the unmatched rows in build side
         let mut unmatched_build_indexes = vec![];
         let build_indexes = self.hash_join_desc.right_join_desc.build_indexes.read();
         let build_indexes_set: HashSet<&RowPtr> = build_indexes.iter().collect();
-        let chunks = self.row_space.chunks.read().unwrap();
-        for (chunk_index, chunk) in chunks.iter().enumerate() {
+        // TODO(xudong): remove the line of code below after https://github.com/rust-lang/rust-clippy/issues/8987
+        #[allow(clippy::significant_drop_in_scrutinee)]
+        for (chunk_index, chunk) in self.row_space.chunks.read().unwrap().iter().enumerate() {
             for row_index in 0..chunk.num_rows() {
                 let row_ptr = RowPtr {
                     chunk_index: chunk_index as u32,
@@ -455,7 +456,6 @@ impl JoinHashTable {
                 }
             }
         }
-        drop(chunks);
         Ok(unmatched_build_indexes)
     }
 }
