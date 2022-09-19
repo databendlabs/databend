@@ -105,6 +105,7 @@ impl Plan {
             Plan::ShowShares(p) => Ok(format!("{:?}", p)),
             Plan::ShowObjectGrantPrivileges(p) => Ok(format!("{:?}", p)),
             Plan::ShowGrantTenantsOfShare(p) => Ok(format!("{:?}", p)),
+            Plan::CreateTabularFunction(p) => Ok(format!("{:?}", p)),
         }
     }
 }

@@ -324,6 +324,7 @@ impl<'a> Binder {
             Statement::ShowGrantsOfShare(stmt) => {
                 self.bind_show_grants_of_share(stmt).await?
             }
+            Statement::CreateTabularFunction(stmt)=>todo!()
         };
         Ok(plan)
     }

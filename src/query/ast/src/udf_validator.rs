@@ -21,8 +21,10 @@ use common_functions::is_builtin_function;
 use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::Literal;
+use crate::ast::Query;
 use crate::parser::token::Token;
 use crate::walk_expr;
+use crate::walk_query;
 use crate::Visitor;
 
 #[derive(Default)]
@@ -43,6 +45,40 @@ impl UDFValidator {
         if self.has_recursive {
             return Err(ErrorCode::SyntaxException("Recursive UDF is not supported"));
         }
+        let expr_params = &self.expr_params;
+        let parameters = self.parameters.iter().cloned().collect::<HashSet<_>>();
+
+        let params_not_declared: HashSet<_> = parameters.difference(expr_params).collect();
+        let params_not_used: HashSet<_> = expr_params.difference(&parameters).collect();
+
+        if params_not_declared.is_empty() && params_not_used.is_empty() {
+            return Ok(());
+        }
+
+        Err(ErrorCode::SyntaxException(format!(
+            "{}{}",
+            if params_not_declared.is_empty() {
+                "".to_string()
+            } else {
+                format!("Parameters are not declared: {:?}", params_not_declared)
+            },
+            if params_not_used.is_empty() {
+                "".to_string()
+            } else {
+                format!("Parameters are not used: {:?}", params_not_used)
+            },
+        )))
+    }
+
+    pub fn verify_definition_query(&mut self, definition_query: &Query) -> Result<()> {
+        self.expr_params.clear();
+
+        walk_query(self, definition_query);
+
+        self.validate_params()
+    }
+
+    fn validate_params(&mut self) -> Result<()> {
         let expr_params = &self.expr_params;
         let parameters = self.parameters.iter().cloned().collect::<HashSet<_>>();
 

@@ -16,8 +16,7 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use crate::ast::write_comma_separated_list;
-use crate::ast::CreateTableSource;
-use crate::ast::Expr;
+use crate::ast::ColumnDefinition;
 use crate::ast::Identifier;
 use crate::ast::Query;
 
@@ -25,8 +24,8 @@ use crate::ast::Query;
 pub struct CreateTabularFunctionStmt<'a> {
     pub if_not_exists: bool,
     pub name: Identifier<'a>,
-    pub args: Vec<Expr<'a>>,
-    pub source: Option<CreateTableSource<'a>>,
+    pub args: Option<Vec<ColumnDefinition<'a>>>,
+    pub source: Vec<ColumnDefinition<'a>>,
     pub as_query: Box<Query<'a>>,
 }
 
@@ -39,16 +38,20 @@ impl Display for CreateTabularFunctionStmt<'_> {
         write!(f, "{}", self.name)?;
 
         write!(f, " (")?;
-        if !self.args.is_empty() {
-            write_comma_separated_list(f, &self.args)?;
+        if let Some(args) = &self.args {
+            if !args.is_empty() {
+                write_comma_separated_list(f, args)?;
+            }
         }
         write!(f, ")")?;
 
         write!(f, " RETURNS TABLE")?;
 
-        if let Some(source) = &self.source {
-            write!(f, " {source}")?;
+        write!(f, " (")?;
+        if !self.source.is_empty() {
+            write_comma_separated_list(f, &self.source)?;
         }
+        write!(f, ")")?;
 
         write!(f, " AS {}", self.as_query)?;
 

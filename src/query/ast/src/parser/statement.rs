@@ -882,18 +882,18 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule! {
             CREATE ~ FUNCTION ~ ( IF ~ NOT ~ EXISTS )?
             ~ #ident
-            ~ "(" ~ #comma_separated_list0(expr) ~ ")"
+            ~ "(" ~ #comma_separated_list0(column_def)? ~ ")"
             ~ RETURNS ~ TABLE
-            ~ #create_table_source?
+            ~ "(" ~ #comma_separated_list1(column_def) ~ ")"
             ~ AS ~ #query
         },
-        |(_, _, opt_if_not_exists, name, _, args, _, _, _, source, _, as_query)| {
+        |(_, _, opt_if_not_exists, name, _, opt_args, _, _, _, _, source, _, _, as_query)| {
             Statement::CreateTabularFunction(CreateTabularFunctionStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
                 name,
-                args,
                 source,
                 as_query: Box::new(as_query),
+                args: opt_args,
             })
         },
     );

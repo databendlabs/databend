@@ -15,6 +15,7 @@
 mod aggregate;
 mod copy_v2;
 pub mod create_table_v2;
+mod create_tabular_function;
 mod dummy_table_scan;
 mod eval_scalar;
 mod exchange;
@@ -88,6 +89,7 @@ use common_planner::MetadataRef;
 pub use copy_v2::CopyPlanV2;
 pub use copy_v2::ValidationMode;
 pub use create_table_v2::CreateTablePlanV2;
+pub use create_tabular_function::CreateTabularFunctionPlan;
 pub use dummy_table_scan::DummyTableScan;
 pub use eval_scalar::EvalScalar;
 pub use eval_scalar::ScalarItem;
@@ -217,6 +219,7 @@ pub enum Plan {
     ShowShares(Box<ShowSharesPlan>),
     ShowObjectGrantPrivileges(Box<ShowObjectGrantPrivilegesPlan>),
     ShowGrantTenantsOfShare(Box<ShowGrantTenantsOfSharePlan>),
+    CreateTabularFunction(Box<CreateTabularFunctionPlan>),
 }
 
 #[derive(Clone, Debug)]
@@ -299,6 +302,7 @@ impl Display for Plan {
             Plan::ShowGrantTenantsOfShare(_) => write!(f, "ShowGrantTenantsOfShare"),
             Plan::ExplainAst { .. } => write!(f, "ExplainAst"),
             Plan::ExplainSyntax { .. } => write!(f, "ExplainSyntax"),
+            Plan::CreateTabularFunction(_) => write!(f, "CreateTabularFunction"),
         }
     }
 }
@@ -370,6 +374,7 @@ impl Plan {
             Plan::ShowShares(plan) => plan.schema(),
             Plan::ShowObjectGrantPrivileges(plan) => plan.schema(),
             Plan::ShowGrantTenantsOfShare(plan) => plan.schema(),
+            Plan::CreateTabularFunction(plan) => plan.schema(),
         }
     }
 }

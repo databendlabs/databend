@@ -208,6 +208,7 @@ impl AccessChecker for PrivilegeAccess {
             Plan::ShowGrantTenantsOfShare(_) => {}
             Plan::ExplainAst { .. } => {}
             Plan::ExplainSyntax { .. } => {}
+            Plan::CreateTabularFunction(_) => {}
         }
 
         Ok(())

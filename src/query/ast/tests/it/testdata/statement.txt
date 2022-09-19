@@ -6395,23 +6395,21 @@ CreateTabularFunction(
             quote: None,
             span: Ident(16..17),
         },
-        args: [],
-        source: Some(
-            Columns(
-                [
-                    ColumnDefinition {
-                        name: Identifier {
-                            name: "a",
-                            quote: None,
-                            span: Ident(36..37),
-                        },
-                        data_type: Int32,
-                        default_expr: None,
-                        comment: None,
-                    },
-                ],
-            ),
+        args: Some(
+            [],
         ),
+        source: [
+            ColumnDefinition {
+                name: Identifier {
+                    name: "a",
+                    quote: None,
+                    span: Ident(36..37),
+                },
+                data_type: Int32,
+                default_expr: None,
+                comment: None,
+            },
+        ],
         as_query: Query {
             span: [
                 SELECT(46..52),
@@ -6477,9 +6475,9 @@ CreateTabularFunction(
 
 
 ---------- Input ----------
-CREATE FUNCTION t (a, b) RETURNS TABLE (a INT) AS select a from t where b=a and c=b;
+CREATE FUNCTION t (a INT, b VARCHAR) RETURNS TABLE (a INT) AS select a from t where b=a and c=b;
 ---------- Output ---------
-CREATE FUNCTION t (a, b) RETURNS TABLE (a Int32 NOT NULL) AS SELECT a FROM t WHERE b = a AND c = b
+CREATE FUNCTION t (a Int32 NOT NULL, b STRING NOT NULL) RETURNS TABLE (a Int32 NOT NULL) AS SELECT a FROM t WHERE b = a AND c = b
 ---------- AST ------------
 CreateTabularFunction(
     CreateTabularFunctionStmt {
@@ -6489,93 +6487,87 @@ CreateTabularFunction(
             quote: None,
             span: Ident(16..17),
         },
-        args: [
-            ColumnRef {
-                span: [
-                    Ident(19..20),
-                ],
-                database: None,
-                table: None,
-                column: Identifier {
+        args: Some(
+            [
+                ColumnDefinition {
+                    name: Identifier {
+                        name: "a",
+                        quote: None,
+                        span: Ident(19..20),
+                    },
+                    data_type: Int32,
+                    default_expr: None,
+                    comment: None,
+                },
+                ColumnDefinition {
+                    name: Identifier {
+                        name: "b",
+                        quote: None,
+                        span: Ident(26..27),
+                    },
+                    data_type: String,
+                    default_expr: None,
+                    comment: None,
+                },
+            ],
+        ),
+        source: [
+            ColumnDefinition {
+                name: Identifier {
                     name: "a",
                     quote: None,
-                    span: Ident(19..20),
+                    span: Ident(52..53),
                 },
-            },
-            ColumnRef {
-                span: [
-                    Ident(22..23),
-                ],
-                database: None,
-                table: None,
-                column: Identifier {
-                    name: "b",
-                    quote: None,
-                    span: Ident(22..23),
-                },
+                data_type: Int32,
+                default_expr: None,
+                comment: None,
             },
         ],
-        source: Some(
-            Columns(
-                [
-                    ColumnDefinition {
-                        name: Identifier {
-                            name: "a",
-                            quote: None,
-                            span: Ident(40..41),
-                        },
-                        data_type: Int32,
-                        default_expr: None,
-                        comment: None,
-                    },
-                ],
-            ),
-        ),
         as_query: Query {
             span: [
-                SELECT(50..56),
-                Ident(57..58),
-                FROM(59..63),
-                Ident(64..65),
-                WHERE(66..71),
-                Ident(72..73),
-                Eq(73..74),
-                Ident(74..75),
-                AND(76..79),
-                Ident(80..81),
-                Eq(81..82),
-                Ident(82..83),
+                SELECT(62..68),
+                Ident(69..70),
+                FROM(71..75),
+                Ident(76..77),
+                WHERE(78..83),
+                Ident(84..85),
+                Eq(85..86),
+                Ident(86..87),
+                AND(88..91),
+                Ident(92..93),
+                Eq(93..94),
+                Ident(94..95),
             ],
             with: None,
             body: Select(
                 SelectStmt {
                     span: [
-                        SELECT(50..56),
-                        Ident(57..58),
-                        FROM(59..63),
-                        Ident(64..65),
-                        WHERE(66..71),
-                        Ident(72..73),
-                        Eq(73..74),
-                        Ident(74..75),
-                        AND(76..79),
-                        Ident(80..81),
-                        Eq(81..82),
-                        Ident(82..83),
+                        SELECT(62..68),
+                        Ident(69..70),
+                        FROM(71..75),
+                        Ident(76..77),
+                        WHERE(78..83),
+                        Ident(84..85),
+                        Eq(85..86),
+                        Ident(86..87),
+                        AND(88..91),
+                        Ident(92..93),
+                        Eq(93..94),
+                        Ident(94..95),
                     ],
                     distinct: false,
                     select_list: [
                         AliasedExpr {
                             expr: ColumnRef {
                                 span: [
-                                    Ident(57..58),
+                                    Ident(69..70),
                                 ],
                                 database: None,
                                 table: None,
                                 column: Identifier {
                                     name: "a",
                                     quote: None,
-                                    span: Ident(57..58),
+                                    span: Ident(69..70),
                                 },
                             },
                             alias: None,
@@ -6584,14 +6576,14 @@ CreateTabularFunction(
                     from: [
                         Table {
                             span: [
-                                Ident(64..65),
+                                Ident(76..77),
                             ],
                             catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "t",
                                 quote: None,
-                                span: Ident(64..65),
+                                span: Ident(76..77),
                             },
                             alias: None,
                             travel_point: None,
@@ -6600,66 +6592,66 @@ CreateTabularFunction(
                     selection: Some(
                         BinaryOp {
                             span: [
-                                AND(76..79),
+                                AND(88..91),
                             ],
                             op: And,
                             left: BinaryOp {
                                 span: [
-                                    Eq(73..74),
+                                    Eq(85..86),
                                 ],
                                 op: Eq,
                                 left: ColumnRef {
                                     span: [
-                                        Ident(72..73),
+                                        Ident(84..85),
                                     ],
                                     database: None,
                                     table: None,
                                     column: Identifier {
                                         name: "b",
                                         quote: None,
-                                        span: Ident(72..73),
+                                        span: Ident(84..85),
                                     },
                                 },
                                 right: ColumnRef {
                                     span: [
-                                        Ident(74..75),
+                                        Ident(86..87),
                                     ],
                                     database: None,
                                     table: None,
                                     column: Identifier {
                                         name: "a",
                                         quote: None,
-                                        span: Ident(74..75),
+                                        span: Ident(86..87),
                                     },
                                 },
                             },
                             right: BinaryOp {
                                 span: [
-                                    Eq(81..82),
+                                    Eq(93..94),
                                 ],
                                 op: Eq,
                                 left: ColumnRef {
                                     span: [
-                                        Ident(80..81),
+                                        Ident(92..93),
                                     ],
                                     database: None,
                                     table: None,
                                     column: Identifier {
                                         name: "c",
                                         quote: None,
-                                        span: Ident(80..81),
+                                        span: Ident(92..93),
                                     },
                                 },
                                 right: ColumnRef {
                                     span: [
-                                        Ident(82..83),
+                                        Ident(94..95),
                                     ],
                                     database: None,
                                     table: None,
                                     column: Identifier {
                                         name: "b",
                                         quote: None,
-                                        span: Ident(82..83),
+                                        span: Ident(94..95),
                                     },
                                 },
                             },

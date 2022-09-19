@@ -49,7 +49,6 @@ mod with;
 pub mod error_context;
 mod principal_identity;
 mod proto_display;
-mod user_tabular_function;
 
 // reexport
 
@@ -186,5 +185,4 @@ pub use user_quota::UserQuota;
 pub use user_setting::UserSetting;
 pub use user_setting::UserSettingValue;
 pub use user_stage::*;
-pub use user_tabular_function::UserTabularFunction;
 pub use with::With;
