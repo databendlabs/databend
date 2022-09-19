@@ -23,3 +23,4 @@
 
 mod metadata;
 pub use metadata::IndexType;
+pub use metadata::DUMMY_TABLE_INDEX;

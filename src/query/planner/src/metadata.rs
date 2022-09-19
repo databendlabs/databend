@@ -16,3 +16,6 @@
 ///
 /// This type will be used across the whole planner.
 pub type IndexType = usize;
+
+/// Use IndexType::MAX to represent dummy table.
+pub static DUMMY_TABLE_INDEX: IndexType = IndexType::MAX;

@@ -25,8 +25,6 @@ use parking_lot::RwLock;
 use crate::sql::optimizer::ColumnSet;
 use crate::storages::Table;
 
-pub static DUMMY_TABLE_INDEX: IndexType = IndexType::MAX;
-
 pub type MetadataRef = Arc<RwLock<Metadata>>;
 
 #[derive(Clone)]

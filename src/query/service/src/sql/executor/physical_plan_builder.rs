@@ -26,6 +26,7 @@ use common_legacy_planners::Extras;
 use common_legacy_planners::PrewhereInfo;
 use common_legacy_planners::Projection;
 use common_legacy_planners::StageKind;
+use common_planner::DUMMY_TABLE_INDEX;
 use common_storages_fuse::TableContext;
 use itertools::Itertools;
 
@@ -60,7 +61,6 @@ use crate::sql::plans::Scalar;
 use crate::sql::Metadata;
 use crate::sql::MetadataRef;
 use crate::sql::ScalarExpr;
-use crate::sql::DUMMY_TABLE_INDEX;
 use crate::storages::ToReadDataSourcePlan;
 
 pub struct PhysicalPlanBuilder {
