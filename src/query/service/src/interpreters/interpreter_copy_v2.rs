@@ -87,20 +87,26 @@ impl CopyInterpreterV2 {
                 let stage_file = &stage_file[0];
 
                 if let Some(file_info) = resp.file_info.get(file) {
-                    // No need to copy the file again if etag is_some and match.
-                    if stage_file.etag.is_some() && stage_file.etag == file_info.etag {
-                        tracing::warn!("ignore copy file {:?} matched by etag", file);
-                        continue;
-                    }
-
-                    if file_info.content_length == stage_file.size
-                        && file_info.last_modified == Some(stage_file.last_modified)
-                    {
-                        tracing::warn!(
-                            "ignore copy file {:?} matched by content_length and last_modified",
-                            file
-                        );
-                        continue;
+                    match &file_info.etag {
+                        Some(_etag) => {
+                            // No need to copy the file again if etag is_some and match.
+                            if stage_file.etag == file_info.etag {
+                                tracing::warn!("ignore copy file {:?} matched by etag", file);
+                                continue;
+                            }
+                        }
+                        None => {
+                            // etag is none, compare with content_length and last_modified.
+                            if file_info.content_length == stage_file.size
+                                && file_info.last_modified == Some(stage_file.last_modified)
+                            {
+                                tracing::warn!(
+                                    "ignore copy file {:?} matched by content_length and last_modified",
+                                    file
+                                );
+                                continue;
+                            }
+                        }
                     }
                 }
 
