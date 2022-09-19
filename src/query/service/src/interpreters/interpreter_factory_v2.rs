@@ -43,11 +43,12 @@ impl InterpreterFactoryV2 {
         matches!(stmt, DfStatement::SeeYouAgain)
     }
 
-    pub fn get(ctx: Arc<QueryContext>, plan: &Plan) -> Result<InterpreterPtr> {
+    pub async fn get(ctx: Arc<QueryContext>, plan: &Plan) -> Result<InterpreterPtr> {
         // Check the access permission.
         let access_checker = Accessor::create(ctx.clone());
         access_checker
             .check_new(plan)
+            .await
             .map(|e| error!("Access.denied(v2): {:?}", e))?;
 
         let inner = InterpreterFactoryV2::create_interpreter(ctx.clone(), plan)?;

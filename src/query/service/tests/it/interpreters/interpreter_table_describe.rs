@@ -33,7 +33,7 @@ async fn interpreter_describe_table_test() -> Result<()> {
         ";
 
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         let _ = executor.execute(ctx.clone()).await?;
     }
 
@@ -41,7 +41,7 @@ async fn interpreter_describe_table_test() -> Result<()> {
     {
         let query = "DESCRIBE a";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         assert_eq!(executor.name(), "DescribeTableInterpreter");
 
         let stream = executor.execute(ctx.clone()).await?;
@@ -64,7 +64,7 @@ async fn interpreter_describe_table_test() -> Result<()> {
     {
         let query = "show fields from a";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         assert_eq!(executor.name(), "DescribeTableInterpreter");
 
         let stream = executor.execute(ctx.clone()).await?;

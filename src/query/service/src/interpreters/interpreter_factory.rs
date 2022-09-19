@@ -36,11 +36,12 @@ pub struct InterpreterFactory;
 /// InterpreterFactory provides `get` method which transforms the PlanNode into the corresponding interpreter.
 /// Such as: SelectPlan -> SelectInterpreter, ExplainPlan -> ExplainInterpreter, ...
 impl InterpreterFactory {
-    pub fn get(ctx: Arc<QueryContext>, plan: PlanNode) -> Result<Arc<dyn Interpreter>> {
+    pub async fn get(ctx: Arc<QueryContext>, plan: PlanNode) -> Result<Arc<dyn Interpreter>> {
         // Check the access permission.
         let access_checker = Accessor::create(ctx.clone());
         access_checker
             .check(&plan)
+            .await
             .map(|e| error!("Access.denied(v1): {:?}", e))?;
 
         let inner = Self::create_interpreter(ctx.clone(), &plan)?;
