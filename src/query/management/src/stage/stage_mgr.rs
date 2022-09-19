@@ -145,7 +145,7 @@ impl StageApi for StageMgr {
                 else_then: vec![],
             };
             let tx_reply = self.kv_api.transaction(txn_req).await?;
-            let res: std::result::Result<_, MetaError> = tx_reply.into();
+            let res: Result<_, MetaError> = tx_reply.into();
             let (succ, _) = res?;
 
             if succ {
@@ -208,7 +208,7 @@ impl StageApi for StageMgr {
                 else_then: vec![],
             };
             let tx_reply = self.kv_api.transaction(txn_req).await?;
-            let res: std::result::Result<_, MetaError> = tx_reply.into();
+            let res: Result<_, MetaError> = tx_reply.into();
             let (succ, _) = res?;
 
             if succ {
@@ -274,7 +274,7 @@ impl StageApi for StageMgr {
                 else_then: vec![],
             };
             let tx_reply = self.kv_api.transaction(txn_req).await?;
-            let res: std::result::Result<_, MetaError> = tx_reply.into();
+            let res: Result<_, MetaError> = tx_reply.into();
             let (succ, _) = res?;
 
             if succ {
