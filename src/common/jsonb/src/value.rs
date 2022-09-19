@@ -214,11 +214,9 @@ impl<'a> Value<'a> {
     }
 
     /// Attempts to serialize the JSONB Value into a byte stream.
-    pub fn to_writer<W: Write>(&self, mut writer: W) -> Result<(), Error> {
-        let mut buf = Vec::new();
-        let mut encoder = Encoder::new(&mut buf);
+    pub fn to_vec(&self, buf: &mut Vec<u8>) -> Result<(), Error> {
+        let mut encoder = Encoder::new(buf);
         encoder.encode(self)?;
-        writer.write_all(&buf)?;
         Ok(())
     }
 }
