@@ -120,7 +120,7 @@ async fn test_limit_push_down() -> Result<()> {
         let actual = format!("{:?}", plan);
         assert_eq!(test.expect, actual, "{:#?}", test.name);
 
-        let executor = InterpreterFactory::get(ctx.clone(), plan)?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan).await?;
 
         let stream = executor.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;

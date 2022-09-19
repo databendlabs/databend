@@ -33,7 +33,7 @@ async fn test_grant_role_interpreter() -> Result<()> {
     {
         let query = "GRANT ROLE 'test' TO 'test_user'";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         assert_eq!(executor.name(), "GrantRoleInterpreter");
         let res = executor.execute(ctx.clone()).await;
         assert!(res.is_err());
@@ -48,7 +48,7 @@ async fn test_grant_role_interpreter() -> Result<()> {
     {
         let query = "GRANT ROLE 'test' TO 'test_user'";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         assert_eq!(executor.name(), "GrantRoleInterpreter");
         let res = executor.execute(ctx.clone()).await;
         assert!(res.is_err());
@@ -64,7 +64,7 @@ async fn test_grant_role_interpreter() -> Result<()> {
 
         let query = "GRANT ROLE 'test' TO 'test_user'";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         let _ = executor.execute(ctx.clone()).await?;
 
         let user_info = user_mgr.get_user(&tenant, user_info.identity()).await?;
@@ -77,7 +77,7 @@ async fn test_grant_role_interpreter() -> Result<()> {
     {
         let query = "GRANT ROLE 'test' TO ROLE 'test_role'";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         assert_eq!(executor.name(), "GrantRoleInterpreter");
         let res = executor.execute(ctx.clone()).await;
         assert!(res.is_err());
@@ -96,7 +96,7 @@ async fn test_grant_role_interpreter() -> Result<()> {
 
         let query = "GRANT ROLE 'test' TO ROLE 'test_role'";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         let _ = executor.execute(ctx.clone()).await?;
 
         let role_info = user_mgr
