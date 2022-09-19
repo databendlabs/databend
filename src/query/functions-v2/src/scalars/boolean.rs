@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_expression::types::boolean::BooleanDomain;
+use common_expression::types::nullable::NullableDomain;
 use common_expression::types::BooleanType;
 use common_expression::types::NullableType;
 use common_expression::vectorize_2_arg;
@@ -73,7 +74,20 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_2_arg_core::<NullableType<BooleanType>, NullableType<BooleanType>, NullableType<BooleanType>, _, _>(
         "and",
         FunctionProperty::default(),
-        |_, _| {
+        |lhs, rhs| {
+            if !lhs.has_null && !rhs.has_null {
+                let bools = match   ( &lhs.value, &rhs.value) {
+                    (Some(a), Some(b)) => Some(Box::new(BooleanDomain {
+                    has_false: a.has_false || b.has_false,
+                    has_true: a.has_true && b.has_true,
+                    })),
+                    _ => None,
+                };
+                return Some(NullableDomain::<BooleanType> {
+                    has_null: false,
+                    value: bools,
+                });
+            }
             None
         },
         vectorize_2_arg::<NullableType<BooleanType>, NullableType<BooleanType>, NullableType<BooleanType>>(|lhs, rhs| {
@@ -91,7 +105,20 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_2_arg_core::<NullableType<BooleanType>, NullableType<BooleanType>, NullableType<BooleanType>, _, _>(
         "or",
         FunctionProperty::default(),
-        |_, _| {
+        |lhs, rhs| {
+            if !lhs.has_null && !rhs.has_null {
+                let bools = match   (&lhs.value, &rhs.value) {
+                    (Some(a), Some(b)) => Some(Box::new(BooleanDomain {
+                        has_false: a.has_false && b.has_false,
+                        has_true: a.has_true || b.has_true,
+                    })),
+                    _ => None,
+                };
+                return Some(NullableDomain::<BooleanType> {
+                    has_null: false,
+                    value: bools,
+                });
+            }
             None
         },
         vectorize_2_arg::<NullableType<BooleanType>, NullableType<BooleanType>, NullableType<BooleanType>>(|lhs, rhs| {
