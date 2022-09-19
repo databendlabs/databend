@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_legacy_planners::PlanNode;
+use tracing::error;
 
 use crate::interpreters::access::Accessor;
 use crate::interpreters::DeleteInterpreter;
@@ -38,7 +39,9 @@ impl InterpreterFactory {
     pub fn get(ctx: Arc<QueryContext>, plan: PlanNode) -> Result<Arc<dyn Interpreter>> {
         // Check the access permission.
         let access_checker = Accessor::create(ctx.clone());
-        access_checker.check(&plan)?;
+        access_checker
+            .check(&plan)
+            .map(|e| error!("Access.denied(v1): {:?}", e))?;
 
         let inner = Self::create_interpreter(ctx.clone(), &plan)?;
         let query_kind = plan.name().to_string();

@@ -47,21 +47,24 @@ impl SyncSystemTable for SettingsTable {
         let mut levels: Vec<String> = vec![];
         let mut descs: Vec<String> = vec![];
         let mut types: Vec<String> = vec![];
-        for setting in settings {
-            if let DataValue::Struct(vals) = setting {
-                // Name.
-                names.push(format!("{:?}", vals[0]));
-                // Value.
-                values.push(escape(format!("{:?}", vals[1]).as_str()).to_string());
-                // Default Value.
-                defaults.push(escape(format!("{:?}", vals[2]).as_str()).to_string());
-                // Scope level.
-                levels.push(format!("{:?}", vals[3]));
-                // Desc.
-                descs.push(format!("{:?}", vals[4]));
-                // Types.
-                types.push(vals[2].max_data_type().name());
-            }
+        for vals in settings {
+            // Name.
+            names.push(vals.0);
+            // Value.
+            values.push(escape(format!("{:?}", vals.1).as_str()).to_string());
+            // Default Value.
+            defaults.push(escape(format!("{:?}", vals.2).as_str()).to_string());
+            // Scope level.
+            levels.push(vals.3);
+            // Desc.
+            descs.push(vals.4);
+
+            let typename = match vals.2 {
+                common_meta_types::UserSettingValue::UInt64(_) => "UInt64",
+                common_meta_types::UserSettingValue::String(_) => "String",
+            };
+            // Types.
+            types.push(typename.to_string());
         }
 
         let names: Vec<&[u8]> = names.iter().map(|x| x.as_bytes()).collect();
