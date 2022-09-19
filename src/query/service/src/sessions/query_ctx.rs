@@ -351,9 +351,7 @@ impl TableContext for QueryContext {
         swaped_precommit_blocks
     }
     fn try_get_function_context(&self) -> Result<FunctionContext> {
-        let tz = String::from_utf8(self.get_settings().get_timezone()?).map_err(|_| {
-            ErrorCode::LogicalError("Timezone has been checked and should be valid.")
-        })?;
+        let tz = self.get_settings().get_timezone()?;
         let tz = tz.parse::<Tz>().map_err(|_| {
             ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
         })?;
