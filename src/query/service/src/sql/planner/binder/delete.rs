@@ -82,7 +82,7 @@ impl<'a> Binder {
         } else {
             vec![]
         };
-        let selection = selection.as_ref().map(|expr| expr.to_string());
+        let selection = selection.as_ref().map(|expr| format!("({})", expr));
         let projection = Projection::Columns(col_indices);
 
         let plan = DeletePlan {
