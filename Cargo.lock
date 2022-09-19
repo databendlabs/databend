@@ -1751,6 +1751,7 @@ name = "common-settings"
 version = "0.1.0"
 dependencies = [
  "common-ast",
+ "common-base",
  "common-config",
  "common-exception",
  "common-meta-types",
