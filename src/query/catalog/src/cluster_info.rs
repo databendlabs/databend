@@ -20,3 +20,24 @@ pub struct Cluster {
     pub local_id: String,
     pub nodes: Vec<Arc<NodeInfo>>,
 }
+
+impl Cluster {
+    /// If this cluster is empty?
+    ///
+    /// # Note
+    ///
+    /// Cluster empty means:
+    ///
+    /// - There is no active node (is this possible?).
+    /// - There is only one node (myself).
+    ///
+    /// # TODO
+    ///
+    /// From @Xuanwo
+    ///
+    /// Ideally, we should implement a cluster trait to replace `ClusterHelper`
+    /// defined in `databend-query`.
+    pub fn is_empty(&self) -> bool {
+        self.nodes.len() <= 1
+    }
+}

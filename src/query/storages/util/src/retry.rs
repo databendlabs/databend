@@ -53,7 +53,7 @@ pub trait Retryable<T, E, Fut, Fn, N> {
 
 impl<T, E, Fut, Fn, N> Retryable<T, E, Fut, Fn, N> for Fn
 where
-    Fut: Future<Output = std::result::Result<T, backoff::Error<E>>>,
+    Fut: Future<Output = Result<T, backoff::Error<E>>>,
     Fn: FnMut() -> Fut,
     N: Notify<E>,
 {

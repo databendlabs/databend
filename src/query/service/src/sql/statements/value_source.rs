@@ -264,7 +264,7 @@ async fn exprs_to_datavalue(
     Ok(datavalues)
 }
 
-fn parse_exprs(buf: &[u8], typ: &SessionType) -> std::result::Result<Vec<Expr>, ParserError> {
+fn parse_exprs(buf: &[u8], typ: &SessionType) -> Result<Vec<Expr>, ParserError> {
     let dialect: &dyn Dialect = match typ {
         SessionType::MySQL => &MySqlDialect {},
         _ => &GenericDialect {},

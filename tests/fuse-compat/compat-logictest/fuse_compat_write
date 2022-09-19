@@ -1,5 +1,5 @@
 statement ok
-set global sql_dialect = 'PostgreSQL';
+set global timezone = 'UTC';
 
 statement ok
 set global max_block_size = 10000;

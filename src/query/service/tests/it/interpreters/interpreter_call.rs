@@ -33,7 +33,7 @@ async fn test_call_interpreter() -> Result<()> {
 
     let query = "call system$test()";
     let (plan, _, _) = planner.plan_sql(query).await?;
-    let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+    let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
     assert_eq!(executor.name(), "CallInterpreter");
     let res = executor.execute(ctx.clone()).await;
     assert_eq!(res.is_err(), true);
@@ -53,7 +53,7 @@ async fn test_call_fuse_snapshot_interpreter() -> Result<()> {
     {
         let query = "call system$fuse_snapshot()";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(ctx.clone()).await;
         assert_eq!(res.is_err(), true);
@@ -65,7 +65,7 @@ async fn test_call_fuse_snapshot_interpreter() -> Result<()> {
     {
         let query = "call system$fuse_snapshot(default, test)";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(ctx.clone()).await;
         assert_eq!(res.is_err(), true);
@@ -79,7 +79,7 @@ async fn test_call_fuse_snapshot_interpreter() -> Result<()> {
     {
         let query = "call system$fuse_snapshot(system, tables)";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(ctx.clone()).await;
         assert_eq!(res.is_err(), true);
@@ -95,7 +95,7 @@ async fn test_call_fuse_snapshot_interpreter() -> Result<()> {
         ";
 
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         let _ = executor.execute(ctx.clone()).await?;
     }
 
@@ -103,7 +103,7 @@ async fn test_call_fuse_snapshot_interpreter() -> Result<()> {
     {
         let query = "call system$fuse_snapshot(default, a)";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         let _ = executor.execute(ctx.clone()).await?;
     }
 
@@ -119,7 +119,7 @@ async fn test_call_fuse_block_interpreter() -> Result<()> {
     {
         let query = "call system$fuse_block()";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(ctx.clone()).await;
         assert_eq!(res.is_err(), true);
@@ -131,7 +131,7 @@ async fn test_call_fuse_block_interpreter() -> Result<()> {
     {
         let query = "call system$fuse_block(default, test)";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(ctx.clone()).await;
         assert_eq!(res.is_err(), true);
@@ -145,7 +145,7 @@ async fn test_call_fuse_block_interpreter() -> Result<()> {
     {
         let query = "call system$fuse_block(system, tables)";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(ctx.clone()).await;
         assert_eq!(res.is_err(), true);
@@ -161,7 +161,7 @@ async fn test_call_fuse_block_interpreter() -> Result<()> {
         ";
 
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         let _ = executor.execute(ctx.clone()).await?;
     }
 
@@ -169,7 +169,7 @@ async fn test_call_fuse_block_interpreter() -> Result<()> {
     {
         let query = "call system$fuse_block(default, a)";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         let _ = executor.execute(ctx.clone()).await?;
     }
 
@@ -185,7 +185,7 @@ async fn test_call_clustering_information_interpreter() -> Result<()> {
     {
         let query = "call system$clustering_information()";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(ctx.clone()).await;
         assert_eq!(res.is_err(), true);
@@ -197,7 +197,7 @@ async fn test_call_clustering_information_interpreter() -> Result<()> {
     {
         let query = "call system$clustering_information(default, test)";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(ctx.clone()).await;
         assert_eq!(res.is_err(), true);
@@ -211,7 +211,7 @@ async fn test_call_clustering_information_interpreter() -> Result<()> {
     {
         let query = "call system$clustering_information(system, tables)";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(ctx.clone()).await;
         assert_eq!(res.is_err(), true);
@@ -227,7 +227,7 @@ async fn test_call_clustering_information_interpreter() -> Result<()> {
         ";
 
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         let _ = executor.execute(ctx.clone()).await?;
     }
 
@@ -235,7 +235,7 @@ async fn test_call_clustering_information_interpreter() -> Result<()> {
     {
         let query = "call system$clustering_information(default, a)";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         let res = executor.execute(ctx.clone()).await;
         assert_eq!(res.is_err(), true);
         let expect =
@@ -250,7 +250,7 @@ async fn test_call_clustering_information_interpreter() -> Result<()> {
     ";
 
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         let _ = executor.execute(ctx.clone()).await?;
     }
 
@@ -258,7 +258,7 @@ async fn test_call_clustering_information_interpreter() -> Result<()> {
     {
         let query = "call system$clustering_information(default, b)";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         let _ = executor.execute(ctx.clone()).await?;
     }
 
@@ -294,7 +294,7 @@ async fn test_call_tenant_quota_interpreter() -> Result<()> {
     {
         let query = "call admin$tenant_quota()";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         let stream = executor.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
@@ -311,7 +311,7 @@ async fn test_call_tenant_quota_interpreter() -> Result<()> {
     {
         let query = "call admin$tenant_quota(tenant1)";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         let stream = executor.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
@@ -328,7 +328,7 @@ async fn test_call_tenant_quota_interpreter() -> Result<()> {
     {
         let query = "call admin$tenant_quota(tenant1, 7, 5, 3, 3)";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         let stream = executor.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
@@ -344,7 +344,7 @@ async fn test_call_tenant_quota_interpreter() -> Result<()> {
     {
         let query = "call admin$tenant_quota(tenant1, 8)";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         let stream = executor.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
@@ -360,7 +360,7 @@ async fn test_call_tenant_quota_interpreter() -> Result<()> {
     {
         let query = "call admin$tenant_quota(tenant1)";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         let stream = executor.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
@@ -377,7 +377,7 @@ async fn test_call_tenant_quota_interpreter() -> Result<()> {
     {
         let query = "call admin$tenant_quota()";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         let stream = executor.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
@@ -402,7 +402,7 @@ async fn test_call_tenant_quote_without_management_mode() -> Result<()> {
     {
         let query = "call admin$tenant_quota(tenant1)";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         let res = executor.execute(ctx.clone()).await;
         assert_eq!(res.is_err(), true);
         let expect =

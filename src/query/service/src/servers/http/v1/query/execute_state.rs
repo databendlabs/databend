@@ -245,7 +245,7 @@ impl ExecuteState {
             let mut planner = Planner::new(ctx.clone());
             let (plan, _, _) = planner.plan_sql(sql).await?;
             is_select = matches!(&plan, Plan::Query { .. });
-            InterpreterFactoryV2::get(ctx.clone(), &plan)
+            InterpreterFactoryV2::get(ctx.clone(), &plan).await
         } else {
             let plan = match PlanParser::parse(ctx.clone(), sql).await {
                 Ok(p) => p,
@@ -256,7 +256,7 @@ impl ExecuteState {
             };
 
             is_select = matches!(&plan, PlanNode::Select(_));
-            InterpreterFactory::get(ctx.clone(), plan)
+            InterpreterFactory::get(ctx.clone(), plan).await
         }?;
 
         if is_v2 && is_select {
