@@ -10,10 +10,10 @@ output         : false
 ast            : true AND null
 raw expr       : and(true, NULL)
 checked expr   : and<Boolean NULL, Boolean NULL>(CAST(true AS Boolean NULL), CAST(NULL AS Boolean NULL))
-optimized expr : false
+optimized expr : NULL
 output type    : Boolean NULL
 output domain  : Unknown
-output         : false
+output         : NULL
 
 
 ast            : true AND true
@@ -37,10 +37,10 @@ output         : false
 ast            : false AND null
 raw expr       : and(false, NULL)
 checked expr   : and<Boolean NULL, Boolean NULL>(CAST(false AS Boolean NULL), CAST(NULL AS Boolean NULL))
-optimized expr : NULL
+optimized expr : false
 output type    : Boolean NULL
 output domain  : Unknown
-output         : NULL
+output         : false
 
 
 ast            : false AND true
