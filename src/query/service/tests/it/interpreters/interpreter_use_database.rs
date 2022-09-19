@@ -42,7 +42,7 @@ async fn test_use_database_interpreter_error() -> Result<()> {
 
     let query = "USE xx";
     let (plan, _, _) = planner.plan_sql(query).await?;
-    let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+    let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
 
     if let Err(e) = executor.execute(ctx.clone()).await {
         let expect = "Code: 1003, displayText = Cannot USE 'xx', because the 'xx' doesn't exist.";

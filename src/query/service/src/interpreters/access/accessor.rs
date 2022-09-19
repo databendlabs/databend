@@ -22,13 +22,14 @@ use crate::interpreters::ManagementModeAccess;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 
+#[async_trait::async_trait]
 pub trait AccessChecker: Sync + Send {
     // Check the access permission for the old plan.
     // TODO(bohu): Remove after new plan done.
     fn check(&self, plan: &PlanNode) -> Result<()>;
 
     // Check the access permission for the old plan.
-    fn check_new(&self, _plan: &Plan) -> Result<()>;
+    async fn check_new(&self, _plan: &Plan) -> Result<()>;
 }
 
 pub struct Accessor {
@@ -49,9 +50,9 @@ impl Accessor {
         Ok(())
     }
 
-    pub fn check_new(&self, plan: &Plan) -> Result<()> {
+    pub async fn check_new(&self, plan: &Plan) -> Result<()> {
         for accessor in self.accessors.values() {
-            accessor.check_new(plan)?;
+            accessor.check_new(plan).await?;
         }
         Ok(())
     }
