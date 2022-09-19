@@ -101,7 +101,7 @@ impl Function for LogicAndFiltersFunction {
                 }
             }
         }
-        let validity = validity.unwrap_or(MutableBitmap::from_len_set(input_rows).into());
+        let validity = validity.unwrap_or_else(|| MutableBitmap::from_len_set(input_rows).into());
         Ok(BooleanColumn::from_arrow_data(validity).arc())
     }
 }
