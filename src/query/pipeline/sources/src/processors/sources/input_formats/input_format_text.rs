@@ -143,6 +143,7 @@ pub struct RowBatch {
 
     // for error info
     pub path: String,
+    pub batch_id: usize,
     pub offset: usize,
     pub start_row: Option<usize>,
 }
@@ -151,6 +152,7 @@ pub struct AligningState<T> {
     pub path: String,
     pub record_delimiter_end: u8,
     pub field_delimiter: u8,
+    pub batch_id: usize,
     pub rows: usize,
     pub offset: usize,
     pub rows_to_skip: usize,
@@ -203,7 +205,12 @@ impl<T: InputFormatTextBase> AligningState<T> {
             output.data.extend_from_slice(&buf[0..last + 1]);
             let size = output.data.len();
             output.path = self.path.to_string();
+            output.start_row = Some(self.rows);
+            output.offset = self.offset;
+            output.batch_id = self.batch_id;
             self.offset += size;
+            self.rows += rows.len();
+            self.batch_id += 1;
             tracing::debug!(
                 "align {} bytes to {} rows: {} .. {}",
                 size,
@@ -227,8 +234,9 @@ impl<T: InputFormatTextBase> AligningState<T> {
                 row_ends: vec![end],
                 field_ends: vec![],
                 path: self.path.to_string(),
+                batch_id: self.batch_id,
                 offset: self.offset,
-                start_row: None,
+                start_row: Some(self.rows),
             };
             vec![row_batch]
         }
@@ -260,6 +268,7 @@ impl<T: InputFormatTextBase> AligningStateTrait for AligningState<T> {
             csv_reader,
             tail_of_last_batch: vec![],
             rows: 0,
+            batch_id: 0,
             num_fields: ctx.schema.num_fields(),
             offset: split_info.offset,
             record_delimiter_end: ctx.record_delimiter.end(),

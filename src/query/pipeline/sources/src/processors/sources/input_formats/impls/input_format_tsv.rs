@@ -34,6 +34,7 @@ impl InputFormatTSV {
         deserializers: &mut Vec<common_datavalues::TypeDeserializerImpl>,
         format_settings: &FormatSettings,
         path: &str,
+        batch_id: usize,
         offset: usize,
         row_index: Option<usize>,
     ) -> Result<()> {
@@ -86,8 +87,9 @@ impl InputFormatTSV {
                 String::new()
             };
             let mut msg = format!(
-                "fail to parse tsv {} at offset {}, {} reason={}, row data: ",
+                "fail to parse tsv {} batch {} at offset {}, {} reason={}, row data: ",
                 path,
+                batch_id,
                 offset + pos,
                 row_info,
                 m
@@ -110,6 +112,13 @@ impl InputFormatTextBase for InputFormatTSV {
     }
 
     fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()> {
+        tracing::debug!(
+            "tsv deserializing row batch {}, id={}, start_row={:?}, offset={}",
+            batch.path,
+            batch.id,
+            batch.start_row,
+            batch.offset
+        );
         let columns = &mut builder.mutable_columns;
         let mut start = 0usize;
         let start_row = batch.start_row;
@@ -120,6 +129,7 @@ impl InputFormatTextBase for InputFormatTSV {
                 columns,
                 &builder.ctx.format_settings,
                 &batch.path,
+                batch.batch_id,
                 batch.offset + start,
                 start_row.map(|n| n + i),
             )?;

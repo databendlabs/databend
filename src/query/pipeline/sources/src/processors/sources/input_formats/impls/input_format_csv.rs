@@ -177,6 +177,7 @@ impl InputFormatTextBase for InputFormatCSV {
             row_ends: vec![],
             field_ends: vec![],
             path: state.path.to_string(),
+            batch_id: state.batch_id,
             offset: 0,
             start_row: None,
         };
@@ -256,6 +257,7 @@ impl InputFormatTextBase for InputFormatCSV {
             } else {
                 vec![last_remain, out_tmp].concat()
             };
+            state.batch_id += 1;
             Ok(vec![row_batch])
         }
     }
