@@ -196,6 +196,10 @@ impl Catalog for HiveCatalog {
         self
     }
 
+    fn is_case_insensitive_db(&self, _: &str) -> bool {
+        false
+    }
+
     #[tracing::instrument(level = "info", skip(self))]
     async fn get_database(&self, _tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
         let client = self.get_client()?;
