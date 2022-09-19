@@ -15,7 +15,6 @@
 mod aggregate;
 mod copy_v2;
 pub mod create_table_v2;
-mod delete_v2;
 mod dummy_table_scan;
 mod eval_scalar;
 mod exchange;

@@ -12,39 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
-
 use common_ast::ast::Expr;
 use common_ast::ast::TableReference;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_legacy_planners::DeletePlan;
-use common_legacy_planners::Expression;
 use common_legacy_planners::Projection;
 
 use crate::sql::binder::Binder;
 use crate::sql::binder::ScalarBinder;
-use crate::sql::executor::ExpressionBuilderWithoutRenaming;
 use crate::sql::plans::Plan;
-use crate::sql::statements::query::QueryASTIRVisitor;
 use crate::sql::BindContext;
-
-pub struct DeleteCollectPushDowns {}
-impl QueryASTIRVisitor<HashSet<String>> for DeleteCollectPushDowns {
-    fn visit_expr(expr: &mut Expression, require_columns: &mut HashSet<String>) -> Result<()> {
-        if let Expression::Column(name) = expr {
-            if !require_columns.contains(name) {
-                require_columns.insert(name.clone());
-            }
-        }
-
-        Ok(())
-    }
-
-    fn visit_filter(predicate: &mut Expression, data: &mut HashSet<String>) -> Result<()> {
-        Self::visit_recursive_expr(predicate, data)
-    }
-}
+use crate::sql::ScalarExpr;
 
 impl<'a> Binder {
     pub(in crate::sql::planner::binder) async fn bind_delete(
@@ -88,36 +67,22 @@ impl<'a> Binder {
             &[],
         );
 
-        let mut expression = None;
-        let mut require_columns: HashSet<String> = HashSet::new();
-        if let Some(expr) = selection {
-            let (scalar, _) = scalar_binder.bind(expr).await?;
-            let eb = ExpressionBuilderWithoutRenaming::create(self.metadata.clone());
-            let mut pred_expr = eb.build(&scalar)?;
-            DeleteCollectPushDowns::visit_filter(&mut pred_expr, &mut require_columns)?;
-            expression = Some(pred_expr);
-        }
-
         let table = self
             .ctx
             .get_table(&catalog_name, &database_name, &table_name)
             .await?;
 
         let tbl_info = table.get_table_info();
-        let table_id = tbl_info.ident.clone();
-        let mut col_indices = vec![];
-        let schema = tbl_info.meta.schema.as_ref();
-        for col_name in require_columns {
-            if let Some((idx, _)) = schema.column_with_name(col_name.as_str()) {
-                col_indices.push(idx);
-            } else {
-                return Err(ErrorCode::UnknownColumn(format!(
-                    "Column [{}] not found",
-                    col_name
-                )));
-            }
-        }
+        let table_id = tbl_info.ident;
+
         // @todo wait delete migrate to new planner
+        let col_indices: Vec<usize> = if let Some(expr) = selection {
+            let (scalar, _) = scalar_binder.bind(expr).await?;
+            scalar.used_columns().into_iter().collect()
+        } else {
+            vec![]
+        };
+        let selection = selection.as_ref().map(|expr| expr.to_string());
         let projection = Projection::Columns(col_indices);
 
         let plan = DeletePlan {
@@ -125,7 +90,7 @@ impl<'a> Binder {
             database_name,
             table_name,
             table_id,
-            selection: expression,
+            selection,
             projection,
         };
         Ok(Plan::Delete(Box::new(plan)))
