@@ -105,7 +105,7 @@ impl InputFormatTextBase for InputFormatNDJson {
                     return Err(ErrorCode::BadBytes(msg));
                 }
             }
-            start = *end + 1;
+            start = *end;
         }
         Ok(())
     }

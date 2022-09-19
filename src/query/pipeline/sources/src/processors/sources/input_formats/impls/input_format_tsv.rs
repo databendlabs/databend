@@ -115,7 +115,7 @@ impl InputFormatTextBase for InputFormatTSV {
         tracing::debug!(
             "tsv deserializing row batch {}, id={}, start_row={:?}, offset={}",
             batch.path,
-            batch.id,
+            batch.batch_id,
             batch.start_row,
             batch.offset
         );
@@ -123,7 +123,7 @@ impl InputFormatTextBase for InputFormatTSV {
         let mut start = 0usize;
         let start_row = batch.start_row;
         for (i, end) in batch.row_ends.iter().enumerate() {
-            let buf = &batch.data[start..*end];
+            let buf = &batch.data[start..*end]; // include \n
             Self::read_row(
                 buf,
                 columns,
@@ -133,7 +133,7 @@ impl InputFormatTextBase for InputFormatTSV {
                 batch.offset + start,
                 start_row.map(|n| n + i),
             )?;
-            start = *end + 1;
+            start = *end;
         }
         Ok(())
     }

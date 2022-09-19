@@ -166,6 +166,7 @@ pub struct AligningState<T> {
 impl<T: InputFormatTextBase> AligningState<T> {
     pub fn align_by_record_delimiter(&mut self, buf_in: &[u8]) -> Vec<RowBatch> {
         let record_delimiter_end = self.record_delimiter_end;
+        let size_last_remain = self.tail_of_last_batch.len();
         let mut buf = buf_in;
         if self.rows_to_skip > 0 {
             let mut i = 0;
@@ -193,16 +194,17 @@ impl<T: InputFormatTextBase> AligningState<T> {
         let rows = &mut output.row_ends;
         for (i, b) in buf.iter().enumerate() {
             if *b == b'\n' {
-                rows.push(i)
+                rows.push(i + 1 + size_last_remain)
             }
         }
-        let last = rows[rows.len() - 1];
+        let batch_end = rows[rows.len() - 1] - size_last_remain;
         if rows.is_empty() {
             self.tail_of_last_batch.extend_from_slice(buf);
             vec![]
         } else {
             output.data = mem::take(&mut self.tail_of_last_batch);
-            output.data.extend_from_slice(&buf[0..last + 1]);
+            output.data.extend_from_slice(&buf[..batch_end]);
+            self.tail_of_last_batch.extend_from_slice(&buf[batch_end..]);
             let size = output.data.len();
             output.path = self.path.to_string();
             output.start_row = Some(self.rows);
@@ -212,11 +214,12 @@ impl<T: InputFormatTextBase> AligningState<T> {
             self.rows += rows.len();
             self.batch_id += 1;
             tracing::debug!(
-                "align {} bytes to {} rows: {} .. {}",
-                size,
+                "align batch {}, {} + {} + {} bytes to {} rows",
+                output.batch_id,
+                size_last_remain,
+                batch_end,
+                self.tail_of_last_batch.len(),
                 rows.len(),
-                rows[0],
-                last
             );
             vec![output]
         }
@@ -238,6 +241,12 @@ impl<T: InputFormatTextBase> AligningState<T> {
                 offset: self.offset,
                 start_row: Some(self.rows),
             };
+            tracing::debug!(
+                "align flush batch {}, bytes = {}, start_row = {}",
+                row_batch.batch_id,
+                self.tail_of_last_batch.len(),
+                self.rows
+            );
             vec![row_batch]
         }
     }
