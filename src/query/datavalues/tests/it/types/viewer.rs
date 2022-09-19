@@ -68,11 +68,3 @@ fn test_constant_viewer() -> Result<()> {
     }
     Ok(())
 }
-
-#[test]
-fn test_json() {
-    let value = DataValue::Int64(53);
-    let ss = serde_json::to_vec(&value).unwrap();
-    println!("{:?}", ss);
-    println!("{:?}", unsafe { std::str::from_utf8_unchecked(&ss) });
-}

@@ -30,7 +30,7 @@ pub struct UserSetting {
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum UserSettingValue {
     UInt64(u64),
-    String(Vec<u8>),
+    String(String),
 }
 
 impl UserSettingValue {
@@ -44,7 +44,7 @@ impl UserSettingValue {
         }
     }
 
-    pub fn as_string(&self) -> Result<Vec<u8>> {
+    pub fn as_string(&self) -> Result<String> {
         match self {
             UserSettingValue::String(v) => Ok(v.to_owned()),
             other => Result::Err(ErrorCode::BadDataValueType(format!(
@@ -59,15 +59,7 @@ impl fmt::Display for UserSettingValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             UserSettingValue::UInt64(v) => write!(f, "{}", v),
-            UserSettingValue::String(v) => match std::str::from_utf8(v) {
-                Ok(v) => write!(f, "{}", v),
-                Err(_e) => {
-                    for c in v {
-                        write!(f, "{:02x}", c)?;
-                    }
-                    Ok(())
-                }
-            },
+            UserSettingValue::String(v) => write!(f, "{}", v),
         }
     }
 }

@@ -87,7 +87,7 @@ impl Settings {
 
             for global_setting in global_settings {
                 let name = global_setting.name;
-                let val = String::from_utf8(global_setting.value.as_string()?).unwrap();
+                let val = global_setting.value.as_string()?;
                 settings.set_settings(name, val, true)?;
             }
             settings
@@ -170,20 +170,20 @@ impl Settings {
                 possible_values: None,
             },
             SettingValue {
-                default_value: UserSettingValue::String("\n".as_bytes().to_vec()),
+                default_value: UserSettingValue::String("\n".to_owned()),
                 user_setting: UserSetting::create(
                     "record_delimiter",
-                    UserSettingValue::String("\n".as_bytes().to_vec()),
+                    UserSettingValue::String("\n".to_owned()),
                 ),
                 level: ScopeLevel::Session,
                 desc: "Format record_delimiter, default value: \"\\n\"",
                 possible_values: None,
             },
             SettingValue {
-                default_value: UserSettingValue::String(",".as_bytes().to_vec()),
+                default_value: UserSettingValue::String(",".to_owned()),
                 user_setting: UserSetting::create(
                     "field_delimiter",
-                    UserSettingValue::String(",".as_bytes().to_vec()),
+                    UserSettingValue::String(",".to_owned()),
                 ),
                 level: ScopeLevel::Session,
                 desc: "Format field delimiter, default value: ,",
@@ -204,20 +204,20 @@ impl Settings {
                 possible_values: None,
             },
             SettingValue {
-                default_value: UserSettingValue::String("None".as_bytes().to_vec()),
+                default_value: UserSettingValue::String("None".to_owned()),
                 user_setting: UserSetting::create(
                     "compression",
-                    UserSettingValue::String("None".as_bytes().to_vec()),
+                    UserSettingValue::String("None".to_owned()),
                 ),
                 level: ScopeLevel::Session,
                 desc: "Format compression, default value: None",
                 possible_values: None,
             },
             SettingValue {
-                default_value: UserSettingValue::String("UTC".as_bytes().to_vec()),
+                default_value: UserSettingValue::String("UTC".to_owned()),
                 user_setting: UserSetting::create(
                     "timezone",
-                    UserSettingValue::String("UTC".as_bytes().to_vec()),
+                    UserSettingValue::String("UTC".to_owned()),
                 ),
                 level: ScopeLevel::Session,
                 desc: "Timezone, default value: UTC,",
@@ -284,10 +284,10 @@ impl Settings {
                 possible_values: None,
             },
             SettingValue {
-                default_value: UserSettingValue::String("PostgreSQL".as_bytes().to_vec()),
+                default_value: UserSettingValue::String("PostgreSQL".to_owned()),
                 user_setting: UserSetting::create(
                     "sql_dialect",
-                    UserSettingValue::String("PostgreSQL".as_bytes().to_vec()),
+                    UserSettingValue::String("PostgreSQL".to_owned()),
                 ),
                 level: ScopeLevel::Session,
                 desc: "SQL dialect, support \"PostgreSQL\" and \"MySQL\", default value: \"PostgreSQL\"",
@@ -378,19 +378,19 @@ impl Settings {
         self.try_get_u64(KEY)
     }
 
-    pub fn get_field_delimiter(&self) -> Result<Vec<u8>> {
+    pub fn get_field_delimiter(&self) -> Result<String> {
         let key = "field_delimiter";
         self.check_and_get_setting_value(key)
             .and_then(|v| v.user_setting.value.as_string())
     }
 
-    pub fn get_record_delimiter(&self) -> Result<Vec<u8>> {
+    pub fn get_record_delimiter(&self) -> Result<String> {
         let key = "record_delimiter";
         self.check_and_get_setting_value(key)
             .and_then(|v| v.user_setting.value.as_string())
     }
 
-    pub fn get_compression(&self) -> Result<Vec<u8>> {
+    pub fn get_compression(&self) -> Result<String> {
         let key = "compression";
         self.check_and_get_setting_value(key)
             .and_then(|v| v.user_setting.value.as_string())
@@ -406,7 +406,7 @@ impl Settings {
         self.try_get_u64(key)
     }
 
-    pub fn get_timezone(&self) -> Result<Vec<u8>> {
+    pub fn get_timezone(&self) -> Result<String> {
         let key = "timezone";
         self.check_and_get_setting_value(key)
             .and_then(|v| v.user_setting.value.as_string())
@@ -495,7 +495,7 @@ impl Settings {
         self.check_and_get_setting_value(key)
             .and_then(|v| v.user_setting.value.as_string())
             .map(|v| {
-                if v == b"MySQL" {
+                if v == "MySQL" {
                     Dialect::MySQL
                 } else {
                     Dialect::PostgreSQL
@@ -558,7 +558,7 @@ impl Settings {
         Ok(())
     }
 
-    fn try_set_string(&self, key: &str, val: Vec<u8>, is_global: bool) -> Result<()> {
+    fn try_set_string(&self, key: &str, val: String, is_global: bool) -> Result<()> {
         let mut settings = self.settings.write();
         let mut setting = settings
             .get_mut(key)
@@ -656,7 +656,7 @@ impl Settings {
                 self.try_set_u64(&key, u64_val, is_global)?
             }
             UserSettingValue::String(_) => {
-                self.try_set_string(&key, val.into_bytes(), is_global)?;
+                self.try_set_string(&key, val, is_global)?;
             }
         }
         Ok(())
