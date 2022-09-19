@@ -18,6 +18,7 @@ use std::sync::atomic::Ordering;
 use common_hashtable::HashMap;
 use common_hashtable::StackHashMap;
 use common_hashtable::TwolevelHashMap;
+use common_hashtable::UnsizedHashMap;
 use rand::Rng;
 
 macro_rules! simple_test {
@@ -84,4 +85,56 @@ fn test_stack_hash_map() {
 #[test]
 fn test_twolevel_hash_map() {
     simple_test!(TwolevelHashMap);
+}
+
+#[test]
+fn test_unsized_hash_map() {
+    static COUNT: AtomicUsize = AtomicUsize::new(0);
+    #[derive(Debug)]
+    struct U64(u64);
+    impl U64 {
+        fn new(x: u64) -> Self {
+            COUNT.fetch_add(1, Ordering::Relaxed);
+            Self(x)
+        }
+    }
+    impl Drop for U64 {
+        fn drop(&mut self) {
+            COUNT.fetch_sub(1, Ordering::Relaxed);
+        }
+    }
+    let mut sequence = Vec::new();
+    for _ in 0..1000 {
+        let length = rand::thread_rng().gen_range(0..64);
+        let mut array = vec![0u8; length];
+        rand::thread_rng().fill(&mut array[..]);
+        sequence.push(array);
+    }
+    let mut standard = std::collections::HashMap::<&[u8], u64>::new();
+    for s in sequence.iter() {
+        if let Some(x) = standard.get_mut(&s[..]) {
+            *x += 1;
+        } else {
+            standard.insert(&s, 1);
+        }
+    }
+    let mut hashtable = UnsizedHashMap::<[u8], U64>::new();
+    for s in sequence.iter() {
+        match unsafe { hashtable.insert(&s) } {
+            Ok(e) => {
+                e.write(U64::new(1u64));
+            }
+            Err(e) => {
+                e.0 += 1;
+            }
+        }
+    }
+    assert_eq!(standard.len(), hashtable.len());
+    let mut check = std::collections::HashSet::new();
+    for (key, value) in hashtable.iter() {
+        assert!(check.insert(key));
+        assert_eq!(standard.get(key.as_ref()).copied().unwrap(), value.0);
+    }
+    drop(hashtable);
+    assert_eq!(COUNT.load(Ordering::Relaxed), 0);
 }

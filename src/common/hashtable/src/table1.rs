@@ -13,36 +13,23 @@
 // limitations under the License.
 
 use std::alloc::Allocator;
-use std::mem::MaybeUninit;
 
-pub(crate) static ALLKEYS: [[[u8; 2]; 256]; 256] = {
-    let mut ans = [[[0u8; 2]; 256]; 256];
-    let mut i = 0usize;
-    while i < 256 {
-        let mut j = 0usize;
-        while j < 256 {
-            ans[i][j] = [i as u8, j as u8];
-            j += 1;
-        }
-        i += 1;
-    }
-    ans
-};
-
-pub(crate) struct Inner<V> {
-    pub(crate) data: [[MaybeUninit<V>; 64]; 1024],
-    pub(crate) bits: [u64; 1024],
-}
+use super::table0::Entry;
 
 pub struct Table1<V, A: Allocator + Clone> {
-    pub(crate) inner: Box<Inner<V>, A>,
+    pub(crate) data: Box<[Entry<[u8; 2], V>; 65536], A>,
     pub(crate) len: usize,
 }
 
 impl<V, A: Allocator + Clone> Table1<V, A> {
     pub fn new_in(allocator: A) -> Self {
         Self {
-            inner: unsafe { Box::<Inner<V>, A>::new_zeroed_in(allocator).assume_init() },
+            data: unsafe {
+                let mut res =
+                    Box::<[Entry<[u8; 2], V>; 65536], A>::new_zeroed_in(allocator).assume_init();
+                res[0].key.write([0xff, 0xff]);
+                res
+            },
             len: 0,
         }
     }
@@ -52,22 +39,18 @@ impl<V, A: Allocator + Clone> Table1<V, A> {
     pub fn len(&self) -> usize {
         self.len
     }
-    pub fn get(&self, key: [u8; 2]) -> Option<&V> {
-        let x = ((key[0] as usize) << 2) | (key[1] as usize >> 6);
-        let y = key[1] & 63;
-        let z = (self.inner.bits[x] & (1 << y)) != 0;
-        if z {
-            Some(unsafe { self.inner.data[x][y as usize].assume_init_ref().to_owned() })
+    pub fn get(&self, key: [u8; 2]) -> Option<&Entry<[u8; 2], V>> {
+        let e = &self.data[key[1] as usize * 256 + key[0] as usize];
+        if unsafe { e.key.assume_init() } == key {
+            Some(e)
         } else {
             None
         }
     }
-    pub fn get_mut(&mut self, key: [u8; 2]) -> Option<&mut V> {
-        let x = ((key[0] as usize) << 2) | (key[1] as usize >> 6);
-        let y = key[1] & 63;
-        let z = (self.inner.bits[x] & (1 << y)) != 0;
-        if z {
-            Some(unsafe { self.inner.data[x][y as usize].assume_init_mut() })
+    pub fn get_mut(&mut self, key: [u8; 2]) -> Option<&mut Entry<[u8; 2], V>> {
+        let e = &mut self.data[key[1] as usize * 256 + key[0] as usize];
+        if unsafe { e.key.assume_init() } == key {
+            Some(e)
         } else {
             None
         }
@@ -75,64 +58,155 @@ impl<V, A: Allocator + Clone> Table1<V, A> {
     /// # Safety
     ///
     /// The resulted `MaybeUninit` should be initialized immedidately.
-    pub fn insert(&mut self, key: [u8; 2]) -> Result<&mut MaybeUninit<V>, &mut V> {
-        let x = ((key[0] as usize) << 2) | (key[1] as usize >> 6);
-        let y = key[1] & 63;
-        let z = (self.inner.bits[x] & (1 << y)) != 0;
-        if z {
-            Err(unsafe { self.inner.data[x][y as usize].assume_init_mut() })
+    pub fn insert(
+        &mut self,
+        key: [u8; 2],
+    ) -> Result<&mut Entry<[u8; 2], V>, &mut Entry<[u8; 2], V>> {
+        let e = &mut self.data[key[1] as usize * 256 + key[0] as usize];
+        if unsafe { e.key.assume_init() } == key {
+            Err(e)
         } else {
             self.len += 1;
-            self.inner.bits[x] |= 1 << y;
-            Ok(&mut self.inner.data[x][y as usize])
+            e.key.write(key);
+            Ok(e)
         }
     }
-    pub fn iter(&self) -> impl Iterator<Item = (&[u8; 2], &V)> + '_ {
-        self.inner.data.iter().enumerate().flat_map(|(x, group)| {
-            let mut bits = self.inner.bits[x];
-            std::iter::from_fn(move || {
-                let y = bits.trailing_zeros();
-                if y == u64::BITS {
-                    return None;
-                }
-                bits ^= 1 << y;
-                let i = (x >> 2) as u8;
-                let j = ((x & 3) << 6) as u8 | y as u8;
-                let k = &ALLKEYS[i as usize][j as usize];
-                let v = unsafe { group[y as usize].assume_init_ref() }.to_owned();
-                Some((k, v))
-            })
-        })
+    pub fn iter(&self) -> Table1Iter<'_, V> {
+        Table1Iter {
+            slice: self.data.as_ref(),
+            i: 0,
+        }
     }
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = (&[u8; 2], &mut V)> + '_ {
-        self.inner
-            .data
-            .iter_mut()
-            .enumerate()
-            .flat_map(|(x, group)| {
-                let mut bits = self.inner.bits[x];
-                std::iter::from_fn(move || {
-                    let y = bits.trailing_zeros();
-                    if y == u64::BITS {
-                        return None;
-                    }
-                    bits ^= 1 << y;
-                    let i = (x >> 2) as u8;
-                    let j = ((x & 3) << 6) as u8 | y as u8;
-                    let k = &ALLKEYS[i as usize][j as usize];
-                    let v = unsafe { &mut *(group[y as usize].assume_init_mut() as *mut V) };
-                    Some((k, v))
-                })
-            })
+    pub fn iter_mut(&mut self) -> Table1IterMut<'_, V> {
+        Table1IterMut {
+            slice: self.data.as_mut(),
+            i: 0,
+        }
+    }
+    pub fn iter_ptr(&self) -> Table1IterPtr<V> {
+        Table1IterPtr {
+            slice: self.data.as_ref(),
+            i: 0,
+        }
+    }
+    pub fn iter_mut_ptr(&self) -> Table1IterMutPtr<V> {
+        Table1IterMutPtr {
+            slice: self.data.as_ref() as *const _ as *mut _,
+            i: 0,
+        }
     }
 }
 
 impl<V, A: Allocator + Clone> Drop for Table1<V, A> {
     fn drop(&mut self) {
         if std::mem::needs_drop::<V>() {
-            self.iter_mut().for_each(|(_, v)| unsafe {
-                std::ptr::drop_in_place(v);
+            self.iter_mut().for_each(|e| unsafe {
+                e.val.assume_init_drop();
             });
+        }
+    }
+}
+
+pub struct Table1Iter<'a, V> {
+    slice: &'a [Entry<[u8; 2], V>; 65536],
+    i: usize,
+}
+
+impl<'a, V> Iterator for Table1Iter<'a, V> {
+    type Item = &'a Entry<[u8; 2], V>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.i < 65536
+            && unsafe {
+                u16::from_le_bytes(self.slice[self.i].key.assume_init()) as usize != self.i
+            }
+        {
+            self.i += 1;
+        }
+        if self.i == 65536 {
+            None
+        } else {
+            let res = unsafe { &*(self.slice.as_ptr().add(self.i) as *const _) };
+            self.i += 1;
+            Some(res)
+        }
+    }
+}
+
+pub struct Table1IterMut<'a, V> {
+    slice: &'a mut [Entry<[u8; 2], V>; 65536],
+    i: usize,
+}
+
+impl<'a, V> Iterator for Table1IterMut<'a, V> {
+    type Item = &'a mut Entry<[u8; 2], V>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.i < 65536
+            && unsafe {
+                u16::from_le_bytes(self.slice[self.i].key.assume_init()) as usize != self.i
+            }
+        {
+            self.i += 1;
+        }
+        if self.i == 65536 {
+            None
+        } else {
+            let res = unsafe { &mut *(self.slice.as_ptr().add(self.i) as *mut _) };
+            self.i += 1;
+            Some(res)
+        }
+    }
+}
+
+pub struct Table1IterPtr<V> {
+    slice: *const [Entry<[u8; 2], V>; 65536],
+    i: usize,
+}
+
+impl<V> Iterator for Table1IterPtr<V> {
+    type Item = *const Entry<[u8; 2], V>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.i < 65536
+            && unsafe {
+                u16::from_le_bytes((*self.slice)[self.i].key.assume_init()) as usize != self.i
+            }
+        {
+            self.i += 1;
+        }
+        if self.i == 65536 {
+            None
+        } else {
+            let res = unsafe { &*((*self.slice).as_ptr().add(self.i) as *const _) };
+            self.i += 1;
+            Some(res)
+        }
+    }
+}
+
+pub struct Table1IterMutPtr<V> {
+    slice: *mut [Entry<[u8; 2], V>; 65536],
+    i: usize,
+}
+
+impl<V> Iterator for Table1IterMutPtr<V> {
+    type Item = *mut Entry<[u8; 2], V>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.i < 65536
+            && unsafe {
+                u16::from_le_bytes((*self.slice)[self.i].key.assume_init()) as usize != self.i
+            }
+        {
+            self.i += 1;
+        }
+        if self.i == 65536 {
+            None
+        } else {
+            let res = unsafe { &mut *((*self.slice).as_ptr().add(self.i) as *mut _) };
+            self.i += 1;
+            Some(res)
         }
     }
 }

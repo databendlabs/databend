@@ -25,11 +25,10 @@ use common_datavalues::TypeID;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
 
-use crate::pipelines::processors::transforms::group_by::keys_ref::KeysRef;
 use crate::pipelines::processors::AggregatorParams;
 
-pub trait GroupColumnsBuilder<Key> {
-    fn append_value(&mut self, v: &Key);
+pub trait GroupColumnsBuilder<KeyRef> {
+    fn append_value(&mut self, v: KeyRef);
     fn finish(self) -> Result<Vec<ColumnRef>>;
 }
 
@@ -53,8 +52,8 @@ impl<T: Copy + Send + Sync + 'static> GroupColumnsBuilder<T> for FixedKeysGroupC
 where for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey = T>
 {
     #[inline]
-    fn append_value(&mut self, v: &T) {
-        self.data.push(*v);
+    fn append_value(&mut self, v: T) {
+        self.data.push(v);
     }
 
     #[inline]
@@ -65,7 +64,7 @@ where for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey = T>
 }
 
 pub struct SerializedKeysGroupColumnsBuilder {
-    data: Vec<KeysRef>,
+    data: Vec<*const [u8]>,
     groups_fields: Vec<DataField>,
 }
 
@@ -78,9 +77,9 @@ impl SerializedKeysGroupColumnsBuilder {
     }
 }
 
-impl GroupColumnsBuilder<KeysRef> for SerializedKeysGroupColumnsBuilder {
-    fn append_value(&mut self, v: &KeysRef) {
-        self.data.push(*v);
+impl GroupColumnsBuilder<*const [u8]> for SerializedKeysGroupColumnsBuilder {
+    fn append_value(&mut self, v: *const [u8]) {
+        self.data.push(v);
     }
 
     fn finish(self) -> Result<Vec<ColumnRef>> {
@@ -88,8 +87,7 @@ impl GroupColumnsBuilder<KeysRef> for SerializedKeysGroupColumnsBuilder {
 
         for v in &self.data {
             unsafe {
-                let value = std::slice::from_raw_parts(v.address as *const u8, v.length);
-                keys.push(value);
+                keys.push(v.as_ref().unwrap());
             }
         }
 

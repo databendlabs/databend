@@ -27,12 +27,14 @@ use common_hashtable::HashMapKind;
 use common_hashtable::HashMapKindIterMutPtr;
 use common_hashtable::HashtableEntry;
 use common_hashtable::HashtableKeyable;
+use common_hashtable::UnsizedHashMap;
+use common_hashtable::UnsizedHashMapIterMutPtr;
+use common_hashtable::UnsizedHashtableFakeEntry;
 
 use crate::pipelines::processors::transforms::group_by::aggregator_state_entity::ShortFixedKeyable;
 use crate::pipelines::processors::transforms::group_by::aggregator_state_entity::ShortFixedKeysStateEntity;
 use crate::pipelines::processors::transforms::group_by::aggregator_state_entity::StateEntity;
 use crate::pipelines::processors::transforms::group_by::aggregator_state_iterator::ShortFixedKeysStateIterator;
-use crate::pipelines::processors::transforms::group_by::keys_ref::KeysRef;
 use crate::pipelines::processors::transforms::group_by::AggregatorParams;
 use crate::pipelines::processors::AggregatorParams as NewAggregatorParams;
 
@@ -44,8 +46,9 @@ use crate::pipelines::processors::AggregatorParams as NewAggregatorParams;
 ///     - Group by key data memory pool (if necessary)
 #[allow(clippy::len_without_is_empty)]
 pub trait AggregatorState<Method: HashMethod>: Sync + Send {
-    type Key;
-    type Entity: StateEntity<Self::Key>;
+    type Key: ?Sized;
+    type KeyRef: Copy;
+    type Entity: StateEntity<KeyRef = Self::KeyRef>;
     type Iterator: Iterator<Item = *mut Self::Entity>;
 
     fn len(&self) -> usize;
@@ -80,7 +83,7 @@ pub trait AggregatorState<Method: HashMethod>: Sync + Send {
 
     fn entity(&mut self, key: Method::HashKeyRef<'_>, inserted: &mut bool) -> *mut Self::Entity;
 
-    fn entity_by_key(&mut self, key: &Self::Key, inserted: &mut bool) -> *mut Self::Entity;
+    fn entity_by_key(&mut self, key: Self::KeyRef, inserted: &mut bool) -> *mut Self::Entity;
 
     fn is_two_level(&self) -> bool {
         false
@@ -146,6 +149,7 @@ where
     for<'a> <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashtableKeyable,
 {
     type Key = T;
+    type KeyRef = T;
     type Entity = ShortFixedKeysStateEntity<T>;
     type Iterator = ShortFixedKeysStateIterator<T>;
 
@@ -184,8 +188,8 @@ where
     }
 
     #[inline(always)]
-    fn entity_by_key(&mut self, key: &Self::Key, inserted: &mut bool) -> *mut Self::Entity {
-        self.entity(*key, inserted)
+    fn entity_by_key(&mut self, key: Self::KeyRef, inserted: &mut bool) -> *mut Self::Entity {
+        self.entity(key, inserted)
     }
 
     #[inline(always)]
@@ -233,6 +237,7 @@ where
     for<'a> <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashtableKeyable,
 {
     type Key = T;
+    type KeyRef = T;
     type Entity = HashtableEntry<T, usize>;
     type Iterator = HashMapKindIterMutPtr<T, usize>;
 
@@ -266,8 +271,8 @@ where
     }
 
     #[inline(always)]
-    fn entity_by_key(&mut self, key: &Self::Key, inserted: &mut bool) -> *mut Self::Entity {
-        self.entity(*key, inserted)
+    fn entity_by_key(&mut self, key: Self::KeyRef, inserted: &mut bool) -> *mut Self::Entity {
+        self.entity(key, inserted)
     }
 
     #[inline(always)]
@@ -283,9 +288,8 @@ where
 }
 
 pub struct SerializedKeysAggregatorState {
-    pub keys_area: Bump,
-    pub state_area: Bump,
-    pub data_state_map: HashMapKind<KeysRef, usize>,
+    pub area: Bump,
+    pub data_state_map: UnsizedHashMap<[u8], usize>,
     pub two_level_flag: bool,
 }
 
@@ -301,9 +305,10 @@ unsafe impl Send for SerializedKeysAggregatorState {}
 unsafe impl Sync for SerializedKeysAggregatorState {}
 
 impl AggregatorState<HashMethodSerializer> for SerializedKeysAggregatorState {
-    type Key = KeysRef;
-    type Entity = HashtableEntry<KeysRef, usize>;
-    type Iterator = HashMapKindIterMutPtr<KeysRef, usize>;
+    type Key = [u8];
+    type KeyRef = *const [u8];
+    type Entity = UnsizedHashtableFakeEntry<[u8], usize>;
+    type Iterator = UnsizedHashMapIterMutPtr<[u8], usize>;
 
     fn len(&self) -> usize {
         self.data_state_map.len()
@@ -314,23 +319,15 @@ impl AggregatorState<HashMethodSerializer> for SerializedKeysAggregatorState {
 
     #[inline(always)]
     fn alloc_place(&self, layout: Layout) -> StateAddr {
-        self.state_area.alloc_layout(layout).into()
+        self.area.alloc_layout(layout).into()
     }
 
     #[inline(always)]
     fn entity(&mut self, keys: &[u8], inserted: &mut bool) -> *mut Self::Entity {
-        let mut keys_ref = KeysRef::create(keys.as_ptr() as usize, keys.len());
         unsafe {
-            match self.data_state_map.insert_and_entry(keys_ref) {
+            match self.data_state_map.insert_and_entry(keys) {
                 Ok(e) => {
                     *inserted = true;
-
-                    // Keys will be destroyed after call we need copy the keys to the memory pool.
-                    let global_keys = self.keys_area.alloc_slice_copy(keys);
-                    keys_ref.address = global_keys.as_ptr() as usize;
-                    // TODO: maybe need set key method.
-                    *(e.get() as *const _ as *mut _) = keys_ref;
-
                     e
                 }
                 Err(e) => {
@@ -342,19 +339,11 @@ impl AggregatorState<HashMethodSerializer> for SerializedKeysAggregatorState {
     }
 
     #[inline(always)]
-    fn entity_by_key(&mut self, keys_ref: &KeysRef, inserted: &mut bool) -> *mut Self::Entity {
+    fn entity_by_key(&mut self, key_ref: Self::KeyRef, inserted: &mut bool) -> *mut Self::Entity {
         unsafe {
-            match self.data_state_map.insert_and_entry(*keys_ref) {
+            match self.data_state_map.insert_and_entry(&*key_ref) {
                 Ok(e) => {
                     *inserted = true;
-
-                    // Keys will be destroyed after call we need copy the keys to the memory pool.
-                    let data_ptr = keys_ref.address as *mut u8;
-                    let keys = std::slice::from_raw_parts_mut(data_ptr, keys_ref.length);
-                    let global_keys = self.keys_area.alloc_slice_copy(keys);
-                    let mut keys_ref = *keys_ref;
-                    keys_ref.address = global_keys.as_ptr() as usize;
-                    *(e.get() as *const _ as *mut _) = keys_ref;
                     e
                 }
                 Err(e) => {
@@ -372,7 +361,7 @@ impl AggregatorState<HashMethodSerializer> for SerializedKeysAggregatorState {
 
     #[inline(always)]
     fn convert_to_twolevel(&mut self) {
-        self.data_state_map.convert_to_twolevel();
+        // self.data_state_map.convert_to_twolevel();
         self.two_level_flag = true;
     }
 }

@@ -23,7 +23,7 @@ use common_datablocks::HashMethodKeysU512;
 use common_datablocks::HashMethodSerializer;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_hashtable::HashMapKind;
+use common_hashtable::UnsizedHashMap;
 use primitive_types::U256;
 use primitive_types::U512;
 
@@ -84,13 +84,13 @@ pub trait PolymorphicKeysHelper<Method: HashMethod> {
     type State: AggregatorState<Method>;
     fn aggregate_state(&self) -> Self::State;
 
-    type ColumnBuilder: KeysColumnBuilder<<Self::State as AggregatorState<Method>>::Key>;
+    type ColumnBuilder: KeysColumnBuilder<<Self::State as AggregatorState<Method>>::KeyRef>;
     fn keys_column_builder(&self, capacity: usize) -> Self::ColumnBuilder;
 
-    type KeysColumnIter: KeysColumnIter<<Self::State as AggregatorState<Method>>::Key>;
+    type KeysColumnIter: KeysColumnIter<<Self::State as AggregatorState<Method>>::KeyRef>;
     fn keys_iter_from_column(&self, column: &ColumnRef) -> Result<Self::KeysColumnIter>;
 
-    type GroupColumnsBuilder: GroupColumnsBuilder<<Self::State as AggregatorState<Method>>::Key>;
+    type GroupColumnsBuilder: GroupColumnsBuilder<<Self::State as AggregatorState<Method>>::KeyRef>;
     fn group_columns_builder(
         &self,
         capacity: usize,
@@ -289,9 +289,8 @@ impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
     type State = SerializedKeysAggregatorState;
     fn aggregate_state(&self) -> Self::State {
         SerializedKeysAggregatorState {
-            keys_area: Bump::new(),
-            state_area: Bump::new(),
-            data_state_map: HashMapKind::new(),
+            area: Bump::new(),
+            data_state_map: UnsizedHashMap::new(),
             two_level_flag: false,
         }
     }

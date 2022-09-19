@@ -35,6 +35,7 @@ pub use table0::Entry as HashtableEntry;
 pub use traits::FastHash;
 pub use traits::Keyable as HashtableKeyable;
 pub use traits::UnsizedKeyable as HashtableUnsizedKeyable;
+pub use unsized_hashtable::UnsizedHashtableFakeEntry;
 
 pub type Hashed<K> = utils::Hashed<K>;
 
@@ -83,4 +84,12 @@ pub type HashSetKindIterPtr<K> = twolevel_hashtable::HashtableKindIterPtr<K, ()>
 pub type HashSetKindIterMutPtr<K> = twolevel_hashtable::HashtableKindIterMutPtr<K, ()>;
 
 pub type UnsizedHashMap<K, V> = unsized_hashtable::UnsizedHashtable<K, V>;
+pub type UnsizedHashMapIter<'a, K, V> = unsized_hashtable::UnsizedHashtableIter<'a, K, V>;
+pub type UnsizedHashMapIterMut<'a, K, V> = unsized_hashtable::UnsizedHashtableIterMut<'a, K, V>;
+pub type UnsizedHashMapIterPtr<K, V> = unsized_hashtable::UnsizedHashtableIterPtr<K, V>;
+pub type UnsizedHashMapIterMutPtr<K, V> = unsized_hashtable::UnsizedHashtableIterMutPtr<K, V>;
 pub type UnsizedHashSet<K> = unsized_hashtable::UnsizedHashtable<K, ()>;
+pub type UnsizedHashSetIter<'a, K> = unsized_hashtable::UnsizedHashtableIter<'a, K, ()>;
+pub type UnsizedHashSetIterMut<'a, K> = unsized_hashtable::UnsizedHashtableIterMut<'a, K, ()>;
+pub type UnsizedHashSetIterPtr<K> = unsized_hashtable::UnsizedHashtableIterPtr<K, ()>;
+pub type UnsizedHashSetIterMutPtr<K> = unsized_hashtable::UnsizedHashtableIterMutPtr<K, ()>;

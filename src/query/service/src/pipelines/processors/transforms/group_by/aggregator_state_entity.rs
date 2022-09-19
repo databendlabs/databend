@@ -14,9 +14,12 @@
 
 use common_hashtable::HashtableEntry;
 use common_hashtable::HashtableKeyable;
+use common_hashtable::UnsizedHashtableFakeEntry;
 
-pub trait StateEntity<Key> {
-    fn get_state_key<'a>(self: *mut Self) -> &'a Key;
+pub trait StateEntity {
+    type KeyRef: Copy;
+
+    fn get_state_key(self: *mut Self) -> Self::KeyRef;
     fn set_state_value(self: *mut Self, value: usize);
     fn get_state_value<'a>(self: *mut Self) -> &'a usize;
 }
@@ -32,10 +35,12 @@ pub struct ShortFixedKeysStateEntity<Key: ShortFixedKeyable> {
     pub fill: bool,
 }
 
-impl<Key: ShortFixedKeyable> StateEntity<Key> for ShortFixedKeysStateEntity<Key> {
+impl<Key: ShortFixedKeyable + Copy> StateEntity for ShortFixedKeysStateEntity<Key> {
+    type KeyRef = Key;
+
     #[inline(always)]
-    fn get_state_key<'a>(self: *mut Self) -> &'a Key {
-        unsafe { &(*self).key }
+    fn get_state_key<'a>(self: *mut Self) -> Key {
+        unsafe { (*self).key }
     }
 
     #[inline(always)]
@@ -49,10 +54,12 @@ impl<Key: ShortFixedKeyable> StateEntity<Key> for ShortFixedKeysStateEntity<Key>
     }
 }
 
-impl<Key: HashtableKeyable> StateEntity<Key> for HashtableEntry<Key, usize> {
+impl<Key: HashtableKeyable> StateEntity for HashtableEntry<Key, usize> {
+    type KeyRef = Key;
+
     #[inline(always)]
-    fn get_state_key<'a>(self: *mut Self) -> &'a Key {
-        unsafe { (*self).key() }
+    fn get_state_key(self: *mut Self) -> Key {
+        unsafe { *(*self).key() }
     }
 
     #[inline(always)]
@@ -65,6 +72,27 @@ impl<Key: HashtableKeyable> StateEntity<Key> for HashtableEntry<Key, usize> {
     #[inline(always)]
     fn get_state_value<'a>(self: *mut Self) -> &'a usize {
         unsafe { &*((*self).get() as *const _) }
+    }
+}
+
+impl StateEntity for UnsizedHashtableFakeEntry<[u8], usize> {
+    type KeyRef = *const [u8];
+
+    #[inline(always)]
+    fn get_state_key(self: *mut Self) -> *const [u8] {
+        unsafe { self.key() }
+    }
+
+    #[inline(always)]
+    fn set_state_value(self: *mut Self, value: usize) {
+        unsafe {
+            *self.get_mut() = value;
+        }
+    }
+
+    #[inline(always)]
+    fn get_state_value<'a>(self: *mut Self) -> &'a usize {
+        unsafe { self.get() }
     }
 }
 

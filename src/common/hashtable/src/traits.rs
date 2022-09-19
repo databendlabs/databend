@@ -133,6 +133,23 @@ unsafe impl Keyable for OrderedFloat<f64> {
     }
 }
 
+unsafe impl<const N: usize> Keyable for [u8; N] {
+    #[inline(always)]
+    fn equals_zero(this: &Self) -> bool {
+        *this == [0; N]
+    }
+
+    #[inline(always)]
+    fn is_zero(this: &MaybeUninit<Self>) -> bool {
+        unsafe { this.assume_init() == [0; N] }
+    }
+
+    #[inline(always)]
+    fn hash(&self) -> u64 {
+        (self as &[u8]).fast_hash()
+    }
+}
+
 impl UnsizedKeyable for [u8] {
     fn as_bytes(&self) -> &[u8] {
         self

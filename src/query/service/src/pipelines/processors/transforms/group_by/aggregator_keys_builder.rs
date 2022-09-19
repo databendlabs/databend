@@ -18,12 +18,10 @@ use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
 use common_datavalues::prelude::*;
 
-use crate::pipelines::processors::transforms::group_by::keys_ref::KeysRef;
-
 /// Remove the group by key from the state and rebuild it into a column
-pub trait KeysColumnBuilder<Key> {
+pub trait KeysColumnBuilder<KeyRef> {
     fn finish(self) -> ColumnRef;
-    fn append_value(&mut self, v: &Key);
+    fn append_value(&mut self, v: KeyRef);
 }
 
 pub struct FixedKeysColumnBuilder<T>
@@ -43,8 +41,8 @@ where
     }
 
     #[inline]
-    fn append_value(&mut self, v: &T) {
-        self.inner_builder.append_value(*v)
+    fn append_value(&mut self, v: T) {
+        self.inner_builder.append_value(v)
     }
 }
 
@@ -52,15 +50,14 @@ pub struct SerializedKeysColumnBuilder {
     pub inner_builder: MutableStringColumn,
 }
 
-impl KeysColumnBuilder<KeysRef> for SerializedKeysColumnBuilder {
+impl KeysColumnBuilder<*const [u8]> for SerializedKeysColumnBuilder {
     fn finish(mut self) -> ColumnRef {
         self.inner_builder.to_column()
     }
 
-    fn append_value(&mut self, v: &KeysRef) {
+    fn append_value(&mut self, v: *const [u8]) {
         unsafe {
-            let value = std::slice::from_raw_parts(v.address as *const u8, v.length);
-            self.inner_builder.append_value(value);
+            self.inner_builder.append_value(&*v);
         }
     }
 }
@@ -83,7 +80,7 @@ where
     }
 
     #[inline]
-    fn append_value(&mut self, v: &T) {
+    fn append_value(&mut self, v: T) {
         let values = self.inner_builder.values_mut();
         let new_len = values.len() + T::BYTE_SIZE;
         values.resize(new_len, 0);

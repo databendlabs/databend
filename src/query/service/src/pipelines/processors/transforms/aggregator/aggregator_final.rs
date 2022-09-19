@@ -106,13 +106,13 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> FinalAggregator<
     fn lookup_state(
         params: &AggregatorParams,
         state: &mut Method::State,
-        keys: &[<Method::State as AggregatorState<Method>>::Key],
+        keys: &[<Method::State as AggregatorState<Method>>::KeyRef],
     ) -> StateAddrs {
         let mut places = Vec::with_capacity(keys.len());
 
         let mut inserted = true;
         for key in keys {
-            let entity = state.entity_by_key(key, &mut inserted);
+            let entity = state.entity_by_key(*key, &mut inserted);
 
             match inserted {
                 true => {
@@ -247,7 +247,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
 
         let mut inserted = true;
         for keys_ref in keys_iter.get_slice() {
-            self.state.entity_by_key(keys_ref, &mut inserted);
+            self.state.entity_by_key(*keys_ref, &mut inserted);
         }
 
         Ok(())

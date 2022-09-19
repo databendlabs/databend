@@ -329,7 +329,7 @@ where K: Keyable
 }
 
 pub struct Table0IterMut<'a, K, V> {
-    slice: &'a [Entry<K, V>],
+    slice: &'a mut [Entry<K, V>],
     i: usize,
 }
 
