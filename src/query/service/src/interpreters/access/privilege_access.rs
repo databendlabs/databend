@@ -35,64 +35,144 @@ impl PrivilegeAccess {
 
 #[async_trait::async_trait]
 impl AccessChecker for PrivilegeAccess {
-    async fn check(&self, plan: &PlanNode) -> Result<()> {
-        match plan {
-            PlanNode::Empty(_) => {}
-            PlanNode::Stage(_) => {}
-            PlanNode::Broadcast(_) => {}
-            PlanNode::Remote(_) => {}
-            PlanNode::Projection(_) => {}
-            PlanNode::Expression(_) => {}
-            PlanNode::AggregatorPartial(_) => {}
-            PlanNode::AggregatorFinal(_) => {}
-            PlanNode::Filter(_) => {}
-            PlanNode::Having(_) => {}
-            PlanNode::WindowFunc(_) => {}
-            PlanNode::Sort(_) => {}
-            PlanNode::Limit(_) => {}
-            PlanNode::LimitBy(_) => {}
-            PlanNode::ReadSource(_) => {}
-            PlanNode::SubQueryExpression(_) => {}
-            PlanNode::Sink(_) => {}
-            PlanNode::Explain(_) => {}
-            PlanNode::Select(_) => {}
-            PlanNode::Insert(_) => {}
-            PlanNode::Delete(_) => {}
-        }
+    async fn check(&self, _plan: &PlanNode) -> Result<()> {
+        // The old planner *NO* need to check anymore.
         Ok(())
     }
 
     async fn check_new(&self, plan: &Plan) -> Result<()> {
+        let session = self.ctx.get_current_session();
+
         match plan {
             Plan::Query { .. } => {}
             Plan::Explain { .. } => {}
             Plan::Copy(_) => {}
             Plan::Call(_) => {}
+
+            // Database.
             Plan::ShowCreateDatabase(_) => {}
-            Plan::CreateDatabase(_) => {}
-            Plan::DropDatabase(_) => {}
-            Plan::UndropDatabase(_) => {}
-            Plan::RenameDatabase(_) => {}
+            Plan::CreateDatabase(_) => {
+                session
+                    .validate_privilege(&GrantObject::Global, UserPrivilegeType::Create)
+                    .await?;
+            }
+            Plan::DropDatabase(_) => {
+                session
+                    .validate_privilege(&GrantObject::Global, UserPrivilegeType::Drop)
+                    .await?;
+            }
+            Plan::UndropDatabase(_) => {
+                session
+                    .validate_privilege(&GrantObject::Global, UserPrivilegeType::Drop)
+                    .await?;
+            }
+            Plan::RenameDatabase(_) => {
+                session
+                    .validate_privilege(&GrantObject::Global, UserPrivilegeType::Alter)
+                    .await?;
+            }
             Plan::UseDatabase(_) => {}
+
+            // Table.
             Plan::ShowCreateTable(_) => {}
             Plan::DescribeTable(_) => {}
-            Plan::CreateTable(_) => {}
-            Plan::DropTable(_) => {}
-            Plan::UndropTable(_) => {}
+            Plan::CreateTable(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Database(plan.catalog.clone(), plan.database.clone()),
+                        UserPrivilegeType::Create,
+                    )
+                    .await?;
+            }
+            Plan::DropTable(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Database(plan.catalog.clone(), plan.database.clone()),
+                        UserPrivilegeType::Drop,
+                    )
+                    .await?;
+            }
+            Plan::UndropTable(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Database(plan.catalog.clone(), plan.database.clone()),
+                        UserPrivilegeType::Drop,
+                    )
+                    .await?;
+            }
             Plan::RenameTable(_) => {}
-            Plan::AlterTableClusterKey(_) => {}
-            Plan::DropTableClusterKey(_) => {}
-            Plan::ReclusterTable(_) => {}
-            Plan::TruncateTable(_) => {}
+            Plan::AlterTableClusterKey(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        UserPrivilegeType::Alter,
+                    )
+                    .await?;
+            }
+            Plan::DropTableClusterKey(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        UserPrivilegeType::Drop,
+                    )
+                    .await?;
+            }
+            Plan::ReclusterTable(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        UserPrivilegeType::Alter,
+                    )
+                    .await?;
+            }
+            Plan::TruncateTable(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        UserPrivilegeType::Delete,
+                    )
+                    .await?;
+            }
             Plan::OptimizeTable(_) => {}
             Plan::ExistsTable(_) => {}
+
+            // Others.
             Plan::Insert(_) => {}
             Plan::Delete(_) => {}
-            Plan::CreateView(_) => {}
-            Plan::AlterView(_) => {}
+            Plan::CreateView(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Database(plan.catalog.clone(), plan.database.clone()),
+                        UserPrivilegeType::Alter,
+                    )
+                    .await?;
+            }
+            Plan::AlterView(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Database(plan.catalog.clone(), plan.database.clone()),
+                        UserPrivilegeType::Alter,
+                    )
+                    .await?;
+            }
             Plan::DropView(plan) => {
-                self.ctx
-                    .get_current_session()
+                session
                     .validate_privilege(
                         &GrantObject::Database(plan.catalog.clone(), plan.database.clone()),
                         UserPrivilegeType::Drop,
@@ -118,7 +198,11 @@ impl AccessChecker for PrivilegeAccess {
             Plan::RemoveStage(_) => {}
             Plan::Presign(_) => {}
             Plan::SetVariable(_) => {}
-            Plan::Kill(_) => {}
+            Plan::Kill(_) => {
+                session
+                    .validate_privilege(&GrantObject::Global, UserPrivilegeType::Super)
+                    .await?;
+            }
             Plan::CreateShare(_) => {}
             Plan::DropShare(_) => {}
             Plan::GrantShareObject(_) => {}

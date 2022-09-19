@@ -17,8 +17,6 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_legacy_planners::CreateDatabasePlan;
-use common_meta_types::GrantObject;
-use common_meta_types::UserPrivilegeType;
 use common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
@@ -46,11 +44,6 @@ impl Interpreter for CreateDatabaseInterpreter {
 
     #[tracing::instrument(level = "debug", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        self.ctx
-            .get_current_session()
-            .validate_privilege(&GrantObject::Global, UserPrivilegeType::Create)
-            .await?;
-
         let tenant = self.plan.tenant.clone();
         let quota_api = UserApiProvider::instance().get_tenant_quota_api_client(&tenant)?;
         let quota = quota_api.get_quota(None).await?.data;
