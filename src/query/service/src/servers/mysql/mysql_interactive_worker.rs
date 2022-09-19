@@ -347,10 +347,9 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
                 let mut has_result_set = true;
                 let interpreter = if settings.get_enable_planner_v2()? != 0 {
                     let mut planner = Planner::new(context.clone());
-                    planner.plan_sql(query).await.and_then(|v| async move {
-                        has_result_set = has_result_set_by_plan(&v.0);
-                        InterpreterFactoryV2::get(context.clone(), &v.0).await
-                    })
+                    let plan_res = planner.plan_sql(query).await?;
+                    has_result_set = has_result_set_by_plan(&plan_res.0);
+                    InterpreterFactoryV2::get(context.clone(), &plan_res.0).await
                 } else {
                     let (plan, _) = PlanParser::parse_with_hint(query, context.clone()).await;
                     plan.and_then(|v| {
