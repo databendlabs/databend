@@ -134,7 +134,7 @@ impl Catalog for ImmutableCatalog {
             .get_by_id(&table_id)
             .ok_or_else(|| ErrorCode::UnknownTable(format!("Unknown table id: '{}'", table_id)))?;
         let ti = table.get_table_info();
-        Ok((ti.ident.clone(), Arc::new(ti.meta.clone())))
+        Ok((ti.ident, Arc::new(ti.meta.clone())))
     }
 
     async fn get_table(

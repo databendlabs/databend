@@ -158,6 +158,10 @@ impl JoinHashTable {
                     return Ok(vec![result]);
                 }
             }
+            JoinType::Right => {
+                let result = self.right_join::<_, _>(hash_table, probe_state, keys_iter, input)?;
+                return Ok(vec![result]);
+            }
             Mark => {
                 results.push(DataBlock::empty());
                 // Three cases will produce Mark join:
@@ -520,6 +524,58 @@ impl JoinHashTable {
         DataBlock::filter_block(merged_block, &predicate)
     }
 
+    fn right_join<Key, IT>(
+        &self,
+        hash_table: &HashMap<Key, Vec<RowPtr>>,
+        probe_state: &mut ProbeState,
+        keys_iter: IT,
+        input: &DataBlock,
+    ) -> Result<DataBlock>
+    where
+        Key: HashTableKeyable + Clone + 'static,
+        IT: Iterator<Item = Key> + TrustedLen,
+    {
+        let local_build_indexes = &mut probe_state.build_indexs;
+        let probe_indexes = &mut probe_state.probe_indexs;
+        let valids = &probe_state.valids;
+        let mut validity = MutableBitmap::new();
+        for (i, key) in keys_iter.enumerate() {
+            let probe_result_ptr = Self::probe_key(hash_table, key, valids, i);
+            if let Some(v) = probe_result_ptr {
+                let probe_result_ptrs = v.get_value();
+                {
+                    let mut build_indexes =
+                        self.hash_join_desc.right_join_desc.build_indexes.write();
+                    build_indexes.extend(probe_result_ptrs);
+                    local_build_indexes.extend_from_slice(probe_result_ptrs);
+                }
+                for row_ptr in probe_result_ptrs.iter() {
+                    {
+                        let mut row_state = self.hash_join_desc.right_join_desc.row_state.write();
+                        row_state
+                            .entry(*row_ptr)
+                            .and_modify(|e| *e += 1)
+                            .or_insert(1_usize);
+                    }
+                }
+                probe_indexes.extend(std::iter::repeat(i as u32).take(probe_result_ptrs.len()));
+                validity.extend_constant(probe_result_ptrs.len(), true);
+            }
+        }
+
+        let build_block = self.row_space.gather(local_build_indexes)?;
+        let probe_block = DataBlock::block_take_by_indices(input, probe_indexes)?;
+        let validity: Bitmap = validity.into();
+        let nullable_columns = probe_block
+            .columns()
+            .iter()
+            .map(|c| Self::set_validity(c, &validity))
+            .collect::<Result<Vec<_>>>()?;
+        let nullable_probe_block = DataBlock::create(self.probe_schema.clone(), nullable_columns);
+
+        self.merge_eq_block(&build_block, &nullable_probe_block)
+    }
+
     // modify the bm by the value row_state
     // keep the index of the first positive state
     // bitmap: [1, 1, 1] with row_state [0, 0], probe_index: [0, 0, 0] (repeat the first element 3 times)
@@ -569,9 +625,9 @@ impl JoinHashTable {
     }
 
     // keep at least one index of the positive state and the null state
-    // bitmap: [1, 0, 1] with row_state [2, 0], probe_index: [0, 0, 1]
+    // bitmap: [1, 0, 1] with row_state [2, 1], probe_index: [0, 0, 1]
     // bitmap will be [1, 0, 1] -> [1, 0, 1] -> [1, 0, 1] -> [1, 0, 1]
-    // row_state will be [2, 0] -> [2, 0] -> [1, 0] -> [1, 0]
+    // row_state will be [2, 1] -> [2, 1] -> [1, 1] -> [1, 1]
     fn fill_null_for_left_join(
         bm: &mut MutableBitmap,
         probe_indexs: &[u32],
@@ -597,8 +653,27 @@ impl JoinHashTable {
         }
     }
 
+    pub(crate) fn filter_rows_for_right_join(
+        bm: &mut MutableBitmap,
+        build_indexes: &[RowPtr],
+        row_state: &mut std::collections::HashMap<RowPtr, usize>,
+    ) {
+        for (index, row) in build_indexes.iter().enumerate() {
+            if row_state[row] == 1 || row_state[row] == 0 {
+                if !bm.get(index) {
+                    bm.set(index, true)
+                }
+                continue;
+            }
+
+            if !bm.get(index) {
+                row_state.entry(*row).and_modify(|e| *e -= 1);
+            }
+        }
+    }
+
     // return an (option bitmap, all_true, all_false)
-    fn get_other_filters(
+    pub(crate) fn get_other_filters(
         &self,
         merged_block: &DataBlock,
         filter: &EvalNode,
