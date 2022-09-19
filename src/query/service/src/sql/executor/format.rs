@@ -16,6 +16,7 @@ use common_ast::ast::FormatTreeNode;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_legacy_planners::StageKind;
+use common_planner::IndexType;
 use itertools::Itertools;
 
 use super::AggregateFinal;
@@ -30,7 +31,6 @@ use super::Project;
 use super::Sort;
 use super::TableScan;
 use super::UnionAll;
-use crate::sql::planner::IndexType;
 use crate::sql::MetadataRef;
 use crate::sql::DUMMY_TABLE_INDEX;
 

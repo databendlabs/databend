@@ -17,9 +17,9 @@ use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_legacy_planners::Expression;
+use common_planner::IndexType;
 
 use crate::sql::executor::util::format_field_name;
-use crate::sql::planner::IndexType;
 use crate::sql::plans::AggregateFunction;
 use crate::sql::plans::AndExpr;
 use crate::sql::plans::BoundColumnRef;
