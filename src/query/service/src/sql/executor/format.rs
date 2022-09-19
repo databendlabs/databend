@@ -17,6 +17,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_legacy_planners::StageKind;
 use common_planner::IndexType;
+use common_planner::MetadataRef;
 use common_planner::DUMMY_TABLE_INDEX;
 use itertools::Itertools;
 
@@ -32,7 +33,6 @@ use super::Project;
 use super::Sort;
 use super::TableScan;
 use super::UnionAll;
-use crate::sql::MetadataRef;
 
 impl PhysicalPlan {
     pub fn format(&self, metadata: MetadataRef) -> Result<String> {

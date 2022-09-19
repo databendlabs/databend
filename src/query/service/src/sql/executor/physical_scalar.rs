@@ -17,9 +17,9 @@ use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use common_exception::Result;
 use common_planner::IndexType;
+use common_planner::MetadataRef;
 
 use super::ColumnID;
-use crate::sql::MetadataRef;
 
 /// Serializable and desugared representation of `Scalar`.
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]

@@ -26,6 +26,8 @@ use common_legacy_planners::Extras;
 use common_legacy_planners::PrewhereInfo;
 use common_legacy_planners::Projection;
 use common_legacy_planners::StageKind;
+use common_planner::Metadata;
+use common_planner::MetadataRef;
 use common_planner::DUMMY_TABLE_INDEX;
 use common_storages_fuse::TableContext;
 use itertools::Itertools;
@@ -58,8 +60,6 @@ use crate::sql::plans::Exchange;
 use crate::sql::plans::PhysicalScan;
 use crate::sql::plans::RelOperator;
 use crate::sql::plans::Scalar;
-use crate::sql::Metadata;
-use crate::sql::MetadataRef;
 use crate::sql::ScalarExpr;
 use crate::storages::ToReadDataSourcePlan;
 

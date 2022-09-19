@@ -21,6 +21,7 @@ use common_datavalues::NullableType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planner::IndexType;
+use common_planner::MetadataRef;
 
 use crate::sql::binder::wrap_cast;
 use crate::sql::binder::JoinPredicate;
@@ -55,7 +56,6 @@ use crate::sql::plans::SubqueryExpr;
 use crate::sql::plans::SubqueryType;
 use crate::sql::plans::UnionAll;
 use crate::sql::ColumnBinding;
-use crate::sql::MetadataRef;
 use crate::sql::ScalarExpr;
 
 /// Decorrelate subqueries inside `s_expr`.

@@ -17,6 +17,7 @@ use std::fmt::Display;
 use common_ast::ast::FormatTreeNode;
 use common_datavalues::format_data_type_sql;
 use common_functions::scalars::FunctionFactory;
+use common_planner::MetadataRef;
 use itertools::Itertools;
 
 use crate::sql::optimizer::SExpr;
@@ -38,7 +39,6 @@ use crate::sql::plans::Project;
 use crate::sql::plans::RelOperator;
 use crate::sql::plans::Scalar;
 use crate::sql::plans::Sort;
-use crate::sql::MetadataRef;
 use crate::sql::ScalarExpr;
 
 #[derive(Clone)]

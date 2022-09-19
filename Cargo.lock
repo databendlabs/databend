@@ -1719,6 +1719,11 @@ dependencies = [
 [[package]]
 name = "common-planner"
 version = "0.1.0"
+dependencies = [
+ "common-catalog",
+ "common-datavalues",
+ "parking_lot 0.12.1",
+]
 
 [[package]]
 name = "common-proto-conv"

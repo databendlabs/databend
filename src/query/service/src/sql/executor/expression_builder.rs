@@ -18,6 +18,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_legacy_planners::Expression;
 use common_planner::IndexType;
+use common_planner::MetadataRef;
 
 use crate::sql::executor::util::format_field_name;
 use crate::sql::plans::AggregateFunction;
@@ -29,7 +30,6 @@ use crate::sql::plans::ConstantExpr;
 use crate::sql::plans::FunctionCall;
 use crate::sql::plans::OrExpr;
 use crate::sql::plans::Scalar;
-use crate::sql::MetadataRef;
 
 pub trait FiledNameFormat {
     fn format(display_name: &str, index: IndexType) -> String;

@@ -7,3 +7,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
+common-catalog = { path = "../catalog" }
+common-datavalues = { path = "../datavalues" }
+
+parking_lot = "0.12"

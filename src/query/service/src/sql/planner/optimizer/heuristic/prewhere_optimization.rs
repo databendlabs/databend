@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_planner::MetadataRef;
 
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::SExpr;
@@ -22,7 +23,6 @@ use crate::sql::plans::PatternPlan;
 use crate::sql::plans::Prewhere;
 use crate::sql::plans::RelOp;
 use crate::sql::plans::Scalar;
-use crate::sql::MetadataRef;
 
 pub struct PrewhereOptimizer {
     metadata: MetadataRef,

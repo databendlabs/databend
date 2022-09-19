@@ -22,5 +22,10 @@
 //! build pipelines, then our processes will produce result data blocks.
 
 mod metadata;
+pub use metadata::ColumnEntry;
+pub use metadata::ColumnSet;
 pub use metadata::IndexType;
+pub use metadata::Metadata;
+pub use metadata::MetadataRef;
+pub use metadata::TableEntry;
 pub use metadata::DUMMY_TABLE_INDEX;
