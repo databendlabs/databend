@@ -127,18 +127,18 @@ impl CopyInterpreterV2 {
         &self,
         catalog_name: &str,
         table_id: u64,
-        copy_stage_files: Option<BTreeMap<String, TableCopiedFileInfo>>,
+        copy_stage_files: BTreeMap<String, TableCopiedFileInfo>,
     ) -> Result<()> {
-        if let Some(copy_stage_files) = copy_stage_files {
-            if !copy_stage_files.is_empty() {
-                let req = UpsertTableCopiedFileReq {
-                    table_id,
-                    file_info: copy_stage_files.clone(),
-                    expire_at: None,
-                };
-                let catalog = self.ctx.get_catalog(catalog_name)?;
-                catalog.upsert_table_copied_file_info(req).await?;
-            }
+        tracing::info!("upsert_copied_files_info: {:?}", copy_stage_files);
+
+        if !copy_stage_files.is_empty() {
+            let req = UpsertTableCopiedFileReq {
+                table_id,
+                file_info: copy_stage_files.clone(),
+                expire_at: None,
+            };
+            let catalog = self.ctx.get_catalog(catalog_name)?;
+            catalog.upsert_table_copied_file_info(req).await?;
         }
         Ok(())
     }
@@ -416,7 +416,7 @@ impl Interpreter for CopyInterpreterV2 {
 
                 tracing::info!("matched files: {:?}, pattern: {}", &files, pattern);
 
-                let (table_id, files, copy_stage_files) = match &from.source_info {
+                match &from.source_info {
                     SourceInfo::StageSource(table_info) => {
                         let (table_id, copy_stage_files) = self
                             .filter_duplicate_files(
@@ -434,30 +434,40 @@ impl Interpreter for CopyInterpreterV2 {
                             &copy_stage_files.keys(),
                         );
 
-                        (
-                            table_id,
-                            copy_stage_files.keys().cloned().collect(),
-                            Some(copy_stage_files),
-                        )
+                        if copy_stage_files.is_empty() {
+                            return Ok(PipelineBuildResult::create());
+                        }
+
+                        let result = self
+                            .copy_files_to_table(
+                                catalog_name,
+                                database_name,
+                                table_name,
+                                from,
+                                copy_stage_files.keys().cloned().collect(),
+                            )
+                            .await;
+
+                        if result.is_ok() {
+                            let _ = self
+                                .upsert_copied_files_info(catalog_name, table_id, copy_stage_files)
+                                .await?;
+                        }
+
+                        result
                     }
-                    _other => (0, files.clone(), None),
-                };
-
-                let result = self
-                    .copy_files_to_table(
-                        catalog_name,
-                        database_name,
-                        table_name,
-                        from,
-                        files.clone(),
-                    )
-                    .await;
-
-                if result.is_ok() {
-                    let _ = self.upsert_copied_files_info(catalog_name, table_id, copy_stage_files);
+                    _other => {
+                        return self
+                            .copy_files_to_table(
+                                catalog_name,
+                                database_name,
+                                table_name,
+                                from,
+                                files.clone(),
+                            )
+                            .await;
+                    }
                 }
-                result
-                // Ok(PipelineBuildResult::create())
             }
             CopyPlanV2::IntoStage {
                 stage, from, path, ..
