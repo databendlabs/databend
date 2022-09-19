@@ -57,9 +57,9 @@ impl Compactor for BlockCompactor {
         let block = blocks[size - 1].clone();
 
         // perfect block
-        if (block.num_rows() >= self.min_rows_per_block
-            && block.num_rows() <= self.max_rows_per_block)
-            || block.memory_size() >= self.max_bytes_per_block
+        if block.num_rows() <= self.max_rows_per_block
+            && (block.num_rows() >= self.min_rows_per_block
+                || block.memory_size() >= self.max_bytes_per_block)
         {
             res.push(block);
             blocks.remove(size - 1);
@@ -90,8 +90,9 @@ impl Compactor for BlockCompactor {
 
         for block in blocks.iter() {
             // Perfect block, no need to compact
-            if block.num_rows() >= self.min_rows_per_block
-                && block.num_rows() <= self.max_rows_per_block
+            if block.num_rows() <= self.max_rows_per_block
+                && (block.num_rows() >= self.min_rows_per_block
+                    || block.memory_size() >= self.max_bytes_per_block)
             {
                 res.push(block.clone());
             } else {
