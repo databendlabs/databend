@@ -294,7 +294,7 @@ impl<'a> Binder {
         for column in columns.iter() {
             let column_binding = ColumnBinding {
                 database_name: Some(database_name.to_string()),
-                table_name: Some(table.name.clone()),
+                table_name: Some(table.name().to_string()),
                 column_name: column.name.clone(),
                 index: column.column_index,
                 data_type: Box::new(column.data_type.clone()),
@@ -306,7 +306,7 @@ impl<'a> Binder {
             };
             bind_context.add_column_binding(column_binding);
         }
-        let stat = table.table.statistics(self.ctx.clone()).await?;
+        let stat = table.table().statistics(self.ctx.clone()).await?;
         Ok((
             SExpr::create_leaf(
                 LogicalGet {

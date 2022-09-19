@@ -136,7 +136,7 @@ impl PhysicalPlanBuilder {
                 }
 
                 let table_entry = metadata.table(scan.table_index);
-                let table = table_entry.table.clone();
+                let table = table_entry.table();
                 let table_schema = table.schema();
 
                 let push_downs = self.push_downs(scan, &table_schema, has_inner_column)?;
@@ -144,7 +144,7 @@ impl PhysicalPlanBuilder {
                 let source = table
                     .read_plan_with_catalog(
                         self.ctx.clone(),
-                        table_entry.catalog.clone(),
+                        table_entry.catalog().to_string(),
                         Some(push_downs),
                     )
                     .await?;

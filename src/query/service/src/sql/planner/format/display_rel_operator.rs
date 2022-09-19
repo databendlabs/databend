@@ -246,7 +246,9 @@ fn physical_scan_to_format_tree(
             vec![
                 FormatTreeNode::new(FormatContext::Text(format!(
                     "table: {}.{}.{}",
-                    &table.catalog, &table.database, &table.name,
+                    table.catalog(),
+                    table.database(),
+                    table.name(),
                 ))),
                 FormatTreeNode::new(FormatContext::Text(format!(
                     "filters: [{}]",
@@ -302,7 +304,9 @@ fn logical_get_to_format_tree(
             vec![
                 FormatTreeNode::new(FormatContext::Text(format!(
                     "table: {}.{}.{}",
-                    &table.catalog, &table.database, &table.name,
+                    table.catalog(),
+                    table.database(),
+                    table.name(),
                 ))),
                 FormatTreeNode::new(FormatContext::Text(format!(
                     "filters: [{}]",

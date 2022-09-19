@@ -25,7 +25,7 @@ pub fn contains_local_table_scan(s_expr: &SExpr, metadata: &MetadataRef) -> bool
         .iter()
         .any(|s_expr| contains_local_table_scan(s_expr, metadata))
         || if let RelOperator::LogicalGet(get) = s_expr.plan() {
-            metadata.read().table(get.table_index).table.is_local()
+            metadata.read().table(get.table_index).table().is_local()
         } else {
             false
         }

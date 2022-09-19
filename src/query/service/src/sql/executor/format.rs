@@ -69,7 +69,7 @@ fn table_scan_to_format_tree(
         return Ok(FormatTreeNode::new("DummyTableScan".to_string()));
     }
     let table = metadata.read().table(plan.table_index).clone();
-    let table_name = format!("{}.{}.{}", table.catalog, table.database, table.name);
+    let table_name = format!("{}.{}.{}", table.catalog(), table.database(), table.name());
     let filters = plan
         .source
         .push_downs

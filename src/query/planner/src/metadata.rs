@@ -174,21 +174,21 @@ impl Metadata {
 
 #[derive(Clone)]
 pub struct TableEntry {
-    pub index: IndexType,
-    pub name: String,
-    pub catalog: String,
-    pub database: String,
+    catalog: String,
+    database: String,
+    name: String,
+    index: IndexType,
 
-    pub table: Arc<dyn Table>,
+    table: Arc<dyn Table>,
 }
 
 impl Debug for TableEntry {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TableEntry")
-            .field("index", &self.index)
-            .field("name", &self.name)
             .field("catalog", &self.catalog)
             .field("database", &self.database)
+            .field("name", &self.name)
+            .field("index", &self.index)
             .finish_non_exhaustive()
     }
 }
@@ -208,6 +208,31 @@ impl TableEntry {
             database,
             table,
         }
+    }
+
+    /// Get the catalog name of this table entry.
+    pub fn catalog(&self) -> &str {
+        &self.catalog
+    }
+
+    /// Get the database name of this table entry.
+    pub fn database(&self) -> &str {
+        &self.database
+    }
+
+    /// Get the name of this table entry.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Get the index this table entry.
+    pub fn index(&self) -> IndexType {
+        self.index
+    }
+
+    /// Get the table of this table entry.
+    pub fn table(&self) -> Arc<dyn Table> {
+        self.table.clone()
     }
 }
 

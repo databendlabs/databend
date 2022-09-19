@@ -95,7 +95,7 @@ impl PrewhereOptimizer {
             let mut get: LogicalGet = s_expr.child(0)?.plan().clone().try_into()?;
             let metadata = self.metadata.read().clone();
 
-            let table = metadata.table(get.table_index).table.clone();
+            let table = metadata.table(get.table_index).table();
             if !table.support_prewhere() {
                 // cannot optimize
                 return Ok(s_expr);

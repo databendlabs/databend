@@ -72,7 +72,7 @@ impl PhysicalScalar {
                 let column = metadata.read().column(index).clone();
                 let table_name = match column.table_index {
                     Some(table_index) => {
-                        format!("{}.", metadata.read().table(table_index).name.clone())
+                        format!("{}.", metadata.read().table(table_index).name())
                     }
                     None => "".to_string(),
                 };
