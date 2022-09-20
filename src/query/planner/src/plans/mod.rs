@@ -20,3 +20,7 @@ pub use create_database::CreateDatabasePlan;
 
 mod drop_database;
 pub use drop_database::DropDatabasePlan;
+
+mod rename_database;
+pub use rename_database::RenameDatabaseEntity;
+pub use rename_database::RenameDatabasePlan;

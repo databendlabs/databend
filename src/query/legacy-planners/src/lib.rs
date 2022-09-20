@@ -15,7 +15,6 @@
 mod plan_aggregator_final;
 mod plan_aggregator_partial;
 mod plan_broadcast;
-mod plan_database_rename;
 mod plan_database_show_create;
 mod plan_database_undrop;
 mod plan_delete;
@@ -107,8 +106,6 @@ mod plan_window_func;
 pub use plan_aggregator_final::AggregatorFinalPlan;
 pub use plan_aggregator_partial::AggregatorPartialPlan;
 pub use plan_broadcast::BroadcastPlan;
-pub use plan_database_rename::RenameDatabaseEntity;
-pub use plan_database_rename::RenameDatabasePlan;
 pub use plan_database_show_create::ShowCreateDatabasePlan;
 pub use plan_database_undrop::UndropDatabasePlan;
 pub use plan_delete::DeletePlan;
