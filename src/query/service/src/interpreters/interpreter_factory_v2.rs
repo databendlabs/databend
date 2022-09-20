@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_ast::ast::ExplainKind;
 use common_exception::Result;
 use tracing::error;
 
@@ -46,10 +47,10 @@ impl InterpreterFactoryV2 {
     pub async fn get(ctx: Arc<QueryContext>, plan: &Plan) -> Result<InterpreterPtr> {
         // Check the access permission.
         let access_checker = Accessor::create(ctx.clone());
-        access_checker
-            .check_new(plan)
-            .await
-            .map(|e| error!("Access.denied(v2): {:?}", e))?;
+        access_checker.check_new(plan).await.map_err(|e| {
+            error!("Access.denied(v2): {:?}", e);
+            e
+        })?;
 
         let inner = InterpreterFactoryV2::create_interpreter(ctx.clone(), plan)?;
 
@@ -78,6 +79,20 @@ impl InterpreterFactoryV2 {
                 *plan.clone(),
                 kind.clone(),
             )?)),
+            Plan::ExplainAst { formatted_string } => {
+                Ok(Arc::new(ExplainInterpreterV2::try_create(
+                    ctx,
+                    plan.clone(),
+                    ExplainKind::Ast(formatted_string.clone()),
+                )?))
+            }
+            Plan::ExplainSyntax { formatted_sql } => {
+                Ok(Arc::new(ExplainInterpreterV2::try_create(
+                    ctx,
+                    plan.clone(),
+                    ExplainKind::Syntax(formatted_sql.clone()),
+                )?))
+            }
 
             Plan::Call(plan) => Ok(Arc::new(CallInterpreter::try_create(ctx, *plan.clone())?)),
 

@@ -64,6 +64,8 @@ fn has_result_set_by_plan(plan: &Plan) -> bool {
         plan,
         Plan::Query { .. }
             | Plan::Explain { .. }
+            | Plan::ExplainAst { .. }
+            | Plan::ExplainSyntax { .. }
             | Plan::Call(_)
             | Plan::ShowCreateDatabase(_)
             | Plan::ShowCreateTable(_)
@@ -221,10 +223,10 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
         let mut writer = DFQueryResultWriter::create(writer);
 
         let instant = Instant::now();
-        let blocks = self.base.do_query(query).await;
+        let query_result = self.base.do_query(query).await;
 
         let format = self.base.session.get_format_settings()?;
-        let mut write_result = writer.write(blocks, &format).await;
+        let mut write_result = writer.write(query_result, &format).await;
 
         if let Err(cause) = write_result {
             let suffix = format!("(while in query {})", query);
