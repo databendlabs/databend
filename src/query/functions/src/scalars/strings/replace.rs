@@ -52,7 +52,7 @@ pub struct ReplaceFunction {
 impl ReplaceFunction {
     pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         for arg in args {
-            assert_string(*arg)?;
+            assert_string(arg)?;
         }
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
@@ -67,7 +67,7 @@ impl ReplaceFunction {
 
 impl Function for ReplaceFunction {
     fn name(&self) -> &str {
-        &*self.display_name
+        &self.display_name
     }
 
     fn return_type(&self) -> DataTypeImpl {

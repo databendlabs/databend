@@ -44,7 +44,7 @@ impl CheckJsonFunction {
 
 impl Function for CheckJsonFunction {
     fn name(&self) -> &str {
-        &*self.display_name
+        &self.display_name
     }
 
     fn return_type(&self) -> DataTypeImpl {

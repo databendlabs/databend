@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::CreateDatabasePlan;
+use common_planner::plans::CreateDatabasePlan;
 use common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;

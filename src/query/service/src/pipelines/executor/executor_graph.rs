@@ -242,15 +242,7 @@ impl ExecutingGraph {
                     state_guard_cache = Some(node.state.lock().unwrap());
                 }
 
-                let event = node.processor.event()?;
-                tracing::debug!(
-                    "node id:{:?}, name:{:?}, event: {:?}",
-                    node.processor.id(),
-                    node.processor.name(),
-                    event
-                );
-
-                let processor_state = match event {
+                let processor_state = match node.processor.event()? {
                     Event::Finished => State::Finished,
                     Event::NeedData | Event::NeedConsume => State::Idle,
                     Event::Sync => {

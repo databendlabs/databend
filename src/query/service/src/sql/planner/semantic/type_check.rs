@@ -611,7 +611,7 @@ impl<'a> TypeChecker<'a> {
                             span,
                             "not",
                             &[&Expr::Exists {
-                                span: *span,
+                                span,
                                 not: false,
                                 subquery: subquery.clone(),
                             }],
@@ -644,7 +644,7 @@ impl<'a> TypeChecker<'a> {
                                 subquery: subquery.clone(),
                                 not: false,
                                 expr: expr.clone(),
-                                span: *span,
+                                span,
                             }],
                             required_type,
                         )
@@ -684,7 +684,7 @@ impl<'a> TypeChecker<'a> {
                             ref column,
                             ..
                         } => {
-                            let box (_, data_type) = self.resolve(&*expr, None).await?;
+                            let box (_, data_type) = self.resolve(&expr, None).await?;
                             if data_type.data_type_id() != TypeID::Struct {
                                 break;
                             }
@@ -1848,6 +1848,7 @@ impl<'a> TypeChecker<'a> {
         Ok(Box::new((scalar, data_type)))
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn clone_expr_with_replacement<F>(
         &self,
         original_expr: &Expr<'a>,

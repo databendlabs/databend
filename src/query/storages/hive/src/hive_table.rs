@@ -35,7 +35,6 @@ use common_legacy_planners::Projection;
 use common_legacy_planners::ReadDataSourcePlan;
 use common_legacy_planners::RequireColumnsVisitor;
 use common_legacy_planners::Statistics;
-use common_legacy_planners::TruncateTablePlan;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -407,11 +406,7 @@ impl Table for HiveTable {
         )))
     }
 
-    async fn truncate(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _truncate_plan: TruncateTablePlan,
-    ) -> Result<()> {
+    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: &str, _: bool) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(
             "truncate for table {} is not implemented",
             self.name()
@@ -540,7 +535,7 @@ mod tests {
         m.insert("/", "/");
 
         for (hdfs_path, expected_path) in &m {
-            let path = convert_hdfs_path(*hdfs_path, true);
+            let path = convert_hdfs_path(hdfs_path, true);
             assert_eq!(path, *expected_path);
         }
     }

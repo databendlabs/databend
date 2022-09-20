@@ -25,17 +25,17 @@ use common_ast::Dialect;
 use common_ast::UDFValidator;
 use common_datavalues::DataTypeImpl;
 use common_exception::Result;
-use common_legacy_planners::AlterUserUDFPlan;
-use common_legacy_planners::CallPlan;
-use common_legacy_planners::CreateRolePlan;
-use common_legacy_planners::CreateUserUDFPlan;
-use common_legacy_planners::DropRolePlan;
-use common_legacy_planners::DropUserPlan;
-use common_legacy_planners::DropUserStagePlan;
-use common_legacy_planners::DropUserUDFPlan;
-use common_legacy_planners::ShowGrantsPlan;
-use common_legacy_planners::UseDatabasePlan;
 use common_meta_types::UserDefinedFunction;
+use common_planner::plans::AlterUDFPlan;
+use common_planner::plans::CallPlan;
+use common_planner::plans::CreateRolePlan;
+use common_planner::plans::CreateUDFPlan;
+use common_planner::plans::DropRolePlan;
+use common_planner::plans::DropStagePlan;
+use common_planner::plans::DropUDFPlan;
+use common_planner::plans::DropUserPlan;
+use common_planner::plans::ShowGrantsPlan;
+use common_planner::plans::UseDatabasePlan;
 use common_planner::MetadataRef;
 pub use scalar::ScalarBinder;
 pub use scalar_common::*;
@@ -220,7 +220,7 @@ impl<'a> Binder {
             Statement::DropStage {
                 stage_name,
                 if_exists,
-            } => Plan::DropStage(Box::new(DropUserStagePlan {
+            } => Plan::DropStage(Box::new(DropStagePlan {
                 if_exists: *if_exists,
                 name: stage_name.clone(),
             })),
@@ -264,7 +264,7 @@ impl<'a> Binder {
                     description: description.clone().unwrap_or_default(),
                 };
 
-                Plan::CreateUDF(Box::new(CreateUserUDFPlan {
+                Plan::CreateUDF(Box::new(CreateUDFPlan {
                     if_not_exists: *if_not_exists,
                     udf
                 }))
@@ -288,14 +288,14 @@ impl<'a> Binder {
                     description: description.clone().unwrap_or_default(),
                 };
 
-                Plan::AlterUDF(Box::new(AlterUserUDFPlan {
+                Plan::AlterUDF(Box::new(AlterUDFPlan {
                     udf,
                 }))
             }
             Statement::DropUDF {
                 if_exists,
                 udf_name,
-            } => Plan::DropUDF(Box::new(DropUserUDFPlan {
+            } => Plan::DropUDF(Box::new(DropUDFPlan {
                 if_exists: *if_exists,
                 name: udf_name.to_string(),
             })),

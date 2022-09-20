@@ -114,6 +114,7 @@ impl BlockReader {
                     page_meta_data,
                     Arc::new(|_, _| true),
                     vec![],
+                    usize::MAX,
                 );
                 Ok(BasicDecompressor::new(pages, vec![]))
             })
@@ -124,7 +125,13 @@ impl BlockReader {
             .map(|column_descriptor| &column_descriptor.descriptor.primitive_type)
             .collect::<Vec<_>>();
 
-        Ok(column_iter_to_arrays(columns, types, field, Some(rows))?)
+        Ok(column_iter_to_arrays(
+            columns,
+            types,
+            field,
+            Some(rows),
+            rows,
+        )?)
     }
 
     // TODO refine these

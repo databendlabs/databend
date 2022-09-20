@@ -232,11 +232,14 @@ impl<'a, T: ValueType> Iterator for NullableIterator<'a, T> {
     type Item = Option<T::ScalarRef<'a>>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next().zip(self.validity.next()).map(
-            |(scalar, is_null)| {
-                if is_null { None } else { Some(scalar) }
-            },
-        )
+        self.iter
+            .next()
+            .zip(self.validity.next())
+            .map(
+                |(scalar, is_not_null)| {
+                    if is_not_null { Some(scalar) } else { None }
+                },
+            )
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {

@@ -38,7 +38,7 @@ num = "0.4.0"
 num-format = "0.4.0"
 num-traits = "0.2.15"
 once_cell = "1.12.0"
-ordered-float = { git = "https://github.com/andylokandy/rust-ordered-float.git", branch = "as", features = ["serde"] }
+ordered-float = { version = "3.1.0", features = ["serde"] }
 pulldown-cmark = { version = "0.9.1", default-features = false }
 rand = { version = "0.8.5", features = ["small_rng"] }
 regex = "1.5.6"

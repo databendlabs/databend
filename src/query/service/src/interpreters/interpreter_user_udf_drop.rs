@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_legacy_planners::DropUserUDFPlan;
+use common_planner::plans::DropUDFPlan;
 use common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
@@ -26,11 +26,11 @@ use crate::sessions::TableContext;
 #[derive(Debug)]
 pub struct DropUserUDFInterpreter {
     ctx: Arc<QueryContext>,
-    plan: DropUserUDFPlan,
+    plan: DropUDFPlan,
 }
 
 impl DropUserUDFInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: DropUserUDFPlan) -> Result<Self> {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: DropUDFPlan) -> Result<Self> {
         Ok(DropUserUDFInterpreter { ctx, plan })
     }
 }

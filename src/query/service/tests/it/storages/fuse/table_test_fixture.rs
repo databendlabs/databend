@@ -20,13 +20,13 @@ use common_datablocks::assert_blocks_sorted_eq_with_name;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_legacy_planners::CreateDatabasePlan;
 use common_legacy_planners::Expression;
 use common_legacy_planners::Extras;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::TableMeta;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::SourcePipeBuilder;
+use common_planner::plans::CreateDatabasePlan;
 use common_storage::StorageFsConfig;
 use common_storage::StorageParams;
 use common_streams::SendableDataBlockStream;
@@ -333,6 +333,7 @@ pub async fn test_drive_with_args(ctx: Arc<QueryContext>, tbl_args: TableArgs) -
     let mut stream = test_drive_with_args_and_ctx(tbl_args, ctx).await?;
 
     while let Some(res) = stream.next().await {
+        #[allow(clippy::question_mark)]
         if let Err(cause) = res {
             return Err(cause);
         }

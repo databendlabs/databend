@@ -163,12 +163,32 @@ impl Metadata {
         table_index
     }
 
-    pub fn find_smallest_column_within(&self, indices: &[usize]) -> usize {
-        let entries = indices
+    /// find_smallest_column in given indices.
+    pub fn find_smallest_column(&self, indices: &[usize]) -> usize {
+        let mut smallest_index = indices.iter().min().expect("indices must be valid");
+        let mut smallest_size = usize::MAX;
+        for idx in indices.iter() {
+            let entry = self.column(*idx);
+            if let Ok(bytes) = entry.data_type.data_type_id().numeric_byte_size() {
+                if smallest_size > bytes {
+                    smallest_size = bytes;
+                    smallest_index = &entry.column_index;
+                }
+            }
+        }
+        *smallest_index
+    }
+
+    /// find_smallest_column_by_table_index by given table_index
+    pub fn find_smallest_column_by_table_index(&self, table_index: IndexType) -> usize {
+        let indices: Vec<usize> = self
+            .columns
             .iter()
-            .map(|i| self.column(*i).clone())
-            .collect::<Vec<_>>();
-        find_smallest_column(entries.as_slice())
+            .filter(|v| v.table_index == Some(table_index))
+            .map(|v| v.column_index)
+            .collect();
+
+        self.find_smallest_column(&indices)
     }
 }
 
@@ -294,25 +314,4 @@ impl ColumnEntry {
     pub fn has_path_indices(&self) -> bool {
         self.path_indices.is_some()
     }
-}
-
-/// TODO(xuanwo): migrate this as a function of metadata.
-pub fn find_smallest_column(entries: &[ColumnEntry]) -> usize {
-    debug_assert!(!entries.is_empty());
-    let mut column_indexes = entries
-        .iter()
-        .map(|entry| entry.column_index)
-        .collect::<Vec<IndexType>>();
-    column_indexes.sort();
-    let mut smallest_index = column_indexes[0];
-    let mut smallest_size = usize::MAX;
-    for (idx, column_entry) in entries.iter().enumerate() {
-        if let Ok(bytes) = column_entry.data_type.data_type_id().numeric_byte_size() {
-            if smallest_size > bytes {
-                smallest_size = bytes;
-                smallest_index = entries[idx].column_index;
-            }
-        }
-    }
-    smallest_index
 }

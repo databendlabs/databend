@@ -50,7 +50,7 @@ impl SpaceFunction {
 
 impl Function for SpaceFunction {
     fn name(&self) -> &str {
-        &*self.display_name
+        &self.display_name
     }
 
     fn return_type(&self) -> DataTypeImpl {

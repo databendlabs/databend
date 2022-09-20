@@ -64,7 +64,7 @@ impl<const T: u8> LocatingFunction<T> {
 
 impl<const T: u8> Function for LocatingFunction<T> {
     fn name(&self) -> &str {
-        &*self.display_name
+        &self.display_name
     }
 
     fn return_type(&self) -> DataTypeImpl {

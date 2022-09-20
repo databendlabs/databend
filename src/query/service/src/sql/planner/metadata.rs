@@ -14,9 +14,6 @@
 
 use common_ast::ast::Expr;
 use common_ast::ast::Literal;
-use common_datavalues::prelude::*;
-use common_planner::ColumnEntry;
-use common_planner::IndexType;
 
 pub fn optimize_remove_count_args(name: &str, distinct: bool, args: &[&Expr]) -> bool {
     name.eq_ignore_ascii_case("count")
@@ -24,24 +21,4 @@ pub fn optimize_remove_count_args(name: &str, distinct: bool, args: &[&Expr]) ->
         && args
             .iter()
             .all(|expr| matches!(expr, Expr::Literal{lit,..} if *lit!=Literal::Null))
-}
-
-pub fn find_smallest_column(entries: &[ColumnEntry]) -> usize {
-    debug_assert!(!entries.is_empty());
-    let mut column_indexes = entries
-        .iter()
-        .map(|entry| entry.index())
-        .collect::<Vec<IndexType>>();
-    column_indexes.sort();
-    let mut smallest_index = column_indexes[0];
-    let mut smallest_size = usize::MAX;
-    for (idx, column_entry) in entries.iter().enumerate() {
-        if let Ok(bytes) = column_entry.data_type().data_type_id().numeric_byte_size() {
-            if smallest_size > bytes {
-                smallest_size = bytes;
-                smallest_index = entries[idx].index();
-            }
-        }
-    }
-    smallest_index
 }

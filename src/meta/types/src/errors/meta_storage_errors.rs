@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::error::Error;
+use std::any;
+use std::backtrace::Backtrace;
 
 use anyerror::AnyError;
 use common_exception::ErrorCode;
@@ -46,7 +47,7 @@ pub type MetaStorageResult<T> = Result<T, MetaStorageError>;
 
 impl From<MetaStorageError> for ErrorCode {
     fn from(e: MetaStorageError) -> Self {
-        ErrorCode::MetaStorageError(e.to_string()).set_backtrace(e.backtrace())
+        ErrorCode::MetaStorageError(e.to_string()).set_backtrace(any::request_ref::<Backtrace>(&e))
     }
 }
 
