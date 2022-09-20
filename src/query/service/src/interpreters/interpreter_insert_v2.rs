@@ -39,6 +39,8 @@ use common_pipeline_sources::processors::sources::AsyncSourcer;
 use common_pipeline_sources::processors::sources::SyncSource;
 use common_pipeline_sources::processors::sources::SyncSourcer;
 use common_pipeline_transforms::processors::transforms::Transform;
+use common_planner::Metadata;
+use common_planner::MetadataRef;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
@@ -66,8 +68,6 @@ use crate::sql::plans::InsertInputSource;
 use crate::sql::plans::Plan;
 use crate::sql::plans::Scalar;
 use crate::sql::BindContext;
-use crate::sql::Metadata;
-use crate::sql::MetadataRef;
 use crate::sql::NameResolutionContext;
 
 pub struct InsertInterpreterV2 {
@@ -372,7 +372,7 @@ impl ValueSource {
         schema: DataSchemaRef,
     ) -> Self {
         let bind_context = BindContext::new();
-        let metadata = Arc::new(RwLock::new(Metadata::create()));
+        let metadata = Arc::new(RwLock::new(Metadata::default()));
 
         Self {
             data,

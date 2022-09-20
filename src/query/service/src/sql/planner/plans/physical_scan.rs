@@ -15,6 +15,7 @@
 use std::hash::Hash;
 
 use common_exception::Result;
+use common_planner::IndexType;
 use itertools::Itertools;
 
 use super::logical_get::Prewhere;
@@ -23,7 +24,6 @@ use crate::sql::optimizer::Distribution;
 use crate::sql::optimizer::PhysicalProperty;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::RequiredProperty;
-use crate::sql::planner::IndexType;
 use crate::sql::plans::LogicalOperator;
 use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalOperator;

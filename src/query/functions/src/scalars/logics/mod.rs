@@ -20,6 +20,7 @@ mod xor;
 #[macro_use]
 mod macros;
 
+pub use and::LogicAndFiltersFunction;
 pub use and::LogicAndFunction;
 pub use logic::LogicFunction;
 pub use not::LogicNotFunction;

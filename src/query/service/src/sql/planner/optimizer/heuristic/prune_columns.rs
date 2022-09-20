@@ -14,6 +14,7 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planner::MetadataRef;
 use itertools::Itertools;
 
 use crate::sql::find_smallest_column;
@@ -25,7 +26,6 @@ use crate::sql::plans::EvalScalar;
 use crate::sql::plans::LogicalGet;
 use crate::sql::plans::Project;
 use crate::sql::plans::RelOperator;
-use crate::sql::MetadataRef;
 use crate::sql::ScalarExpr;
 
 pub struct ColumnPruner {

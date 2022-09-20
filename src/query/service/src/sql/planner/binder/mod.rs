@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 pub use aggregate::AggregateInfo;
 pub use bind_context::*;
+use common_ast::ast::ExplainKind;
 use common_ast::ast::Statement;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
@@ -35,6 +36,7 @@ use common_legacy_planners::DropUserUDFPlan;
 use common_legacy_planners::ShowGrantsPlan;
 use common_legacy_planners::UseDatabasePlan;
 use common_meta_types::UserDefinedFunction;
+use common_planner::MetadataRef;
 pub use scalar::ScalarBinder;
 pub use scalar_common::*;
 
@@ -43,7 +45,6 @@ use super::plans::RewriteKind;
 use super::semantic::NameResolutionContext;
 use crate::catalogs::CatalogManager;
 use crate::sessions::TableContext;
-use crate::sql::planner::metadata::MetadataRef;
 
 mod aggregate;
 mod bind_context;
@@ -118,10 +119,13 @@ impl<'a> Binder {
                 }
             }
 
-            Statement::Explain { query, kind } => Plan::Explain {
-                kind: kind.clone(),
-                plan: Box::new(self.bind_statement(bind_context, query).await?),
-            },
+            Statement::Explain { query, kind } => {
+                match kind {
+                    ExplainKind::Ast(formatted_stmt) => Plan::ExplainAst { formatted_string: formatted_stmt.clone() },
+                    ExplainKind::Syntax(formatted_sql) => Plan::ExplainSyntax { formatted_sql: formatted_sql.clone() },
+                    _ => Plan::Explain { kind: kind.clone(), plan: Box::new(self.bind_statement(bind_context, query).await?) },
+                }
+            }
 
             Statement::ShowFunctions { limit } => {
                 self.bind_show_functions(bind_context, limit).await?

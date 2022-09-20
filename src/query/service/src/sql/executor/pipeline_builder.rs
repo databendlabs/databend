@@ -53,10 +53,12 @@ use crate::pipelines::processors::transforms::TransformMarkJoin;
 use crate::pipelines::processors::transforms::TransformMergeBlock;
 use crate::pipelines::processors::transforms::TransformProject;
 use crate::pipelines::processors::transforms::TransformRename;
+use crate::pipelines::processors::transforms::TransformRightJoin;
 use crate::pipelines::processors::AggregatorParams;
 use crate::pipelines::processors::AggregatorTransformParams;
 use crate::pipelines::processors::JoinHashTable;
 use crate::pipelines::processors::MarkJoinCompactor;
+use crate::pipelines::processors::RightJoinCompactor;
 use crate::pipelines::processors::SinkBuildHashTable;
 use crate::pipelines::processors::Sinker;
 use crate::pipelines::processors::SortMergeCompactor;
@@ -145,6 +147,7 @@ impl PipelineBuilder {
             self.ctx.clone(),
             &join.build_keys,
             join.build.output_schema()?,
+            join.probe.output_schema()?,
             HashJoinDesc::create(join)?,
         )
     }
@@ -250,9 +253,9 @@ impl PipelineBuilder {
             let left_type = predicate.data_type();
             let right_type = pred.data_type();
             let data_types = vec![&left_type, &right_type];
-            let func = FunctionFactory::instance().get("and", &data_types)?;
+            let func = FunctionFactory::instance().get("and_filters", &data_types)?;
             predicate = PhysicalScalar::Function {
-                name: "and".to_string(),
+                name: "and_filters".to_string(),
                 args: vec![
                     (predicate.clone(), predicate.data_type()),
                     (pred.clone(), pred.data_type()),
@@ -463,6 +466,17 @@ impl PipelineBuilder {
                     input,
                     output,
                     MarkJoinCompactor::create(state.clone()),
+                )
+            })?;
+        }
+
+        if join.join_type == JoinType::Right {
+            self.main_pipeline.resize(1)?;
+            self.main_pipeline.add_transform(|input, output| {
+                TransformRightJoin::try_create(
+                    input,
+                    output,
+                    RightJoinCompactor::create(state.clone()),
                 )
             })?;
         }

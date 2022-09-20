@@ -84,12 +84,12 @@ NULL
 42
 
 statement query II
-SELECT * FROM onecolumn AS a(x) RIGHT OUTER JOIN onecolumn AS b(y) ON a.x = b.y;
+SELECT * FROM onecolumn AS a(x) RIGHT OUTER JOIN onecolumn AS b(y) ON a.x = b.y order by x;
 
 ----
+42 42
 44 44
 NULL NULL
-42 42
 
 statement query I
 SELECT * FROM onecolumn AS a RIGHT OUTER JOIN onecolumn AS b USING(x) ORDER BY x;
@@ -100,12 +100,12 @@ SELECT * FROM onecolumn AS a RIGHT OUTER JOIN onecolumn AS b USING(x) ORDER BY x
 NULL
 
 statement query I
-SELECT * FROM onecolumn AS a NATURAL RIGHT OUTER JOIN onecolumn AS b;
+SELECT * FROM onecolumn AS a NATURAL RIGHT OUTER JOIN onecolumn AS b order by x;
 
 ----
+42
 44
 NULL
-42
 
 statement ok
 drop table if exists onecolumn_w;
@@ -334,12 +334,12 @@ SELECT * FROM a LEFT OUTER JOIN b ON a.i = b.i;
 3 3 1
 
 statement query III
-SELECT * FROM a RIGHT OUTER JOIN b ON a.i = b.i;
+SELECT * FROM a RIGHT OUTER JOIN b ON a.i = b.i order by b;
 
 ----
-2 1 2
-3 1 3
-4 0 NULL
+NULL 4 0
+2 2 1
+3 3 1
 
 -- statement query
 -- SELECT * FROM a FULL OUTER JOIN b ON a.i = b.i;
@@ -354,10 +354,10 @@ statement query III
 SELECT * FROM a RIGHT OUTER JOIN b ON a.i=b.i ORDER BY b.i, b.b;
 
 ----
-2 1 2
-3 0 3
-3 1 3
-4 0 NULL
+2 2 1
+3 3 0
+3 3 1
+NULL 4 0
 
 -- statement query
 -- SELECT * FROM a FULL OUTER JOIN b ON a.i=b.i ORDER BY b.i, b.b;
@@ -526,14 +526,14 @@ SELECT *  FROM (SELECT * FROM pairs LEFT JOIN square ON b = sq AND a > 1 AND n <
 4 6 NULL NULL
 
 statement query IIII
-SELECT *  FROM (SELECT * FROM pairs RIGHT JOIN square ON b = sq AND a > 1 AND n < 6) WHERE (a IS NULL OR a > 2) AND n > 1 AND (a IS NULL OR a < sq);
+SELECT *  FROM (SELECT * FROM pairs RIGHT JOIN square ON b = sq AND a > 1 AND n < 6) WHERE (a IS NULL OR a > 2) AND n > 1 AND (a IS NULL OR a < sq) order by n;
 
 ----
-2 4 3 4
-3 9 NULL NULL
-4 16 NULL NULL
-5 25 NULL NULL
-6 36 NULL NULL
+3 4 2 4
+NULL NULL 3 9
+NULL NULL 4 16
+NULL NULL 5 25
+NULL NULL 6 36
 
 statement ok
 drop table if exists t1;
@@ -653,7 +653,7 @@ a a NULL
 c c NULL
 
 statement query TTT
-SELECT s, str1.s, str2.s FROM str1 RIGHT OUTER JOIN str2 USING(s) order by str1.s;
+SELECT s, str1.s, str2.s FROM str1 RIGHT OUTER JOIN str2 USING(s) order by str2.s;
 
 ----
 A A A
@@ -669,6 +669,28 @@ SELECT * FROM str1 LEFT OUTER JOIN str2 ON str1.s = str2.s order by str1.a;
 2 A 1 A
 3 c NULL NULL
 4 D NULL NULL
+
+statement ok
+INSERT INTO str1 VALUES (1, 'a' ), (2, 'A'), (3, 'c'), (4, 'D');
+
+statement query ITIT
+select * from str1 right join str2 on str1.s = str2.s order by str2.a;
+
+----
+2 A 1 A
+2 A 1 A
+NULL NULL 2 B
+NULL NULL 3 C
+NULL NULL 4 E
+
+statement query ITIT
+select * from str1 right join str2 on false order by str2.a;
+
+----
+NULL NULL 1 A
+NULL NULL 2 B
+NULL NULL 3 C
+NULL NULL 4 E
 
 -- statement query
 -- SELECT s, str1.s, str2.s FROM str1 FULL OUTER JOIN str2 USING(s);
@@ -706,12 +728,12 @@ SELECT * FROM xyu LEFT OUTER JOIN xyv USING(x, y) WHERE x > 2;
 4 4 44 NULL 
 
 statement query IIII
-SELECT * FROM xyu RIGHT OUTER JOIN xyv USING(x, y) WHERE x > 2;
+SELECT * FROM xyu RIGHT OUTER JOIN xyv USING(x, y) WHERE x > 2 order by y;
 
 ----
-3 1 31 31
-3 3 33 NULL
-5 5 55 NULL
+31 3 1 31
+NULL 3 3 33
+NULL 5 5 55
 
 -- statement error 1065
 -- SELECT * FROM xyu FULL OUTER JOIN xyv USING(x, y) WHERE x > 2;
@@ -739,14 +761,14 @@ SELECT * FROM xyu LEFT OUTER JOIN xyv ON xyu.x = xyv.x AND xyu.y = xyv.y AND xyu
 4 4 44 NULL NULL NULL
 
 statement query IIIIII
-SELECT * FROM xyu RIGHT OUTER JOIN xyv ON xyu.x = xyv.x AND xyu.y = xyv.y AND xyu.x = 1 AND xyu.y < 10;
+SELECT * FROM xyu RIGHT OUTER JOIN xyv ON xyu.x = xyv.x AND xyu.y = xyv.y AND xyu.x = 1 AND xyu.y < 10 order by v;
 
 ----
 1 1 1 1 1 1
-2 2 2 NULL NULL NULL
-3 1 31 NULL NULL NULL
-3 3 33 NULL NULL NULL
-5 5 55 NULL NULL NULL
+NULL NULL NULL 2 2 2
+NULL NULL NULL 3 1 31
+NULL NULL NULL 3 3 33
+NULL NULL NULL 5 5 55
 
 statement query IIII
 SELECT * FROM (SELECT * FROM xyu ORDER BY x, y) AS xyu LEFT OUTER JOIN (SELECT * FROM xyv ORDER BY x, y) AS xyv USING(x, y) WHERE x > 2;
@@ -757,12 +779,12 @@ SELECT * FROM (SELECT * FROM xyu ORDER BY x, y) AS xyu LEFT OUTER JOIN (SELECT *
 4 4 44 NULL
 
 statement query IIII
-SELECT * FROM (SELECT * FROM xyu ORDER BY x, y) AS xyu RIGHT OUTER JOIN (SELECT * FROM xyv ORDER BY x, y) AS xyv USING(x, y) WHERE x > 2;
+SELECT * FROM (SELECT * FROM xyu ORDER BY x, y) AS xyu RIGHT OUTER JOIN (SELECT * FROM xyv ORDER BY x, y) AS xyv USING(x, y) WHERE x > 2 order by v;
 
 ----
-3 1 31 31
-3 3 33 NULL
-5 5 55 NULL
+31 3 1 31
+NULL 3 3 33
+NULL 5 5 55
 
 -- statement query
 -- SELECT * FROM (SELECT * FROM xyu ORDER BY x, y) AS xyu FULL OUTER JOIN (SELECT * FROM xyv ORDER BY x, y) AS xyv USING(x, y) WHERE x > 2;
@@ -778,14 +800,14 @@ SELECT * FROM (SELECT * FROM xyu ORDER BY x, y) AS xyu LEFT OUTER JOIN (SELECT *
 4 4 44 NULL NULL NULL
 
 statement query IIIIII
-SELECT * FROM xyu RIGHT OUTER JOIN (SELECT * FROM xyv ORDER BY x, y) AS xyv ON xyu.x = xyv.x AND xyu.y = xyv.y AND xyu.x = 1 AND xyu.y < 10;
+SELECT * FROM xyu RIGHT OUTER JOIN (SELECT * FROM xyv ORDER BY x, y) AS xyv ON xyu.x = xyv.x AND xyu.y = xyv.y AND xyu.x = 1 AND xyu.y < 10 ORDER BY v;
 
 ----
 1 1 1 1 1 1
-2 2 2 NULL NULL NULL
-3 1 31 NULL NULL NULL
-3 3 33 NULL NULL NULL
-5 5 55 NULL NULL NULL
+NULL NULL NULL 2 2 2
+NULL NULL NULL 3 1 31
+NULL NULL NULL 3 3 33
+NULL NULL NULL 5 5 55
 
 statement ok
 drop table if exists l;
@@ -821,13 +843,13 @@ statement query III
 SELECT * FROM l RIGHT OUTER JOIN r USING(a) WHERE a = 3;
 
 ----
-3 1 1
+1 3 1
 
 statement query III
 SELECT * FROM l RIGHT OUTER JOIN r USING(a) WHERE a = 4;
 
 ----
-4 1 NULL
+NULL 4 1
 
 statement ok
 drop table if exists foo;
@@ -920,13 +942,13 @@ SELECT * FROM foo JOIN bar USING (a, b) WHERE foo.c = bar.c AND foo.d = bar.d;
 3 3 3.0 3.0 3.0 3
 
 statement query TII
-SELECT * FROM onecolumn AS a(x) RIGHT JOIN twocolumn ON false;
+SELECT * FROM onecolumn AS a(x) RIGHT JOIN twocolumn ON false order by y;
 
 ----
-44 51 NULL
-NULL 52 NULL
-42 53 NULL
-45 45 NULL
+NULL 45 45
+NULL 44 51
+NULL NULL 52
+NULL 42 53
 
 -- statement query
 -- SELECT column1, column1+1FROM  (SELECT * FROM    (VALUES (NULL, NULL)) AS t      NATURAL FULL OUTER JOIN    (VALUES (1, 1)) AS u);

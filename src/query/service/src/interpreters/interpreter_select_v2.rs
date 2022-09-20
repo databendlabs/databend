@@ -16,9 +16,9 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_planner::MetadataRef;
 
 use super::plan_schedulers::schedule_query_v2;
-use crate::clusters::ClusterHelper;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -27,7 +27,6 @@ use crate::sql::executor::PhysicalPlanBuilder;
 use crate::sql::executor::PipelineBuilder;
 use crate::sql::optimizer::SExpr;
 use crate::sql::BindContext;
-use crate::sql::MetadataRef;
 
 /// Interpret SQL query with ne&w SQL planner
 pub struct SelectInterpreterV2 {

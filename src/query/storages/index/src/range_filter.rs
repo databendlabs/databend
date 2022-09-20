@@ -105,14 +105,18 @@ impl RangeFilter {
     }
 
     #[tracing::instrument(level = "debug", name = "range_filter_eval", skip_all)]
-    pub fn eval(&self, stats: &StatisticsOfColumns) -> Result<bool> {
+    pub fn eval(&self, stats: &StatisticsOfColumns, row_count: u64) -> Result<bool> {
         let mut columns = Vec::with_capacity(self.stat_columns.len());
         for col in self.stat_columns.iter() {
-            let val_opt = col.apply_stat_value(stats, self.origin.clone())?;
-            if val_opt.is_none() {
-                return Ok(true);
+            if col.stat_type == StatType::RowCount {
+                columns.push(Series::from_data(vec![row_count]));
+            } else {
+                let val_opt = col.apply_stat_value(stats, self.origin.clone())?;
+                if val_opt.is_none() {
+                    return Ok(true);
+                }
+                columns.push(val_opt.unwrap());
             }
-            columns.push(val_opt.unwrap());
         }
         let data_block = DataBlock::create(self.schema.clone(), columns);
         let executed_data_block = self.executor.execute(&data_block)?;
@@ -135,7 +139,7 @@ pub fn build_verifiable_expr(
 
     let (exprs, op) = match expr {
         Expression::Literal { .. } => return expr.clone(),
-        Expression::ScalarFunction { op, args } => (args.clone(), op.clone()),
+        Expression::ScalarFunction { op, args } => try_convert_is_null(op, args.clone()),
         Expression::BinaryExpression { left, op, right } => match op.to_lowercase().as_str() {
             "and" => {
                 let left = build_verifiable_expr(left, schema, stat_columns);
@@ -173,11 +177,30 @@ fn inverse_operator(op: &str) -> Result<&str> {
     }
 }
 
+/// Try to convert `not(is_not_null)` to `is_null`.
+fn try_convert_is_null(op: &str, args: Vec<Expression>) -> (Vec<Expression>, String) {
+    // `is null` will be converted to `not(is not null)` in the parser.
+    // we should convert it back to `is null` here.
+    if op == "not" && args.len() == 1 {
+        if let Expression::ScalarFunction {
+            op: inner_op,
+            args: inner_args,
+        } = &args[0]
+        {
+            if inner_op == "is_not_null" {
+                return (inner_args.clone(), String::from("is_null"));
+            }
+        }
+    }
+    (args, String::from(op))
+}
+
 #[derive(Debug, Copy, Clone, PartialEq)]
 enum StatType {
     Min,
     Max,
     Nulls,
+    RowCount,
 }
 
 impl fmt::Display for StatType {
@@ -186,6 +209,7 @@ impl fmt::Display for StatType {
             StatType::Min => write!(f, "min"),
             StatType::Max => write!(f, "max"),
             StatType::Nulls => write!(f, "nulls"),
+            StatType::RowCount => write!(f, "row_count"),
         }
     }
 }
@@ -209,7 +233,7 @@ impl StatColumn {
         expr: Expression,
     ) -> Self {
         let column_new = format!("{}_{}", stat_type, field.name());
-        let data_type = if matches!(stat_type, StatType::Nulls) {
+        let data_type = if matches!(stat_type, StatType::Nulls | StatType::RowCount) {
             u64::to_data_type()
         } else {
             field.data_type().clone()
@@ -400,15 +424,16 @@ impl<'a> VerifiableExprBuilder<'a> {
         // TODO: support in/not in.
         match self.op {
             "is_null" => {
+                // should_keep: col.null_count > 0
                 let nulls_expr = self.nulls_column_expr(0)?;
                 let scalar_expr = lit(0u64);
                 Ok(nulls_expr.gt(scalar_expr))
             }
             "is_not_null" => {
-                let left_min = self.min_column_expr(0)?;
-                Ok(Expression::create_scalar_function("is_not_null", vec![
-                    left_min,
-                ]))
+                // should_keep: col.null_count != col.row_count
+                let nulls_expr = self.nulls_column_expr(0)?;
+                let row_count_expr = self.row_count_column_expr(0)?;
+                Ok(nulls_expr.not_eq(row_count_expr))
             }
             "=" => {
                 // left = right => min_left <= max_right and max_left >= min_right
@@ -581,6 +606,10 @@ impl<'a> VerifiableExprBuilder<'a> {
 
     fn nulls_column_expr(&mut self, index: usize) -> Result<Expression> {
         self.stat_column_expr(StatType::Nulls, index)
+    }
+
+    fn row_count_column_expr(&mut self, index: usize) -> Result<Expression> {
+        self.stat_column_expr(StatType::RowCount, index)
     }
 }
 

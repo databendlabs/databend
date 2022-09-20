@@ -26,7 +26,7 @@ async fn test_select_interpreter() -> Result<()> {
     {
         let query = "select number from numbers_mt(10)";
         let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan)?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan).await?;
         assert_eq!(executor.name(), "SelectInterpreter");
 
         let stream = executor.execute(ctx.clone()).await?;
@@ -56,7 +56,7 @@ async fn test_select_interpreter() -> Result<()> {
     {
         let query = "select 1 + 1, 2 + 2, 3 * 3, 4 * 4";
         let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan)?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan).await?;
         assert_eq!(executor.name(), "SelectInterpreter");
 
         let stream = executor.execute(ctx.clone()).await?;

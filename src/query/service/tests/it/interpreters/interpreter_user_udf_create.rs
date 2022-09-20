@@ -31,7 +31,7 @@ async fn test_create_udf_interpreter() -> Result<()> {
     {
         let query = "CREATE FUNCTION IF NOT EXISTS isnotempty AS (p) -> not(is_null(p)) DESC = 'This is a description'";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         assert_eq!(executor.name(), "CreateUserUDFInterpreter");
         let mut stream = executor.execute(ctx.clone()).await?;
         while let Some(_block) = stream.next().await {}
@@ -49,7 +49,7 @@ async fn test_create_udf_interpreter() -> Result<()> {
     {
         let query = "CREATE FUNCTION IF NOT EXISTS isnotempty AS (p) -> not(is_null(p)) DESC = 'This is a description'";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         executor.execute(ctx.clone()).await?;
 
         let udf = UserApiProvider::instance()
@@ -66,7 +66,7 @@ async fn test_create_udf_interpreter() -> Result<()> {
         let query =
             "CREATE FUNCTION isnotempty AS (p) -> not(is_null(p)) DESC = 'This is a description'";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         let r = executor.execute(ctx.clone()).await;
         assert!(r.is_err());
         let e = r.err();

@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Arc;
@@ -23,11 +24,15 @@ use common_exception::Result;
 use common_legacy_planners::ReadDataSourcePlan;
 use common_legacy_planners::SourceInfo;
 use common_legacy_planners::StageTableInfo;
+use common_meta_app::schema::GetTableCopiedFileReq;
+use common_meta_app::schema::TableCopiedFileInfo;
+use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_types::UserStageInfo;
 use futures::TryStreamExt;
 use regex::Regex;
 
 use super::append2table;
+use crate::interpreters::interpreter_common::stat_file;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreterV2;
 use crate::pipelines::PipelineBuildResult;
@@ -47,6 +52,99 @@ impl CopyInterpreterV2 {
     /// Create a CopyInterpreterV2 with context and [`CopyPlanV2`].
     pub fn try_create(ctx: Arc<QueryContext>, plan: CopyPlanV2) -> Result<Self> {
         Ok(CopyInterpreterV2 { ctx, plan })
+    }
+
+    async fn filter_duplicate_files(
+        &self,
+        force: bool,
+        table_info: &StageTableInfo,
+        catalog_name: &str,
+        database_name: &str,
+        table_name: &str,
+        files: &[String],
+    ) -> Result<(u64, BTreeMap<String, TableCopiedFileInfo>)> {
+        let catalog = self.ctx.get_catalog(catalog_name)?;
+        let tenant = self.ctx.get_tenant();
+        let table = catalog
+            .get_table(&tenant, database_name, table_name)
+            .await?;
+        let table_id = table.get_id();
+        let req = GetTableCopiedFileReq {
+            table_id,
+            files: files.to_owned(),
+        };
+        let mut file_map = BTreeMap::new();
+
+        if !force {
+            // if force is false, copy only the files that unmatch to the meta copied files info.
+            let resp = catalog.get_table_copied_file_info(req).await?;
+            for file in files.iter() {
+                let stage_file = stat_file(&self.ctx, &table_info.stage_info, file).await?;
+
+                if let Some(file_info) = resp.file_info.get(file) {
+                    match &file_info.etag {
+                        Some(_etag) => {
+                            // No need to copy the file again if etag is_some and match.
+                            if stage_file.etag == file_info.etag {
+                                tracing::warn!("ignore copy file {:?} matched by etag", file);
+                                continue;
+                            }
+                        }
+                        None => {
+                            // etag is none, compare with content_length and last_modified.
+                            if file_info.content_length == stage_file.size
+                                && file_info.last_modified == Some(stage_file.last_modified)
+                            {
+                                tracing::warn!(
+                                    "ignore copy file {:?} matched by content_length and last_modified",
+                                    file
+                                );
+                                continue;
+                            }
+                        }
+                    }
+                }
+
+                // unmatch case: insert into file map for copy.
+                file_map.insert(file.clone(), TableCopiedFileInfo {
+                    etag: stage_file.etag.clone(),
+                    content_length: stage_file.size,
+                    last_modified: Some(stage_file.last_modified),
+                });
+            }
+        } else {
+            // if force is true, copy all the file.
+            for file in files.iter() {
+                let stage_file = stat_file(&self.ctx, &table_info.stage_info, file).await?;
+
+                file_map.insert(file.clone(), TableCopiedFileInfo {
+                    etag: stage_file.etag.clone(),
+                    content_length: stage_file.size,
+                    last_modified: Some(stage_file.last_modified),
+                });
+            }
+        }
+        Ok((table_id, file_map))
+    }
+
+    async fn upsert_copied_files_info(
+        &self,
+        catalog_name: &str,
+        table_id: u64,
+        copy_stage_files: BTreeMap<String, TableCopiedFileInfo>,
+    ) -> Result<()> {
+        tracing::info!("upsert_copied_files_info: {:?}", copy_stage_files);
+
+        if !copy_stage_files.is_empty() {
+            let req = UpsertTableCopiedFileReq {
+                table_id,
+                file_info: copy_stage_files.clone(),
+                expire_at: None,
+            };
+            let catalog = self.ctx.get_catalog(catalog_name)?;
+            catalog.upsert_table_copied_file_info(req).await?;
+        }
+        Ok(())
     }
 
     /// List the files.
@@ -235,7 +333,7 @@ impl CopyInterpreterV2 {
                 bind_context,
                 ..
             } => (s_expr, metadata, bind_context),
-            v => unreachable!("Input plan must be Query, but it's {v}"),
+            v => unreachable!("Input plan must be Query, but it's {}", v),
         };
 
         let select_interpreter = SelectInterpreterV2::try_create(
@@ -297,6 +395,7 @@ impl Interpreter for CopyInterpreterV2 {
                 files,
                 pattern,
                 from,
+                force,
                 ..
             } => {
                 let mut files = self.list_files(from, files).await?;
@@ -320,14 +419,59 @@ impl Interpreter for CopyInterpreterV2 {
                 }
 
                 tracing::info!("matched files: {:?}, pattern: {}", &files, pattern);
-                self.copy_files_to_table(
-                    catalog_name,
-                    database_name,
-                    table_name,
-                    from,
-                    files.clone(),
-                )
-                .await
+
+                match &from.source_info {
+                    SourceInfo::StageSource(table_info) => {
+                        let (table_id, copy_stage_files) = self
+                            .filter_duplicate_files(
+                                *force,
+                                table_info,
+                                catalog_name,
+                                database_name,
+                                table_name,
+                                &files,
+                            )
+                            .await?;
+
+                        tracing::info!(
+                            "matched copy unduplicate files: {:?}",
+                            &copy_stage_files.keys(),
+                        );
+
+                        if copy_stage_files.is_empty() {
+                            return Ok(PipelineBuildResult::create());
+                        }
+
+                        let result = self
+                            .copy_files_to_table(
+                                catalog_name,
+                                database_name,
+                                table_name,
+                                from,
+                                copy_stage_files.keys().cloned().collect(),
+                            )
+                            .await;
+
+                        if result.is_ok() {
+                            let _ = self
+                                .upsert_copied_files_info(catalog_name, table_id, copy_stage_files)
+                                .await?;
+                        }
+
+                        result
+                    }
+                    _other => {
+                        return self
+                            .copy_files_to_table(
+                                catalog_name,
+                                database_name,
+                                table_name,
+                                from,
+                                files.clone(),
+                            )
+                            .await;
+                    }
+                }
             }
             CopyPlanV2::IntoStage {
                 stage, from, path, ..

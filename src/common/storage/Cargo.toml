@@ -18,7 +18,7 @@ anyhow = "1.0.64"
 backon = "0.1.0"
 globiter = "0.1.0"
 once_cell = "1.12.0"
-opendal = { version = "0.17.0", features = [
+opendal = { version = "0.17.1", features = [
     "layers-retry",
     "layers-tracing",
     "layers-metrics",

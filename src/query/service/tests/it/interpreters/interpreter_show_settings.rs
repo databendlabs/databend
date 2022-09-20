@@ -27,7 +27,7 @@ async fn test_show_settings_interpreter() -> Result<()> {
     {
         let query = "show settings";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         assert_eq!(executor.name(), "SelectInterpreterV2");
 
         let stream = executor.execute(ctx.clone()).await?;

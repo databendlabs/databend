@@ -19,7 +19,6 @@ use common_exception::Result;
 use common_legacy_planners::PlanNode;
 use common_legacy_planners::SelectPlan;
 
-use crate::clusters::ClusterHelper;
 use crate::interpreters::plan_schedulers;
 use crate::interpreters::Interpreter;
 use crate::optimizers::Optimizers;
