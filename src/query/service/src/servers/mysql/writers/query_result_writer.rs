@@ -31,6 +31,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures_util::StreamExt;
 use opensrv_mysql::*;
+use tracing::debug;
 use tracing::error;
 
 /// Reports progress information as string, intend to be put into the mysql Ok packet.
@@ -185,6 +186,9 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                         }
                         Ok(block) => block,
                     };
+
+                    debug!("mysql.query.result.writer.block: {:?}", block);
+
                     match block.get_serializers() {
                         Ok(serializers) => {
                             let rows_size = block.column(0).len();

@@ -433,7 +433,7 @@ impl Interpreter for CopyInterpreterV2 {
                     files = matched_files;
                 }
 
-                tracing::info!("matched files: {:?}, pattern: {}", &files, pattern);
+                tracing::info!("Copy matched files: {:?}, pattern: {}", &files, pattern);
 
                 match &from.source_info {
                     SourceInfo::StageSource(table_info) => {
@@ -448,7 +448,7 @@ impl Interpreter for CopyInterpreterV2 {
                             )
                             .await?;
 
-                        tracing::info!("need copy files: {:?}", &copy_stage_files.keys(),);
+                        tracing::info!("Copy files list: {:?}", &copy_stage_files.keys(),);
 
                         let result = self
                             .copy_files_to_table(
@@ -464,7 +464,7 @@ impl Interpreter for CopyInterpreterV2 {
                             self.upsert_copied_files_info(catalog_name, table_id, copy_stage_files)
                                 .await
                                 .map_err(|e| {
-                                    error!("upsert.copied.files.info error:{}", e);
+                                    error!("Upsert copied_files_info error:{}", e);
                                     e
                                 })?;
                         }

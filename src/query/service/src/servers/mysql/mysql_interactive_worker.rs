@@ -65,6 +65,7 @@ fn has_result_set_by_plan(plan: &Plan) -> bool {
         Plan::Query { .. }
             | Plan::Explain { .. }
             | Plan::Call(_)
+            | Plan::Copy(_)
             | Plan::ShowCreateDatabase(_)
             | Plan::ShowCreateTable(_)
             | Plan::DescShare(_)
