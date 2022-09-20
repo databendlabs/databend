@@ -32,6 +32,8 @@ use common_meta_types::UserStageInfo;
 use futures::TryStreamExt;
 use regex::Regex;
 use tracing::error;
+use tracing::info;
+use tracing::warn;
 
 use super::append2table;
 use crate::interpreters::interpreter_common::stat_file;
@@ -90,10 +92,9 @@ impl CopyInterpreterV2 {
                         Some(_etag) => {
                             // No need to copy the file again if etag is_some and match.
                             if stage_file.etag == file_info.etag {
-                                tracing::warn!(
+                                warn!(
                                     "ignore copy file {:?} matched by etag: {:?}",
-                                    file,
-                                    file_info.etag
+                                    file, file_info.etag
                                 );
                                 continue;
                             }
@@ -103,7 +104,7 @@ impl CopyInterpreterV2 {
                             if file_info.content_length == stage_file.size
                                 && file_info.last_modified == Some(stage_file.last_modified)
                             {
-                                tracing::warn!(
+                                warn!(
                                     "ignore copy file {:?} matched by content_length and last_modified",
                                     file
                                 );
@@ -141,7 +142,7 @@ impl CopyInterpreterV2 {
         table_id: u64,
         copy_stage_files: BTreeMap<String, TableCopiedFileInfo>,
     ) -> Result<()> {
-        tracing::info!("upsert_copied_files_info: {:?}", copy_stage_files);
+        info!("upsert_copied_files_info: {:?}", copy_stage_files);
 
         if !copy_stage_files.is_empty() {
             let req = UpsertTableCopiedFileReq {
@@ -207,7 +208,7 @@ impl CopyInterpreterV2 {
                     list.into_iter().collect::<Vec<_>>()
                 };
 
-                tracing::info!("listed files: {:?}", &files_with_path);
+                info!("listed files: {:?}", &files_with_path);
 
                 Ok(files_with_path)
             }
@@ -230,10 +231,10 @@ impl CopyInterpreterV2 {
                     let op = StageSourceHelper::get_op(&rename_me, &table_info.stage_info).await?;
                     for f in files {
                         if let Err(e) = op.object(f).delete().await {
-                            tracing::error!("Failed to delete file: {}, error: {}", f, e);
+                            error!("Failed to delete file: {}, error: {}", f, e);
                         }
                     }
-                    tracing::info!("purge files: {:?}", files);
+                    info!("purge files: {:?}", files);
                 }
                 Ok(())
             }
@@ -274,7 +275,7 @@ impl CopyInterpreterV2 {
         if !files.is_empty() {
             let mut build_res = PipelineBuildResult::create();
             let read_source_plan = Self::rewrite_read_plan_file_name(from.clone(), &files);
-            tracing::info!("copy_files_to_table from source: {:?}", read_source_plan);
+            info!("copy_files_to_table from source: {:?}", read_source_plan);
 
             let from_table = self.ctx.build_table_from_source_plan(&read_source_plan)?;
             from_table.read2(
@@ -433,7 +434,7 @@ impl Interpreter for CopyInterpreterV2 {
                     files = matched_files;
                 }
 
-                tracing::info!("Copy matched files: {:?}, pattern: {}", &files, pattern);
+                info!("Copy matched files: {:?}, pattern: {}", &files, pattern);
 
                 match &from.source_info {
                     SourceInfo::StageSource(table_info) => {
@@ -448,7 +449,7 @@ impl Interpreter for CopyInterpreterV2 {
                             )
                             .await?;
 
-                        tracing::info!("Copy files list: {:?}", &copy_stage_files.keys(),);
+                        info!("Copy files list: {:?}", &copy_stage_files.keys(),);
 
                         let result = self
                             .copy_files_to_table(
