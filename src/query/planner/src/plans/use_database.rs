@@ -11,26 +11,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 use std::sync::Arc;
 
-use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
-use common_datavalues::ToDataType;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct ExistsTablePlan {
-    pub catalog: String,
+pub struct UseDatabasePlan {
     pub database: String,
-    pub table: String,
 }
 
-impl ExistsTablePlan {
+impl UseDatabasePlan {
     pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::new(vec![DataField::new(
-            "result",
-            u8::to_data_type(),
-        )]))
+        Arc::new(DataSchema::empty())
     }
 }

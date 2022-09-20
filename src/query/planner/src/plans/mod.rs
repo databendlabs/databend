@@ -12,48 +12,59 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod alter_table_cluster_key;
 mod call;
-pub use call::CallPlan;
-
 mod create_database;
-pub use create_database::CreateDatabasePlan;
-
 mod create_role;
-pub use create_role::CreateRolePlan;
-
+mod describe_table;
 mod drop_database;
-pub use drop_database::DropDatabasePlan;
-
 mod drop_role;
-pub use drop_role::DropRolePlan;
-
+mod drop_table;
+mod drop_table_cluster_key;
+mod exists_table;
 mod grant_privilege;
-pub use grant_privilege::GrantPrivilegePlan;
-
 mod grant_role;
-pub use grant_role::GrantRolePlan;
-
 mod kill;
-pub use kill::KillPlan;
-
 mod list;
-pub use list::ListPlan;
-
+mod optimize_table;
 mod rename_database;
+mod rename_table;
+mod revoke_privilege;
+mod revoke_role;
+mod show_create_database;
+mod show_create_table;
+mod show_grants;
+mod truncate_table;
+mod undrop_database;
+mod undrop_table;
+mod use_database;
+
+pub use alter_table_cluster_key::AlterTableClusterKeyPlan;
+pub use call::CallPlan;
+pub use create_database::CreateDatabasePlan;
+pub use create_role::CreateRolePlan;
+pub use describe_table::DescribeTablePlan;
+pub use drop_database::DropDatabasePlan;
+pub use drop_role::DropRolePlan;
+pub use drop_table::DropTablePlan;
+pub use drop_table_cluster_key::DropTableClusterKeyPlan;
+pub use exists_table::ExistsTablePlan;
+pub use grant_privilege::GrantPrivilegePlan;
+pub use grant_role::GrantRolePlan;
+pub use kill::KillPlan;
+pub use list::ListPlan;
+pub use optimize_table::OptimizeTableAction;
+pub use optimize_table::OptimizeTablePlan;
 pub use rename_database::RenameDatabaseEntity;
 pub use rename_database::RenameDatabasePlan;
-
-mod revoke_privilege;
+pub use rename_table::RenameTableEntity;
+pub use rename_table::RenameTablePlan;
 pub use revoke_privilege::RevokePrivilegePlan;
-
-mod revoke_role;
 pub use revoke_role::RevokeRolePlan;
-
-mod show_create_database;
 pub use show_create_database::ShowCreateDatabasePlan;
-
-mod show_grants;
+pub use show_create_table::ShowCreateTablePlan;
 pub use show_grants::ShowGrantsPlan;
-
-mod undrop_database;
+pub use truncate_table::TruncateTablePlan;
 pub use undrop_database::UndropDatabasePlan;
+pub use undrop_table::UndropTablePlan;
+pub use use_database::UseDatabasePlan;
