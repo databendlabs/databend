@@ -39,7 +39,6 @@ pub use binder::Visibility;
 use common_catalog::catalog::CatalogManager;
 use common_planner::Metadata;
 use common_planner::MetadataRef;
-pub use metadata::find_smallest_column;
 pub use semantic::normalize_identifier;
 pub use semantic::IdentifierNormalizer;
 pub use semantic::NameResolutionContext;
