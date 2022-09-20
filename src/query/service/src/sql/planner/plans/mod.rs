@@ -86,6 +86,7 @@ use common_legacy_planners::TruncateTablePlan;
 use common_legacy_planners::UndropDatabasePlan;
 use common_legacy_planners::UndropTablePlan;
 use common_legacy_planners::UseDatabasePlan;
+use common_planner::MetadataRef;
 pub use copy_v2::CopyPlanV2;
 pub use copy_v2::ValidationMode;
 pub use create_table_v2::CreateTablePlanV2;
@@ -116,7 +117,6 @@ pub use sort::SortItem;
 pub use union_all::UnionAll;
 
 use super::BindContext;
-use super::MetadataRef;
 use crate::sql::optimizer::SExpr;
 
 #[derive(Clone, Debug)]

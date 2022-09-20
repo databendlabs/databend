@@ -23,6 +23,7 @@ use common_datavalues::type_coercion::compare_coercion;
 use common_datavalues::wrap_nullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planner::MetadataRef;
 
 use crate::sessions::TableContext;
 use crate::sql::binder::scalar_common::split_conjunctions;
@@ -34,7 +35,6 @@ use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::binder::scalar::ScalarBinder;
 use crate::sql::planner::binder::Binder;
-use crate::sql::planner::metadata::MetadataRef;
 use crate::sql::planner::semantic::NameResolutionContext;
 use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::JoinType;

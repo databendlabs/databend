@@ -70,13 +70,10 @@ impl Interpreter for OptimizeTableInterpreter {
             if let Some(mutator) = mutator {
                 let settings = ctx.get_settings();
                 pipeline.set_max_threads(settings.get_max_threads()? as usize);
-                let query_need_abort = ctx.query_need_abort();
                 let executor_settings = ExecutorSettings::try_create(&settings)?;
-                let executor = PipelineCompleteExecutor::try_create(
-                    query_need_abort,
-                    pipeline,
-                    executor_settings,
-                )?;
+                let executor = PipelineCompleteExecutor::try_create(pipeline, executor_settings)?;
+
+                ctx.set_executor(Arc::downgrade(&executor.get_inner()));
                 executor.execute()?;
                 drop(executor);
 

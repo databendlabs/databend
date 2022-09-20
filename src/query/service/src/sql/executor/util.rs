@@ -14,11 +14,11 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planner::IndexType;
 use once_cell::sync::Lazy;
 use regex::Regex;
 
 use crate::sql::optimizer::SExpr;
-use crate::sql::planner::IndexType;
 use crate::sql::plans::Operator;
 
 /// Check if all plans in an expression are physical plans
