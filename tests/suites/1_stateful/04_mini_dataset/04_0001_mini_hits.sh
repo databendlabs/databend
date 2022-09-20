@@ -22,7 +22,8 @@ hits_statements=(
   "SELECT '====== SQL5 ======';"
   "SELECT COUNT(DISTINCT UserID) FROM hits;"
   "SELECT '====== SQL6 ======';"
-  "SELECT COUNT(DISTINCT SearchPhrase) FROM hits;"
+  #"SELECT COUNT(DISTINCT SearchPhrase) FROM hits;" # wait for bugfix  https://github.com/datafuselabs/databend/issues/7743
+  "SELECT COUNT(DISTINCT SearchPhrase) FROM (select SearchPhrase from hits order by SearchPhrase)"
   "SELECT '====== SQL7 ======';"
   "SELECT MIN(EventDate), MAX(EventDate) FROM hits;"
   "SELECT '====== SQL8 ======';"
