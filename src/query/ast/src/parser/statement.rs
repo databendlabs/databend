@@ -1017,6 +1017,7 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
     )(i)
 }
 
+#[allow(clippy::needless_lifetimes)]
 pub fn rest_str<'a>(i: Input<'a>) -> IResult<&'a str> {
     // It's safe to unwrap because input must contain EOI.
     let first_token = i.0.first().unwrap();

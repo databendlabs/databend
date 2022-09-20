@@ -101,7 +101,7 @@ pub fn run_agg_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType
             {
                 let mut table = Table::new();
                 table.load_preset("||--+-++|    ++++++");
-                table.set_header(&["Column", "Data"]);
+                table.set_header(["Column", "Data"]);
 
                 let ids = match column_ids.is_empty() {
                     true => {

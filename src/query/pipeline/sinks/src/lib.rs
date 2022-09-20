@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(generic_associated_types)]
-#![deny(unused_crate_dependencies)]
 #![feature(type_alias_impl_trait)]
 
 pub mod processors;

@@ -535,7 +535,7 @@ mod tests {
         m.insert("/", "/");
 
         for (hdfs_path, expected_path) in &m {
-            let path = convert_hdfs_path(*hdfs_path, true);
+            let path = convert_hdfs_path(hdfs_path, true);
             assert_eq!(path, *expected_path);
         }
     }

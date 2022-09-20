@@ -55,12 +55,7 @@ impl AsyncSystemTable for UsersTable {
             .collect();
         let default_roles: Vec<String> = users
             .iter()
-            .map(|x| {
-                x.option
-                    .default_role()
-                    .cloned()
-                    .unwrap_or_else(|| "".to_string())
-            })
+            .map(|x| x.option.default_role().cloned().unwrap_or_default())
             .collect();
 
         Ok(DataBlock::create(self.table_info.schema(), vec![

@@ -50,7 +50,7 @@ impl Interpreter for CreateViewInterpreter {
         if self
             .ctx
             .get_catalog(&self.plan.catalog)?
-            .list_tables(&*self.plan.tenant, &*self.plan.database)
+            .list_tables(&self.plan.tenant, &self.plan.database)
             .await?
             .iter()
             .any(|table| table.name() == self.plan.viewname.as_str())

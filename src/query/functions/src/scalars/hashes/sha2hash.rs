@@ -62,7 +62,7 @@ impl Sha2HashFunction {
 
 impl Function for Sha2HashFunction {
     fn name(&self) -> &str {
-        &*self.display_name
+        &self.display_name
     }
 
     fn return_type(&self) -> DataTypeImpl {
