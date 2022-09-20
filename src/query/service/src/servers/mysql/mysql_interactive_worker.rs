@@ -459,10 +459,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
                     }
                 };
 
-                let abortable_stream = ctx
-                    .try_create_abortable(intercepted_stream.boxed())?
-                    .boxed();
-                Ok::<_, ErrorCode>(abortable_stream)
+                Ok::<_, ErrorCode>(intercepted_stream.boxed())
             }
             .in_current_span()
         })?;

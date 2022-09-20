@@ -44,47 +44,47 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::StringType;
-use common_legacy_planners::AlterTableClusterKeyPlan;
-use common_legacy_planners::AlterUserPlan;
-use common_legacy_planners::AlterUserUDFPlan;
-use common_legacy_planners::AlterViewPlan;
-use common_legacy_planners::CallPlan;
-use common_legacy_planners::CreateDatabasePlan;
-use common_legacy_planners::CreateRolePlan;
-use common_legacy_planners::CreateUserPlan;
-use common_legacy_planners::CreateUserStagePlan;
-use common_legacy_planners::CreateUserUDFPlan;
-use common_legacy_planners::CreateViewPlan;
 use common_legacy_planners::DeletePlan;
-use common_legacy_planners::DescribeTablePlan;
-use common_legacy_planners::DropDatabasePlan;
-use common_legacy_planners::DropRolePlan;
-use common_legacy_planners::DropTableClusterKeyPlan;
-use common_legacy_planners::DropTablePlan;
-use common_legacy_planners::DropUserPlan;
-use common_legacy_planners::DropUserStagePlan;
-use common_legacy_planners::DropUserUDFPlan;
-use common_legacy_planners::DropViewPlan;
-use common_legacy_planners::ExistsTablePlan;
-use common_legacy_planners::GrantPrivilegePlan;
-use common_legacy_planners::GrantRolePlan;
-use common_legacy_planners::KillPlan;
-use common_legacy_planners::ListPlan;
-use common_legacy_planners::OptimizeTablePlan;
 use common_legacy_planners::ReclusterTablePlan;
-use common_legacy_planners::RemoveUserStagePlan;
-use common_legacy_planners::RenameDatabasePlan;
-use common_legacy_planners::RenameTablePlan;
-use common_legacy_planners::RevokePrivilegePlan;
-use common_legacy_planners::RevokeRolePlan;
 use common_legacy_planners::SettingPlan;
-use common_legacy_planners::ShowCreateDatabasePlan;
-use common_legacy_planners::ShowCreateTablePlan;
-use common_legacy_planners::ShowGrantsPlan;
-use common_legacy_planners::TruncateTablePlan;
-use common_legacy_planners::UndropDatabasePlan;
-use common_legacy_planners::UndropTablePlan;
-use common_legacy_planners::UseDatabasePlan;
+use common_planner::plans::AlterTableClusterKeyPlan;
+use common_planner::plans::AlterUDFPlan;
+use common_planner::plans::AlterUserPlan;
+use common_planner::plans::AlterViewPlan;
+use common_planner::plans::CallPlan;
+use common_planner::plans::CreateDatabasePlan;
+use common_planner::plans::CreateRolePlan;
+use common_planner::plans::CreateStagePlan;
+use common_planner::plans::CreateUDFPlan;
+use common_planner::plans::CreateUserPlan;
+use common_planner::plans::CreateViewPlan;
+use common_planner::plans::DescribeTablePlan;
+use common_planner::plans::DropDatabasePlan;
+use common_planner::plans::DropRolePlan;
+use common_planner::plans::DropStagePlan;
+use common_planner::plans::DropTableClusterKeyPlan;
+use common_planner::plans::DropTablePlan;
+use common_planner::plans::DropUDFPlan;
+use common_planner::plans::DropUserPlan;
+use common_planner::plans::DropViewPlan;
+use common_planner::plans::ExistsTablePlan;
+use common_planner::plans::GrantPrivilegePlan;
+use common_planner::plans::GrantRolePlan;
+use common_planner::plans::KillPlan;
+use common_planner::plans::ListPlan;
+use common_planner::plans::OptimizeTablePlan;
+use common_planner::plans::RemoveStagePlan;
+use common_planner::plans::RenameDatabasePlan;
+use common_planner::plans::RenameTablePlan;
+use common_planner::plans::RevokePrivilegePlan;
+use common_planner::plans::RevokeRolePlan;
+use common_planner::plans::ShowCreateDatabasePlan;
+use common_planner::plans::ShowCreateTablePlan;
+use common_planner::plans::ShowGrantsPlan;
+use common_planner::plans::TruncateTablePlan;
+use common_planner::plans::UndropDatabasePlan;
+use common_planner::plans::UndropTablePlan;
+use common_planner::plans::UseDatabasePlan;
 use common_planner::MetadataRef;
 pub use copy_v2::CopyPlanV2;
 pub use copy_v2::ValidationMode;
@@ -182,9 +182,9 @@ pub enum Plan {
     DropUser(Box<DropUserPlan>),
 
     // UDF
-    CreateUDF(Box<CreateUserUDFPlan>),
-    AlterUDF(Box<AlterUserUDFPlan>),
-    DropUDF(Box<DropUserUDFPlan>),
+    CreateUDF(Box<CreateUDFPlan>),
+    AlterUDF(Box<AlterUDFPlan>),
+    DropUDF(Box<DropUDFPlan>),
 
     // Role
     CreateRole(Box<CreateRolePlan>),
@@ -197,9 +197,9 @@ pub enum Plan {
 
     // Stages
     ListStage(Box<ListPlan>),
-    CreateStage(Box<CreateUserStagePlan>),
-    DropStage(Box<DropUserStagePlan>),
-    RemoveStage(Box<RemoveUserStagePlan>),
+    CreateStage(Box<CreateStagePlan>),
+    DropStage(Box<DropStagePlan>),
+    RemoveStage(Box<RemoveStagePlan>),
 
     // Presign
     Presign(Box<PresignPlan>),

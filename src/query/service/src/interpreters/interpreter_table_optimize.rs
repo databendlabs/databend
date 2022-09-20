@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_legacy_planners::OptimizeTableAction;
-use common_legacy_planners::OptimizeTablePlan;
+use common_planner::plans::OptimizeTableAction;
+use common_planner::plans::OptimizeTablePlan;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::executor::ExecutorSettings;

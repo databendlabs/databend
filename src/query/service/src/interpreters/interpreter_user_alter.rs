@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_legacy_planners::AlterUserPlan;
+use common_planner::plans::AlterUserPlan;
 use common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;

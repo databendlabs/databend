@@ -41,9 +41,6 @@ use common_legacy_planners::SourceInfo;
 use common_legacy_planners::StageTableInfo;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::UserInfo;
-use common_streams::AbortStream;
-use common_streams::SendableDataBlockStream;
-use futures::future::AbortHandle;
 use opendal::Operator;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
@@ -142,16 +139,6 @@ impl QueryContext {
 
     pub fn get_exchange_manager(&self) -> Arc<DataExchangeManager> {
         DataExchangeManager::instance()
-    }
-
-    pub fn try_create_abortable(&self, input: SendableDataBlockStream) -> Result<AbortStream> {
-        let (abort_handle, abort_stream) = AbortStream::try_create(input)?;
-        self.shared.add_source_abort_handle(abort_handle);
-        Ok(abort_stream)
-    }
-
-    pub fn add_source_abort_handle(&self, abort_handle: AbortHandle) {
-        self.shared.add_source_abort_handle(abort_handle);
     }
 
     pub fn attach_http_query(&self, handle: HttpQueryHandle) {

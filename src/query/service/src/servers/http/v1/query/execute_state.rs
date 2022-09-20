@@ -30,8 +30,6 @@ use common_exception::Result;
 use common_legacy_planners::PlanNode;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use futures::future::AbortHandle;
-use futures::future::Abortable;
 use futures::StreamExt;
 use futures_util::FutureExt;
 use serde::Deserialize;
@@ -322,8 +320,7 @@ async fn execute(
     block_buffer: Arc<BlockBuffer>,
     executor: Arc<RwLock<Executor>>,
 ) -> Result<()> {
-    let data_stream = interpreter.execute(ctx.clone()).await?;
-    let mut data_stream = ctx.try_create_abortable(data_stream)?;
+    let mut data_stream = interpreter.execute(ctx.clone()).await?;
     let use_result_cache = !ctx.get_config().query.management_mode;
 
     match data_stream.next().await {
@@ -425,17 +422,10 @@ impl HttpQueryHandle {
         };
 
         let (error_sender, mut error_receiver) = mpsc::channel::<Result<()>>(1);
-        let (abort_handle, abort_registration) = AbortHandle::new_pair();
 
         GlobalIORuntime::instance().spawn(async move {
-            let error_receiver = Abortable::new(error_receiver.recv(), abort_registration);
-            ctx.add_source_abort_handle(abort_handle);
-            match error_receiver.await {
-                Err(_) => {
-                    Executor::stop(&executor, Err(ErrorCode::AbortedQuery("")), false).await;
-                    block_buffer.stop_push().await.unwrap();
-                }
-                Ok(Some(Err(e))) => {
+            match error_receiver.recv().await {
+                Some(Err(e)) => {
                     Executor::stop(&executor, Err(e), false).await;
                     block_buffer.stop_push().await.unwrap();
                 }

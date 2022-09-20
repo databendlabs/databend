@@ -111,7 +111,7 @@ async fn execute(
         .start()
         .await
         .map_err(|e| error!("interpreter.start.error: {:?}", e));
-    let data_stream: SendableDataBlockStream = {
+    let mut data_stream: SendableDataBlockStream = {
         let output_port = OutputPort::create();
         let stream_source = StreamSource::create(ctx.clone(), input_stream, output_port.clone())?;
         let mut source_pipe_builder = SourcePipeBuilder::create();
@@ -122,7 +122,6 @@ async fn execute(
         interpreter.execute(ctx.clone()).await?
     };
 
-    let mut data_stream = ctx.try_create_abortable(data_stream)?;
     let format_setting = ctx.get_format_settings()?;
     let mut output_format = format.create_format(schema, format_setting);
     let prefix = Ok(output_format.serialize_prefix()?);

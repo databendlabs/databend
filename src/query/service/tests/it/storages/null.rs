@@ -15,7 +15,6 @@
 use common_base::base::tokio;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_legacy_planners::*;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use databend_query::sql::plans::create_table_v2::TableOptions;
@@ -54,13 +53,7 @@ async fn test_null_table() -> Result<()> {
 
     // truncate.
     {
-        let truncate_plan = TruncateTablePlan {
-            catalog: "default".to_string(),
-            database: "default".to_string(),
-            table: "a".to_string(),
-            purge: false,
-        };
-        table.truncate(ctx, truncate_plan).await?;
+        table.truncate(ctx, "default", false).await?;
     }
 
     Ok(())

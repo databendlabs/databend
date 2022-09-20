@@ -17,12 +17,12 @@ use std::str::FromStr;
 use common_ast::ast::CreateStageStmt;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::CreateUserStagePlan;
-use common_legacy_planners::ListPlan;
-use common_legacy_planners::RemoveUserStagePlan;
 use common_meta_types::OnErrorMode;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
+use common_planner::plans::CreateStagePlan;
+use common_planner::plans::ListPlan;
+use common_planner::plans::RemoveStagePlan;
 use common_storage::parse_uri_location;
 use common_storage::UriLocation;
 
@@ -55,7 +55,7 @@ impl<'a> Binder {
     ) -> Result<Plan> {
         let stage_name = format!("@{location}");
         let (stage, path) = parse_stage_location(&self.ctx, stage_name.as_str()).await?;
-        let plan_node = RemoveUserStagePlan {
+        let plan_node = RemoveStagePlan {
             path,
             stage,
             pattern: pattern.to_string(),
@@ -124,7 +124,7 @@ impl<'a> Binder {
             stage_info.copy_options.size_limit = *size_limit;
         }
 
-        Ok(Plan::CreateStage(Box::new(CreateUserStagePlan {
+        Ok(Plan::CreateStage(Box::new(CreateStagePlan {
             if_not_exists: *if_not_exists,
             tenant: self.ctx.get_tenant(),
             user_stage_info: stage_info,

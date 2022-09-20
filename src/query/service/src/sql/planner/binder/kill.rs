@@ -14,7 +14,7 @@
 
 use common_ast::ast::KillTarget;
 use common_exception::Result;
-use common_legacy_planners::KillPlan;
+use common_planner::plans::KillPlan;
 
 use crate::sql::planner::binder::BindContext;
 use crate::sql::planner::binder::Binder;
