@@ -21,7 +21,6 @@ use common_base::base::tokio::sync::mpsc::Sender;
 use common_base::base::GlobalIORuntime;
 use common_base::base::TrySpawn;
 use common_datablocks::DataBlock;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipeline;
@@ -247,10 +246,9 @@ pub trait InputFormatPipe: Sized + Send + 'static {
             } else {
                 batch.truncate(n);
                 tracing::debug!("read {} bytes", n);
-                batch_tx
-                    .send(Ok(batch.into()))
-                    .await
-                    .map_err(|_| ErrorCode::UnexpectedError("fail to send ReadBatch"))?;
+                if let Err(e) = batch_tx.send(Ok(batch.into())).await {
+                    tracing::warn!("fail to send ReadBatch: {}", e);
+                }
             }
         }
         tracing::debug!("finished");
