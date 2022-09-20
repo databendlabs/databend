@@ -21,14 +21,14 @@ use common_ast::ast::RevokeStmt;
 use common_exception::Result;
 use common_legacy_planners::AlterUserPlan;
 use common_legacy_planners::CreateUserPlan;
-use common_legacy_planners::GrantPrivilegePlan;
 use common_legacy_planners::GrantRolePlan;
-use common_legacy_planners::RevokePrivilegePlan;
 use common_legacy_planners::RevokeRolePlan;
 use common_meta_types::AuthInfo;
 use common_meta_types::GrantObject;
 use common_meta_types::UserOption;
 use common_meta_types::UserPrivilegeSet;
+use common_planner::plans::GrantPrivilegePlan;
+use common_planner::plans::RevokePrivilegePlan;
 use common_users::UserApiProvider;
 
 use crate::sql::plans::Plan;

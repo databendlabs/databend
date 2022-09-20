@@ -21,6 +21,9 @@ pub use create_database::CreateDatabasePlan;
 mod drop_database;
 pub use drop_database::DropDatabasePlan;
 
+mod grant_privilege;
+pub use grant_privilege::GrantPrivilegePlan;
+
 mod kill;
 pub use kill::KillPlan;
 
@@ -30,6 +33,9 @@ pub use list::ListPlan;
 mod rename_database;
 pub use rename_database::RenameDatabaseEntity;
 pub use rename_database::RenameDatabasePlan;
+
+mod revoke_privilege;
+pub use revoke_privilege::RevokePrivilegePlan;
 
 mod show_create_database;
 pub use show_create_database::ShowCreateDatabasePlan;
