@@ -17,7 +17,7 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_legacy_planners::ShowCreateTablePlan;
+use common_planner::plans::ShowCreateTablePlan;
 use tracing::debug;
 
 use crate::interpreters::Interpreter;

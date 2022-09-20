@@ -33,7 +33,6 @@ use common_legacy_planners::Extras;
 use common_legacy_planners::Partitions;
 use common_legacy_planners::ReadDataSourcePlan;
 use common_legacy_planners::Statistics;
-use common_legacy_planners::TruncateTablePlan;
 use common_meta_app::schema::TableInfo;
 use common_storages_util::storage_context::StorageContext;
 use common_storages_util::table_storage_prefix::table_storage_prefix;
@@ -357,11 +356,11 @@ impl Table for FuseTable {
     async fn truncate(
         &self,
         ctx: Arc<dyn TableContext>,
-        truncate_plan: TruncateTablePlan,
+        catalog_name: &str,
+        purge: bool,
     ) -> Result<()> {
         self.check_mutable()?;
-        self.do_truncate(ctx, truncate_plan.purge, truncate_plan.catalog.as_str())
-            .await
+        self.do_truncate(ctx, purge, catalog_name).await
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_optimize", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]

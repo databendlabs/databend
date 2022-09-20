@@ -16,8 +16,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::DropTablePlan;
-use common_legacy_planners::TruncateTablePlan;
+use common_planner::plans::DropTablePlan;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -69,12 +68,7 @@ impl Interpreter for DropTableInterpreter {
             if self.plan.all {
                 // errors of truncation are ignored
                 let _ = tbl
-                    .truncate(self.ctx.clone(), TruncateTablePlan {
-                        catalog: self.plan.catalog.clone(),
-                        database: self.plan.database.clone(),
-                        table: self.plan.table.clone(),
-                        purge: true,
-                    })
+                    .truncate(self.ctx.clone(), &self.plan.catalog, true)
                     .await;
             }
         }
