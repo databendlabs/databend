@@ -104,7 +104,7 @@ impl InputContext {
         let format = Self::get_input_format(&file_format_options.format)?;
         let file_infos = Self::get_file_infos(&format, &operator, &plan).await?;
         let splits = format.split_files(file_infos, split_size);
-        let rows_per_block = settings.get_max_block_size()? as usize;
+        let rows_per_block = 1000 * 1000 * 0.8 as usize;
         let record_delimiter = {
             if file_format_options.record_delimiter.is_empty() {
                 format.default_record_delimiter()
@@ -151,7 +151,7 @@ impl InputContext {
             StageFileFormatType::from_str(format_name).map_err(ErrorCode::UnknownFormat)?;
         let format = Self::get_input_format(&format)?;
         let read_batch_size = settings.get_input_read_buffer_size()? as usize;
-        let rows_per_block = settings.get_max_block_size()? as usize;
+        let rows_per_block = 1000 * 1000 * 0.8 as usize;
         let field_delimiter = settings.get_field_delimiter()?;
         let field_delimiter = {
             if field_delimiter.is_empty() {
