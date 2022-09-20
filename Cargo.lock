@@ -1196,6 +1196,7 @@ dependencies = [
  "comfy-table",
  "common-arrow",
  "common-ast",
+ "common-datablocks",
  "common-datavalues",
  "common-exception",
  "common-jsonb",
