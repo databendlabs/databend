@@ -1725,6 +1725,7 @@ dependencies = [
  "common-catalog",
  "common-datavalues",
  "parking_lot 0.12.1",
+ "serde",
 ]
 
 [[package]]

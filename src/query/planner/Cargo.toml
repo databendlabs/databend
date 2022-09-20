@@ -11,3 +11,4 @@ common-catalog = { path = "../catalog" }
 common-datavalues = { path = "../datavalues" }
 
 parking_lot = "0.12"
+serde = { version = "1", features = ["derive"]}
