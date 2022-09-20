@@ -98,7 +98,7 @@ impl InputContext {
             return Err(ErrorCode::BadArguments("no file to copy"));
         }
         let plan = Box::new(CopyIntoPlan { stage_info, files });
-        let read_batch_size = 1024 * 1024;
+        let read_batch_size = settings.get_input_read_buffer_size()? as usize;
         let split_size = 128usize * 1024 * 1024;
         let file_format_options = &plan.stage_info.file_format_options;
         let format = Self::get_input_format(&file_format_options.format)?;
@@ -150,7 +150,7 @@ impl InputContext {
         let format =
             StageFileFormatType::from_str(format_name).map_err(ErrorCode::UnknownFormat)?;
         let format = Self::get_input_format(&format)?;
-        let read_batch_size = 1024 * 1024;
+        let read_batch_size = settings.get_input_read_buffer_size()? as usize;
         let rows_per_block = settings.get_max_block_size()? as usize;
         let field_delimiter = settings.get_field_delimiter()?;
         let field_delimiter = {
