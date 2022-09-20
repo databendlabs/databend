@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 // Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,6 +11,7 @@ use std::collections::HashSet;
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -65,8 +65,6 @@ impl CopyInterpreterV2 {
         match &from.source_info {
             SourceInfo::StageSource(table_info) => {
                 let path = &table_info.path;
-                tracing::info!("path is :{}", path);
-
                 // Here we add the path to the file: /path/to/path/file1.
                 let files_with_path = if !files.is_empty() {
                     let mut files_with_path = vec![];
@@ -76,7 +74,6 @@ impl CopyInterpreterV2 {
                     }
                     files_with_path
                 } else if !path.ends_with('/') {
-                    tracing::info!("path not ends with '/'");
                     let rename_me: Arc<dyn TableContext> = self.ctx.clone();
                     let op = StageSourceHelper::get_op(&rename_me, &table_info.stage_info).await?;
                     if op.object(path).is_exist().await? {
@@ -85,7 +82,6 @@ impl CopyInterpreterV2 {
                         vec![]
                     }
                 } else {
-                    tracing::info!("shit");
                     let rename_me: Arc<dyn TableContext> = self.ctx.clone();
                     let op = StageSourceHelper::get_op(&rename_me, &table_info.stage_info).await?;
 
@@ -95,13 +91,10 @@ impl CopyInterpreterV2 {
 
                     // TODO: we could rewrite into try_collect.
                     let mut objects = op.batch().walk_top_down(path)?;
-                    tracing::info!("common here we go top down");
                     while let Some(de) = objects.try_next().await? {
                         if de.mode().is_dir() {
-                            tracing::info!("dir continue");
                             continue;
                         }
-                        tracing::info!("insert path to list");
                         list.insert(de.path().to_string());
                     }
 
@@ -310,10 +303,6 @@ impl Interpreter for CopyInterpreterV2 {
 
                 // Pattern match check.
                 let pattern = &pattern;
-                tracing::info!(
-                    "parttern should be empty right, tell me, it is {}",
-                    pattern.is_empty()
-                );
                 if !pattern.is_empty() {
                     let regex = Regex::new(pattern).map_err(|e| {
                         ErrorCode::SyntaxException(format!(

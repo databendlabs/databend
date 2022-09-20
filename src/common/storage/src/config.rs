@@ -259,7 +259,7 @@ pub struct StorageHttpConfig {
     pub paths: Vec<String>,
 }
 
-pub const STORAGE_IPFS_DEFAULT_ENDPOINT: &str = "https://ipfs.filebase.io";
+pub const STORAGE_IPFS_DEFAULT_ENDPOINT: &str = "https://ipfs.io";
 /// Config for IPFS storage backend
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StorageIpfsConfig {
