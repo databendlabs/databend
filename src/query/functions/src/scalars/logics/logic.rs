@@ -18,6 +18,7 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use super::xor::LogicXorFunction;
+use super::LogicAndFiltersFunction;
 use super::LogicAndFunction;
 use super::LogicNotFunction;
 use super::LogicOrFunction;
@@ -31,6 +32,7 @@ pub struct LogicFunction;
 impl LogicFunction {
     pub fn register(factory: &mut FunctionFactory) {
         factory.register("and", LogicAndFunction::desc());
+        factory.register("and_filters", LogicAndFiltersFunction::desc());
         factory.register("or", LogicOrFunction::desc());
         factory.register("not", LogicNotFunction::desc());
         factory.register("xor", LogicXorFunction::desc());
@@ -65,17 +67,10 @@ impl<F> LogicFunctionImpl<F>
 where F: LogicExpression + Clone + 'static
 {
     pub fn try_create(op: LogicOperator, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
-        let nullable = match op {
-            LogicOperator::And | LogicOperator::Or
-                if args[0].is_nullable()
-                    || args[1].is_nullable()
-                    || args[0].is_null()
-                    || args[1].is_null() =>
-            {
-                true
-            }
-            _ => false,
-        };
+        let nullable = matches!(op, LogicOperator::And | LogicOperator::Or if args[0].is_nullable()
+                     || args[1].is_nullable()
+                     || args[0].is_null()
+                     || args[1].is_null());
 
         Ok(Box::new(Self {
             op,

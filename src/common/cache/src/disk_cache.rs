@@ -245,13 +245,13 @@ where
         key: K,
         with: F,
     ) -> Result<()> {
-        self.insert_by(key, None, |path| with(File::create(&path)?))
+        self.insert_by(key, None, |path| with(File::create(path)?))
     }
 
     /// Add a file with `bytes` as its contents to the cache at path `key`.
     pub fn insert_bytes<K: AsRef<OsStr>>(&mut self, key: K, bytes: &[u8]) -> Result<()> {
         self.insert_by(key, Some(bytes.len() as u64), |path| {
-            let mut f = File::create(&path)?;
+            let mut f = File::create(path)?;
             f.write_all(bytes)?;
             Ok(())
         })

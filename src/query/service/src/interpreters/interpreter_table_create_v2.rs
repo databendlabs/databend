@@ -55,7 +55,7 @@ impl Interpreter for CreateTableInterpreterV2 {
         let engine = self.plan.engine();
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
         let tables = catalog
-            .list_tables(&*self.plan.tenant, &*self.plan.database)
+            .list_tables(&self.plan.tenant, &self.plan.database)
             .await?;
         if quota.max_tables_per_database != 0
             && tables.len() >= quota.max_tables_per_database as usize

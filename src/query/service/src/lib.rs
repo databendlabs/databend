@@ -15,7 +15,6 @@
 #![feature(hash_raw_entry)]
 #![feature(core_intrinsics)]
 #![feature(arbitrary_self_types)]
-#![feature(generic_associated_types)]
 #![feature(type_alias_impl_trait)]
 #![feature(assert_matches)]
 #![feature(trusted_len)]

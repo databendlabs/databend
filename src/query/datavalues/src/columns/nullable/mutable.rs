@@ -74,7 +74,7 @@ impl MutableColumn for MutableNullableColumn {
             })
             .and_then(|v| {
                 let value = self.inner.pop_data_value();
-                v.then_some(value).unwrap_or(Ok(DataValue::Null))
+                if v { value } else { Ok(DataValue::Null) }
             })
     }
 }

@@ -79,7 +79,7 @@ impl fmt::Display for Cmd {
                 write!(f, "upsert_kv:{}", upsert_kv)
             }
             Cmd::Transaction(txn) => {
-                write!(f, "txn:{:?}", txn)
+                write!(f, "txn:{}", txn)
             }
         }
     }

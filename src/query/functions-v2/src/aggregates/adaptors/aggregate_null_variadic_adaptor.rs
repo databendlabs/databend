@@ -99,7 +99,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
     #[inline]
     fn state_layout(&self) -> Layout {
         let layout = self.nested.state_layout();
-        let add = if NULLABLE_RESULT { 1 } else { 0 };
+        let add = usize::from(NULLABLE_RESULT);
         Layout::from_size_align(layout.size() + add, layout.align()).unwrap()
     }
 

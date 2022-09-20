@@ -800,13 +800,12 @@ impl<KV: KVApi> ShareApi for KV {
         let mut objects = vec![];
         for entry in entries {
             let object = get_object_name_from_id(self, &database_name, entry.object).await?;
-            match object {
-                Some(object) => objects.push(ShareGrantReplyObject {
+            if let Some(object) = object {
+                objects.push(ShareGrantReplyObject {
                     object,
                     privileges: entry.privileges,
                     grant_on: entry.grant_on,
-                }),
-                None => {}
+                })
             }
         }
 
@@ -925,15 +924,12 @@ impl<KV: KVApi> ShareApi for KV {
         };
         let mut privileges = vec![];
         for (entry, share_name) in entries {
-            match entry {
-                Some(entry) => {
-                    privileges.push(ObjectGrantPrivilege {
-                        share_name,
-                        privileges: entry.privileges,
-                        grant_on: entry.grant_on,
-                    });
-                }
-                None => {}
+            if let Some(entry) = entry {
+                privileges.push(ObjectGrantPrivilege {
+                    share_name,
+                    privileges: entry.privileges,
+                    grant_on: entry.grant_on,
+                });
             }
         }
         Ok(GetObjectGrantPrivilegesReply { privileges })

@@ -165,7 +165,7 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
                     let mut table = Table::new();
                     table.load_preset("||--+-++|    ++++++");
 
-                    table.set_header(&["Column", "Data"]);
+                    table.set_header(["Column", "Data"]);
 
                     for (name, _, col) in columns.iter() {
                         table.add_row(&[name.to_string(), format!("{col:?}")]);

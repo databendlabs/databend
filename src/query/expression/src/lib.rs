@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #![feature(const_try)]
-#![feature(generic_associated_types)]
 #![feature(iterator_try_reduce)]
 #![feature(const_fmt_arguments_new)]
 #![feature(box_patterns)]

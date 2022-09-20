@@ -53,7 +53,7 @@ where S: AsPrimitive<f64> {
 
 impl Function for ExpFunction {
     fn name(&self) -> &str {
-        &*self._display_name
+        &self._display_name
     }
 
     fn return_type(&self) -> DataTypeImpl {

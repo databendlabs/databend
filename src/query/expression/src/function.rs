@@ -221,9 +221,9 @@ where F: Fn(&[ValueRef<AnyType>], &GenericMap) -> Result<Value<AnyType>, String>
                 }
             }
         }
-        let nonull_results = f(&nonull_args, generics)?;
+        let results = f(&nonull_args, generics)?;
         let bitmap = bitmap.unwrap_or_else(|| constant_bitmap(true, len));
-        match nonull_results {
+        match results {
             Value::Scalar(s) => {
                 if bitmap.get(0) {
                     Ok(Value::Scalar(Result::upcast_scalar(s)))
@@ -232,10 +232,21 @@ where F: Fn(&[ValueRef<AnyType>], &GenericMap) -> Result<Value<AnyType>, String>
                 }
             }
             Value::Column(column) => {
-                let result = Column::Nullable(Box::new(NullableColumn {
-                    column,
-                    validity: bitmap.into(),
-                }));
+                let result = match column {
+                    Column::Nullable(box nullable_column) => {
+                        let validity = bitmap.into();
+                        let validity =
+                            common_arrow::arrow::bitmap::and(&nullable_column.validity, &validity);
+                        Column::Nullable(Box::new(NullableColumn {
+                            column: nullable_column.column,
+                            validity,
+                        }))
+                    }
+                    _ => Column::Nullable(Box::new(NullableColumn {
+                        column,
+                        validity: bitmap.into(),
+                    })),
+                };
                 Ok(Value::Column(Result::upcast_column(result)))
             }
         }

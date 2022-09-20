@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_legacy_planners::TruncateTablePlan;
+use common_planner::plans::TruncateTablePlan;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -45,7 +45,8 @@ impl Interpreter for TruncateTableInterpreter {
         let tbl_name = self.plan.table.as_str();
 
         let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
-        tbl.truncate(self.ctx.clone(), self.plan.clone()).await?;
+        tbl.truncate(self.ctx.clone(), catalog_name, self.plan.purge)
+            .await?;
         Ok(PipelineBuildResult::create())
     }
 }

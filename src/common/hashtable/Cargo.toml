@@ -16,7 +16,7 @@ common-base = { path = "../base" }
 
 # Crates.io dependencies
 ahash = "0.7.6"
-ordered-float = { git = "https://github.com/andylokandy/rust-ordered-float.git", branch = "as", features = ["serde"] }
+ordered-float = { version = "3.1.0", features = ["serde"] }
 primitive-types = "0.11.1"
 
 [dev-dependencies]

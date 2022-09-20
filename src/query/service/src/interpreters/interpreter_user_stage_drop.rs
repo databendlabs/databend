@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_legacy_planners::DropUserStagePlan;
 use common_meta_types::StageType;
+use common_planner::plans::DropStagePlan;
 use common_users::UserApiProvider;
 use tracing::info;
 
@@ -29,11 +29,11 @@ use crate::storages::stage::StageSourceHelper;
 #[derive(Debug)]
 pub struct DropUserStageInterpreter {
     ctx: Arc<QueryContext>,
-    plan: DropUserStagePlan,
+    plan: DropStagePlan,
 }
 
 impl DropUserStageInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: DropUserStagePlan) -> Result<Self> {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: DropStagePlan) -> Result<Self> {
         Ok(DropUserStageInterpreter { ctx, plan })
     }
 }

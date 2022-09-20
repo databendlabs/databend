@@ -17,8 +17,8 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_legacy_planners::ShowGrantsPlan;
 use common_meta_types::PrincipalIdentity;
+use common_planner::plans::ShowGrantsPlan;
 use common_users::RoleCacheManager;
 use common_users::UserApiProvider;
 

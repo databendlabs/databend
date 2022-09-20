@@ -31,13 +31,13 @@ impl PartialEq for DataTypeImpl {
 
 impl PartialEq<DataTypeImpl> for Arc<DataTypeImpl> {
     fn eq(&self, that: &DataTypeImpl) -> bool {
-        equal(&**self, that)
+        equal(self, that)
     }
 }
 
 impl PartialEq<DataTypeImpl> for Box<DataTypeImpl> {
     fn eq(&self, that: &DataTypeImpl) -> bool {
-        equal(&**self, that)
+        equal(self, that)
     }
 }
 
