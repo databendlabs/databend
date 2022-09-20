@@ -212,6 +212,8 @@ impl AccessChecker for PrivilegeAccess {
             Plan::ShowShares(_) => {}
             Plan::ShowObjectGrantPrivileges(_) => {}
             Plan::ShowGrantTenantsOfShare(_) => {}
+            Plan::ExplainAst { .. } => {}
+            Plan::ExplainSyntax { .. } => {}
         }
 
         Ok(())
