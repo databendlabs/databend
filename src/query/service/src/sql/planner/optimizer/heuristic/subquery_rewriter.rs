@@ -22,13 +22,14 @@ use common_datavalues::UInt64Type;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
+use common_planner::IndexType;
+use common_planner::MetadataRef;
 
 use crate::sql::binder::ColumnBinding;
 use crate::sql::binder::Visibility;
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::SExpr;
-use crate::sql::planner::IndexType;
 use crate::sql::plans::Aggregate;
 use crate::sql::plans::AggregateFunction;
 use crate::sql::plans::AggregateMode;
@@ -50,7 +51,6 @@ use crate::sql::plans::Scalar;
 use crate::sql::plans::ScalarItem;
 use crate::sql::plans::SubqueryExpr;
 use crate::sql::plans::SubqueryType;
-use crate::sql::MetadataRef;
 use crate::sql::ScalarExpr;
 
 pub enum UnnestResult {

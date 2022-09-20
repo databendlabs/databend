@@ -7,13 +7,49 @@ output domain  : {FALSE}
 output         : false
 
 
-ast            : null AND false
-raw expr       : and(NULL, false)
-checked expr   : and<NULL, Boolean NULL>(NULL, CAST(false AS Boolean NULL))
+ast            : true AND null
+raw expr       : and(true, NULL)
+checked expr   : and<Boolean NULL, Boolean NULL>(CAST(true AS Boolean NULL), CAST(NULL AS Boolean NULL))
 optimized expr : NULL
-output type    : NULL
-output domain  : {NULL}
+output type    : Boolean NULL
+output domain  : Unknown
 output         : NULL
+
+
+ast            : true AND true
+raw expr       : and(true, true)
+checked expr   : and<Boolean, Boolean>(true, true)
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : false AND false
+raw expr       : and(false, false)
+checked expr   : and<Boolean, Boolean>(false, false)
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : false AND null
+raw expr       : and(false, NULL)
+checked expr   : and<Boolean NULL, Boolean NULL>(CAST(false AS Boolean NULL), CAST(NULL AS Boolean NULL))
+optimized expr : false
+output type    : Boolean NULL
+output domain  : Unknown
+output         : false
+
+
+ast            : false AND true
+raw expr       : and(false, true)
+checked expr   : and<Boolean, Boolean>(false, true)
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
 
 
 ast            : NOT a
@@ -102,10 +138,10 @@ output         : true
 
 ast            : null OR false
 raw expr       : or(NULL, false)
-checked expr   : or<NULL, Boolean NULL>(NULL, CAST(false AS Boolean NULL))
+checked expr   : or<Boolean NULL, Boolean NULL>(CAST(NULL AS Boolean NULL), CAST(false AS Boolean NULL))
 optimized expr : NULL
-output type    : NULL
-output domain  : {NULL}
+output type    : Boolean NULL
+output domain  : Unknown
 output         : NULL
 
 

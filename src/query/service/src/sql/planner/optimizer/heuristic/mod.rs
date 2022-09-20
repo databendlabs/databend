@@ -22,6 +22,7 @@ mod subquery_rewriter;
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_planner::MetadataRef;
 use once_cell::sync::Lazy;
 
 use self::prewhere_optimization::PrewhereOptimizer;
@@ -34,7 +35,6 @@ pub use crate::sql::optimizer::heuristic::rule_list::RuleList;
 use crate::sql::optimizer::rule::TransformState;
 use crate::sql::optimizer::SExpr;
 use crate::sql::BindContext;
-use crate::sql::MetadataRef;
 
 pub static DEFAULT_REWRITE_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| {
     vec![

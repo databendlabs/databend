@@ -153,7 +153,7 @@ pub enum FlightExchange {
 impl FlightExchange {
     pub fn from_server(
         streaming: Request<Streaming<FlightData>>,
-        response_tx: Sender<std::result::Result<FlightData, Status>>,
+        response_tx: Sender<Result<FlightData, Status>>,
     ) -> FlightExchange {
         let mut streaming = streaming.into_inner();
         let (tx, rx) = async_channel::bounded(1);
@@ -260,7 +260,7 @@ pub struct ClientFlightExchange {
     is_closed_request: AtomicBool,
     is_closed_response: AtomicBool,
     response_tx: Sender<FlightData>,
-    request_rx: Receiver<std::result::Result<FlightData, Status>>,
+    request_rx: Receiver<Result<FlightData, Status>>,
 }
 
 impl ClientFlightExchange {
@@ -344,8 +344,8 @@ pub struct ServerFlightExchange {
     state: Arc<ChannelState>,
     is_closed_request: AtomicBool,
     is_closed_response: AtomicBool,
-    request_rx: Receiver<std::result::Result<FlightData, Status>>,
-    response_tx: Sender<std::result::Result<FlightData, Status>>,
+    request_rx: Receiver<Result<FlightData, Status>>,
+    response_tx: Sender<Result<FlightData, Status>>,
 }
 
 impl Clone for ServerFlightExchange {

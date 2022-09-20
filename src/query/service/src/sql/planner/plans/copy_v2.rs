@@ -33,7 +33,7 @@ pub enum ValidationMode {
 
 impl FromStr for ValidationMode {
     type Err = String;
-    fn from_str(s: &str) -> std::result::Result<Self, String> {
+    fn from_str(s: &str) -> Result<Self, String> {
         match s.to_uppercase().as_str() {
             "" => Ok(ValidationMode::None),
             "RETURN_ERRORS" => Ok(ValidationMode::ReturnErrors),
@@ -66,6 +66,7 @@ pub enum CopyPlanV2 {
         schema: DataSchemaRef,
         validation_mode: ValidationMode,
         from: Box<ReadDataSourcePlan>,
+        force: bool,
     },
     IntoStage {
         stage: Box<UserStageInfo>,
@@ -86,6 +87,7 @@ impl Debug for CopyPlanV2 {
                 pattern,
                 from,
                 validation_mode,
+                force,
                 ..
             } => {
                 write!(f, "Copy into {:}.{:}", database_name, table_name)?;
@@ -98,6 +100,7 @@ impl Debug for CopyPlanV2 {
                     write!(f, ", validation_mode: {:?}", validation_mode)?;
                     write!(f, ", {:?}", from)?;
                 }
+                write!(f, " force: {}", force)?;
             }
             CopyPlanV2::IntoStage {
                 stage,

@@ -23,13 +23,13 @@ use common_storages_index::RangeFilter;
 
 pub trait RangeFilterPruner {
     // returns ture, if target should NOT be pruned (false positive allowed)
-    fn should_keep(&self, input: &StatisticsOfColumns) -> bool;
+    fn should_keep(&self, input: &StatisticsOfColumns, row_count: u64) -> bool;
 }
 
 struct KeepTrue;
 
 impl RangeFilterPruner for KeepTrue {
-    fn should_keep(&self, _input: &StatisticsOfColumns) -> bool {
+    fn should_keep(&self, _input: &StatisticsOfColumns, _row_count: u64) -> bool {
         true
     }
 }
@@ -37,14 +37,14 @@ impl RangeFilterPruner for KeepTrue {
 struct KeepFalse;
 
 impl RangeFilterPruner for KeepFalse {
-    fn should_keep(&self, _input: &StatisticsOfColumns) -> bool {
+    fn should_keep(&self, _input: &StatisticsOfColumns, _row_count: u64) -> bool {
         false
     }
 }
 
 impl RangeFilterPruner for RangeFilter {
-    fn should_keep(&self, stats: &StatisticsOfColumns) -> bool {
-        match self.eval(stats) {
+    fn should_keep(&self, stats: &StatisticsOfColumns, row_count: u64) -> bool {
+        match self.eval(stats, row_count) {
             Ok(r) => r,
             Err(e) => {
                 // swallow exceptions intentionally, corrupted index should not prevent execution

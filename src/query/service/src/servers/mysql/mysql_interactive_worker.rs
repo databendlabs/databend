@@ -64,6 +64,8 @@ fn has_result_set_by_plan(plan: &Plan) -> bool {
         plan,
         Plan::Query { .. }
             | Plan::Explain { .. }
+            | Plan::ExplainAst { .. }
+            | Plan::ExplainSyntax { .. }
             | Plan::Call(_)
             | Plan::ShowCreateDatabase(_)
             | Plan::ShowCreateTable(_)
@@ -221,10 +223,10 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
         let mut writer = DFQueryResultWriter::create(writer);
 
         let instant = Instant::now();
-        let blocks = self.base.do_query(query).await;
+        let query_result = self.base.do_query(query).await;
 
         let format = self.base.session.get_format_settings()?;
-        let mut write_result = writer.write(blocks, &format).await;
+        let mut write_result = writer.write(query_result, &format).await;
 
         if let Err(cause) = write_result {
             let suffix = format!("(while in query {})", query);
@@ -344,19 +346,23 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
                     Ok((_, h)) => h.clone(),
                     Err(_) => vec![],
                 };
-                let mut has_result_set = true;
-                let interpreter = if settings.get_enable_planner_v2()? != 0 {
+
+                let (interpreter, has_result_set) = if settings.get_enable_planner_v2()? != 0 {
                     let mut planner = Planner::new(context.clone());
-                    planner.plan_sql(query).await.and_then(|v| {
-                        has_result_set = has_result_set_by_plan(&v.0);
-                        InterpreterFactoryV2::get(context.clone(), &v.0)
-                    })
+                    let plan = planner.plan_sql(query).await?;
+                    let has_result_set = has_result_set_by_plan(&plan.0);
+                    (
+                        InterpreterFactoryV2::get(context.clone(), &plan.0).await,
+                        has_result_set,
+                    )
                 } else {
-                    let (plan, _) = PlanParser::parse_with_hint(query, context.clone()).await;
-                    plan.and_then(|v| {
-                        has_result_set = has_result_set_by_plan_node(&v);
-                        InterpreterFactory::get(context.clone(), v)
-                    })
+                    let (plan_res, _) = PlanParser::parse_with_hint(query, context.clone()).await;
+                    let plan = plan_res?;
+                    let has_result_set = has_result_set_by_plan_node(&plan);
+                    (
+                        InterpreterFactory::get(context.clone(), plan).await,
+                        has_result_set,
+                    )
                 };
 
                 let hint = hints

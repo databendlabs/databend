@@ -31,6 +31,7 @@ use opensrv_mysql::*;
 use tokio_stream::wrappers::TcpListenerStream;
 use tracing::error;
 use tracing::info;
+use tracing::warn;
 
 use crate::servers::mysql::mysql_session::MySQLConnection;
 use crate::servers::mysql::reject_connection::RejectConnection;
@@ -81,7 +82,10 @@ impl MySQLHandler {
     fn accept_socket(sessions: Arc<SessionManager>, executor: Arc<Runtime>, socket: TcpStream) {
         executor.spawn(async move {
             match sessions.create_session(SessionType::MySQL).await {
-                Err(error) => Self::reject_session(socket, error).await,
+                Err(error) => {
+                    warn!("create session failed, {:?}", error);
+                    Self::reject_session(socket, error).await
+                }
                 Ok(session) => {
                     info!("MySQL connection coming: {:?}", socket.peer_addr());
                     if let Err(error) = MySQLConnection::run_on_stream(session, socket) {

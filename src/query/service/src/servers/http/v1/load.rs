@@ -72,7 +72,7 @@ fn execute_query(
     source_builder: SourcePipeBuilder,
 ) -> impl Future<Output = Result<()>> {
     async move {
-        let interpreter = InterpreterFactory::get(context.clone(), node)?;
+        let interpreter = InterpreterFactory::get(context.clone(), node).await?;
 
         if let Err(cause) = interpreter.start().await {
             error!("interpreter.start error: {:?}", cause);
@@ -202,8 +202,9 @@ pub async fn streaming_load(
             StatusCode::BAD_REQUEST,
         )),
     }?;
-    let interpreter =
-        InterpreterFactory::get(context.clone(), plan.clone()).map_err(InternalServerError)?;
+    let interpreter = InterpreterFactory::get(context.clone(), plan.clone())
+        .await
+        .map_err(InternalServerError)?;
     let _ = interpreter
         .set_source_pipe_builder(Some(source_pipe_builder))
         .map_err(|e| error!("interpreter.set_source_pipe_builder.error: {:?}", e));

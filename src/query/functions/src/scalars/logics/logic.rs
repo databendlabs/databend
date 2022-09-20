@@ -18,6 +18,7 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use super::xor::LogicXorFunction;
+use super::LogicAndFiltersFunction;
 use super::LogicAndFunction;
 use super::LogicNotFunction;
 use super::LogicOrFunction;
@@ -31,6 +32,7 @@ pub struct LogicFunction;
 impl LogicFunction {
     pub fn register(factory: &mut FunctionFactory) {
         factory.register("and", LogicAndFunction::desc());
+        factory.register("and_filters", LogicAndFiltersFunction::desc());
         factory.register("or", LogicOrFunction::desc());
         factory.register("not", LogicNotFunction::desc());
         factory.register("xor", LogicXorFunction::desc());

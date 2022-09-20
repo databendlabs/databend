@@ -21,7 +21,6 @@ use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
 use tracing::debug;
 
-use crate::clusters::ClusterHelper;
 use crate::sql::binder::Binder;
 use crate::sql::normalize_identifier;
 use crate::sql::optimizer::optimize;

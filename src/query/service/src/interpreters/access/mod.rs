@@ -14,7 +14,9 @@
 
 mod accessor;
 mod management_mode_access;
+mod privilege_access;
 
 pub use accessor::AccessChecker;
 pub use accessor::Accessor;
 pub use management_mode_access::ManagementModeAccess;
+pub use privilege_access::PrivilegeAccess;
