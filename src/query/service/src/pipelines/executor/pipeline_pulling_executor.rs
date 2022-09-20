@@ -115,14 +115,13 @@ impl PipelinePullingExecutor {
     }
 
     pub fn try_create(
-        query_need_abort: Arc<AtomicBool>,
         mut pipeline: Pipeline,
         settings: ExecutorSettings,
     ) -> Result<PipelinePullingExecutor> {
         let (sender, receiver) = std::sync::mpsc::sync_channel(pipeline.output_len());
 
         Self::wrap_pipeline(&mut pipeline, sender)?;
-        let executor = PipelineExecutor::create(query_need_abort, pipeline, settings)?;
+        let executor = PipelineExecutor::create(pipeline, settings)?;
         Ok(PipelinePullingExecutor {
             receiver,
             executor,
@@ -131,7 +130,6 @@ impl PipelinePullingExecutor {
     }
 
     pub fn from_pipelines(
-        query_need_abort: Arc<AtomicBool>,
         build_res: PipelineBuildResult,
         settings: ExecutorSettings,
     ) -> Result<PipelinePullingExecutor> {
@@ -145,7 +143,7 @@ impl PipelinePullingExecutor {
         Ok(PipelinePullingExecutor {
             receiver,
             state: State::create(),
-            executor: PipelineExecutor::from_pipelines(query_need_abort, pipelines, settings)?,
+            executor: PipelineExecutor::from_pipelines(pipelines, settings)?,
         })
     }
 
@@ -179,8 +177,8 @@ impl PipelinePullingExecutor {
         }
     }
 
-    pub fn finish(&self) -> Result<()> {
-        self.executor.finish()
+    pub fn finish(&self, cause: Option<ErrorCode>) {
+        self.executor.finish(cause);
     }
 
     pub fn pull_data(&mut self) -> Result<Option<DataBlock>> {
@@ -196,7 +194,7 @@ impl PipelinePullingExecutor {
                 }
                 Err(_disconnected) => {
                     if !self.executor.is_finished() {
-                        self.executor.finish()?;
+                        self.executor.finish(None);
                     }
 
                     self.state.wait_finish();
@@ -214,9 +212,7 @@ impl PipelinePullingExecutor {
 
 impl Drop for PipelinePullingExecutor {
     fn drop(&mut self) {
-        if let Err(cause) = self.finish() {
-            tracing::warn!("Executor finish is failure {:?}", cause);
-        }
+        self.finish(None);
     }
 }
 

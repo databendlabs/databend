@@ -403,6 +403,8 @@ pub enum TokenKind {
     FLOAT64,
     #[token("FOR", ignore(ascii_case))]
     FOR,
+    #[token("FORCE", ignore(ascii_case))]
+    FORCE,
     #[token("FORMAT", ignore(ascii_case))]
     FORMAT,
     #[token("FRAGMENTS", ignore(ascii_case))]
