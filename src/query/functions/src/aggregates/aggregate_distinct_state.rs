@@ -23,6 +23,7 @@ use bytes::BytesMut;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_hashtable::HashSet as CommonHashSet;
 use common_hashtable::HashSetWithStackMemory;
 use common_hashtable::HashTableEntity;
 use common_hashtable::HashTableKeyable;
@@ -63,9 +64,13 @@ pub struct AggregateDistinctPrimitiveState<T: PrimitiveType, E: From<T> + HashTa
     inserted: bool,
 }
 
+const HOLDER_CAPACITY: usize = 256;
+const HOLDER_BYTES_CAPACITY: usize = HOLDER_CAPACITY * 8;
+
 pub struct AggregateDistinctStringState {
-    set: HashSet<KeysRef, RandomState>,
-    holder: MutableStringColumn,
+    set: CommonHashSet<KeysRef>,
+    inserted: bool,
+    holders: Vec<MutableStringColumn>,
 }
 
 impl DistinctStateFunc<DataGroupValues> for AggregateDistinctState {
@@ -110,11 +115,11 @@ impl DistinctStateFunc<DataGroupValues> for AggregateDistinctState {
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
-        for row in 0..input_rows {
-            let values = columns.iter().map(|s| s.get(row)).collect::<Vec<_>>();
-            match validity {
-                Some(v) => {
+        match validity {
+            Some(v) => {
+                for row in 0..input_rows {
                     if v.get_bit(row) {
+                        let values = columns.iter().map(|s| s.get(row)).collect::<Vec<_>>();
                         let data_values = DataGroupValues(
                             values
                                 .iter()
@@ -124,7 +129,10 @@ impl DistinctStateFunc<DataGroupValues> for AggregateDistinctState {
                         self.set.insert(data_values);
                     }
                 }
-                None => {
+            }
+            _ => {
+                for row in 0..input_rows {
+                    let values = columns.iter().map(|s| s.get(row)).collect::<Vec<_>>();
                     let data_values = DataGroupValues(
                         values
                             .iter()
@@ -171,31 +179,58 @@ impl DistinctStateFunc<DataGroupValues> for AggregateDistinctState {
     }
 }
 
+impl AggregateDistinctStringState {
+    #[inline]
+    fn insert_and_materialize(&mut self, key: &KeysRef) {
+        let entity = self.set.insert_key(key, &mut self.inserted);
+        if self.inserted {
+            let data = unsafe { key.as_slice() };
+
+            let holder = self.holders.last_mut().unwrap();
+            if holder.may_resize(data.len()) {
+                let mut holder = MutableStringColumn::with_values_capacity(
+                    HOLDER_BYTES_CAPACITY.max(data.len()),
+                    HOLDER_CAPACITY,
+                );
+                holder.push(data);
+                let value = unsafe { holder.value_unchecked(holder.len() - 1) };
+                entity.set_key(KeysRef::create(value.as_ptr() as usize, value.len()));
+                self.holders.push(holder);
+            } else {
+                holder.push(data);
+                let value = unsafe { holder.value_unchecked(holder.len() - 1) };
+                entity.set_key(KeysRef::create(value.as_ptr() as usize, value.len()));
+            }
+        }
+    }
+}
+
 impl DistinctStateFunc<KeysRef> for AggregateDistinctStringState {
     fn new() -> Self {
         AggregateDistinctStringState {
-            set: HashSet::new(),
-            holder: MutableStringColumn::with_capacity(0),
+            set: CommonHashSet::create(),
+            inserted: false,
+            holders: vec![MutableStringColumn::with_values_capacity(
+                HOLDER_BYTES_CAPACITY,
+                HOLDER_CAPACITY,
+            )],
         }
     }
 
     fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
-        let (values, offsets) = self.holder.values_offsets();
-        serialize_into_buf(writer, offsets)?;
-        serialize_into_buf(writer, values)
+        serialize_into_buf(writer, &self.holders)
     }
 
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        let offsets: Vec<i64> = deserialize_from_slice(reader)?;
-        let values: Vec<u8> = deserialize_from_slice(reader)?;
+        self.holders = deserialize_from_slice(reader)?;
+        self.set = CommonHashSet::with_capacity(self.holders.iter().map(|h| h.len()).sum());
 
-        self.holder = MutableStringColumn::from_data(values, offsets);
-        self.set = HashSet::with_capacity(self.holder.len());
-
-        for index in 0..self.holder.len() {
-            let data = unsafe { self.holder.value_unchecked(index) };
-            let key = KeysRef::create(data.as_ptr() as usize, data.len());
-            self.set.insert(key);
+        for holder in self.holders.iter() {
+            for index in 0..holder.len() {
+                let data = unsafe { holder.value_unchecked(index) };
+                let key = KeysRef::create(data.as_ptr() as usize, data.len());
+                self.set.insert_key(&key, &mut self.inserted);
+            }
         }
         Ok(())
     }
@@ -211,14 +246,8 @@ impl DistinctStateFunc<KeysRef> for AggregateDistinctStringState {
     fn add(&mut self, columns: &[ColumnRef], row: usize) -> Result<()> {
         let column: &StringColumn = unsafe { Series::static_cast(&columns[0]) };
         let data = column.get_data(row);
-        let mut key = KeysRef::create(data.as_ptr() as usize, data.len());
-
-        if !self.set.contains(&key) {
-            self.holder.push(data);
-            let data = unsafe { self.holder.value_unchecked(self.holder.len() - 1) };
-            key = KeysRef::create(data.as_ptr() as usize, data.len());
-            self.set.insert(key);
-        }
+        let key = KeysRef::create(data.as_ptr() as usize, data.len());
+        self.insert_and_materialize(&key);
         Ok(())
     }
 
@@ -230,30 +259,21 @@ impl DistinctStateFunc<KeysRef> for AggregateDistinctStringState {
     ) -> Result<()> {
         let column: &StringColumn = unsafe { Series::static_cast(&columns[0]) };
 
-        for row in 0..input_rows {
-            match validity {
-                Some(v) => {
+        match validity {
+            Some(v) => {
+                for row in 0..input_rows {
                     if v.get_bit(row) {
                         let data = column.get_data(row);
-                        let mut key = KeysRef::create(data.as_ptr() as usize, data.len());
-                        if !self.set.contains(&key) {
-                            self.holder.push(data);
-                            let data =
-                                unsafe { self.holder.value_unchecked(self.holder.len() - 1) };
-                            key = KeysRef::create(data.as_ptr() as usize, data.len());
-                            self.set.insert(key);
-                        }
+                        let key = KeysRef::create(data.as_ptr() as usize, data.len());
+                        self.insert_and_materialize(&key);
                     }
                 }
-                None => {
+            }
+            _ => {
+                for row in 0..input_rows {
                     let data = column.get_data(row);
-                    let mut key = KeysRef::create(data.as_ptr() as usize, data.len());
-                    if !self.set.contains(&key) {
-                        self.holder.push(data);
-                        let data = unsafe { self.holder.value_unchecked(self.holder.len() - 1) };
-                        key = KeysRef::create(data.as_ptr() as usize, data.len());
-                        self.set.insert(key);
-                    }
+                    let key = KeysRef::create(data.as_ptr() as usize, data.len());
+                    self.insert_and_materialize(&key);
                 }
             }
         }
@@ -261,13 +281,37 @@ impl DistinctStateFunc<KeysRef> for AggregateDistinctStringState {
     }
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
-        self.set.extend(rhs.set.clone());
+        for value in rhs.set.iter() {
+            self.insert_and_materialize(value.get_key());
+        }
         Ok(())
     }
 
+    // After build_columns, the set is not avaiable any more.
     fn build_columns(&mut self, _fields: &[DataField]) -> Result<Vec<ColumnRef>> {
-        let c = self.holder.finish();
-        Ok(vec![c.arc()])
+        if self.holders.len() == 1 {
+            let c = self.holders[0].finish();
+            return Ok(vec![c.arc()]);
+        }
+        let mut values = Vec::with_capacity(
+            self.holders
+                .iter()
+                .map(|h| h.values_offsets().0.len())
+                .sum(),
+        );
+        let mut offsets = Vec::with_capacity(self.holders.iter().map(|h| h.len()).sum());
+
+        let mut last_offset = 0;
+        offsets.push(0);
+        for holder in self.holders.iter_mut() {
+            for offset in holder.values_offsets().1.iter() {
+                last_offset += *offset;
+                offsets.push(last_offset);
+            }
+            values.append(holder.values_mut());
+        }
+        let mut c = MutableStringColumn::from_data(values, offsets);
+        Ok(vec![c.finish().arc()])
     }
 }
 
