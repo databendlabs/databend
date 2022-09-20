@@ -158,6 +158,10 @@ impl InputFormatTextBase for InputFormatCSV {
                     }
 
                     state.rows_to_skip -= 1;
+                    tracing::debug!(
+                        "csv aligner: skip a header row, remain {}",
+                        state.rows_to_skip
+                    );
                     state.rows += 1;
                     endlen = 0;
                 }
@@ -179,7 +183,7 @@ impl InputFormatTextBase for InputFormatCSV {
             path: state.path.to_string(),
             batch_id: state.batch_id,
             offset: 0,
-            start_row: None,
+            start_row: Some(state.rows),
         };
 
         while !buf.is_empty() {
@@ -191,9 +195,7 @@ impl InputFormatTextBase for InputFormatCSV {
             endlen += n_end;
             out_pos += n_out;
             match result {
-                ReadRecordResult::InputEmpty => {
-                    break;
-                }
+                ReadRecordResult::InputEmpty => break,
                 ReadRecordResult::OutputFull => {
                     return Err(csv_error(
                         "output more than input",
@@ -243,21 +245,37 @@ impl InputFormatTextBase for InputFormatCSV {
             }
         }
 
+        reader.n_end = endlen;
+        out_tmp.truncate(out_pos);
         if row_batch.row_ends.is_empty() {
-            reader.out.extend_from_slice(&out_tmp[..out_pos]);
+            tracing::debug!(
+                "csv aligner: {} + {} bytes => 0 rows",
+                reader.out.len(),
+                buf_in.len(),
+            );
+            reader.out.extend_from_slice(&out_tmp);
             Ok(vec![])
         } else {
-            state.rows += row_batch.row_ends.len();
             let last_remain = mem::take(&mut reader.out);
+
+            state.batch_id += 1;
+            state.rows += row_batch.row_ends.len();
             reader.out.extend_from_slice(&out_tmp[row_batch_end..]);
+
+            tracing::debug!(
+                "csv aligner: {} + {} bytes => {} rows + {} bytes remain",
+                last_remain.len(),
+                buf_in.len(),
+                row_batch.row_ends.len(),
+                reader.out.len()
+            );
+
             out_tmp.truncate(row_batch_end);
-            row_batch.start_row = Some(state.rows);
             row_batch.data = if last_remain.is_empty() {
                 out_tmp
             } else {
                 vec![last_remain, out_tmp].concat()
             };
-            state.batch_id += 1;
             Ok(vec![row_batch])
         }
     }
