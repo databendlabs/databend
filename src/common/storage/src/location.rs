@@ -44,7 +44,7 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
     // Path endswith `/` means it's a directory, otherwise it's a file.
     // If the path is a directory, we will use this path as root.
     // If the path is a file, we will use `/` as root (which is the default value)
-    let (mut root, mut path) = if l.path.ends_with('/') {
+    let (root, path) = if l.path.ends_with('/') {
         (l.path.as_str(), "/")
     } else {
         ("/", l.path.as_str())
@@ -98,14 +98,9 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
             root: root.to_string(),
         }),
         Scheme::Ipfs => {
-            if l.name.ends_with('/') {
-                root = l.name.as_str();
-            } else {
-                path = l.name.as_str();
-            }
             StorageParams::Ipfs(StorageIpfsConfig {
                 endpoint_url: STORAGE_IPFS_DEFAULT_ENDPOINT.to_string(),
-                root: "/ipfs/".to_string() + root,
+                root: "/ipfs/".to_string() + l.name.as_str(),
             })
         }
         Scheme::S3 => StorageParams::S3(StorageS3Config {
