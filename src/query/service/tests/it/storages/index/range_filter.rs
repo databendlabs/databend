@@ -91,6 +91,12 @@ async fn test_range_filter() -> Result<()> {
         Test {
             name: "a is not null",
             expr: Expression::create_scalar_function("is_not_null", vec![col("a")]),
+            expect: false,
+            error: "",
+        },
+        Test {
+            name: "b is not null",
+            expr: Expression::create_scalar_function("is_not_null", vec![col("b")]),
             expect: true,
             error: "",
         },
@@ -192,7 +198,7 @@ async fn test_range_filter() -> Result<()> {
     for test in tests {
         let prune = RangeFilter::try_create(ctx.clone(), &[test.expr], schema.clone())?;
 
-        match prune.eval(&stats) {
+        match prune.eval(&stats, 1) {
             Ok(actual) => assert_eq!(test.expect, actual, "{:#?}", test.name),
             Err(e) => assert_eq!(test.error, e.to_string(), "{}", test.name),
         }
@@ -239,7 +245,7 @@ fn test_build_verifiable_function() -> Result<()> {
         Test {
             name: "a is not null",
             expr: Expression::create_scalar_function("is_not_null", vec![col("a")]),
-            expect: "is_not_null(min_a)",
+            expect: "(nulls_a != row_count_a)",
         },
         Test {
             name: "b >= 0 and c like 0xffffff",
