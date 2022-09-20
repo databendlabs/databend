@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,33 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
-use common_meta_app::schema::DatabaseNameIdent;
-use common_meta_app::schema::UndropDatabaseReq;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct UndropDatabasePlan {
-    pub tenant: String,
+pub struct ShowCreateDatabasePlan {
     pub catalog: String,
     pub database: String,
+    pub schema: DataSchemaRef,
 }
 
-impl UndropDatabasePlan {
+impl ShowCreateDatabasePlan {
     pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
-}
-
-impl From<UndropDatabasePlan> for UndropDatabaseReq {
-    fn from(p: UndropDatabasePlan) -> Self {
-        UndropDatabaseReq {
-            name_ident: DatabaseNameIdent {
-                tenant: p.tenant,
-                db_name: p.database,
-            },
-        }
+        self.schema.clone()
     }
 }
