@@ -197,11 +197,11 @@ impl<T: InputFormatTextBase> AligningState<T> {
                 rows.push(i + 1 + size_last_remain)
             }
         }
-        let batch_end = rows[rows.len() - 1] - size_last_remain;
         if rows.is_empty() {
             self.tail_of_last_batch.extend_from_slice(buf);
             vec![]
         } else {
+            let batch_end = rows[rows.len() - 1] - size_last_remain;
             output.data = mem::take(&mut self.tail_of_last_batch);
             output.data.extend_from_slice(&buf[..batch_end]);
             self.tail_of_last_batch.extend_from_slice(&buf[batch_end..]);
