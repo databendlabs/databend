@@ -79,7 +79,7 @@ impl Function for LogicAndFiltersFunction {
         input_rows: usize,
     ) -> Result<ColumnRef> {
         if columns.len() == 1 {
-            return Ok(columns[1].column().clone());
+            return Ok(columns[0].column().clone());
         }
 
         let mut validity = None;
