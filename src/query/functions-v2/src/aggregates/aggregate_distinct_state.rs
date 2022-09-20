@@ -288,7 +288,7 @@ impl DistinctStateFunc<KeysRef> for AggregateDistinctStringState {
             data: values,
             offsets,
         };
-        return Ok(vec![Column::String(c.build())]);
+        Ok(vec![Column::String(c.build())])
     }
 }
 
