@@ -157,6 +157,7 @@ impl RowGroupInMemory {
                 self.fields[f].clone(),
                 self.meta.num_rows() as usize,
                 None,
+                None,
             )?;
             column_chunks.push(array_iters);
         }
