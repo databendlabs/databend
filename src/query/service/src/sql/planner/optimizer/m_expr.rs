@@ -14,6 +14,7 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planner::IndexType;
 
 use super::group::Group;
 use crate::sql::optimizer::memo::Memo;
@@ -21,7 +22,6 @@ use crate::sql::optimizer::pattern_extractor::PatternExtractor;
 use crate::sql::optimizer::rule::RulePtr;
 use crate::sql::optimizer::rule::TransformState;
 use crate::sql::optimizer::SExpr;
-use crate::sql::planner::IndexType;
 use crate::sql::plans::Operator;
 use crate::sql::plans::RelOperator;
 

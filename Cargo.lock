@@ -1717,6 +1717,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-planner"
+version = "0.1.0"
+dependencies = [
+ "common-catalog",
+ "common-datavalues",
+ "parking_lot 0.12.1",
+]
+
+[[package]]
 name = "common-proto-conv"
 version = "0.1.0"
 dependencies = [
@@ -2533,6 +2542,7 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
+ "common-planner",
  "common-settings",
  "common-storage",
  "common-storages-fuse",

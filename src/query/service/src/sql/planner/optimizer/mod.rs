@@ -30,6 +30,7 @@ use std::sync::Arc;
 
 use common_ast::ast::ExplainKind;
 use common_exception::Result;
+use common_planner::MetadataRef;
 pub use heuristic::HeuristicOptimizer;
 pub use heuristic::DEFAULT_REWRITE_RULES;
 pub use m_expr::MExpr;
@@ -55,7 +56,6 @@ pub use crate::sql::optimizer::heuristic::RuleList;
 pub use crate::sql::optimizer::rule::RuleID;
 use crate::sql::optimizer::rule::RuleSet;
 use crate::sql::plans::CopyPlanV2;
-use crate::sql::MetadataRef;
 
 #[derive(Debug, Clone, Default)]
 pub struct OptimizerConfig {

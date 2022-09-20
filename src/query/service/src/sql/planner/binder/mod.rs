@@ -35,6 +35,7 @@ use common_legacy_planners::DropUserUDFPlan;
 use common_legacy_planners::ShowGrantsPlan;
 use common_legacy_planners::UseDatabasePlan;
 use common_meta_types::UserDefinedFunction;
+use common_planner::MetadataRef;
 pub use scalar::ScalarBinder;
 pub use scalar_common::*;
 
@@ -43,7 +44,6 @@ use super::plans::RewriteKind;
 use super::semantic::NameResolutionContext;
 use crate::catalogs::CatalogManager;
 use crate::sessions::TableContext;
-use crate::sql::planner::metadata::MetadataRef;
 
 mod aggregate;
 mod bind_context;
