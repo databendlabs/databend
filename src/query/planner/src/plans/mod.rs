@@ -24,6 +24,9 @@ pub use drop_database::DropDatabasePlan;
 mod kill;
 pub use kill::KillPlan;
 
+mod list;
+pub use list::ListPlan;
+
 mod rename_database;
 pub use rename_database::RenameDatabaseEntity;
 pub use rename_database::RenameDatabasePlan;

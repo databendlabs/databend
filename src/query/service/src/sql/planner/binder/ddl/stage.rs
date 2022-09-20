@@ -18,11 +18,11 @@ use common_ast::ast::CreateStageStmt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_legacy_planners::CreateUserStagePlan;
-use common_legacy_planners::ListPlan;
 use common_legacy_planners::RemoveUserStagePlan;
 use common_meta_types::OnErrorMode;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
+use common_planner::plans::ListPlan;
 use common_storage::parse_uri_location;
 use common_storage::UriLocation;
 

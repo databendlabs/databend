@@ -1725,6 +1725,7 @@ dependencies = [
  "common-catalog",
  "common-datavalues",
  "common-meta-app",
+ "common-meta-types",
  "parking_lot 0.12.1",
  "serde",
 ]
