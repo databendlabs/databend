@@ -30,7 +30,6 @@ use common_datavalues::DataSchemaRefExt;
 use common_datavalues::ToDataType;
 use common_datavalues::Vu8;
 use common_exception::Result;
-use common_legacy_planners::CreateDatabasePlan;
 use common_legacy_planners::DropDatabasePlan;
 use common_legacy_planners::RenameDatabaseEntity;
 use common_legacy_planners::RenameDatabasePlan;
@@ -38,6 +37,7 @@ use common_legacy_planners::ShowCreateDatabasePlan;
 use common_legacy_planners::UndropDatabasePlan;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::share::ShareNameIdent;
+use common_planner::plans::CreateDatabasePlan;
 
 use crate::sql::binder::Binder;
 use crate::sql::planner::semantic::normalize_identifier;

@@ -9,6 +9,7 @@ edition = "2021"
 [dependencies]
 common-catalog = { path = "../catalog" }
 common-datavalues = { path = "../datavalues" }
+common-meta-app = {path = "../../meta/app"}
 
 parking_lot = "0.12"
 serde = { version = "1", features = ["derive"]}
