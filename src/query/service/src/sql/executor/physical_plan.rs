@@ -28,12 +28,12 @@ use common_legacy_planners::ReadDataSourcePlan;
 use common_legacy_planners::StageKind;
 use common_legacy_planners::SINK_SCHEMA;
 use common_meta_app::schema::TableInfo;
+use common_planner::IndexType;
 
 use super::physical_scalar::PhysicalScalar;
 use super::AggregateFunctionDesc;
 use super::SortDesc;
 use crate::sql::optimizer::ColumnSet;
-use crate::sql::planner::IndexType;
 use crate::sql::plans::JoinType;
 use crate::sql::ColumnBinding;
 

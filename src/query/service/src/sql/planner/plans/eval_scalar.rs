@@ -13,13 +13,13 @@
 // limitations under the License.#[derive(Clone, Debug)]
 
 use common_exception::Result;
+use common_planner::IndexType;
 
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::PhysicalProperty;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::RelationalProperty;
 use crate::sql::optimizer::RequiredProperty;
-use crate::sql::planner::IndexType;
 use crate::sql::plans::LogicalOperator;
 use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalOperator;

@@ -53,6 +53,7 @@ use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::TupleFunction;
 use common_legacy_planners::validate_function_arg;
+use common_planner::MetadataRef;
 use common_users::UserApiProvider;
 
 use super::name_resolution::NameResolutionContext;
@@ -65,7 +66,6 @@ use crate::sql::binder::Binder;
 use crate::sql::binder::NameResolutionResult;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::planner::metadata::optimize_remove_count_args;
-use crate::sql::planner::metadata::MetadataRef;
 use crate::sql::plans::AggregateFunction;
 use crate::sql::plans::AndExpr;
 use crate::sql::plans::BoundColumnRef;

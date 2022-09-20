@@ -61,6 +61,7 @@ common-pipeline-core = { path = "../pipeline/core" }
 common-pipeline-sinks = { path = "../pipeline/sinks" }
 common-pipeline-sources = { path = "../pipeline/sources" }
 common-pipeline-transforms = { path = "../pipeline/transforms" }
+common-planner = { path = "../planner" }
 common-settings = { path = "../settings" }
 common-storage = { path = "../../common/storage" }
 common-storages-fuse = { path = "../storages/fuse" }

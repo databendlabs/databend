@@ -44,6 +44,7 @@ use common_datavalues::NullableType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_hashtable::HashMap;
+use common_planner::IndexType;
 use parking_lot::RwLock;
 use primitive_types::U256;
 use primitive_types::U512;
@@ -59,7 +60,6 @@ use crate::sessions::TableContext;
 use crate::sql::executor::PhysicalScalar;
 use crate::sql::planner::plans::JoinType;
 use crate::sql::plans::JoinType::Mark;
-use crate::sql::IndexType;
 
 pub struct SerializerHashTable {
     pub(crate) hash_table: HashMap<KeysRef, Vec<RowPtr>>,

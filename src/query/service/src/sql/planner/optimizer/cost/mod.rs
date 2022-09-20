@@ -17,11 +17,11 @@ mod cost_model;
 use std::ops::Add;
 
 use common_exception::Result;
+use common_planner::IndexType;
 pub use cost_model::DefaultCostModel;
 
 use super::MExpr;
 use super::Memo;
-use crate::sql::planner::IndexType;
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Cost(pub f64);

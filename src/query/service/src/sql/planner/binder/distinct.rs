@@ -15,12 +15,12 @@
 use std::collections::HashMap;
 
 use common_exception::Result;
+use common_planner::IndexType;
 
 use crate::sql::binder::Binder;
 use crate::sql::binder::ColumnBinding;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::semantic::GroupingChecker;
-use crate::sql::planner::IndexType;
 use crate::sql::plans::Aggregate;
 use crate::sql::plans::AggregateMode;
 use crate::sql::plans::BoundColumnRef;
