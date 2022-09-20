@@ -89,7 +89,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
         let (split_tx, split_rx) = async_channel::bounded(ctx.num_prefetch_splits()?);
         Self::build_pipeline_with_aligner(&ctx, split_rx, pipeline)?;
 
-        tokio::spawn(async move {
+        GlobalIORuntime::instance().spawn(async move {
             let mut sender: Option<Sender<Result<Self::ReadBatch>>> = None;
             while let Some(batch) = input.recv().await {
                 if batch.is_start {
