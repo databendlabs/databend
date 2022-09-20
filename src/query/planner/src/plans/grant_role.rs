@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,14 +16,15 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_meta_types::PrincipalIdentity;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct DropRolePlan {
-    pub if_exists: bool,
-    pub role_name: String,
+pub struct GrantRolePlan {
+    pub principal: PrincipalIdentity,
+    pub role: String,
 }
 
-impl DropRolePlan {
+impl GrantRolePlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }

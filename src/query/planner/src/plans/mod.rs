@@ -18,11 +18,20 @@ pub use call::CallPlan;
 mod create_database;
 pub use create_database::CreateDatabasePlan;
 
+mod create_role;
+pub use create_role::CreateRolePlan;
+
 mod drop_database;
 pub use drop_database::DropDatabasePlan;
 
+mod drop_role;
+pub use drop_role::DropRolePlan;
+
 mod grant_privilege;
 pub use grant_privilege::GrantPrivilegePlan;
+
+mod grant_role;
+pub use grant_role::GrantRolePlan;
 
 mod kill;
 pub use kill::KillPlan;
@@ -36,6 +45,9 @@ pub use rename_database::RenameDatabasePlan;
 
 mod revoke_privilege;
 pub use revoke_privilege::RevokePrivilegePlan;
+
+mod revoke_role;
+pub use revoke_role::RevokeRolePlan;
 
 mod show_create_database;
 pub use show_create_database::ShowCreateDatabasePlan;
