@@ -44,21 +44,20 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::StringType;
-use common_legacy_planners::AlterUserUDFPlan;
 use common_legacy_planners::AlterViewPlan;
-use common_legacy_planners::CreateUserUDFPlan;
 use common_legacy_planners::CreateViewPlan;
 use common_legacy_planners::DeletePlan;
-use common_legacy_planners::DropUserUDFPlan;
 use common_legacy_planners::DropViewPlan;
 use common_legacy_planners::ReclusterTablePlan;
 use common_legacy_planners::SettingPlan;
 use common_planner::plans::AlterTableClusterKeyPlan;
+use common_planner::plans::AlterUDFPlan;
 use common_planner::plans::AlterUserPlan;
 use common_planner::plans::CallPlan;
 use common_planner::plans::CreateDatabasePlan;
 use common_planner::plans::CreateRolePlan;
 use common_planner::plans::CreateStagePlan;
+use common_planner::plans::CreateUDFPlan;
 use common_planner::plans::CreateUserPlan;
 use common_planner::plans::DescribeTablePlan;
 use common_planner::plans::DropDatabasePlan;
@@ -66,6 +65,7 @@ use common_planner::plans::DropRolePlan;
 use common_planner::plans::DropStagePlan;
 use common_planner::plans::DropTableClusterKeyPlan;
 use common_planner::plans::DropTablePlan;
+use common_planner::plans::DropUDFPlan;
 use common_planner::plans::DropUserPlan;
 use common_planner::plans::ExistsTablePlan;
 use common_planner::plans::GrantPrivilegePlan;
@@ -182,9 +182,9 @@ pub enum Plan {
     DropUser(Box<DropUserPlan>),
 
     // UDF
-    CreateUDF(Box<CreateUserUDFPlan>),
-    AlterUDF(Box<AlterUserUDFPlan>),
-    DropUDF(Box<DropUserUDFPlan>),
+    CreateUDF(Box<CreateUDFPlan>),
+    AlterUDF(Box<AlterUDFPlan>),
+    DropUDF(Box<DropUDFPlan>),
 
     // Role
     CreateRole(Box<CreateRolePlan>),
