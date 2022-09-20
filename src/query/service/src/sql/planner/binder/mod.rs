@@ -27,12 +27,12 @@ use common_datavalues::DataTypeImpl;
 use common_exception::Result;
 use common_legacy_planners::AlterUserUDFPlan;
 use common_legacy_planners::CreateUserUDFPlan;
-use common_legacy_planners::DropUserStagePlan;
 use common_legacy_planners::DropUserUDFPlan;
 use common_meta_types::UserDefinedFunction;
 use common_planner::plans::CallPlan;
 use common_planner::plans::CreateRolePlan;
 use common_planner::plans::DropRolePlan;
+use common_planner::plans::DropStagePlan;
 use common_planner::plans::DropUserPlan;
 use common_planner::plans::ShowGrantsPlan;
 use common_planner::plans::UseDatabasePlan;
@@ -220,7 +220,7 @@ impl<'a> Binder {
             Statement::DropStage {
                 stage_name,
                 if_exists,
-            } => Plan::DropStage(Box::new(DropUserStagePlan {
+            } => Plan::DropStage(Box::new(DropStagePlan {
                 if_exists: *if_exists,
                 name: stage_name.clone(),
             })),

@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,12 +18,12 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct DropUserStagePlan {
+pub struct DropStagePlan {
     pub if_exists: bool,
     pub name: String,
 }
 
-impl DropUserStagePlan {
+impl DropStagePlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }

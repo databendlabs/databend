@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,13 +19,13 @@ use common_datavalues::DataSchemaRef;
 use common_meta_types::UserStageInfo;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct CreateUserStagePlan {
-    pub if_not_exists: bool,
-    pub tenant: String,
-    pub user_stage_info: UserStageInfo,
+pub struct RemoveStagePlan {
+    pub stage: UserStageInfo,
+    pub path: String,
+    pub pattern: String,
 }
 
-impl CreateUserStagePlan {
+impl RemoveStagePlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }
