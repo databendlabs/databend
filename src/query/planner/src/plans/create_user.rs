@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,14 +21,14 @@ use common_meta_types::UserIdentity;
 use common_meta_types::UserOption;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct AlterUserPlan {
+pub struct CreateUserPlan {
     pub user: UserIdentity,
-    // None means no change to make
-    pub auth_info: Option<AuthInfo>,
-    pub user_option: Option<UserOption>,
+    pub auth_info: AuthInfo,
+    pub user_option: UserOption,
+    pub if_not_exists: bool,
 }
 
-impl AlterUserPlan {
+impl CreateUserPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }
