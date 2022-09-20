@@ -151,6 +151,7 @@ impl Display for CreateTableStmt<'_> {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum CreateTableSource<'a> {
     Columns(Vec<ColumnDefinition<'a>>),

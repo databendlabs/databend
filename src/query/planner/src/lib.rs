@@ -29,3 +29,6 @@ pub use metadata::Metadata;
 pub use metadata::MetadataRef;
 pub use metadata::TableEntry;
 pub use metadata::DUMMY_TABLE_INDEX;
+
+// Plan will be used publicly.
+pub mod plans;

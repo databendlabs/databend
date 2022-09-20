@@ -25,7 +25,7 @@ fn test_empty_string_column() {
 
 #[test]
 fn test_new_from_slice() {
-    let data_column: StringColumn = NewColumn::new_from_slice(&["你好", "hello"]);
+    let data_column: StringColumn = NewColumn::new_from_slice(["你好", "hello"]);
     let mut iter = data_column.iter();
     assert_eq!("你好".as_bytes().to_vec(), iter.next().unwrap().to_vec());
     assert_eq!("hello".as_bytes().to_vec(), iter.next().unwrap().to_vec());

@@ -464,7 +464,7 @@ impl Settings {
 
     pub fn set_unquoted_ident_case_sensitive(&self, val: bool) -> Result<()> {
         static KEY: &str = "unquoted_ident_case_sensitive";
-        let v = if val { 1 } else { 0 };
+        let v = u64::from(val);
         self.try_set_u64(KEY, v, false)
     }
 
@@ -476,7 +476,7 @@ impl Settings {
 
     pub fn set_quoted_ident_case_sensitive(&self, val: bool) -> Result<()> {
         static KEY: &str = "quoted_ident_case_sensitive";
-        let v = if val { 1 } else { 0 };
+        let v = u64::from(val);
         self.try_set_u64(KEY, v, false)
     }
 
@@ -488,7 +488,7 @@ impl Settings {
 
     pub fn set_enable_cbo(&self, val: bool) -> Result<()> {
         static KEY: &str = "enable_cbo";
-        let v = if val { 1 } else { 0 };
+        let v = u64::from(val);
         self.try_set_u64(KEY, v, false)
     }
 

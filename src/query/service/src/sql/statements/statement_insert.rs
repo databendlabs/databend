@@ -92,13 +92,8 @@ impl<'a> AnalyzableStatement for DfInsertStatement<'a> {
         let input_source = match &self.source {
             InsertSource::Empty => self.analyze_insert_without_source().await,
             InsertSource::StreamFormat(stream_format) => {
-                self.analyze_stream_format(
-                    ctx.clone(),
-                    *stream_format,
-                    &schema,
-                    self.format.clone(),
-                )
-                .await
+                self.analyze_stream_format(ctx.clone(), stream_format, &schema, self.format.clone())
+                    .await
             }
             InsertSource::Select(select) => self.analyze_insert_select(ctx.clone(), select).await,
         }?;

@@ -126,7 +126,7 @@ impl PhysicalPlanBuilder {
                     }
                     if let Some(prewhere) = &scan.prewhere {
                         // if there is a prewhere optimization,
-                        // we can prune `PhysicalScan`'s ouput schema.
+                        // we can prune `PhysicalScan`'s output schema.
                         if prewhere.output_columns.contains(index) {
                             name_mapping.insert(column.name().to_string(), index.to_string());
                         }
@@ -499,6 +499,7 @@ impl PhysicalPlanBuilder {
 
 pub struct PhysicalScalarBuilder;
 
+#[allow(clippy::only_used_in_recursion)]
 impl PhysicalScalarBuilder {
     pub fn build(&mut self, scalar: &Scalar) -> Result<PhysicalScalar> {
         match scalar {

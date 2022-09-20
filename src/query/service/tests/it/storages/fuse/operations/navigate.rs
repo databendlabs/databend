@@ -20,7 +20,6 @@ use common_base::base::tokio;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::TruncateTablePlan;
 use common_storages_fuse::io::SnapshotHistoryReader;
 use databend_query::pipelines::Pipeline;
 use databend_query::storages::fuse::io::MetaReaders;
@@ -168,15 +167,7 @@ async fn test_fuse_historical_table_is_read_only() -> Result<()> {
     assert_not_writable(res, "append2");
 
     // check truncate
-    let res = tbl
-        .truncate(ctx.clone(), TruncateTablePlan {
-            // values do not matter
-            catalog: "".to_string(),
-            database: db,
-            table: "".to_string(),
-            purge: false,
-        })
-        .await;
+    let res = tbl.truncate(ctx.clone(), "", false).await;
     assert_not_writable(res, "truncate");
 
     Ok(())

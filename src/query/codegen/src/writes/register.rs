@@ -641,7 +641,7 @@ pub fn codegen_register() {
 }
 
 fn format_and_save(path: &str, src: &str) {
-    let mut file = File::create(&path).expect("open");
+    let mut file = File::create(path).expect("open");
 
     // Write the head.
     let codegen_src_path = file!();

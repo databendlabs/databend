@@ -992,6 +992,7 @@ mod regexp {
                     fn_name, c,
                 )),
             };
+            #[allow(clippy::question_mark)]
             if let Err(e) = r {
                 return Err(e);
             }

@@ -67,17 +67,10 @@ impl<F> LogicFunctionImpl<F>
 where F: LogicExpression + Clone + 'static
 {
     pub fn try_create(op: LogicOperator, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
-        let nullable = match op {
-            LogicOperator::And | LogicOperator::Or
-                if args[0].is_nullable()
-                    || args[1].is_nullable()
-                    || args[0].is_null()
-                    || args[1].is_null() =>
-            {
-                true
-            }
-            _ => false,
-        };
+        let nullable = matches!(op, LogicOperator::And | LogicOperator::Or if args[0].is_nullable()
+                     || args[1].is_nullable()
+                     || args[0].is_null()
+                     || args[1].is_null());
 
         Ok(Box::new(Self {
             op,

@@ -1353,7 +1353,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     fn visit_create_view(&mut self, stmt: &'ast CreateViewStmt<'ast>) {
         self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.view);
         let view_child = self.children.pop().unwrap();
-        self.visit_query(&*stmt.query);
+        self.visit_query(&stmt.query);
         let query_child = self.children.pop().unwrap();
 
         let name = "CreateView".to_string();
@@ -1365,7 +1365,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     fn visit_alter_view(&mut self, stmt: &'ast AlterViewStmt<'ast>) {
         self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.view);
         let view_child = self.children.pop().unwrap();
-        self.visit_query(&*stmt.query);
+        self.visit_query(&stmt.query);
         let query_child = self.children.pop().unwrap();
 
         let name = "AlterView".to_string();
@@ -1967,9 +1967,9 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     }
 
     fn visit_set_operation(&mut self, set_operation: &'ast SetOperation<'ast>) {
-        self.visit_set_expr(&*set_operation.left);
+        self.visit_set_expr(&set_operation.left);
         let left_child = self.children.pop().unwrap();
-        self.visit_set_expr(&*set_operation.right);
+        self.visit_set_expr(&set_operation.right);
         let right_child = self.children.pop().unwrap();
 
         let name = format!("SetOperation {}", match set_operation.op {
@@ -2189,9 +2189,9 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
 
     fn visit_join(&mut self, join: &'ast Join<'ast>) {
         let mut children = Vec::new();
-        self.visit_table_reference(&*join.left);
+        self.visit_table_reference(&join.left);
         children.push(self.children.pop().unwrap());
-        self.visit_table_reference(&*join.right);
+        self.visit_table_reference(&join.right);
         children.push(self.children.pop().unwrap());
 
         match &join.condition {
