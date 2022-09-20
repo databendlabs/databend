@@ -518,7 +518,7 @@ where
             condition.push(txn_cond_seq(&id_to_name, Eq, name_ident_seq));
             if_then.push(txn_op_del(&id_to_name));
 
-            return Ok((true, db_meta.from_share.clone()));
+            return Ok((true, db_meta.from_share));
         }
     }
     Ok((false, None))

@@ -331,6 +331,7 @@ impl<'a> Binder {
         Ok(SExpr::create_unary(sort_plan.into(), child))
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn rewrite_scalar_with_replacement<F>(
         &self,
         original_scalar: &Scalar,

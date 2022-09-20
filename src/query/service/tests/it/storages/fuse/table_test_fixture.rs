@@ -333,6 +333,7 @@ pub async fn test_drive_with_args(ctx: Arc<QueryContext>, tbl_args: TableArgs) -
     let mut stream = test_drive_with_args_and_ctx(tbl_args, ctx).await?;
 
     while let Some(res) = stream.next().await {
+        #[allow(clippy::question_mark)]
         if let Err(cause) = res {
             return Err(cause);
         }

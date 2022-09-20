@@ -92,7 +92,7 @@ pub fn add_env_credits_info() {
         }
     };
 
-    let names: Vec<String> = deps.iter().map(|x| (&x.name).to_string()).collect();
+    let names: Vec<String> = deps.iter().map(|x| (x.name).to_string()).collect();
     let versions: Vec<String> = deps.iter().map(|x| x.version.to_string()).collect();
     let licenses: Vec<String> = deps
         .iter()

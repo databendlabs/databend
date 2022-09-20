@@ -499,6 +499,7 @@ impl PhysicalPlanBuilder {
 
 pub struct PhysicalScalarBuilder;
 
+#[allow(clippy::only_used_in_recursion)]
 impl PhysicalScalarBuilder {
     pub fn build(&mut self, scalar: &Scalar) -> Result<PhysicalScalar> {
         match scalar {

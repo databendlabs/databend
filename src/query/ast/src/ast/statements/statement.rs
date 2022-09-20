@@ -27,6 +27,7 @@ use crate::ast::Query;
 use crate::ast::TableReference;
 
 // SQL statement
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Statement<'a> {
     Query(Box<Query<'a>>),

@@ -89,7 +89,7 @@ impl Display for FormatContext {
     }
 }
 
-pub fn format_scalar(metadata: &MetadataRef, scalar: &Scalar) -> String {
+pub fn format_scalar(_metadata: &MetadataRef, scalar: &Scalar) -> String {
     match scalar {
         Scalar::BoundColumnRef(column_ref) => {
             if let Some(table_name) = &column_ref.column.table_name {
@@ -107,19 +107,19 @@ pub fn format_scalar(metadata: &MetadataRef, scalar: &Scalar) -> String {
         Scalar::ConstantExpr(constant) => constant.value.to_string(),
         Scalar::AndExpr(and) => format!(
             "({}) AND ({})",
-            format_scalar(metadata, &and.left),
-            format_scalar(metadata, &and.right)
+            format_scalar(_metadata, &and.left),
+            format_scalar(_metadata, &and.right)
         ),
         Scalar::OrExpr(or) => format!(
             "({}) OR ({})",
-            format_scalar(metadata, &or.left),
-            format_scalar(metadata, &or.right)
+            format_scalar(_metadata, &or.left),
+            format_scalar(_metadata, &or.right)
         ),
         Scalar::ComparisonExpr(comp) => format!(
             "{} {} {}",
-            format_scalar(metadata, &comp.left),
+            format_scalar(_metadata, &comp.left),
             comp.op.to_func_name(),
-            format_scalar(metadata, &comp.right)
+            format_scalar(_metadata, &comp.right)
         ),
         Scalar::AggregateFunction(agg) => agg.display_name.clone(),
         Scalar::FunctionCall(func) => {
@@ -128,7 +128,7 @@ pub fn format_scalar(metadata: &MetadataRef, scalar: &Scalar) -> String {
                 &func.func_name,
                 func.arguments
                     .iter()
-                    .map(|arg| { format_scalar(metadata, arg) })
+                    .map(|arg| { format_scalar(_metadata, arg) })
                     .collect::<Vec<String>>()
                     .join(", ")
             )
@@ -136,7 +136,7 @@ pub fn format_scalar(metadata: &MetadataRef, scalar: &Scalar) -> String {
         Scalar::CastExpr(cast) => {
             format!(
                 "CAST({} AS {})",
-                format_scalar(metadata, &cast.argument),
+                format_scalar(_metadata, &cast.argument),
                 format_data_type_sql(&cast.target_type)
             )
         }

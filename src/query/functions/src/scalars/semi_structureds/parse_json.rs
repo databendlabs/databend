@@ -74,7 +74,7 @@ impl<const SUPPRESS_PARSE_ERROR: bool> ParseJsonFunctionImpl<SUPPRESS_PARSE_ERRO
 
 impl<const SUPPRESS_PARSE_ERROR: bool> Function for ParseJsonFunctionImpl<SUPPRESS_PARSE_ERROR> {
     fn name(&self) -> &str {
-        &*self.display_name
+        &self.display_name
     }
 
     fn return_type(&self) -> DataTypeImpl {

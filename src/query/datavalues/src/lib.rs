@@ -15,7 +15,6 @@
 //! *Credits to the work of https://github.com/pola-rs/polars, which served as
 //! insipration for the crate*
 
-#![feature(generic_associated_types)]
 #![feature(trusted_len)]
 
 #[macro_use]

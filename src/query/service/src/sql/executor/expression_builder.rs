@@ -87,8 +87,8 @@ where ExpressionBuilder<T>: FiledNameFormat
                 ..
             }) => self.build_aggr_function(func_name.clone(), *distinct, params.clone(), args),
             Scalar::AndExpr(AndExpr { left, right, .. }) => {
-                let left = self.build(&**left)?;
-                let right = self.build(&**right)?;
+                let left = self.build(left)?;
+                let right = self.build(right)?;
                 Ok(Expression::BinaryExpression {
                     left: Box::new(left),
                     op: "and".to_string(),
@@ -96,8 +96,8 @@ where ExpressionBuilder<T>: FiledNameFormat
                 })
             }
             Scalar::OrExpr(OrExpr { left, right, .. }) => {
-                let left = self.build(&**left)?;
-                let right = self.build(&**right)?;
+                let left = self.build(left)?;
+                let right = self.build(right)?;
                 Ok(Expression::BinaryExpression {
                     left: Box::new(left),
                     op: "or".to_string(),

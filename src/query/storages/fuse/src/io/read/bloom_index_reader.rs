@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_arrow::arrow::io::parquet::read::column_iter_to_arrays;
 use common_arrow::arrow::io::parquet::read::infer_schema;
-use common_arrow::arrow::io::parquet::read::read_metadata_async;
 use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
 use common_arrow::parquet::compression::Compression;
 use common_arrow::parquet::metadata::ColumnChunkMetaData;
@@ -162,13 +161,14 @@ mod util_v1 {
                     page_meta_data,
                     Arc::new(|_, _| true),
                     vec![],
+                    usize::MAX,
                 );
                 let decompressor = BasicDecompressor::new(page_reader, vec![]);
                 let decompressors = vec![decompressor];
                 let types = vec![&column_descriptors[col_idx].descriptor.primitive_type];
                 let field = arrow_schema.fields[col_idx].clone();
                 let arrays = tracing::debug_span!("iter_to_arrays").in_scope(|| {
-                    column_iter_to_arrays(decompressors, types, field, Some(num_values))
+                    column_iter_to_arrays(decompressors, types, field, Some(num_values), num_values)
                 })?;
                 columns_array_iter.push(arrays);
             }
@@ -263,14 +263,6 @@ mod util_v1 {
         }
         .execute_in_runtime(&storage_runtime)
         .await?
-    }
-
-    #[tracing::instrument(level = "debug", skip_all)]
-    async fn load_index_meta_from_storage(dal: Operator, path: String) -> Result<FileMetaData> {
-        let object = dal.object(&path);
-        let mut reader = object.seekable_reader(0..);
-        let file_meta = read_metadata_async(&mut reader).await?;
-        Ok(file_meta)
     }
 
     #[tracing::instrument(level = "debug", skip_all)]

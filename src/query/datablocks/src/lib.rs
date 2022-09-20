@@ -14,7 +14,6 @@
 
 #![feature(hash_raw_entry)]
 #![feature(trusted_len)]
-#![feature(generic_associated_types)]
 
 mod data_block;
 mod data_block_debug;

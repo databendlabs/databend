@@ -68,7 +68,7 @@ impl<const IGNORE_CASE: bool> GetFunctionImpl<IGNORE_CASE> {
 
 impl<const IGNORE_CASE: bool> Function for GetFunctionImpl<IGNORE_CASE> {
     fn name(&self) -> &str {
-        &*self.display_name
+        &self.display_name
     }
 
     fn return_type(&self) -> DataTypeImpl {

@@ -114,7 +114,7 @@ impl<T: PadOperator> PadFunction<T> {
 
 impl<T: PadOperator> Function for PadFunction<T> {
     fn name(&self) -> &str {
-        &*self.display_name
+        &self.display_name
     }
 
     fn return_type(&self) -> DataTypeImpl {
