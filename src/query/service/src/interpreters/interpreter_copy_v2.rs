@@ -163,10 +163,8 @@ impl CopyInterpreterV2 {
         match &from.source_info {
             SourceInfo::StageSource(table_info) => {
                 let path = &table_info.path;
-                tracing::debug!("list files under path: {}", path);
                 // Here we add the path to the file: /path/to/path/file1.
                 let files_with_path = if !files.is_empty() {
-                    tracing::trace!("got files offered in list");
                     let mut files_with_path = vec![];
                     for file in files {
                         let new_path = Path::new(path).join(file);
@@ -174,7 +172,6 @@ impl CopyInterpreterV2 {
                     }
                     files_with_path
                 } else if !path.ends_with('/') {
-                    tracing::trace!("path not ends with '/'");
                     let rename_me: Arc<dyn TableContext> = self.ctx.clone();
                     let op = StageSourceHelper::get_op(&rename_me, &table_info.stage_info).await?;
                     if op.object(path).is_exist().await? {
@@ -183,7 +180,6 @@ impl CopyInterpreterV2 {
                         vec![]
                     }
                 } else {
-                    tracing::trace!("have to list directories in stage");
                     let rename_me: Arc<dyn TableContext> = self.ctx.clone();
                     let op = StageSourceHelper::get_op(&rename_me, &table_info.stage_info).await?;
 
@@ -195,10 +191,8 @@ impl CopyInterpreterV2 {
                     let mut objects = op.batch().walk_top_down(path)?;
                     while let Some(de) = objects.try_next().await? {
                         if de.mode().is_dir() {
-                            tracing::trace!("listing in stage path:{} got directory: {}", path, de.path());
                             continue;
                         }
-                        tracing::trace!("listing in stage path:{} got file: {}",path, de.path());
                         list.insert(de.path().to_string());
                     }
 

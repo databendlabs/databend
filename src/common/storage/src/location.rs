@@ -97,12 +97,10 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
                 .to_string(),
             root: root.to_string(),
         }),
-        Scheme::Ipfs => {
-            StorageParams::Ipfs(StorageIpfsConfig {
-                endpoint_url: STORAGE_IPFS_DEFAULT_ENDPOINT.to_string(),
-                root: "/ipfs/".to_string() + l.name.as_str(),
-            })
-        }
+        Scheme::Ipfs => StorageParams::Ipfs(StorageIpfsConfig {
+            endpoint_url: STORAGE_IPFS_DEFAULT_ENDPOINT.to_string(),
+            root: "/ipfs/".to_string() + l.name.as_str(),
+        }),
         Scheme::S3 => StorageParams::S3(StorageS3Config {
             endpoint_url: l
                 .connection
