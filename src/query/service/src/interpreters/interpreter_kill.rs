@@ -17,8 +17,6 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_legacy_planners::KillPlan;
-use common_meta_types::GrantObject;
-use common_meta_types::UserPrivilegeType;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -61,11 +59,6 @@ impl Interpreter for KillInterpreter {
     }
 
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        self.ctx
-            .get_current_session()
-            .validate_privilege(&GrantObject::Global, UserPrivilegeType::Super)
-            .await?;
-
         let id = &self.plan.id;
         // If press Ctrl + C, MySQL Client will create a new session and send query
         // `kill query mysql_connection_id` to server.

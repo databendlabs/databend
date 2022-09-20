@@ -14,10 +14,9 @@
 
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::Weak;
 
 use common_base::base::Progress;
 use common_base::base::Runtime;
@@ -36,6 +35,7 @@ use crate::auth::AuthMgr;
 use crate::catalogs::CatalogManager;
 use crate::catalogs::CatalogManagerHelper;
 use crate::clusters::Cluster;
+use crate::pipelines::executor::PipelineExecutor;
 use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::Session;
@@ -77,8 +77,8 @@ pub struct QueryContextShared {
     pub(in crate::sessions) auth_manager: Arc<AuthMgr>,
     pub(in crate::sessions) affect: Arc<Mutex<Option<QueryAffect>>>,
     pub(in crate::sessions) catalog_manager: Arc<CatalogManager>,
-    pub(in crate::sessions) query_need_abort: Arc<AtomicBool>,
     pub(in crate::sessions) storage_operator: Operator,
+    pub(in crate::sessions) executor: Arc<RwLock<Weak<PipelineExecutor>>>,
 }
 
 impl QueryContextShared {
@@ -106,8 +106,8 @@ impl QueryContextShared {
             tables_refs: Arc::new(Mutex::new(HashMap::new())),
             dal_ctx: Arc::new(Default::default()),
             auth_manager: AuthMgr::create(config).await?,
-            query_need_abort: Arc::new(AtomicBool::new(false)),
             affect: Arc::new(Mutex::new(None)),
+            executor: Arc::new(RwLock::new(Weak::new())),
         }))
     }
 
@@ -116,13 +116,13 @@ impl QueryContextShared {
         *guard = Some(err);
     }
 
-    pub fn query_need_abort(self: &Arc<Self>) -> Arc<AtomicBool> {
-        self.query_need_abort.clone()
-    }
-
     pub fn kill(&self, cause: ErrorCode) {
-        self.set_error(cause);
-        self.query_need_abort.store(true, Ordering::Release);
+        self.set_error(cause.clone());
+
+        if let Some(executor) = self.executor.read().upgrade() {
+            executor.finish(Some(cause));
+        }
+
         let mut sources_abort_handle = self.sources_abort_handle.write();
 
         while let Some(source_abort_handle) = sources_abort_handle.pop() {
@@ -277,5 +277,10 @@ impl QueryContextShared {
     pub fn set_affect(&self, affect: QueryAffect) {
         let mut guard = self.affect.lock();
         *guard = Some(affect);
+    }
+
+    pub fn set_executor(&self, weak_ptr: Weak<PipelineExecutor>) {
+        let mut executor = self.executor.write();
+        *executor = weak_ptr;
     }
 }

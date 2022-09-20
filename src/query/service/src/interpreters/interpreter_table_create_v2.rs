@@ -18,8 +18,6 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::GrantObject;
-use common_meta_types::UserPrivilegeType;
 use common_users::UserApiProvider;
 
 use crate::interpreters::InsertInterpreterV2;
@@ -51,14 +49,6 @@ impl Interpreter for CreateTableInterpreterV2 {
     }
 
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        self.ctx
-            .get_current_session()
-            .validate_privilege(
-                &GrantObject::Database(self.plan.catalog.clone(), self.plan.database.clone()),
-                UserPrivilegeType::Create,
-            )
-            .await?;
-
         let tenant = self.plan.tenant.clone();
         let quota_api = UserApiProvider::instance().get_tenant_quota_api_client(&tenant)?;
         let quota = quota_api.get_quota(None).await?.data;

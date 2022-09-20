@@ -20,6 +20,7 @@ use common_datavalues::DataValue;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_planner::Metadata;
 use databend_query::sql::optimizer::SExpr;
 use databend_query::sql::planner::plans::JoinType;
 use databend_query::sql::plans::BoundColumnRef;
@@ -29,7 +30,6 @@ use databend_query::sql::plans::FunctionCall;
 use databend_query::sql::plans::PhysicalHashJoin;
 use databend_query::sql::plans::PhysicalScan;
 use databend_query::sql::ColumnBinding;
-use databend_query::sql::Metadata;
 use databend_query::sql::Visibility;
 use databend_query::storages::Table;
 use parking_lot::RwLock;
@@ -66,7 +66,7 @@ impl Table for DummyTable {
 
 #[test]
 fn test_format() {
-    let mut metadata = Metadata::create();
+    let mut metadata = Metadata::default();
     let col1 = metadata.add_column("col1".to_string(), BooleanType::new_impl(), None, None);
     let col2 = metadata.add_column("col2".to_string(), BooleanType::new_impl(), None, None);
     let tab1 = metadata.add_table(

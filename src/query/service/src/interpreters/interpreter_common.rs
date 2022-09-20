@@ -113,13 +113,12 @@ pub fn append2table(
 }
 
 pub fn execute_pipeline(ctx: Arc<QueryContext>, mut res: PipelineBuildResult) -> Result<()> {
-    let query_need_abort = ctx.query_need_abort();
     let executor_settings = ExecutorSettings::try_create(&ctx.get_settings())?;
     res.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
     let mut pipelines = res.sources_pipelines;
     pipelines.push(res.main_pipeline);
-    let executor =
-        PipelineCompleteExecutor::from_pipelines(query_need_abort, pipelines, executor_settings)?;
+    let executor = PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
+    ctx.set_executor(Arc::downgrade(&executor.get_inner()));
     executor.execute()
 }
 
@@ -158,6 +157,26 @@ pub async fn validate_grant_object_exists(
     }
 
     Ok(())
+}
+
+pub async fn stat_file(
+    ctx: &Arc<QueryContext>,
+    stage: &UserStageInfo,
+    path: &str,
+) -> Result<StageFile> {
+    let table_ctx: Arc<dyn TableContext> = ctx.clone();
+    let op = StageSourceHelper::get_op(&table_ctx, stage).await?;
+    let meta = op.object(path).metadata().await?;
+    Ok(StageFile {
+        path: path.to_owned(),
+        size: meta.content_length(),
+        md5: meta.content_md5().map(str::to_string),
+        last_modified: meta
+            .last_modified()
+            .map_or(Utc::now(), |t| Utc.timestamp(t.unix_timestamp(), 0)),
+        creator: None,
+        etag: meta.etag().map(str::to_string),
+    })
 }
 
 pub async fn list_files(

@@ -17,6 +17,7 @@ use std::fmt::Display;
 use common_ast::ast::FormatTreeNode;
 use common_datavalues::format_data_type_sql;
 use common_functions::scalars::FunctionFactory;
+use common_planner::MetadataRef;
 use itertools::Itertools;
 
 use crate::sql::optimizer::SExpr;
@@ -38,7 +39,6 @@ use crate::sql::plans::Project;
 use crate::sql::plans::RelOperator;
 use crate::sql::plans::Scalar;
 use crate::sql::plans::Sort;
-use crate::sql::MetadataRef;
 use crate::sql::ScalarExpr;
 
 #[derive(Clone)]
@@ -246,7 +246,9 @@ fn physical_scan_to_format_tree(
             vec![
                 FormatTreeNode::new(FormatContext::Text(format!(
                     "table: {}.{}.{}",
-                    &table.catalog, &table.database, &table.name,
+                    table.catalog(),
+                    table.database(),
+                    table.name(),
                 ))),
                 FormatTreeNode::new(FormatContext::Text(format!(
                     "filters: [{}]",
@@ -268,7 +270,7 @@ fn physical_scan_to_format_tree(
                             .iter()
                             .map(|item| format!(
                                 "{} (#{}) {}",
-                                metadata.read().column(item.index).name.clone(),
+                                metadata.read().column(item.index).name(),
                                 item.index,
                                 if item.asc { "ASC" } else { "DESC" }
                             ))
@@ -302,7 +304,9 @@ fn logical_get_to_format_tree(
             vec![
                 FormatTreeNode::new(FormatContext::Text(format!(
                     "table: {}.{}.{}",
-                    &table.catalog, &table.database, &table.name,
+                    table.catalog(),
+                    table.database(),
+                    table.name(),
                 ))),
                 FormatTreeNode::new(FormatContext::Text(format!(
                     "filters: [{}]",
@@ -324,7 +328,7 @@ fn logical_get_to_format_tree(
                             .iter()
                             .map(|item| format!(
                                 "{} (#{}) {}",
-                                metadata.read().column(item.index).name.clone(),
+                                metadata.read().column(item.index).name(),
                                 item.index,
                                 if item.asc { "ASC" } else { "DESC" }
                             ))
@@ -556,7 +560,7 @@ fn project_to_format_tree(
         .read()
         .columns()
         .iter()
-        .map(|entry| format!("{} (#{})", entry.name.clone(), entry.column_index))
+        .map(|entry| format!("{} (#{})", entry.name(), entry.index()))
         .collect::<Vec<String>>();
     // Sorted by column index to make display of Project stable
     let project_columns = op
@@ -591,7 +595,8 @@ fn sort_to_format_tree(
         .items
         .iter()
         .map(|item| {
-            let name = metadata.read().column(item.index).name.clone();
+            let metadata = metadata.read();
+            let name = metadata.column(item.index).name();
             format!(
                 "{} (#{}) {}",
                 name,
