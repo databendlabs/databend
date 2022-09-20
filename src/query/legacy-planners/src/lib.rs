@@ -55,9 +55,6 @@ mod plan_sink;
 mod plan_sort;
 mod plan_subqueries_set;
 mod plan_table_recluster;
-mod plan_view_alter;
-mod plan_view_create;
-mod plan_view_drop;
 mod plan_window_func;
 
 pub use plan_aggregator_final::AggregatorFinalPlan;
@@ -142,7 +139,4 @@ pub use plan_sink::SINK_SCHEMA;
 pub use plan_sort::SortPlan;
 pub use plan_subqueries_set::SubQueriesSetPlan;
 pub use plan_table_recluster::ReclusterTablePlan;
-pub use plan_view_alter::AlterViewPlan;
-pub use plan_view_create::CreateViewPlan;
-pub use plan_view_drop::DropViewPlan;
 pub use plan_window_func::WindowFuncPlan;
