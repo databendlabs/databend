@@ -40,5 +40,8 @@ pub use revoke_privilege::RevokePrivilegePlan;
 mod show_create_database;
 pub use show_create_database::ShowCreateDatabasePlan;
 
+mod show_grants;
+pub use show_grants::ShowGrantsPlan;
+
 mod undrop_database;
 pub use undrop_database::UndropDatabasePlan;
