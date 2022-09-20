@@ -15,7 +15,6 @@
 mod plan_aggregator_final;
 mod plan_aggregator_partial;
 mod plan_broadcast;
-mod plan_copy;
 mod plan_database_create;
 mod plan_database_drop;
 mod plan_database_rename;
@@ -110,9 +109,6 @@ mod plan_window_func;
 pub use plan_aggregator_final::AggregatorFinalPlan;
 pub use plan_aggregator_partial::AggregatorPartialPlan;
 pub use plan_broadcast::BroadcastPlan;
-pub use plan_copy::CopyMode;
-pub use plan_copy::CopyPlan;
-pub use plan_copy::ValidationMode;
 pub use plan_database_create::CreateDatabasePlan;
 pub use plan_database_drop::DropDatabasePlan;
 pub use plan_database_rename::RenameDatabaseEntity;
