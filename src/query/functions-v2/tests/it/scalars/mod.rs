@@ -118,7 +118,7 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
                     test_arrow_conversion(&output_col);
 
                     // Only display the used input columns
-                    let used_columns = expr.column_refs();
+                    let used_columns = raw_expr.column_refs();
                     let input_domains = input_domains
                         .iter()
                         .enumerate()

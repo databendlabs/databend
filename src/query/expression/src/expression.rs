@@ -137,17 +137,17 @@ pub enum Literal {
     String(Vec<u8>),
 }
 
-impl Expr {
+impl RawExpr {
     pub fn column_refs(&self) -> HashSet<usize> {
-        fn walk(expr: &Expr, buf: &mut HashSet<usize>) {
+        fn walk(expr: &RawExpr, buf: &mut HashSet<usize>) {
             match expr {
-                Expr::ColumnRef { id, .. } => {
+                RawExpr::ColumnRef { id, .. } => {
                     buf.insert(*id);
                 }
-                Expr::Cast { expr, .. } => walk(expr, buf),
-                Expr::TryCast { expr, .. } => walk(expr, buf),
-                Expr::FunctionCall { args, .. } => args.iter().for_each(|expr| walk(expr, buf)),
-                Expr::Constant { .. } => (),
+                RawExpr::Cast { expr, .. } => walk(expr, buf),
+                RawExpr::TryCast { expr, .. } => walk(expr, buf),
+                RawExpr::FunctionCall { args, .. } => args.iter().for_each(|expr| walk(expr, buf)),
+                RawExpr::Literal { .. } => (),
             }
         }
 

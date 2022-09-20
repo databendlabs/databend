@@ -14,6 +14,7 @@
 
 mod agg;
 
+use std::collections::HashSet;
 use std::io::Write;
 
 use comfy_table::Table;
@@ -52,7 +53,7 @@ pub fn run_agg_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType
         num_rows,
     );
 
-    let column_ids = collect_columns(&raw_expr);
+    let used_columns = raw_expr.column_refs();
 
     // For test only, we just support agg function call here
     let result: common_exception::Result<(Column, DataType)> = try {
@@ -103,15 +104,15 @@ pub fn run_agg_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType
                 table.load_preset("||--+-++|    ++++++");
                 table.set_header(["Column", "Data"]);
 
-                let ids = match column_ids.is_empty() {
+                let ids = match used_columns.is_empty() {
                     true => {
                         if columns.is_empty() {
-                            vec![]
+                            HashSet::new()
                         } else {
-                            vec![0]
+                            HashSet::from_iter([0])
                         }
                     }
-                    false => column_ids,
+                    false => used_columns,
                 };
 
                 for id in ids.iter() {
@@ -138,12 +139,4 @@ pub fn run_scalar_expr(
     let evaluator = Evaluator::new(chunk, FunctionContext::default());
     let result = evaluator.run(&expr)?;
     Ok((result, output_ty))
-}
-
-fn collect_columns(raw_expr: &RawExpr) -> Vec<usize> {
-    match raw_expr {
-        RawExpr::ColumnRef { id, .. } => vec![*id],
-        RawExpr::FunctionCall { args, .. } => args.iter().flat_map(collect_columns).collect(),
-        _ => vec![],
-    }
 }
