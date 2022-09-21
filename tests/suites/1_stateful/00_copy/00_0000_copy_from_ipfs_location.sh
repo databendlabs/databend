@@ -4,7 +4,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 QMHASH=QmPpCt1aYGb9JWJRmXRUnmJtVgeFFTJGzWFYEEX7bo9zGJ
 
-echo "drop table if exists ${TABLE};" | $MYSQL_CLIENT_CONNECT
+echo "drop table if exists ontime_199;" | $MYSQL_CLIENT_CONNECT
 
 ## Create table
 cat $CURDIR/../ddl/ontime.sql | sed "s/ontime/ontime_199/g" | $MYSQL_CLIENT_CONNECT
