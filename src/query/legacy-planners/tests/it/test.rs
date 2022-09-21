@@ -13,19 +13,8 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::sync::Arc;
 
-use common_datavalues::prelude::*;
-use common_exception::Result;
 use common_legacy_planners::PartInfo;
-use common_legacy_planners::Partitions;
-use common_legacy_planners::PlanNode;
-use common_legacy_planners::ReadDataSourcePlan;
-use common_legacy_planners::SourceInfo;
-use common_legacy_planners::Statistics;
-use common_meta_app::schema::TableInfo;
-
-pub struct Test {}
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq)]
 struct PlannerTestPartInfo {}
@@ -41,63 +30,5 @@ impl PartInfo for PlannerTestPartInfo {
             None => false,
             Some(other) => self == other,
         }
-    }
-}
-
-impl PlannerTestPartInfo {
-    pub fn create() -> Arc<Box<dyn PartInfo>> {
-        Arc::new(Box::new(PlannerTestPartInfo {}))
-    }
-}
-
-impl Test {
-    pub fn create() -> Self {
-        Self {}
-    }
-
-    pub fn generate_source_plan_for_test(&self, total: usize) -> Result<PlanNode> {
-        let schema = DataSchemaRefExt::create(vec![DataField::new("number", u64::to_data_type())]);
-
-        let statistics = Statistics {
-            read_rows: total,
-            read_bytes: total * 8,
-            partitions_scanned: 8,
-            partitions_total: 8,
-            is_exact: true,
-        };
-
-        Ok(PlanNode::ReadSource(ReadDataSourcePlan {
-            catalog: "default".to_owned(),
-            source_info: SourceInfo::TableSource(TableInfo::simple("system", "numbers_mt", schema)),
-            scan_fields: None,
-            parts: Self::generate_partitions(8, total as u64),
-            statistics: statistics.clone(),
-            description: format!(
-                "(Read from system.numbers_mt table, Exactly Read Rows:{}, Read Bytes:{})",
-                statistics.read_rows, statistics.read_bytes
-            ),
-            tbl_args: None,
-            push_downs: None,
-        }))
-    }
-
-    pub fn generate_partitions(workers: u64, total: u64) -> Partitions {
-        let part_size = total / workers;
-        // let part_remain = total % workers;
-
-        let mut partitions = Vec::with_capacity(workers as usize);
-        if part_size == 0 {
-            partitions.push(PlannerTestPartInfo::create())
-        } else {
-            for _part in 0..workers {
-                // let part_begin = part * part_size;
-                // let mut part_end = (part + 1) * part_size;
-                // if part == (workers - 1) && part_remain > 0 {
-                //     part_end += part_remain;
-                // }
-                partitions.push(PlannerTestPartInfo::create())
-            }
-        }
-        partitions
     }
 }
