@@ -14,7 +14,6 @@
 
 mod agg;
 
-use std::collections::HashSet;
 use std::io::Write;
 
 use comfy_table::Table;
@@ -112,9 +111,9 @@ pub fn run_agg_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType
                 let ids = match used_columns.is_empty() {
                     true => {
                         if columns.is_empty() {
-                            HashSet::new()
+                            vec![]
                         } else {
-                            HashSet::from_iter([0])
+                            vec![0]
                         }
                     }
                     false => used_columns,

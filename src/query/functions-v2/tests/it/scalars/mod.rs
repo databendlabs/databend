@@ -126,9 +126,10 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
                         .collect::<Vec<_>>();
                     let input_domains = used_columns
                         .iter()
-                        .map(|i| input_domains[i])
+                        .cloned()
+                        .map(|i| input_domains[i].clone())
                         .collect::<Vec<_>>();
-                    let columns = used_columns.iter().map(|i| columns[i]).collect::<Vec<_>>();
+                    let columns = used_columns.iter().cloned().map(|i| columns[i].clone()).collect::<Vec<_>>();
 
                     let mut table = Table::new();
                     table.load_preset("||--+-++|    ++++++");
