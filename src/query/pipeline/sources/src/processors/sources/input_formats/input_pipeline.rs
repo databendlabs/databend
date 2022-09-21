@@ -25,6 +25,7 @@ use common_exception::Result;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
+use futures::AsyncRead;
 use futures_util::stream::FuturesUnordered;
 use futures_util::AsyncReadExt;
 use futures_util::StreamExt;
@@ -257,7 +258,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
     }
 }
 
-pub async fn read_full<R: AsyncReadExt + Unpin>(reader: &mut R, buf: &mut [u8]) -> Result<usize> {
+pub async fn read_full<R: AsyncRead + Unpin>(reader: &mut R, buf: &mut [u8]) -> Result<usize> {
     let mut buf = &mut buf[0..];
     let mut n = 0;
     while !buf.is_empty() {
