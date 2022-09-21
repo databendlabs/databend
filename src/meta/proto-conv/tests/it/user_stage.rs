@@ -44,10 +44,10 @@ fn test_user_stage_gcs_latest() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_user_stage_s3_v8() -> anyhow::Result<()> {
-    // Encoded data of version 8 of user_stage_s3:
+fn test_user_stage_s3_v9() -> anyhow::Result<()> {
+    // Encoded data of version 9 of user_stage_s3:
     // It is generated with common::test_pb_from_to.
-    let user_stage_s3_v8 = vec![
+    let user_stage_s3_v9 = vec![
         10, 24, 115, 51, 58, 47, 47, 109, 121, 98, 117, 99, 107, 101, 116, 47, 100, 97, 116, 97,
         47, 102, 105, 108, 101, 115, 16, 1, 26, 100, 10, 98, 10, 96, 18, 24, 104, 116, 116, 112,
         115, 58, 47, 47, 115, 51, 46, 97, 109, 97, 122, 111, 110, 97, 119, 115, 46, 99, 111, 109,
@@ -88,7 +88,7 @@ fn test_user_stage_s3_v8() -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    common::test_load_old(func_name!(), user_stage_s3_v8.as_slice(), want)?;
+    common::test_load_old(func_name!(), user_stage_s3_v9.as_slice(), want)?;
     Ok(())
 }
 
