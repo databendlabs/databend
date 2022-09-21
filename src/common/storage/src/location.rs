@@ -22,6 +22,8 @@ use opendal::Scheme;
 use percent_encoding::percent_decode_str;
 
 use crate::config::StorageHttpConfig;
+use crate::config::StorageIpfsConfig;
+use crate::config::STORAGE_IPFS_DEFAULT_ENDPOINT;
 use crate::config::STORAGE_S3_DEFAULT_ENDPOINT;
 use crate::StorageAzblobConfig;
 use crate::StorageParams;
@@ -94,6 +96,14 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
                 })?
                 .to_string(),
             root: root.to_string(),
+        }),
+        Scheme::Ipfs => StorageParams::Ipfs(StorageIpfsConfig {
+            endpoint_url: l
+                .connection
+                .get("endpoint_url")
+                .cloned()
+                .unwrap_or_else(|| STORAGE_IPFS_DEFAULT_ENDPOINT.to_string()),
+            root: "/ipfs/".to_string() + l.name.as_str(),
         }),
         Scheme::S3 => StorageParams::S3(StorageS3Config {
             endpoint_url: l

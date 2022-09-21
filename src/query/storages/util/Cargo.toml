@@ -21,9 +21,9 @@ common-exception = { path = "../../../common/exception" }
 common-fuse-meta = { path = "../fuse-meta" }
 common-meta-api = { path = "../../../meta/api" }
 
-async-trait = { version = "0.1.0", package = "async-trait-fn" }
+async-trait = { version = "0.1.57", package = "async-trait-fn" }
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
-futures-util = "0.3.21"
-once_cell = "1.12.0"
+futures-util = "0.3.24"
+once_cell = "1.15.0"
 parking_lot = "0.12.1"
-tracing = "0.1.35"
+tracing = "0.1.36"

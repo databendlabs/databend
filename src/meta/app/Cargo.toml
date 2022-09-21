@@ -18,7 +18,7 @@ enumflags2 = { version = "0.7.5", features = ["serde"] }
 maplit = "1.0.2"
 num-derive = "0.3.3"
 num-traits = "0.2.15"
-serde = { version = "1.0.137", features = ["derive", "rc"] }
+serde = { version = "1.0.144", features = ["derive", "rc"] }
 
 [build-dependencies]
 common-building = { path = "../../common/building" }
