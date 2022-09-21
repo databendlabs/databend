@@ -114,12 +114,12 @@ impl SplitInfo {
         }
     }
 
-    pub fn from_stream_split(path: String) -> Self {
+    pub fn from_stream_split(path: String, compress_alg: Option<CompressAlgorithm>) -> Self {
         SplitInfo {
             file_info: FileInfo {
                 path,
                 size: 0,
-                compress_alg: None,
+                compress_alg,
                 file_meta: None,
             },
             seq_infile: 0,

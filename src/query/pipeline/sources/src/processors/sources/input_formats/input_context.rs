@@ -43,13 +43,26 @@ use crate::processors::sources::input_formats::InputFormat;
 
 pub enum InputPlan {
     CopyInto(Box<CopyIntoPlan>),
-    StreamingLoad,
+    StreamingLoad(StreamPlan),
     Clickhouse,
+}
+
+impl InputPlan {
+    pub fn as_stream(&self) -> Result<&StreamPlan> {
+        match self {
+            InputPlan::StreamingLoad(p) => Ok(p),
+            _ => Err(ErrorCode::UnexpectedError("expect StreamingLoad")),
+        }
+    }
 }
 
 pub struct CopyIntoPlan {
     pub stage_info: UserStageInfo,
     pub files: Vec<String>,
+}
+
+pub struct StreamPlan {
+    pub compression: StageFileCompression,
 }
 
 pub enum InputSource {
@@ -197,6 +210,14 @@ impl InputContext {
         };
         let record_delimiter = RecordDelimiter::try_from(&settings.get_record_delimiter()?[..])?;
         let rows_to_skip = settings.get_skip_header()? as usize;
+        let compression = settings.get_compression()?;
+        let compression = if !compression.is_empty() {
+            StageFileCompression::from_str(&compression).map_err(ErrorCode::BadArguments)?
+        } else {
+            StageFileCompression::Auto
+        };
+        let plan = StreamPlan { compression };
+
         Ok(InputContext {
             format,
             schema,
@@ -209,7 +230,7 @@ impl InputContext {
             rows_to_skip,
             scan_progress,
             source: InputSource::Stream(Mutex::new(Some(stream_receiver))),
-            plan: InputPlan::StreamingLoad,
+            plan: InputPlan::StreamingLoad(plan),
             splits: vec![],
         })
     }
@@ -250,6 +271,7 @@ impl InputContext {
     pub fn get_compression_alg(&self, path: &str) -> Result<Option<CompressAlgorithm>> {
         let opt = match &self.plan {
             InputPlan::CopyInto(p) => p.stage_info.file_format_options.compression,
+            InputPlan::StreamingLoad(p) => p.compression,
             _ => StageFileCompression::None,
         };
         Self::get_compression_alg_copy(opt, path)

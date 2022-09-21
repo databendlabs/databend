@@ -145,7 +145,7 @@ pub async fn streaming_load(
                 );
 
                 let handler = context.spawn(execute_query(context.clone(), plan));
-                let files = read_multi_part(multipart, tx, input_context.read_batch_size).await?;
+                let files = read_multi_part(multipart, tx, &input_context).await?;
 
                 match handler.await {
                     Ok(Ok(_)) => Ok(Json(LoadResponse {
@@ -183,7 +183,7 @@ pub async fn streaming_load(
 async fn read_multi_part(
     mut multipart: Multipart,
     tx: Sender<Result<StreamingReadBatch>>,
-    read_batch_size: usize,
+    input_context: &Arc<InputContext>,
 ) -> poem::Result<Vec<String>> {
     let mut files = vec![];
     loop {
@@ -205,12 +205,15 @@ async fn read_multi_part(
             }
             Ok(Some(field)) => {
                 let filename = field.file_name().unwrap_or("file_with_no_name").to_string();
+                let compression = input_context
+                    .get_compression_alg(&filename)
+                    .map_err(BadRequest)?;
                 tracing::debug!("Multipart start read {}", &filename);
                 files.push(filename.clone());
                 let mut async_reader = field.into_async_read();
                 let mut is_start = true;
                 loop {
-                    let mut batch = vec![0u8; read_batch_size];
+                    let mut batch = vec![0u8; input_context.read_batch_size];
                     let n = read_full(&mut async_reader, &mut batch[0..])
                         .await
                         .map_err(InternalServerError)?;
@@ -224,6 +227,7 @@ async fn read_multi_part(
                                 data: batch,
                                 path: filename.clone(),
                                 is_start,
+                                compression,
                             }))
                             .await
                         {

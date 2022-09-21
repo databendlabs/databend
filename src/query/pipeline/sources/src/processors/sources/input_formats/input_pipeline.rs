@@ -29,6 +29,7 @@ use futures::AsyncRead;
 use futures_util::stream::FuturesUnordered;
 use futures_util::AsyncReadExt;
 use futures_util::StreamExt;
+use opendal::io_util::CompressAlgorithm;
 
 use crate::processors::sources::input_formats::input_context::InputContext;
 use crate::processors::sources::input_formats::input_context::InputPlan;
@@ -42,16 +43,11 @@ pub struct Split<I: InputFormatPipe> {
     pub(crate) rx: Receiver<Result<I::ReadBatch>>,
 }
 
-#[allow(unused)]
-pub struct StreamingSplit {
-    path: String,
-    data_tx: Sender<StreamingReadBatch>,
-}
-
 pub struct StreamingReadBatch {
     pub data: Vec<u8>,
     pub path: String,
     pub is_start: bool,
+    pub compression: Option<CompressAlgorithm>,
 }
 
 pub trait AligningStateTrait: Sized {
@@ -96,7 +92,8 @@ pub trait InputFormatPipe: Sized + Send + 'static {
                         if batch.is_start {
                             let (data_tx, data_rx) = tokio::sync::mpsc::channel(1);
                             sender = Some(data_tx);
-                            let split_info = SplitInfo::from_stream_split(batch.path.clone());
+                            let split_info =
+                                SplitInfo::from_stream_split(batch.path.clone(), batch.compression);
                             split_tx
                                 .send(Ok(Split {
                                     info: split_info,
@@ -213,7 +210,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
         let n_threads = ctx.settings.get_max_threads()? as usize;
         let max_aligner = match ctx.plan {
             InputPlan::CopyInto(_) => ctx.splits.len(),
-            InputPlan::StreamingLoad => 3,
+            InputPlan::StreamingLoad(_) => 3,
             InputPlan::Clickhouse => 1,
         };
         let (row_batch_tx, row_batch_rx) = crossbeam_channel::bounded(n_threads);
