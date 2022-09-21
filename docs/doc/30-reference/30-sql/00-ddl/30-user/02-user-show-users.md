@@ -3,9 +3,7 @@ title: SHOW USERS
 description: Lists all the users in the system
 ---
 
-Lists all the users in the system. 
-
-When you're in Databend Cloud, the list also includes SQL users you created.
+Lists all the users in the system.
 
 ## Syntax
 
@@ -14,7 +12,6 @@ SHOW USERS;
 ```
 
 ## Examples
-
 
 ```sql
 SHOW USERS;
