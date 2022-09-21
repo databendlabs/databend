@@ -49,9 +49,9 @@ pub struct StreamingSplit {
 }
 
 pub struct StreamingReadBatch {
-    data: Vec<u8>,
-    pub(crate) path: String,
-    pub(crate) is_start: bool,
+    pub data: Vec<u8>,
+    pub path: String,
+    pub is_start: bool,
 }
 
 pub trait AligningStateTrait: Sized {
