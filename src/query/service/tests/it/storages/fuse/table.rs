@@ -347,7 +347,7 @@ async fn test_fuse_alter_table_cluster_key() -> Result<()> {
         .options()
         .get(OPT_KEY_SNAPSHOT_LOCATION)
         .unwrap();
-    let reader = MetaReaders::table_snapshot_reader(ctx.clone());
+    let reader = MetaReaders::table_snapshot_reader(ctx.clone(), None);
     let snapshot = reader.read(snapshot_loc.as_str(), None, 1).await?;
     let expected = Some((0, "(id)".to_string()));
     assert_eq!(snapshot.cluster_key_meta, expected);
@@ -373,7 +373,7 @@ async fn test_fuse_alter_table_cluster_key() -> Result<()> {
         .options()
         .get(OPT_KEY_SNAPSHOT_LOCATION)
         .unwrap();
-    let reader = MetaReaders::table_snapshot_reader(ctx);
+    let reader = MetaReaders::table_snapshot_reader(ctx, None);
     let snapshot = reader.read(snapshot_loc.as_str(), None, 1).await?;
     let expected = None;
     assert_eq!(snapshot.cluster_key_meta, expected);

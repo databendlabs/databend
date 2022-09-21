@@ -24,6 +24,7 @@ use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::Statistics;
 use common_fuse_meta::meta::TableSnapshot;
+use common_storage::StorageParams;
 use opendal::Operator;
 
 use crate::io::MetaReaders;
@@ -48,6 +49,7 @@ pub struct BaseMutator {
     pub(crate) location_generator: TableMetaLocationGenerator,
     pub(crate) data_accessor: Operator,
     pub(crate) base_snapshot: Arc<TableSnapshot>,
+    pub(crate) storage_params: Option<StorageParams>,
 }
 
 impl BaseMutator {
@@ -55,14 +57,16 @@ impl BaseMutator {
         ctx: Arc<dyn TableContext>,
         location_generator: TableMetaLocationGenerator,
         base_snapshot: Arc<TableSnapshot>,
+        sp: Option<StorageParams>,
     ) -> Result<Self> {
-        let data_accessor = ctx.get_storage_operator()?;
+        let data_accessor = ctx.get_storage_operator(sp.clone())?;
         Ok(Self {
             mutations: HashMap::new(),
             ctx,
             location_generator,
             data_accessor,
             base_snapshot,
+            storage_params: sp,
         })
     }
 
@@ -98,7 +102,8 @@ impl BaseMutator {
         let mut segments_editor =
             HashMap::<_, _, RandomState>::from_iter(segments.clone().into_iter().enumerate());
 
-        let segment_reader = MetaReaders::segment_info_reader(self.ctx.as_ref());
+        let segment_reader =
+            MetaReaders::segment_info_reader(self.ctx.as_ref(), self.storage_params.clone());
 
         let segment_info_cache = CacheManager::instance().get_table_segment_cache();
         let seg_writer = SegmentWriter::new(

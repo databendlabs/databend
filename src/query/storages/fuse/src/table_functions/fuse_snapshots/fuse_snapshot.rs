@@ -89,7 +89,8 @@ impl FuseSnapshot {
         let meta_location_generator = tbl.meta_location_generator.clone();
         if let Some(snapshot_location) = snapshot_location {
             let snapshot_version = tbl.snapshot_format_version();
-            let snapshot_reader = MetaReaders::table_snapshot_reader(self.ctx.clone());
+            let snapshot_reader =
+                MetaReaders::table_snapshot_reader(self.ctx.clone(), tbl.storage_params.clone());
             let snapshot_stream = snapshot_reader.snapshot_history(
                 snapshot_location,
                 snapshot_version,

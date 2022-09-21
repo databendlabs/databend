@@ -20,6 +20,7 @@ common-datablocks = { path = "../../datablocks" }
 common-exception = { path = "../../../common/exception" }
 common-fuse-meta = { path = "../fuse-meta" }
 common-meta-api = { path = "../../../meta/api" }
+common-storage = { path = "../../../common/storage" }
 
 async-trait = { version = "0.1.0", package = "async-trait-fn" }
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }

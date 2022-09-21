@@ -31,6 +31,7 @@ use common_legacy_planners::ReadDataSourcePlan;
 use common_legacy_planners::Statistics;
 use common_meta_types::UserInfo;
 use common_settings::Settings;
+use common_storage::StorageParams;
 use common_users::UserApiProvider;
 use opendal::Operator;
 use parking_lot::Mutex;
@@ -101,7 +102,7 @@ pub trait TableContext: Send + Sync {
     /// Get the session running query.
     fn get_query_str(&self) -> String;
     // Get the storage data accessor operator from the session manager.
-    fn get_storage_operator(&self) -> Result<Operator>;
+    fn get_storage_operator(&self, sp: Option<StorageParams>) -> Result<Operator>;
     fn get_dal_context(&self) -> &DalContext;
     fn push_precommit_block(&self, block: DataBlock);
     fn consume_precommit_blocks(&self) -> Vec<DataBlock>;

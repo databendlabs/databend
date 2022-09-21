@@ -20,6 +20,7 @@ use common_exception::Result;
 use common_fuse_meta::meta::ClusterStatistics;
 use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::TableSnapshot;
+use common_storage::StorageParams;
 
 use crate::io::BlockWriter;
 use crate::io::TableMetaLocationGenerator;
@@ -42,8 +43,9 @@ impl DeletionMutator {
         location_generator: TableMetaLocationGenerator,
         base_snapshot: Arc<TableSnapshot>,
         cluster_stats_gen: ClusterStatsGenerator,
+        sp: Option<StorageParams>,
     ) -> Result<Self> {
-        let base_mutator = BaseMutator::try_create(ctx, location_generator, base_snapshot)?;
+        let base_mutator = BaseMutator::try_create(ctx, location_generator, base_snapshot, sp)?;
         Ok(Self {
             base_mutator,
             cluster_stats_gen,

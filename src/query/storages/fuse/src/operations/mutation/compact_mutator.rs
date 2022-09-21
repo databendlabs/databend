@@ -23,6 +23,7 @@ use common_fuse_meta::meta::Statistics;
 use common_fuse_meta::meta::TableSnapshot;
 use common_fuse_meta::meta::Versioned;
 use common_meta_app::schema::TableInfo;
+use common_storage::StorageParams;
 use opendal::Operator;
 
 use crate::io::BlockCompactor;
@@ -50,18 +51,20 @@ pub struct CompactMutator {
     block_per_seg: usize,
     // is_cluster indicates whether the table contains cluster key.
     is_cluster: bool,
+    storage_params: Option<StorageParams>,
 }
 
 impl CompactMutator {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
         base_snapshot: Arc<TableSnapshot>,
+        sp: Option<StorageParams>,
         block_compactor: BlockCompactor,
         location_generator: TableMetaLocationGenerator,
         block_per_seg: usize,
         is_cluster: bool,
     ) -> Result<Self> {
-        let data_accessor = ctx.get_storage_operator()?;
+        let data_accessor = ctx.get_storage_operator(sp.clone())?;
 
         Ok(Self {
             ctx,
@@ -74,6 +77,7 @@ impl CompactMutator {
             summary: Statistics::default(),
             block_per_seg,
             is_cluster,
+            storage_params: sp,
         })
     }
 
@@ -97,7 +101,8 @@ impl TableMutator for CompactMutator {
         // Blocks that need to be reorganized into new segments.
         let mut remain_blocks = Vec::new();
         let mut summarys = Vec::new();
-        let reader = MetaReaders::segment_info_reader(self.ctx.as_ref());
+        let reader =
+            MetaReaders::segment_info_reader(self.ctx.as_ref(), self.storage_params.clone());
 
         for segment_location in &snapshot.segments {
             let (x, ver) = (segment_location.0.clone(), segment_location.1);
@@ -183,6 +188,7 @@ impl TableMutator for CompactMutator {
             table_info,
             &self.location_generator,
             new_snapshot,
+            self.storage_params.clone(),
         )
         .await
     }

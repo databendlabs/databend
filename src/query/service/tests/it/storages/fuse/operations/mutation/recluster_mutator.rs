@@ -114,7 +114,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
 
     let schema = DataSchemaRef::new(DataSchema::empty());
     let ctx: Arc<dyn TableContext> = ctx.clone();
-    let block_metas = BlockPruner::new(base_snapshot.clone())
+    let block_metas = BlockPruner::new(base_snapshot.clone(), None)
         .prune(&ctx, schema, &None)
         .await?;
     let mut blocks_map = BTreeMap::new();
@@ -127,6 +127,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         1.0,
         BlockCompactor::default(),
         blocks_map,
+        None,
     )?;
 
     let need_recluster = mutator.blocks_select().await?;

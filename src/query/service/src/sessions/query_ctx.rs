@@ -42,6 +42,9 @@ use common_legacy_planners::StageTableInfo;
 use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::UserInfo;
+use common_storage::init_operator;
+use common_storage::StorageOperator;
+use common_storage::StorageParams;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
 use common_users::UserApiProvider;
@@ -359,8 +362,14 @@ impl TableContext for QueryContext {
         self.shared.get_query_str()
     }
     // Get the storage data accessor operator from the session manager.
-    fn get_storage_operator(&self) -> Result<Operator> {
-        let operator = self.shared.storage_operator.clone();
+    fn get_storage_operator(&self, sp: Option<StorageParams>) -> Result<Operator> {
+        let operator = match sp {
+            Some(p) => {
+                let op = StorageOperator::try_create_with_op(init_operator(&p)?)?;
+                op
+            }
+            None => self.shared.storage_operator.clone(),
+        };
 
         Ok(operator.layer(self.shared.dal_ctx.as_ref().clone()))
     }

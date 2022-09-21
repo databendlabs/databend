@@ -35,6 +35,7 @@ use common_pipeline_core::processors::Processor;
 use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
 use common_pipeline_transforms::processors::ExpressionExecutor;
+use common_storage::StorageParams;
 
 use crate::io::BlockReader;
 use crate::operations::read::State::Generated;
@@ -46,7 +47,14 @@ impl FuseTable {
         ctx: &Arc<dyn TableContext>,
         projection: Projection,
     ) -> Result<Arc<BlockReader>> {
-        let operator = ctx.get_storage_operator()?;
+        let sp = self.table_info.meta.storage_params.clone();
+        let operator = match sp {
+            Some(p) => {
+                let sp: StorageParams = serde_json::from_str(&p)?;
+                ctx.get_storage_operator(Some(sp))?
+            }
+            None => ctx.get_storage_operator(None)?,
+        };
         let table_schema = self.table_info.schema();
         BlockReader::create(operator, table_schema, projection)
     }

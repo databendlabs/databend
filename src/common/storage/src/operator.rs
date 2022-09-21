@@ -202,7 +202,7 @@ pub fn init_obs_operator(cfg: &StorageObsConfig) -> Result<Operator> {
     Ok(Operator::new(builder.build()?).layer(LoggingLayer))
 }
 
-pub struct StorageOperator;
+pub struct StorageOperator();
 
 static STORAGE_OPERATOR: OnceCell<Singleton<Operator>> = OnceCell::new();
 
@@ -237,6 +237,19 @@ impl StorageOperator {
         // NOTE: Magic happens here. We will add a layer upon original storage operator
         // so that all underlying storage operations will send to storage runtime.
         Ok(operator.layer(DalRuntime::new(io_runtime.inner())))
+    }
+
+    pub fn try_create_with_op(op: Operator) -> common_exception::Result<Operator> {
+        let io_runtime = GlobalIORuntime::instance();
+        let op = op
+            .layer(RetryLayer::new(ExponentialBackoff::default()))
+            .layer(LoggingLayer)
+            .layer(TracingLayer)
+            .layer(MetricsLayer);
+
+        // todo(ariesdevil): check op
+
+        Ok(op.layer(DalRuntime::new(io_runtime.inner())))
     }
 
     pub fn instance() -> Operator {

@@ -45,7 +45,7 @@ impl FuseTable {
                     return Ok(result);
                 }
 
-                let block_metas = BlockPruner::new(snapshot.clone())
+                let block_metas = BlockPruner::new(snapshot.clone(), self.storage_params.clone())
                     .prune(&ctx, self.table_info.schema(), &push_downs)
                     .await?
                     .into_iter()

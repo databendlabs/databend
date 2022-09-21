@@ -23,6 +23,7 @@ use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::SegmentInfoVersion;
 use common_fuse_meta::meta::SnapshotVersion;
 use common_fuse_meta::meta::TableSnapshot;
+use common_storage::StorageParams;
 use common_storages_util::cached_reader::CachedReader;
 use common_storages_util::cached_reader::HasTenantLabel;
 use common_storages_util::cached_reader::Loader;
@@ -37,7 +38,12 @@ use super::versioned_reader::VersionedReader;
 /// of an [BufReader] can be deferred or avoided (e.g. if hits cache).
 #[async_trait::async_trait]
 pub trait BufReaderProvider {
-    async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<BytesReader>>;
+    async fn buf_reader(
+        &self,
+        path: &str,
+        len: Option<u64>,
+        sp: Option<StorageParams>,
+    ) -> Result<BufReader<BytesReader>>;
 }
 
 pub type SegmentInfoReader<'a> = CachedReader<SegmentInfo, LoaderWrapper<&'a dyn TableContext>>;
@@ -47,27 +53,39 @@ pub type BloomIndexFileMetaDataReader = CachedReader<FileMetaData, Arc<dyn Table
 pub struct MetaReaders;
 
 impl MetaReaders {
-    pub fn segment_info_reader(ctx: &dyn TableContext) -> SegmentInfoReader {
+    pub fn segment_info_reader(
+        ctx: &dyn TableContext,
+        sp: Option<StorageParams>,
+    ) -> SegmentInfoReader {
         SegmentInfoReader::new(
             CacheManager::instance().get_table_segment_cache(),
             LoaderWrapper(ctx),
             "SEGMENT_INFO_CACHE".to_owned(),
+            sp,
         )
     }
 
-    pub fn table_snapshot_reader(ctx: Arc<dyn TableContext>) -> TableSnapshotReader {
+    pub fn table_snapshot_reader(
+        ctx: Arc<dyn TableContext>,
+        sp: Option<StorageParams>,
+    ) -> TableSnapshotReader {
         TableSnapshotReader::new(
             CacheManager::instance().get_table_snapshot_cache(),
             LoaderWrapper(ctx),
             "SNAPSHOT_CACHE".to_owned(),
+            sp,
         )
     }
 
-    pub fn file_meta_data_reader(ctx: Arc<dyn TableContext>) -> BloomIndexFileMetaDataReader {
+    pub fn file_meta_data_reader(
+        ctx: Arc<dyn TableContext>,
+        sp: Option<StorageParams>,
+    ) -> BloomIndexFileMetaDataReader {
         BloomIndexFileMetaDataReader::new(
             CacheManager::instance().get_bloom_index_meta_cache(),
             ctx,
             "BLOOM_INDEX_FILE_META_DATA_CACHE".to_owned(),
+            sp,
         )
     }
 }
@@ -84,10 +102,11 @@ where T: BufReaderProvider + Sync + Send
         &self,
         key: &str,
         length_hint: Option<u64>,
+        sp: Option<StorageParams>,
         version: u64,
     ) -> Result<TableSnapshot> {
         let version = SnapshotVersion::try_from(version)?;
-        let reader = self.0.buf_reader(key, length_hint).await?;
+        let reader = self.0.buf_reader(key, length_hint, sp).await?;
         version.read(reader).await
     }
 }
@@ -96,17 +115,28 @@ where T: BufReaderProvider + Sync + Send
 impl<T> Loader<SegmentInfo> for LoaderWrapper<T>
 where T: BufReaderProvider + Sync + Send
 {
-    async fn load(&self, key: &str, length_hint: Option<u64>, version: u64) -> Result<SegmentInfo> {
+    async fn load(
+        &self,
+        key: &str,
+        length_hint: Option<u64>,
+        sp: Option<StorageParams>,
+        version: u64,
+    ) -> Result<SegmentInfo> {
         let version = SegmentInfoVersion::try_from(version)?;
-        let reader = self.0.buf_reader(key, length_hint).await?;
+        let reader = self.0.buf_reader(key, length_hint, sp).await?;
         version.read(reader).await
     }
 }
 
 #[async_trait::async_trait]
 impl BufReaderProvider for &dyn TableContext {
-    async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<BytesReader>> {
-        let operator = self.get_storage_operator()?;
+    async fn buf_reader(
+        &self,
+        path: &str,
+        len: Option<u64>,
+        sp: Option<StorageParams>,
+    ) -> Result<BufReader<BytesReader>> {
+        let operator = self.get_storage_operator(sp)?;
         let object = operator.object(path);
 
         let len = match len {
@@ -129,8 +159,13 @@ impl BufReaderProvider for &dyn TableContext {
 
 #[async_trait::async_trait]
 impl BufReaderProvider for Arc<dyn TableContext> {
-    async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<BytesReader>> {
-        self.as_ref().buf_reader(path, len).await
+    async fn buf_reader(
+        &self,
+        path: &str,
+        len: Option<u64>,
+        sp: Option<StorageParams>,
+    ) -> Result<BufReader<BytesReader>> {
+        self.as_ref().buf_reader(path, len, sp).await
     }
 }
 

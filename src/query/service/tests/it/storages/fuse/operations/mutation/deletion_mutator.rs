@@ -98,6 +98,7 @@ async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
         location_generator,
         Arc::new(base_snapshot),
         ClusterStatsGenerator::default(),
+        None,
     )?;
 
     // clear half of the segments

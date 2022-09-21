@@ -124,6 +124,8 @@ message TableMeta {
 
   // Comments of each field.
   repeated string field_comments = 25;
+
+  optional string storage_params = 26;
 }
 
 // Save table name id list history.

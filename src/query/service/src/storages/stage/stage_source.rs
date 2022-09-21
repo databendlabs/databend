@@ -120,7 +120,7 @@ impl StageSourceHelper {
     /// correct root.
     pub async fn get_op(ctx: &Arc<dyn TableContext>, stage: &UserStageInfo) -> Result<Operator> {
         if stage.stage_type == StageType::Internal {
-            ctx.get_storage_operator()
+            ctx.get_storage_operator(None)
         } else {
             Ok(init_operator(&stage.stage_params.storage)?)
         }

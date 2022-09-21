@@ -57,7 +57,10 @@ impl<'a> FuseBlock<'a> {
             let snapshot_location = tbl
                 .meta_location_generator
                 .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot_version)?;
-            let reader = MetaReaders::table_snapshot_reader(self.ctx.clone());
+            let reader = MetaReaders::table_snapshot_reader(
+                self.ctx.clone(),
+                self.table.storage_params.clone(),
+            );
             let mut snapshot_stream = reader.snapshot_history(
                 snapshot_location,
                 snapshot_version,
@@ -84,7 +87,8 @@ impl<'a> FuseBlock<'a> {
         let mut bloom_filter_location: Vec<Option<Vec<u8>>> = Vec::with_capacity(len);
         let mut bloom_filter_size: Vec<u64> = Vec::with_capacity(len);
 
-        let reader = MetaReaders::segment_info_reader(self.ctx.as_ref());
+        let reader =
+            MetaReaders::segment_info_reader(self.ctx.as_ref(), self.table.storage_params.clone());
         for (x, ver) in &snapshot.segments {
             let segment = reader.read(x, None, *ver).await?;
             segment.blocks.clone().into_iter().for_each(|block| {

@@ -61,7 +61,7 @@ impl FuseTable {
         };
 
         let schema = self.table_info.schema();
-        let block_metas = BlockPruner::new(snapshot.clone())
+        let block_metas = BlockPruner::new(snapshot.clone(), self.storage_params.clone())
             .prune(&ctx, schema, &push_downs)
             .await?;
 
@@ -92,6 +92,7 @@ impl FuseTable {
         };
         let block_per_seg =
             self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
+
         let mut mutator = ReclusterMutator::try_create(
             ctx.clone(),
             self.meta_location_generator.clone(),
@@ -99,6 +100,7 @@ impl FuseTable {
             threshold,
             block_compactor.clone(),
             blocks_map,
+            self.storage_params.clone(),
         )?;
 
         let need_recluster = mutator.blocks_select().await?;
@@ -178,7 +180,7 @@ impl FuseTable {
             )
         })?;
 
-        let da = ctx.get_storage_operator()?;
+        let da = ctx.get_storage_operator(self.storage_params.clone())?;
         let mut sink_pipeline_builder = SinkPipeBuilder::create();
         for _ in 0..pipeline.output_len() {
             let input_port = InputPort::create();

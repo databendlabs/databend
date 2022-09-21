@@ -1457,7 +1457,15 @@ pub fn engine(i: Input) -> IResult<Engine> {
     let engine = alt((
         value(Engine::Null, rule! { NULL }),
         value(Engine::Memory, rule! { MEMORY }),
-        value(Engine::Fuse, rule! { FUSE }),
+        map(
+            rule! {
+                FUSE ~ ( #uri_location )?
+            },
+            |(_, loc)| match loc {
+                Some(l) => Engine::Fuse(Some(l)),
+                None => Engine::Fuse(None),
+            },
+        ),
         value(Engine::View, rule! { VIEW }),
         value(Engine::Random, rule! { RANDOM }),
     ));

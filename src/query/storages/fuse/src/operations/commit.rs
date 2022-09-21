@@ -36,6 +36,7 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableStatistics;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
+use common_storage::StorageParams;
 use common_storages_util::retry;
 use common_storages_util::retry::Retryable;
 use opendal::Operator;
@@ -123,37 +124,42 @@ impl FuseTable {
                         Ok(())
                     };
                 }
-                Err(e) if self::utils::is_error_recoverable(&e, transient) => match backoff
-                    .next_backoff()
-                {
-                    Some(d) => {
-                        let name = tbl.table_info.name.clone();
-                        debug!(
-                            "got error TableVersionMismatched, tx will be retried {} ms later. table name {}, identity {}",
-                            d.as_millis(),
-                            name.as_str(),
-                            tbl.table_info.ident
-                        );
-                        common_base::base::tokio::time::sleep(d).await;
-                        latest = tbl.latest(ctx.as_ref(), catalog_name).await?;
-                        tbl = FuseTable::try_from_table(latest.as_ref())?;
-                        retry_times += 1;
-                        continue;
+                Err(e) if self::utils::is_error_recoverable(&e, transient) => {
+                    match backoff.next_backoff() {
+                        Some(d) => {
+                            let name = tbl.table_info.name.clone();
+                            debug!(
+                                "got error TableVersionMismatched, tx will be retried {} ms later. table name {}, identity {}",
+                                d.as_millis(),
+                                name.as_str(),
+                                tbl.table_info.ident
+                            );
+                            common_base::base::tokio::time::sleep(d).await;
+                            latest = tbl.latest(ctx.as_ref(), catalog_name).await?;
+                            tbl = FuseTable::try_from_table(latest.as_ref())?;
+                            retry_times += 1;
+                            continue;
+                        }
+                        None => {
+                            info!("aborting operations");
+                            let _ = self::utils::abort_operations(
+                                ctx.as_ref(),
+                                operation_log,
+                                self.storage_params.clone(),
+                            )
+                            .await;
+                            break Err(ErrorCode::OCCRetryFailure(format!(
+                                "can not fulfill the tx after retries({} times, {} ms), aborted. table name {}, identity {}",
+                                retry_times,
+                                Instant::now()
+                                    .duration_since(backoff.start_time)
+                                    .as_millis(),
+                                tbl.table_info.name.as_str(),
+                                tbl.table_info.ident,
+                            )));
+                        }
                     }
-                    None => {
-                        info!("aborting operations");
-                        let _ = self::utils::abort_operations(ctx.as_ref(), operation_log).await;
-                        break Err(ErrorCode::OCCRetryFailure(format!(
-                            "can not fulfill the tx after retries({} times, {} ms), aborted. table name {}, identity {}",
-                            retry_times,
-                            Instant::now()
-                                .duration_since(backoff.start_time)
-                                .as_millis(),
-                            tbl.table_info.name.as_str(),
-                            tbl.table_info.ident,
-                        )));
-                    }
-                },
+                }
                 Err(e) => break Err(e),
             }
         }
@@ -220,6 +226,7 @@ impl FuseTable {
             &self.table_info,
             &self.meta_location_generator,
             new_snapshot,
+            self.storage_params.clone(),
         )
         .await
     }
@@ -266,12 +273,13 @@ impl FuseTable {
         table_info: &TableInfo,
         location_generator: &TableMetaLocationGenerator,
         snapshot: TableSnapshot,
+        sp: Option<StorageParams>,
     ) -> Result<()> {
         let snapshot_location = location_generator
             .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot.format_version())?;
 
         // 1. write down snapshot
-        let operator = ctx.get_storage_operator()?;
+        let operator = ctx.get_storage_operator(sp)?;
         write_meta(&operator, &snapshot_location, &snapshot).await?;
 
         // 2. prepare table meta
@@ -427,8 +435,9 @@ mod utils {
     pub async fn abort_operations(
         ctx: &dyn TableContext,
         operation_log: TableOperationLog,
+        storage_params: Option<StorageParams>,
     ) -> Result<()> {
-        let operator = ctx.get_storage_operator()?;
+        let operator = ctx.get_storage_operator(storage_params)?;
 
         for entry in operation_log {
             for block in &entry.segment_info.blocks {

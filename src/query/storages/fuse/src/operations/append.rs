@@ -78,7 +78,7 @@ impl FuseTable {
             })?;
         }
 
-        let da = ctx.get_storage_operator()?;
+        let da = ctx.get_storage_operator(self.storage_params.clone())?;
         if need_output {
             pipeline.add_transform(|transform_input_port, transform_output_port| {
                 FuseTableSink::try_create(

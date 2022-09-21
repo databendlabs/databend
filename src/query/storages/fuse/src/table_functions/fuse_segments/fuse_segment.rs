@@ -49,7 +49,10 @@ impl<'a> FuseSegment<'a> {
             let snapshot_location = tbl
                 .meta_location_generator
                 .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot_version)?;
-            let reader = MetaReaders::table_snapshot_reader(self.ctx.clone());
+            let reader = MetaReaders::table_snapshot_reader(
+                self.ctx.clone(),
+                self.table.storage_params.clone(),
+            );
             let mut snapshot_stream = reader.snapshot_history(
                 snapshot_location,
                 snapshot_version,
@@ -78,7 +81,10 @@ impl<'a> FuseSegment<'a> {
 
         for segment_location in segments {
             let (location, version) = (segment_location.0.clone(), segment_location.1);
-            let reader = MetaReaders::segment_info_reader(self.ctx.as_ref());
+            let reader = MetaReaders::segment_info_reader(
+                self.ctx.as_ref(),
+                self.table.storage_params.clone(),
+            );
             let segment_info = reader.read(&location, None, version).await?;
 
             format_versions.push(version);

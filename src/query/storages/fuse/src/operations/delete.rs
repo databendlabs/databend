@@ -72,11 +72,13 @@ impl FuseTable {
         plan: &DeletePlan,
     ) -> Result<()> {
         let cluster_stats_gen = self.cluster_stats_gen(ctx.clone())?;
+
         let mut deletion_collector = DeletionMutator::try_create(
             ctx.clone(),
             self.meta_location_generator.clone(),
             snapshot.clone(),
             cluster_stats_gen,
+            self.storage_params.clone(),
         )?;
         let schema = self.table_info.schema();
         // TODO refine pruner
@@ -88,7 +90,7 @@ impl FuseTable {
             order_by: vec![],
         };
         let push_downs = Some(extras);
-        let block_metas = BlockPruner::new(snapshot.clone())
+        let block_metas = BlockPruner::new(snapshot.clone(), self.storage_params.clone())
             .prune(&ctx, schema, &push_downs)
             .await?;
 
@@ -132,6 +134,7 @@ impl FuseTable {
             self.get_table_info(),
             &self.meta_location_generator,
             new_snapshot,
+            self.storage_params.clone(),
         )
         .await?;
         // TODO check if error is recoverable, and try to resolve the conflict

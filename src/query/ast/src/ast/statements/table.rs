@@ -25,6 +25,7 @@ use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::ast::TableReference;
 use crate::ast::TypeName;
+use crate::ast::UriLocation;
 
 #[derive(Debug, Clone, PartialEq)] // Tables
 pub struct ShowTablesStmt<'a> {
@@ -424,7 +425,7 @@ impl Display for ExistsTableStmt<'_> {
 pub enum Engine {
     Null,
     Memory,
-    Fuse,
+    Fuse(Option<UriLocation>),
     View,
     Random,
 }
@@ -434,7 +435,8 @@ impl Display for Engine {
         match self {
             Engine::Null => write!(f, "NULL"),
             Engine::Memory => write!(f, "MEMORY"),
-            Engine::Fuse => write!(f, "FUSE"),
+            Engine::Fuse(None) => write!(f, "FUSE Internal"),
+            Engine::Fuse(Some(_)) => write!(f, "FUSE External"),
             Engine::View => write!(f, "VIEW"),
             Engine::Random => write!(f, "RANDOM"),
         }

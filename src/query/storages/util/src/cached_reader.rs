@@ -22,6 +22,7 @@ use common_fuse_meta::caches::CacheDeferMetrics;
 use common_fuse_meta::caches::CacheManager;
 use common_fuse_meta::caches::ItemCache;
 use common_fuse_meta::caches::TenantLabel;
+use common_storage::StorageParams;
 use tracing::warn;
 
 use crate::retry;
@@ -31,7 +32,13 @@ use crate::retry::Retryable;
 #[async_trait::async_trait]
 pub trait Loader<T> {
     /// Loads object of type T, located at `location`
-    async fn load(&self, location: &str, len_hint: Option<u64>, ver: u64) -> Result<T>;
+    async fn load(
+        &self,
+        location: &str,
+        len_hint: Option<u64>,
+        sp: Option<StorageParams>,
+        ver: u64,
+    ) -> Result<T>;
 }
 
 pub trait HasTenantLabel {
@@ -43,16 +50,23 @@ pub struct CachedReader<T, L> {
     cache: Option<ItemCache<T>>,
     loader: L,
     name: String,
+    storage_params: Option<StorageParams>,
 }
 
 impl<T, L> CachedReader<T, L>
 where L: Loader<T> + HasTenantLabel
 {
-    pub fn new(cache: Option<ItemCache<T>>, loader: L, name: impl Into<String>) -> Self {
+    pub fn new(
+        cache: Option<ItemCache<T>>,
+        loader: L,
+        name: impl Into<String>,
+        storage_params: Option<StorageParams>,
+    ) -> Self {
         Self {
             cache,
             loader,
             name: name.into(),
+            storage_params,
         }
     }
 
@@ -105,7 +119,7 @@ where L: Loader<T> + HasTenantLabel
             // to distinguish transient errors from permanent ones.
             let v = self
                 .loader
-                .load(loc, len_hint, version)
+                .load(loc, len_hint, self.storage_params.clone(), version)
                 .await
                 .map_err(retry::from_error_code)?;
             Ok(v)

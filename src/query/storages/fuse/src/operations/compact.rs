@@ -58,6 +58,7 @@ impl FuseTable {
         let mut mutator = CompactMutator::try_create(
             ctx.clone(),
             base_snapshot,
+            self.storage_params.clone(),
             block_compactor.clone(),
             self.meta_location_generator().clone(),
             block_per_seg,

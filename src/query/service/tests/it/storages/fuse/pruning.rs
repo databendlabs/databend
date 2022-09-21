@@ -27,6 +27,7 @@ use common_legacy_planners::sub;
 use common_legacy_planners::Expression;
 use common_legacy_planners::Extras;
 use common_meta_app::schema::TableMeta;
+use common_storage::StorageParams;
 use databend_query::interpreters::CreateTableInterpreterV2;
 use databend_query::interpreters::Interpreter;
 use databend_query::sessions::QueryContext;
@@ -46,9 +47,10 @@ async fn apply_block_pruning(
     schema: DataSchemaRef,
     push_down: &Option<Extras>,
     ctx: Arc<QueryContext>,
+    sp: Option<StorageParams>,
 ) -> Result<Vec<BlockMeta>> {
     let ctx: Arc<dyn TableContext> = ctx;
-    BlockPruner::new(table_snapshot)
+    BlockPruner::new(table_snapshot, sp)
         .prune(&ctx, schema, push_down)
         .await
         .map(|v| v.into_iter().map(|(_, v)| v).collect())
@@ -143,7 +145,7 @@ async fn test_block_pruner() -> Result<()> {
         .get(OPT_KEY_SNAPSHOT_LOCATION)
         .unwrap();
 
-    let reader = MetaReaders::table_snapshot_reader(ctx.clone());
+    let reader = MetaReaders::table_snapshot_reader(ctx.clone(), None);
     let snapshot = reader.read(snapshot_loc.as_str(), None, 1).await?;
 
     // nothing is pruned
@@ -190,6 +192,7 @@ async fn test_block_pruner() -> Result<()> {
             table.get_table_info().schema(),
             &extra,
             ctx.clone(),
+            None,
         )
         .await?;
 
@@ -285,7 +288,7 @@ async fn test_block_pruner_monotonic() -> Result<()> {
         .options()
         .get(OPT_KEY_SNAPSHOT_LOCATION)
         .unwrap();
-    let reader = MetaReaders::table_snapshot_reader(ctx.clone());
+    let reader = MetaReaders::table_snapshot_reader(ctx.clone(), None);
     let snapshot = reader.read(snapshot_loc.as_str(), None, 1).await?;
 
     // a + b > 20; some blocks pruned
@@ -298,6 +301,7 @@ async fn test_block_pruner_monotonic() -> Result<()> {
         table.get_table_info().schema(),
         &Some(extra),
         ctx.clone(),
+        None,
     )
     .await?;
 
@@ -313,6 +317,7 @@ async fn test_block_pruner_monotonic() -> Result<()> {
         table.get_table_info().schema(),
         &Some(extra),
         ctx.clone(),
+        None,
     )
     .await?;
 

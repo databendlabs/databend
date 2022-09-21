@@ -36,6 +36,8 @@ use common_exception::Result;
 use common_legacy_planners::OptimizeTableAction;
 use common_legacy_planners::*;
 use common_meta_app::schema::TableMeta;
+use common_storage::parse_uri_location;
+use common_storage::UriLocation;
 use tracing::debug;
 
 use crate::catalogs::DatabaseCatalog;
@@ -342,7 +344,7 @@ impl<'a> Binder {
         let table = normalize_identifier(table, &self.name_resolution_ctx).name;
 
         // Take FUSE engine AS default engine
-        let engine = engine.clone().unwrap_or(Engine::Fuse);
+        let engine = engine.clone().unwrap_or(Engine::Fuse(None));
         let mut options: BTreeMap<String, String> = BTreeMap::new();
         for table_option in table_options.iter() {
             self.insert_table_option_with_validation(
@@ -416,23 +418,41 @@ impl<'a> Binder {
             ..Default::default()
         };
 
-        if engine == Engine::Fuse {
-            // Currently, [Table] can not accesses its database id yet, thus
-            // here we keep the db id AS an entry of `table_meta.options`.
-            //
-            // To make the unit/stateless test cases (`show create ..`) easier,
-            // here we care about the FUSE engine only.
-            //
-            // Later, when database id is kept, let say in `TableInfo`, we can
-            // safely eliminate this "FUSE" constant and the table meta option entry.
-            let catalog = self.ctx.get_catalog(&catalog)?;
-            let db = catalog
-                .get_database(&self.ctx.get_tenant(), &database)
-                .await?;
-            let db_id = db.get_db_info().ident.db_id;
-            table_meta
-                .options
-                .insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
+        match engine {
+            Engine::Fuse(e) => {
+                // Currently, [Table] can not accesses its database id yet, thus
+                // here we keep the db id AS an entry of `table_meta.options`.
+                //
+                // To make the unit/stateless test cases (`show create ..`) easier,
+                // here we care about the FUSE engine only.
+                //
+                // Later, when database id is kept, let say in `TableInfo`, we can
+                // safely eliminate this "FUSE" constant and the table meta option entry.
+                let catalog = self.ctx.get_catalog(&catalog)?;
+                let db = catalog
+                    .get_database(&self.ctx.get_tenant(), &database)
+                    .await?;
+                let db_id = db.get_db_info().ident.db_id;
+                table_meta
+                    .options
+                    .insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
+
+                match e {
+                    Some(uri) => {
+                        let uri = UriLocation {
+                            protocol: uri.protocol.clone(),
+                            name: uri.name.clone(),
+                            path: uri.path.clone(),
+                            connection: uri.connection.clone(),
+                        };
+                        let (sp, path) = parse_uri_location(&uri)?;
+                        table_meta.storage_params = Some(serde_json::to_string(&sp)?);
+                        // todo(ariesdevil): add path to table_meta.
+                    }
+                    None => {}
+                }
+            }
+            _ => {}
         }
 
         let cluster_keys = self

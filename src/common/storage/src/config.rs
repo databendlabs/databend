@@ -32,6 +32,7 @@ pub struct StorageConfig {
 
 /// Storage params which contains the detailed storage info.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type")]
 pub enum StorageParams {
     Azblob(StorageAzblobConfig),
     Fs(StorageFsConfig),

@@ -35,6 +35,7 @@ use common_legacy_planners::ReadDataSourcePlan;
 use common_legacy_planners::Statistics;
 use common_legacy_planners::TruncateTablePlan;
 use common_meta_app::schema::TableInfo;
+use common_storage::StorageParams;
 use common_storages_util::storage_context::StorageContext;
 use common_storages_util::table_storage_prefix::table_storage_prefix;
 use uuid::Uuid;
@@ -58,6 +59,7 @@ use crate::OPT_KEY_SNAPSHOT_LOCATION;
 #[derive(Clone)]
 pub struct FuseTable {
     pub(crate) table_info: TableInfo,
+    pub(crate) storage_params: Option<StorageParams>,
     pub(crate) meta_location_generator: TableMetaLocationGenerator,
 
     pub(crate) cluster_keys: Vec<Expression>,
@@ -79,8 +81,18 @@ impl FuseTable {
             cluster_keys = ExpressionParser::parse_exprs(order)?;
         }
 
+        let sp = table_info.meta.storage_params.clone();
+        let storage_params = match sp {
+            Some(p) => {
+                let sp: StorageParams = serde_json::from_str(&p)?;
+                Some(sp)
+            }
+            None => None,
+        };
+
         Ok(Box::new(FuseTable {
             table_info,
+            storage_params,
             cluster_keys,
             cluster_key_meta,
             meta_location_generator: TableMetaLocationGenerator::with_prefix(storage_prefix),
@@ -120,7 +132,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
     ) -> Result<Option<Arc<TableSnapshot>>> {
         if let Some(loc) = self.snapshot_loc() {
-            let reader = MetaReaders::table_snapshot_reader(ctx);
+            let reader = MetaReaders::table_snapshot_reader(ctx, self.storage_params.clone());
             let ver = self.snapshot_format_version();
             Ok(Some(reader.read(loc.as_str(), None, ver).await?))
         } else {
@@ -254,6 +266,7 @@ impl Table for FuseTable {
             &table_info,
             &self.meta_location_generator,
             new_snapshot,
+            self.storage_params.clone(),
         )
         .await
     }
@@ -302,6 +315,7 @@ impl Table for FuseTable {
             &table_info,
             &self.meta_location_generator,
             new_snapshot,
+            self.storage_params.clone(),
         )
         .await
     }

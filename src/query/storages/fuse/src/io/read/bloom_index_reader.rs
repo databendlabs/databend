@@ -36,6 +36,7 @@ use common_exception::Result;
 use common_fuse_meta::meta::BlockBloomFilterIndex;
 use common_fuse_meta::meta::BlockBloomFilterIndexVersion;
 use common_fuse_meta::meta::Location;
+use common_storage::StorageParams;
 use futures_util::future::try_join_all;
 use opendal::Operator;
 use tracing::Instrument;
@@ -49,6 +50,7 @@ pub trait BlockBloomFilterIndexReader {
         dal: Operator,
         columns: &[String],
         index_length: u64,
+        storage_params: Option<StorageParams>,
     ) -> Result<BlockBloomFilterIndex>;
 }
 
@@ -60,12 +62,20 @@ impl BlockBloomFilterIndexReader for Location {
         dal: Operator,
         columns: &[String],
         index_length: u64,
+        storage_params: Option<StorageParams>,
     ) -> Result<BlockBloomFilterIndex> {
         let index_version = BlockBloomFilterIndexVersion::try_from(self.1)?;
         match index_version {
             BlockBloomFilterIndexVersion::V1(_) => {
-                let block =
-                    load_bloom_filter_by_columns(ctx, dal, columns, &self.0, index_length).await?;
+                let block = load_bloom_filter_by_columns(
+                    ctx,
+                    dal,
+                    columns,
+                    &self.0,
+                    index_length,
+                    storage_params,
+                )
+                .await?;
                 Ok(BlockBloomFilterIndex::new(block))
             }
         }
@@ -91,8 +101,9 @@ mod util_v1 {
         column_needed: &[String],
         path: &str,
         length: u64,
+        storage_params: Option<StorageParams>,
     ) -> Result<DataBlock> {
-        let file_meta = load_index_meta(&ctx, path, length).await?;
+        let file_meta = load_index_meta(&ctx, path, length, storage_params).await?;
         if file_meta.row_groups.len() != 1 {
             return Err(ErrorCode::StorageOther(format!(
                 "invalid v1 bloom index filter index, number of row group should be 1, but found {} row groups",
@@ -250,12 +261,13 @@ mod util_v1 {
         ctx: &Arc<dyn TableContext>,
         path: &str,
         length: u64,
+        storage_params: Option<StorageParams>,
     ) -> Result<Arc<FileMetaData>> {
         let storage_runtime = GlobalIORuntime::instance();
         let ctx_cloned = ctx.clone();
         let path_owned = path.to_owned();
         async move {
-            let reader = MetaReaders::file_meta_data_reader(ctx_cloned);
+            let reader = MetaReaders::file_meta_data_reader(ctx_cloned, storage_params);
             // Format of FileMetaData is not versioned, version argument is ignored by the underlying reader,
             // so we just pass a zero to reader
             let version = 0;

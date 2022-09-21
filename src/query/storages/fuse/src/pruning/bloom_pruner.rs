@@ -22,6 +22,7 @@ use common_fuse_meta::meta::Location;
 use common_legacy_planners::Expression;
 use common_legacy_planners::ExpressionVisitor;
 use common_legacy_planners::Recursion;
+use common_storage::StorageParams;
 use common_storages_index::BloomFilterIndexer;
 use opendal::Operator;
 
@@ -53,6 +54,7 @@ struct BloomFilterIndexPruner {
     dal: Operator,
     // the schema of data being indexed
     data_schema: DataSchemaRef,
+    storage_params: Option<StorageParams>,
 }
 
 impl BloomFilterIndexPruner {
@@ -62,6 +64,7 @@ impl BloomFilterIndexPruner {
         filter_expression: Expression,
         dal: Operator,
         data_schema: DataSchemaRef,
+        storage_params: Option<StorageParams>,
     ) -> Self {
         Self {
             ctx,
@@ -69,6 +72,7 @@ impl BloomFilterIndexPruner {
             filter_expression,
             dal,
             data_schema,
+            storage_params,
         }
     }
 }
@@ -87,6 +91,7 @@ impl BloomFilterPruner for BloomFilterIndexPruner {
                 &self.index_columns,
                 loc,
                 index_length,
+                self.storage_params.clone(),
             )
             .await
             {
@@ -112,6 +117,7 @@ pub fn new_bloom_filter_pruner(
     filter_exprs: Option<&[Expression]>,
     schema: &DataSchemaRef,
     dal: Operator,
+    storage_params: Option<StorageParams>,
 ) -> Result<Arc<dyn BloomFilterPruner + Send + Sync>> {
     if let Some(exprs) = filter_exprs {
         if exprs.is_empty() {
@@ -139,6 +145,7 @@ pub fn new_bloom_filter_pruner(
                 expr,
                 dal,
                 schema.clone(),
+                storage_params,
             )));
         } else {
             tracing::debug!("no point filters found, using NonPruner");
@@ -158,10 +165,17 @@ mod util {
         bloom_index_col_names: &[String],
         index_location: &Location,
         index_length: u64,
+        storage_params: Option<StorageParams>,
     ) -> Result<bool> {
         // load the relevant index columns
         let bloom_filter_index = index_location
-            .read_bloom_filter_index(ctx.clone(), dal, bloom_index_col_names, index_length)
+            .read_bloom_filter_index(
+                ctx.clone(),
+                dal,
+                bloom_index_col_names,
+                index_length,
+                storage_params,
+            )
             .await?;
 
         // figure it out

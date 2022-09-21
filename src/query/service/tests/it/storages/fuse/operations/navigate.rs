@@ -80,7 +80,7 @@ async fn test_fuse_navigate() -> Result<()> {
     // 2. grab the history
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let reader = MetaReaders::table_snapshot_reader(ctx.clone());
+    let reader = MetaReaders::table_snapshot_reader(ctx.clone(), None);
     let loc = fuse_table.snapshot_loc().unwrap();
     assert_eq!(second_snapshot, loc);
     let version = TableMetaLocationGenerator::snapshot_version(loc.as_str());
@@ -141,7 +141,7 @@ async fn test_fuse_historical_table_is_read_only() -> Result<()> {
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let loc = fuse_table.snapshot_loc().unwrap();
-    let reader = MetaReaders::table_snapshot_reader(ctx.clone());
+    let reader = MetaReaders::table_snapshot_reader(ctx.clone(), None);
     let version = TableMetaLocationGenerator::snapshot_version(loc.as_str());
     let snapshots: Vec<_> = reader
         .snapshot_history(loc, version, fuse_table.meta_location_generator().clone())

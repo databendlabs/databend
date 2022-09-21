@@ -25,6 +25,7 @@ use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::TableSnapshot;
 use common_fuse_meta::meta::Versioned;
 use common_meta_app::schema::TableInfo;
+use common_storage::StorageParams;
 
 use crate::io::BlockCompactor;
 use crate::io::TableMetaLocationGenerator;
@@ -53,8 +54,9 @@ impl ReclusterMutator {
         threshold: f64,
         block_compactor: BlockCompactor,
         blocks_map: BTreeMap<i32, Vec<(usize, BlockMeta)>>,
+        sp: Option<StorageParams>,
     ) -> Result<Self> {
-        let base_mutator = BaseMutator::try_create(ctx, location_generator, base_snapshot)?;
+        let base_mutator = BaseMutator::try_create(ctx, location_generator, base_snapshot, sp)?;
         Ok(Self {
             base_mutator,
             blocks_map,
@@ -226,6 +228,7 @@ impl TableMutator for ReclusterMutator {
             table_info,
             &self.base_mutator.location_generator,
             new_snapshot,
+            self.base_mutator.storage_params.clone(),
         )
         .await?;
         Ok(())

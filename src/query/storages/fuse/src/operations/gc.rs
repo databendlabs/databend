@@ -55,7 +55,7 @@ impl FuseTable {
             return Ok(());
         };
 
-        let reader = MetaReaders::table_snapshot_reader(ctx.clone());
+        let reader = MetaReaders::table_snapshot_reader(ctx.clone(), self.storage_params.clone());
 
         let (prev_id, prev_ver) = if let Some((id, ver)) = last_snapshot.prev_snapshot_id {
             (id, ver)
@@ -144,7 +144,7 @@ impl FuseTable {
         segments: impl Iterator<Item = &Location>,
     ) -> Result<HashSet<String>> {
         let mut result = HashSet::new();
-        let reader = MetaReaders::segment_info_reader(ctx);
+        let reader = MetaReaders::segment_info_reader(ctx, self.storage_params.clone());
         for l in segments {
             let (segment_location, ver) = l;
             let r = reader.read(segment_location, None, *ver).await;
@@ -176,8 +176,9 @@ impl FuseTable {
         segments: impl Iterator<Item = &Location>,
         root: &HashSet<String>,
     ) -> Result<()> {
-        let reader = MetaReaders::segment_info_reader(ctx);
-        let accessor = ctx.get_storage_operator()?;
+        let reader = MetaReaders::segment_info_reader(ctx, self.storage_params.clone());
+
+        let accessor = ctx.get_storage_operator(self.storage_params.clone())?;
         for l in segments {
             let (x, ver) = l;
             let res = reader.read(x, None, *ver).await?;
@@ -236,7 +237,7 @@ impl FuseTable {
         segments_to_be_deleted: HashSet<Location>,
         snapshots_to_be_deleted: Vec<(SnapshotId, u64)>,
     ) -> Result<()> {
-        let accessor = ctx.get_storage_operator()?;
+        let accessor = ctx.get_storage_operator(self.storage_params.clone())?;
 
         // order matters, should always remove the blocks first, segment 2nd, snapshot last,
         // so that if something goes wrong, e.g. process crashed, gc task can be "picked up" and continued

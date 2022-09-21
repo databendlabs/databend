@@ -24,6 +24,7 @@ use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::TableSnapshot;
 use common_legacy_planners::Extras;
+use common_storage::StorageParams;
 use futures::future;
 use futures::StreamExt;
 use futures::TryStreamExt;
@@ -37,13 +38,17 @@ use crate::pruning::topn_pruner;
 
 pub struct BlockPruner {
     table_snapshot: Arc<TableSnapshot>,
+    storage_params: Option<StorageParams>,
 }
 
 const FUTURE_BUFFER_SIZE: usize = 10;
 
 impl BlockPruner {
-    pub fn new(table_snapshot: Arc<TableSnapshot>) -> Self {
-        Self { table_snapshot }
+    pub fn new(table_snapshot: Arc<TableSnapshot>, storage_params: Option<StorageParams>) -> Self {
+        Self {
+            table_snapshot,
+            storage_params,
+        }
     }
 
     // prune blocks by utilizing min_max index and bloom filter, according to the pushdowns
@@ -70,7 +75,8 @@ impl BlockPruner {
 
         // shortcut, just returns all the blocks
         if limit.is_none() && filter_expressions.is_none() {
-            return Self::all_the_blocks(segment_locs, ctx.as_ref()).await;
+            return Self::all_the_blocks(segment_locs, ctx.as_ref(), self.storage_params.clone())
+                .await;
         }
 
         // 1. prepare pruners
@@ -84,9 +90,14 @@ impl BlockPruner {
             range_pruner::new_range_filter_pruner(ctx, filter_expressions, &schema)?;
 
         // prepare the bloom filter, if filter_expression is none, an dummy pruner will be returned
-        let dal = ctx.get_storage_operator()?;
-        let bloom_filter_pruner =
-            bloom_pruner::new_bloom_filter_pruner(ctx, filter_expressions, &schema, dal)?;
+        let dal = ctx.get_storage_operator(self.storage_params.clone())?;
+        let bloom_filter_pruner = bloom_pruner::new_bloom_filter_pruner(
+            ctx,
+            filter_expressions,
+            &schema,
+            dal,
+            self.storage_params.clone(),
+        )?;
 
         // 2. kick off
         //
@@ -110,8 +121,9 @@ impl BlockPruner {
             let range_filter_pruner = range_filter_pruner.clone();
             let bloom_filter_pruner = bloom_filter_pruner.clone();
             let limiter = limiter.clone();
+            let sp = self.storage_params.clone();
             let segment_pruning_fut = async move {
-                let segment_reader = MetaReaders::segment_info_reader(ctx.as_ref());
+                let segment_reader = MetaReaders::segment_info_reader(ctx.as_ref(), sp);
                 if limiter.exceeded() {
                     // before read segment info, check if limit already exceeded
                     return Ok(vec![]);
@@ -186,11 +198,12 @@ impl BlockPruner {
     async fn all_the_blocks(
         segment_locs: Vec<Location>,
         ctx: &dyn TableContext,
+        sp: Option<StorageParams>,
     ) -> Result<Vec<(usize, BlockMeta)>> {
         let segment_num = segment_locs.len();
+        let segment_reader = &MetaReaders::segment_info_reader(ctx, sp);
         let block_metas = futures::stream::iter(segment_locs.into_iter().enumerate())
             .map(|(idx, (seg_loc, ver))| async move {
-                let segment_reader = MetaReaders::segment_info_reader(ctx);
                 let segment_info = segment_reader.read(seg_loc, None, ver).await?;
                 Ok::<_, ErrorCode>(
                     segment_info

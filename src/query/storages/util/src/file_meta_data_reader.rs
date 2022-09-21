@@ -20,6 +20,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::caches::CacheManager;
+use common_storage::StorageParams;
 use futures_util::io::BufReader;
 
 use super::cached_reader::CachedReader;
@@ -28,11 +29,12 @@ use super::cached_reader::Loader;
 pub type FileMetaDataReader = CachedReader<FileMetaData, Arc<dyn TableContext>>;
 
 impl FileMetaDataReader {
-    pub fn new_reader(ctx: Arc<dyn TableContext>) -> FileMetaDataReader {
+    pub fn new_reader(ctx: Arc<dyn TableContext>, sp: Option<StorageParams>) -> FileMetaDataReader {
         FileMetaDataReader::new(
             CacheManager::instance().get_file_meta_data_cache(),
             ctx,
             "FILE_META_DATA_CACHE".to_owned(),
+            sp,
         )
     }
 }
@@ -43,9 +45,10 @@ impl Loader<FileMetaData> for Arc<dyn TableContext> {
         &self,
         key: &str,
         length_hint: Option<u64>,
+        sp: Option<StorageParams>,
         _version: u64,
     ) -> Result<FileMetaData> {
-        let dal = self.get_storage_operator()?;
+        let dal = self.get_storage_operator(sp)?;
         let object = dal.object(key);
         let reader = if let Some(len) = length_hint {
             object.seekable_reader(..len)
