@@ -24,7 +24,7 @@ use crate::sql::plans::Plan;
 
 #[async_trait::async_trait]
 pub trait AccessChecker: Sync + Send {
-    // Check the access permission for the old plan.
+    // Check the access permission for the plan.
     async fn check(&self, _plan: &Plan) -> Result<()>;
 }
 
