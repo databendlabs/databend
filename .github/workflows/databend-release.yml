@@ -286,6 +286,7 @@ jobs:
           ecr_role_arn: ${{ secrets.ECR_ROLE_ARN }}
           dockerhub_user: ${{ secrets.DOCKERHUB_USERNAME }}
           dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
+          acr_password: ${{ secrets.ACR_PASSWORD }}
 
       - name: Download binaries for usage
         id: download_binaries
@@ -308,11 +309,14 @@ jobs:
         run: |
           _tags="${{ steps.login.outputs.dockerhub_repo }}:${{ needs.create_release.outputs.version }}-${{ matrix.distro }}"
           _tags="${_tags},${{ steps.login.outputs.ecr_repo }}:${{ needs.create_release.outputs.version }}-${{ matrix.distro }}"
+          _tags="${_tags},${{ steps.login.outputs.acr_repo }}:${{ needs.create_release.outputs.version }}-${{ matrix.distro }}"
           if [[ "${{ matrix.distro }}" == "debian" ]]; then
             _tags="${_tags},${{ steps.login.outputs.dockerhub_repo }}:${{ needs.create_release.outputs.version }}"
             _tags="${_tags},${{ steps.login.outputs.ecr_repo }}:${{ needs.create_release.outputs.version }}"
+            _tags="${_tags},${{ steps.login.outputs.acr_repo }}:${{ needs.create_release.outputs.version }}"
             _tags="${_tags},${{ steps.login.outputs.dockerhub_repo }}:latest"
             _tags="${_tags},${{ steps.login.outputs.ecr_repo }}:latest"
+            _tags="${_tags},${{ steps.login.outputs.acr_repo }}:latest"
           fi
           echo ::set-output name=IMAGE_TAGS::${_tags}
 
