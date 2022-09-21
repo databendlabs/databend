@@ -27,7 +27,6 @@ use common_base::base::TrySpawn;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::PlanNode;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
@@ -39,7 +38,6 @@ use ExecuteState::*;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
-use crate::interpreters::InterpreterFactoryV2;
 use crate::interpreters::InterpreterQueryLog;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
@@ -51,7 +49,6 @@ use crate::sessions::QueryContext;
 use crate::sessions::Session;
 use crate::sessions::TableContext;
 use crate::sql::plans::Plan;
-use crate::sql::PlanParser;
 use crate::sql::Planner;
 use crate::storages::result::block_buffer::BlockBuffer;
 use crate::storages::result::block_buffer::BlockBufferWriterMemOnly;
@@ -235,29 +232,12 @@ impl ExecuteState {
     ) -> Result<ExecuteRunning> {
         ctx.attach_query_str(sql);
 
-        let settings = ctx.get_settings();
-        let is_v2 = settings.get_enable_planner_v2()? != 0;
-        let is_select;
+        let mut planner = Planner::new(ctx.clone());
+        let (plan, _, _) = planner.plan_sql(sql).await?;
+        let is_select = matches!(&plan, Plan::Query { .. });
+        let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
 
-        let interpreter = if is_v2 {
-            let mut planner = Planner::new(ctx.clone());
-            let (plan, _, _) = planner.plan_sql(sql).await?;
-            is_select = matches!(&plan, Plan::Query { .. });
-            InterpreterFactoryV2::get(ctx.clone(), &plan).await
-        } else {
-            let plan = match PlanParser::parse(ctx.clone(), sql).await {
-                Ok(p) => p,
-                Err(e) => {
-                    InterpreterQueryLog::fail_to_start(ctx, e.clone()).await;
-                    return Err(e);
-                }
-            };
-
-            is_select = matches!(&plan, PlanNode::Select(_));
-            InterpreterFactory::get(ctx.clone(), plan).await
-        }?;
-
-        if is_v2 && is_select {
+        if is_select {
             let _ = interpreter
                 .start()
                 .await

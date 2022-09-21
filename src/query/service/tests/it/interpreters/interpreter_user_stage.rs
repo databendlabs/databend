@@ -16,7 +16,7 @@ use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_types::TenantQuota;
 use common_users::UserApiProvider;
-use databend_query::interpreters::InterpreterFactoryV2;
+use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::TableContext;
 use databend_query::sql::*;
 use futures::StreamExt;
@@ -31,7 +31,7 @@ async fn test_user_stage_interpreter() -> Result<()> {
     {
         let query = "CREATE STAGE test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z')";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
         assert_eq!(executor.name(), "CreateUserStageInterpreter");
         let mut stream = executor.execute(ctx.clone()).await?;
         while let Some(_block) = stream.next().await {}
@@ -41,7 +41,7 @@ async fn test_user_stage_interpreter() -> Result<()> {
     {
         let query = "DESC STAGE test_stage";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
         let mut stream = executor.execute(ctx.clone()).await?;
         let mut blocks = vec![];
 
@@ -76,7 +76,7 @@ async fn test_user_stage_interpreter() -> Result<()> {
         quota_api.set_quota(&quota, None).await?;
         let query = "CREATE STAGE test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z')";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
         assert_eq!(executor.name(), "CreateUserStageInterpreter");
         let res = executor.execute(ctx.clone()).await;
         assert!(res.is_err());
@@ -90,7 +90,7 @@ async fn test_user_stage_interpreter() -> Result<()> {
     {
         let query = "DROP STAGE if exists test_stage";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
         assert_eq!(executor.name(), "DropUserStageInterpreter");
 
         let mut stream = executor.execute(ctx.clone()).await?;
