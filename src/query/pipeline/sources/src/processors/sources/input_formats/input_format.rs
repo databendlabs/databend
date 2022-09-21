@@ -18,7 +18,6 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_base::base::tokio::sync::mpsc::Receiver;
 use common_exception::Result;
 use common_pipeline_core::Pipeline;
 use opendal::io_util::CompressAlgorithm;
@@ -26,7 +25,6 @@ use opendal::Object;
 
 use crate::processors::sources::input_formats::delimiter::RecordDelimiter;
 use crate::processors::sources::input_formats::input_context::InputContext;
-use crate::processors::sources::input_formats::input_pipeline::StreamingReadBatch;
 
 pub trait InputData: Send + Sync + 'static {
     fn as_any(&self) -> &dyn Any;
@@ -55,12 +53,7 @@ pub trait InputFormat: Send + Sync {
 
     fn exec_copy(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()>;
 
-    fn exec_stream(
-        &self,
-        ctx: Arc<InputContext>,
-        pipeline: &mut Pipeline,
-        input: Receiver<StreamingReadBatch>,
-    ) -> Result<()>;
+    fn exec_stream(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()>;
 }
 
 #[derive(Clone)]

@@ -16,7 +16,6 @@ use std::marker::PhantomData;
 use std::mem;
 use std::sync::Arc;
 
-use common_base::base::tokio::sync::mpsc::Receiver;
 use common_datablocks::DataBlock;
 use common_datavalues::TypeDeserializer;
 use common_datavalues::TypeDeserializerImpl;
@@ -38,7 +37,6 @@ use crate::processors::sources::input_formats::input_format::SplitInfo;
 use crate::processors::sources::input_formats::input_pipeline::AligningStateTrait;
 use crate::processors::sources::input_formats::input_pipeline::BlockBuilderTrait;
 use crate::processors::sources::input_formats::input_pipeline::InputFormatPipe;
-use crate::processors::sources::input_formats::input_pipeline::StreamingReadBatch;
 
 pub trait InputFormatTextBase: Sized + Send + Sync + 'static {
     fn format_type() -> StageFileFormatType;
@@ -125,13 +123,8 @@ impl<T: InputFormatTextBase> InputFormat for InputFormatText<T> {
         InputFormatTextPipe::<T>::execute_copy_with_aligner(ctx, pipeline)
     }
 
-    fn exec_stream(
-        &self,
-        ctx: Arc<InputContext>,
-        pipeline: &mut Pipeline,
-        input: Receiver<StreamingReadBatch>,
-    ) -> Result<()> {
-        InputFormatTextPipe::<T>::execute_stream(ctx, pipeline, input)
+    fn exec_stream(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {
+        InputFormatTextPipe::<T>::execute_stream(ctx, pipeline)
     }
 }
 
