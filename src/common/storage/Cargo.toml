@@ -22,6 +22,7 @@ opendal = { version = "0.17.1", features = [
     "layers-retry",
     "layers-tracing",
     "layers-metrics",
+    "services-ipfs",
     "compress",
 ] }
 percent-encoding = "2.2.0"
