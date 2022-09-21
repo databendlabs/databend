@@ -31,23 +31,28 @@ async fn test_explain_interpreter() -> Result<()> {
 
     let (plan, _, _) = planner.plan_sql(query).await?;
     let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
-    assert_eq!(executor.name(), "ExplainInterpreter");
+    assert_eq!(executor.name(), "ExplainInterpreterV2");
 
     let stream = executor.execute(ctx).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 1);
-    assert_eq!(block.column(0).len(), 4);
+    assert_eq!(block.column(0).len(), 9);
 
     let expected = vec![
-        "+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+",
-        "| explain                                                                                                                                                                                                    |",
-        "+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+",
-        "| Projection: number:UInt64                                                                                                                                                                                  |",
-        "|   Having: ((number + 1) = 4)                                                                                                                                                                               |",
-        "|     Filter: ((number + 1) = 4)                                                                                                                                                                             |",
-        "|       ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [((number + 1) = 4)]] |",
-        "+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+",
+        "+---------------------------------------------------------------------------------------+",
+        "| explain                                                                               |",
+        "+---------------------------------------------------------------------------------------+",
+        "| Filter                                                                                |",
+        "| ├── filters: [=(+(numbers_mt.number (#0), 1), 4), =(+(numbers_mt.number (#0), 1), 4)] |",
+        "| └── TableScan                                                                         |",
+        "|     ├── table: default.system.numbers_mt                                              |",
+        "|     ├── read rows: 10                                                                 |",
+        "|     ├── read bytes: 80                                                                |",
+        "|     ├── partitions total: 1                                                           |",
+        "|     ├── partitions scanned: 1                                                         |",
+        "|     └── push downs: [filters: [(+(number, 1) = 4)], limit: NONE]                      |",
+        "+---------------------------------------------------------------------------------------+",
     ];
     common_datablocks::assert_blocks_eq(expected, result.as_slice());
 
