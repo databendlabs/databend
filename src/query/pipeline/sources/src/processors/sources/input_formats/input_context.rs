@@ -174,7 +174,6 @@ impl InputContext {
         })
     }
 
-    #[allow(unused)]
     pub async fn try_create_from_insert(
         format_name: &str,
         stream_receiver: Receiver<Result<StreamingReadBatch>>,
