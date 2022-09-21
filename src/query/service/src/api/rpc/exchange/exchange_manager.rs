@@ -52,7 +52,6 @@ use crate::interpreters::QueryFragmentsActions;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
-use crate::pipelines::QueryPipelineBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::executor::PipelineBuilder as PipelineBuilderV2;
@@ -668,10 +667,6 @@ impl FragmentCoordinator {
             self.initialized = true;
 
             match &self.payload {
-                FragmentPayload::PlanV1(node) => {
-                    let pipeline_builder = QueryPipelineBuilder::create(ctx);
-                    self.pipeline_build_res = Some(pipeline_builder.finalize(node)?);
-                }
                 FragmentPayload::PlanV2(plan) => {
                     let pipeline_builder = PipelineBuilderV2::create(ctx);
                     self.pipeline_build_res = Some(pipeline_builder.finalize(plan)?);

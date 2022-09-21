@@ -369,11 +369,9 @@ where F: Fn(&Expression) -> Result<Option<Expression>> {
                     .map(|e| clone_with_replacement(e, replacement_fn))
                     .collect::<Result<Vec<Expression>>>()?,
             }),
-            Expression::Column(_)
-            | Expression::QualifiedColumn(_)
-            | Expression::Literal { .. }
-            | Expression::Subquery { .. }
-            | Expression::ScalarSubquery { .. } => Ok(expr.clone()),
+            Expression::Column(_) | Expression::QualifiedColumn(_) | Expression::Literal { .. } => {
+                Ok(expr.clone())
+            }
         },
     }
 }
@@ -490,16 +488,6 @@ impl ExpressionVisitor for ExpressionDataTypeVisitor {
             )),
             Expression::Literal { data_type, .. } => {
                 self.stack.push(data_type.clone());
-                Ok(self)
-            }
-            Expression::Subquery { query_plan, .. } => {
-                let data_type = Expression::to_subquery_type(query_plan);
-                self.stack.push(data_type);
-                Ok(self)
-            }
-            Expression::ScalarSubquery { query_plan, .. } => {
-                let data_type = Expression::to_subquery_type(query_plan);
-                self.stack.push(data_type);
                 Ok(self)
             }
             Expression::BinaryExpression { op, .. } => self.visit_function(op, 2),

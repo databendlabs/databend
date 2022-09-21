@@ -14,7 +14,6 @@
 
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use std::sync::Weak;
 
@@ -67,7 +66,6 @@ pub struct QueryContextShared {
     pub(in crate::sessions) runtime: Arc<RwLock<Option<Arc<Runtime>>>>,
     pub(in crate::sessions) init_query_id: Arc<RwLock<String>>,
     pub(in crate::sessions) cluster_cache: Arc<Cluster>,
-    pub(in crate::sessions) subquery_index: Arc<AtomicUsize>,
     pub(in crate::sessions) running_query: Arc<RwLock<Option<String>>>,
     pub(in crate::sessions) http_query: Arc<RwLock<Option<HttpQueryHandle>>>,
     pub(in crate::sessions) tables_refs: Arc<Mutex<HashMap<DatabaseAndTable, Arc<dyn Table>>>>,
@@ -97,7 +95,6 @@ impl QueryContextShared {
             write_progress: Arc::new(Progress::create()),
             error: Arc::new(Mutex::new(None)),
             runtime: Arc::new(RwLock::new(None)),
-            subquery_index: Arc::new(AtomicUsize::new(1)),
             running_query: Arc::new(RwLock::new(None)),
             http_query: Arc::new(RwLock::new(None)),
             tables_refs: Arc::new(Mutex::new(HashMap::new())),
