@@ -35,7 +35,7 @@ use crate::statistics::merge_statistics;
 use crate::FuseTable;
 use crate::TableMutator;
 
-static MAX_BLOCK_COUNT: usize = 100;
+static MAX_BLOCK_COUNT: usize = 50;
 
 #[derive(Clone)]
 pub struct ReclusterMutator {

@@ -50,11 +50,12 @@ impl BlockCompactor {
         false
     }
 
-    pub fn to_compactor(&self) -> Compactor {
+    pub fn to_compactor(&self, is_recluster: bool) -> Compactor {
         Compactor::new(
             self.max_rows_per_block,
             self.min_rows_per_block,
             self.max_bytes_per_block,
+            is_recluster,
         )
     }
 }

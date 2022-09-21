@@ -22,6 +22,9 @@ pub struct BlockCompactor {
     max_rows_per_block: usize,
     min_rows_per_block: usize,
     max_bytes_per_block: usize,
+    // A flag denoting whether it is a recluster operation.
+    // Will be removed later.
+    is_recluster: bool,
 }
 
 impl BlockCompactor {
@@ -29,11 +32,13 @@ impl BlockCompactor {
         max_rows_per_block: usize,
         min_rows_per_block: usize,
         max_bytes_per_block: usize,
+        is_recluster: bool,
     ) -> Self {
         BlockCompactor {
             max_rows_per_block,
             min_rows_per_block,
             max_bytes_per_block,
+            is_recluster,
         }
     }
 }
@@ -70,12 +75,30 @@ impl Compactor for BlockCompactor {
             let merged = DataBlock::concat_blocks(blocks)?;
             blocks.clear();
 
-            // we can't use slice here, it did not deallocate memory
-            if accumulated_rows >= self.max_rows_per_block
-                || accumulated_bytes >= self.max_bytes_per_block
-            {
+            if accumulated_rows >= self.max_rows_per_block {
+                // Used for recluster opreation, will be removed later.
+                if self.is_recluster {
+                    let mut offset = 0;
+                    let mut remain_rows = accumulated_rows;
+                    while remain_rows >= self.max_rows_per_block {
+                        let cut = merged.slice(offset, self.max_rows_per_block);
+                        res.push(cut);
+                        offset += self.max_rows_per_block;
+                        remain_rows -= self.max_rows_per_block;
+                    }
+
+                    if remain_rows > 0 {
+                        blocks.push(merged.slice(offset, remain_rows));
+                    }
+                } else {
+                    // we can't use slice here, it did not deallocate memory
+                    res.push(merged);
+                }
+            } else if accumulated_bytes >= self.max_bytes_per_block {
+                // too large for merged block, flush to results
                 res.push(merged);
             } else {
+                // keep the merged block into blocks for future merge
                 blocks.push(merged);
             }
         }
