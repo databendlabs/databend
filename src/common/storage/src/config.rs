@@ -205,6 +205,13 @@ pub struct StorageS3Config {
     pub bucket: String,
     pub access_key_id: String,
     pub secret_access_key: String,
+    /// Temporary security token used for authentications
+    ///
+    /// This recommended to use since users don't need to store their permanent credentials in their
+    /// scripts or worksheets.
+    ///
+    /// refer to [documentations](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp.html) for details.
+    pub security_token: String,
     pub master_key: String,
     pub root: String,
     /// This flag is used internally to control whether databend load
@@ -225,6 +232,7 @@ impl Default for StorageS3Config {
             bucket: "".to_string(),
             access_key_id: "".to_string(),
             secret_access_key: "".to_string(),
+            security_token: "".to_string(),
             master_key: "".to_string(),
             root: "".to_string(),
             disable_credential_loader: false,
@@ -247,6 +255,7 @@ impl Debug for StorageS3Config {
                 "secret_access_key",
                 &mask_string(&self.secret_access_key, 3),
             )
+            .field("security_token", &mask_string(&self.security_token, 3))
             .field("master_key", &mask_string(&self.master_key, 3))
             .finish()
     }

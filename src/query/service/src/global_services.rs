@@ -31,7 +31,6 @@ use opendal::Operator;
 use crate::api::DataExchangeManager;
 use crate::catalogs::CatalogManagerHelper;
 use crate::clusters::ClusterDiscovery;
-use crate::interpreters::AsyncInsertManager;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::SessionManager;
 
@@ -40,7 +39,6 @@ pub struct GlobalServices {
     query_logger: UnsafeCell<Option<Arc<QueryLogger>>>,
     cluster_discovery: UnsafeCell<Option<Arc<ClusterDiscovery>>>,
     storage_operator: UnsafeCell<Option<Operator>>,
-    async_insert_manager: UnsafeCell<Option<Arc<AsyncInsertManager>>>,
     cache_manager: UnsafeCell<Option<Arc<CacheManager>>>,
     catalog_manager: UnsafeCell<Option<Arc<CatalogManager>>>,
     http_query_manager: UnsafeCell<Option<Arc<HttpQueryManager>>>,
@@ -60,7 +58,6 @@ impl GlobalServices {
             query_logger: UnsafeCell::new(None),
             cluster_discovery: UnsafeCell::new(None),
             storage_operator: UnsafeCell::new(None),
-            async_insert_manager: UnsafeCell::new(None),
             cache_manager: UnsafeCell::new(None),
             catalog_manager: UnsafeCell::new(None),
             http_query_manager: UnsafeCell::new(None),
@@ -81,7 +78,6 @@ impl GlobalServices {
         ClusterDiscovery::init(config.clone(), global_services.clone()).await?;
 
         StorageOperator::init(&config.storage, global_services.clone()).await?;
-        AsyncInsertManager::init(&config, global_services.clone())?;
         CacheManager::init(&config.query, global_services.clone())?;
         CatalogManager::init(&config, global_services.clone()).await?;
         HttpQueryManager::init(&config, global_services.clone()).await?;
@@ -164,25 +160,6 @@ impl SingletonImpl<Operator> for GlobalServices {
     fn init(&self, value: Operator) -> Result<()> {
         unsafe {
             *(self.storage_operator.get() as *mut Option<Operator>) = Some(value);
-            Ok(())
-        }
-    }
-}
-
-impl SingletonImpl<Arc<AsyncInsertManager>> for GlobalServices {
-    fn get(&self) -> Arc<AsyncInsertManager> {
-        unsafe {
-            match &*self.async_insert_manager.get() {
-                None => panic!("AsyncInsertManager is not init"),
-                Some(async_insert_manager) => async_insert_manager.clone(),
-            }
-        }
-    }
-
-    fn init(&self, value: Arc<AsyncInsertManager>) -> Result<()> {
-        unsafe {
-            *(self.async_insert_manager.get() as *mut Option<Arc<AsyncInsertManager>>) =
-                Some(value);
             Ok(())
         }
     }

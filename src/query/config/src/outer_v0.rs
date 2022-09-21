@@ -402,6 +402,12 @@ pub struct S3StorageConfig {
     #[clap(long = "storage-s3-secret-access-key", default_value_t)]
     pub secret_access_key: String,
 
+    /// Security token for S3 storage
+    ///
+    /// Check out [documents](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp.html) for details
+    #[clap(long = "storage-s3-security-token", default_value_t)]
+    pub security_token: String,
+
     /// S3 Bucket to use for storage
     #[clap(long = "storage-s3-bucket", default_value_t)]
     pub bucket: String,
@@ -449,6 +455,7 @@ impl From<InnerStorageS3Config> for S3StorageConfig {
             endpoint_url: inner.endpoint_url,
             access_key_id: inner.access_key_id,
             secret_access_key: inner.secret_access_key,
+            security_token: inner.security_token,
             bucket: inner.bucket,
             root: inner.root,
             master_key: inner.master_key,
@@ -467,6 +474,7 @@ impl TryInto<InnerStorageS3Config> for S3StorageConfig {
             bucket: self.bucket,
             access_key_id: self.access_key_id,
             secret_access_key: self.secret_access_key,
+            security_token: self.security_token,
             master_key: self.master_key,
             root: self.root,
             disable_credential_loader: false,

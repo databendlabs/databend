@@ -23,5 +23,5 @@ common-meta-embedded = { path = "../embedded" }
 common-meta-types = { path = "../types" }
 
 # Crates.io dependencies
-async-trait = "0.1.56"
-tracing = "0.1.35"
+async-trait = "0.1.57"
+tracing = "0.1.36"

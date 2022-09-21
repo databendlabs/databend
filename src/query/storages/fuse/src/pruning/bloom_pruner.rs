@@ -113,6 +113,14 @@ pub fn new_bloom_filter_pruner(
     schema: &DataSchemaRef,
     dal: Operator,
 ) -> Result<Arc<dyn BloomFilterPruner + Send + Sync>> {
+    // due to issue
+    // https://github.com/datafuselabs/databend/issues/7780
+    // bloom filter is disabled, just return a NonPruner unconditionally
+    if true {
+        return Ok(Arc::new(NonPruner));
+    }
+
+    // the following codes is unreachable, but kept to help diagnostic performance issues
     if let Some(exprs) = filter_exprs {
         if exprs.is_empty() {
             return Ok(Arc::new(NonPruner));

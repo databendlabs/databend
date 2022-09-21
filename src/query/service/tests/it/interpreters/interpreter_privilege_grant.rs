@@ -79,7 +79,7 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
 
     for tt in tests {
         let (plan, _, _) = planner.plan_sql(&tt.query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
         assert_eq!(executor.name(), "GrantPrivilegeInterpreter");
         let r = match executor.execute(ctx.clone()).await {
             Err(err) => Err(err),

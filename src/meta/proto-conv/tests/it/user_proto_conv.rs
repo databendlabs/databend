@@ -102,6 +102,7 @@ pub(crate) fn test_s3_stage_info() -> mt::UserStageInfo {
                 root: "/data/files".to_string(),
                 access_key_id: "my_key_id".to_string(),
                 secret_access_key: "my_secret_key".to_string(),
+                security_token: "my_security_token".to_string(),
                 master_key: "my_master_key".to_string(),
                 ..Default::default()
             }),

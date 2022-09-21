@@ -18,17 +18,16 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::PlanNode;
 use futures::TryStreamExt;
 
 use crate::interpreters::Interpreter;
-use crate::interpreters::SelectInterpreter;
-use crate::optimizers::Optimizers;
+use crate::interpreters::SelectInterpreterV2;
 use crate::procedures::OneBlockProcedure;
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
-use crate::sql::PlanParser;
+use crate::sql::plans::Plan;
+use crate::sql::Planner;
 use crate::storages::system::TablesTableWithoutHistory;
 
 pub struct SearchTablesProcedure {}
@@ -56,11 +55,18 @@ impl OneBlockProcedure for SearchTablesProcedure {
             "SELECT * FROM system.tables WHERE name like '%{}%' ORDER BY database, name",
             args[0]
         );
-        let plan = PlanParser::parse(ctx.clone(), &query).await?;
-        let optimized = Optimizers::create(ctx.clone()).optimize(&plan)?;
+        let mut planner = Planner::new(ctx.clone());
+        let (plan, _, _) = planner.plan_sql(&query).await?;
 
-        let stream = if let PlanNode::Select(plan) = optimized {
-            let interpreter = SelectInterpreter::try_create(ctx.clone(), plan)?;
+        let stream = if let Plan::Query {
+            s_expr,
+            metadata,
+            bind_context,
+            ..
+        } = plan
+        {
+            let interpreter =
+                SelectInterpreterV2::try_create(ctx.clone(), *bind_context, *s_expr, metadata)?;
             interpreter.execute(ctx.clone()).await
         } else {
             return Err(ErrorCode::LogicalError("search tables build query error"));

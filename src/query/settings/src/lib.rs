@@ -152,6 +152,16 @@ impl Settings {
                 desc: "The size of buffer in bytes for buffered reader of dal. By default, it is 1MB.",
                 possible_values: None,
             },
+            SettingValue {
+                default_value: UserSettingValue::UInt64(1024 * 1024),
+                user_setting: UserSetting::create(
+                    "input_read_buffer_size",
+                    UserSettingValue::UInt64(1024 * 1024),
+                ),
+                level: ScopeLevel::Session,
+                desc: "The size of buffer in bytes for input with format. By default, it is 1MB.",
+                possible_values: None,
+            },
             // enable_new_processor_framework
             SettingValue {
                 default_value: UserSettingValue::UInt64(1),
@@ -367,6 +377,11 @@ impl Settings {
     // Get storage read buffer size.
     pub fn get_storage_read_buffer_size(&self) -> Result<u64> {
         let key = "storage_read_buffer_size";
+        self.try_get_u64(key)
+    }
+
+    pub fn get_input_read_buffer_size(&self) -> Result<u64> {
+        let key = "input_read_buffer_size";
         self.try_get_u64(key)
     }
 

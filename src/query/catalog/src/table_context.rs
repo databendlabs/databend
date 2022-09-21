@@ -26,7 +26,6 @@ use common_exception::Result;
 use common_functions::scalars::FunctionContext;
 use common_io::prelude::FormatSettings;
 use common_legacy_planners::Partitions;
-use common_legacy_planners::PlanNode;
 use common_legacy_planners::ReadDataSourcePlan;
 use common_meta_types::UserInfo;
 use common_settings::Settings;
@@ -87,7 +86,6 @@ pub trait TableContext: Send + Sync {
     fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()>;
     fn get_format_settings(&self) -> Result<FormatSettings>;
     fn get_tenant(&self) -> String;
-    fn get_subquery_name(&self, _query: &PlanNode) -> String;
     /// Get the data accessor metrics.
     fn get_dal_metrics(&self) -> DalMetrics;
     /// Get the session running query.

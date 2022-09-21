@@ -20,11 +20,12 @@ use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
 use databend_query::sessions::TableContext;
-use databend_query::sql::PlanParser;
+use databend_query::sql::Planner;
 use databend_query::storages::TableStreamReadWrap;
 use databend_query::storages::ToReadDataSourcePlan;
 use databend_query::table_functions::NumbersTable;
 use futures::TryStreamExt;
+use pretty_assertions::assert_eq;
 
 use crate::tests::ConfigBuilder;
 use crate::tests::TestGlobalServices;
@@ -71,7 +72,6 @@ async fn test_limit_push_down() -> Result<()> {
     struct Test {
         name: &'static str,
         query: &'static str,
-        expect: &'static str,
         result: Vec<&'static str>,
     }
 
@@ -79,10 +79,6 @@ async fn test_limit_push_down() -> Result<()> {
         Test {
             name: "only-limit",
             query: "select * from numbers_mt(10) limit 2",
-            expect: "\
-            Limit: 2\
-            \n  Projection: number:UInt64\
-            \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 2, read_bytes: 16, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], limit: 2]",
             result: vec![
                 "+--------+",
                 "| number |",
@@ -95,11 +91,6 @@ async fn test_limit_push_down() -> Result<()> {
         Test {
             name: "limit-with-filter",
             query: "select * from numbers_mt(10) where number > 8 limit 2",
-            expect: "\
-            Limit: 2\
-            \n  Projection: number:UInt64\
-            \n    Filter: (number > 8)\
-            \n      ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [(number > 8)], limit: 2]",
             result: vec![
                 "+--------+",
                 "| number |",
@@ -116,11 +107,10 @@ async fn test_limit_push_down() -> Result<()> {
             .create_session(SessionType::Dummy)
             .await?;
         let ctx = session.create_query_context().await?;
-        let plan = PlanParser::parse(ctx.clone(), test.query).await?;
-        let actual = format!("{:?}", plan);
-        assert_eq!(test.expect, actual, "{:#?}", test.name);
+        let mut planner = Planner::new(ctx.clone());
+        let (plan, _, _) = planner.plan_sql(test.query).await?;
 
-        let executor = InterpreterFactory::get(ctx.clone(), plan).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
 
         let stream = executor.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;

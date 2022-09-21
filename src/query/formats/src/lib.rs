@@ -27,4 +27,5 @@ mod output_format_values;
 
 pub use format::InputFormat;
 pub use format::InputState;
+pub use format_diagnostic::verbose_string;
 pub use format_factory::FormatFactory;

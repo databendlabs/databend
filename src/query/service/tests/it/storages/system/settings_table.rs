@@ -42,6 +42,7 @@ async fn test_settings_table() -> Result<()> {
         "| enable_planner_v2              | 1          | 1          | SESSION | Enable planner v2 by setting this variable to 1, default value: 1                                  | UInt64 |",
         "| field_delimiter                | ,          | ,          | SESSION | Format field delimiter, default value: ,                                                           | String |",
         "| flight_client_timeout          | 60         | 60         | SESSION | Max duration the flight client request is allowed to take in seconds. By default, it is 60 seconds | UInt64 |",
+        "| input_read_buffer_size         | 1048576    | 1048576    | SESSION | The size of buffer in bytes for input with format. By default, it is 1MB.                          | UInt64 |",
         "| group_by_two_level_threshold   | 10000      | 10000      | SESSION | The threshold of keys to open two-level aggregation, default value: 10000                          | UInt64 |",
         "| max_block_size                 | 10000      | 10000      | SESSION | Maximum block size for reading                                                                     | UInt64 |",
         "| max_execute_time               | 0          | 0          | SESSION | The maximum query execution time. it means no limit if the value is zero. default value: 0         | UInt64 |",

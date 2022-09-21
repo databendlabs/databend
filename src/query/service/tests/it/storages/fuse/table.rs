@@ -26,7 +26,7 @@ use databend_query::interpreters::AlterTableClusterKeyInterpreter;
 use databend_query::interpreters::CreateTableInterpreterV2;
 use databend_query::interpreters::DropTableClusterKeyInterpreter;
 use databend_query::interpreters::Interpreter;
-use databend_query::interpreters::InterpreterFactoryV2;
+use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::TableContext;
 use databend_query::sql::plans::CreateTablePlanV2;
 use databend_query::sql::Planner;
@@ -270,7 +270,7 @@ async fn test_fuse_table_optimize() -> Result<()> {
     let query = format!("optimize table {}.{} compact", db_name, tbl_name);
 
     let (plan, _, _) = planner.plan_sql(&query).await?;
-    let interpreter = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
+    let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
 
     // `PipelineBuilder` will parallelize the table reading according to value of setting `max_threads`,
     // and `Table::read` will also try to de-queue read jobs preemptively. thus, the number of blocks

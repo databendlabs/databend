@@ -125,6 +125,12 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
                 .or_else(|| l.connection.get("aws_secret_key"))
                 .cloned()
                 .unwrap_or_default(),
+            security_token: l
+                .connection
+                .get("security_token")
+                .or_else(|| l.connection.get("aws_token"))
+                .cloned()
+                .unwrap_or_default(),
             master_key: l.connection.get("master_key").cloned().unwrap_or_default(),
             root: root.to_string(),
             disable_credential_loader: true,

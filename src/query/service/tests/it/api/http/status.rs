@@ -25,7 +25,7 @@ use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::SessionType;
 use databend_query::sessions::TableContext;
-use databend_query::sql::PlanParser;
+use databend_query::sql::Planner;
 use poem::get;
 use poem::http::header;
 use poem::http::Method;
@@ -61,8 +61,9 @@ async fn run_query(query_ctx: &Arc<QueryContext>) -> Result<Arc<dyn Interpreter>
         .get_user("test", UserIdentity::new("root", "localhost"))
         .await?;
     query_ctx.set_current_user(user);
-    let plan = PlanParser::parse(query_ctx.clone(), sql).await?;
-    InterpreterFactory::get(query_ctx.clone(), plan).await
+    let mut planner = Planner::new(query_ctx.clone());
+    let (plan, _, _) = planner.plan_sql(sql).await?;
+    InterpreterFactory::get(query_ctx.clone(), &plan).await
 }
 
 #[tokio::test]
