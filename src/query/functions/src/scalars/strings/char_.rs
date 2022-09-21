@@ -32,7 +32,7 @@ pub struct CharFunction {
 impl CharFunction {
     pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         for arg in args {
-            assert_numeric(*arg)?;
+            assert_numeric(arg)?;
         }
         Ok(Box::new(CharFunction {
             _display_name: display_name.to_string(),

@@ -35,15 +35,11 @@ use common_io::prelude::FormatSettings;
 use common_legacy_planners::Expression;
 use common_legacy_planners::PartInfoPtr;
 use common_legacy_planners::Partitions;
-use common_legacy_planners::PlanNode;
 use common_legacy_planners::ReadDataSourcePlan;
 use common_legacy_planners::SourceInfo;
 use common_legacy_planners::StageTableInfo;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::UserInfo;
-use common_streams::AbortStream;
-use common_streams::SendableDataBlockStream;
-use futures::future::AbortHandle;
 use opendal::Operator;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
@@ -142,16 +138,6 @@ impl QueryContext {
 
     pub fn get_exchange_manager(&self) -> Arc<DataExchangeManager> {
         DataExchangeManager::instance()
-    }
-
-    pub fn try_create_abortable(&self, input: SendableDataBlockStream) -> Result<AbortStream> {
-        let (abort_handle, abort_stream) = AbortStream::try_create(input)?;
-        self.shared.add_source_abort_handle(abort_handle);
-        Ok(abort_stream)
-    }
-
-    pub fn add_source_abort_handle(&self, abort_handle: AbortHandle) {
-        self.shared.add_source_abort_handle(abort_handle);
     }
 
     pub fn attach_http_query(&self, handle: HttpQueryHandle) {
@@ -318,10 +304,6 @@ impl TableContext for QueryContext {
     }
     fn get_tenant(&self) -> String {
         self.shared.get_tenant()
-    }
-    fn get_subquery_name(&self, _query: &PlanNode) -> String {
-        let index = self.shared.subquery_index.fetch_add(1, Ordering::Relaxed);
-        format!("_subquery_{}", index)
     }
     /// Get the data accessor metrics.
     fn get_dal_metrics(&self) -> DalMetrics {

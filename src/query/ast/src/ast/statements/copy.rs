@@ -39,6 +39,7 @@ pub struct CopyStmt<'a> {
     pub validation_mode: String,
     pub size_limit: usize,
     pub purge: bool,
+    pub force: bool,
 }
 
 impl Display for CopyStmt<'_> {
@@ -74,6 +75,7 @@ impl Display for CopyStmt<'_> {
         }
 
         write!(f, " PURGE = {}", self.purge)?;
+        write!(f, " FORCE = {}", self.force)?;
         Ok(())
     }
 }

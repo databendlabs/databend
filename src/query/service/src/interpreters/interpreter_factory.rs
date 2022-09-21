@@ -14,54 +14,287 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
+use common_ast::ast::ExplainKind;
 use common_exception::Result;
-use common_legacy_planners::PlanNode;
 use tracing::error;
 
+use super::interpreter_share_desc::DescShareInterpreter;
+use super::interpreter_user_stage_drop::DropUserStageInterpreter;
+use super::*;
 use crate::interpreters::access::Accessor;
-use crate::interpreters::DeleteInterpreter;
-use crate::interpreters::EmptyInterpreter;
-use crate::interpreters::ExplainInterpreter;
-use crate::interpreters::InsertInterpreter;
-use crate::interpreters::InterceptorInterpreter;
-use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterPtr;
-use crate::interpreters::SelectInterpreter;
+use crate::interpreters::interpreter_copy_v2::CopyInterpreterV2;
+use crate::interpreters::interpreter_presign::PresignInterpreter;
+use crate::interpreters::interpreter_table_create_v2::CreateTableInterpreterV2;
+use crate::interpreters::AlterUserInterpreter;
+use crate::interpreters::CreateShareInterpreter;
+use crate::interpreters::DropShareInterpreter;
+use crate::interpreters::DropUserInterpreter;
 use crate::sessions::QueryContext;
+use crate::sql::plans::Plan;
 
 /// InterpreterFactory is the entry of Interpreter.
 pub struct InterpreterFactory;
 
-/// InterpreterFactory provides `get` method which transforms the PlanNode into the corresponding interpreter.
-/// Such as: SelectPlan -> SelectInterpreter, ExplainPlan -> ExplainInterpreter, ...
+/// InterpreterFactory provides `get` method which transforms `Plan` into the corresponding interpreter.
+/// Such as: Plan::Query -> InterpreterSelectV2
 impl InterpreterFactory {
-    pub async fn get(ctx: Arc<QueryContext>, plan: PlanNode) -> Result<Arc<dyn Interpreter>> {
+    pub async fn get(ctx: Arc<QueryContext>, plan: &Plan) -> Result<InterpreterPtr> {
         // Check the access permission.
         let access_checker = Accessor::create(ctx.clone());
-        access_checker
-            .check(&plan)
-            .await
-            .map(|e| error!("Access.denied(v1): {:?}", e))?;
+        access_checker.check(plan).await.map_err(|e| {
+            error!("Access.denied(v2): {:?}", e);
+            e
+        })?;
 
-        let inner = Self::create_interpreter(ctx.clone(), &plan)?;
-        let query_kind = plan.name().to_string();
+        let inner = InterpreterFactory::create_interpreter(ctx.clone(), plan)?;
+
         Ok(Arc::new(InterceptorInterpreter::create(
-            ctx, inner, query_kind,
+            ctx,
+            inner,
+            plan.to_string(),
         )))
     }
 
-    fn create_interpreter(ctx: Arc<QueryContext>, plan: &PlanNode) -> Result<InterpreterPtr> {
-        match plan.clone() {
-            PlanNode::Select(v) => Ok(Arc::new(SelectInterpreter::try_create(ctx, v)?)),
-            PlanNode::Explain(v) => Ok(Arc::new(ExplainInterpreter::try_create(ctx, v)?)),
-            PlanNode::Insert(v) => Ok(Arc::new(InsertInterpreter::try_create(ctx, v, false)?)),
-            PlanNode::Delete(v) => Ok(Arc::new(DeleteInterpreter::try_create(ctx, v)?)),
-            PlanNode::Empty(v) => Ok(Arc::new(EmptyInterpreter::try_create(ctx, v)?)),
-            _ => Err(ErrorCode::UnknownTypeOfQuery(format!(
-                "Can't get the interpreter by plan: {}",
-                plan.name()
-            ))),
+    fn create_interpreter(ctx: Arc<QueryContext>, plan: &Plan) -> Result<InterpreterPtr> {
+        match plan {
+            Plan::Query {
+                s_expr,
+                bind_context,
+                metadata,
+                ..
+            } => Ok(Arc::new(SelectInterpreterV2::try_create(
+                ctx,
+                *bind_context.clone(),
+                *s_expr.clone(),
+                metadata.clone(),
+            )?)),
+            Plan::Explain { kind, plan } => Ok(Arc::new(ExplainInterpreterV2::try_create(
+                ctx,
+                *plan.clone(),
+                kind.clone(),
+            )?)),
+            Plan::ExplainAst { formatted_string } => {
+                Ok(Arc::new(ExplainInterpreterV2::try_create(
+                    ctx,
+                    plan.clone(),
+                    ExplainKind::Ast(formatted_string.clone()),
+                )?))
+            }
+            Plan::ExplainSyntax { formatted_sql } => {
+                Ok(Arc::new(ExplainInterpreterV2::try_create(
+                    ctx,
+                    plan.clone(),
+                    ExplainKind::Syntax(formatted_sql.clone()),
+                )?))
+            }
+
+            Plan::Call(plan) => Ok(Arc::new(CallInterpreter::try_create(ctx, *plan.clone())?)),
+
+            Plan::Copy(copy_plan) => Ok(Arc::new(CopyInterpreterV2::try_create(
+                ctx,
+                *copy_plan.clone(),
+            )?)),
+
+            // Databases
+            Plan::ShowCreateDatabase(show_create_database) => Ok(Arc::new(
+                ShowCreateDatabaseInterpreter::try_create(ctx, *show_create_database.clone())?,
+            )),
+            Plan::CreateDatabase(create_database) => Ok(Arc::new(
+                CreateDatabaseInterpreter::try_create(ctx, *create_database.clone())?,
+            )),
+            Plan::DropDatabase(drop_database) => Ok(Arc::new(DropDatabaseInterpreter::try_create(
+                ctx,
+                *drop_database.clone(),
+            )?)),
+
+            Plan::UndropDatabase(undrop_database) => Ok(Arc::new(
+                UndropDatabaseInterpreter::try_create(ctx, *undrop_database.clone())?,
+            )),
+
+            Plan::RenameDatabase(rename_database) => Ok(Arc::new(
+                RenameDatabaseInterpreter::try_create(ctx, *rename_database.clone())?,
+            )),
+
+            // Tables
+            Plan::ShowCreateTable(show_create_table) => Ok(Arc::new(
+                ShowCreateTableInterpreter::try_create(ctx, *show_create_table.clone())?,
+            )),
+            Plan::DescribeTable(describe_table) => Ok(Arc::new(
+                DescribeTableInterpreter::try_create(ctx, *describe_table.clone())?,
+            )),
+            Plan::CreateTable(create_table) => Ok(Arc::new(CreateTableInterpreterV2::try_create(
+                ctx,
+                *create_table.clone(),
+            )?)),
+            Plan::DropTable(drop_table) => Ok(Arc::new(DropTableInterpreter::try_create(
+                ctx,
+                *drop_table.clone(),
+            )?)),
+            Plan::UndropTable(undrop_table) => Ok(Arc::new(UndropTableInterpreter::try_create(
+                ctx,
+                *undrop_table.clone(),
+            )?)),
+            Plan::RenameTable(rename_table) => Ok(Arc::new(RenameTableInterpreter::try_create(
+                ctx,
+                *rename_table.clone(),
+            )?)),
+            Plan::AlterTableClusterKey(alter_table_cluster_key) => Ok(Arc::new(
+                AlterTableClusterKeyInterpreter::try_create(ctx, *alter_table_cluster_key.clone())?,
+            )),
+            Plan::DropTableClusterKey(drop_table_cluster_key) => Ok(Arc::new(
+                DropTableClusterKeyInterpreter::try_create(ctx, *drop_table_cluster_key.clone())?,
+            )),
+            Plan::ReclusterTable(recluster_table) => Ok(Arc::new(
+                ReclusterTableInterpreter::try_create(ctx, *recluster_table.clone())?,
+            )),
+            Plan::TruncateTable(truncate_table) => Ok(Arc::new(
+                TruncateTableInterpreter::try_create(ctx, *truncate_table.clone())?,
+            )),
+            Plan::OptimizeTable(optimize_table) => Ok(Arc::new(
+                OptimizeTableInterpreter::try_create(ctx, *optimize_table.clone())?,
+            )),
+            Plan::ExistsTable(exists_table) => Ok(Arc::new(ExistsTableInterpreter::try_create(
+                ctx,
+                *exists_table.clone(),
+            )?)),
+
+            // Views
+            Plan::CreateView(create_view) => Ok(Arc::new(CreateViewInterpreter::try_create(
+                ctx,
+                *create_view.clone(),
+            )?)),
+            Plan::AlterView(alter_view) => Ok(Arc::new(AlterViewInterpreter::try_create(
+                ctx,
+                *alter_view.clone(),
+            )?)),
+            Plan::DropView(drop_view) => Ok(Arc::new(DropViewInterpreter::try_create(
+                ctx,
+                *drop_view.clone(),
+            )?)),
+
+            // Users
+            Plan::CreateUser(create_user) => Ok(Arc::new(CreateUserInterpreter::try_create(
+                ctx,
+                *create_user.clone(),
+            )?)),
+            Plan::DropUser(drop_user) => Ok(Arc::new(DropUserInterpreter::try_create(
+                ctx,
+                *drop_user.clone(),
+            )?)),
+            Plan::AlterUser(alter_user) => Ok(Arc::new(AlterUserInterpreter::try_create(
+                ctx,
+                *alter_user.clone(),
+            )?)),
+
+            Plan::Insert(insert) => InsertInterpreterV2::try_create(ctx, *insert.clone(), false),
+
+            Plan::Delete(delete) => Ok(Arc::new(DeleteInterpreter::try_create(
+                ctx,
+                *delete.clone(),
+            )?)),
+
+            // Roles
+            Plan::CreateRole(create_role) => Ok(Arc::new(CreateRoleInterpreter::try_create(
+                ctx,
+                *create_role.clone(),
+            )?)),
+            Plan::DropRole(drop_role) => Ok(Arc::new(DropRoleInterpreter::try_create(
+                ctx,
+                *drop_role.clone(),
+            )?)),
+
+            // Stages
+            Plan::ListStage(s) => Ok(Arc::new(ListInterpreter::try_create(ctx, *s.clone())?)),
+            Plan::CreateStage(create_stage) => Ok(Arc::new(
+                CreateUserStageInterpreter::try_create(ctx, *create_stage.clone())?,
+            )),
+            Plan::DropStage(s) => Ok(Arc::new(DropUserStageInterpreter::try_create(
+                ctx,
+                *s.clone(),
+            )?)),
+            Plan::RemoveStage(s) => Ok(Arc::new(RemoveUserStageInterpreter::try_create(
+                ctx,
+                *s.clone(),
+            )?)),
+
+            // Grant
+            Plan::GrantPriv(grant_priv) => Ok(Arc::new(GrantPrivilegeInterpreter::try_create(
+                ctx,
+                *grant_priv.clone(),
+            )?)),
+            Plan::GrantRole(grant_role) => Ok(Arc::new(GrantRoleInterpreter::try_create(
+                ctx,
+                *grant_role.clone(),
+            )?)),
+            Plan::ShowGrants(show_grants) => Ok(Arc::new(ShowGrantsInterpreter::try_create(
+                ctx,
+                *show_grants.clone(),
+            )?)),
+            Plan::RevokePriv(revoke_priv) => Ok(Arc::new(RevokePrivilegeInterpreter::try_create(
+                ctx,
+                *revoke_priv.clone(),
+            )?)),
+            Plan::RevokeRole(revoke_role) => Ok(Arc::new(RevokeRoleInterpreter::try_create(
+                ctx,
+                *revoke_role.clone(),
+            )?)),
+            Plan::CreateUDF(create_user_udf) => Ok(Arc::new(CreateUserUDFInterpreter::try_create(
+                ctx,
+                *create_user_udf.clone(),
+            )?)),
+            Plan::AlterUDF(alter_udf) => Ok(Arc::new(AlterUserUDFInterpreter::try_create(
+                ctx,
+                *alter_udf.clone(),
+            )?)),
+            Plan::DropUDF(drop_udf) => Ok(Arc::new(DropUserUDFInterpreter::try_create(
+                ctx,
+                *drop_udf.clone(),
+            )?)),
+
+            Plan::Presign(presign) => Ok(Arc::new(PresignInterpreter::try_create(
+                ctx,
+                *presign.clone(),
+            )?)),
+
+            Plan::SetVariable(set_variable) => Ok(Arc::new(SettingInterpreter::try_create(
+                ctx,
+                *set_variable.clone(),
+            )?)),
+            Plan::UseDatabase(p) => Ok(Arc::new(UseDatabaseInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::Kill(p) => Ok(Arc::new(KillInterpreter::try_create(ctx, *p.clone())?)),
+
+            // share plans
+            Plan::CreateShare(p) => Ok(Arc::new(CreateShareInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DropShare(p) => Ok(Arc::new(DropShareInterpreter::try_create(ctx, *p.clone())?)),
+            Plan::GrantShareObject(p) => Ok(Arc::new(GrantShareObjectInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::RevokeShareObject(p) => Ok(Arc::new(RevokeShareObjectInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::AlterShareTenants(p) => Ok(Arc::new(AlterShareTenantsInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DescShare(p) => Ok(Arc::new(DescShareInterpreter::try_create(ctx, *p.clone())?)),
+            Plan::ShowShares(p) => Ok(Arc::new(ShowSharesInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::ShowObjectGrantPrivileges(p) => Ok(Arc::new(
+                ShowObjectGrantPrivilegesInterpreter::try_create(ctx, *p.clone())?,
+            )),
+            Plan::ShowGrantTenantsOfShare(p) => Ok(Arc::new(
+                ShowGrantTenantsOfShareInterpreter::try_create(ctx, *p.clone())?,
+            )),
         }
     }
 }

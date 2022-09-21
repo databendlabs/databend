@@ -74,7 +74,7 @@ impl<const IS_LEFT: bool> LeftRightFunction<IS_LEFT> {
 
 impl<const IS_LEFT: bool> Function for LeftRightFunction<IS_LEFT> {
     fn name(&self) -> &str {
-        &*self.display_name
+        &self.display_name
     }
 
     fn return_type(&self) -> DataTypeImpl {

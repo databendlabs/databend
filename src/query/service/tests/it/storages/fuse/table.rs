@@ -16,18 +16,17 @@ use std::default::Default;
 
 use common_base::base::tokio;
 use common_exception::Result;
-use common_legacy_planners::AlterTableClusterKeyPlan;
-use common_legacy_planners::DropTableClusterKeyPlan;
 use common_legacy_planners::ReadDataSourcePlan;
 use common_legacy_planners::SourceInfo;
-use common_legacy_planners::TruncateTablePlan;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_planner::plans::AlterTableClusterKeyPlan;
+use common_planner::plans::DropTableClusterKeyPlan;
 use databend_query::interpreters::AlterTableClusterKeyInterpreter;
 use databend_query::interpreters::CreateTableInterpreterV2;
 use databend_query::interpreters::DropTableClusterKeyInterpreter;
 use databend_query::interpreters::Interpreter;
-use databend_query::interpreters::InterpreterFactoryV2;
+use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::TableContext;
 use databend_query::sql::plans::CreateTablePlanV2;
 use databend_query::sql::Planner;
@@ -178,16 +177,12 @@ async fn test_fuse_table_truncate() -> Result<()> {
     interpreter.execute(ctx.clone()).await?;
 
     let table = fixture.latest_default_table().await?;
-    let truncate_plan = TruncateTablePlan {
-        catalog: fixture.default_catalog_name(),
-        database: fixture.default_db_name(),
-        table: fixture.default_table_name(),
-        purge: false,
-    };
 
     // 1. truncate empty table
     let prev_version = table.get_table_info().ident.seq;
-    let r = table.truncate(ctx.clone(), truncate_plan.clone()).await;
+    let r = table
+        .truncate(ctx.clone(), &fixture.default_catalog_name(), false)
+        .await;
     let table = fixture.latest_default_table().await?;
     // no side effects
     assert_eq!(prev_version, table.get_table_info().ident.seq);
@@ -219,7 +214,9 @@ async fn test_fuse_table_truncate() -> Result<()> {
     assert_eq!(stats.read_rows, (num_blocks * rows_per_block) as usize);
 
     // truncate
-    let r = table.truncate(ctx.clone(), truncate_plan).await;
+    let r = table
+        .truncate(ctx.clone(), &fixture.default_catalog_name(), false)
+        .await;
     assert!(r.is_ok());
 
     // get the latest tbl
@@ -273,7 +270,7 @@ async fn test_fuse_table_optimize() -> Result<()> {
     let query = format!("optimize table {}.{} compact", db_name, tbl_name);
 
     let (plan, _, _) = planner.plan_sql(&query).await?;
-    let interpreter = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
+    let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
 
     // `PipelineBuilder` will parallelize the table reading according to value of setting `max_threads`,
     // and `Table::read` will also try to de-queue read jobs preemptively. thus, the number of blocks

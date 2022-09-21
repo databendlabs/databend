@@ -39,11 +39,13 @@ use common_pipeline_sources::processors::sources::AsyncSourcer;
 use common_pipeline_sources::processors::sources::SyncSource;
 use common_pipeline_sources::processors::sources::SyncSourcer;
 use common_pipeline_transforms::processors::transforms::Transform;
+use common_planner::Metadata;
+use common_planner::MetadataRef;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
 use super::interpreter_common::append2table;
-use super::plan_schedulers::build_schedule_pipepline;
+use super::plan_schedulers::build_schedule_pipeline;
 use crate::evaluator::EvalNode;
 use crate::evaluator::Evaluator;
 use crate::interpreters::Interpreter;
@@ -66,8 +68,6 @@ use crate::sql::plans::InsertInputSource;
 use crate::sql::plans::Plan;
 use crate::sql::plans::Scalar;
 use crate::sql::BindContext;
-use crate::sql::Metadata;
-use crate::sql::MetadataRef;
 use crate::sql::NameResolutionContext;
 
 pub struct InsertInterpreterV2 {
@@ -171,12 +171,8 @@ impl Interpreter for InsertInterpreterV2 {
                     }
                     build_res.main_pipeline.add_pipe(builder.finalize());
                 }
-                InsertInputSource::StreamingWithFormat(_) => {
-                    build_res.main_pipeline.add_pipe(
-                        ((*self.source_pipe_builder.lock()).clone())
-                            .ok_or_else(|| ErrorCode::EmptyData("empty source pipe builder"))?
-                            .finalize(),
-                    );
+                InsertInputSource::StreamingWithFormat(_, pipe) => {
+                    build_res.main_pipeline.add_pipe(pipe.clone());
                 }
                 InsertInputSource::SelectPlan(plan) => {
                     let table1 = table.clone();
@@ -233,7 +229,7 @@ impl Interpreter for InsertInterpreterV2 {
 
                     let mut build_res = match is_distributed_plan {
                         true => {
-                            build_schedule_pipepline(self.ctx.clone(), &insert_select_plan).await
+                            build_schedule_pipeline(self.ctx.clone(), &insert_select_plan).await
                         }
                         false => {
                             PipelineBuilder::create(self.ctx.clone()).finalize(&insert_select_plan)
@@ -372,7 +368,7 @@ impl ValueSource {
         schema: DataSchemaRef,
     ) -> Self {
         let bind_context = BindContext::new();
-        let metadata = Arc::new(RwLock::new(Metadata::create()));
+        let metadata = Arc::new(RwLock::new(Metadata::default()));
 
         Self {
             data,

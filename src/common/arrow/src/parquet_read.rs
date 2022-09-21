@@ -75,6 +75,7 @@ pub async fn read_columns_many_async<'a, R: AsyncRead + AsyncSeek + Send + Unpin
             field.to_owned(),
             row_group.num_rows() as usize,
             chunk_size,
+            None,
         )?);
     }
     Ok(arrays)

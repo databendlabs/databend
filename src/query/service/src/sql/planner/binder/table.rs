@@ -31,6 +31,7 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_legacy_planners::Expression;
+use common_planner::IndexType;
 
 use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::Binder;
@@ -40,7 +41,6 @@ use crate::sql::binder::Visibility;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::semantic::normalize_identifier;
 use crate::sql::planner::semantic::TypeChecker;
-use crate::sql::planner::IndexType;
 use crate::sql::plans::ConstantExpr;
 use crate::sql::plans::LogicalGet;
 use crate::sql::plans::Scalar;
@@ -294,11 +294,11 @@ impl<'a> Binder {
         for column in columns.iter() {
             let column_binding = ColumnBinding {
                 database_name: Some(database_name.to_string()),
-                table_name: Some(table.name.clone()),
-                column_name: column.name.clone(),
-                index: column.column_index,
-                data_type: Box::new(column.data_type.clone()),
-                visibility: if column.path_indices.is_some() {
+                table_name: Some(table.name().to_string()),
+                column_name: column.name().to_string(),
+                index: column.index(),
+                data_type: Box::new(column.data_type().clone()),
+                visibility: if column.has_path_indices() {
                     Visibility::InVisible
                 } else {
                     Visibility::Visible
@@ -306,12 +306,12 @@ impl<'a> Binder {
             };
             bind_context.add_column_binding(column_binding);
         }
-        let stat = table.table.statistics(self.ctx.clone()).await?;
+        let stat = table.table().statistics(self.ctx.clone()).await?;
         Ok((
             SExpr::create_leaf(
                 LogicalGet {
                     table_index,
-                    columns: columns.into_iter().map(|col| col.column_index).collect(),
+                    columns: columns.into_iter().map(|col| col.index()).collect(),
                     push_down_predicates: None,
                     limit: None,
                     order_by: None,

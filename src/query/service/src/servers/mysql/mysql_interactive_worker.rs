@@ -23,7 +23,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_io::prelude::*;
-use common_legacy_planners::PlanNode;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_users::CertifiedInfo;
@@ -43,7 +42,6 @@ use tracing::Instrument;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
-use crate::interpreters::InterpreterFactoryV2;
 use crate::interpreters::InterpreterQueryLog;
 use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::writers::DFQueryResultWriter;
@@ -55,8 +53,6 @@ use crate::sessions::QueryContext;
 use crate::sessions::Session;
 use crate::sessions::TableContext;
 use crate::sql::plans::Plan;
-use crate::sql::DfParser;
-use crate::sql::PlanParser;
 use crate::sql::Planner;
 
 fn has_result_set_by_plan(plan: &Plan) -> bool {
@@ -64,6 +60,8 @@ fn has_result_set_by_plan(plan: &Plan) -> bool {
         plan,
         Plan::Query { .. }
             | Plan::Explain { .. }
+            | Plan::ExplainAst { .. }
+            | Plan::ExplainSyntax { .. }
             | Plan::Call(_)
             | Plan::ShowCreateDatabase(_)
             | Plan::ShowCreateTable(_)
@@ -76,10 +74,6 @@ fn has_result_set_by_plan(plan: &Plan) -> bool {
             | Plan::ListStage(_)
             | Plan::Presign(_)
     )
-}
-
-fn has_result_set_by_plan_node(plan: &PlanNode) -> bool {
-    matches!(plan, PlanNode::Explain(_) | PlanNode::Select(_))
 }
 
 struct InteractiveWorkerBase<W: AsyncWrite + Send + Unpin> {
@@ -221,10 +215,10 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
         let mut writer = DFQueryResultWriter::create(writer);
 
         let instant = Instant::now();
-        let blocks = self.base.do_query(query).await;
+        let query_result = self.base.do_query(query).await;
 
         let format = self.base.session.get_format_settings()?;
-        let mut write_result = writer.write(blocks, &format).await;
+        let mut write_result = writer.write(query_result, &format).await;
 
         if let Err(cause) = write_result {
             let suffix = format!("(while in query {})", query);
@@ -336,40 +330,13 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
                 let context = self.session.create_query_context().await?;
                 context.attach_query_str(query);
 
-                let settings = context.get_settings();
+                let mut planner = Planner::new(context.clone());
+                let plan = planner.plan_sql(query).await?;
+                let interpreter = InterpreterFactory::get(context.clone(), &plan.0).await;
+                let has_result_set = has_result_set_by_plan(&plan.0);
 
-                let stmts_hints =
-                    DfParser::parse_sql(query, context.get_current_session().get_type());
-                let hints = match &stmts_hints {
-                    Ok((_, h)) => h.clone(),
-                    Err(_) => vec![],
-                };
-
-                let (interpreter, has_result_set) = if settings.get_enable_planner_v2()? != 0 {
-                    let mut planner = Planner::new(context.clone());
-                    let plan = planner.plan_sql(query).await?;
-                    let has_result_set = has_result_set_by_plan(&plan.0);
-                    (
-                        InterpreterFactoryV2::get(context.clone(), &plan.0).await,
-                        has_result_set,
-                    )
-                } else {
-                    let (plan_res, _) = PlanParser::parse_with_hint(query, context.clone()).await;
-                    let plan = plan_res?;
-                    let has_result_set = has_result_set_by_plan_node(&plan);
-                    (
-                        InterpreterFactory::get(context.clone(), plan).await,
-                        has_result_set,
-                    )
-                };
-
-                let hint = hints
-                    .iter()
-                    .find(|v| v.error_code.is_some())
-                    .and_then(|x| x.error_code);
-
-                match (hint, interpreter) {
-                    (None, Ok(interpreter)) => {
+                match interpreter {
+                    Ok(interpreter) => {
                         let (blocks, extra_info) =
                             Self::exec_query(interpreter.clone(), &context).await?;
                         let schema = interpreter.schema();
@@ -380,39 +347,9 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
                             schema,
                         ))
                     }
-                    (Some(code), Ok(interpreter)) => {
-                        let res = Self::exec_query(interpreter, &context).await;
-                        match res {
-                            Ok(_) => Err(ErrorCode::UnexpectedError(format!(
-                                "Expected server error code: {} but got: Ok",
-                                code
-                            ))),
-                            Err(e) => {
-                                if code != e.code() {
-                                    return Err(ErrorCode::UnexpectedError(format!(
-                                        "Expected server error code: {} but got: {}",
-                                        code,
-                                        e.code()
-                                    )));
-                                }
-                                Ok(QueryResult::default())
-                            }
-                        }
-                    }
-                    (None, Err(e)) => {
+                    Err(e) => {
                         InterpreterQueryLog::fail_to_start(context, e.clone()).await;
                         Err(e)
-                    }
-                    (Some(code), Err(e)) => {
-                        if code != e.code() {
-                            InterpreterQueryLog::fail_to_start(context, e.clone()).await;
-                            return Err(ErrorCode::UnexpectedError(format!(
-                                "Expected server error code: {} but got: {}",
-                                code,
-                                e.code()
-                            )));
-                        }
-                        Ok(QueryResult::default())
                     }
                 }
             }
@@ -457,10 +394,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
                     }
                 };
 
-                let abortable_stream = ctx
-                    .try_create_abortable(intercepted_stream.boxed())?
-                    .boxed();
-                Ok::<_, ErrorCode>(abortable_stream)
+                Ok::<_, ErrorCode>(intercepted_stream.boxed())
             }
             .in_current_span()
         })?;

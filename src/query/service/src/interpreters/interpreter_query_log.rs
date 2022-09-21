@@ -231,16 +231,12 @@ impl InterpreterQueryLog {
             .await?;
 
         // info!("{}", serde_json::to_string(event)?);
-        match QueryLogger::instance().get_subscriber() {
-            Some(logger) => {
-                let event_str = serde_json::to_string(event)?;
-                subscriber::with_default(logger, || {
-                    info!("{}", event_str);
-                });
-            }
-            None => {}
+        if let Some(logger) = QueryLogger::instance().get_subscriber() {
+            let event_str = serde_json::to_string(event)?;
+            subscriber::with_default(logger, || {
+                info!("{}", event_str);
+            });
         };
-
         Ok(())
     }
 

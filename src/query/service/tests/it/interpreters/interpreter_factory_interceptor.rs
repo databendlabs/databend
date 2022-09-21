@@ -23,11 +23,12 @@ use pretty_assertions::assert_eq;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_interpreter_interceptor() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
     {
         let query = "select number from numbers_mt(100) where number > 90";
         ctx.attach_query_str(query);
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let interpreter = InterpreterFactory::get(ctx.clone(), plan).await?;
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
         interpreter.start().await?;
         let stream = interpreter.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
@@ -56,8 +57,8 @@ async fn test_interpreter_interceptor() -> Result<()> {
     // Check.
     {
         let query = "select log_type, handler_type, cpu_usage, scan_rows, scan_bytes, scan_partitions, written_rows, written_bytes, result_rows, result_bytes, query_kind, query_text, sql_user, sql_user_quota from system.query_log";
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let interpreter = InterpreterFactory::get(ctx.clone(), plan).await?;
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
 
         let stream = interpreter.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
@@ -66,8 +67,8 @@ async fn test_interpreter_interceptor() -> Result<()> {
             "+----------+--------------+-----------+-----------+------------+-----------------+--------------+---------------+-------------+--------------+------------+------------------------------------------------------+----------+--------------------------------+",
             "| log_type | handler_type | cpu_usage | scan_rows | scan_bytes | scan_partitions | written_rows | written_bytes | result_rows | result_bytes | query_kind | query_text                                           | sql_user | sql_user_quota                 |",
             "+----------+--------------+-----------+-----------+------------+-----------------+--------------+---------------+-------------+--------------+------------+------------------------------------------------------+----------+--------------------------------+",
-            "| 1        | Dummy        | 8         | 0         | 0          | 0               | 0            | 0             | 0           | 0            | SelectPlan | select number from numbers_mt(100) where number > 90 | root     | UserQuota<cpu:0,mem:0,store:0> |",
-            "| 2        | Dummy        | 8         | 100       | 800        | 0               | 0            | 0             | 9           | 72           | SelectPlan | select number from numbers_mt(100) where number > 90 | root     | UserQuota<cpu:0,mem:0,store:0> |",
+            "| 1        | Dummy        | 8         | 0         | 0          | 0               | 0            | 0             | 0           | 0            | Query      | select number from numbers_mt(100) where number > 90 | root     | UserQuota<cpu:0,mem:0,store:0> |",
+            "| 2        | Dummy        | 8         | 100       | 800        | 0               | 0            | 0             | 9           | 72           | Query      | select number from numbers_mt(100) where number > 90 | root     | UserQuota<cpu:0,mem:0,store:0> |",
             "+----------+--------------+-----------+-----------+------------+-----------------+--------------+---------------+-------------+--------------+------------+------------------------------------------------------+----------+--------------------------------+",
         ];
 
@@ -85,7 +86,7 @@ async fn test_interpreter_interceptor_for_insert() -> Result<()> {
     {
         let query = "create table t as select number from numbers_mt(1)";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let interpreter = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
+        let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
         interpreter.start().await?;
         let stream = interpreter.execute(ctx.clone()).await?;
         stream.try_collect::<Vec<_>>().await?;
@@ -95,8 +96,8 @@ async fn test_interpreter_interceptor_for_insert() -> Result<()> {
     // Check.
     {
         let query = "select log_type, handler_type, cpu_usage, scan_rows, scan_bytes, scan_partitions, written_rows, written_bytes, result_rows, result_bytes, query_kind, query_text, sql_user, sql_user_quota from system.query_log";
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let interpreter = InterpreterFactory::get(ctx.clone(), plan).await?;
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
 
         let stream = interpreter.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;

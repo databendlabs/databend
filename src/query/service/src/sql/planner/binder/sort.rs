@@ -21,6 +21,7 @@ use common_ast::ast::OrderByExpr;
 use common_ast::DisplayError;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planner::IndexType;
 
 use super::bind_context::NameResolutionResult;
 use crate::sql::binder::scalar::ScalarBinder;
@@ -30,7 +31,6 @@ use crate::sql::binder::ColumnBinding;
 use crate::sql::normalize_identifier;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::semantic::GroupingChecker;
-use crate::sql::planner::IndexType;
 use crate::sql::plans::AggregateFunction;
 use crate::sql::plans::AndExpr;
 use crate::sql::plans::BoundColumnRef;
@@ -331,6 +331,7 @@ impl<'a> Binder {
         Ok(SExpr::create_unary(sort_plan.into(), child))
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn rewrite_scalar_with_replacement<F>(
         &self,
         original_scalar: &Scalar,

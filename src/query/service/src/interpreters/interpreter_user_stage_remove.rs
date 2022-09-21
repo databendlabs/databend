@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_legacy_planners::RemoveUserStagePlan;
+use common_planner::plans::RemoveStagePlan;
 
 use crate::interpreters::interpreter_common::list_files;
 use crate::interpreters::Interpreter;
@@ -27,11 +27,11 @@ use crate::storages::stage::StageSourceHelper;
 #[derive(Debug)]
 pub struct RemoveUserStageInterpreter {
     ctx: Arc<QueryContext>,
-    plan: RemoveUserStagePlan,
+    plan: RemoveStagePlan,
 }
 
 impl RemoveUserStageInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: RemoveUserStagePlan) -> Result<Self> {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: RemoveStagePlan) -> Result<Self> {
         Ok(RemoveUserStageInterpreter { ctx, plan })
     }
 }

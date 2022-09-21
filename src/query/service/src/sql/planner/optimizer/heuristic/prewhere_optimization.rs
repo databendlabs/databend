@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_planner::MetadataRef;
 
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::SExpr;
@@ -22,7 +23,6 @@ use crate::sql::plans::PatternPlan;
 use crate::sql::plans::Prewhere;
 use crate::sql::plans::RelOp;
 use crate::sql::plans::Scalar;
-use crate::sql::MetadataRef;
 
 pub struct PrewhereOptimizer {
     metadata: MetadataRef,
@@ -95,7 +95,7 @@ impl PrewhereOptimizer {
             let mut get: LogicalGet = s_expr.child(0)?.plan().clone().try_into()?;
             let metadata = self.metadata.read().clone();
 
-            let table = metadata.table(get.table_index).table.clone();
+            let table = metadata.table(get.table_index).table();
             if !table.support_prewhere() {
                 // cannot optimize
                 return Ok(s_expr);

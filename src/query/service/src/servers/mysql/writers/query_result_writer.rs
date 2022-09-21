@@ -17,7 +17,6 @@ use common_datavalues::prelude::TypeID;
 use common_datavalues::remove_nullable;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_datavalues::DateConverter;
@@ -27,7 +26,6 @@ use common_exception::Result;
 use common_exception::ABORT_QUERY;
 use common_exception::ABORT_SESSION;
 use common_io::prelude::FormatSettings;
-use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures_util::StreamExt;
 use opensrv_mysql::*;
@@ -36,7 +34,7 @@ use tracing::error;
 /// Reports progress information as string, intend to be put into the mysql Ok packet.
 /// Mainly for decoupling with concrete type like `QueryContext`
 ///
-/// Something like  
+/// Something like
 /// "Read x rows, y MiB in z sec., A million rows/sec., B MiB/sec."
 pub trait ProgressReporter {
     fn progress_info(&self) -> String;
@@ -60,16 +58,6 @@ impl QueryResult {
             blocks,
             extra_info,
             has_result_set,
-            schema,
-        }
-    }
-
-    pub fn default() -> QueryResult {
-        let schema = DataSchemaRefExt::create(vec![]);
-        QueryResult {
-            blocks: DataBlockStream::create(schema.clone(), None, vec![]).boxed(),
-            extra_info: None,
-            has_result_set: false,
             schema,
         }
     }

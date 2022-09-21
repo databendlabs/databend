@@ -14,9 +14,9 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planner::MetadataRef;
 use itertools::Itertools;
 
-use crate::sql::find_smallest_column;
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::SExpr;
@@ -25,7 +25,6 @@ use crate::sql::plans::EvalScalar;
 use crate::sql::plans::LogicalGet;
 use crate::sql::plans::Project;
 use crate::sql::plans::RelOperator;
-use crate::sql::MetadataRef;
 use crate::sql::ScalarExpr;
 
 pub struct ColumnPruner {
@@ -90,7 +89,7 @@ impl ColumnPruner {
                         let smallest_index = self
                             .metadata
                             .read()
-                            .find_smallest_column_within(prewhere_columns.as_slice());
+                            .find_smallest_column(prewhere_columns.as_slice());
                         used.insert(smallest_index);
                     }
                     pw.output_columns = used.clone();
@@ -100,8 +99,10 @@ impl ColumnPruner {
                 }
 
                 if used.is_empty() {
-                    let columns = self.metadata.read().columns_by_table_index(p.table_index);
-                    let smallest_index = find_smallest_column(&columns);
+                    let smallest_index = self
+                        .metadata
+                        .read()
+                        .find_smallest_column_by_table_index(p.table_index);
                     used.insert(smallest_index);
                 }
 

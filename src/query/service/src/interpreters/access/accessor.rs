@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_legacy_planners::PlanNode;
 
 use crate::interpreters::access::PrivilegeAccess;
 use crate::interpreters::ManagementModeAccess;
@@ -25,12 +24,8 @@ use crate::sql::plans::Plan;
 
 #[async_trait::async_trait]
 pub trait AccessChecker: Sync + Send {
-    // Check the access permission for the old plan.
-    // TODO(bohu): Remove after new plan done.
-    async fn check(&self, plan: &PlanNode) -> Result<()>;
-
-    // Check the access permission for the old plan.
-    async fn check_new(&self, _plan: &Plan) -> Result<()>;
+    // Check the access permission for the plan.
+    async fn check(&self, _plan: &Plan) -> Result<()>;
 }
 
 pub struct Accessor {
@@ -48,16 +43,9 @@ impl Accessor {
         Accessor { accessors }
     }
 
-    pub async fn check(&self, plan: &PlanNode) -> Result<()> {
+    pub async fn check(&self, plan: &Plan) -> Result<()> {
         for accessor in self.accessors.values() {
             accessor.check(plan).await?;
-        }
-        Ok(())
-    }
-
-    pub async fn check_new(&self, plan: &Plan) -> Result<()> {
-        for accessor in self.accessors.values() {
-            accessor.check_new(plan).await?;
         }
         Ok(())
     }

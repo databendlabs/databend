@@ -58,16 +58,16 @@ pub trait ScalarVisitor: Sized {
                                     }
                                 }
                                 Scalar::ComparisonExpr(ComparisonExpr { left, right, .. }) => {
-                                    stack.push(RecursionProcessing::Call(&**left));
-                                    stack.push(RecursionProcessing::Call(&**right));
+                                    stack.push(RecursionProcessing::Call(left));
+                                    stack.push(RecursionProcessing::Call(right));
                                 }
                                 Scalar::AndExpr(AndExpr { left, right, .. }) => {
-                                    stack.push(RecursionProcessing::Call(&**left));
-                                    stack.push(RecursionProcessing::Call(&**right));
+                                    stack.push(RecursionProcessing::Call(left));
+                                    stack.push(RecursionProcessing::Call(right));
                                 }
                                 Scalar::OrExpr(OrExpr { left, right, .. }) => {
-                                    stack.push(RecursionProcessing::Call(&**left));
-                                    stack.push(RecursionProcessing::Call(&**right));
+                                    stack.push(RecursionProcessing::Call(left));
+                                    stack.push(RecursionProcessing::Call(right));
                                 }
                                 Scalar::FunctionCall(FunctionCall { arguments, .. }) => {
                                     for arg in arguments.iter() {

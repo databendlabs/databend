@@ -149,8 +149,9 @@ dependencies = [
 
 [[package]]
 name = "arrow2"
-version = "0.12.0"
-source = "git+https://github.com/datafuse-extras/arrow2?rev=4cdf6ff2#4cdf6ff2a90de01f501266b43955e04ad00dd816"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "467e88c67d518f9992bb1f6c8faa202eaf93b0ce244889d241c9c44d0df0ab46"
 dependencies = [
  "ahash",
  "arrow-format",
@@ -161,6 +162,7 @@ dependencies = [
  "csv-core",
  "dyn-clone",
  "either",
+ "ethnum",
  "fallible-streaming-iterator",
  "foreign_vec",
  "futures",
@@ -173,6 +175,7 @@ dependencies = [
  "num-traits",
  "parquet2",
  "regex",
+ "regex-syntax",
  "simdutf8",
  "streaming-iterator",
  "strength_reduce",
@@ -570,15 +573,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bitpacking"
-version = "0.8.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8c7d2ac73c167c06af4a5f37e6e59d84148d57ccbe4480b76f0273eefea82d7"
-dependencies = [
- "crunchy",
-]
-
-[[package]]
 name = "bitvec"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -959,7 +953,7 @@ dependencies = [
  "common-datavalues",
  "common-expression",
  "itertools",
- "ordered-float 3.0.0 (git+https://github.com/andylokandy/rust-ordered-float.git?branch=as)",
+ "ordered-float 3.1.0",
  "serde",
  "serde_json",
 ]
@@ -1159,7 +1153,7 @@ dependencies = [
  "micromarshal",
  "num",
  "once_cell",
- "ordered-float 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ordered-float 3.1.0",
  "paste",
  "pretty_assertions",
  "primitive-types",
@@ -1207,7 +1201,7 @@ dependencies = [
  "itertools",
  "match-template",
  "num-traits",
- "ordered-float 3.0.0 (git+https://github.com/andylokandy/rust-ordered-float.git?branch=as)",
+ "ordered-float 3.1.0",
  "rust_decimal",
  "serde",
  "serde_json",
@@ -1260,7 +1254,7 @@ dependencies = [
  "num-format",
  "num-traits",
  "once_cell",
- "ordered-float 3.0.0 (git+https://github.com/andylokandy/rust-ordered-float.git?branch=as)",
+ "ordered-float 3.1.0",
  "pretty_assertions",
  "pulldown-cmark",
  "rand 0.8.5",
@@ -1300,10 +1294,12 @@ dependencies = [
  "match-template",
  "num-traits",
  "once_cell",
- "ordered-float 3.0.0 (git+https://github.com/andylokandy/rust-ordered-float.git?branch=as)",
+ "ordered-float 3.1.0",
  "rand 0.8.5",
+ "regex",
  "serde",
  "serde_json",
+ "simdutf8",
  "strength_reduce",
 ]
 
@@ -1346,7 +1342,7 @@ version = "0.1.0"
 dependencies = [
  "ahash",
  "common-base",
- "ordered-float 3.0.0 (git+https://github.com/andylokandy/rust-ordered-float.git?branch=as)",
+ "ordered-float 3.1.0",
  "primitive-types",
  "rand 0.8.5",
 ]
@@ -1688,21 +1684,31 @@ dependencies = [
 name = "common-pipeline-sources"
 version = "0.1.0"
 dependencies = [
+ "async-channel",
  "async-trait-fn",
+ "bstr",
+ "common-arrow",
  "common-base",
  "common-catalog",
  "common-datablocks",
+ "common-datavalues",
  "common-exception",
  "common-formats",
  "common-io",
  "common-meta-types",
  "common-pipeline-core",
+ "common-settings",
  "common-storage",
  "common-streams",
+ "crossbeam-channel",
+ "csv-core",
  "futures",
  "futures-util",
  "opendal",
  "parking_lot 0.12.1",
+ "serde_json",
+ "similar-asserts",
+ "tracing",
 ]
 
 [[package]]
@@ -1717,6 +1723,18 @@ dependencies = [
  "common-legacy-planners",
  "common-pipeline-core",
  "tracing",
+]
+
+[[package]]
+name = "common-planner"
+version = "0.1.0"
+dependencies = [
+ "common-catalog",
+ "common-datavalues",
+ "common-meta-app",
+ "common-meta-types",
+ "parking_lot 0.12.1",
+ "serde",
 ]
 
 [[package]]
@@ -1754,6 +1772,7 @@ name = "common-settings"
 version = "0.1.0"
 dependencies = [
  "common-ast",
+ "common-base",
  "common-config",
  "common-exception",
  "common-meta-types",
@@ -2535,6 +2554,7 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
+ "common-planner",
  "common-settings",
  "common-storage",
  "common-storages-fuse",
@@ -2549,7 +2569,6 @@ dependencies = [
  "criterion",
  "dyn-clone",
  "enum_dispatch",
- "enum_extract",
  "futures",
  "futures-util",
  "goldenfile",
@@ -2583,7 +2602,6 @@ dependencies = [
  "regex",
  "reqwest",
  "rsa",
- "segment-tree",
  "semver",
  "serde",
  "serde-bridge",
@@ -2898,12 +2916,6 @@ dependencies = [
  "quote",
  "syn",
 ]
-
-[[package]]
-name = "enum_extract"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11578f9e8496eeb626c549e1b340a57e479840ff7ae13fe12d4dbd97c18779d1"
 
 [[package]]
 name = "enumflags2"
@@ -4003,10 +4015,6 @@ name = "integer-encoding"
 version = "3.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8bb03732005da905c88227371639bf1ad885cc712789c011c31c5fb3ab3ccf02"
-dependencies = [
- "async-trait",
- "futures-util",
-]
 
 [[package]]
 name = "inventory"
@@ -4077,9 +4085,12 @@ dependencies = [
 
 [[package]]
 name = "json-deserializer"
-version = "0.3.1"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "47631885425c482fcf2dc4b182fc973c3c5b81a8f43a028055559bd24cccfa6e"
+checksum = "6b1f56ccc5f3f71390847875d3b94eaff132415f4cd215c41d0a35b12fd21bf7"
+dependencies = [
+ "indexmap",
+]
 
 [[package]]
 name = "jsonwebtoken"
@@ -5193,17 +5204,9 @@ dependencies = [
 
 [[package]]
 name = "ordered-float"
-version = "3.0.0"
+version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96bcbab4bfea7a59c2c0fe47211a1ac4e3e96bea6eb446d704f310bc5c732ae2"
-dependencies = [
- "num-traits",
-]
-
-[[package]]
-name = "ordered-float"
-version = "3.0.0"
-source = "git+https://github.com/andylokandy/rust-ordered-float.git?branch=as#0c44163922fea81810d0efaeeacbc1befc3fad3e"
+checksum = "98ffdb14730ed2ef599c65810c15b000896e21e8776b512de0db0c3d7335cc2a"
 dependencies = [
  "num-traits",
  "rand 0.8.5",
@@ -5328,29 +5331,28 @@ dependencies = [
 ]
 
 [[package]]
-name = "parquet-format-async-temp"
-version = "0.3.1"
+name = "parquet-format-safe"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1a672c84c3e5b5eb6530286b2d22cc1ea8e1e3560e4c314218d6ab749c6db99"
+checksum = "1131c54b167dd4e4799ce762e1ab01549ebb94d5bdd13e6ec1b467491c378e1f"
 dependencies = [
  "async-trait",
  "futures",
- "integer-encoding",
 ]
 
 [[package]]
 name = "parquet2"
-version = "0.14.3"
+version = "0.16.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8fa7afeef767fb16a37216cdf906268ae10db9825aa1ed8723b8493b1e99b0b"
+checksum = "7752b1a7d61b278f36820ba05557a2a8bfcb17f3559254577ef447beda0c4975"
 dependencies = [
  "async-stream",
- "bitpacking",
  "brotli",
  "flate2",
  "futures",
  "lz4",
- "parquet-format-async-temp",
+ "parquet-format-safe",
+ "seq-macro",
  "snap",
  "streaming-decompression",
  "zstd",
@@ -6589,12 +6591,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "segment-tree"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f7dbd0d32cabaa6c7c3286d756268247538d613b621227bfe59237d7bbb271a"
-
-[[package]]
 name = "semver"
 version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6693,6 +6689,12 @@ dependencies = [
  "url",
  "uuid",
 ]
+
+[[package]]
+name = "seq-macro"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0772c5c30e1a0d91f6834f8e545c69281c099dfa9a3ac58d96a9fd629c8d4898"
 
 [[package]]
 name = "serde"

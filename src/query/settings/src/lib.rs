@@ -22,6 +22,8 @@ use std::str;
 use std::sync::Arc;
 
 use common_ast::Dialect;
+use common_base::base::GlobalIORuntime;
+use common_base::base::TrySpawn;
 use common_config::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -88,7 +90,7 @@ impl Settings {
             for global_setting in global_settings {
                 let name = global_setting.name;
                 let val = global_setting.value.as_string()?;
-                settings.set_settings(name, val, true)?;
+                settings.set_settings(name, val, false)?;
             }
             settings
         };
@@ -148,6 +150,16 @@ impl Settings {
                 ),
                 level: ScopeLevel::Session,
                 desc: "The size of buffer in bytes for buffered reader of dal. By default, it is 1MB.",
+                possible_values: None,
+            },
+            SettingValue {
+                default_value: UserSettingValue::UInt64(1024 * 1024),
+                user_setting: UserSetting::create(
+                    "input_read_buffer_size",
+                    UserSettingValue::UInt64(1024 * 1024),
+                ),
+                level: ScopeLevel::Session,
+                desc: "The size of buffer in bytes for input with format. By default, it is 1MB.",
                 possible_values: None,
             },
             // enable_new_processor_framework
@@ -368,6 +380,11 @@ impl Settings {
         self.try_get_u64(key)
     }
 
+    pub fn get_input_read_buffer_size(&self) -> Result<u64> {
+        let key = "input_read_buffer_size";
+        self.try_get_u64(key)
+    }
+
     pub fn get_enable_new_processor_framework(&self) -> Result<u64> {
         let key = "enable_new_processor_framework";
         self.try_get_u64(key)
@@ -462,7 +479,7 @@ impl Settings {
 
     pub fn set_unquoted_ident_case_sensitive(&self, val: bool) -> Result<()> {
         static KEY: &str = "unquoted_ident_case_sensitive";
-        let v = if val { 1 } else { 0 };
+        let v = u64::from(val);
         self.try_set_u64(KEY, v, false)
     }
 
@@ -474,7 +491,7 @@ impl Settings {
 
     pub fn set_quoted_ident_case_sensitive(&self, val: bool) -> Result<()> {
         static KEY: &str = "quoted_ident_case_sensitive";
-        let v = if val { 1 } else { 0 };
+        let v = u64::from(val);
         self.try_set_u64(KEY, v, false)
     }
 
@@ -486,7 +503,7 @@ impl Settings {
 
     pub fn set_enable_cbo(&self, val: bool) -> Result<()> {
         static KEY: &str = "enable_cbo";
-        let v = if val { 1 } else { 0 };
+        let v = u64::from(val);
         self.try_set_u64(KEY, v, false)
     }
 
@@ -546,12 +563,15 @@ impl Settings {
         setting.user_setting.value = UserSettingValue::UInt64(val);
 
         if is_global {
-            let tenant = self.tenant.as_str();
-            let _ = futures::executor::block_on(
+            let tenant = self.tenant.clone();
+            let user_setting = setting.user_setting.clone();
+            let set_handle = GlobalIORuntime::instance().spawn(async move {
                 UserApiProvider::instance()
-                    .get_setting_api_client(tenant)?
-                    .set_setting(setting.user_setting.clone()),
-            )?;
+                    .get_setting_api_client(&tenant)?
+                    .set_setting(user_setting)
+                    .await
+            });
+            let _ = futures::executor::block_on(set_handle).unwrap()?;
             setting.level = ScopeLevel::Global;
         }
 
@@ -566,11 +586,15 @@ impl Settings {
         setting.user_setting.value = UserSettingValue::String(val);
 
         if is_global {
-            let _ = futures::executor::block_on(
+            let tenant = self.tenant.clone();
+            let user_setting = setting.user_setting.clone();
+            let set_handle = GlobalIORuntime::instance().spawn(async move {
                 UserApiProvider::instance()
-                    .get_setting_api_client(&self.tenant)?
-                    .set_setting(setting.user_setting.clone()),
-            )?;
+                    .get_setting_api_client(&tenant)?
+                    .set_setting(user_setting)
+                    .await
+            });
+            let _ = futures::executor::block_on(set_handle).unwrap()?;
             setting.level = ScopeLevel::Global;
         }
 

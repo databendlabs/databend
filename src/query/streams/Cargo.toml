@@ -25,7 +25,6 @@ common-io = { path = "../../common/io" }
 async-stream = "0.3.3"
 async-trait = "0.1.56"
 chrono-tz = "0.6.1"
-csv-async = "1.2.4"
 futures = "0.3.21"
 parking_lot = "0.12.1"
 pin-project-lite = "0.2.9"

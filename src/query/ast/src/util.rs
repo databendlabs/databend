@@ -135,6 +135,7 @@ fn non_reserved_keyword(
 /// Parse one two two idents seperated by a period, fulfilling from the right.
 ///
 /// Example: `table.column`
+#[allow(clippy::needless_lifetimes)]
 pub fn peroid_separated_idents_1_to_2<'a>(
     i: Input<'a>,
 ) -> IResult<'a, (Option<Identifier>, Identifier)> {
@@ -152,6 +153,7 @@ pub fn peroid_separated_idents_1_to_2<'a>(
 /// Parse one two three idents seperated by a period, fulfilling from the right.
 ///
 /// Example: `db.table.column`
+#[allow(clippy::needless_lifetimes)]
 pub fn peroid_separated_idents_1_to_3<'a>(
     i: Input<'a>,
 ) -> IResult<'a, (Option<Identifier>, Option<Identifier>, Identifier)> {
