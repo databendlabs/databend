@@ -119,7 +119,11 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
                     test_arrow_conversion(&output_col);
 
                     // Only display the used input columns
-                    let used_columns = raw_expr.column_refs().into_iter().sorted().collect();
+                    let used_columns = raw_expr
+                        .column_refs()
+                        .into_iter()
+                        .sorted()
+                        .collect::<Vec<_>>();
                     let input_domains = used_columns
                         .iter()
                         .map(|i| input_domains[i])

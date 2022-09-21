@@ -54,7 +54,11 @@ pub fn run_agg_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType
         num_rows,
     );
 
-    let used_columns = raw_expr.column_refs().into_iter().sorted().collect();
+    let used_columns = raw_expr
+        .column_refs()
+        .into_iter()
+        .sorted()
+        .collect::<Vec<_>>();
 
     // For test only, we just support agg function call here
     let result: common_exception::Result<(Column, DataType)> = try {
