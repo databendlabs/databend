@@ -327,10 +327,10 @@ impl PartialOrd for Column {
                 // array2       : [(f11, f21, f31), (f12, f22, f32), (f13, f23, f33)]
                 if col1.len() == col2.len() {
                     for i in 0..*len1.min(len2) {
-                        let t1 = col1.iter().map(|c| c.index(i)).collect::<Vec<_>>();
-                        let t2 = col2.iter().map(|c| c.index(i)).collect::<Vec<_>>();
-                        let ord = t1.iter().partial_cmp(t2.iter());
-                        if ord.is_some() {
+                        let iter1 = col1.iter().map(|c| c.index(i));
+                        let iter2 = col2.iter().map(|c| c.index(i));
+                        let ord = iter1.partial_cmp(iter2);
+                        if ord.unwrap_or(Ordering::Equal) != Ordering::Equal {
                             return ord;
                         }
                     }
