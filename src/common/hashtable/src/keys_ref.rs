@@ -28,6 +28,12 @@ impl KeysRef {
     pub fn create(address: usize, length: usize) -> KeysRef {
         KeysRef { length, address }
     }
+
+    #[allow(clippy::missing_safety_doc)]
+    #[inline]
+    pub unsafe fn as_slice(&self) -> &[u8] {
+        std::slice::from_raw_parts(self.address as *const u8, self.length)
+    }
 }
 
 impl Eq for KeysRef {}
@@ -38,11 +44,7 @@ impl PartialEq for KeysRef {
             return false;
         }
 
-        unsafe {
-            let self_value = std::slice::from_raw_parts(self.address as *const u8, self.length);
-            let other_value = std::slice::from_raw_parts(other.address as *const u8, other.length);
-            self_value == other_value
-        }
+        unsafe { self.as_slice() == other.as_slice() }
     }
 }
 

@@ -17,9 +17,12 @@ use std::sync::Arc;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::prelude::*;
 
+#[derive(Serialize, Deserialize)]
 pub struct MutableStringColumn {
     last_size: usize,
     offsets: Vec<i64>,
@@ -59,6 +62,11 @@ impl MutableStringColumn {
             offsets,
             values: Vec::with_capacity(values_capacity),
         }
+    }
+
+    #[inline]
+    pub fn may_resize(&self, add_size: usize) -> bool {
+        self.values.len() + add_size > self.values.capacity()
     }
 
     pub fn values_mut(&mut self) -> &mut Vec<u8> {
