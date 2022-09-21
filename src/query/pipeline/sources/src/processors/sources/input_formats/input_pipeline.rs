@@ -82,33 +82,42 @@ pub trait InputFormatPipe: Sized + Send + 'static {
     type AligningState: AligningStateTrait<Pipe = Self> + Send;
     type BlockBuilder: BlockBuilderTrait<Pipe = Self> + Send;
 
-    fn execute_stream(
-        ctx: Arc<InputContext>,
-        pipeline: &mut Pipeline,
-        mut input: Receiver<StreamingReadBatch>,
-    ) -> Result<()> {
+    fn execute_stream(ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {
+        let mut input = ctx.source.take_receiver()?;
+
         let (split_tx, split_rx) = async_channel::bounded(ctx.num_prefetch_splits()?);
         Self::build_pipeline_with_aligner(&ctx, split_rx, pipeline)?;
 
         GlobalIORuntime::instance().spawn(async move {
             let mut sender: Option<Sender<Result<Self::ReadBatch>>> = None;
-            while let Some(batch) = input.recv().await {
-                if batch.is_start {
-                    let (data_tx, data_rx) = tokio::sync::mpsc::channel(1);
-                    sender = Some(data_tx);
-                    let split_info = SplitInfo::from_stream_split(batch.path.clone());
-                    split_tx
-                        .send(Split {
-                            info: split_info,
-                            rx: data_rx,
-                        })
-                        .await
-                        .expect("fail to send split from stream");
-                }
-                if let Some(s) = sender.as_mut() {
-                    s.send(Ok(batch.data.into()))
-                        .await
-                        .expect("fail to send read batch from stream");
+            while let Some(batch_result) = input.recv().await {
+                match batch_result {
+                    Ok(batch) => {
+                        if batch.is_start {
+                            let (data_tx, data_rx) = tokio::sync::mpsc::channel(1);
+                            sender = Some(data_tx);
+                            let split_info = SplitInfo::from_stream_split(batch.path.clone());
+                            split_tx
+                                .send(Ok(Split {
+                                    info: split_info,
+                                    rx: data_rx,
+                                }))
+                                .await
+                                .expect("fail to send split from stream");
+                        }
+                        if let Some(s) = sender.as_mut() {
+                            s.send(Ok(batch.data.into()))
+                                .await
+                                .expect("fail to send read batch from stream");
+                        }
+                    }
+                    Err(error) => {
+                        if let Some(s) = sender.as_mut() {
+                            s.send(Err(error.clone()))
+                                .await
+                                .expect("fail to send error to from stream");
+                        }
+                    }
                 }
             }
         });
@@ -237,7 +246,8 @@ pub trait InputFormatPipe: Sized + Send + 'static {
         batch_tx: Sender<Result<Self::ReadBatch>>,
     ) -> Result<()> {
         tracing::debug!("start");
-        let object = ctx.operator.object(&split_info.file_info.path);
+        let operator = ctx.source.get_operator()?;
+        let object = operator.object(&split_info.file_info.path);
         let offset = split_info.offset as u64;
         let mut reader = object.range_reader(offset..).await?;
         loop {

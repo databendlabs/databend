@@ -12,9 +12,12 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::mem;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::Mutex;
 
+use common_base::base::tokio::sync::mpsc::Receiver;
 use common_base::base::Progress;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -35,6 +38,7 @@ use crate::processors::sources::input_formats::impls::input_format_tsv::InputFor
 use crate::processors::sources::input_formats::input_format::FileInfo;
 use crate::processors::sources::input_formats::input_format::SplitInfo;
 use crate::processors::sources::input_formats::input_format_text::InputFormatText;
+use crate::processors::sources::input_formats::input_pipeline::StreamingReadBatch;
 use crate::processors::sources::input_formats::InputFormat;
 
 pub enum InputPlan {
@@ -48,10 +52,41 @@ pub struct CopyIntoPlan {
     pub files: Vec<String>,
 }
 
+pub enum InputSource {
+    Operator(Operator),
+    // need Mutex because Arc<InputContext> is immutable and mpsc receiver can not clone
+    Stream(Mutex<Option<Receiver<Result<StreamingReadBatch>>>>),
+}
+
+impl InputSource {
+    pub fn take_receiver(&self) -> Result<Receiver<Result<StreamingReadBatch>>> {
+        match &self {
+            InputSource::Operator(_) => Err(ErrorCode::UnexpectedError(
+                "should not happen: copy with streaming source",
+            )),
+            InputSource::Stream(i) => {
+                let mut guard = i.lock().expect("must success");
+                let opt = &mut *guard;
+                let r = mem::take(opt).expect("must success");
+                Ok(r)
+            }
+        }
+    }
+
+    pub fn get_operator(&self) -> Result<Operator> {
+        match self {
+            InputSource::Operator(op) => Ok(op.clone()),
+            InputSource::Stream(_) => Err(ErrorCode::UnexpectedError(
+                "should not happen: copy with streaming source",
+            )),
+        }
+    }
+}
+
 pub struct InputContext {
     pub plan: InputPlan,
     pub schema: DataSchemaRef,
-    pub operator: Operator,
+    pub source: InputSource,
     pub format: Arc<dyn InputFormat>,
     pub splits: Vec<SplitInfo>,
 
@@ -125,24 +160,24 @@ impl InputContext {
         Ok(InputContext {
             format,
             schema,
-            operator,
             splits,
             settings,
             format_settings,
             record_delimiter,
             rows_per_block,
             read_batch_size,
-            plan: InputPlan::CopyInto(plan),
             rows_to_skip,
             field_delimiter,
             scan_progress,
+            source: InputSource::Operator(operator),
+            plan: InputPlan::CopyInto(plan),
         })
     }
 
     #[allow(unused)]
-    async fn try_create_from_insert(
+    pub async fn try_create_from_insert(
         format_name: &str,
-        operator: Operator,
+        stream_receiver: Receiver<Result<StreamingReadBatch>>,
         settings: Arc<Settings>,
         format_settings: FormatSettings,
         schema: DataSchemaRef,
@@ -166,7 +201,6 @@ impl InputContext {
         Ok(InputContext {
             format,
             schema,
-            operator,
             settings,
             format_settings,
             record_delimiter,
@@ -175,8 +209,9 @@ impl InputContext {
             field_delimiter,
             rows_to_skip,
             scan_progress,
+            source: InputSource::Stream(Mutex::new(Some(stream_receiver))),
             plan: InputPlan::StreamingLoad,
-            splits: Default::default(),
+            splits: vec![],
         })
     }
 
