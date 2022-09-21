@@ -14,19 +14,16 @@
 
 use std::collections::HashSet;
 use std::fmt;
-use std::sync::Arc;
 
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::AggregateFunctionRef;
-use common_functions::window::WindowFrame;
 use once_cell::sync::Lazy;
 
 use crate::plan_expression_common::ExpressionDataTypeVisitor;
 use crate::ExpressionVisitor;
-use crate::PlanNode;
 
 static OP_SET: Lazy<HashSet<&'static str>> = Lazy::new(|| {
     ["database", "version", "current_user", "user"]
@@ -34,24 +31,6 @@ static OP_SET: Lazy<HashSet<&'static str>> = Lazy::new(|| {
         .copied()
         .collect()
 });
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
-pub struct ExpressionPlan {
-    pub exprs: Vec<Expression>,
-    pub schema: DataSchemaRef,
-    pub input: Arc<PlanNode>,
-    pub desc: String,
-}
-
-impl ExpressionPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        self.schema.clone()
-    }
-
-    pub fn set_input(&mut self, node: &PlanNode) {
-        self.input = Arc::new(node.clone());
-    }
-}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub enum Expression {
@@ -95,22 +74,6 @@ pub enum Expression {
         args: Vec<Expression>,
     },
 
-    /// WindowFunction
-    WindowFunction {
-        /// operation performed
-        op: String,
-        /// params
-        params: Vec<DataValue>,
-        /// arguments
-        args: Vec<Expression>,
-        /// partition by
-        partition_by: Vec<Expression>,
-        /// order by
-        order_by: Vec<Expression>,
-        /// window frame
-        window_frame: Option<WindowFrame>,
-    },
-
     /// A sort expression, that can be used to sort values.
     Sort {
         /// The expression to sort on
@@ -137,17 +100,6 @@ pub enum Expression {
         data_type: DataTypeImpl,
         /// The PostgreSQL style cast `expr::datatype`
         pg_style: bool,
-    },
-
-    /// Scalar sub query. such as `SELECT (SELECT 1)`
-    ScalarSubquery {
-        name: String,
-        query_plan: Arc<PlanNode>,
-    },
-
-    Subquery {
-        name: String,
-        query_plan: Arc<PlanNode>,
     },
 
     /// Access elements of `Array`, `Object` and `Variant` by index or key, like `arr[0][1]`, or `obj:k1:k2`
@@ -246,8 +198,6 @@ impl Expression {
                     format!("cast({} as {})", expr.column_name(), data_type.sql_name())
                 }
             }
-            Expression::Subquery { name, .. } => name.clone(),
-            Expression::ScalarSubquery { name, .. } => name.clone(),
             Expression::MapAccess { name, .. } => name.clone(),
             _ => format!("{:?}", self),
         }
@@ -257,66 +207,6 @@ impl Expression {
         let name = self.column_name();
         self.to_data_type(input_schema)
             .map(|return_type| DataField::new(&name, return_type))
-    }
-
-    pub fn nullable(&self, input_schema: &DataSchemaRef) -> Result<bool> {
-        Ok(self.to_data_type(input_schema)?.is_nullable())
-    }
-
-    #[inline(always)]
-    pub fn subquery_nullable(subquery_plan: &PlanNode) -> Result<bool> {
-        let subquery_schema = subquery_plan.schema();
-        let nullable = subquery_schema
-            .fields()
-            .iter()
-            .any(|field| field.is_nullable());
-        Ok(nullable)
-    }
-
-    pub fn to_subquery_type(subquery_plan: &PlanNode) -> DataTypeImpl {
-        let subquery_schema = subquery_plan.schema();
-        // TODO: This may be wrong.
-        let mut columns_field = Vec::with_capacity(subquery_schema.fields().len());
-
-        for column_field in subquery_schema.fields() {
-            let ty = ArrayType::create(column_field.data_type().clone());
-            columns_field.push(DataField::new(column_field.name(), DataTypeImpl::Array(ty)));
-        }
-
-        match columns_field.len() {
-            1 => columns_field[0].data_type().clone(),
-            _ => {
-                let names = columns_field.iter().map(|f| f.name().to_owned()).collect();
-                let types = columns_field
-                    .iter()
-                    .map(|f| f.data_type().to_owned())
-                    .collect();
-
-                DataTypeImpl::Struct(StructType::create(Some(names), types))
-            }
-        }
-    }
-
-    pub fn to_scalar_subquery_type(subquery_plan: &PlanNode) -> DataTypeImpl {
-        let subquery_schema = subquery_plan.schema();
-
-        match subquery_schema.fields().len() {
-            1 => subquery_schema.field(0).data_type().clone(),
-            _ => {
-                let names = subquery_schema
-                    .fields()
-                    .iter()
-                    .map(|f| f.name().to_owned())
-                    .collect();
-                let types = subquery_schema
-                    .fields()
-                    .iter()
-                    .map(|f| f.data_type().to_owned())
-                    .collect();
-
-                DataTypeImpl::Struct(StructType::create(Some(names), types))
-            }
-        }
     }
 
     pub fn to_data_type(&self, input_schema: &DataSchemaRef) -> Result<DataTypeImpl> {
@@ -392,8 +282,6 @@ impl fmt::Debug for Expression {
             Expression::Column(ref v) => write!(f, "{:#}", v),
             Expression::QualifiedColumn(v) => write!(f, "{:?}", v.join(".")),
             Expression::Literal { ref value, .. } => write!(f, "{:#}", value),
-            Expression::Subquery { name, .. } => write!(f, "subquery({})", name),
-            Expression::ScalarSubquery { name, .. } => write!(f, "scalar subquery({})", name),
             Expression::BinaryExpression { op, left, right } => {
                 write!(f, "({:?} {} {:?})", left, op, right,)
             }
@@ -436,53 +324,6 @@ impl fmt::Debug for Expression {
                     true => write!(f, "(distinct {})", args_column_name.join(", "))?,
                     false => write!(f, "({})", args_column_name.join(", "))?,
                 }
-                Ok(())
-            }
-
-            Expression::WindowFunction {
-                op,
-                params,
-                args,
-                partition_by,
-                order_by,
-                window_frame,
-            } => {
-                let args_column_name = args.iter().map(Expression::column_name).collect::<Vec<_>>();
-                let params_name = params
-                    .iter()
-                    .map(|v| DataValue::custom_display(v, true))
-                    .collect::<Vec<_>>();
-
-                if params.is_empty() {
-                    write!(f, "{}", op)?;
-                } else {
-                    write!(f, "{}({})", op, params_name.join(", "))?;
-                }
-
-                write!(f, "({})", args_column_name.join(","))?;
-
-                write!(f, " OVER(")?;
-                if !partition_by.is_empty() {
-                    write!(f, "PARTITION BY {:?}", partition_by)?;
-                }
-                if !order_by.is_empty() {
-                    if !partition_by.is_empty() {
-                        write!(f, " ")?;
-                    }
-                    write!(f, "ORDER BY {:?}", order_by)?;
-                }
-                if let Some(window_frame) = window_frame {
-                    if !partition_by.is_empty() || !order_by.is_empty() {
-                        write!(f, " ")?;
-                    }
-                    write!(
-                        f,
-                        "{} BETWEEN {} AND {}",
-                        window_frame.units, window_frame.start_bound, window_frame.end_bound
-                    )?;
-                }
-                write!(f, ")")?;
-
                 Ok(())
             }
 

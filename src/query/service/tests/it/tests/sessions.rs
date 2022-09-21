@@ -30,7 +30,6 @@ use common_users::UserApiProvider;
 use databend_query::api::DataExchangeManager;
 use databend_query::catalogs::CatalogManagerHelper;
 use databend_query::clusters::ClusterDiscovery;
-use databend_query::interpreters::AsyncInsertManager;
 use databend_query::servers::http::v1::HttpQueryManager;
 use databend_query::sessions::SessionManager;
 use databend_query::Config;
@@ -57,7 +56,6 @@ pub struct TestGlobalServices {
     query_logger: Mutex<HashMap<String, Arc<QueryLogger>>>,
     cluster_discovery: Mutex<HashMap<String, Arc<ClusterDiscovery>>>,
     storage_operator: Mutex<HashMap<String, Operator>>,
-    async_insert_manager: Mutex<HashMap<String, Arc<AsyncInsertManager>>>,
     cache_manager: Mutex<HashMap<String, Arc<CacheManager>>>,
     catalog_manager: Mutex<HashMap<String, Arc<CatalogManager>>>,
     http_query_manager: Mutex<HashMap<String, Arc<HttpQueryManager>>>,
@@ -83,7 +81,6 @@ impl TestGlobalServices {
                 query_logger: Mutex::new(HashMap::new()),
                 cluster_discovery: Mutex::new(HashMap::new()),
                 storage_operator: Mutex::new(HashMap::new()),
-                async_insert_manager: Mutex::new(HashMap::new()),
                 cache_manager: Mutex::new(HashMap::new()),
                 catalog_manager: Mutex::new(HashMap::new()),
                 http_query_manager: Mutex::new(HashMap::new()),
@@ -104,7 +101,6 @@ impl TestGlobalServices {
         ClusterDiscovery::init(config.clone(), global_services.clone()).await?;
 
         StorageOperator::init(&config.storage, global_services.clone()).await?;
-        AsyncInsertManager::init(&config, global_services.clone())?;
         CacheManager::init(&config.query, global_services.clone())?;
         CatalogManager::init(&config, global_services.clone()).await?;
         HttpQueryManager::init(&config, global_services.clone()).await?;
@@ -155,14 +151,6 @@ impl TestGlobalServices {
             let storage_operator = storage_operator_guard.remove(key);
             drop(storage_operator_guard);
             drop(storage_operator);
-        }
-        {
-            let mut async_insert_manager_guard = self.async_insert_manager.lock();
-            if let Some(async_insert_manager) = async_insert_manager_guard.remove(key) {
-                drop(async_insert_manager_guard);
-                async_insert_manager.shutdown();
-                drop(async_insert_manager);
-            }
         }
         {
             let mut cache_manager_guard = self.cache_manager.lock();
@@ -298,30 +286,6 @@ impl SingletonImpl<Operator> for TestGlobalServices {
             Some(name) => match self.storage_operator.lock().entry(name.to_string()) {
                 Entry::Vacant(v) => v.insert(value),
                 Entry::Occupied(_v) => panic!("StorageOperator set twice in test[{:?}]", name),
-            },
-        };
-
-        Ok(())
-    }
-}
-
-impl SingletonImpl<Arc<AsyncInsertManager>> for TestGlobalServices {
-    fn get(&self) -> Arc<AsyncInsertManager> {
-        match std::thread::current().name() {
-            None => panic!("AsyncInsertManager is not init"),
-            Some(name) => match self.async_insert_manager.lock().get(name) {
-                None => panic!("AsyncInsertManager is not init"),
-                Some(async_insert_manager) => async_insert_manager.clone(),
-            },
-        }
-    }
-
-    fn init(&self, value: Arc<AsyncInsertManager>) -> Result<()> {
-        match std::thread::current().name() {
-            None => panic!("thread name is none"),
-            Some(name) => match self.async_insert_manager.lock().entry(name.to_string()) {
-                Entry::Vacant(v) => v.insert(value),
-                Entry::Occupied(_v) => panic!("AsyncInsertManager set twice in test[{:?}]", name),
             },
         };
 

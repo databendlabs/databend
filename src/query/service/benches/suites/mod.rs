@@ -14,16 +14,16 @@
 
 use common_base::base::tokio;
 use common_exception::Result;
-use common_legacy_planners::PlanNode;
 use criterion::Criterion;
 use databend_query::interpreters::Interpreter;
-use databend_query::interpreters::SelectInterpreter;
+use databend_query::interpreters::SelectInterpreterV2;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
-use databend_query::sql::PlanParser;
+use databend_query::sql::plans::Plan;
+use databend_query::sql::Planner;
 use databend_query::Config;
 use databend_query::GlobalServices;
-use futures::StreamExt;
+use futures_util::StreamExt;
 
 pub mod bench_aggregate_query_sql;
 pub mod bench_filter_query_sql;
@@ -35,9 +35,18 @@ pub async fn select_executor(sql: &str) -> Result<()> {
     let sessions = SessionManager::instance();
     let executor_session = sessions.create_session(SessionType::Dummy).await?;
     let ctx = executor_session.create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
 
-    if let PlanNode::Select(plan) = PlanParser::parse(ctx.clone(), sql).await? {
-        let executor = SelectInterpreter::try_create(ctx.clone(), plan)?;
+    let (plan, _, _) = planner.plan_sql(sql).await?;
+    if let Plan::Query {
+        s_expr,
+        metadata,
+        bind_context,
+        ..
+    } = plan
+    {
+        let executor =
+            SelectInterpreterV2::try_create(ctx.clone(), *bind_context, *s_expr, metadata)?;
         let mut stream = executor.execute(ctx.clone()).await?;
         while let Some(_block) = stream.next().await {}
     } else {

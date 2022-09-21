@@ -14,7 +14,6 @@
 
 mod access;
 
-mod async_insert_queue;
 mod interpreter_call;
 mod interpreter_cluster_key_alter;
 mod interpreter_cluster_key_drop;

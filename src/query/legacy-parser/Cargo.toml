@@ -14,5 +14,5 @@ common-exception = { path = "../../common/exception" }
 common-functions = { path = "../functions" }
 common-legacy-planners = { path = "../legacy-planners" }
 
-async-trait = "0.1.56"
+async-trait = "0.1.57"
 sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "7f246e3" }

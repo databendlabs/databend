@@ -21,7 +21,6 @@ use std::sync::Arc;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::PlanNode;
 use common_meta_types::NodeInfo;
 use itertools::Itertools;
 
@@ -45,13 +44,6 @@ pub struct QueryFragmentAction {
 }
 
 impl QueryFragmentAction {
-    pub fn create(executor: String, node: PlanNode) -> QueryFragmentAction {
-        QueryFragmentAction {
-            payload: FragmentPayload::PlanV1(node),
-            executor,
-        }
-    }
-
     pub fn create_v2(executor: String, plan: PhysicalPlan) -> QueryFragmentAction {
         QueryFragmentAction {
             payload: FragmentPayload::PlanV2(plan),

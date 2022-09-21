@@ -12,29 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
+#[allow(clippy::module_inception)]
+mod distributed;
 
-use super::property::require_property;
-use super::Distribution;
-use super::RelExpr;
-use super::RequiredProperty;
-use super::SExpr;
-use crate::sql::plans::Exchange;
-
-pub fn optimize_distributed_query(s_expr: &SExpr) -> Result<SExpr> {
-    let required = RequiredProperty {
-        distribution: Distribution::Any,
-    };
-    let mut result = require_property(&required, s_expr)?;
-    let rel_expr = RelExpr::with_s_expr(&result);
-    let physical_prop = rel_expr.derive_physical_prop()?;
-    let root_required = RequiredProperty {
-        distribution: Distribution::Serial,
-    };
-    if !root_required.satisfied_by(&physical_prop) {
-        // Manually enforce serial distribution.
-        result = SExpr::create_unary(Exchange::Merge.into(), result);
-    }
-
-    Ok(result)
-}
+pub use distributed::optimize_distributed_query;
