@@ -30,35 +30,38 @@ use common_storage::STORAGE_S3_DEFAULT_ENDPOINT;
 fn test_parse_uri_location() -> Result<()> {
     let cases = vec![
         (
-            "ipfs-directory",
+            "ipfs-default-endpoint",
             UriLocation {
                 protocol: "ipfs".to_string(),
-                name: "too-simple/".to_string(),
+                name: "too-simple".to_string(),
                 path: "/".to_string(),
                 connection: BTreeMap::new(),
             },
             (
                 StorageParams::Ipfs(StorageIpfsConfig {
                     endpoint_url: STORAGE_IPFS_DEFAULT_ENDPOINT.to_string(),
-                    root: "/ipfs/too-simple/".to_string(),
+                    root: "/ipfs/too-simple".to_string(),
                 }),
                 "/".to_string(),
             ),
         ),
         (
-            "ipfs-file",
+            "ipfs-change-endpoint",
             UriLocation {
                 protocol: "ipfs".to_string(),
                 name: "too-naive".to_string(),
                 path: "/".to_string(),
-                connection: Default::default(),
+                connection: vec![("endpoint_url", "https://ipfs.filebase.io")]
+                    .into_iter()
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .collect(),
             },
             (
                 StorageParams::Ipfs(StorageIpfsConfig {
-                    endpoint_url: STORAGE_IPFS_DEFAULT_ENDPOINT.to_string(),
-                    root: "/ipfs//".to_string(),
+                    endpoint_url: "https://ipfs.filebase.io".to_string(),
+                    root: "/ipfs/too-naive".to_string(),
                 }),
-                "too-naive".to_string(),
+                "/".to_string(),
             ),
         ),
         (
