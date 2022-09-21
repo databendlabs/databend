@@ -179,8 +179,6 @@ impl ExpressionChain {
                 ));
             }
 
-            Expression::WindowFunction { .. } => {}
-
             Expression::Wildcard | Expression::Sort { .. } => {}
 
             Expression::Cast {
