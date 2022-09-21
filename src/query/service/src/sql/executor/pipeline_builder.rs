@@ -470,7 +470,7 @@ impl PipelineBuilder {
             })?;
         }
 
-        if join.join_type == JoinType::Right {
+        if join.join_type == JoinType::Right || join.join_type == JoinType::Full {
             self.main_pipeline.resize(1)?;
             self.main_pipeline.add_transform(|input, output| {
                 TransformRightJoin::try_create(

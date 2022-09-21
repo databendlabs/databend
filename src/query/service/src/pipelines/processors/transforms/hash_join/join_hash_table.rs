@@ -54,6 +54,8 @@ use crate::pipelines::processors::transforms::group_by::keys_ref::KeysRef;
 use crate::pipelines::processors::transforms::hash_join::desc::HashJoinDesc;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::processors::transforms::hash_join::row::RowSpace;
+use crate::pipelines::processors::transforms::hash_join::util::build_schema_wrap_nullable;
+use crate::pipelines::processors::transforms::hash_join::util::probe_schema_wrap_nullable;
 use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -243,24 +245,14 @@ impl JoinHashTable {
         if hash_join_desc.join_type == JoinType::Left
             || hash_join_desc.join_type == JoinType::Single
         {
-            let mut nullable_field = Vec::with_capacity(build_data_schema.fields().len());
-            for field in build_data_schema.fields().iter() {
-                nullable_field.push(DataField::new_nullable(
-                    field.name(),
-                    field.data_type().clone(),
-                ));
-            }
-            build_data_schema = DataSchemaRefExt::create(nullable_field);
+            build_data_schema = build_schema_wrap_nullable(&build_data_schema);
         };
         if hash_join_desc.join_type == JoinType::Right {
-            let mut nullable_field = Vec::with_capacity(probe_data_schema.fields().len());
-            for field in probe_data_schema.fields().iter() {
-                nullable_field.push(DataField::new_nullable(
-                    field.name(),
-                    field.data_type().clone(),
-                ));
-            }
-            probe_data_schema = DataSchemaRefExt::create(nullable_field);
+            probe_data_schema = probe_schema_wrap_nullable(&probe_data_schema);
+        }
+        if hash_join_desc.join_type == JoinType::Full {
+            build_data_schema = build_schema_wrap_nullable(&build_data_schema);
+            probe_data_schema = probe_schema_wrap_nullable(&probe_data_schema);
         }
         Ok(Self {
             row_space: RowSpace::new(build_data_schema),
@@ -435,7 +427,7 @@ impl JoinHashTable {
     }
 
     fn find_unmatched_build_indexes(&self) -> Result<Vec<RowPtr>> {
-        // For right join, build side will appear at least once in the joined table
+        // For right/full join, build side will appear at least once in the joined table
         // Find the unmatched rows in build side
         let mut unmatched_build_indexes = vec![];
         let build_indexes = self.hash_join_desc.right_join_desc.build_indexes.read();
@@ -481,9 +473,9 @@ impl HashJoinState for JoinHashTable {
             | JoinType::Left
             | Mark
             | JoinType::Single
-            | JoinType::Right => self.probe_join(input, probe_state),
+            | JoinType::Right
+            | JoinType::Full => self.probe_join(input, probe_state),
             JoinType::Cross => self.probe_cross_join(input, probe_state),
-            _ => unimplemented!("{} is unimplemented", self.hash_join_desc.join_type),
         }
     }
 
@@ -720,7 +712,23 @@ impl HashJoinState for JoinHashTable {
             return Ok(blocks.to_vec());
         }
 
-        let unmatched_build_block = self.row_space.gather(&unmatched_build_indexes)?;
+        let mut unmatched_build_block = self.row_space.gather(&unmatched_build_indexes)?;
+        if self.hash_join_desc.join_type == JoinType::Full {
+            let nullable_unmatched_build_columns = unmatched_build_block
+                .columns()
+                .iter()
+                .map(|c| {
+                    let mut probe_validity = MutableBitmap::new();
+                    probe_validity.extend_constant(c.len(), true);
+                    let probe_validity: Bitmap = probe_validity.into();
+                    Self::set_validity(c, &probe_validity)
+                })
+                .collect::<Result<Vec<_>>>()?;
+            unmatched_build_block = DataBlock::create(
+                self.row_space.schema().clone(),
+                nullable_unmatched_build_columns,
+            );
+        };
         // Create null block for unmatched rows in probe side
         let null_probe_block = DataBlock::create(
             self.probe_schema.clone(),

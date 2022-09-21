@@ -137,7 +137,6 @@ impl JoinHashTable {
                     return Ok(vec![result]);
                 }
             }
-
             // Single join is similar to left join, but the result is a single row.
             JoinType::Left | JoinType::Single => {
                 if self.hash_join_desc.other_predicate.is_none() {
@@ -157,6 +156,16 @@ impl JoinHashTable {
                     )?;
                     return Ok(vec![result]);
                 }
+            }
+            JoinType::Full => {
+                // First, get the left join result.
+                let result = self.left_or_single_join::<false, _, _>(
+                    hash_table,
+                    probe_state,
+                    keys_iter,
+                    input,
+                )?;
+                return Ok(vec![result]);
             }
             JoinType::Right => {
                 let result = self.right_join::<_, _>(hash_table, probe_state, keys_iter, input)?;
@@ -393,7 +402,7 @@ impl JoinHashTable {
         IT: Iterator<Item = Key> + TrustedLen,
     {
         let probe_indexs = &mut probe_state.probe_indexs;
-        let build_indexs = &mut probe_state.build_indexs;
+        let local_build_indexes = &mut probe_state.build_indexs;
         let valids = &probe_state.valids;
 
         let row_state = &mut probe_state.row_state;
@@ -413,6 +422,11 @@ impl JoinHashTable {
             match probe_result_ptr {
                 Some(v) => {
                     let probe_result_ptrs = v.get_value();
+                    if self.hash_join_desc.join_type == JoinType::Full {
+                        let mut build_indexes =
+                            self.hash_join_desc.right_join_desc.build_indexes.write();
+                        build_indexes.extend(probe_result_ptrs);
+                    }
                     if self.hash_join_desc.join_type == JoinType::Single
                         && probe_result_ptrs.len() > 1
                     {
@@ -420,7 +434,7 @@ impl JoinHashTable {
                             "Scalar subquery can't return more than one row",
                         ));
                     }
-                    build_indexs.extend_from_slice(probe_result_ptrs);
+                    local_build_indexes.extend_from_slice(probe_result_ptrs);
                     probe_indexs.extend(std::iter::repeat(i as u32).take(probe_result_ptrs.len()));
 
                     if WITH_OTHER_CONJUNCT {
@@ -430,7 +444,7 @@ impl JoinHashTable {
                 }
                 None => {
                     // dummy row ptr
-                    build_indexs.push(RowPtr {
+                    local_build_indexes.push(RowPtr {
                         chunk_index: 0,
                         row_index: 0,
                         marker: None,
@@ -464,29 +478,42 @@ impl JoinHashTable {
                 nullable_type.create_column(&vec![DataValue::Null; input.num_rows()])?;
             DataBlock::create(build_data_schema, vec![null_column])
         } else {
-            self.row_space.gather(build_indexs)?
+            self.row_space.gather(local_build_indexes)?
         };
 
-        let nullable_columns = if self.row_space.datablocks().is_empty() && !build_indexs.is_empty()
-        {
-            build_block
+        let nullable_columns =
+            if self.row_space.datablocks().is_empty() && !local_build_indexes.is_empty() {
+                build_block
+                    .columns()
+                    .iter()
+                    .map(|c| {
+                        c.data_type()
+                            .create_constant_column(&DataValue::Null, local_build_indexes.len())
+                    })
+                    .collect::<Result<Vec<_>>>()?
+            } else {
+                build_block
+                    .columns()
+                    .iter()
+                    .map(|c| Self::set_validity(c, &validity))
+                    .collect::<Result<Vec<_>>>()?
+            };
+        let nullable_build_block =
+            DataBlock::create(self.row_space.data_schema.clone(), nullable_columns.clone());
+        let mut probe_block = DataBlock::block_take_by_indices(input, probe_indexs)?;
+        if self.hash_join_desc.join_type == JoinType::Full {
+            let nullable_probe_columns = probe_block
                 .columns()
                 .iter()
                 .map(|c| {
-                    c.data_type()
-                        .create_constant_column(&DataValue::Null, build_indexs.len())
+                    let mut probe_validity = MutableBitmap::new();
+                    probe_validity.extend_constant(c.len(), true);
+                    let probe_validity: Bitmap = probe_validity.into();
+                    Self::set_validity(c, &probe_validity)
                 })
-                .collect::<Result<Vec<_>>>()?
-        } else {
-            build_block
-                .columns()
-                .iter()
-                .map(|c| Self::set_validity(c, &validity))
-                .collect::<Result<Vec<_>>>()?
-        };
-        let nullable_build_block =
-            DataBlock::create(self.row_space.data_schema.clone(), nullable_columns.clone());
-        let probe_block = DataBlock::block_take_by_indices(input, probe_indexs)?;
+                .collect::<Result<Vec<_>>>()?;
+            probe_block = DataBlock::create(self.probe_schema.clone(), nullable_probe_columns);
+        }
         let merged_block = self.merge_eq_block(&nullable_build_block, &probe_block)?;
 
         if !WITH_OTHER_CONJUNCT {
