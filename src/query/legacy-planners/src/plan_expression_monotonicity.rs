@@ -24,7 +24,6 @@ use common_functions::scalars::FunctionContext;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::Monotonicity;
 
-use crate::col;
 use crate::Expression;
 use crate::ExpressionVisitor;
 use crate::Recursion;
@@ -175,45 +174,6 @@ impl ExpressionMonotonicityVisitor {
         visitor.visit(expr).map_or(Monotonicity::default(), |v| {
             v.finalize().unwrap_or_else(|_| Monotonicity::default())
         })
-    }
-
-    /// Extract sort column from sort expression. It checks the monotonicity information
-    /// of the sort expression (like f(x) = x+2 is a monotonic function), and extract the
-    /// column information, returns as Expression::Column.
-    pub fn extract_sort_column(
-        schema: DataSchemaRef,
-        sort_expr: &Expression,
-        left: Option<ColumnWithField>,
-        right: Option<ColumnWithField>,
-        column_name: &str,
-    ) -> Result<Expression> {
-        if let Expression::Sort {
-            asc,
-            nulls_first,
-            origin_expr,
-            ..
-        } = sort_expr
-        {
-            let mut variables = HashMap::new();
-            variables.insert(column_name.to_owned(), (left, right));
-            let mono = Self::check_expression(schema, origin_expr, variables, false);
-            if !mono.is_monotonic {
-                return Ok(sort_expr.clone());
-            }
-
-            // need to flip the asc when is_positive is false
-            let new_asc = if mono.is_positive { *asc } else { !*asc };
-            return Ok(Expression::Sort {
-                expr: Box::new(col(column_name)),
-                asc: new_asc,
-                nulls_first: *nulls_first,
-                origin_expr: origin_expr.clone(),
-            });
-        }
-        Err(ErrorCode::BadArguments(format!(
-            "expect sort expression, get {:?}",
-            sort_expr
-        )))
     }
 }
 
