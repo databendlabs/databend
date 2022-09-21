@@ -37,7 +37,7 @@ use tracing::error;
 use ExecuteState::*;
 
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterFactoryV2;
+use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterQueryLog;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
@@ -235,7 +235,7 @@ impl ExecuteState {
         let mut planner = Planner::new(ctx.clone());
         let (plan, _, _) = planner.plan_sql(sql).await?;
         let is_select = matches!(&plan, Plan::Query { .. });
-        let interpreter = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
+        let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
 
         if is_select {
             let _ = interpreter

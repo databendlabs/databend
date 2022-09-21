@@ -30,7 +30,7 @@ async fn test_explain_interpreter() -> Result<()> {
     ";
 
     let (plan, _, _) = planner.plan_sql(query).await?;
-    let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
+    let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
     assert_eq!(executor.name(), "ExplainInterpreterV2");
 
     let stream = executor.execute(ctx).await?;

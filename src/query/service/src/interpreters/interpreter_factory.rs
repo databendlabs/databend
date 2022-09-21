@@ -34,11 +34,11 @@ use crate::sql::plans::Plan;
 use crate::sql::DfStatement;
 
 /// InterpreterFactory is the entry of Interpreter.
-pub struct InterpreterFactoryV2;
+pub struct InterpreterFactory;
 
-/// InterpreterFactoryV2 provides `get` method which transforms `Plan` into the corresponding interpreter.
+/// InterpreterFactory provides `get` method which transforms `Plan` into the corresponding interpreter.
 /// Such as: Plan::Query -> InterpreterSelectV2
-impl InterpreterFactoryV2 {
+impl InterpreterFactory {
     /// Check if statement is supported by InterpreterFactoryV2
     pub fn check(stmt: &DfStatement) -> bool {
         matches!(stmt, DfStatement::SeeYouAgain)
@@ -52,7 +52,7 @@ impl InterpreterFactoryV2 {
             e
         })?;
 
-        let inner = InterpreterFactoryV2::create_interpreter(ctx.clone(), plan)?;
+        let inner = InterpreterFactory::create_interpreter(ctx.clone(), plan)?;
 
         Ok(Arc::new(InterceptorInterpreter::create(
             ctx,

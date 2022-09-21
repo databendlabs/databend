@@ -21,7 +21,7 @@ use common_users::UserApiProvider;
 use databend_query::api::http::v1::instance_status::instance_status_handler;
 use databend_query::api::http::v1::instance_status::InstanceStatus;
 use databend_query::interpreters::Interpreter;
-use databend_query::interpreters::InterpreterFactoryV2;
+use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::SessionType;
 use databend_query::sessions::TableContext;
@@ -63,7 +63,7 @@ async fn run_query(query_ctx: &Arc<QueryContext>) -> Result<Arc<dyn Interpreter>
     query_ctx.set_current_user(user);
     let mut planner = Planner::new(query_ctx.clone());
     let (plan, _, _) = planner.plan_sql(sql).await?;
-    InterpreterFactoryV2::get(query_ctx.clone(), &plan).await
+    InterpreterFactory::get(query_ctx.clone(), &plan).await
 }
 
 #[tokio::test]

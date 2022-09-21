@@ -33,7 +33,7 @@ use serde::Serialize;
 use tracing::error;
 
 use super::HttpQueryContext;
-use crate::interpreters::InterpreterFactoryV2;
+use crate::interpreters::InterpreterFactory;
 use crate::servers::http::v1::multipart_format::MultipartFormat;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
@@ -54,7 +54,7 @@ pub struct LoadResponse {
 #[allow(clippy::manual_async_fn)]
 fn execute_query(context: Arc<QueryContext>, plan: Plan) -> impl Future<Output = Result<()>> {
     async move {
-        let interpreter = InterpreterFactoryV2::get(context.clone(), &plan).await?;
+        let interpreter = InterpreterFactory::get(context.clone(), &plan).await?;
 
         if let Err(cause) = interpreter.start().await {
             error!("interpreter.start error: {:?}", cause);

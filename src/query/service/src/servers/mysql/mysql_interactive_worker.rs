@@ -41,7 +41,7 @@ use tracing::info;
 use tracing::Instrument;
 
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterFactoryV2;
+use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterQueryLog;
 use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::writers::DFQueryResultWriter;
@@ -332,7 +332,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
 
                 let mut planner = Planner::new(context.clone());
                 let plan = planner.plan_sql(query).await?;
-                let interpreter = InterpreterFactoryV2::get(context.clone(), &plan.0).await;
+                let interpreter = InterpreterFactory::get(context.clone(), &plan.0).await;
                 let has_result_set = has_result_set_by_plan(&plan.0);
 
                 match interpreter {

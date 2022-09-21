@@ -34,7 +34,7 @@ use databend_query::interpreters::append2table;
 use databend_query::interpreters::execute_pipeline;
 use databend_query::interpreters::CreateTableInterpreterV2;
 use databend_query::interpreters::Interpreter;
-use databend_query::interpreters::InterpreterFactoryV2;
+use databend_query::interpreters::InterpreterFactory;
 use databend_query::pipelines::processors::BlocksSource;
 use databend_query::pipelines::PipelineBuildResult;
 use databend_query::sessions::QueryContext;
@@ -411,7 +411,7 @@ pub async fn expects_ok(
 pub async fn execute_query(ctx: Arc<QueryContext>, query: &str) -> Result<SendableDataBlockStream> {
     let mut planner = Planner::new(ctx.clone());
     let (plan, _, _) = planner.plan_sql(query).await?;
-    let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
+    let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
     executor.execute(ctx.clone()).await
 }
 

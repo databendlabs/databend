@@ -31,7 +31,7 @@ async fn test_create_table_interpreter() -> Result<()> {
         ";
 
         let (plan, _, _) = planner.plan_sql(TEST_CREATE_QUERY).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
         let _ = executor.execute(ctx.clone()).await?;
     }
 
@@ -40,7 +40,7 @@ async fn test_create_table_interpreter() -> Result<()> {
             "CREATE TABLE default.test_b(a varchar, x int) as select b, a from default.test_a";
 
         let (plan, _, _) = planner.plan_sql(TEST_CREATE_QUERY_SELECT).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
         let mut stream = executor.execute(ctx.clone()).await?;
         while let Some(_block) = stream.next().await {}
 
@@ -73,7 +73,7 @@ async fn test_create_table_interpreter() -> Result<()> {
             c varchar(255) comment 'c', d smallint comment 'd', e Date comment 'e')\
             Engine = Null COMMENT = 'test create'";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
 
         assert!(executor.execute(ctx.clone()).await.is_ok());
     }

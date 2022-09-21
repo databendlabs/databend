@@ -16,7 +16,7 @@ use common_base::base::tokio;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_legacy_planners::*;
-use databend_query::interpreters::InterpreterFactoryV2;
+use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
 use databend_query::sessions::TableContext;
@@ -110,7 +110,7 @@ async fn test_limit_push_down() -> Result<()> {
         let mut planner = Planner::new(ctx.clone());
         let (plan, _, _) = planner.plan_sql(test.query).await?;
 
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
 
         let stream = executor.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;

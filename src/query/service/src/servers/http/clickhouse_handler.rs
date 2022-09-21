@@ -44,7 +44,7 @@ use serde::Serialize;
 use tracing::error;
 use tracing::info;
 
-use crate::interpreters::InterpreterFactoryV2;
+use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterPtr;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::StreamSource;
@@ -213,7 +213,7 @@ pub async fn clickhouse_handler_get(
     let format = get_format_from_plan(&plan, format)?;
 
     context.attach_query_str(&sql);
-    let interpreter = InterpreterFactoryV2::get(context.clone(), &plan)
+    let interpreter = InterpreterFactory::get(context.clone(), &plan)
         .await
         .map_err(BadRequest)?;
     execute(context, interpreter, plan.schema(), format, None, params)
@@ -269,7 +269,7 @@ pub async fn clickhouse_handler_post(
     let format = get_format_with_default(fmt, default_format)?;
     let format = get_format_from_plan(&plan, format)?;
     ctx.attach_query_str(&sql);
-    let interpreter = InterpreterFactoryV2::get(ctx.clone(), &plan)
+    let interpreter = InterpreterFactory::get(ctx.clone(), &plan)
         .await
         .map_err(BadRequest)?;
 
