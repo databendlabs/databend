@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_legacy_planners::PlanNode;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
 
@@ -35,12 +34,7 @@ impl PrivilegeAccess {
 
 #[async_trait::async_trait]
 impl AccessChecker for PrivilegeAccess {
-    async fn check(&self, _plan: &PlanNode) -> Result<()> {
-        // The old planner *NO* need to check anymore.
-        Ok(())
-    }
-
-    async fn check_new(&self, plan: &Plan) -> Result<()> {
+    async fn check(&self, plan: &Plan) -> Result<()> {
         let session = self.ctx.get_current_session();
 
         match plan {

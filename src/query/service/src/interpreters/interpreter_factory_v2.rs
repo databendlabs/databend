@@ -47,7 +47,7 @@ impl InterpreterFactoryV2 {
     pub async fn get(ctx: Arc<QueryContext>, plan: &Plan) -> Result<InterpreterPtr> {
         // Check the access permission.
         let access_checker = Accessor::create(ctx.clone());
-        access_checker.check_new(plan).await.map_err(|e| {
+        access_checker.check(plan).await.map_err(|e| {
             error!("Access.denied(v2): {:?}", e);
             e
         })?;
