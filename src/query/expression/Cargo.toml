@@ -18,7 +18,7 @@ common-exception = { path = "../../common/exception" }
 
 # Crates.io dependencies
 chrono = "0.4"
-chrono-tz = "0.6.1"
+chrono-tz = "0.6.3"
 comfy-table = "6"
 common-jsonb = { path = "../../common/jsonb" }
 educe = "0.4"
