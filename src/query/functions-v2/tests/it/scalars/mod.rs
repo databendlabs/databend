@@ -26,6 +26,7 @@ use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
 use common_expression::Value;
 use common_functions_v2::scalars::builtin_functions;
+use itertools::Itertools;
 
 mod arithmetic;
 mod boolean;
@@ -116,6 +117,23 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
                 }
                 Value::Column(output_col) => {
                     test_arrow_conversion(&output_col);
+
+                    // Only display the used input columns
+                    let used_columns = raw_expr
+                        .column_refs()
+                        .into_iter()
+                        .sorted()
+                        .collect::<Vec<_>>();
+                    let input_domains = used_columns
+                        .iter()
+                        .cloned()
+                        .map(|i| input_domains[i].clone())
+                        .collect::<Vec<_>>();
+                    let columns = used_columns
+                        .iter()
+                        .cloned()
+                        .map(|i| columns[i].clone())
+                        .collect::<Vec<_>>();
 
                     let mut table = Table::new();
                     table.load_preset("||--+-++|    ++++++");
