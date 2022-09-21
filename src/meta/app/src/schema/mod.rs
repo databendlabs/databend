@@ -62,6 +62,7 @@ pub use table::TableInfo;
 pub use table::TableMeta;
 pub use table::TableNameIdent;
 pub use table::TableStatistics;
+pub use table::TableStorageParams;
 pub use table::TruncateTableReply;
 pub use table::TruncateTableReq;
 pub use table::UndropTableReply;

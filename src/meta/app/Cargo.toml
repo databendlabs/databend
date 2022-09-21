@@ -13,6 +13,7 @@ test = false
 [dependencies]
 common-datavalues = { path = "../../query/datavalues" }
 common-meta-types = { path = "../types" }
+common-storage = { path = "../../common/storage" }
 
 enumflags2 = { version = "0.7.5", features = ["serde"] }
 maplit = "1.0.2"

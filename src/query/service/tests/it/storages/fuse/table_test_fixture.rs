@@ -150,6 +150,14 @@ impl TestFixture {
             table: self.default_table_name(),
             schema: TestFixture::default_schema(),
             engine: Engine::Fuse,
+            storage_params: self.ctx.get_storage_params(),
+            path: self
+                .ctx
+                .get_storage_operator()
+                .unwrap()
+                .metadata()
+                .root()
+                .to_string(),
             options: [
                 // database id is required for FUSE
                 (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
@@ -172,6 +180,14 @@ impl TestFixture {
             table: self.default_table_name(),
             schema: TestFixture::default_schema(),
             engine: Engine::Fuse,
+            storage_params: self.ctx.get_storage_params(),
+            path: self
+                .ctx
+                .get_storage_operator()
+                .unwrap()
+                .metadata()
+                .root()
+                .to_string(),
             options: [
                 // database id is required for FUSE
                 (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),

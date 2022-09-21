@@ -78,6 +78,7 @@ fn test_statement() {
         r#"create table if not exists a.b (c tuple(m integer, n string), d tuple(integer, string));"#,
         r#"create table a.b like c.d;"#,
         r#"create table t like t2 engine = memory;"#,
+        r#"create table if not exists a.b (a int) 's3://testbucket/admin/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');"#,
         r#"truncate table a;"#,
         r#"truncate table "a".b;"#,
         r#"drop table a;"#,
@@ -295,6 +296,10 @@ fn test_statement() {
         r#"SHOW GRANTS ON DATABASE db;"#,
         r#"SHOW GRANTS OF SHARE t;"#,
     ];
+
+    // let cases = &[
+    //     r#"create table if not exists a.b (a int) 's3://testbucket/admin/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');"#,
+    // ];
 
     for case in cases {
         let tokens = tokenize_sql(case).unwrap();

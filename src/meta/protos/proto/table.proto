@@ -16,6 +16,7 @@ syntax = "proto3";
 
 package databend_proto;
 
+import "user.proto";
 import "metadata.proto";
 
 message DbIdTableName {
@@ -56,6 +57,9 @@ message TableIdent {
   // The seq of TableMeta
   uint64 seq = 2;
 }
+
+// TableStorageParams for store table storage location.
+message TableStorageParams { UserStageInfo.StageStorage storage = 1; }
 
 // TableMeta is a container of all non-identity information.
 message TableMeta {
@@ -103,6 +107,12 @@ message TableMeta {
 
   // Comments of each field.
   repeated string field_comments = 25;
+
+  // Table storage location connection info.
+  optional TableStorageParams storage_params = 26;
+
+  // Table storage path prefix
+  string storage_path = 27;
 }
 
 // Save table name id list history.
