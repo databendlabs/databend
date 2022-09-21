@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::VecDeque;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -29,15 +28,14 @@ use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::SinkPipeBuilder;
+use common_pipeline_sources::processors::sources::input_formats::InputContext;
 use parking_lot::Mutex;
 use tracing::info;
 
 use super::StageSourceHelper;
-use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::ContextSink;
 use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::Pipeline;
-use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::TableContext;
 use crate::storages::Table;
 
@@ -47,6 +45,7 @@ pub struct StageTable {
     // But the Table trait need it:
     // fn get_table_info(&self) -> &TableInfo).
     table_info_placeholder: TableInfo,
+    input_context: Mutex<Option<Arc<InputContext>>>,
 }
 
 impl StageTable {
@@ -56,7 +55,13 @@ impl StageTable {
         Ok(Arc::new(Self {
             table_info,
             table_info_placeholder,
+            input_context: Default::default(),
         }))
+    }
+
+    fn get_input_context(&self) -> Option<Arc<InputContext>> {
+        let guard = self.input_context.lock();
+        guard.clone()
     }
 }
 
@@ -73,39 +78,35 @@ impl Table for StageTable {
 
     async fn read_partitions(
         &self,
-        _ctx: Arc<dyn TableContext>,
+        ctx: Arc<dyn TableContext>,
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
+        let operator = StageSourceHelper::get_op(&ctx, &self.table_info.stage_info).await?;
+        let input_ctx = Arc::new(
+            InputContext::try_create_from_copy(
+                operator,
+                ctx.get_settings().clone(),
+                ctx.get_format_settings()?,
+                self.table_info.schema.clone(),
+                self.table_info.stage_info.clone(),
+                self.table_info.files.clone(),
+                ctx.get_scan_progress(),
+            )
+            .await?,
+        );
+        let mut guard = self.input_context.lock();
+        *guard = Some(input_ctx);
         Ok((Statistics::default(), vec![]))
     }
 
     fn read2(
         &self,
-        ctx: Arc<dyn TableContext>,
+        _ctx: Arc<dyn TableContext>,
         _plan: &ReadDataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let settings = ctx.get_settings();
-        let mut builder = SourcePipeBuilder::create();
-        let table_info = &self.table_info;
-        let schema = table_info.schema.clone();
-        let mut files_deque = VecDeque::with_capacity(table_info.files.len());
-        for f in &table_info.files {
-            files_deque.push_back(f.to_string());
-        }
-        let files = Arc::new(Mutex::new(files_deque));
-
-        let stage_source = StageSourceHelper::try_create(ctx, schema, table_info.clone(), files)?;
-
-        for _index in 0..settings.get_max_threads()? {
-            let output = OutputPort::create();
-            builder.add_source(output.clone(), stage_source.get_splitter(output)?);
-        }
-        pipeline.add_pipe(builder.finalize());
-
-        pipeline.add_transform(|transform_input_port, transform_output_port| {
-            stage_source.get_deserializer(transform_input_port, transform_output_port)
-        })?;
+        let input_ctx = self.get_input_context().unwrap();
+        input_ctx.format.exec_copy(input_ctx.clone(), pipeline)?;
 
         let limit = self.table_info.stage_info.copy_options.size_limit;
         if limit > 0 {
