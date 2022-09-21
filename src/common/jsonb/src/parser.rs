@@ -229,7 +229,7 @@ impl<'a> Parser<'a> {
                 return Err(self.error(ParseErrorCode::InvalidNumberValue));
             }
         }
-        let s = std::str::from_utf8(&self.buf[start_idx..self.idx]).unwrap();
+        let s = unsafe { std::str::from_utf8_unchecked(&self.buf[start_idx..self.idx]) };
 
         if !has_fraction && !has_exponent {
             if !negative {

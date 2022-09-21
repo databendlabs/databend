@@ -12,13 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::cmp::Ordering;
 
+use common_jsonb::array_length;
 use common_jsonb::build_array;
 use common_jsonb::build_object;
 use common_jsonb::compare;
 use common_jsonb::from_slice;
+use common_jsonb::get_by_name_ignore_case;
+use common_jsonb::get_by_path;
+use common_jsonb::object_keys;
+use common_jsonb::parse_json_path;
 use common_jsonb::parse_value;
+use common_jsonb::JsonPath;
 use common_jsonb::Object;
 use common_jsonb::Value;
 
@@ -111,6 +118,129 @@ fn test_build_object() {
 }
 
 #[test]
+fn test_array_length() {
+    let sources = vec![
+        (r#"true"#, None),
+        (r#"1234"#, None),
+        (r#"[]"#, Some(0)),
+        (r#"[1,2,3]"#, Some(3)),
+        (r#"["a","b","c","d","e","f"]"#, Some(6)),
+        (r#"{"k":"v"}"#, None),
+    ];
+
+    let mut buf: Vec<u8> = Vec::new();
+    for (s, expect) in sources {
+        let value = parse_value(s.as_bytes()).unwrap();
+        value.to_vec(&mut buf);
+        let res = array_length(&buf);
+        assert_eq!(res, expect);
+        buf.clear();
+    }
+}
+
+#[test]
+fn test_get_by_path() {
+    let sources = vec![
+        (r#"1234"#, vec![JsonPath::UInt64(0)], None),
+        (r#"[]"#, vec![JsonPath::UInt64(0)], None),
+        (
+            r#"["a","b","c"]"#,
+            vec![JsonPath::UInt64(0)],
+            Some(Value::String(Cow::from("a"))),
+        ),
+        (
+            r#"{"k1":["a","b","c"], "k2":{"k3":3,"k4":4}}"#,
+            vec![JsonPath::String(Cow::from("k1")), JsonPath::UInt64(0)],
+            Some(Value::String(Cow::from("a"))),
+        ),
+        (
+            r#"{"k1":["a","b","c"], "k2":{"k3":"v3","k4":"v4"}}"#,
+            vec![
+                JsonPath::String(Cow::from("k2")),
+                JsonPath::String(Cow::from("k3")),
+            ],
+            Some(Value::String(Cow::from("v3"))),
+        ),
+    ];
+
+    let mut buf: Vec<u8> = Vec::new();
+    for (s, paths, expect) in sources {
+        let value = parse_value(s.as_bytes()).unwrap();
+        value.to_vec(&mut buf);
+        let res = get_by_path(&buf, paths);
+        match expect {
+            Some(expect) => assert_eq!(from_slice(&res.unwrap()).unwrap(), expect),
+            None => assert_eq!(res, None),
+        }
+        buf.clear();
+    }
+}
+
+#[test]
+fn test_get_by_name_ignore_case() {
+    let sources = vec![
+        (r#"true"#, "a".to_string(), None),
+        (r#"[1,2,3]"#, "a".to_string(), None),
+        (r#"{"a":"v1","b":[1,2,3]}"#, "k".to_string(), None),
+        (
+            r#"{"Aa":"v1", "aA":"v2", "aa":"v3"}"#,
+            "aa".to_string(),
+            Some(Value::String(Cow::from("v3"))),
+        ),
+        (
+            r#"{"Aa":"v1", "aA":"v2", "aa":"v3"}"#,
+            "AA".to_string(),
+            Some(Value::String(Cow::from("v1"))),
+        ),
+    ];
+
+    let mut buf: Vec<u8> = Vec::new();
+    for (s, name, expect) in sources {
+        let value = parse_value(s.as_bytes()).unwrap();
+        value.to_vec(&mut buf);
+        let res = get_by_name_ignore_case(&buf, &name);
+        match expect {
+            Some(expect) => assert_eq!(from_slice(&res.unwrap()).unwrap(), expect),
+            None => assert_eq!(res, None),
+        }
+        buf.clear();
+    }
+}
+
+#[test]
+fn test_object_keys() {
+    let sources = vec![
+        (r#"[1,2,3]"#, None),
+        (
+            r#"{"a":"v1","b":[1,2,3]}"#,
+            Some(Value::Array(vec![
+                Value::String(Cow::from("a")),
+                Value::String(Cow::from("b")),
+            ])),
+        ),
+        (
+            r#"{"k1":"v1","k2":[1,2,3]}"#,
+            Some(Value::Array(vec![
+                Value::String(Cow::from("k1")),
+                Value::String(Cow::from("k2")),
+            ])),
+        ),
+    ];
+
+    let mut buf: Vec<u8> = Vec::new();
+    for (s, expect) in sources {
+        let value = parse_value(s.as_bytes()).unwrap();
+        value.to_vec(&mut buf);
+        let res = object_keys(&buf);
+        match expect {
+            Some(expect) => assert_eq!(from_slice(&res.unwrap()).unwrap(), expect),
+            None => assert_eq!(res, None),
+        }
+        buf.clear();
+    }
+}
+
+#[test]
 fn test_compare() {
     let sources = vec![
         (r#"null"#, r#"null"#, Ordering::Equal),
@@ -187,5 +317,31 @@ fn test_compare() {
 
         lbuf.clear();
         rbuf.clear();
+    }
+}
+
+#[test]
+fn test_parse_json_path() {
+    let sources = vec![
+        (r#"[1][2]"#, vec![JsonPath::UInt64(1), JsonPath::UInt64(2)]),
+        (r#"["k1"]["k2"]"#, vec![
+            JsonPath::String(Cow::from("k1")),
+            JsonPath::String(Cow::from("k2")),
+        ]),
+        (r#"k1.k2:k3"#, vec![
+            JsonPath::String(Cow::from("k1")),
+            JsonPath::String(Cow::from("k2")),
+            JsonPath::String(Cow::from("k3")),
+        ]),
+        (r#"k1["k2"][1]"#, vec![
+            JsonPath::String(Cow::from("k1")),
+            JsonPath::String(Cow::from("k2")),
+            JsonPath::UInt64(1),
+        ]),
+    ];
+
+    for (s, expect) in sources {
+        let path = parse_json_path(s.as_bytes()).unwrap();
+        assert_eq!(&path[..], &expect[..]);
     }
 }
