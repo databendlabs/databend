@@ -196,9 +196,9 @@ copyOptions ::=
 
 | Parameters  | Description | Required |
 | ----------- | ----------- | --- |
-| `SIZE_LIMIT = <num>` | Specifies the maximum rows of data to be loaded for a given COPY statement. Defaults to `0` meaning no limits | Optional |
-| `PURGE = <bool>` | If `True`, the command will purge the files in the stage after they are loaded successfully into the table. Default: `False` | Optional |
-| `FORCE = <bool>` | True that specifies the command will purge the files in the stage if they are loaded successfully into table. Default: `False` | Optional |
+| `SIZE_LIMIT = <num>` | Specifies the maximum rows of data to be loaded for a given COPY statement. Defaults to `0` meaning no limits. | Optional |
+| `PURGE = <bool>` | If `True`, the command will purge the files in the stage after they are loaded successfully into the table. Default: `False`. | Optional |
+| `FORCE = <bool>` | Defaults to `False` meaning the command will skip duplicate files in the stage when copying data. If `True`, duplicate files will not be skipped. | Optional |
 
 ## Examples
 
