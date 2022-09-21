@@ -60,6 +60,7 @@ tracing = "0.1.36"
 typetag = "0.1.8"
 uuid = { version = "1.1.2", features = ["serde", "v4"] }
 walkdir = "2.3.2"
+serde_repr = "0.1.9"
 
 [build-dependencies]
 common-building = { path = "../../../common/building" }

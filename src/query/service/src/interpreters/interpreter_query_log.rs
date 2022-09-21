@@ -165,78 +165,78 @@ impl InterpreterQueryLog {
     }
 
     async fn write_log(&self, event: &LogEvent) -> Result<()> {
-        let query_log = self
-            .ctx
-            .get_table(CATALOG_DEFAULT, "system", "query_log")
-            .await?;
-        let schema = query_log.get_table_info().meta.schema.clone();
-
-        let block = DataBlock::create(schema.clone(), vec![
-            // Type.
-            Series::from_data(vec![event.log_type as i8]),
-            Series::from_data(vec![event.handler_type.as_str()]),
-            // User.
-            Series::from_data(vec![event.tenant_id.as_str()]),
-            Series::from_data(vec![event.cluster_id.as_str()]),
-            Series::from_data(vec![event.sql_user.as_str()]),
-            Series::from_data(vec![event.sql_user_quota.as_str()]),
-            Series::from_data(vec![event.sql_user_privileges.as_str()]),
-            // Query.
-            Series::from_data(vec![event.query_id.as_str()]),
-            Series::from_data(vec![event.query_kind.as_str()]),
-            Series::from_data(vec![event.query_text.as_str()]),
-            Series::from_data(vec![event.event_date]),
-            Series::from_data(vec![event.event_time]),
-            // Schema.
-            Series::from_data(vec![event.current_database.as_str()]),
-            Series::from_data(vec![event.databases.as_str()]),
-            Series::from_data(vec![event.tables.as_str()]),
-            Series::from_data(vec![event.columns.as_str()]),
-            Series::from_data(vec![event.projections.as_str()]),
-            // Stats.
-            Series::from_data(vec![event.written_rows]),
-            Series::from_data(vec![event.written_bytes]),
-            Series::from_data(vec![event.written_io_bytes]),
-            Series::from_data(vec![event.written_io_bytes_cost_ms]),
-            Series::from_data(vec![event.scan_rows]),
-            Series::from_data(vec![event.scan_bytes]),
-            Series::from_data(vec![event.scan_io_bytes]),
-            Series::from_data(vec![event.scan_io_bytes_cost_ms]),
-            Series::from_data(vec![event.scan_partitions]),
-            Series::from_data(vec![event.total_partitions]),
-            Series::from_data(vec![event.result_rows]),
-            Series::from_data(vec![event.result_bytes]),
-            Series::from_data(vec![event.cpu_usage]),
-            Series::from_data(vec![event.memory_usage]),
-            // Client.
-            Series::from_data(vec![event.client_info.as_str()]),
-            Series::from_data(vec![event.client_address.as_str()]),
-            // Exception.
-            Series::from_data(vec![event.exception_code]),
-            Series::from_data(vec![event.exception_text.as_str()]),
-            Series::from_data(vec![event.stack_trace.as_str()]),
-            // Server.
-            Series::from_data(vec![event.server_version.as_str()]),
-            // Session settings
-            Series::from_data(vec![event.session_settings.as_str()]),
-            // Extra.
-            Series::from_data(vec![event.extra.as_str()]),
-        ]);
-        let blocks = vec![Ok(block)];
-        let input_stream = futures::stream::iter::<Vec<Result<DataBlock>>>(blocks);
-
-        let query_log_table: &QueryLogTable = query_log.as_any().downcast_ref().unwrap();
-        query_log_table
-            .append_data(self.ctx.clone(), Box::pin(input_stream))
-            .await?;
-
-        // info!("{}", serde_json::to_string(event)?);
-        if let Some(logger) = QueryLogger::instance().get_subscriber() {
-            let event_str = serde_json::to_string(event)?;
-            subscriber::with_default(logger, || {
-                info!("{}", event_str);
-            });
-        };
+        // let query_log = self
+        //     .ctx
+        //     .get_table(CATALOG_DEFAULT, "system", "query_log")
+        //     .await?;
+        // let schema = query_log.get_table_info().meta.schema.clone();
+        //
+        // let block = DataBlock::create(schema.clone(), vec![
+        //     // Type.
+        //     Series::from_data(vec![event.log_type as i8]),
+        //     Series::from_data(vec![event.handler_type.as_str()]),
+        //     // User.
+        //     Series::from_data(vec![event.tenant_id.as_str()]),
+        //     Series::from_data(vec![event.cluster_id.as_str()]),
+        //     Series::from_data(vec![event.sql_user.as_str()]),
+        //     Series::from_data(vec![event.sql_user_quota.as_str()]),
+        //     Series::from_data(vec![event.sql_user_privileges.as_str()]),
+        //     // Query.
+        //     Series::from_data(vec![event.query_id.as_str()]),
+        //     Series::from_data(vec![event.query_kind.as_str()]),
+        //     Series::from_data(vec![event.query_text.as_str()]),
+        //     Series::from_data(vec![event.event_date]),
+        //     Series::from_data(vec![event.event_time]),
+        //     // Schema.
+        //     Series::from_data(vec![event.current_database.as_str()]),
+        //     Series::from_data(vec![event.databases.as_str()]),
+        //     Series::from_data(vec![event.tables.as_str()]),
+        //     Series::from_data(vec![event.columns.as_str()]),
+        //     Series::from_data(vec![event.projections.as_str()]),
+        //     // Stats.
+        //     Series::from_data(vec![event.written_rows]),
+        //     Series::from_data(vec![event.written_bytes]),
+        //     Series::from_data(vec![event.written_io_bytes]),
+        //     Series::from_data(vec![event.written_io_bytes_cost_ms]),
+        //     Series::from_data(vec![event.scan_rows]),
+        //     Series::from_data(vec![event.scan_bytes]),
+        //     Series::from_data(vec![event.scan_io_bytes]),
+        //     Series::from_data(vec![event.scan_io_bytes_cost_ms]),
+        //     Series::from_data(vec![event.scan_partitions]),
+        //     Series::from_data(vec![event.total_partitions]),
+        //     Series::from_data(vec![event.result_rows]),
+        //     Series::from_data(vec![event.result_bytes]),
+        //     Series::from_data(vec![event.cpu_usage]),
+        //     Series::from_data(vec![event.memory_usage]),
+        //     // Client.
+        //     Series::from_data(vec![event.client_info.as_str()]),
+        //     Series::from_data(vec![event.client_address.as_str()]),
+        //     // Exception.
+        //     Series::from_data(vec![event.exception_code]),
+        //     Series::from_data(vec![event.exception_text.as_str()]),
+        //     Series::from_data(vec![event.stack_trace.as_str()]),
+        //     // Server.
+        //     Series::from_data(vec![event.server_version.as_str()]),
+        //     // Session settings
+        //     Series::from_data(vec![event.session_settings.as_str()]),
+        //     // Extra.
+        //     Series::from_data(vec![event.extra.as_str()]),
+        // ]);
+        // let blocks = vec![Ok(block)];
+        // let input_stream = futures::stream::iter::<Vec<Result<DataBlock>>>(blocks);
+        //
+        // let query_log_table: &QueryLogTable = query_log.as_any().downcast_ref().unwrap();
+        // query_log_table
+        //     .append_data(self.ctx.clone(), Box::pin(input_stream))
+        //     .await?;
+        //
+        // // info!("{}", serde_json::to_string(event)?);
+        // if let Some(logger) = QueryLogger::instance().get_subscriber() {
+        //     let event_str = serde_json::to_string(event)?;
+        //     subscriber::with_default(logger, || {
+        //         info!("{}", event_str);
+        //     });
+        // };
         Ok(())
     }
 

@@ -50,7 +50,7 @@ impl SystemDatabase {
             system::UsersTable::create(sys_db_meta.next_table_id()),
             Arc::new(system::QueryLogTable::create(
                 sys_db_meta.next_table_id(),
-                config.query.max_query_log_size as i32,
+                config.query.max_query_log_size,
             )),
             Arc::new(system::ClusteringHistoryTable::create(
                 sys_db_meta.next_table_id(),
