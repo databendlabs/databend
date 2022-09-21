@@ -14,7 +14,6 @@
 
 pub mod executor;
 pub mod planner;
-pub mod statements;
 use common_legacy_parser::sql_common;
 use common_storages_util::table_option_keys;
 pub use planner::*;

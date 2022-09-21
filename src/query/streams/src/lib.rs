@@ -12,16 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod sources;
 mod stream;
 mod stream_datablock;
 mod stream_error;
 mod stream_progress;
-mod stream_take;
 
-pub use sources::*;
 pub use stream::*;
 pub use stream_datablock::DataBlockStream;
 pub use stream_error::ErrorStream;
 pub use stream_progress::ProgressStream;
-pub use stream_take::TakeStream;
