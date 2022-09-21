@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::PlanNode;
 
 use crate::interpreters::access::AccessChecker;
 use crate::sessions::QueryContext;
@@ -36,22 +35,7 @@ impl ManagementModeAccess {
 #[async_trait::async_trait]
 impl AccessChecker for ManagementModeAccess {
     // Check what we can do if in management mode.
-    async fn check(&self, plan: &PlanNode) -> Result<()> {
-        // Allows for management-mode.
-        if self.ctx.get_config().query.management_mode {
-            return match plan {
-                PlanNode::Empty(_) => Ok(()),
-                _ => Err(ErrorCode::ManagementModePermissionDenied(format!(
-                    "Access denied for operation:{:?} in management-mode",
-                    plan.name()
-                ))),
-            };
-        };
-        Ok(())
-    }
-
-    // Check what we can do if in management mode.
-    async fn check_new(&self, plan: &Plan) -> Result<()> {
+    async fn check(&self, plan: &Plan) -> Result<()> {
         // Allows for management-mode.
         if self.ctx.get_config().query.management_mode {
             let ok = match plan {

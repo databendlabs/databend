@@ -56,7 +56,7 @@ async fn test_alter_user_interpreter() -> Result<()> {
         );
 
         let (plan, _, _) = planner.plan_sql(&test_query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
         assert_eq!(executor.name(), "AlterUserInterpreter");
         let mut stream = executor.execute(ctx.clone()).await?;
         while let Some(_block) = stream.next().await {}
@@ -71,7 +71,7 @@ async fn test_alter_user_interpreter() -> Result<()> {
         let test_query = format!("ALTER USER '{}'@'{}' WITH TENANTSETTING", name, hostname);
 
         let (plan, _, _) = planner.plan_sql(&test_query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
         assert_eq!(executor.name(), "AlterUserInterpreter");
         let mut stream = executor.execute(ctx.clone()).await?;
         while let Some(_block) = stream.next().await {}
@@ -90,7 +90,7 @@ async fn test_alter_user_interpreter() -> Result<()> {
         );
 
         let (plan, _, _) = planner.plan_sql(&test_query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
         assert_eq!(executor.name(), "AlterUserInterpreter");
         let mut stream = executor.execute(ctx.clone()).await?;
         while let Some(_block) = stream.next().await {}
