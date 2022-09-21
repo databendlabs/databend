@@ -135,10 +135,10 @@ pub trait InputFormatPipe: Sized + Send + 'static {
                     }
                 });
                 if split_tx
-                    .send(Split {
+                    .send(Ok(Split {
                         info: s.clone(),
                         rx: data_rx,
-                    })
+                    }))
                     .await
                     .is_err()
                 {
@@ -196,7 +196,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
 
     fn build_pipeline_with_aligner(
         ctx: &Arc<InputContext>,
-        split_rx: async_channel::Receiver<Split<Self>>,
+        split_rx: async_channel::Receiver<Result<Split<Self>>>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let mut builder = SourcePipeBuilder::create();
