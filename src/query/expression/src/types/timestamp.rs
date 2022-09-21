@@ -150,7 +150,7 @@ impl ArgType for TimestampType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Serialize, Deserialize)]
 pub struct Timestamp {
     /// Milliseconds since UNIX epoch.
     pub ts: i64,

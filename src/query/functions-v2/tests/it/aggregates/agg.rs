@@ -36,6 +36,9 @@ fn test_agg() {
     test_uniq(file, eval_aggr);
     test_agg_if(file, eval_aggr);
     test_agg_distinct(file, eval_aggr);
+    test_agg_max(file, eval_aggr);
+    test_agg_min(file, eval_aggr);
+    test_agg_any(file, eval_aggr);
 }
 
 #[test]
@@ -49,6 +52,9 @@ fn test_agg_group_by() {
     test_uniq(file, simulate_two_groups_group_by);
     test_agg_if(file, simulate_two_groups_group_by);
     test_agg_distinct(file, simulate_two_groups_group_by);
+    test_agg_max(file, simulate_two_groups_group_by);
+    test_agg_min(file, simulate_two_groups_group_by);
+    test_agg_any(file, simulate_two_groups_group_by);
 }
 
 fn get_example() -> Vec<(&'static str, DataType, Column)> {
@@ -77,6 +83,11 @@ fn get_example() -> Vec<(&'static str, DataType, Column)> {
             "y_null",
             DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
             Column::from_data_with_validity(vec![1u64, 2, 3, 4], vec![false, false, true, true]),
+        ),
+        (
+            "all_null",
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
+            Column::from_data_with_validity(vec![1u64, 2, 3, 4], vec![false, false, false, false]),
         ),
     ]
 }
@@ -136,4 +147,32 @@ fn test_agg_distinct(file: &mut impl Write, simulator: impl AggregationSimulator
         get_example().as_slice(),
         simulator,
     );
+}
+
+fn test_agg_max(file: &mut impl Write, simulator: impl AggregationSimulator) {
+    run_agg_ast(file, "max(1)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "max(NULL)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "max(a)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "max(b)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "max(x_null)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "max(all_null)", get_example().as_slice(), simulator);
+}
+
+fn test_agg_min(file: &mut impl Write, simulator: impl AggregationSimulator) {
+    run_agg_ast(file, "min(1)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "min(NULL)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "min(a)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "min(b)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "min(x_null)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "min(all_null)", get_example().as_slice(), simulator);
+}
+
+fn test_agg_any(file: &mut impl Write, simulator: impl AggregationSimulator) {
+    run_agg_ast(file, "any(1)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "any(NULL)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "any(a)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "any(b)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "any(x_null)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "any(y_null)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "any(all_null)", get_example().as_slice(), simulator);
 }

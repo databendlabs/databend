@@ -193,7 +193,7 @@ pub enum NumberDataType {
     Float64,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, EnumAsInner, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, EnumAsInner, Serialize, Deserialize)]
 pub enum NumberScalar {
     UInt8(u8),
     UInt16(u16),

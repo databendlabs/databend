@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::ops::Range;
 
 use common_arrow::arrow::bitmap::Bitmap;
@@ -53,6 +54,7 @@ use crate::util::bitmap_into_mut;
 use crate::util::constant_bitmap;
 use crate::util::deserialize_arrow_array;
 use crate::util::serialize_arrow_array;
+use crate::with_number_type;
 
 #[derive(Debug, Clone, EnumAsInner)]
 pub enum Value<T: ValueType> {
@@ -66,7 +68,7 @@ pub enum ValueRef<'a, T: ValueType> {
     Column(T::Column),
 }
 
-#[derive(Debug, Clone, PartialEq, Default, EnumAsInner, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Default, EnumAsInner, Serialize, Deserialize)]
 pub enum Scalar {
     #[default]
     Null,
@@ -80,7 +82,7 @@ pub enum Scalar {
     Variant(Vec<u8>),
 }
 
-#[derive(Clone, PartialEq, Default, EnumAsInner)]
+#[derive(Clone, PartialEq, PartialOrd, Default, EnumAsInner)]
 pub enum ScalarRef<'a> {
     #[default]
     Null,
@@ -282,6 +284,62 @@ impl<'a> ScalarRef<'a> {
                 Domain::Tuple(fields.iter().map(|field| field.domain()).collect())
             }
             ScalarRef::Variant(_) => Domain::Undefined,
+        }
+    }
+}
+
+impl PartialOrd for Column {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match (self, other) {
+            (Column::Null { .. }, Column::Null { .. }) => Some(Ordering::Equal),
+            (Column::EmptyArray { .. }, Column::EmptyArray { .. }) => Some(Ordering::Equal),
+            (Column::Number(col1), Column::Number(col2)) => {
+                with_number_type!(|NUM_TYPE| match (col1, col2) {
+                    (NumberColumn::NUM_TYPE(c1), NumberColumn::NUM_TYPE(c2)) =>
+                        c1.iter().partial_cmp(c2.iter()),
+                    _ => unreachable!(),
+                })
+            }
+            (Column::Boolean(col1), Column::Boolean(col2)) => col1.iter().partial_cmp(col2.iter()),
+            (Column::String(col1), Column::String(col2))
+            | (Column::Variant(col1), Column::Variant(col2)) => {
+                col1.iter().partial_cmp(col2.iter())
+            }
+            (Column::Timestamp(col1), Column::Timestamp(col2)) => {
+                col1.iter().partial_cmp(col2.iter())
+            }
+            (Column::Array(col1), Column::Array(col2)) => col1.iter().partial_cmp(col2.iter()),
+            (Column::Nullable(col1), Column::Nullable(col2)) => {
+                col1.iter().partial_cmp(col2.iter())
+            }
+            (
+                Column::Tuple {
+                    fields: col1,
+                    len: len1,
+                },
+                Column::Tuple {
+                    fields: col2,
+                    len: len2,
+                },
+            ) => {
+                // array(tuple) : [      t1       ,       t2       ,       t3       ]
+                // array1       : [(f11, f21, f31), (f12, f22, f32), (f13, f23, f33)]
+                // array2       : [(f11, f21, f31), (f12, f22, f32), (f13, f23, f33)]
+                if col1.len() == col2.len() {
+                    for i in 0..*len1.min(len2) {
+                        let t1 = col1.iter().map(|c| c.index(i)).collect::<Vec<_>>();
+                        let t2 = col2.iter().map(|c| c.index(i)).collect::<Vec<_>>();
+                        let ord = t1.iter().partial_cmp(t2.iter());
+                        if ord.is_some() {
+                            return ord;
+                        }
+                    }
+                    len1.partial_cmp(len2)
+                } else {
+                    unreachable!()
+                }
+            }
+            _ => unreachable!(),
         }
     }
 }
