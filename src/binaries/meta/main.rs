@@ -24,6 +24,7 @@ use common_macros::databend_main;
 use common_meta_sled_store::init_sled_db;
 use common_meta_store::MetaStoreProvider;
 use common_tracing::init_logging;
+use common_tracing::set_panic_hook;
 use databend_meta::api::GrpcServer;
 use databend_meta::api::HttpService;
 use databend_meta::configs::Config;
@@ -62,6 +63,8 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
             ..Default::default()
         })));
     }
+
+    set_panic_hook();
 
     let _guards = init_logging("databend-meta", &conf.log);
 
