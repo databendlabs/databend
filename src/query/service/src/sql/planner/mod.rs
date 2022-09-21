@@ -14,7 +14,8 @@
 
 mod format;
 mod metadata;
-mod plan;
+#[allow(clippy::module_inception)]
+mod planner;
 mod semantic;
 
 pub(crate) mod binder;
@@ -25,7 +26,7 @@ pub use binder::BindContext;
 pub use binder::Binder;
 pub use binder::ColumnBinding;
 pub use binder::Visibility;
-pub use plan::Planner;
+pub use planner::Planner;
 pub use plans::ScalarExpr;
 pub use semantic::normalize_identifier;
 pub use semantic::IdentifierNormalizer;
