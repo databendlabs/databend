@@ -15,12 +15,16 @@
 use std::future::Future;
 use std::sync::Arc;
 
+use common_base::base::tokio;
+use common_base::base::tokio::io::AsyncRead;
+use common_base::base::tokio::io::AsyncReadExt;
 use common_base::base::ProgressValues;
 use common_base::base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_formats::FormatFactory;
 use common_io::prelude::parse_escape_string;
+use common_pipeline_sources::processors::sources::input_formats::InputContext;
+use common_pipeline_sources::processors::sources::input_formats::StreamingReadBatch;
 use futures::StreamExt;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
@@ -30,11 +34,11 @@ use poem::web::Multipart;
 use poem::Request;
 use serde::Deserialize;
 use serde::Serialize;
+use tokio::sync::mpsc::Sender;
 use tracing::error;
 
 use super::HttpQueryContext;
 use crate::interpreters::InterpreterFactory;
-use crate::servers::http::v1::multipart_format::MultipartFormat;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
 use crate::sessions::TableContext;
@@ -77,7 +81,7 @@ fn execute_query(context: Arc<QueryContext>, plan: Plan) -> impl Future<Output =
 pub async fn streaming_load(
     ctx: &HttpQueryContext,
     req: &Request,
-    multipart: Multipart,
+    mut multipart: Multipart,
 ) -> PoemResult<Json<LoadResponse>> {
     let session = ctx.get_session(SessionType::HTTPStreamingLoad);
     let context = session
@@ -110,64 +114,50 @@ pub async fn streaming_load(
         .map_err(InternalServerError)?;
     context.attach_query_str(insert_sql);
 
-    let format_settings = context.get_format_settings().map_err(InternalServerError)?;
     let schema = plan.schema();
     match &mut plan {
         Plan::Insert(insert) => match &mut insert.source {
             InsertInputSource::StrWithFormat((sql_rest, format)) => {
                 if !sql_rest.is_empty() {
-                    Err(poem::Error::from_string(
+                    return Err(poem::Error::from_string(
                         "should NOT have data after `Format` in streaming load.",
                         StatusCode::BAD_REQUEST,
-                    ))
-                } else if FormatFactory::instance().has_input(format.as_str()) {
-                    let new_format = format!("{}WithNames", format);
-                    if format_settings.skip_header > 0
-                        && FormatFactory::instance().has_input(new_format.as_str())
-                    {
-                        *format = new_format;
-                    }
-
-                    let format_settings =
-                        context.get_format_settings().map_err(InternalServerError)?;
-
-                    let (mut worker, builder) = MultipartFormat::input_sources(
-                        format,
-                        context.clone(),
-                        multipart,
+                    ));
+                };
+                let (tx, rx) = tokio::sync::mpsc::channel(2);
+                let input_context = Arc::new(
+                    InputContext::try_create_from_insert(
+                        format.as_str(),
+                        rx,
+                        context.get_settings(),
+                        context.get_format_settings().map_err(InternalServerError)?,
                         schema,
-                        format_settings.clone(),
+                        context.get_scan_progress(),
                     )
-                    .map_err(InternalServerError)?;
+                    .await
+                    .map_err(InternalServerError)?,
+                );
 
-                    insert.source = InsertInputSource::StreamingWithFormat(
-                        format.to_string(),
-                        builder.finalize(),
-                    );
+                insert.source = InsertInputSource::StreamingWithFormat(
+                    format.to_string(),
+                    input_context.clone(),
+                );
 
-                    let handler = context.spawn(execute_query(context.clone(), plan));
+                let handler = context.spawn(execute_query(context.clone(), plan));
+                let files = read_multi_part(multipart, tx, input_context.read_batch_size).await?;
 
-                    worker.work().await;
-                    let files = worker.get_files();
-
-                    match handler.await {
-                        Ok(Ok(_)) => Ok(Json(LoadResponse {
-                            error: None,
-                            state: "SUCCESS".to_string(),
-                            id: uuid::Uuid::new_v4().to_string(),
-                            stats: context.get_scan_progress_value(),
-                            files,
-                        })),
-                        Ok(Err(cause)) => Err(cause),
-                        Err(_) => Err(ErrorCode::TokioError("Maybe panic.")),
-                    }
-                    .map_err(InternalServerError)
-                } else {
-                    Err(poem::Error::from_string(
-                        format!("format not supported for streaming load {}", format),
-                        StatusCode::BAD_REQUEST,
-                    ))
+                match handler.await {
+                    Ok(Ok(_)) => Ok(Json(LoadResponse {
+                        error: None,
+                        state: "SUCCESS".to_string(),
+                        id: uuid::Uuid::new_v4().to_string(),
+                        stats: context.get_scan_progress_value(),
+                        files,
+                    })),
+                    Ok(Err(cause)) => Err(cause),
+                    Err(_) => Err(ErrorCode::TokioError("Maybe panic.")),
                 }
+                .map_err(InternalServerError)
             }
             _non_supported_source => Err(poem::Error::from_string(
                 "Only supports streaming upload. e.g. INSERT INTO $table FORMAT CSV, got insert ... select.",
@@ -182,4 +172,76 @@ pub async fn streaming_load(
             StatusCode::BAD_REQUEST,
         )),
     }
+}
+
+async fn read_multi_part(
+    mut multipart: Multipart,
+    tx: Sender<Result<StreamingReadBatch>>,
+    read_batch_size: usize,
+) -> poem::Result<Vec<String>> {
+    let mut files = vec![];
+    loop {
+        match multipart.next_field().await {
+            Err(cause) => {
+                if let Err(cause) = tx
+                    .send(Err(ErrorCode::BadBytes(format!(
+                        "Parse multipart error, cause {:?}",
+                        cause
+                    ))))
+                    .await
+                {
+                    tracing::warn!("Multipart channel disconnect. {}", cause);
+                }
+                return Err(cause.into());
+            }
+            Ok(None) => {
+                break;
+            }
+            Ok(Some(field)) => {
+                let filename = field.file_name().unwrap_or("file_with_no_name").to_string();
+                tracing::debug!("Multipart start read {}", &filename);
+                files.push(filename.clone());
+                let mut async_reader = field.into_async_read();
+                let mut is_start = true;
+                loop {
+                    let mut batch = vec![0u8; read_batch_size];
+                    let n = read_full(&mut async_reader, &mut batch[0..])
+                        .await
+                        .map_err(InternalServerError)?;
+                    if n == 0 {
+                        break;
+                    } else {
+                        batch.truncate(n);
+                        tracing::debug!("Multipart read {} bytes", n);
+                        if let Err(e) = tx
+                            .send(Ok(StreamingReadBatch {
+                                data: batch,
+                                path: filename.clone(),
+                                is_start,
+                            }))
+                            .await
+                        {
+                            tracing::warn!(" Multipart fail to send ReadBatch: {}", e);
+                        }
+                        is_start = false;
+                    }
+                }
+            }
+        }
+    }
+    Ok(files)
+}
+
+pub async fn read_full<R: AsyncRead + Unpin>(reader: &mut R, buf: &mut [u8]) -> Result<usize> {
+    let mut buf = &mut buf[0..];
+    let mut n = 0;
+    while !buf.is_empty() {
+        let read = reader.read(buf).await?;
+        if read == 0 {
+            break;
+        }
+        n += read;
+        buf = &mut buf[read..]
+    }
+    Ok(n)
 }
