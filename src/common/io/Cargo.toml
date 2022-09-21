@@ -18,14 +18,14 @@ common-exception = { path = "../exception" }
 
 # Crates.io dependencies
 bincode = { version = "2.0.0-rc.1", features = ["serde", "std"] }
-bytes = "1.1.0"
-chrono = "0.4.20"
-chrono-tz = "0.6.1"
-futures = "0.3.21"
+bytes = "1.2.1"
+chrono = "0.4.22"
+chrono-tz = "0.6.3"
+futures = "0.3.24"
 lexical-core = "0.8.5"
 micromarshal = "0.1.0"
-serde = { version = "1.0.137", features = ["derive"] }
-time = "0.3.10"
+serde = { version = "1.0.144", features = ["derive"] }
+time = "0.3.14"
 
 [dev-dependencies]
 rand = "0.8.5"
