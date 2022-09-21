@@ -14,15 +14,15 @@ common-base = { path = "../base" }
 common-contexts = { path = "../contexts" }
 common-exception = { path = "../exception" }
 
-anyhow = "1.0.64"
+anyhow = "1.0.65"
 backon = "0.1.0"
 globiter = "0.1.0"
-once_cell = "1.12.0"
+once_cell = "1.15.0"
 opendal = { version = "0.17.1", features = [
     "layers-retry",
     "layers-tracing",
     "layers-metrics",
     "compress",
 ] }
-percent-encoding = "2.1.0"
-serde = { version = "1.0.137", features = ["derive"] }
+percent-encoding = "2.2.0"
+serde = { version = "1.0.144", features = ["derive"] }

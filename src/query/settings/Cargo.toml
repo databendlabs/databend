@@ -16,7 +16,7 @@ common-exception = { path = "../../common/exception" }
 common-meta-types = { path = "../../meta/types" }
 common-users = { path = "../users" }
 
-futures = "0.3.21"
-itertools = "0.10.3"
+futures = "0.3.24"
+itertools = "0.10.5"
 num_cpus = "1.13.1"
 parking_lot = "0.12.1"

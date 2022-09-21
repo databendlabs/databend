@@ -19,13 +19,13 @@ common-exception = { path = "../exception" }
 
 # Crates.io dependencies
 anyerror = "=0.1.7"
-hyper = "0.14.19"
+hyper = "0.14.20"
 jwt-simple = "0.11.0"
-once_cell = "1.12.0"
-serde = { version = "1.0.137", features = ["derive"] }
+once_cell = "1.15.0"
+serde = { version = "1.0.144", features = ["derive"] }
 thiserror = "1"
 tonic = { version = "0.7.2", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
-tracing = "0.1.35"
+tracing = "0.1.36"
 trust-dns-resolver = { version = "0.21.2", features = ["system-config"] }
 
 [build-dependencies]
