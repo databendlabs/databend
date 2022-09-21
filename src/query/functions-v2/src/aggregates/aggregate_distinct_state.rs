@@ -161,6 +161,7 @@ impl AggregateDistinctStringState {
             let data = unsafe { key.as_slice() };
 
             let holder = self.holders.last_mut().unwrap();
+            // TODO(sundy): may cause memory fragmentation, refactor this using arena
             if holder.may_resize(data.len()) {
                 let mut holder = StringColumnBuilder::with_capacity(
                     HOLDER_CAPACITY,
