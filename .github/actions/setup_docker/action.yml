@@ -10,6 +10,9 @@ inputs:
   ecr_role_arn:
     description: "ECR Role ARN"
     required: true
+  acr_password:
+    description: "Aliyun Container Registry Login Password"
+    required: false
   repo:
     description: "Docker Repo to push"
     required: true
@@ -20,6 +23,9 @@ outputs:
   ecr_repo:
     description: "AWS public ECR Repository"
     value: ${{ steps.registry.outputs.ecr }}
+  acr_repo:
+    description: "Aliyun public Repository"
+    value: ${{ steps.registry.outputs.acr }}
 
 runs:
   using: "composite"
@@ -45,9 +51,16 @@ runs:
         username: ${{ inputs.dockerhub_user }}
         password: ${{ inputs.dockerhub_token }}
 
+    - name: Login to Aliyun Container Registry
+      if: inputs.acr_password
+      shell: bash
+      run: |
+        docker login --username ${{ inputs.dockerhub_user }} --password ${{ inputs.acr_password }} registry.cn-beijing.aliyuncs.com
+
     - name: Output Registries
       shell: bash
       id: registry
       run: |
         echo "::set-output name=dockerhub::datafuselabs/${{ inputs.repo }}"
         echo "::set-output name=ecr::public.ecr.aws/i7g1w5q7/${{ inputs.repo }}"
+        echo "::set-output name=acr::registry.cn-beijing.aliyuncs.com/datafuselabs/${{ inputs.repo }}"
