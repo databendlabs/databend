@@ -446,6 +446,14 @@ impl JoinHashTable {
                     row_state.entry(row_ptr).or_insert(0_usize);
                     unmatched_build_indexes.push(row_ptr);
                 }
+                if self.hash_join_desc.join_type == JoinType::Full {
+                    if let Some(row_ptr) = build_indexes_set.get(&row_ptr) {
+                        // If `marker` == `MarkerKind::False`, it means the row in build side has been filtered in left probe phase
+                        if row_ptr.marker == Some(MarkerKind::False) {
+                            unmatched_build_indexes.push(**row_ptr);
+                        }
+                    }
+                }
             }
         }
         Ok(unmatched_build_indexes)
@@ -724,10 +732,8 @@ impl HashJoinState for JoinHashTable {
                     Self::set_validity(c, &probe_validity)
                 })
                 .collect::<Result<Vec<_>>>()?;
-            unmatched_build_block = DataBlock::create(
-                self.row_space.schema().clone(),
-                nullable_unmatched_build_columns,
-            );
+            unmatched_build_block =
+                DataBlock::create(self.row_space.schema(), nullable_unmatched_build_columns);
         };
         // Create null block for unmatched rows in probe side
         let null_probe_block = DataBlock::create(
@@ -745,7 +751,9 @@ impl HashJoinState for JoinHashTable {
         let mut merged_block = self.merge_eq_block(&unmatched_build_block, &null_probe_block)?;
         merged_block = DataBlock::concat_blocks(&[blocks, &[merged_block]].concat())?;
 
-        if self.hash_join_desc.other_predicate.is_none() {
+        if self.hash_join_desc.other_predicate.is_none()
+            || self.hash_join_desc.join_type == JoinType::Full
+        {
             return Ok(vec![merged_block]);
         }
 

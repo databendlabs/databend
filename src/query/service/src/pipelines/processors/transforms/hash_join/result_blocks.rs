@@ -138,7 +138,7 @@ impl JoinHashTable {
                 }
             }
             // Single join is similar to left join, but the result is a single row.
-            JoinType::Left | JoinType::Single => {
+            JoinType::Left | JoinType::Single | JoinType::Full => {
                 if self.hash_join_desc.other_predicate.is_none() {
                     let result = self.left_or_single_join::<false, _, _>(
                         hash_table,
@@ -156,16 +156,6 @@ impl JoinHashTable {
                     )?;
                     return Ok(vec![result]);
                 }
-            }
-            JoinType::Full => {
-                // First, get the left join result.
-                let result = self.left_or_single_join::<false, _, _>(
-                    hash_table,
-                    probe_state,
-                    keys_iter,
-                    input,
-                )?;
-                return Ok(vec![result]);
             }
             JoinType::Right => {
                 let result = self.right_join::<_, _>(hash_table, probe_state, keys_iter, input)?;
@@ -546,7 +536,16 @@ impl JoinHashTable {
 
         let mut bm = validity.into_mut().right().unwrap();
 
+        if self.hash_join_desc.join_type == JoinType::Full {
+            let mut build_indexes = self.hash_join_desc.right_join_desc.build_indexes.write();
+            for (idx, build_index) in build_indexes.iter_mut().enumerate() {
+                if !bm.get(idx) {
+                    build_index.marker = Some(MarkerKind::False);
+                }
+            }
+        }
         Self::fill_null_for_left_join(&mut bm, probe_indexs, row_state);
+
         let predicate = BooleanColumn::from_arrow_data(bm.into()).arc();
         DataBlock::filter_block(merged_block, &predicate)
     }

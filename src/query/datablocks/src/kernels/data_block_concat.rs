@@ -27,8 +27,6 @@ impl DataBlock {
         let first_block = &blocks[0];
         for block in blocks.iter() {
             if block.schema().ne(first_block.schema()) {
-                dbg!(first_block.schema().clone());
-                dbg!(block.schema().clone());
                 return Err(ErrorCode::DataStructMissMatch("Schema not matched"));
             }
         }

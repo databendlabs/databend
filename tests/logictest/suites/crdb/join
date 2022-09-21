@@ -136,16 +136,15 @@ CREATE TABLE othercolumn (x INT);
 statement ok
 INSERT INTO othercolumn(x) VALUES (43),(42),(16);
 
--- TODO FULL OUTER is unimplemented
--- statement query II
--- SELECT * FROM onecolumn AS a FULL OUTER JOIN othercolumn AS b ON a.x = b.x ORDER BY a.x,b.x;
+statement query II
+SELECT * FROM onecolumn AS a FULL OUTER JOIN othercolumn AS b ON a.x = b.x ORDER BY a.x,b.x;
 
--- ----
--- NULL NULL
--- NULL 16
--- NULL 43
--- 42   42
--- 44   NULL
+----
+42 42
+44 NULL
+NULL 16
+NULL 43
+NULL NULL
 
 -- statement query
 -- SELECT * FROM onecolumn AS a FULL OUTER JOIN othercolumn AS b USING(x) ORDER BY x;
