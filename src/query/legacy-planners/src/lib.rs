@@ -51,7 +51,6 @@ pub use plan_expression_function::sum;
 pub use plan_expression_literal::lit;
 pub use plan_expression_literal::lit_null;
 pub use plan_expression_monotonicity::ExpressionMonotonicityVisitor;
-pub use plan_expression_validator::validate_clustering;
 pub use plan_expression_validator::validate_expression;
 pub use plan_expression_validator::validate_function_arg;
 pub use plan_expression_visitor::ExpressionVisitor;
