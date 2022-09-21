@@ -31,6 +31,7 @@ use common_expression::Scalar;
 use common_expression::Value;
 use common_functions_v2::aggregates::eval_aggr;
 use common_functions_v2::scalars::builtin_functions;
+use itertools::Itertools;
 
 use super::scalars::parser;
 
@@ -53,7 +54,7 @@ pub fn run_agg_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType
         num_rows,
     );
 
-    let used_columns = raw_expr.column_refs();
+    let used_columns = raw_expr.column_refs().into_iter().sorted().collect();
 
     // For test only, we just support agg function call here
     let result: common_exception::Result<(Column, DataType)> = try {
