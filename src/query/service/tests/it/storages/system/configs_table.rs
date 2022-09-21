@@ -133,6 +133,7 @@ async fn test_configs_table() -> Result<()> {
         "| storage | s3.region                            |                                |             |",
         "| storage | s3.root                              |                                |             |",
         "| storage | s3.secret_access_key                 |                                |             |",
+        "| storage | s3.security_token                    |                                |             |",
         "| storage | type                                 | fs                             |             |",
         "+---------+--------------------------------------+--------------------------------+-------------+",
     ];
@@ -266,6 +267,7 @@ async fn test_configs_table_redact() -> Result<()> {
         "| storage | s3.region                            | us-east-2                      |             |",
         "| storage | s3.root                              |                                |             |",
         "| storage | s3.secret_access_key                 | ******key                      |             |",
+        "| storage | s3.security_token                    |                                |             |",
         "| storage | type                                 | s3                             |             |",
         "+---------+--------------------------------------+--------------------------------+-------------+",
     ];
