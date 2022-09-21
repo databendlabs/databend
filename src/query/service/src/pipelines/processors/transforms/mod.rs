@@ -34,7 +34,6 @@ mod transform_limit_by;
 mod transform_mark_join;
 mod transform_project;
 mod transform_rename;
-mod transform_window_func;
 
 pub mod group_by;
 mod transform_merge_block;
@@ -86,5 +85,3 @@ pub use transform_sort_merge::SortMergeCompactor;
 pub use transform_sort_merge::TransformSortMerge;
 pub use transform_sort_partial::get_sort_descriptions;
 pub use transform_sort_partial::TransformSortPartial;
-pub use transform_window_func::TransformWindowFunc;
-pub use transform_window_func::WindowFuncCompact;

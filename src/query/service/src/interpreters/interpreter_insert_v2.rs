@@ -45,7 +45,7 @@ use parking_lot::Mutex;
 use parking_lot::RwLock;
 
 use super::interpreter_common::append2table;
-use super::plan_schedulers::build_schedule_pipepline;
+use super::plan_schedulers::build_schedule_pipeline;
 use crate::evaluator::EvalNode;
 use crate::evaluator::Evaluator;
 use crate::interpreters::Interpreter;
@@ -229,7 +229,7 @@ impl Interpreter for InsertInterpreterV2 {
 
                     let mut build_res = match is_distributed_plan {
                         true => {
-                            build_schedule_pipepline(self.ctx.clone(), &insert_select_plan).await
+                            build_schedule_pipeline(self.ctx.clone(), &insert_select_plan).await
                         }
                         false => {
                             PipelineBuilder::create(self.ctx.clone()).finalize(&insert_select_plan)

@@ -31,7 +31,6 @@ use crate::interpreters::DropShareInterpreter;
 use crate::interpreters::DropUserInterpreter;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
-use crate::sql::DfStatement;
 
 /// InterpreterFactory is the entry of Interpreter.
 pub struct InterpreterFactory;
@@ -39,11 +38,6 @@ pub struct InterpreterFactory;
 /// InterpreterFactory provides `get` method which transforms `Plan` into the corresponding interpreter.
 /// Such as: Plan::Query -> InterpreterSelectV2
 impl InterpreterFactory {
-    /// Check if statement is supported by InterpreterFactoryV2
-    pub fn check(stmt: &DfStatement) -> bool {
-        matches!(stmt, DfStatement::SeeYouAgain)
-    }
-
     pub async fn get(ctx: Arc<QueryContext>, plan: &Plan) -> Result<InterpreterPtr> {
         // Check the access permission.
         let access_checker = Accessor::create(ctx.clone());

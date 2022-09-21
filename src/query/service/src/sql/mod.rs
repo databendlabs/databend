@@ -13,18 +13,10 @@
 // limitations under the License.
 
 pub mod executor;
-mod metrics;
-mod parsers;
-mod plan_parser;
 pub mod planner;
-mod sql_parser;
-mod sql_statement;
 pub mod statements;
 use common_legacy_parser::sql_common;
 use common_storages_util::table_option_keys;
-pub use plan_parser::PlanParser;
 pub use planner::*;
 pub use sql_common::SQLCommon;
-pub use sql_parser::DfParser;
-pub use sql_statement::*;
 pub use table_option_keys::*;

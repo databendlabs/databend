@@ -35,7 +35,6 @@ use common_io::prelude::FormatSettings;
 use common_legacy_planners::Expression;
 use common_legacy_planners::PartInfoPtr;
 use common_legacy_planners::Partitions;
-use common_legacy_planners::PlanNode;
 use common_legacy_planners::ReadDataSourcePlan;
 use common_legacy_planners::SourceInfo;
 use common_legacy_planners::StageTableInfo;
@@ -305,10 +304,6 @@ impl TableContext for QueryContext {
     }
     fn get_tenant(&self) -> String {
         self.shared.get_tenant()
-    }
-    fn get_subquery_name(&self, _query: &PlanNode) -> String {
-        let index = self.shared.subquery_index.fetch_add(1, Ordering::Relaxed);
-        format!("_subquery_{}", index)
     }
     /// Get the data accessor metrics.
     fn get_dal_metrics(&self) -> DalMetrics {
