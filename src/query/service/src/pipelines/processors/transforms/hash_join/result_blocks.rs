@@ -433,6 +433,17 @@ impl JoinHashTable {
                     validity.extend_constant(probe_result_ptrs.len(), true);
                 }
                 None => {
+                    if self.hash_join_desc.join_type == JoinType::Full {
+                        let mut build_indexes =
+                            self.hash_join_desc.right_join_desc.build_indexes.write();
+                        // dummy row ptr
+                        // here assume there is no RowPtr, which chunk_index is u32::MAX and row_index is u32::MAX
+                        build_indexes.push(RowPtr {
+                            chunk_index: u32::MAX,
+                            row_index: u32::MAX,
+                            marker: None,
+                        });
+                    }
                     // dummy row ptr
                     local_build_indexes.push(RowPtr {
                         chunk_index: 0,
