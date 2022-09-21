@@ -42,6 +42,11 @@ where
     Value: Sized + Clone,
 {
     #[inline(always)]
+    pub fn set_key(self: *mut Self, key: Key) {
+        unsafe { std::ptr::write(&mut (*self).key as *mut Key, key) }
+    }
+
+    #[inline(always)]
     pub fn set_value(self: *mut Self, value: Value) {
         unsafe { std::ptr::write(&mut (*self).value as *mut Value, value) }
     }
