@@ -1425,8 +1425,14 @@ pub fn uri_location(i: Input) -> IResult<UriLocation> {
                 protocol: parsed.scheme().to_string(),
                 name: parsed
                     .host_str()
-                    .ok_or(ErrorKind::Other("invalid uri location"))?
-                    .to_string(),
+                    .map(|hostname| {
+                        if let Some(port) = parsed.port() {
+                            format!("{}:{}", hostname, port)
+                        } else {
+                            hostname.to_string()
+                        }
+                    })
+                    .ok_or(ErrorKind::Other("invalid uri location"))?,
                 path: if parsed.path().is_empty() {
                     "/".to_string()
                 } else {
