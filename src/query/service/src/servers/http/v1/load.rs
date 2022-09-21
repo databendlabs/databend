@@ -26,6 +26,7 @@ use common_io::prelude::parse_escape_string;
 use common_pipeline_sources::processors::sources::input_formats::InputContext;
 use common_pipeline_sources::processors::sources::input_formats::StreamingReadBatch;
 use futures::StreamExt;
+use poem::error::BadRequest;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
 use poem::http::StatusCode;
@@ -154,10 +155,15 @@ pub async fn streaming_load(
                         stats: context.get_scan_progress_value(),
                         files,
                     })),
-                    Ok(Err(cause)) => Err(cause),
-                    Err(_) => Err(ErrorCode::TokioError("Maybe panic.")),
+                    Ok(Err(cause)) => Err(poem::Error::from_string(
+                        format!("execute fail: {}", cause.message()),
+                        StatusCode::BAD_REQUEST,
+                    )),
+                    Err(_) => Err(poem::Error::from_string(
+                        "Maybe panic.",
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                    )),
                 }
-                .map_err(InternalServerError)
             }
             _non_supported_source => Err(poem::Error::from_string(
                 "Only supports streaming upload. e.g. INSERT INTO $table FORMAT CSV, got insert ... select.",
