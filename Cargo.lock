@@ -3755,7 +3755,8 @@ checksum = "0bfe8eed0a9285ef776bb792479ea3834e8b94e13d615c2f66d03dd50a435a29"
 [[package]]
 name = "http-types"
 version = "2.12.0"
-source = "git+https://github.com/Xuanwo/http-types?rev=106fc6d#106fc6d57c339334d864ac4378678fc351abb852"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e9b187a72d63adbfba487f48095306ac823049cb504ee195541e91c7775f5ad"
 dependencies = [
  "anyhow",
  "async-channel",
