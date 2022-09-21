@@ -68,7 +68,7 @@ pub enum ValueRef<'a, T: ValueType> {
     Column(T::Column),
 }
 
-#[derive(Debug, Clone, PartialEq, PartialOrd, Default, EnumAsInner, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, EnumAsInner, Serialize, Deserialize)]
 pub enum Scalar {
     #[default]
     Null,
@@ -82,7 +82,7 @@ pub enum Scalar {
     Variant(Vec<u8>),
 }
 
-#[derive(Clone, PartialEq, PartialOrd, Default, EnumAsInner)]
+#[derive(Clone, PartialEq, Default, EnumAsInner)]
 pub enum ScalarRef<'a> {
     #[default]
     Null,
@@ -288,6 +288,29 @@ impl<'a> ScalarRef<'a> {
     }
 }
 
+impl PartialOrd for Scalar {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.as_ref().partial_cmp(&other.as_ref())
+    }
+}
+
+impl PartialOrd for ScalarRef<'_> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match (self, other) {
+            (ScalarRef::Null, ScalarRef::Null) => Some(Ordering::Equal),
+            (ScalarRef::EmptyArray, ScalarRef::EmptyArray) => Some(Ordering::Equal),
+            (ScalarRef::Number(n1), ScalarRef::Number(n2)) => n1.partial_cmp(n2),
+            (ScalarRef::Boolean(b1), ScalarRef::Boolean(b2)) => b1.partial_cmp(b2),
+            (ScalarRef::String(s1), ScalarRef::String(s2)) => s1.partial_cmp(s2),
+            (ScalarRef::Timestamp(t1), ScalarRef::Timestamp(t2)) => t1.partial_cmp(t2),
+            (ScalarRef::Array(a1), ScalarRef::Array(a2)) => a1.partial_cmp(a2),
+            (ScalarRef::Tuple(t1), ScalarRef::Tuple(t2)) => t1.partial_cmp(t2),
+            (ScalarRef::Variant(v1), ScalarRef::Variant(v2)) => v1.partial_cmp(v2),
+            _ => None,
+        }
+    }
+}
+
 impl PartialOrd for Column {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (self, other) {
@@ -297,7 +320,7 @@ impl PartialOrd for Column {
                 with_number_type!(|NUM_TYPE| match (col1, col2) {
                     (NumberColumn::NUM_TYPE(c1), NumberColumn::NUM_TYPE(c2)) =>
                         c1.iter().partial_cmp(c2.iter()),
-                    _ => unreachable!(),
+                    _ => None,
                 })
             }
             (Column::Boolean(col1), Column::Boolean(col2)) => col1.iter().partial_cmp(col2.iter()),
@@ -336,10 +359,10 @@ impl PartialOrd for Column {
                     }
                     len1.partial_cmp(len2)
                 } else {
-                    unreachable!()
+                    None
                 }
             }
-            _ => unreachable!(),
+            _ => None,
         }
     }
 }
