@@ -18,6 +18,8 @@ SHOW GRANTS FOR ROLE <role_name>;
 
 ## Examples
 
+The following code returns all the privileges granted to the user `user1`: 
+
 ```sql
 SHOW GRANTS FOR user1;
 
@@ -29,6 +31,8 @@ SHOW GRANTS FOR user1;
 | GRANT ALL ON *.* TO 'user1'@'%'         |
 +-----------------------------------------+
 ```
+
+The following code returns all the privileges granted to the role `role1`: 
 
 ```sql
 SHOW GRANTS FOR ROLE role1;
