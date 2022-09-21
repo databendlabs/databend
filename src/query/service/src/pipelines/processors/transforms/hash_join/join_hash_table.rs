@@ -751,6 +751,8 @@ impl HashJoinState for JoinHashTable {
         let mut merged_block = self.merge_eq_block(&unmatched_build_block, &null_probe_block)?;
         merged_block = DataBlock::concat_blocks(&[blocks, &[merged_block]].concat())?;
 
+        // Don't need process non-equi conditions for full join in the method
+        // Because non-equi conditions have been processed in left probe join
         if self.hash_join_desc.other_predicate.is_none()
             || self.hash_join_desc.join_type == JoinType::Full
         {
