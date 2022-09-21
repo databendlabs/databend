@@ -57,7 +57,9 @@ impl InputFormatCSV {
                     verbose_string(buf, &mut value);
                     let err_msg = format!(
                         "fail to decode column {}: {:?}, [column_data]=[{}]",
-                        c, e, value
+                        c,
+                        e.message(),
+                        value
                     );
                     return Err(csv_error(&err_msg, path, row_index));
                 };
