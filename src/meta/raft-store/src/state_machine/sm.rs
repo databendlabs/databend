@@ -263,11 +263,7 @@ impl StateMachine {
     /// command safely in case of network failure etc.
     #[tracing::instrument(level = "debug", skip(self, entry), fields(log_id=%entry.log_id))]
     pub async fn apply(&self, entry: &Entry<LogEntry>) -> Result<AppliedState, MetaStorageError> {
-        info!(
-            "apply: summary: {}; payload: {:?}",
-            entry.summary(),
-            entry.payload
-        );
+        info!("apply: summary: {}", entry.summary(),);
 
         let log_id = &entry.log_id;
 
@@ -280,8 +276,11 @@ impl StateMachine {
             txn_sm_meta.insert(&LastApplied, &StateMachineMetaValue::LogId(*log_id))?;
 
             match entry.payload {
-                EntryPayload::Blank => {}
+                EntryPayload::Blank => {
+                    info!("apply: blank");
+                }
                 EntryPayload::Normal(ref data) => {
+                    info!("apply: {}", data);
                     if let Some(ref txid) = data.txid {
                         let (serial, resp) =
                             self.txn_get_client_last_resp(&txid.client, &txn_tree)?;
@@ -303,7 +302,12 @@ impl StateMachine {
                     };
 
                     let res = self.apply_cmd(&data.cmd, &txn_tree, kv_pairs.as_ref(), log_time_ms);
-                    info!("apply_result: summary: {}; res: {:?}", entry.summary(), res);
+                    if let Ok(ok) = &res {
+                        info!("apply_result: summary: {}; res ok: {}", entry.summary(), ok);
+                    }
+                    if let Err(err) = &res {
+                        info!("apply_result: summary: {}; res err: {:?}", entry.summary(), err);
+                    }
 
                     let applied_state = res?;
 
@@ -317,6 +321,7 @@ impl StateMachine {
                     return Ok(Some(applied_state));
                 }
                 EntryPayload::Membership(ref mem) => {
+                    info!("apply: membership: {:?}", mem);
                     txn_sm_meta.insert(
                         &LastMembership,
                         &StateMachineMetaValue::Membership(EffectiveMembership {
@@ -760,7 +765,7 @@ impl StateMachine {
         kv_pairs: Option<&(DeleteByPrefixKeyMap, DeleteByPrefixKeyMap)>,
         log_time_ms: u64,
     ) -> Result<AppliedState, MetaStorageError> {
-        info!("apply_cmd: {:?}", cmd);
+        info!("apply_cmd: {}", cmd);
 
         match cmd {
             Cmd::IncrSeq { ref key } => self.apply_incr_seq_cmd(key, txn_tree),

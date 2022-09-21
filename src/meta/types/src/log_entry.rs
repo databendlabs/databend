@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Display;
+use std::fmt::Formatter;
+
 use openraft::AppData;
 use serde::Deserialize;
 use serde::Serialize;
@@ -42,3 +45,16 @@ pub struct LogEntry {
 }
 
 impl AppData for LogEntry {}
+
+impl Display for LogEntry {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if let Some(txid) = &self.txid {
+            write!(f, "txid: {:?}", txid)?;
+        }
+        if let Some(time) = &self.time_ms {
+            write!(f, "time: {} ms", time)?;
+        }
+
+        write!(f, " cmd: {}", self.cmd)
+    }
+}

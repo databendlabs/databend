@@ -30,6 +30,7 @@ use common_expression::types::ValueType;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Scalar;
+use common_hashtable::HashSet as CommonHashSet;
 use common_hashtable::HashSetWithStackMemory;
 use common_hashtable::HashTableEntity;
 use common_hashtable::HashTableKeyable;
@@ -64,9 +65,13 @@ pub struct AggregateDistinctNumberState<T: Number + HashTableKeyable> {
     inserted: bool,
 }
 
+const HOLDER_CAPACITY: usize = 256;
+const HOLDER_BYTES_CAPACITY: usize = HOLDER_CAPACITY * 8;
+
 pub struct AggregateDistinctStringState {
-    set: HashSet<KeysRef, RandomState>,
-    holder: StringColumnBuilder,
+    set: CommonHashSet<KeysRef>,
+    inserted: bool,
+    holders: Vec<StringColumnBuilder>,
 }
 
 pub struct DataGroupValue;
@@ -148,26 +153,61 @@ impl DistinctStateFunc<DataGroupValue> for AggregateDistinctState {
     }
 }
 
+impl AggregateDistinctStringState {
+    #[inline]
+    fn insert_and_materialize(&mut self, key: &KeysRef) {
+        let entity = self.set.insert_key(key, &mut self.inserted);
+        if self.inserted {
+            let data = unsafe { key.as_slice() };
+
+            let holder = self.holders.last_mut().unwrap();
+            // TODO(sundy): may cause memory fragmentation, refactor this using arena
+            if holder.may_resize(data.len()) {
+                let mut holder = StringColumnBuilder::with_capacity(
+                    HOLDER_CAPACITY,
+                    HOLDER_BYTES_CAPACITY.max(data.len()),
+                );
+                holder.put_slice(data);
+                holder.commit_row();
+                let value = unsafe { holder.index_unchecked(holder.len() - 1) };
+                entity.set_key(KeysRef::create(value.as_ptr() as usize, value.len()));
+                self.holders.push(holder);
+            } else {
+                holder.put_slice(data);
+                holder.commit_row();
+                let value = unsafe { holder.index_unchecked(holder.len() - 1) };
+                entity.set_key(KeysRef::create(value.as_ptr() as usize, value.len()));
+            }
+        }
+    }
+}
+
 impl DistinctStateFunc<KeysRef> for AggregateDistinctStringState {
     fn new() -> Self {
         AggregateDistinctStringState {
-            set: HashSet::new(),
-            holder: StringColumnBuilder::with_capacity(0, 0),
+            set: CommonHashSet::create(),
+            inserted: false,
+            holders: vec![StringColumnBuilder::with_capacity(
+                HOLDER_CAPACITY,
+                HOLDER_BYTES_CAPACITY,
+            )],
         }
     }
 
     fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
-        serialize_into_buf(writer, &self.holder)
+        serialize_into_buf(writer, &self.holders)
     }
 
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.holder = deserialize_from_slice(reader)?;
-        self.set = HashSet::with_capacity(self.holder.len());
+        self.holders = deserialize_from_slice(reader)?;
+        self.set = CommonHashSet::with_capacity(self.holders.iter().map(|h| h.len()).sum());
 
-        for index in 0..self.holder.len() {
-            let data = unsafe { self.holder.index_unchecked(index) };
-            let key = KeysRef::create(data.as_ptr() as usize, data.len());
-            self.set.insert(key);
+        for holder in self.holders.iter() {
+            for index in 0..holder.len() {
+                let data = unsafe { holder.index_unchecked(index) };
+                let key = KeysRef::create(data.as_ptr() as usize, data.len());
+                self.set.insert_key(&key, &mut self.inserted);
+            }
         }
         Ok(())
     }
@@ -183,16 +223,8 @@ impl DistinctStateFunc<KeysRef> for AggregateDistinctStringState {
     fn add(&mut self, columns: &[Column], row: usize) -> Result<()> {
         let column = StringType::try_downcast_column(&columns[0]).unwrap();
         let data = unsafe { column.index_unchecked(row) };
-
-        let mut key = KeysRef::create(data.as_ptr() as usize, data.len());
-
-        if !self.set.contains(&key) {
-            self.holder.put_slice(data);
-            self.holder.commit_row();
-            let data = unsafe { self.holder.index_unchecked(self.holder.len() - 1) };
-            key = KeysRef::create(data.as_ptr() as usize, data.len());
-            self.set.insert(key);
-        }
+        let key = KeysRef::create(data.as_ptr() as usize, data.len());
+        self.insert_and_materialize(&key);
         Ok(())
     }
 
@@ -204,34 +236,21 @@ impl DistinctStateFunc<KeysRef> for AggregateDistinctStringState {
     ) -> Result<()> {
         let column = StringType::try_downcast_column(&columns[0]).unwrap();
 
-        for row in 0..input_rows {
-            match validity {
-                Some(v) => {
+        match validity {
+            Some(v) => {
+                for row in 0..input_rows {
                     if v.get_bit(row) {
                         let data = unsafe { column.index_unchecked(row) };
-                        let mut key = KeysRef::create(data.as_ptr() as usize, data.len());
-                        if !self.set.contains(&key) {
-                            self.holder.put_slice(data);
-                            self.holder.commit_row();
-
-                            let data =
-                                unsafe { self.holder.index_unchecked(self.holder.len() - 1) };
-                            key = KeysRef::create(data.as_ptr() as usize, data.len());
-                            self.set.insert(key);
-                        }
+                        let key = KeysRef::create(data.as_ptr() as usize, data.len());
+                        self.insert_and_materialize(&key);
                     }
                 }
-                None => {
+            }
+            None => {
+                for row in 0..input_rows {
                     let data = unsafe { column.index_unchecked(row) };
-                    let mut key = KeysRef::create(data.as_ptr() as usize, data.len());
-                    if !self.set.contains(&key) {
-                        self.holder.put_slice(data);
-                        self.holder.commit_row();
-
-                        let data = unsafe { self.holder.index_unchecked(self.holder.len() - 1) };
-                        key = KeysRef::create(data.as_ptr() as usize, data.len());
-                        self.set.insert(key);
-                    }
+                    let key = KeysRef::create(data.as_ptr() as usize, data.len());
+                    self.insert_and_materialize(&key);
                 }
             }
         }
@@ -239,12 +258,37 @@ impl DistinctStateFunc<KeysRef> for AggregateDistinctStringState {
     }
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
-        self.set.extend(rhs.set.clone());
+        for value in rhs.set.iter() {
+            self.insert_and_materialize(value.get_key());
+        }
         Ok(())
     }
 
     fn build_columns(&mut self, _types: &[DataType]) -> Result<Vec<Column>> {
-        let c = std::mem::replace(&mut self.holder, StringColumnBuilder::with_capacity(0, 0));
+        if self.holders.len() == 1 {
+            let c = std::mem::replace(
+                &mut self.holders[0],
+                StringColumnBuilder::with_capacity(0, 0),
+            );
+            return Ok(vec![Column::String(c.build())]);
+        }
+
+        let mut values = Vec::with_capacity(self.holders.iter().map(|h| h.data.len()).sum());
+        let mut offsets = Vec::with_capacity(self.holders.iter().map(|h| h.len()).sum());
+
+        let mut last_offset = 0;
+        offsets.push(0);
+        for holder in self.holders.iter_mut() {
+            for offset in holder.offsets.iter() {
+                last_offset += *offset;
+                offsets.push(last_offset);
+            }
+            values.append(&mut holder.data);
+        }
+        let c = StringColumnBuilder {
+            data: values,
+            offsets,
+        };
         Ok(vec![Column::String(c.build())])
     }
 }
