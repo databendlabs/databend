@@ -209,10 +209,6 @@ impl Expression {
             .map(|return_type| DataField::new(&name, return_type))
     }
 
-    pub fn nullable(&self, input_schema: &DataSchemaRef) -> Result<bool> {
-        Ok(self.to_data_type(input_schema)?.is_nullable())
-    }
-
     pub fn to_data_type(&self, input_schema: &DataSchemaRef) -> Result<DataTypeImpl> {
         let visitor = ExpressionDataTypeVisitor::create(input_schema.clone());
         visitor.visit(self)?.finalize()
