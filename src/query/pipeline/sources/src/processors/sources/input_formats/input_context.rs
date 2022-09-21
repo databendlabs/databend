@@ -40,6 +40,7 @@ use crate::processors::sources::input_formats::InputFormat;
 pub enum InputPlan {
     CopyInto(Box<CopyIntoPlan>),
     StreamingLoad,
+    Clickhouse,
 }
 
 pub struct CopyIntoPlan {

@@ -204,6 +204,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
         let max_aligner = match ctx.plan {
             InputPlan::CopyInto(_) => ctx.splits.len(),
             InputPlan::StreamingLoad => 3,
+            InputPlan::Clickhouse => 1,
         };
         let (row_batch_tx, row_batch_rx) = crossbeam_channel::bounded(n_threads);
         for _ in 0..std::cmp::min(max_aligner, n_threads) {
