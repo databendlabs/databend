@@ -15,21 +15,22 @@
 use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::interpreters::*;
-use databend_query::sql::PlanParser;
+use databend_query::sql::Planner;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_explain_interpreter() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
 
     let query = "\
         EXPLAIN SELECT number FROM numbers_mt(10) \
         WHERE (number + 1) = 4 HAVING (number + 1) = 4\
     ";
 
-    let plan = PlanParser::parse(ctx.clone(), query).await?;
-    let executor = InterpreterFactory::get(ctx.clone(), plan).await?;
+    let (plan, _, _) = planner.plan_sql(query).await?;
+    let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
     assert_eq!(executor.name(), "ExplainInterpreter");
 
     let stream = executor.execute(ctx).await?;

@@ -48,13 +48,6 @@ impl Accessor {
         Accessor { accessors }
     }
 
-    pub async fn check(&self, plan: &PlanNode) -> Result<()> {
-        for accessor in self.accessors.values() {
-            accessor.check(plan).await?;
-        }
-        Ok(())
-    }
-
     pub async fn check_new(&self, plan: &Plan) -> Result<()> {
         for accessor in self.accessors.values() {
             accessor.check_new(plan).await?;

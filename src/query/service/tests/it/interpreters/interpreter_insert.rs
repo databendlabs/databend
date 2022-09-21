@@ -52,16 +52,16 @@ async fn test_insert_into_interpreter() -> Result<()> {
         // insert into.
         {
             let query = "insert into default.default_value_table(a) values('a')";
-            let plan = PlanParser::parse(ctx.clone(), query).await?;
-            let executor = InterpreterFactory::get(ctx.clone(), plan.clone()).await?;
+            let (plan, _, _) = planner.plan_sql(query).await?;
+            let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
             let _ = executor.execute(ctx.clone()).await?;
         }
 
         // insert into select.
         {
             let query = "insert into default.default_value_table(a) select a from default.default_value_table";
-            let plan = PlanParser::parse(ctx.clone(), query).await?;
-            let executor = InterpreterFactory::get(ctx.clone(), plan.clone()).await?;
+            let (plan, _, _) = planner.plan_sql(query).await?;
+            let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
             let _ = executor.execute(ctx.clone()).await?;
         }
 
@@ -87,8 +87,8 @@ async fn test_insert_into_interpreter() -> Result<()> {
     // Insert into input table.
     {
         let query = "insert into default.input_table values(1,1,1,1,1), (2,2,2,2,2)";
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone()).await?;
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         let _ = executor.execute(ctx.clone()).await?;
     }
 
@@ -96,8 +96,8 @@ async fn test_insert_into_interpreter() -> Result<()> {
     {
         let query = "insert into default.output_table select * from default.input_table";
 
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone()).await?;
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan).await?;
         let _ = executor.execute(ctx.clone()).await?;
     }
 
