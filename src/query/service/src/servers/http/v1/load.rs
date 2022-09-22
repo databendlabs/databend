@@ -138,6 +138,7 @@ pub async fn streaming_load(
                     .await
                     .map_err(InternalServerError)?,
                 );
+                tracing::info!("streaming load {:?}", input_context);
 
                 insert.source = InsertInputSource::StreamingWithFormat(
                     format.to_string(),

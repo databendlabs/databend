@@ -12,6 +12,8 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::mem;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -41,6 +43,7 @@ use crate::processors::sources::input_formats::input_format_text::InputFormatTex
 use crate::processors::sources::input_formats::input_pipeline::StreamingReadBatch;
 use crate::processors::sources::input_formats::InputFormat;
 
+#[derive(Debug)]
 pub enum InputPlan {
     CopyInto(Box<CopyIntoPlan>),
     StreamingLoad(StreamPlan),
@@ -56,11 +59,13 @@ impl InputPlan {
     }
 }
 
+#[derive(Debug)]
 pub struct CopyIntoPlan {
     pub stage_info: UserStageInfo,
     pub files: Vec<String>,
 }
 
+#[derive(Debug)]
 pub struct StreamPlan {
     pub compression: StageFileCompression,
 }
@@ -116,6 +121,21 @@ pub struct InputContext {
     pub rows_per_block: usize,
 
     pub scan_progress: Arc<Progress>,
+}
+
+impl Debug for InputContext {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InputContext")
+            .field("plan", &self.plan)
+            .field("rows_to_skip", &self.rows_to_skip)
+            .field("field_delimiter", &self.field_delimiter)
+            .field("record_delimiter", &self.record_delimiter)
+            .field("format_settings", &self.format_settings)
+            .field("rows_per_block", &self.rows_per_block)
+            .field("read_batch_size", &self.read_batch_size)
+            .field("num_splits", &self.splits.len())
+            .finish()
+    }
 }
 
 impl InputContext {

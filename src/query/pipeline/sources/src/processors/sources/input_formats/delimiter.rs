@@ -15,6 +15,7 @@
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+#[derive(Debug)]
 pub enum RecordDelimiter {
     Crlf,
     Any(u8),

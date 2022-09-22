@@ -94,6 +94,7 @@ impl Table for StageTable {
             )
             .await?,
         );
+        info!("copy into {:?}", input_ctx);
         let mut guard = self.input_context.lock();
         *guard = Some(input_ctx);
         Ok((Statistics::default(), vec![]))
