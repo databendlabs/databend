@@ -296,6 +296,7 @@ impl CsvReaderState {
     pub(crate) fn create(ctx: &Arc<InputContext>) -> Self {
         let reader = csv_core::ReaderBuilder::new()
             .delimiter(ctx.field_delimiter)
+            .quote(ctx.format_settings.quote_char)
             .terminator(match ctx.record_delimiter {
                 RecordDelimiter::Crlf => csv_core::Terminator::CRLF,
                 RecordDelimiter::Any(v) => csv_core::Terminator::Any(v),

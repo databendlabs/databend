@@ -84,7 +84,7 @@ fn remove_quote(s: &[u8]) -> &[u8] {
     if l > 1 {
         let a = r[0];
         let b = r[l - 1];
-        if (a == b'"' && b == b'"') || (a == b'"' && b == b'"') {
+        if (a == b'"' && b == b'"') || (a == b'\'' && b == b'\'') {
             r = &r[1..l - 1]
         }
     }
