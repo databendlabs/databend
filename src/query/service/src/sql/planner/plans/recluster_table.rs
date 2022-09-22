@@ -11,22 +11,23 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 use std::sync::Arc;
 
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_planner::MetadataRef;
 
-use crate::Extras;
+use crate::sql::plans::Scalar;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct ReclusterTablePlan {
     pub tenant: String,
     pub catalog: String,
     pub database: String,
     pub table: String,
     pub is_final: bool,
-    pub push_downs: Option<Extras>,
+    pub metadata: MetadataRef,
+    pub push_downs: Option<Scalar>,
 }
 
 impl ReclusterTablePlan {
