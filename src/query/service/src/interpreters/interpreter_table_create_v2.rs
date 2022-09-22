@@ -165,7 +165,7 @@ impl CreateTableInterpreterV2 {
     fn build_request(&self) -> Result<CreateTableReq> {
         let mut fields = Vec::with_capacity(self.plan.schema.num_fields());
         for (idx, field) in self.plan.schema.fields().clone().into_iter().enumerate() {
-            let field = if let Some(scalar) = &self.plan.field_default_exprs[idx] {
+            let field = if let Some(Some(scalar)) = &self.plan.field_default_exprs.get(idx) {
                 let mut builder = PhysicalScalarBuilder;
                 let physical_scaler = builder.build(scalar)?;
                 field.with_default_expr(Some(serde_json::to_string(&physical_scaler)?))

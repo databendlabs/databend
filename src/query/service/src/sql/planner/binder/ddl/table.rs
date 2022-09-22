@@ -390,9 +390,8 @@ impl<'a> Binder {
                     })
                     .collect();
                 let schema = DataSchemaRefExt::create(fields);
-                let num_fields = schema.num_fields();
                 Self::validate_create_table_schema(&schema)?;
-                (schema, vec![None; num_fields], vec![])
+                (schema, vec![], vec![])
             }
             (Some(source), Some(query)) => {
                 // e.g. `CREATE TABLE t (i INT) AS SELECT * from old_t` with columns speicified
@@ -863,11 +862,7 @@ impl<'a> Binder {
                 );
                 let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
                 let table = self.ctx.get_table(&catalog, &database, &table_name).await?;
-                Ok((
-                    table.schema(),
-                    vec![None; table.schema().num_fields()],
-                    table.field_comments().clone(),
-                ))
+                Ok((table.schema(), vec![], table.field_comments().clone()))
             }
         }
     }
