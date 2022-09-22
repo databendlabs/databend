@@ -61,6 +61,56 @@ pub fn build_array<'a>(
     Ok(())
 }
 
+// build `JSONB` object from items
+// Assuming that the input values is valid JSONB data
+pub fn build_object<'a>(
+    items: impl IntoIterator<Item = (&'a str, &'a [u8])>,
+    buf: &mut Vec<u8>,
+) -> Result<(), Error> {
+    // reserve space for header
+    buf.resize(4, 0);
+    let mut len: u32 = 0;
+    let mut key_data = Vec::new();
+    let mut val_data = Vec::new();
+    let mut val_jentries = VecDeque::new();
+    for (key, value) in items.into_iter() {
+        // write key jentry and key data
+        let encoded_key_jentry = (STRING_TAG | key.len() as u32).to_be_bytes();
+        buf.extend_from_slice(&encoded_key_jentry);
+        key_data.extend_from_slice(key.as_bytes());
+
+        // build value jentry and write value data
+        let header = read_u32(value, 0)?;
+        let encoded_val_jentry = match header & CONTAINER_HEADER_TYPE_MASK {
+            SCALAR_CONTAINER_TAG => {
+                let jentry = &value[4..8];
+                val_data.extend_from_slice(&value[8..]);
+                jentry.try_into().unwrap()
+            }
+            ARRAY_CONTAINER_TAG | OBJECT_CONTAINER_TAG => {
+                val_data.extend_from_slice(value);
+                (CONTAINER_TAG | value.len() as u32).to_be_bytes()
+            }
+            _ => return Err(Error::InvalidJsonbHeader),
+        };
+        val_jentries.push_back(encoded_val_jentry);
+        len += 1;
+    }
+    // write header and value jentry
+    let header = OBJECT_CONTAINER_TAG | len;
+    for (i, b) in header.to_be_bytes().iter().enumerate() {
+        buf[i] = *b;
+    }
+    while let Some(val_jentry) = val_jentries.pop_front() {
+        buf.extend_from_slice(&val_jentry);
+    }
+    // write key data and value data
+    buf.extend_from_slice(&key_data);
+    buf.extend_from_slice(&val_data);
+
+    Ok(())
+}
+
 // `JSONB` values supports partial decode for comparison,
 // if the values are found to be unequal,
 // the result will be returned immediately

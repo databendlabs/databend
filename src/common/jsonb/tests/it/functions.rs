@@ -15,6 +15,7 @@
 use std::cmp::Ordering;
 
 use common_jsonb::build_array;
+use common_jsonb::build_object;
 use common_jsonb::compare;
 use common_jsonb::from_slice;
 use common_jsonb::parse_value;
@@ -44,11 +45,52 @@ fn test_build_array() {
 
     let mut arr_buf = Vec::new();
     build_array(values, &mut arr_buf).unwrap();
-    assert_eq!(arr_buf, b"\x80\0\0\x05\x40\0\0\x00\x20\0\0\x04\x10\0\0\x03\x50\0\0\x13\x50\0\0\x0e\x02\x02\x39\x30\x61\x62\x63\x80\0\0\x03\x20\0\0\x01\x20\0\0\x01\x20\0\0\x01\x01\x02\x03\x40\0\0\x01\x10\0\0\x01\x10\0\0\x01\x6b\x76");
+    assert_eq!(arr_buf, b"\x80\0\0\x05\x40\0\0\0\x20\0\0\x04\x10\0\0\x03\x50\0\0\x13\x50\0\0\x0e\x02\x02\x39\x30\x61\x62\x63\x80\0\0\x03\x20\0\0\x01\x20\0\0\x01\x20\0\0\x01\x01\x02\x03\x40\0\0\x01\x10\0\0\x01\x10\0\0\x01\x6b\x76");
 
     let value = from_slice(&arr_buf).unwrap();
     assert!(value.is_array());
     let array = value.as_array().unwrap();
+    assert_eq!(array.len(), 5);
+}
+
+#[test]
+fn test_build_object() {
+    let sources = vec![
+        r#"true"#,
+        r#"123.45"#,
+        r#""abc""#,
+        r#"[1,2,3]"#,
+        r#"{"k":"v"}"#,
+    ];
+    let keys = vec![
+        "k1".to_string(),
+        "k2".to_string(),
+        "k3".to_string(),
+        "k4".to_string(),
+        "k5".to_string(),
+    ];
+
+    let mut offsets = Vec::with_capacity(sources.len());
+    let mut buf: Vec<u8> = Vec::new();
+    for s in sources {
+        let value = parse_value(s.as_bytes()).unwrap();
+        value.to_vec(&mut buf).unwrap();
+        offsets.push(buf.len());
+    }
+    let mut values = Vec::with_capacity(offsets.len());
+    let mut last_offset = 0;
+
+    for (key, offset) in keys.iter().zip(offsets.iter()) {
+        values.push((key.as_str(), &buf[last_offset..*offset]));
+        last_offset = *offset;
+    }
+    let mut obj_buf = Vec::new();
+    build_object(values, &mut obj_buf).unwrap();
+    assert_eq!(obj_buf, b"\x40\0\0\x05\x10\0\0\x02\x10\0\0\x02\x10\0\0\x02\x10\0\0\x02\x10\0\0\x02\x40\0\0\0\x20\0\0\x04\x10\0\0\x03\x50\0\0\x13\x50\0\0\x0e\x6b\x31\x6b\x32\x6b\x33\x6b\x34\x6b\x35\x02\x02\x39\x30\x61\x62\x63\x80\0\0\x03\x20\0\0\x01\x20\0\0\x01\x20\0\0\x01\x01\x02\x03\x40\0\0\x01\x10\0\0\x01\x10\0\0\x01\x6b\x76");
+
+    let value = from_slice(&obj_buf).unwrap();
+    assert!(value.is_object());
+    let array = value.as_object().unwrap();
     assert_eq!(array.len(), 5);
 }
 
