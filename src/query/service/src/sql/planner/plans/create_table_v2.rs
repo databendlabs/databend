@@ -23,8 +23,7 @@ use crate::sql::plans::Plan;
 
 pub type TableOptions = BTreeMap<String, String>;
 
-// Replace `PlanNode` with `Plan`
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[derive(Clone)]
 pub struct CreateTablePlanV2 {
     pub if_not_exists: bool,
     pub tenant: String,
@@ -37,7 +36,6 @@ pub struct CreateTablePlanV2 {
     pub table_meta: TableMeta,
 
     pub cluster_keys: Vec<String>,
-    #[serde(skip)]
     pub as_select: Option<Box<Plan>>,
 }
 
