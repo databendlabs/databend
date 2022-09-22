@@ -106,7 +106,7 @@ pub fn codegen_register() {
             .join("");
         let arg_g_closure_sig = (0..n_args)
             .map(|n| n + 1)
-            .map(|n| format!("ValueRef<I{n}>, "))
+            .map(|n| format!("ValueRef<'a, I{n}>, "))
             .join("");
         let arg_sig_type = (0..n_args)
             .map(|n| n + 1)
@@ -177,7 +177,7 @@ pub fn codegen_register() {
                     func: G,
                 ) where
                     F: Fn({arg_f_closure_sig}) -> Option<O::Domain> + 'static + Clone + Copy,
-                    G: Fn({arg_g_closure_sig} &GenericMap) -> Result<Value<O>, String> + 'static + Clone + Copy,
+                    G: for<'a> Fn({arg_g_closure_sig} &GenericMap) -> Result<Value<O>, String> + 'static + Clone + Copy,
                 {{
                     let has_nullable = &[{arg_sig_type} O::data_type()]
                         .iter()
@@ -226,7 +226,7 @@ pub fn codegen_register() {
             .join("");
         let arg_g_closure_sig = (0..n_args)
             .map(|n| n + 1)
-            .map(|n| format!("ValueRef<I{n}>, "))
+            .map(|n| format!("ValueRef<'a, I{n}>, "))
             .join("");
         let arg_sig_type = (0..n_args)
             .map(|n| n + 1)
@@ -247,7 +247,7 @@ pub fn codegen_register() {
                     func: G,
                 ) where
                     F: Fn({arg_f_closure_sig}) -> Option<O::Domain> + 'static + Clone + Copy,
-                    G: Fn({arg_g_closure_sig} &GenericMap) -> Result<Value<O>, String> + 'static + Clone + Copy,
+                    G: for <'a> Fn({arg_g_closure_sig} &GenericMap) -> Result<Value<O>, String> + 'static + Clone + Copy,
                 {{
                     self.funcs
                         .entry(name)
@@ -466,11 +466,11 @@ pub fn codegen_register() {
             .join("");
         let arg_input_closure_sig = (0..n_args)
             .map(|n| n + 1)
-            .map(|n| format!("ValueRef<I{n}>, "))
+            .map(|n| format!("ValueRef<'a, I{n}>, "))
             .join("");
         let arg_output_closure_sig = (0..n_args)
             .map(|n| n + 1)
-            .map(|n| format!("ValueRef<NullableType<I{n}>>, "))
+            .map(|n| format!("ValueRef<'a, NullableType<I{n}>>, "))
             .join("");
         let closure_args = (0..n_args)
             .map(|n| n + 1)
@@ -547,8 +547,8 @@ pub fn codegen_register() {
             source,
             "
                 pub fn passthrough_nullable_{n_args}_arg<{arg_generics_bound} O: ArgType>(
-                    func: impl Fn({arg_input_closure_sig} &GenericMap) -> Result<Value<O>, String> + Copy,
-                ) -> impl Fn({arg_output_closure_sig} &GenericMap) -> Result<Value<NullableType<O>>, String> + Copy {{
+                    func: impl for <'a> Fn({arg_input_closure_sig} &GenericMap) -> Result<Value<O>, String> + Copy,
+                ) -> impl for <'a> Fn({arg_output_closure_sig} &GenericMap) -> Result<Value<NullableType<O>>, String> + Copy {{
                     move |{closure_args} generics| match ({args_tuple}) {{
                         {scalar_nones_pats} => Ok(Value::Scalar(None)),
                         ({arg_scalar}) => Ok(Value::Scalar(Some(
@@ -611,7 +611,7 @@ pub fn codegen_register() {
             .join("");
         let arg_g_closure_sig = (0..n_args)
             .map(|n| n + 1)
-            .map(|n| format!("ValueRef<I{n}>, "))
+            .map(|n| format!("ValueRef<'a, I{n}>, "))
             .join("");
         let let_args = (0..n_args)
             .map(|n| n + 1)
@@ -625,7 +625,7 @@ pub fn codegen_register() {
             source,
             "
                 fn erase_function_generic_{n_args}_arg<{arg_generics_bound} O: ArgType>(
-                    func: impl Fn({arg_g_closure_sig} &GenericMap) -> Result<Value<O>, String>,
+                    func: impl for <'a> Fn({arg_g_closure_sig} &GenericMap) -> Result<Value<O>, String>,
                 ) -> impl Fn(&[ValueRef<AnyType>], &GenericMap) -> Result<Value<AnyType>, String> {{
                     move |args, generics| {{
                         {let_args}
