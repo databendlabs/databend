@@ -27,7 +27,6 @@ use common_expression::types::string::StringDomain;
 use common_expression::types::AnyType;
 use common_expression::types::ArgType;
 use common_expression::types::DataType;
-use common_expression::types::GenericMap;
 use common_expression::types::NullableType;
 use common_expression::types::NumberDataType;
 use common_expression::types::StringType;
@@ -36,6 +35,7 @@ use common_expression::wrap_nullable;
 use common_expression::Column;
 use common_expression::Domain;
 use common_expression::Function;
+use common_expression::FunctionContext;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
@@ -56,7 +56,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::String,
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|args_domain, _| {
+            calc_domain: Box::new(|args_domain| {
                 let domain = args_domain[0].as_string().unwrap();
                 Some(Domain::String(StringDomain {
                     min: domain.min.clone(),
@@ -79,7 +79,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Nullable(Box::new(DataType::String)),
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_, _| None),
+            calc_domain: Box::new(|_| None),
             eval: Box::new(wrap_nullable(concat_fn)),
         }))
     });
@@ -95,14 +95,14 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::String,
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|args_domain, _| {
+            calc_domain: Box::new(|args_domain| {
                 let domain = args_domain[1].as_string().unwrap();
                 Some(Domain::String(StringDomain {
                     min: domain.min.clone(),
                     max: None,
                 }))
             }),
-            eval: Box::new(|args, _generics| {
+            eval: Box::new(|args, _| {
                 let len = args.iter().find_map(|arg| match arg {
                     ValueRef::Column(col) => Some(col.len()),
                     _ => None,
@@ -162,8 +162,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Nullable(Box::new(DataType::String)),
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_, _| None),
-            eval: Box::new(|args, _generics| {
+            calc_domain: Box::new(|_| None),
+            eval: Box::new(|args, _| {
                 type T = NullableType<StringType>;
                 let len = args.iter().find_map(|arg| match arg {
                     ValueRef::Column(col) => Some(col.len()),
@@ -260,7 +260,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::String,
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_, _| None),
+            calc_domain: Box::new(|_| None),
             eval: Box::new(char_fn),
         }))
     });
@@ -282,7 +282,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Nullable(Box::new(DataType::String)),
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_, _| None),
+            calc_domain: Box::new(|_| None),
             eval: Box::new(wrap_nullable(char_fn)),
         }))
     });
@@ -327,7 +327,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Number(NumberDataType::UInt64),
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_, _| None),
+            calc_domain: Box::new(|_| None),
             eval: Box::new(regexp_instr_fn),
         }))
     });
@@ -372,7 +372,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_, _| None),
+            calc_domain: Box::new(|_| None),
             eval: Box::new(wrap_nullable(regexp_instr_fn)),
         }))
     });
@@ -392,7 +392,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Boolean,
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_, _| None),
+            calc_domain: Box::new(|_| None),
             eval: Box::new(regexp_like_fn),
         }))
     });
@@ -412,7 +412,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Nullable(Box::new(DataType::Boolean)),
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_, _| None),
+            calc_domain: Box::new(|_| None),
             eval: Box::new(wrap_nullable(regexp_like_fn)),
         }))
     });
@@ -452,7 +452,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::String,
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_, _| None),
+            calc_domain: Box::new(|_| None),
             eval: Box::new(regexp_replace_fn),
         }))
     });
@@ -492,7 +492,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Nullable(Box::new(DataType::String)),
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_, _| None),
+            calc_domain: Box::new(|_| None),
             eval: Box::new(wrap_nullable(regexp_replace_fn)),
         }))
     });
@@ -529,7 +529,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Nullable(Box::new(DataType::String)),
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_, _| None),
+            calc_domain: Box::new(|_| None),
             eval: Box::new(regexp_substr_fn),
         }))
     });
@@ -566,13 +566,13 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Nullable(Box::new(DataType::String)),
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_, _| None),
+            calc_domain: Box::new(|_| None),
             eval: Box::new(wrap_nullable(regexp_substr_fn)),
         }))
     });
 }
 
-fn concat_fn(args: &[ValueRef<AnyType>], _: &GenericMap) -> Result<Value<AnyType>, String> {
+fn concat_fn(args: &[ValueRef<AnyType>], _: FunctionContext) -> Result<Value<AnyType>, String> {
     let len = args.iter().find_map(|arg| match arg {
         ValueRef::Column(col) => Some(col.len()),
         _ => None,
@@ -597,7 +597,7 @@ fn concat_fn(args: &[ValueRef<AnyType>], _: &GenericMap) -> Result<Value<AnyType
     }
 }
 
-fn char_fn(args: &[ValueRef<AnyType>], _: &GenericMap) -> Result<Value<AnyType>, String> {
+fn char_fn(args: &[ValueRef<AnyType>], _: FunctionContext) -> Result<Value<AnyType>, String> {
     let args = args
         .iter()
         .map(|arg| arg.try_downcast::<UInt8Type>().unwrap())
@@ -640,7 +640,10 @@ fn char_fn(args: &[ValueRef<AnyType>], _: &GenericMap) -> Result<Value<AnyType>,
     Ok(Value::Column(Column::String(result)))
 }
 
-fn regexp_instr_fn(args: &[ValueRef<AnyType>], _: &GenericMap) -> Result<Value<AnyType>, String> {
+fn regexp_instr_fn(
+    args: &[ValueRef<AnyType>],
+    _: FunctionContext,
+) -> Result<Value<AnyType>, String> {
     let len = args.iter().find_map(|arg| match arg {
         ValueRef::Column(col) => Some(col.len()),
         _ => None,
@@ -716,7 +719,10 @@ fn regexp_instr_fn(args: &[ValueRef<AnyType>], _: &GenericMap) -> Result<Value<A
     }
 }
 
-fn regexp_like_fn(args: &[ValueRef<AnyType>], _: &GenericMap) -> Result<Value<AnyType>, String> {
+fn regexp_like_fn(
+    args: &[ValueRef<AnyType>],
+    _: FunctionContext,
+) -> Result<Value<AnyType>, String> {
     let len = args.iter().find_map(|arg| match arg {
         ValueRef::Column(col) => Some(col.len()),
         _ => None,
@@ -761,7 +767,10 @@ fn regexp_like_fn(args: &[ValueRef<AnyType>], _: &GenericMap) -> Result<Value<An
     }
 }
 
-fn regexp_replace_fn(args: &[ValueRef<AnyType>], _: &GenericMap) -> Result<Value<AnyType>, String> {
+fn regexp_replace_fn(
+    args: &[ValueRef<AnyType>],
+    _: FunctionContext,
+) -> Result<Value<AnyType>, String> {
     let len = args.iter().find_map(|arg| match arg {
         ValueRef::Column(col) => Some(col.len()),
         _ => None,
@@ -843,7 +852,10 @@ fn regexp_replace_fn(args: &[ValueRef<AnyType>], _: &GenericMap) -> Result<Value
     }
 }
 
-fn regexp_substr_fn(args: &[ValueRef<AnyType>], _: &GenericMap) -> Result<Value<AnyType>, String> {
+fn regexp_substr_fn(
+    args: &[ValueRef<AnyType>],
+    _: FunctionContext,
+) -> Result<Value<AnyType>, String> {
     let len = args.iter().find_map(|arg| match arg {
         ValueRef::Column(col) => Some(col.len()),
         _ => None,
