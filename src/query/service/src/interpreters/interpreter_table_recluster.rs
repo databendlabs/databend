@@ -91,9 +91,7 @@ impl Interpreter for ReclusterTableInterpreter {
             }
         }
 
-        InterpreterClusteringHistory::create(ctx.clone())
-            .write_log(start, &plan.database, &plan.table)
-            .await?;
+        InterpreterClusteringHistory::write_log(&ctx, start, &plan.database, &plan.table)?;
 
         Ok(PipelineBuildResult::create())
     }

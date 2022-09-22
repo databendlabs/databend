@@ -34,6 +34,8 @@ mod tracing_table;
 mod tracing_table_stream;
 mod users_table;
 
+pub use clustering_history_table::ClusteringHistoryLogElement;
+pub use clustering_history_table::ClusteringHistoryQueue;
 pub use clustering_history_table::ClusteringHistoryTable;
 pub use columns_table::ColumnsTable;
 pub use configs_table::ConfigsTable;
@@ -42,6 +44,7 @@ pub use credits_table::CreditsTable;
 pub use databases_table::DatabasesTable;
 pub use engines_table::EnginesTable;
 pub use functions_table::FunctionsTable;
+pub use log_queue::SystemLogElement;
 pub use log_queue::SystemLogQueue;
 pub use log_queue::SystemLogTable;
 pub use metrics_table::MetricsTable;

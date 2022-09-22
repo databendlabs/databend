@@ -54,7 +54,7 @@ impl SystemDatabase {
             )),
             Arc::new(system::ClusteringHistoryTable::create(
                 sys_db_meta.next_table_id(),
-                config.query.max_query_log_size as i32,
+                config.query.max_query_log_size,
             )),
             system::EnginesTable::create(sys_db_meta.next_table_id()),
             system::RolesTable::create(sys_db_meta.next_table_id()),
