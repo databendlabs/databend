@@ -55,7 +55,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Generic(0),
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|args_domain, _| {
+            calc_domain: Box::new(|args_domain| {
                 let mut domain = None;
                 for cond_idx in (0..args_domain.len() - 1).step_by(2) {
                     let (has_true, has_null_or_false) = match &args_domain[cond_idx] {
@@ -98,14 +98,14 @@ pub fn register(registry: &mut FunctionRegistry) {
                     None => args_domain.last().unwrap().clone(),
                 })
             }),
-            eval: Box::new(|args, generics, _num_rows| {
+            eval: Box::new(|args, ctx| {
                 let len = args.iter().find_map(|arg| match arg {
                     ValueRef::Column(col) => Some(col.len()),
                     _ => None,
                 });
 
                 let mut output_builder =
-                    ColumnBuilder::with_capacity(&generics[0], len.unwrap_or(1));
+                    ColumnBuilder::with_capacity(&ctx.generics[0], len.unwrap_or(1));
                 for row_idx in 0..(len.unwrap_or(1)) {
                     let result_idx = (0..args.len() - 1)
                         .step_by(2)

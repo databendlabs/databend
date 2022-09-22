@@ -1267,6 +1267,7 @@ dependencies = [
  "bstr",
  "bumpalo",
  "bytes 1.2.1",
+ "chrono-tz",
  "comfy-table",
  "common-arrow",
  "common-ast",

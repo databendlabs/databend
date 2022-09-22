@@ -39,18 +39,22 @@ pub struct FunctionSignature {
     pub property: FunctionProperty,
 }
 
-#[derive(Clone)]
-pub struct FunctionContext {
+#[derive(Clone, Copy)]
+pub struct FunctionContext<'a> {
+    pub generics: &'a GenericMap,
+    pub num_rows: usize,
     pub tz: Tz,
 }
 
-impl Default for FunctionContext {
-    fn default() -> Self {
-        Self {
-            tz: "UTC".parse::<Tz>().unwrap(),
-        }
-    }
-}
+// impl<'a> Default for FunctionContext<'a> {
+//     fn default() -> Self {
+//         Self {
+//             tz: "UTC".parse::<Tz>().unwrap(),
+//             generics: &[],
+//             num_rows: 0,
+//         }
+//     }
+// }
 
 /// `FunctionID` is a unique identifier for a function. It's used to construct
 /// the exactly same function from the remote execution nodes.
@@ -71,10 +75,9 @@ pub enum FunctionID {
 pub struct Function {
     pub signature: FunctionSignature,
     #[allow(clippy::type_complexity)]
-    pub calc_domain: Box<dyn Fn(&[Domain], &GenericMap) -> Option<Domain>>,
+    pub calc_domain: Box<dyn Fn(&[Domain]) -> Option<Domain>>,
     #[allow(clippy::type_complexity)]
-    pub eval:
-        Box<dyn Fn(&[ValueRef<AnyType>], &GenericMap, usize) -> Result<Value<AnyType>, String>>,
+    pub eval: Box<dyn Fn(&[ValueRef<AnyType>], FunctionContext) -> Result<Value<AnyType>, String>>,
 }
 
 #[derive(Default)]
@@ -195,9 +198,9 @@ impl FunctionRegistry {
 
 pub fn wrap_nullable<F>(
     f: F,
-) -> impl Fn(&[ValueRef<AnyType>], &GenericMap, usize) -> Result<Value<AnyType>, String> + Copy
-where F: Fn(&[ValueRef<AnyType>], &GenericMap, usize) -> Result<Value<AnyType>, String> + Copy {
-    move |args, generics, num_rows| {
+) -> impl Fn(&[ValueRef<AnyType>], FunctionContext) -> Result<Value<AnyType>, String> + Copy
+where F: Fn(&[ValueRef<AnyType>], FunctionContext) -> Result<Value<AnyType>, String> + Copy {
+    move |args, ctx| {
         type T = NullableType<AnyType>;
         type Result = AnyType;
 
@@ -222,7 +225,7 @@ where F: Fn(&[ValueRef<AnyType>], &GenericMap, usize) -> Result<Value<AnyType>, 
                 }
             }
         }
-        let results = f(&nonull_args, generics, num_rows)?;
+        let results = f(&nonull_args, ctx)?;
         let bitmap = bitmap.unwrap_or_else(|| constant_bitmap(true, len));
         match results {
             Value::Scalar(s) => {
