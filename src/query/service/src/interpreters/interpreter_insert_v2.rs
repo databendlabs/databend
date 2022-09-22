@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use common_ast::ast::Expr;
 use common_ast::parser::parse_comma_separated_exprs;
+use common_ast::parser::parse_expr;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_base::base::GlobalIORuntime;
@@ -60,6 +61,7 @@ use crate::sql::binder::ScalarBinder;
 use crate::sql::executor::DistributedInsertSelect;
 use crate::sql::executor::PhysicalPlan;
 use crate::sql::executor::PhysicalPlanBuilder;
+use crate::sql::executor::PhysicalScalarBuilder;
 use crate::sql::executor::PipelineBuilder;
 use crate::sql::plans::CastExpr;
 use crate::sql::plans::ConstantExpr;
@@ -572,10 +574,41 @@ pub fn skip_to_next_row<R: BufferRead>(
     Ok(())
 }
 
-fn fill_default_value(expressions: &mut Vec<(EvalNode, String)>, field: &DataField) -> Result<()> {
+async fn fill_default_value(
+    ctx: Arc<dyn TableContext>,
+    name_resolution_ctx: &NameResolutionContext,
+    bind_context: &BindContext,
+    metadata: MetadataRef,
+    expressions: &mut Vec<(EvalNode, String)>,
+    field: &DataField,
+) -> Result<()> {
     if let Some(default_expr) = field.default_expr() {
+        let settings = ctx.get_settings();
+        let sql_dialect = settings.get_sql_dialect()?;
+        let tokens = tokenize_sql(default_expr)?;
+        let backtrace = Backtrace::new();
+        let expr = parse_expr(&tokens[1..tokens.len() as usize], sql_dialect, &backtrace)?;
+
+        let mut scalar_binder = ScalarBinder::new(
+            bind_context,
+            ctx.clone(),
+            name_resolution_ctx,
+            metadata.clone(),
+            &[],
+        );
+
+        let (mut expr, expr_type) = scalar_binder.bind(&expr).await?;
+        if !expr_type.eq(field.data_type()) {
+            expr = Scalar::CastExpr(CastExpr {
+                argument: Box::new(expr),
+                from_type: Box::new(expr_type),
+                target_type: Box::new(field.data_type().clone()),
+            })
+        }
+        let mut builder = PhysicalScalarBuilder;
+        let serializable_expr = builder.build(&expr)?;
         expressions.push((
-            Evaluator::eval_physical_scalar(&serde_json::from_str(default_expr)?)?,
+            Evaluator::eval_physical_scalar(&serializable_expr)?,
             field.name().to_string(),
         ));
     } else {
@@ -620,14 +653,6 @@ async fn exprs_to_datavalue<'a>(
     }
     let mut expressions = Vec::with_capacity(schema_fields_len);
     for (i, expr) in exprs.iter().enumerate() {
-        // `DEFAULT` in insert values will be parsed as `Expr::ColumnRef`.
-        if let Expr::ColumnRef { column, .. } = expr {
-            if column.name.eq_ignore_ascii_case("default") {
-                let field = schema.field(i);
-                fill_default_value(&mut expressions, field)?;
-                continue;
-            }
-        }
         let mut scalar_binder = ScalarBinder::new(
             bind_context,
             ctx.clone(),
@@ -635,6 +660,23 @@ async fn exprs_to_datavalue<'a>(
             metadata.clone(),
             &[],
         );
+
+        // `DEFAULT` in insert values will be parsed as `Expr::ColumnRef`.
+        if let Expr::ColumnRef { column, .. } = expr {
+            if column.name.eq_ignore_ascii_case("default") {
+                let field = schema.field(i);
+                fill_default_value(
+                    ctx.clone(),
+                    name_resolution_ctx,
+                    bind_context,
+                    metadata.clone(),
+                    &mut expressions,
+                    field,
+                )
+                .await?;
+                continue;
+            }
+        }
         let (mut scalar, data_type) = scalar_binder.bind(expr).await?;
         let field_data_type = schema.field(i).data_type();
         if data_type.ne(field_data_type) {

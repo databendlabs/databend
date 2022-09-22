@@ -53,7 +53,6 @@ use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::Binder;
 use crate::sql::binder::Visibility;
 use crate::sql::executor::ExpressionBuilderWithoutRenaming;
-use crate::sql::executor::PhysicalScalarBuilder;
 use crate::sql::is_reserved_opt_key;
 use crate::sql::optimizer::optimize;
 use crate::sql::optimizer::OptimizerConfig;
@@ -61,10 +60,8 @@ use crate::sql::optimizer::OptimizerContext;
 use crate::sql::planner::semantic::normalize_identifier;
 use crate::sql::planner::semantic::IdentifierNormalizer;
 use crate::sql::plans::create_table_v2::CreateTablePlanV2;
-use crate::sql::plans::CastExpr;
 use crate::sql::plans::Plan;
 use crate::sql::plans::RewriteKind;
-use crate::sql::plans::Scalar;
 use crate::sql::BindContext;
 use crate::sql::ColumnBinding;
 use crate::sql::ScalarExpr;
@@ -828,20 +825,11 @@ impl<'a> Binder {
 
                     let field = DataField::new(&name, data_type.clone()).with_default_expr({
                         if let Some(default_expr) = &column.default_expr {
-                            let (mut expr, expr_type) = scalar_binder.bind(default_expr).await?;
+                            let (_, expr_type) = scalar_binder.bind(default_expr).await?;
                             if compare_coercion(&data_type, &expr_type).is_err() {
                                 return Err(ErrorCode::SemanticError(format!("column {name} is of type {} but default expression is of type {}", data_type, expr_type)));
                             }
-                            if !expr_type.eq(&data_type) {
-                                expr = Scalar::CastExpr(CastExpr {
-                                    argument: Box::new(expr),
-                                    from_type: Box::new(expr_type),
-                                    target_type: Box::new(data_type),
-                                })
-                            }
-                            let mut builder = PhysicalScalarBuilder;
-                            let serializable_expr = builder.build(&expr)?;
-                            Some(serde_json::to_string(&serializable_expr)?)
+                            Some(default_expr.to_string())
                         } else {
                             None
                         }
