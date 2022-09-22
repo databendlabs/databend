@@ -28,8 +28,8 @@ use common_functions::scalars::PatternType;
 use common_fuse_meta::meta::StatisticsOfColumns;
 use common_legacy_expression::lit;
 use common_legacy_expression::ExpressionMonotonicityVisitor;
-use common_legacy_expression::Expressions;
 use common_legacy_expression::LegacyExpression;
+use common_legacy_expression::LegacyExpressions;
 use common_legacy_expression::RequireColumnsVisitor;
 use common_pipeline_transforms::processors::transforms::ExpressionExecutor;
 
@@ -323,14 +323,14 @@ impl StatColumn {
 
 struct VerifiableExprBuilder<'a> {
     op: &'a str,
-    args: Expressions,
+    args: LegacyExpressions,
     fields: Vec<(DataField, ColumnFields)>,
     stat_columns: &'a mut StatColumns,
 }
 
 impl<'a> VerifiableExprBuilder<'a> {
     fn try_create(
-        exprs: Expressions,
+        exprs: LegacyExpressions,
         op: &'a str,
         schema: &'a DataSchemaRef,
         stat_columns: &'a mut StatColumns,
@@ -659,7 +659,7 @@ pub fn right_bound_for_like_pattern(prefix: Vec<u8>) -> Vec<u8> {
     res
 }
 
-fn get_maybe_monotonic(op: &str, args: Expressions) -> Result<bool> {
+fn get_maybe_monotonic(op: &str, args: LegacyExpressions) -> Result<bool> {
     let factory = FunctionFactory::instance();
     let function_features = factory.get_features(op)?;
     if !function_features.maybe_monotonic {

@@ -270,18 +270,18 @@ impl LegacyExpression {
         }
     }
 
-    pub fn create_scalar_function(op: &str, args: Expressions) -> LegacyExpression {
+    pub fn create_scalar_function(op: &str, args: LegacyExpressions) -> LegacyExpression {
         let op = op.to_string();
         LegacyExpression::ScalarFunction { op, args }
     }
 
-    pub fn create_unary_expression(op: &str, mut args: Expressions) -> LegacyExpression {
+    pub fn create_unary_expression(op: &str, mut args: LegacyExpressions) -> LegacyExpression {
         let op = op.to_string();
         let expr = Box::new(args.remove(0));
         LegacyExpression::UnaryExpression { op, expr }
     }
 
-    pub fn create_binary_expression(op: &str, mut args: Expressions) -> LegacyExpression {
+    pub fn create_binary_expression(op: &str, mut args: LegacyExpressions) -> LegacyExpression {
         let op = op.to_string();
         let left = Box::new(args.remove(0));
         let right = Box::new(args.remove(0));
@@ -366,4 +366,4 @@ impl fmt::Debug for LegacyExpression {
     }
 }
 
-pub type Expressions = Vec<LegacyExpression>;
+pub type LegacyExpressions = Vec<LegacyExpression>;
