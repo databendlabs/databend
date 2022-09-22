@@ -290,7 +290,19 @@ impl<'a> ScalarRef<'a> {
 
 impl PartialOrd for Scalar {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.as_ref().partial_cmp(&other.as_ref())
+        match (self, other) {
+            (Scalar::Null, Scalar::Null) => Some(Ordering::Equal),
+            (Scalar::EmptyArray, Scalar::EmptyArray) => Some(Ordering::Equal),
+            (Scalar::Number(n1), Scalar::Number(n2)) => n1.partial_cmp(n2),
+            (Scalar::Boolean(b1), Scalar::Boolean(b2)) => b1.partial_cmp(b2),
+            (Scalar::String(s1), Scalar::String(s2)) => s1.partial_cmp(s2),
+            (Scalar::Timestamp(t1), Scalar::Timestamp(t2)) => t1.partial_cmp(t2),
+            (Scalar::Array(a1), Scalar::Array(a2)) => a1.partial_cmp(a2),
+            (Scalar::Tuple(t1), Scalar::Tuple(t2)) => t1.partial_cmp(t2),
+            // TODO(RinChanNOW): compare after casting to JSON.
+            (Scalar::Variant(v1), Scalar::Variant(v2)) => v1.partial_cmp(v2),
+            _ => None,
+        }
     }
 }
 
@@ -305,6 +317,7 @@ impl PartialOrd for ScalarRef<'_> {
             (ScalarRef::Timestamp(t1), ScalarRef::Timestamp(t2)) => t1.partial_cmp(t2),
             (ScalarRef::Array(a1), ScalarRef::Array(a2)) => a1.partial_cmp(a2),
             (ScalarRef::Tuple(t1), ScalarRef::Tuple(t2)) => t1.partial_cmp(t2),
+            // TODO(RinChanNOW): compare after casting to JSON.
             (ScalarRef::Variant(v1), ScalarRef::Variant(v2)) => v1.partial_cmp(v2),
             _ => None,
         }
@@ -314,8 +327,8 @@ impl PartialOrd for ScalarRef<'_> {
 impl PartialOrd for Column {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (self, other) {
-            (Column::Null { .. }, Column::Null { .. }) => Some(Ordering::Equal),
-            (Column::EmptyArray { .. }, Column::EmptyArray { .. }) => Some(Ordering::Equal),
+            (Column::Null { len: col1 }, Column::Null { len: col2 }) => col1.partial_cmp(col2),
+            (Column::EmptyArray { len: col1 }, Column::EmptyArray { len: col2 }) => col1.partial_cmp(col2),
             (Column::Number(col1), Column::Number(col2)) => {
                 with_number_type!(|NUM_TYPE| match (col1, col2) {
                     (NumberColumn::NUM_TYPE(c1), NumberColumn::NUM_TYPE(c2)) =>
@@ -325,6 +338,7 @@ impl PartialOrd for Column {
             }
             (Column::Boolean(col1), Column::Boolean(col2)) => col1.iter().partial_cmp(col2.iter()),
             (Column::String(col1), Column::String(col2))
+            // TODO(RinChanNOW): compare after casting to JSON.
             | (Column::Variant(col1), Column::Variant(col2)) => {
                 col1.iter().partial_cmp(col2.iter())
             }
@@ -338,29 +352,14 @@ impl PartialOrd for Column {
             (
                 Column::Tuple {
                     fields: col1,
-                    len: len1,
+                    ..
                 },
                 Column::Tuple {
                     fields: col2,
-                    len: len2,
+                    ..
                 },
             ) => {
-                // array(tuple) : [      t1       ,       t2       ,       t3       ]
-                // array1       : [(f11, f21, f31), (f12, f22, f32), (f13, f23, f33)]
-                // array2       : [(f11, f21, f31), (f12, f22, f32), (f13, f23, f33)]
-                if col1.len() == col2.len() {
-                    for i in 0..*len1.min(len2) {
-                        let iter1 = col1.iter().map(|c| c.index(i));
-                        let iter2 = col2.iter().map(|c| c.index(i));
-                        let ord = iter1.partial_cmp(iter2);
-                        if ord.unwrap_or(Ordering::Equal) != Ordering::Equal {
-                            return ord;
-                        }
-                    }
-                    len1.partial_cmp(len2)
-                } else {
-                    None
-                }
+                col1.partial_cmp(col2)
             }
             _ => None,
         }
