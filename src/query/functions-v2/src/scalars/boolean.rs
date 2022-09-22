@@ -23,7 +23,7 @@ use common_expression::Value;
 use common_expression::ValueRef;
 
 pub fn register(registry: &mut FunctionRegistry) {
-    registry.register_1_arg::<BooleanType, BooleanType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<BooleanType, BooleanType, _, _>(
         "not",
         FunctionProperty::default(),
         |arg| {
@@ -32,7 +32,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                 has_true: arg.has_false,
             })
         },
-        |val, _| !val,
+        |val, _| match val {
+            ValueRef::Scalar(scalar) => Ok(Value::Scalar(!scalar)),
+            ValueRef::Column(column) => Ok(Value::Column(!&column)),
+        },
     );
 
     // special function to combine the filter efficiently
@@ -46,20 +49,10 @@ pub fn register(registry: &mut FunctionRegistry) {
             })
         },
         |lhs, rhs, _| match (lhs, rhs) {
-            (ValueRef::Scalar(flag), other) => {
-                if flag {
-                    Ok(other.to_owned())
-                } else {
-                    Ok(Value::Scalar(false))
-                }
+            (ValueRef::Scalar(true), other) | (other, ValueRef::Scalar(true)) => {
+                Ok(other.to_owned())
             }
-            (other, ValueRef::Scalar(flag)) => {
-                if flag {
-                    Ok(other.to_owned())
-                } else {
-                    Ok(Value::Scalar(false))
-                }
-            }
+            (ValueRef::Scalar(false), _) | (_, ValueRef::Scalar(false)) => Ok(Value::Scalar(false)),
             (ValueRef::Column(a), ValueRef::Column(b)) => Ok(Value::Column(&a & &b)),
         },
     );
@@ -74,20 +67,10 @@ pub fn register(registry: &mut FunctionRegistry) {
             })
         },
         |lhs, rhs, _| match (lhs, rhs) {
-            (ValueRef::Scalar(flag), other) => {
-                if flag {
-                    Ok(other.to_owned())
-                } else {
-                    Ok(Value::Scalar(false))
-                }
+            (ValueRef::Scalar(true), other) | (other, ValueRef::Scalar(true)) => {
+                Ok(other.to_owned())
             }
-            (other, ValueRef::Scalar(flag)) => {
-                if flag {
-                    Ok(other.to_owned())
-                } else {
-                    Ok(Value::Scalar(false))
-                }
-            }
+            (ValueRef::Scalar(false), _) | (_, ValueRef::Scalar(false)) => Ok(Value::Scalar(false)),
             (ValueRef::Column(a), ValueRef::Column(b)) => Ok(Value::Column(&a & &b)),
         },
     );
@@ -102,19 +85,9 @@ pub fn register(registry: &mut FunctionRegistry) {
             })
         },
         |lhs, rhs, _| match (lhs, rhs) {
-            (ValueRef::Scalar(flag), other) => {
-                if flag {
-                    Ok(Value::Scalar(true))
-                } else {
-                    Ok(other.to_owned())
-                }
-            }
-            (other, ValueRef::Scalar(flag)) => {
-                if flag {
-                    Ok(Value::Scalar(true))
-                } else {
-                    Ok(other.to_owned())
-                }
+            (ValueRef::Scalar(true), _) | (_, ValueRef::Scalar(true)) => Ok(Value::Scalar(true)),
+            (ValueRef::Scalar(false), other) | (other, ValueRef::Scalar(false)) => {
+                Ok(other.to_owned())
             }
             (ValueRef::Column(a), ValueRef::Column(b)) => Ok(Value::Column(&a | &b)),
         },
@@ -183,7 +156,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
+    registry.register_passthrough_nullable_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
         "xor",
         FunctionProperty::default(),
         |lhs, rhs| {
@@ -192,6 +165,17 @@ pub fn register(registry: &mut FunctionRegistry) {
                 has_true: (lhs.has_false && rhs.has_true) || (lhs.has_true && rhs.has_false),
             })
         },
-        |lhs, rhs, _| lhs ^ rhs,
+        |lhs, rhs, _| match (lhs, rhs) {
+            (ValueRef::Scalar(true), ValueRef::Scalar(other))
+            | (ValueRef::Scalar(other), ValueRef::Scalar(true)) => Ok(Value::Scalar(!other)),
+            (ValueRef::Scalar(true), ValueRef::Column(other))
+            | (ValueRef::Column(other), ValueRef::Scalar(true)) => Ok(Value::Column(!&other)),
+            (ValueRef::Scalar(false), other) | (other, ValueRef::Scalar(false)) => {
+                Ok(other.to_owned())
+            }
+            (ValueRef::Column(a), ValueRef::Column(b)) => {
+                Ok(Value::Column(common_arrow::arrow::bitmap::xor(&a, &b)))
+            }
+        },
     );
 }
