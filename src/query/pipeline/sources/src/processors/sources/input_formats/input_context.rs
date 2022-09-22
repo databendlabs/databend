@@ -43,6 +43,8 @@ use crate::processors::sources::input_formats::input_format_text::InputFormatTex
 use crate::processors::sources::input_formats::input_pipeline::StreamingReadBatch;
 use crate::processors::sources::input_formats::InputFormat;
 
+const MIN_ROW_PER_BLOCK: usize = 800 * 1000;
+
 #[derive(Debug)]
 pub enum InputPlan {
     CopyInto(Box<CopyIntoPlan>),
@@ -173,7 +175,7 @@ impl InputContext {
         let format = Self::get_input_format(&file_format_options.format)?;
         let file_infos = Self::get_file_infos(&format, &operator, &plan).await?;
         let splits = format.split_files(file_infos, split_size);
-        let rows_per_block = 1000 * 1000 * 0.8 as usize;
+        let rows_per_block = MIN_ROW_PER_BLOCK;
         let record_delimiter = {
             if file_format_options.record_delimiter.is_empty() {
                 format.default_record_delimiter()
@@ -219,7 +221,7 @@ impl InputContext {
         let format = Self::get_input_format(&format_type)?;
         let format_settings = format.get_format_settings(&settings)?;
         let read_batch_size = settings.get_input_read_buffer_size()? as usize;
-        let rows_per_block = 1000 * 1000 * 0.8 as usize;
+        let rows_per_block = MIN_ROW_PER_BLOCK;
         let field_delimiter = settings.get_field_delimiter()?;
         let field_delimiter = {
             if field_delimiter.is_empty() {
