@@ -1068,6 +1068,7 @@ dependencies = [
  "common-exception",
  "common-functions",
  "common-io",
+ "common-legacy-expression",
  "common-legacy-planners",
  "common-meta-app",
  "common-meta-types",
@@ -1267,6 +1268,7 @@ dependencies = [
  "bstr",
  "bumpalo",
  "bytes 1.2.1",
+ "chrono-tz",
  "comfy-table",
  "common-arrow",
  "common-ast",
@@ -1383,6 +1385,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-legacy-expression"
+version = "0.1.0"
+dependencies = [
+ "common-datavalues",
+ "common-exception",
+ "common-functions",
+ "once_cell",
+ "serde",
+]
+
+[[package]]
 name = "common-legacy-parser"
 version = "0.1.0"
 dependencies = [
@@ -1390,7 +1403,7 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
- "common-legacy-planners",
+ "common-legacy-expression",
  "sqlparser",
 ]
 
@@ -1403,6 +1416,7 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
+ "common-legacy-expression",
  "common-meta-app",
  "common-meta-types",
  "once_cell",
@@ -1708,7 +1722,7 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
- "common-legacy-planners",
+ "common-legacy-expression",
  "common-pipeline-core",
  "tracing",
 ]
@@ -1803,6 +1817,7 @@ dependencies = [
  "common-exception",
  "common-functions",
  "common-fuse-meta",
+ "common-legacy-expression",
  "common-legacy-parser",
  "common-legacy-planners",
  "common-meta-app",
@@ -1837,6 +1852,7 @@ dependencies = [
  "common-exception",
  "common-fuse-meta",
  "common-hive-meta-store",
+ "common-legacy-expression",
  "common-legacy-planners",
  "common-meta-app",
  "common-meta-types",
@@ -1864,7 +1880,7 @@ dependencies = [
  "common-exception",
  "common-functions",
  "common-fuse-meta",
- "common-legacy-planners",
+ "common-legacy-expression",
  "common-pipeline-transforms",
  "rand 0.8.5",
  "serde",
@@ -2507,6 +2523,7 @@ dependencies = [
  "common-hive-meta-store",
  "common-http",
  "common-io",
+ "common-legacy-expression",
  "common-legacy-parser",
  "common-legacy-planners",
  "common-management",

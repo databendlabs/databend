@@ -19,7 +19,7 @@ use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_functions::aggregates::get_layout_offsets;
 use common_functions::aggregates::AggregateFunctionRef;
-use common_legacy_planners::Expression;
+use common_legacy_expression::LegacyExpression;
 
 pub struct AggregatorParams {
     pub schema: DataSchemaRef,
@@ -40,7 +40,7 @@ impl AggregatorParams {
     pub fn try_create(
         schema: &DataSchemaRef,
         before_schema: &DataSchemaRef,
-        exprs: &[Expression],
+        exprs: &[LegacyExpression],
         group_cols: &[String],
     ) -> Result<AggregatorParamsRef> {
         let mut aggregate_functions = Vec::with_capacity(exprs.len());

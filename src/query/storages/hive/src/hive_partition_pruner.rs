@@ -24,12 +24,12 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::ColumnStatistics;
 use common_fuse_meta::meta::StatisticsOfColumns;
-use common_legacy_planners::Expression;
+use common_legacy_expression::LegacyExpression;
 use common_storages_index::range_filter::RangeFilter;
 
 pub struct HivePartitionPruner {
     pub ctx: Arc<dyn TableContext>,
-    pub filters: Vec<Expression>,
+    pub filters: Vec<LegacyExpression>,
     // pub partitions: Vec<String>,
     pub partition_schema: Arc<DataSchema>,
 }
@@ -37,7 +37,7 @@ pub struct HivePartitionPruner {
 impl HivePartitionPruner {
     pub fn create(
         ctx: Arc<dyn TableContext>,
-        filters: Vec<Expression>,
+        filters: Vec<LegacyExpression>,
         partition_schema: Arc<DataSchema>,
     ) -> Self {
         HivePartitionPruner {

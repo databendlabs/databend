@@ -41,7 +41,6 @@ use common_expression::ConstantFolder;
 use common_expression::Domain;
 use common_expression::Evaluator;
 use common_expression::Function;
-use common_expression::FunctionContext;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
@@ -518,7 +517,7 @@ fn builtin_functions() -> FunctionRegistry {
                 has_true: lhs.has_true && rhs.has_true,
             })
         },
-        |lhs, rhs| lhs && rhs,
+        |lhs, rhs, _| lhs && rhs,
     );
 
     registry.register_2_arg::<NumberType<i16>, NumberType<i16>, NumberType<i16>, _, _>(
@@ -530,7 +529,7 @@ fn builtin_functions() -> FunctionRegistry {
                 max: lhs.max.checked_add(rhs.max).unwrap_or(i16::MAX),
             })
         },
-        |lhs, rhs| lhs + rhs,
+        |lhs, rhs, _| lhs + rhs,
     );
 
     registry.register_2_arg::<NumberType<i32>, NumberType<i32>, NumberType<i32>, _, _>(
@@ -542,21 +541,21 @@ fn builtin_functions() -> FunctionRegistry {
                 max: lhs.max.checked_sub(rhs.min).unwrap_or(i32::MAX),
             })
         },
-        |lhs, rhs| lhs - rhs,
+        |lhs, rhs, _| lhs - rhs,
     );
 
     registry.register_2_arg::<NumberType<i64>, NumberType<i64>, NumberType<i64>, _, _>(
         "multiply",
         FunctionProperty::default(),
         |_, _| None,
-        |lhs, rhs| lhs * rhs,
+        |lhs, rhs, _| lhs * rhs,
     );
 
     registry.register_2_arg::<NumberType<F32>, NumberType<F32>, NumberType<F32>, _, _>(
         "divide",
         FunctionProperty::default(),
         |_, _| None,
-        |lhs, rhs| lhs / rhs,
+        |lhs, rhs, _| lhs / rhs,
     );
 
     registry.register_2_arg::<NumberType<F64>, NumberType<F64>, NumberType<F64>, _, _>(
@@ -568,7 +567,7 @@ fn builtin_functions() -> FunctionRegistry {
                 max: (lhs.max + rhs.max) / 2.0,
             })
         },
-        |lhs, rhs| (lhs + rhs) / 2.0,
+        |lhs, rhs, _| (lhs + rhs) / 2.0,
     );
 
     registry.register_1_arg::<BooleanType, BooleanType, _, _>(
@@ -580,7 +579,7 @@ fn builtin_functions() -> FunctionRegistry {
                 has_true: arg.has_false,
             })
         },
-        |val| !val,
+        |val, _| !val,
     );
 
     registry.register_function_factory("least", |_, args_type| {
@@ -591,7 +590,7 @@ fn builtin_functions() -> FunctionRegistry {
                 return_type: DataType::Number(NumberDataType::Int16),
                 property: FunctionProperty::default().commutative(true),
             },
-            calc_domain: Box::new(|args_domain, _| {
+            calc_domain: Box::new(|args_domain| {
                 let min = args_domain
                     .iter()
                     .map(|domain| domain.as_number().unwrap().as_int16().unwrap().min)
@@ -615,7 +614,7 @@ fn builtin_functions() -> FunctionRegistry {
                 } else {
                     let mut min =
                         vectorize_2_arg::<NumberType<i16>, NumberType<i16>, NumberType<i16>>(
-                            |lhs, rhs| lhs.min(rhs),
+                            |lhs, rhs, _| lhs.min(rhs),
                         )(
                             args[0].try_downcast().unwrap(),
                             args[1].try_downcast().unwrap(),
@@ -623,7 +622,7 @@ fn builtin_functions() -> FunctionRegistry {
                         )?;
                     for arg in &args[2..] {
                         min = vectorize_2_arg::<NumberType<i16>, NumberType<i16>, NumberType<i16>>(
-                            |lhs, rhs| lhs.min(rhs),
+                            |lhs, rhs, _| lhs.min(rhs),
                         )(
                             min.as_ref(), arg.try_downcast().unwrap(), generics
                         )?;
@@ -649,18 +648,18 @@ fn builtin_functions() -> FunctionRegistry {
                 return_type: DataType::Array(Box::new(DataType::Generic(0))),
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|args_domain, _| {
+            calc_domain: Box::new(|args_domain| {
                 Some(args_domain.iter().fold(Domain::Array(None), |acc, x| {
                     acc.merge(&Domain::Array(Some(Box::new(x.clone()))))
                 }))
             }),
-            eval: Box::new(|args, generics| {
+            eval: Box::new(|args, ctx| {
                 let len = args.iter().find_map(|arg| match arg {
                     ValueRef::Column(col) => Some(col.len()),
                     _ => None,
                 });
                 if let Some(len) = len {
-                    let mut array_builder = ColumnBuilder::with_capacity(&generics[0], 0);
+                    let mut array_builder = ColumnBuilder::with_capacity(&ctx.generics[0], 0);
                     for idx in 0..len {
                         for arg in args {
                             match arg {
@@ -682,7 +681,7 @@ fn builtin_functions() -> FunctionRegistry {
                     }))))
                 } else {
                     // All args are scalars, so we return a scalar as result
-                    let mut array = ColumnBuilder::with_capacity(&generics[0], 0);
+                    let mut array = ColumnBuilder::with_capacity(&ctx.generics[0], 0);
                     for arg in args {
                         match arg {
                             ValueRef::Scalar(scalar) => {
@@ -702,7 +701,7 @@ fn builtin_functions() -> FunctionRegistry {
         FunctionProperty::default(),
         |_, _| None,
         vectorize_with_builder_2_arg::<ArrayType<GenericType<0>>, NumberType<i16>, GenericType<0>>(
-            |array, idx, output| {
+            |array, idx, output, _| {
             let item = array
                 .index(idx as usize)
                 .ok_or_else(|| format!("index out of bounds: the len is {} but the index is {}", array.len(), idx))?;
@@ -719,7 +718,7 @@ fn builtin_functions() -> FunctionRegistry {
                 return_type: DataType::Tuple(args_type.to_vec()),
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|args_domain, _| Some(Domain::Tuple(args_domain.to_vec()))),
+            calc_domain: Box::new(|args_domain| Some(Domain::Tuple(args_domain.to_vec()))),
             eval: Box::new(move |args, _generics| {
                 let len = args.iter().find_map(|arg| match arg {
                     ValueRef::Column(col) => Some(col.len()),
@@ -766,7 +765,7 @@ fn builtin_functions() -> FunctionRegistry {
                 return_type: tuple_tys[idx].clone(),
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(move |args_domain, _| {
+            calc_domain: Box::new(move |args_domain| {
                 Some(args_domain[0].as_tuple().unwrap()[idx].clone())
             }),
             eval: Box::new(move |args, _| match &args[0] {
@@ -800,7 +799,7 @@ fn builtin_functions() -> FunctionRegistry {
                 return_type: DataType::Nullable(Box::new(tuple_tys[idx].clone())),
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(move |args_domain, _| {
+            calc_domain: Box::new(move |args_domain| {
                 let NullableDomain { has_null, value } = args_domain[0].as_nullable().unwrap();
                 let value = value.as_ref().map(|value| {
                     let fields = value.as_tuple().unwrap();
@@ -852,7 +851,7 @@ fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Column
             .map(|(_, _, col)| col.domain())
             .collect::<Vec<_>>();
 
-        let constant_folder = ConstantFolder::new(&input_domains, FunctionContext::default());
+        let constant_folder = ConstantFolder::new(&input_domains, chrono_tz::UTC);
         let (optimized_expr, output_domain) = constant_folder.fold(&expr);
 
         let num_rows = columns.iter().map(|col| col.2.len()).max().unwrap_or(0);
@@ -868,7 +867,7 @@ fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Column
             test_arrow_conversion(col);
         });
 
-        let evaluator = Evaluator::new(&chunk, FunctionContext::default());
+        let evaluator = Evaluator::new(&chunk, chrono_tz::UTC);
         let result = evaluator.run(&expr);
         let optimized_result = evaluator.run(&optimized_expr);
         match &result {

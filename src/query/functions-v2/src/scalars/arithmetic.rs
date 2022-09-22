@@ -48,7 +48,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                             max: -(lhs.min.as_(): T),
                         })
                     },
-                    |a| -(a.as_(): T),
+                    |a, _| -(a.as_(): T),
                 );
             }
         });
@@ -60,7 +60,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     "plus",
                     FunctionProperty::default(),
                     |lhs| Some(lhs.clone()),
-                    |a| a,
+                    |a, _| a,
                 );
             }
         });
@@ -87,7 +87,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                         max: lm.checked_add(rm)?,
                                     })
                                 },
-                                |a, b| (a.as_() : T) + (b.as_() : T),
+                                |a, b, _| (a.as_() : T) + (b.as_() : T),
                             );
                         }
 
@@ -107,7 +107,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                         max: lm.checked_sub(rn)?,
                                     })
                                 },
-                                |a, b| (a.as_() : T) - (b.as_() : T),
+                                |a, b, _| (a.as_() : T) - (b.as_() : T),
                             );
                         }
 
@@ -132,7 +132,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                         max: x.max(y).max(m).max(n),
                                     })
                                 },
-                                |a, b| (a.as_() : T) * (b.as_() : T),
+                                |a, b, _| (a.as_() : T) * (b.as_() : T),
                             );
                         }
 
@@ -157,7 +157,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                         max: x.max(y).max(m).max(n),
                                     })
                                 },
-                                |a, b| (a.as_() : T) / (b.as_() : T),
+                                |a, b, _| (a.as_() : T) / (b.as_() : T),
                             );
                         }
 
@@ -168,7 +168,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                             FunctionProperty::default(),
                             |_, _| None,
                             vectorize_with_builder_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>>(
-                                    |a, b, output| {
+                                    |a, b, output, _| {
                                     let b = (b.as_() : F64);
                                     if std::intrinsics::unlikely(b == 0.0) {
                                             return Err("Division by zero".to_string());
@@ -197,7 +197,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 FunctionProperty::default(),
                                 |_, _| None,
                                 vectorize_with_builder_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>>(
-                                        |a, b, output| {
+                                        |a, b, output, _| {
                                         let b = (b.as_() : F64);
                                         if std::intrinsics::unlikely(b == 0.0) {
                                                 return Err("Modulo by zero".to_string());
@@ -208,10 +208,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 );
                             } else {
                                 registry.register_passthrough_nullable_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
-                                "modulo",
-                                FunctionProperty::default(),
-                                |_, _| None,
-                                vectorize_modulo::<L, R, M, T>()
+                                    "modulo",
+                                    FunctionProperty::default(),
+                                    |_, _| None,
+                                    vectorize_modulo::<L, R, M, T>()
                                 );
                             }
                         }

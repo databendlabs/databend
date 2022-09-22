@@ -13,7 +13,7 @@ common-catalog = { path = "../../catalog" }
 common-datablocks = { path = "../../datablocks" }
 common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
-common-legacy-planners = { path = "../../legacy-planners" }
+common-legacy-expression = { path = "../../legacy-expression" }
 common-pipeline-core = { path = "../core" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }

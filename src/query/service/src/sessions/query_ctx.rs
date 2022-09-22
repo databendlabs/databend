@@ -32,7 +32,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionContext;
 use common_io::prelude::FormatSettings;
-use common_legacy_planners::Expression;
+use common_legacy_expression::LegacyExpression;
 use common_legacy_planners::PartInfoPtr;
 use common_legacy_planners::Partitions;
 use common_legacy_planners::ReadDataSourcePlan;
@@ -92,7 +92,7 @@ impl QueryContext {
         &self,
         catalog_name: &str,
         table_info: &TableInfo,
-        table_args: Option<Vec<Expression>>,
+        table_args: Option<Vec<LegacyExpression>>,
     ) -> Result<Arc<dyn Table>> {
         let catalog = self.get_catalog(catalog_name)?;
         if table_args.is_none() {
@@ -111,7 +111,7 @@ impl QueryContext {
         &self,
         _catalog: &str,
         table_info: &StageTableInfo,
-        _table_args: Option<Vec<Expression>>,
+        _table_args: Option<Vec<LegacyExpression>>,
     ) -> Result<Arc<dyn Table>> {
         StageTable::try_create(table_info.clone())
     }

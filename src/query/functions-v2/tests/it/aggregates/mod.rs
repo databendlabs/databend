@@ -24,12 +24,12 @@ use common_expression::types::DataType;
 use common_expression::Chunk;
 use common_expression::Column;
 use common_expression::Evaluator;
-use common_expression::FunctionContext;
 use common_expression::RawExpr;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_functions_v2::aggregates::eval_aggr;
 use common_functions_v2::scalars::builtin_functions;
+use itertools::Itertools;
 
 use super::scalars::parser;
 
@@ -52,7 +52,11 @@ pub fn run_agg_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType
         num_rows,
     );
 
-    let column_ids = collect_columns(&raw_expr);
+    let used_columns = raw_expr
+        .column_refs()
+        .into_iter()
+        .sorted()
+        .collect::<Vec<_>>();
 
     // For test only, we just support agg function call here
     let result: common_exception::Result<(Column, DataType)> = try {
@@ -103,7 +107,7 @@ pub fn run_agg_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType
                 table.load_preset("||--+-++|    ++++++");
                 table.set_header(["Column", "Data"]);
 
-                let ids = match column_ids.is_empty() {
+                let ids = match used_columns.is_empty() {
                     true => {
                         if columns.is_empty() {
                             vec![]
@@ -111,7 +115,7 @@ pub fn run_agg_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType
                             vec![0]
                         }
                     }
-                    false => column_ids,
+                    false => used_columns,
                 };
 
                 for id in ids.iter() {
@@ -135,15 +139,7 @@ pub fn run_scalar_expr(
 ) -> common_expression::Result<(Value<AnyType>, DataType)> {
     let fn_registry = builtin_functions();
     let (expr, output_ty) = type_check::check(raw_expr, &fn_registry)?;
-    let evaluator = Evaluator::new(chunk, FunctionContext::default());
+    let evaluator = Evaluator::new(chunk, chrono_tz::UTC);
     let result = evaluator.run(&expr)?;
     Ok((result, output_ty))
-}
-
-fn collect_columns(raw_expr: &RawExpr) -> Vec<usize> {
-    match raw_expr {
-        RawExpr::ColumnRef { id, .. } => vec![*id],
-        RawExpr::FunctionCall { args, .. } => args.iter().flat_map(collect_columns).collect(),
-        _ => vec![],
-    }
 }

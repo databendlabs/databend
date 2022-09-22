@@ -22,10 +22,10 @@ use common_expression::Chunk;
 use common_expression::Column;
 use common_expression::ConstantFolder;
 use common_expression::Evaluator;
-use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
 use common_expression::Value;
 use common_functions_v2::scalars::builtin_functions;
+use itertools::Itertools;
 
 mod arithmetic;
 mod boolean;
@@ -54,7 +54,7 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
             .map(|(_, _, col)| col.domain())
             .collect::<Vec<_>>();
 
-        let constant_folder = ConstantFolder::new(&input_domains, FunctionContext::default());
+        let constant_folder = ConstantFolder::new(&input_domains, chrono_tz::UTC);
         let (optimized_expr, output_domain) = constant_folder.fold(&expr);
 
         let remote_expr = RemoteExpr::from_expr(optimized_expr);
@@ -73,7 +73,7 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
             test_arrow_conversion(col);
         });
 
-        let evaluator = Evaluator::new(&chunk, FunctionContext::default());
+        let evaluator = Evaluator::new(&chunk, chrono_tz::UTC);
         let result = evaluator.run(&expr);
         let optimized_result = evaluator.run(&optimized_expr);
         match &result {
@@ -116,6 +116,23 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
                 }
                 Value::Column(output_col) => {
                     test_arrow_conversion(&output_col);
+
+                    // Only display the used input columns
+                    let used_columns = raw_expr
+                        .column_refs()
+                        .into_iter()
+                        .sorted()
+                        .collect::<Vec<_>>();
+                    let input_domains = used_columns
+                        .iter()
+                        .cloned()
+                        .map(|i| input_domains[i].clone())
+                        .collect::<Vec<_>>();
+                    let columns = used_columns
+                        .iter()
+                        .cloned()
+                        .map(|i| columns[i].clone())
+                        .collect::<Vec<_>>();
 
                     let mut table = Table::new();
                     table.load_preset("||--+-++|    ++++++");
