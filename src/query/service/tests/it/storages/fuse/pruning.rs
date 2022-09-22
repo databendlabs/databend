@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_ast::ast::Engine;
 use common_base::base::tokio;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
@@ -26,7 +27,6 @@ use common_legacy_planners::lit;
 use common_legacy_planners::sub;
 use common_legacy_planners::Expression;
 use common_legacy_planners::Extras;
-use common_meta_app::schema::TableMeta;
 use databend_query::interpreters::CreateTableInterpreterV2;
 use databend_query::interpreters::Interpreter;
 use databend_query::sessions::QueryContext;
@@ -76,19 +76,18 @@ async fn test_block_pruner() -> Result<()> {
         tenant: fixture.default_tenant(),
         database: fixture.default_db_name(),
         table: test_tbl_name.to_string(),
-        table_meta: TableMeta {
-            schema: test_schema.clone(),
-            engine: "FUSE".to_string(),
-            options: [
-                (FUSE_OPT_KEY_ROW_PER_BLOCK.to_owned(), num_blocks_opt),
-                (FUSE_OPT_KEY_BLOCK_PER_SEGMENT.to_owned(), "1".to_owned()),
-                (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
-            ]
-            .into(),
-            ..Default::default()
-        },
+        schema: test_schema.clone(),
+        engine: Engine::Fuse,
+        options: [
+            (FUSE_OPT_KEY_ROW_PER_BLOCK.to_owned(), num_blocks_opt),
+            (FUSE_OPT_KEY_BLOCK_PER_SEGMENT.to_owned(), "1".to_owned()),
+            (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
+        ]
+        .into(),
+        field_default_exprs: vec![],
+        field_comments: vec![],
         as_select: None,
-        cluster_keys: vec![],
+        cluster_key: None,
     };
 
     let interpreter = CreateTableInterpreterV2::try_create(ctx.clone(), create_table_plan)?;
@@ -222,21 +221,20 @@ async fn test_block_pruner_monotonic() -> Result<()> {
         tenant: fixture.default_tenant(),
         database: fixture.default_db_name(),
         table: test_tbl_name.to_string(),
-        table_meta: TableMeta {
-            schema: test_schema.clone(),
-            engine: "FUSE".to_string(),
-            options: [
-                (FUSE_OPT_KEY_ROW_PER_BLOCK.to_owned(), num_blocks_opt),
-                // for the convenience of testing, let one seegment contains one block
-                (FUSE_OPT_KEY_BLOCK_PER_SEGMENT.to_owned(), "1".to_owned()),
-                // database id is required for FUSE
-                (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
-            ]
-            .into(),
-            ..Default::default()
-        },
+        schema: test_schema.clone(),
+        engine: Engine::Fuse,
+        options: [
+            (FUSE_OPT_KEY_ROW_PER_BLOCK.to_owned(), num_blocks_opt),
+            // for the convenience of testing, let one seegment contains one block
+            (FUSE_OPT_KEY_BLOCK_PER_SEGMENT.to_owned(), "1".to_owned()),
+            // database id is required for FUSE
+            (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
+        ]
+        .into(),
+        field_default_exprs: vec![],
+        field_comments: vec![],
         as_select: None,
-        cluster_keys: vec![],
+        cluster_key: None,
     };
 
     let catalog = ctx.get_catalog("default")?;

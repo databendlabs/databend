@@ -15,6 +15,7 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use common_ast::ast::Engine;
 use common_catalog::catalog::CATALOG_DEFAULT;
 use common_datablocks::assert_blocks_sorted_eq_with_name;
 use common_datablocks::DataBlock;
@@ -23,7 +24,6 @@ use common_exception::Result;
 use common_legacy_planners::Expression;
 use common_legacy_planners::Extras;
 use common_meta_app::schema::DatabaseMeta;
-use common_meta_app::schema::TableMeta;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::SourcePipeBuilder;
 use common_planner::plans::CreateDatabasePlan;
@@ -148,21 +148,17 @@ impl TestFixture {
             catalog: self.default_catalog_name(),
             database: self.default_db_name(),
             table: self.default_table_name(),
-            table_meta: TableMeta {
-                schema: TestFixture::default_schema(),
-                engine: "FUSE".to_string(),
-                options: [
-                    // database id is required for FUSE
-                    (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
-                ]
-                .into(),
-                default_cluster_key: Some("(id)".to_string()),
-                cluster_keys: vec!["(id)".to_string()],
-                default_cluster_key_id: Some(0),
-                ..Default::default()
-            },
-            cluster_keys: vec!["id".to_string()],
+            schema: TestFixture::default_schema(),
+            engine: Engine::Fuse,
+            options: [
+                // database id is required for FUSE
+                (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
+            ]
+            .into(),
+            field_default_exprs: vec![],
+            field_comments: vec![],
             as_select: None,
+            cluster_key: Some("(id)".to_string()),
         }
     }
 
@@ -174,18 +170,17 @@ impl TestFixture {
             catalog: self.default_catalog_name(),
             database: self.default_db_name(),
             table: self.default_table_name(),
-            table_meta: TableMeta {
-                schema: TestFixture::default_schema(),
-                engine: "FUSE".to_string(),
-                options: [
-                    // database id is required for FUSE
-                    (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
-                ]
-                .into(),
-                ..Default::default()
-            },
+            schema: TestFixture::default_schema(),
+            engine: Engine::Fuse,
+            options: [
+                // database id is required for FUSE
+                (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
+            ]
+            .into(),
+            field_default_exprs: vec![],
+            field_comments: vec![],
             as_select: None,
-            cluster_keys: vec![],
+            cluster_key: None,
         }
     }
 
