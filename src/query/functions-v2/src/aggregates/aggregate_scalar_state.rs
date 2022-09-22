@@ -19,25 +19,30 @@ use bytes::BytesMut;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::Result;
 use common_expression::types::DataType;
-use common_expression::Column;
+use common_expression::types::ValueType;
 use common_expression::ColumnBuilder;
-use common_expression::Scalar;
-use common_expression::ScalarRef;
 use common_io::prelude::deserialize_from_slice;
 use common_io::prelude::serialize_into_buf;
+use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
 
-pub trait ChangeIf: Send + Sync + 'static {
-    fn change_if(l: ScalarRef<'_>, r: ScalarRef<'_>) -> bool;
+pub trait ChangeIf<T: ValueType>: Send + Sync + 'static {
+    fn change_if(l: T::ScalarRef<'_>, r: T::ScalarRef<'_>) -> bool;
 }
 
 #[derive(Default)]
 pub struct CmpMin;
 
-impl ChangeIf for CmpMin {
+impl<T> ChangeIf<T> for CmpMin
+where
+    T: ValueType,
+    for<'a> T::ScalarRef<'a>: PartialOrd,
+{
     #[inline]
-    fn change_if(l: ScalarRef<'_>, r: ScalarRef<'_>) -> bool {
+    fn change_if<'a>(l: T::ScalarRef<'_>, r: T::ScalarRef<'_>) -> bool {
+        let l = T::upcast_gat(l);
+        let r = T::upcast_gat(r);
         l.partial_cmp(&r).unwrap_or(Ordering::Equal) == Ordering::Greater
     }
 }
@@ -45,9 +50,15 @@ impl ChangeIf for CmpMin {
 #[derive(Default)]
 pub struct CmpMax;
 
-impl ChangeIf for CmpMax {
+impl<T> ChangeIf<T> for CmpMax
+where
+    T: ValueType,
+    for<'a> T::ScalarRef<'a>: PartialOrd,
+{
     #[inline]
-    fn change_if(l: ScalarRef<'_>, r: ScalarRef<'_>) -> bool {
+    fn change_if<'a>(l: T::ScalarRef<'_>, r: T::ScalarRef<'_>) -> bool {
+        let l = T::upcast_gat(l);
+        let r = T::upcast_gat(r);
         l.partial_cmp(&r).unwrap_or(Ordering::Equal) == std::cmp::Ordering::Less
     }
 }
@@ -55,64 +66,89 @@ impl ChangeIf for CmpMax {
 #[derive(Default)]
 pub struct CmpAny;
 
-impl ChangeIf for CmpAny {
+impl<T: ValueType> ChangeIf<T> for CmpAny {
     #[inline]
-    fn change_if(_: ScalarRef<'_>, _: ScalarRef<'_>) -> bool {
+    fn change_if(_: T::ScalarRef<'_>, _: T::ScalarRef<'_>) -> bool {
         false
     }
 }
 
-pub trait ScalarStateFunc: Send + Sync + 'static {
+pub trait ScalarStateFunc<T: ValueType>: Send + Sync + 'static {
     fn new() -> Self;
-    fn add(&mut self, other: ScalarRef<'_>);
-    fn add_batch(&mut self, column: &Column, validity: Option<&Bitmap>) -> Result<()>;
+    fn add(&mut self, other: T::ScalarRef<'_>);
+    fn add_batch(&mut self, column: &T::Column, validity: Option<&Bitmap>) -> Result<()>;
     fn merge(&mut self, rhs: &Self) -> Result<()>;
     fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()>;
     fn serialize(&self, writer: &mut BytesMut) -> Result<()>;
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()>;
 }
 
-#[derive(Default, Serialize, Deserialize)]
-pub struct ScalarState<C> {
-    pub value: Option<Scalar>,
+#[derive(Serialize, Deserialize)]
+pub struct ScalarState<T, C>
+where
+    T: ValueType,
+    T::Scalar: Serialize + DeserializeOwned,
+{
+    #[serde(bound(deserialize = "T::Scalar: DeserializeOwned"))]
+    pub value: Option<T::Scalar>,
     #[serde(skip)]
     _c: PhantomData<C>,
 }
 
-impl<C> ScalarStateFunc for ScalarState<C>
-where C: ChangeIf + Default
+impl<T, C> Default for ScalarState<T, C>
+where
+    T: ValueType,
+    T::Scalar: Serialize + DeserializeOwned,
+{
+    fn default() -> Self {
+        Self {
+            value: None,
+            _c: PhantomData,
+        }
+    }
+}
+
+impl<T, C> ScalarStateFunc<T> for ScalarState<T, C>
+where
+    T: ValueType,
+    T::Scalar: Default + Serialize + DeserializeOwned + Send + Sync,
+    C: ChangeIf<T> + Default,
 {
     fn new() -> Self {
         Self::default()
     }
 
-    fn add(&mut self, other: ScalarRef<'_>) {
+    fn add(&mut self, other: T::ScalarRef<'_>) {
         match &self.value {
             Some(v) => {
-                if C::change_if(v.as_ref(), other.clone()) {
-                    self.value = Some(other.to_owned());
+                if C::change_if(T::to_scalar_ref(v), other.clone()) {
+                    self.value = Some(T::to_owned_scalar(other));
                 }
             }
             None => {
-                self.value = Some(other.to_owned());
+                self.value = Some(T::to_owned_scalar(other));
             }
         }
     }
 
-    fn add_batch(&mut self, column: &Column, validity: Option<&Bitmap>) -> Result<()> {
-        if column.len() == 0 {
+    fn add_batch(&mut self, column: &T::Column, validity: Option<&Bitmap>) -> Result<()> {
+        let column_len = T::column_len(column);
+        if column_len == 0 {
             return Ok(());
         }
 
+        let column_iter = T::iter_column(column);
+
         if let Some(validity) = validity {
-            if validity.unset_bits() == column.len() {
+            if validity.unset_bits() == column_len {
                 return Ok(());
             }
 
-            let mut v = column.index(0).unwrap();
+            // V::ScalarRef dosen't dervie Default, so take the first value as default.
+            let mut v = T::index_column(column, 0).unwrap();
             let mut has_v = validity.get_bit(0);
 
-            for (data, valid) in column.iter().skip(1).zip(validity.iter().skip(1)) {
+            for (data, valid) in column_iter.skip(1).zip(validity.iter().skip(1)) {
                 if !valid {
                     continue;
                 }
@@ -128,7 +164,7 @@ where C: ChangeIf + Default
                 self.add(v);
             }
         } else {
-            let v = column.iter().reduce(|l, r| {
+            let v = column_iter.reduce(|l, r| {
                 if !C::change_if(l.clone(), r.clone()) {
                     l
                 } else {
@@ -144,16 +180,17 @@ where C: ChangeIf + Default
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
         if let Some(v) = &rhs.value {
-            self.add(v.as_ref());
+            self.add(T::to_scalar_ref(v));
         }
         Ok(())
     }
 
     fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()> {
+        // TODO(RinChanNOW): downcast builder
         if let Some(v) = &self.value {
-            builder.push(v.as_ref());
+            builder.push(T::upcast_scalar(v.clone()).as_ref())
         } else {
-            builder.push_default();
+            builder.push_default()
         }
         Ok(())
     }

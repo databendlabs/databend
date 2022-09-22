@@ -35,9 +35,7 @@ impl ValueType for EmptyArrayType {
     type ColumnIterator<'a> = std::iter::Take<std::iter::Repeat<()>>;
     type ColumnBuilder = usize;
 
-    fn upcast_gat<'short, 'long: 'short>(_: Self::ScalarRef<'long>) -> Self::ScalarRef<'short> {
-        ()
-    }
+    fn upcast_gat<'short, 'long: 'short>(_: Self::ScalarRef<'long>) -> Self::ScalarRef<'short> {}
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
         scalar

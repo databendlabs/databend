@@ -202,3 +202,19 @@ pub trait ArgType: ValueType {
         Self::build_column(col)
     }
 }
+
+#[macro_export]
+macro_rules! with_basic_no_number_mapped_type {
+    (| $t:tt | $($tail:tt)*) => {
+        match_template::match_template! {
+            $t = [
+                String => StringType,
+                Boolean => BooleanType,
+                // TODO(RinChanNOW): enable TimestampType
+                // Need to fix: TimestampType cannot satisfy the bounded trait of `AggregateMinMaxAnyFunction`
+                // Timestamp => TimestampType,
+            ],
+            $($tail)*
+        }
+    }
+}
