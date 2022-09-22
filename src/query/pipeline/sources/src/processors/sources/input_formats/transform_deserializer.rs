@@ -47,7 +47,9 @@ impl<I: InputFormatPipe> DeserializeProcessor<I> {
     fn process(&mut self) -> Result<()> {
         let blocks = self.block_builder.deserialize(self.input_buffer.take())?;
         for b in blocks.into_iter() {
-            self.output_buffer.push_back(b)
+            if !b.is_empty() {
+                self.output_buffer.push_back(b)
+            }
         }
         Ok(())
     }

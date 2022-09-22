@@ -25,9 +25,11 @@ use common_exception::Result;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
+use futures::AsyncRead;
 use futures_util::stream::FuturesUnordered;
 use futures_util::AsyncReadExt;
 use futures_util::StreamExt;
+use opendal::io_util::CompressAlgorithm;
 
 use crate::processors::sources::input_formats::input_context::InputContext;
 use crate::processors::sources::input_formats::input_context::InputPlan;
@@ -41,16 +43,11 @@ pub struct Split<I: InputFormatPipe> {
     pub(crate) rx: Receiver<Result<I::ReadBatch>>,
 }
 
-#[allow(unused)]
-pub struct StreamingSplit {
-    path: String,
-    data_tx: Sender<StreamingReadBatch>,
-}
-
 pub struct StreamingReadBatch {
-    data: Vec<u8>,
-    pub(crate) path: String,
-    pub(crate) is_start: bool,
+    pub data: Vec<u8>,
+    pub path: String,
+    pub is_start: bool,
+    pub compression: Option<CompressAlgorithm>,
 }
 
 pub trait AligningStateTrait: Sized {
@@ -81,33 +78,43 @@ pub trait InputFormatPipe: Sized + Send + 'static {
     type AligningState: AligningStateTrait<Pipe = Self> + Send;
     type BlockBuilder: BlockBuilderTrait<Pipe = Self> + Send;
 
-    fn execute_stream(
-        ctx: Arc<InputContext>,
-        pipeline: &mut Pipeline,
-        mut input: Receiver<StreamingReadBatch>,
-    ) -> Result<()> {
+    fn execute_stream(ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {
+        let mut input = ctx.source.take_receiver()?;
+
         let (split_tx, split_rx) = async_channel::bounded(ctx.num_prefetch_splits()?);
         Self::build_pipeline_with_aligner(&ctx, split_rx, pipeline)?;
 
-        tokio::spawn(async move {
+        GlobalIORuntime::instance().spawn(async move {
             let mut sender: Option<Sender<Result<Self::ReadBatch>>> = None;
-            while let Some(batch) = input.recv().await {
-                if batch.is_start {
-                    let (data_tx, data_rx) = tokio::sync::mpsc::channel(1);
-                    sender = Some(data_tx);
-                    let split_info = SplitInfo::from_stream_split(batch.path.clone());
-                    split_tx
-                        .send(Split {
-                            info: split_info,
-                            rx: data_rx,
-                        })
-                        .await
-                        .expect("fail to send split from stream");
-                }
-                if let Some(s) = sender.as_mut() {
-                    s.send(Ok(batch.data.into()))
-                        .await
-                        .expect("fail to send read batch from stream");
+            while let Some(batch_result) = input.recv().await {
+                match batch_result {
+                    Ok(batch) => {
+                        if batch.is_start {
+                            let (data_tx, data_rx) = tokio::sync::mpsc::channel(1);
+                            sender = Some(data_tx);
+                            let split_info =
+                                SplitInfo::from_stream_split(batch.path.clone(), batch.compression);
+                            split_tx
+                                .send(Ok(Split {
+                                    info: split_info,
+                                    rx: data_rx,
+                                }))
+                                .await
+                                .expect("fail to send split from stream");
+                        }
+                        if let Some(s) = sender.as_mut() {
+                            s.send(Ok(batch.data.into()))
+                                .await
+                                .expect("fail to send read batch from stream");
+                        }
+                    }
+                    Err(error) => {
+                        if let Some(s) = sender.as_mut() {
+                            s.send(Err(error.clone()))
+                                .await
+                                .expect("fail to send error to from stream");
+                        }
+                    }
                 }
             }
         });
@@ -135,10 +142,10 @@ pub trait InputFormatPipe: Sized + Send + 'static {
                     }
                 });
                 if split_tx
-                    .send(Split {
+                    .send(Ok(Split {
                         info: s.clone(),
                         rx: data_rx,
-                    })
+                    }))
                     .await
                     .is_err()
                 {
@@ -196,14 +203,15 @@ pub trait InputFormatPipe: Sized + Send + 'static {
 
     fn build_pipeline_with_aligner(
         ctx: &Arc<InputContext>,
-        split_rx: async_channel::Receiver<Split<Self>>,
+        split_rx: async_channel::Receiver<Result<Split<Self>>>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let mut builder = SourcePipeBuilder::create();
         let n_threads = ctx.settings.get_max_threads()? as usize;
         let max_aligner = match ctx.plan {
             InputPlan::CopyInto(_) => ctx.splits.len(),
-            InputPlan::StreamingLoad => 3,
+            InputPlan::StreamingLoad(_) => 3,
+            InputPlan::Clickhouse => 1,
         };
         let (row_batch_tx, row_batch_rx) = crossbeam_channel::bounded(n_threads);
         for _ in 0..std::cmp::min(max_aligner, n_threads) {
@@ -235,7 +243,8 @@ pub trait InputFormatPipe: Sized + Send + 'static {
         batch_tx: Sender<Result<Self::ReadBatch>>,
     ) -> Result<()> {
         tracing::debug!("start");
-        let object = ctx.operator.object(&split_info.file_info.path);
+        let operator = ctx.source.get_operator()?;
+        let object = operator.object(&split_info.file_info.path);
         let offset = split_info.offset as u64;
         let mut reader = object.range_reader(offset..).await?;
         loop {
@@ -256,7 +265,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
     }
 }
 
-pub async fn read_full<R: AsyncReadExt + Unpin>(reader: &mut R, buf: &mut [u8]) -> Result<usize> {
+pub async fn read_full<R: AsyncRead + Unpin>(reader: &mut R, buf: &mut [u8]) -> Result<usize> {
     let mut buf = &mut buf[0..];
     let mut n = 0;
     while !buf.is_empty() {

@@ -116,6 +116,10 @@ pub fn parse_escape_bytes(bs: &[u8]) -> Vec<u8> {
 
                 vs.push(c);
                 i += 2;
+            } else {
+                // end with \
+                vs.push(b'\\');
+                break;
             }
         } else {
             vs.push(bs[i]);

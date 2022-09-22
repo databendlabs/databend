@@ -36,7 +36,7 @@ pub struct Aligner<I: InputFormatPipe> {
     output: Arc<OutputPort>,
 
     // input
-    split_rx: async_channel::Receiver<Split<I>>,
+    split_rx: async_channel::Receiver<Result<Split<I>>>,
 
     state: Option<I::AligningState>,
     batch_rx: Option<Receiver<Result<I::ReadBatch>>>,
@@ -54,7 +54,7 @@ impl<I: InputFormatPipe> Aligner<I> {
     pub(crate) fn try_create(
         output: Arc<OutputPort>,
         ctx: Arc<InputContext>,
-        split_rx: async_channel::Receiver<Split<I>>,
+        split_rx: async_channel::Receiver<Result<Split<I>>>,
         batch_tx: crossbeam_channel::Sender<I::RowBatch>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(Self {
@@ -135,7 +135,7 @@ impl<I: InputFormatPipe> Processor for Aligner<I> {
         if !self.no_more_split {
             if self.state.is_none() {
                 match self.split_rx.recv().await {
-                    Ok(split) => {
+                    Ok(Ok(split)) => {
                         self.state = Some(I::AligningState::try_create(&self.ctx, &split.info)?);
                         self.batch_rx = Some(split.rx);
                         self.received_end_batch_of_split = false;
@@ -144,6 +144,9 @@ impl<I: InputFormatPipe> Processor for Aligner<I> {
                             &split.info.file_info.path,
                             split.info.seq_infile
                         );
+                    }
+                    Ok(Err(e)) => {
+                        return Err(e);
                     }
                     Err(_) => {
                         tracing::debug!("aligner no more split");
