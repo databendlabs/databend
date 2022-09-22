@@ -109,8 +109,6 @@ pub use interpreter_list::ListInterpreter;
 pub use interpreter_privilege_grant::GrantPrivilegeInterpreter;
 pub use interpreter_privilege_revoke::RevokePrivilegeInterpreter;
 pub use interpreter_query_log::InterpreterQueryLog;
-pub use interpreter_query_log::LogEvent;
-pub use interpreter_query_log::LogType;
 pub use interpreter_role_create::CreateRoleInterpreter;
 pub use interpreter_role_drop::DropRoleInterpreter;
 pub use interpreter_role_grant::GrantRoleInterpreter;

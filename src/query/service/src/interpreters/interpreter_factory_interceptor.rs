@@ -87,7 +87,7 @@ impl Interpreter for InterceptorInterpreter {
         if session.get_type().is_user_session() {
             SessionManager::instance().status.write().query_start(now);
         }
-        self.query_log.log_start(now, None).await
+        self.query_log.log_start(now, None)
     }
 
     async fn finish(&self) -> Result<()> {
@@ -98,7 +98,7 @@ impl Interpreter for InterceptorInterpreter {
             SessionManager::instance().status.write().query_finish(now)
         }
         let error = self.ctx.get_error_value();
-        self.query_log.log_finish(now, error).await
+        self.query_log.log_finish(now, error)
     }
 
     fn set_source_pipe_builder(&self, builder: Option<SourcePipeBuilder>) -> Result<()> {

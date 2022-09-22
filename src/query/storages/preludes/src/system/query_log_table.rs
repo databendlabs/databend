@@ -12,37 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
-use std::collections::VecDeque;
-use std::sync::Arc;
-
 use chrono::NaiveDateTime;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_legacy_planners::Extras;
-use common_legacy_planners::Partitions;
-use common_legacy_planners::ReadDataSourcePlan;
-use common_legacy_planners::Statistics;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
-use common_streams::SendableDataBlockStream;
-use futures::StreamExt;
-use once_cell::sync::OnceCell;
-use parking_lot::RwLock;
 use serde::Serialize;
 use serde::Serializer;
-use serde_json;
 use serde_repr::Serialize_repr;
 
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::processor::ProcessorPtr;
-use crate::pipelines::processors::SyncSource;
-use crate::pipelines::processors::SyncSourcer;
-use crate::pipelines::Pipeline;
-use crate::pipelines::SourcePipeBuilder;
-use crate::sessions::TableContext;
-use crate::storages::Table;
 use crate::system::log_queue::SystemLogElement;
 use crate::system::SystemLogQueue;
 use crate::system::SystemLogTable;
@@ -57,13 +33,13 @@ pub enum LogType {
 }
 
 fn date_str<S>(dt: &i32, s: S) -> Result<S::Ok, S::Error>
-    where S: Serializer {
+where S: Serializer {
     let t = NaiveDateTime::from_timestamp(i64::from(*dt) * 24 * 3600, 0);
     s.serialize_str(t.format("%Y-%m-%d").to_string().as_str())
 }
 
 fn datetime_str<S>(dt: &i64, s: S) -> Result<S::Ok, S::Error>
-    where S: Serializer {
+where S: Serializer {
     let t = NaiveDateTime::from_timestamp(
         dt / 1_000_000,
         TryFrom::try_from((dt % 1_000_000) * 1000).unwrap_or(0),

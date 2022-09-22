@@ -177,7 +177,6 @@ impl Executor {
                     s.ctx.set_error(e.clone());
                     InterpreterQueryLog::create(s.ctx.clone(), "".to_string())
                         .log_finish(SystemTime::now(), Some(e.clone()))
-                        .await
                         .unwrap_or_else(|e| error!("fail to write query_log {:?}", e));
                 }
                 guard.state = Stopped(ExecuteStopped {

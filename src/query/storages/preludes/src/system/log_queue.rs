@@ -1,7 +1,6 @@
 use std::any::Any;
 use std::any::TypeId;
 use std::collections::HashMap;
-use std::collections::VecDeque;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
@@ -168,10 +167,8 @@ impl<Event: SystemLogElement + 'static> Table for SystemLogTable<Event> {
         }
 
         let log_queue = SystemLogQueue::<Event>::instance()?;
-        for event in log_queue.data.read().event_queue.iter() {
-            if let Some(event) = event {
-                event.fill_to_data_block(&mut mutable_columns)?;
-            }
+        for event in log_queue.data.read().event_queue.iter().flatten() {
+            event.fill_to_data_block(&mut mutable_columns)?;
         }
 
         let mut columns = Vec::with_capacity(mutable_columns.len());

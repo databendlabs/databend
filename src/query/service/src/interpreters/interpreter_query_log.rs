@@ -17,118 +17,19 @@ use std::sync::Arc;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use chrono::NaiveDateTime;
-use common_catalog::catalog::CATALOG_DEFAULT;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::Series;
-use common_datavalues::prelude::SeriesFrom;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_storages_preludes::system::LogType;
+use common_storages_preludes::system::QueryLogElement;
+use common_storages_preludes::system::QueryLogQueue;
 use common_tracing::QueryLogger;
-use serde::Serialize;
-use serde::Serializer;
 use serde_json;
-use serde_repr::Serialize_repr;
 use tracing::error;
 use tracing::info;
 use tracing::subscriber;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::storages::system::QueryLogTable;
-
-#[derive(Clone, Copy, Serialize_repr)]
-#[repr(u8)]
-pub enum LogType {
-    Start = 1,
-    Finish = 2,
-    Error = 3,
-    Aborted = 4,
-}
-
-fn date_str<S>(dt: &i32, s: S) -> Result<S::Ok, S::Error>
-where S: Serializer {
-    let t = NaiveDateTime::from_timestamp(i64::from(*dt) * 24 * 3600, 0);
-    s.serialize_str(t.format("%Y-%m-%d").to_string().as_str())
-}
-
-fn datetime_str<S>(dt: &i64, s: S) -> Result<S::Ok, S::Error>
-where S: Serializer {
-    let t = NaiveDateTime::from_timestamp(
-        dt / 1_000_000,
-        u32::try_from((dt % 1_000_000) * 1000).unwrap_or(0),
-    );
-    s.serialize_str(t.format("%Y-%m-%d %H:%M:%S%.6f").to_string().as_str())
-}
-
-#[derive(Clone, Serialize)]
-pub struct LogEvent {
-    // Type.
-    pub log_type: LogType,
-    pub handler_type: String,
-
-    // User.
-    pub tenant_id: String,
-    pub cluster_id: String,
-    pub sql_user: String,
-
-    #[serde(skip_serializing)]
-    pub sql_user_quota: String,
-    #[serde(skip_serializing)]
-    pub sql_user_privileges: String,
-
-    // Query.
-    pub query_id: String,
-    pub query_kind: String,
-    pub query_text: String,
-
-    #[serde(serialize_with = "date_str")]
-    pub event_date: i32,
-    #[serde(serialize_with = "datetime_str")]
-    pub event_time: i64,
-
-    // Schema.
-    pub current_database: String,
-    pub databases: String,
-    pub tables: String,
-    pub columns: String,
-    pub projections: String,
-
-    // Stats.
-    pub written_rows: u64,
-    pub written_bytes: u64,
-    pub written_io_bytes: u64,
-    pub written_io_bytes_cost_ms: u64,
-    pub scan_rows: u64,
-    pub scan_bytes: u64,
-    pub scan_io_bytes: u64,
-    pub scan_io_bytes_cost_ms: u64,
-    pub scan_partitions: u64,
-    pub total_partitions: u64,
-    pub result_rows: u64,
-    pub result_bytes: u64,
-    pub cpu_usage: u32,
-    pub memory_usage: u64,
-
-    // Client.
-    pub client_info: String,
-    pub client_address: String,
-
-    // Exception.
-    pub exception_code: i32,
-    pub exception_text: String,
-    pub stack_trace: String,
-
-    // Server.
-    pub server_version: String,
-
-    // Session settings
-    #[serde(skip_serializing)]
-    pub session_settings: String,
-
-    // Extra.
-    pub extra: String,
-}
 
 #[derive(Clone)]
 pub struct InterpreterQueryLog {
@@ -164,91 +65,27 @@ impl InterpreterQueryLog {
         InterpreterQueryLog { ctx, query_kind }
     }
 
-    async fn write_log(&self, event: &LogEvent) -> Result<()> {
-        // let query_log = self
-        //     .ctx
-        //     .get_table(CATALOG_DEFAULT, "system", "query_log")
-        //     .await?;
-        // let schema = query_log.get_table_info().meta.schema.clone();
-        //
-        // let block = DataBlock::create(schema.clone(), vec![
-        //     // Type.
-        //     Series::from_data(vec![event.log_type as i8]),
-        //     Series::from_data(vec![event.handler_type.as_str()]),
-        //     // User.
-        //     Series::from_data(vec![event.tenant_id.as_str()]),
-        //     Series::from_data(vec![event.cluster_id.as_str()]),
-        //     Series::from_data(vec![event.sql_user.as_str()]),
-        //     Series::from_data(vec![event.sql_user_quota.as_str()]),
-        //     Series::from_data(vec![event.sql_user_privileges.as_str()]),
-        //     // Query.
-        //     Series::from_data(vec![event.query_id.as_str()]),
-        //     Series::from_data(vec![event.query_kind.as_str()]),
-        //     Series::from_data(vec![event.query_text.as_str()]),
-        //     Series::from_data(vec![event.event_date]),
-        //     Series::from_data(vec![event.event_time]),
-        //     // Schema.
-        //     Series::from_data(vec![event.current_database.as_str()]),
-        //     Series::from_data(vec![event.databases.as_str()]),
-        //     Series::from_data(vec![event.tables.as_str()]),
-        //     Series::from_data(vec![event.columns.as_str()]),
-        //     Series::from_data(vec![event.projections.as_str()]),
-        //     // Stats.
-        //     Series::from_data(vec![event.written_rows]),
-        //     Series::from_data(vec![event.written_bytes]),
-        //     Series::from_data(vec![event.written_io_bytes]),
-        //     Series::from_data(vec![event.written_io_bytes_cost_ms]),
-        //     Series::from_data(vec![event.scan_rows]),
-        //     Series::from_data(vec![event.scan_bytes]),
-        //     Series::from_data(vec![event.scan_io_bytes]),
-        //     Series::from_data(vec![event.scan_io_bytes_cost_ms]),
-        //     Series::from_data(vec![event.scan_partitions]),
-        //     Series::from_data(vec![event.total_partitions]),
-        //     Series::from_data(vec![event.result_rows]),
-        //     Series::from_data(vec![event.result_bytes]),
-        //     Series::from_data(vec![event.cpu_usage]),
-        //     Series::from_data(vec![event.memory_usage]),
-        //     // Client.
-        //     Series::from_data(vec![event.client_info.as_str()]),
-        //     Series::from_data(vec![event.client_address.as_str()]),
-        //     // Exception.
-        //     Series::from_data(vec![event.exception_code]),
-        //     Series::from_data(vec![event.exception_text.as_str()]),
-        //     Series::from_data(vec![event.stack_trace.as_str()]),
-        //     // Server.
-        //     Series::from_data(vec![event.server_version.as_str()]),
-        //     // Session settings
-        //     Series::from_data(vec![event.session_settings.as_str()]),
-        //     // Extra.
-        //     Series::from_data(vec![event.extra.as_str()]),
-        // ]);
-        // let blocks = vec![Ok(block)];
-        // let input_stream = futures::stream::iter::<Vec<Result<DataBlock>>>(blocks);
-        //
-        // let query_log_table: &QueryLogTable = query_log.as_any().downcast_ref().unwrap();
-        // query_log_table
-        //     .append_data(self.ctx.clone(), Box::pin(input_stream))
-        //     .await?;
-        //
-        // // info!("{}", serde_json::to_string(event)?);
-        // if let Some(logger) = QueryLogger::instance().get_subscriber() {
-        //     let event_str = serde_json::to_string(event)?;
-        //     subscriber::with_default(logger, || {
-        //         info!("{}", event_str);
-        //     });
-        // };
-        Ok(())
+    fn write_log(&self, event: QueryLogElement) -> Result<()> {
+        info!("{}", serde_json::to_string(&event)?);
+
+        if let Some(logger) = QueryLogger::instance().get_subscriber() {
+            let event_str = serde_json::to_string(&event)?;
+            subscriber::with_default(logger, || {
+                info!("{}", event_str);
+            });
+        };
+
+        QueryLogQueue::instance()?.append_data(event)
     }
 
     pub async fn fail_to_start(ctx: Arc<QueryContext>, err: ErrorCode) {
         ctx.set_error(err.clone());
         InterpreterQueryLog::create(ctx, "".to_string())
             .log_start(SystemTime::now(), Some(err))
-            .await
             .unwrap_or_else(|e| error!("fail to write query_log {:?}", e));
     }
 
-    pub async fn log_start(&self, now: SystemTime, err: Option<ErrorCode>) -> Result<()> {
+    pub fn log_start(&self, now: SystemTime, err: Option<ErrorCode>) -> Result<()> {
         // User.
         let handler_type = self.ctx.get_current_session().get_type().to_string();
         let tenant_id = self.ctx.get_tenant();
@@ -310,7 +147,7 @@ impl InterpreterQueryLog {
         let (log_type, exception_code, exception_text, stack_trace) =
             error_fields(LogType::Start, err);
 
-        let log_event = LogEvent {
+        self.write_log(QueryLogElement {
             log_type,
             handler_type,
             tenant_id,
@@ -351,12 +188,10 @@ impl InterpreterQueryLog {
             server_version: "".to_string(),
             session_settings,
             extra: "".to_string(),
-        };
-
-        self.write_log(&log_event).await
+        })
     }
 
-    pub async fn log_finish(&self, now: SystemTime, err: Option<ErrorCode>) -> Result<()> {
+    pub fn log_finish(&self, now: SystemTime, err: Option<ErrorCode>) -> Result<()> {
         // User.
         let handler_type = self.ctx.get_current_session().get_type().to_string();
         let tenant_id = self.ctx.get_config().query.tenant_id;
@@ -424,7 +259,7 @@ impl InterpreterQueryLog {
         let (log_type, exception_code, exception_text, stack_trace) =
             error_fields(LogType::Finish, err);
 
-        let log_event = LogEvent {
+        self.write_log(QueryLogElement {
             log_type,
             handler_type,
             tenant_id,
@@ -465,8 +300,6 @@ impl InterpreterQueryLog {
             server_version: "".to_string(),
             session_settings,
             extra: "".to_string(),
-        };
-
-        self.write_log(&log_event).await
+        })
     }
 }
