@@ -24,7 +24,6 @@ use common_expression::types::DataType;
 use common_expression::Chunk;
 use common_expression::Column;
 use common_expression::Evaluator;
-use common_expression::FunctionContext;
 use common_expression::RawExpr;
 use common_expression::Scalar;
 use common_expression::Value;
@@ -140,7 +139,7 @@ pub fn run_scalar_expr(
 ) -> common_expression::Result<(Value<AnyType>, DataType)> {
     let fn_registry = builtin_functions();
     let (expr, output_ty) = type_check::check(raw_expr, &fn_registry)?;
-    let evaluator = Evaluator::new(chunk, FunctionContext::default());
+    let evaluator = Evaluator::new(chunk, chrono_tz::UTC);
     let result = evaluator.run(&expr)?;
     Ok((result, output_ty))
 }
