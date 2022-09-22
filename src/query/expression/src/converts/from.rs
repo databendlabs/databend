@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 use common_datablocks::DataBlock;
 use common_datavalues::remove_nullable;
 use common_datavalues::ColumnRef;
@@ -38,20 +37,20 @@ pub fn can_convert(datatype: &DataTypeImpl) -> bool {
     }
 }
 
-pub fn convert_type(datatype: &DataTypeImpl) -> DataType {
+pub fn from_type(datatype: &DataTypeImpl) -> DataType {
     with_number_type!(|TYPE| match datatype {
         DataTypeImpl::TYPE(_) => DataType::Number(NumberDataType::TYPE),
 
         DataTypeImpl::Null(_) => DataType::Null,
-        DataTypeImpl::Nullable(v) => DataType::Nullable(Box::new(convert_type(v.inner_type()))),
+        DataTypeImpl::Nullable(v) => DataType::Nullable(Box::new(from_type(v.inner_type()))),
         DataTypeImpl::Boolean(_) => DataType::Boolean,
         DataTypeImpl::Timestamp(_) => DataType::Timestamp,
         DataTypeImpl::String(_) => DataType::String,
         DataTypeImpl::Struct(ty) => {
-            let inners = ty.types().iter().map(convert_type).collect();
+            let inners = ty.types().iter().map(from_type).collect();
             DataType::Tuple(inners)
         }
-        DataTypeImpl::Array(ty) => DataType::Array(Box::new(convert_type(ty.inner_type()))),
+        DataTypeImpl::Array(ty) => DataType::Array(Box::new(from_type(ty.inner_type()))),
         DataTypeImpl::Variant(_)
         | DataTypeImpl::VariantArray(_)
         | DataTypeImpl::VariantObject(_) => DataType::Variant,
@@ -60,7 +59,7 @@ pub fn convert_type(datatype: &DataTypeImpl) -> DataType {
     })
 }
 
-pub fn convert_scalar(datavalue: &DataValue, datatype: &DataTypeImpl) -> Scalar {
+pub fn from_scalar(datavalue: &DataValue, datatype: &DataTypeImpl) -> Scalar {
     if datavalue.is_null() {
         return Scalar::Null;
     }
@@ -114,7 +113,7 @@ pub fn convert_scalar(datavalue: &DataValue, datatype: &DataTypeImpl) -> Scalar 
                 .types()
                 .iter()
                 .zip(values.iter())
-                .map(|(ty, v)| convert_scalar(v, ty))
+                .map(|(ty, v)| from_scalar(v, ty))
                 .collect();
 
             Scalar::Tuple(inners)
@@ -125,11 +124,11 @@ pub fn convert_scalar(datavalue: &DataValue, datatype: &DataTypeImpl) -> Scalar 
                 _ => unreachable!(),
             };
 
-            let new_type = convert_type(ty.inner_type());
+            let new_type = from_type(ty.inner_type());
             let mut builder = ColumnBuilder::with_capacity(&new_type, values.len());
 
             for value in values.iter() {
-                let scalar = convert_scalar(value, ty.inner_type());
+                let scalar = from_scalar(value, ty.inner_type());
                 builder.push(scalar.as_ref());
             }
             let col = builder.build();
@@ -155,7 +154,7 @@ pub fn convert_scalar(datavalue: &DataValue, datatype: &DataTypeImpl) -> Scalar 
 pub fn convert_column(column: &ColumnRef, logical_type: &DataTypeImpl) -> Value<AnyType> {
     if column.is_const() {
         let value = column.get(0);
-        let scalar = convert_scalar(&value, logical_type);
+        let scalar = from_scalar(&value, logical_type);
         return Value::Scalar(scalar);
     }
 
@@ -164,7 +163,7 @@ pub fn convert_column(column: &ColumnRef, logical_type: &DataTypeImpl) -> Value<
     Value::Column(new_column)
 }
 
-pub fn convert_block(datablock: &DataBlock) -> Chunk {
+pub fn from_block(datablock: &DataBlock) -> Chunk {
     let columns: Vec<Value<AnyType>> = datablock
         .columns()
         .iter()

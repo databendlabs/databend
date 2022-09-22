@@ -37,3 +37,4 @@ serde_json = "1.0.81"
 [dev-dependencies]
 common-ast = { path = "../ast" }
 goldenfile = "1.4"
+rand = "0.8.5"

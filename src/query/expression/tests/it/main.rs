@@ -15,6 +15,7 @@
 #![feature(box_patterns)]
 #![feature(try_blocks)]
 
+mod convert;
 mod expression;
 mod kernel;
 mod parser;

@@ -95,6 +95,8 @@ pub enum ScalarRef<'a> {
     Variant(&'a [u8]),
 }
 
+impl Ord for ScalarRef {}
+
 #[derive(Clone, PartialEq, EnumAsInner)]
 pub enum Column {
     Null { len: usize },
