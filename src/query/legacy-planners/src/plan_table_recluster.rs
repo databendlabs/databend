@@ -19,7 +19,7 @@ use common_datavalues::DataSchemaRef;
 
 use crate::Extras;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ReclusterTablePlan {
     pub tenant: String,
     pub catalog: String,
