@@ -78,6 +78,19 @@ fn execute_query(context: Arc<QueryContext>, plan: Plan) -> impl Future<Output =
     }
 }
 
+fn remove_quote(s: &[u8]) -> &[u8] {
+    let mut r = s;
+    let l = r.len();
+    if l > 1 {
+        let a = r[0];
+        let b = r[l - 1];
+        if (a == b'"' && b == b'"') || (a == b'"' && b == b'"') {
+            r = &r[1..l - 1]
+        }
+    }
+    r
+}
+
 #[poem::handler]
 pub async fn streaming_load(
     ctx: &HttpQueryContext,
@@ -100,8 +113,7 @@ pub async fn streaming_load(
     for (key, value) in req.headers().iter() {
         if settings.has_setting(key.as_str()) {
             let value = value.to_str().map_err(InternalServerError)?;
-            let value = value.trim_matches(|p| p == '"' || p == '\'');
-            let value = parse_escape_string(value.as_bytes());
+            let value = parse_escape_string(remove_quote(value.as_bytes()));
             settings
                 .set_settings(key.to_string(), value, false)
                 .map_err(InternalServerError)?
