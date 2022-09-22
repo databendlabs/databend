@@ -2426,6 +2426,7 @@ dependencies = [
  "anyhow",
  "async-entry",
  "async-trait",
+ "backon 0.2.0",
  "clap 3.2.22",
  "common-arrow",
  "common-base",
