@@ -97,7 +97,7 @@ async fn test_status() -> Result<()> {
             "running"
         );
 
-        while let Some(_) = stream.next().await {}
+        while stream.next().await.is_some() {}
     }
 
     let status = get_status(&ep).await;
