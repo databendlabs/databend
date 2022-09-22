@@ -15,5 +15,5 @@ common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../../common/exception" }
 common-functions = { path = "../functions" }
 
-serde = { version = "1", features = ["derive"] }
 once_cell = "1.15"
+serde = { version = "1", features = ["derive"] }
