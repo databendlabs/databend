@@ -18,7 +18,7 @@ use common_datavalues::prelude::*;
 use common_functions::scalars::Function;
 
 #[derive(Debug, Clone)]
-pub enum ExpressionAction {
+pub enum LegacyExpressionAction {
     /// Column which must be in input.
     Input(ActionInput),
     /// Constant column with known value.
@@ -59,13 +59,13 @@ pub struct ActionFunction {
     pub arg_types: Vec<DataTypeImpl>,
 }
 
-impl ExpressionAction {
+impl LegacyExpressionAction {
     pub fn column_name(&self) -> &str {
         match self {
-            ExpressionAction::Input(input) => &input.name,
-            ExpressionAction::Constant(c) => &c.name,
-            ExpressionAction::Alias(a) => &a.name,
-            ExpressionAction::Function(f) => &f.name,
+            LegacyExpressionAction::Input(input) => &input.name,
+            LegacyExpressionAction::Constant(c) => &c.name,
+            LegacyExpressionAction::Alias(a) => &a.name,
+            LegacyExpressionAction::Function(f) => &f.name,
         }
     }
 }

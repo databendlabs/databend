@@ -24,16 +24,16 @@ use crate::ActionAlias;
 use crate::ActionConstant;
 use crate::ActionFunction;
 use crate::ActionInput;
-use crate::ExpressionAction;
 use crate::ExpressionVisitor;
 use crate::LegacyExpression;
+use crate::LegacyExpressionAction;
 use crate::Recursion;
 
 #[derive(Debug, Clone)]
 pub struct ExpressionChain {
     // input schema
     pub schema: DataSchemaRef,
-    pub actions: Vec<ExpressionAction>,
+    pub actions: Vec<LegacyExpressionAction>,
 }
 
 impl ExpressionChain {
@@ -81,7 +81,7 @@ impl ExpressionChain {
                     arg_type: return_type,
                 };
 
-                self.actions.push(ExpressionAction::Alias(alias));
+                self.actions.push(LegacyExpressionAction::Alias(alias));
             }
             LegacyExpression::Column(c) => {
                 let arg_type = self.schema.field_with_name(c)?.data_type();
@@ -89,7 +89,7 @@ impl ExpressionChain {
                     name: expr.column_name(),
                     return_type: arg_type.clone(),
                 };
-                self.actions.push(ExpressionAction::Input(input));
+                self.actions.push(LegacyExpressionAction::Input(input));
             }
             LegacyExpression::QualifiedColumn(_) => {
                 return Err(ErrorCode::LogicalError(
@@ -105,7 +105,7 @@ impl ExpressionChain {
                     data_type: data_type.clone(),
                 };
 
-                self.actions.push(ExpressionAction::Constant(value));
+                self.actions.push(LegacyExpressionAction::Constant(value));
             }
             LegacyExpression::UnaryExpression {
                 op,
@@ -125,7 +125,8 @@ impl ExpressionChain {
                     return_type,
                 };
 
-                self.actions.push(ExpressionAction::Function(function));
+                self.actions
+                    .push(LegacyExpressionAction::Function(function));
             }
 
             LegacyExpression::BinaryExpression { op, left, right } => {
@@ -147,7 +148,8 @@ impl ExpressionChain {
                     return_type,
                 };
 
-                self.actions.push(ExpressionAction::Function(function));
+                self.actions
+                    .push(LegacyExpressionAction::Function(function));
             }
 
             LegacyExpression::ScalarFunction { op, args } => {
@@ -170,7 +172,8 @@ impl ExpressionChain {
                     return_type,
                 };
 
-                self.actions.push(ExpressionAction::Function(function));
+                self.actions
+                    .push(LegacyExpressionAction::Function(function));
             }
 
             LegacyExpression::AggregateFunction { .. } => {
@@ -206,7 +209,8 @@ impl ExpressionChain {
                     return_type,
                 };
 
-                self.actions.push(ExpressionAction::Function(function));
+                self.actions
+                    .push(LegacyExpressionAction::Function(function));
             }
             LegacyExpression::MapAccess { args, .. } => {
                 let arg_types = args
@@ -229,7 +233,8 @@ impl ExpressionChain {
                     return_type,
                 };
 
-                self.actions.push(ExpressionAction::Function(function));
+                self.actions
+                    .push(LegacyExpressionAction::Function(function));
             }
         }
         Ok(())
