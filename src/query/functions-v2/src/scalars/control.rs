@@ -98,7 +98,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     None => args_domain.last().unwrap().clone(),
                 })
             }),
-            eval: Box::new(|args, generics| {
+            eval: Box::new(|args, generics, _num_rows| {
                 let len = args.iter().find_map(|arg| match arg {
                     ValueRef::Column(col) => Some(col.len()),
                     _ => None,

@@ -626,8 +626,8 @@ pub fn codegen_register() {
             "
                 fn erase_function_generic_{n_args}_arg<{arg_generics_bound} O: ArgType>(
                     func: impl Fn({arg_g_closure_sig} &GenericMap) -> Result<Value<O>, String>,
-                ) -> impl Fn(&[ValueRef<AnyType>], &GenericMap) -> Result<Value<AnyType>, String> {{
-                    move |args, generics| {{
+                ) -> impl Fn(&[ValueRef<AnyType>], &GenericMap, usize) -> Result<Value<AnyType>, String> {{
+                    move |args, generics, _num_rows| {{
                         {let_args}
                         func({func_args} generics).map(Value::upcast)
                     }}

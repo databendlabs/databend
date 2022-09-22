@@ -4059,14 +4059,14 @@ fn erase_calc_domain_generic_5_arg<
 
 fn erase_function_generic_0_arg<O: ArgType>(
     func: impl Fn(&GenericMap) -> Result<Value<O>, String>,
-) -> impl Fn(&[ValueRef<AnyType>], &GenericMap) -> Result<Value<AnyType>, String> {
-    move |args, generics| func(generics).map(Value::upcast)
+) -> impl Fn(&[ValueRef<AnyType>], &GenericMap, usize) -> Result<Value<AnyType>, String> {
+    move |args, generics, _num_rows| func(generics).map(Value::upcast)
 }
 
 fn erase_function_generic_1_arg<I1: ArgType, O: ArgType>(
     func: impl Fn(ValueRef<I1>, &GenericMap) -> Result<Value<O>, String>,
-) -> impl Fn(&[ValueRef<AnyType>], &GenericMap) -> Result<Value<AnyType>, String> {
-    move |args, generics| {
+) -> impl Fn(&[ValueRef<AnyType>], &GenericMap, usize) -> Result<Value<AnyType>, String> {
+    move |args, generics, _num_rows| {
         let arg1 = args[0].try_downcast().unwrap();
         func(arg1, generics).map(Value::upcast)
     }
@@ -4074,8 +4074,8 @@ fn erase_function_generic_1_arg<I1: ArgType, O: ArgType>(
 
 fn erase_function_generic_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
     func: impl Fn(ValueRef<I1>, ValueRef<I2>, &GenericMap) -> Result<Value<O>, String>,
-) -> impl Fn(&[ValueRef<AnyType>], &GenericMap) -> Result<Value<AnyType>, String> {
-    move |args, generics| {
+) -> impl Fn(&[ValueRef<AnyType>], &GenericMap, usize) -> Result<Value<AnyType>, String> {
+    move |args, generics, _num_rows| {
         let arg1 = args[0].try_downcast().unwrap();
         let arg2 = args[1].try_downcast().unwrap();
         func(arg1, arg2, generics).map(Value::upcast)
@@ -4084,8 +4084,8 @@ fn erase_function_generic_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
 
 fn erase_function_generic_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>(
     func: impl Fn(ValueRef<I1>, ValueRef<I2>, ValueRef<I3>, &GenericMap) -> Result<Value<O>, String>,
-) -> impl Fn(&[ValueRef<AnyType>], &GenericMap) -> Result<Value<AnyType>, String> {
-    move |args, generics| {
+) -> impl Fn(&[ValueRef<AnyType>], &GenericMap, usize) -> Result<Value<AnyType>, String> {
+    move |args, generics, _num_rows| {
         let arg1 = args[0].try_downcast().unwrap();
         let arg2 = args[1].try_downcast().unwrap();
         let arg3 = args[2].try_downcast().unwrap();
@@ -4101,8 +4101,8 @@ fn erase_function_generic_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgTy
         ValueRef<I4>,
         &GenericMap,
     ) -> Result<Value<O>, String>,
-) -> impl Fn(&[ValueRef<AnyType>], &GenericMap) -> Result<Value<AnyType>, String> {
-    move |args, generics| {
+) -> impl Fn(&[ValueRef<AnyType>], &GenericMap, usize) -> Result<Value<AnyType>, String> {
+    move |args, generics, _num_rows| {
         let arg1 = args[0].try_downcast().unwrap();
         let arg2 = args[1].try_downcast().unwrap();
         let arg3 = args[2].try_downcast().unwrap();
@@ -4127,8 +4127,8 @@ fn erase_function_generic_5_arg<
         ValueRef<I5>,
         &GenericMap,
     ) -> Result<Value<O>, String>,
-) -> impl Fn(&[ValueRef<AnyType>], &GenericMap) -> Result<Value<AnyType>, String> {
-    move |args, generics| {
+) -> impl Fn(&[ValueRef<AnyType>], &GenericMap, usize) -> Result<Value<AnyType>, String> {
+    move |args, generics, _num_rows| {
         let arg1 = args[0].try_downcast().unwrap();
         let arg2 = args[1].try_downcast().unwrap();
         let arg3 = args[2].try_downcast().unwrap();

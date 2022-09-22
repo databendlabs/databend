@@ -102,7 +102,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     max: None,
                 }))
             }),
-            eval: Box::new(|args, _generics| {
+            eval: Box::new(|args, _generics, _num_rows| {
                 let len = args.iter().find_map(|arg| match arg {
                     ValueRef::Column(col) => Some(col.len()),
                     _ => None,
@@ -163,7 +163,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 property: FunctionProperty::default(),
             },
             calc_domain: Box::new(|_, _| None),
-            eval: Box::new(|args, _generics| {
+            eval: Box::new(|args, _generics, _num_rows| {
                 type T = NullableType<StringType>;
                 let len = args.iter().find_map(|arg| match arg {
                     ValueRef::Column(col) => Some(col.len()),
@@ -572,7 +572,11 @@ pub fn register(registry: &mut FunctionRegistry) {
     });
 }
 
-fn concat_fn(args: &[ValueRef<AnyType>], _: &GenericMap) -> Result<Value<AnyType>, String> {
+fn concat_fn(
+    args: &[ValueRef<AnyType>],
+    _: &GenericMap,
+    _: usize,
+) -> Result<Value<AnyType>, String> {
     let len = args.iter().find_map(|arg| match arg {
         ValueRef::Column(col) => Some(col.len()),
         _ => None,
@@ -597,7 +601,7 @@ fn concat_fn(args: &[ValueRef<AnyType>], _: &GenericMap) -> Result<Value<AnyType
     }
 }
 
-fn char_fn(args: &[ValueRef<AnyType>], _: &GenericMap) -> Result<Value<AnyType>, String> {
+fn char_fn(args: &[ValueRef<AnyType>], _: &GenericMap, _: usize) -> Result<Value<AnyType>, String> {
     let args = args
         .iter()
         .map(|arg| arg.try_downcast::<UInt8Type>().unwrap())
@@ -640,7 +644,11 @@ fn char_fn(args: &[ValueRef<AnyType>], _: &GenericMap) -> Result<Value<AnyType>,
     Ok(Value::Column(Column::String(result)))
 }
 
-fn regexp_instr_fn(args: &[ValueRef<AnyType>], _: &GenericMap) -> Result<Value<AnyType>, String> {
+fn regexp_instr_fn(
+    args: &[ValueRef<AnyType>],
+    _: &GenericMap,
+    _: usize,
+) -> Result<Value<AnyType>, String> {
     let len = args.iter().find_map(|arg| match arg {
         ValueRef::Column(col) => Some(col.len()),
         _ => None,
@@ -716,7 +724,11 @@ fn regexp_instr_fn(args: &[ValueRef<AnyType>], _: &GenericMap) -> Result<Value<A
     }
 }
 
-fn regexp_like_fn(args: &[ValueRef<AnyType>], _: &GenericMap) -> Result<Value<AnyType>, String> {
+fn regexp_like_fn(
+    args: &[ValueRef<AnyType>],
+    _: &GenericMap,
+    _: usize,
+) -> Result<Value<AnyType>, String> {
     let len = args.iter().find_map(|arg| match arg {
         ValueRef::Column(col) => Some(col.len()),
         _ => None,
@@ -761,7 +773,11 @@ fn regexp_like_fn(args: &[ValueRef<AnyType>], _: &GenericMap) -> Result<Value<An
     }
 }
 
-fn regexp_replace_fn(args: &[ValueRef<AnyType>], _: &GenericMap) -> Result<Value<AnyType>, String> {
+fn regexp_replace_fn(
+    args: &[ValueRef<AnyType>],
+    _: &GenericMap,
+    _: usize,
+) -> Result<Value<AnyType>, String> {
     let len = args.iter().find_map(|arg| match arg {
         ValueRef::Column(col) => Some(col.len()),
         _ => None,
@@ -843,7 +859,11 @@ fn regexp_replace_fn(args: &[ValueRef<AnyType>], _: &GenericMap) -> Result<Value
     }
 }
 
-fn regexp_substr_fn(args: &[ValueRef<AnyType>], _: &GenericMap) -> Result<Value<AnyType>, String> {
+fn regexp_substr_fn(
+    args: &[ValueRef<AnyType>],
+    _: &GenericMap,
+    _: usize,
+) -> Result<Value<AnyType>, String> {
     let len = args.iter().find_map(|arg| match arg {
         ValueRef::Column(col) => Some(col.len()),
         _ => None,
