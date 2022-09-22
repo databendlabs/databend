@@ -28,15 +28,20 @@ fn test_build_array() {
         r#"[1,2,3]"#,
         r#"{"k":"v"}"#,
     ];
-    let mut values = Vec::with_capacity(sources.len());
+    let mut offsets = Vec::with_capacity(sources.len());
     let mut buf: Vec<u8> = Vec::new();
     for s in sources {
         let value = parse_value(s.as_bytes()).unwrap();
         value.to_vec(&mut buf).unwrap();
-        let val_buf = buf.clone();
-        values.push(val_buf);
-        buf.clear();
+        offsets.push(buf.len());
     }
+    let mut values = Vec::with_capacity(offsets.len());
+    let mut last_offset = 0;
+    for offset in offsets {
+        values.push(&buf[last_offset..offset]);
+        last_offset = offset;
+    }
+
     let mut arr_buf = Vec::new();
     build_array(values, &mut arr_buf).unwrap();
     assert_eq!(arr_buf, b"\x80\0\0\x05\x40\0\0\x00\x20\0\0\x04\x10\0\0\x03\x50\0\0\x13\x50\0\0\x0e\x02\x02\x39\x30\x61\x62\x63\x80\0\0\x03\x20\0\0\x01\x20\0\0\x01\x20\0\0\x01\x01\x02\x03\x40\0\0\x01\x10\0\0\x01\x10\0\0\x01\x6b\x76");

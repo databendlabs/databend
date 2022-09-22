@@ -16,8 +16,6 @@ use core::convert::TryInto;
 use std::cmp::Ordering;
 use std::collections::VecDeque;
 
-use byteorder::BigEndian;
-use byteorder::WriteBytesExt;
 use decimal_rs::Decimal;
 
 use super::constants::*;
@@ -28,39 +26,47 @@ use crate::jentry::JEntry;
 
 // build `JSONB` array from items
 // Assuming that the input values is valid JSONB data
-pub fn build_array(values: Vec<Vec<u8>>, buf: &mut Vec<u8>) -> Result<(), Error> {
-    let header = ARRAY_CONTAINER_TAG | values.len() as u32;
-    buf.write_u32::<BigEndian>(header).unwrap();
-
-    let mut jentry_index = 4;
-    // reserve space for jentries
-    buf.resize(4 + values.len() * 4, 0);
-
-    for value in values.iter() {
+pub fn build_array<'a>(
+    items: impl IntoIterator<Item = &'a [u8]>,
+    buf: &mut Vec<u8>,
+) -> Result<(), Error> {
+    // reserve space for header
+    buf.resize(4, 0);
+    let mut len: u32 = 0;
+    let mut data = Vec::new();
+    for value in items.into_iter() {
         let header = read_u32(value, 0)?;
         let encoded_jentry = match header & CONTAINER_HEADER_TYPE_MASK {
             SCALAR_CONTAINER_TAG => {
                 let jentry = &value[4..8];
-                buf.extend_from_slice(&value[8..]);
+                data.extend_from_slice(&value[8..]);
                 jentry.try_into().unwrap()
             }
             ARRAY_CONTAINER_TAG | OBJECT_CONTAINER_TAG => {
-                buf.extend_from_slice(value);
+                data.extend_from_slice(value);
                 (CONTAINER_TAG | value.len() as u32).to_be_bytes()
             }
             _ => return Err(Error::InvalidJsonbHeader),
         };
-        for (i, b) in encoded_jentry.iter().enumerate() {
-            buf[jentry_index + i] = *b;
-        }
-        jentry_index += 4;
+        len += 1;
+        buf.extend_from_slice(&encoded_jentry);
     }
+    // write header
+    let header = ARRAY_CONTAINER_TAG | len;
+    for (i, b) in header.to_be_bytes().iter().enumerate() {
+        buf[i] = *b;
+    }
+    buf.extend_from_slice(&data);
+
     Ok(())
 }
 
 // `JSONB` values supports partial decode for comparison,
 // if the values are found to be unequal,
 // the result will be returned immediately
+//
+// in first level header, values compare as the following order
+// Scalar Null > Array > Object > Other Scalars(String > Number > Boolean)
 pub fn compare(left: &[u8], right: &[u8]) -> Result<Ordering, Error> {
     let left_header = read_u32(left, 0)?;
     let right_header = read_u32(right, 0)?;
