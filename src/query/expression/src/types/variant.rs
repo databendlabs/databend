@@ -41,6 +41,10 @@ impl ValueType for VariantType {
     type ColumnIterator<'a> = StringIterator<'a>;
     type ColumnBuilder = StringColumnBuilder;
 
+    fn upcast_gat<'short, 'long: 'short>(long: &'long [u8]) -> &'short [u8] {
+        long
+    }
+
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
         scalar.to_vec()
     }

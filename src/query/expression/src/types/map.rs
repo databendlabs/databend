@@ -41,6 +41,10 @@ impl<K: ValueType, V: ValueType> ValueType for KvPair<K, V> {
     type ColumnIterator<'a> = KvIterator<'a, K, V>;
     type ColumnBuilder = KvColumnBuilder<K, V>;
 
+    fn upcast_gat<'short, 'long: 'short>(long: Self::ScalarRef<'long>) -> Self::ScalarRef<'short> {
+        (K::upcast_gat(long.0), V::upcast_gat(long.1))
+    }
+
     fn to_owned_scalar<'a>((k, v): Self::ScalarRef<'a>) -> Self::Scalar {
         (K::to_owned_scalar(k), V::to_owned_scalar(v))
     }
@@ -290,6 +294,10 @@ impl<T: ValueType> ValueType for MapType<T> {
     type Domain = <MapInternal<T> as ValueType>::Domain;
     type ColumnIterator<'a> = <MapInternal<T> as ValueType>::ColumnIterator<'a>;
     type ColumnBuilder = <MapInternal<T> as ValueType>::ColumnBuilder;
+
+    fn upcast_gat<'short, 'long: 'short>(long: Self::ScalarRef<'long>) -> Self::ScalarRef<'short> {
+        <MapInternal<T> as ValueType>::upcast_gat(long)
+    }
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
         <MapInternal<T> as ValueType>::to_owned_scalar(scalar)

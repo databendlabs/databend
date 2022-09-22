@@ -42,6 +42,12 @@ impl<T: ValueType> ValueType for NullableType<T> {
     type ColumnIterator<'a> = NullableIterator<'a, T>;
     type ColumnBuilder = NullableColumnBuilder<T>;
 
+    fn upcast_gat<'short, 'long: 'short>(
+        long: Option<T::ScalarRef<'long>>,
+    ) -> Option<T::ScalarRef<'short>> {
+        long.map(|long| T::upcast_gat(long))
+    }
+
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
         scalar.map(T::to_owned_scalar)
     }

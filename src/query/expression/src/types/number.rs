@@ -60,6 +60,10 @@ impl<Num: Number> ValueType for NumberType<Num> {
     type ColumnIterator<'a> = std::iter::Cloned<std::slice::Iter<'a, Num>>;
     type ColumnBuilder = Vec<Num>;
 
+    fn upcast_gat<'short, 'long: 'short>(long: Num) -> Num {
+        long
+    }
+
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
         scalar
     }

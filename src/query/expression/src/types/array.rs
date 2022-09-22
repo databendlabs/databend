@@ -41,6 +41,10 @@ impl<T: ValueType> ValueType for ArrayType<T> {
     type ColumnIterator<'a> = ArrayIterator<'a, T>;
     type ColumnBuilder = ArrayColumnBuilder<T>;
 
+    fn upcast_gat<'short, 'long: 'short>(long: T::Column) -> T::Column {
+        long
+    }
+
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
         scalar
     }

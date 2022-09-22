@@ -41,6 +41,10 @@ impl ValueType for TimestampType {
     type ColumnIterator<'a> = TimestampIterator<'a>;
     type ColumnBuilder = TimestampColumnBuilder;
 
+    fn upcast_gat<'short, 'long: 'short>(long: Timestamp) -> Timestamp {
+        long
+    }
+
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
         scalar
     }
