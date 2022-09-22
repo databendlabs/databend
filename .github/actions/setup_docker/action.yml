@@ -45,17 +45,17 @@ runs:
       run: |
         docker login --username AWS --password $(aws ecr-public get-login-password --region us-east-1) public.ecr.aws
 
+    - name: Login to Aliyun Container Registry
+      if: inputs.acr_password
+      shell: bash
+      run: |
+        docker login --username databend --password '${{ inputs.acr_password }}' registry.cn-beijing.aliyuncs.com
+
     - name: Login to DockerHub
       uses: docker/login-action@v1
       with:
         username: ${{ inputs.dockerhub_user }}
         password: ${{ inputs.dockerhub_token }}
-
-    - name: Login to Aliyun Container Registry
-      if: inputs.acr_password
-      shell: bash
-      run: |
-        docker login --username ${{ inputs.dockerhub_user }} --password ${{ inputs.acr_password }} registry.cn-beijing.aliyuncs.com
 
     - name: Output Registries
       shell: bash

@@ -300,7 +300,7 @@ jobs:
               mkdir -p ./target/${target}/release
               tar x -C ./target/${target}/release -f ./distro/databend-${version}-${target}.tar.gz --strip-components 1 bin/
               mkdir -p ./distro/linux/${platform}
-              cp ./target/${target}/release/databend-${{ matrix.service }} ./distro/linux/${platform}
+              cp ./target/${target}/release/databend-* ./distro/linux/${platform}
           done
 
       - name: get image tags
