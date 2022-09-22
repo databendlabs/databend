@@ -26,7 +26,7 @@ async fn test_show_users_interpreter() -> Result<()> {
     {
         let query = "CREATE USER 'test'@'localhost' IDENTIFIED BY 'password'";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
         let _ = executor.execute(ctx.clone()).await?;
     }
 
@@ -34,7 +34,7 @@ async fn test_show_users_interpreter() -> Result<()> {
     {
         let query = "show users";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
         assert_eq!(executor.name(), "SelectInterpreterV2");
 
         let stream = executor.execute(ctx.clone()).await?;

@@ -15,7 +15,6 @@
 #![feature(hash_raw_entry)]
 #![feature(core_intrinsics)]
 #![feature(arbitrary_self_types)]
-#![feature(generic_associated_types)]
 #![feature(type_alias_impl_trait)]
 #![feature(assert_matches)]
 #![feature(trusted_len)]
@@ -24,6 +23,7 @@
 #![feature(option_get_or_insert_default)]
 #![feature(result_option_inspect)]
 #![feature(is_some_with)]
+#![feature(result_flattening)]
 
 extern crate core;
 
@@ -36,7 +36,6 @@ pub mod databases;
 pub mod evaluator;
 pub mod interpreters;
 pub mod metrics;
-pub mod optimizers;
 pub mod pipelines;
 pub mod procedures;
 pub mod servers;

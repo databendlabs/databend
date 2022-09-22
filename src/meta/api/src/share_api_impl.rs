@@ -21,18 +21,17 @@ use common_meta_app::schema::TableIdToName;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::share::*;
-use common_meta_types::app_error::AppError;
-use common_meta_types::app_error::ShareAccountsAlreadyExists;
-use common_meta_types::app_error::ShareAlreadyExists;
-use common_meta_types::app_error::TxnRetryMaxTimes;
-use common_meta_types::app_error::UnknownShare;
-use common_meta_types::app_error::UnknownShareAccounts;
-use common_meta_types::app_error::UnknownTable;
-use common_meta_types::app_error::WrongShare;
-use common_meta_types::app_error::WrongShareObject;
+use common_meta_types::errors::app_error::AppError;
+use common_meta_types::errors::app_error::ShareAccountsAlreadyExists;
+use common_meta_types::errors::app_error::ShareAlreadyExists;
+use common_meta_types::errors::app_error::TxnRetryMaxTimes;
+use common_meta_types::errors::app_error::UnknownShare;
+use common_meta_types::errors::app_error::UnknownShareAccounts;
+use common_meta_types::errors::app_error::UnknownTable;
+use common_meta_types::errors::app_error::WrongShare;
+use common_meta_types::errors::app_error::WrongShareObject;
 use common_meta_types::ConditionResult::Eq;
-use common_meta_types::MetaError;
-use common_meta_types::MetaResult;
+use common_meta_types::KVAppError;
 use common_meta_types::TxnCondition;
 use common_meta_types::TxnOp;
 use common_meta_types::TxnRequest;
@@ -68,7 +67,7 @@ use crate::TXN_MAX_RETRY_TIMES;
 #[async_trait::async_trait]
 impl<KV: KVApi> ShareApi for KV {
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
-    async fn show_shares(&self, req: ShowSharesReq) -> MetaResult<ShowSharesReply> {
+    async fn show_shares(&self, req: ShowSharesReq) -> Result<ShowSharesReply, KVAppError> {
         debug!(req = debug(&req), "ShareApi: {}", func_name!());
 
         // Get all outbound share accounts.
@@ -84,7 +83,7 @@ impl<KV: KVApi> ShareApi for KV {
     }
 
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
-    async fn create_share(&self, req: CreateShareReq) -> MetaResult<CreateShareReply> {
+    async fn create_share(&self, req: CreateShareReq) -> Result<CreateShareReply, KVAppError> {
         debug!(req = debug(&req), "ShareApi: {}", func_name!());
 
         let name_key = &req.share_name;
@@ -103,7 +102,7 @@ impl<KV: KVApi> ShareApi for KV {
                         spec_vec: None,
                     })
                 } else {
-                    Err(MetaError::AppError(AppError::ShareAlreadyExists(
+                    Err(KVAppError::AppError(AppError::ShareAlreadyExists(
                         ShareAlreadyExists::new(
                             &name_key.share_name,
                             format!("create share: tenant: {}", name_key.tenant),
@@ -159,7 +158,7 @@ impl<KV: KVApi> ShareApi for KV {
             }
         }
 
-        Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
+        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
             TxnRetryMaxTimes::new("create_share", TXN_MAX_RETRY_TIMES),
         )))
     }
@@ -173,7 +172,7 @@ impl<KV: KVApi> ShareApi for KV {
     // iterator all the granted objects(from ShareMeta.{database|entries}),
     //     remove share id from ObjectSharedByShareIds
     // drop all the databases created from the share(from ShareMeta.share_from_db_ids),
-    async fn drop_share(&self, req: DropShareReq) -> MetaResult<DropShareReply> {
+    async fn drop_share(&self, req: DropShareReq) -> Result<DropShareReply, KVAppError> {
         debug!(req = debug(&req), "ShareApi: {}", func_name!());
 
         let name_key = &req.share_name;
@@ -186,7 +185,7 @@ impl<KV: KVApi> ShareApi for KV {
             let (share_id_seq, share_id, share_meta_seq, share_meta) = match res {
                 Ok(x) => x,
                 Err(e) => {
-                    if let MetaError::AppError(AppError::UnknownShare(_)) = e {
+                    if let KVAppError::AppError(AppError::UnknownShare(_)) = e {
                         if req.if_exists {
                             return Ok(DropShareReply {
                                 share_id: None,
@@ -205,7 +204,7 @@ impl<KV: KVApi> ShareApi for KV {
             let (share_name_seq, _share_name) = match res {
                 Ok(x) => x,
                 Err(e) => {
-                    if let MetaError::AppError(AppError::UnknownShareId(_)) = e {
+                    if let KVAppError::AppError(AppError::UnknownShareId(_)) = e {
                         if req.if_exists {
                             return Ok(DropShareReply {
                                 share_id: Some(share_id),
@@ -292,7 +291,7 @@ impl<KV: KVApi> ShareApi for KV {
             }
         }
 
-        Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
+        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
             TxnRetryMaxTimes::new("drop_share", TXN_MAX_RETRY_TIMES),
         )))
     }
@@ -300,7 +299,7 @@ impl<KV: KVApi> ShareApi for KV {
     async fn add_share_tenants(
         &self,
         req: AddShareAccountsReq,
-    ) -> MetaResult<AddShareAccountsReply> {
+    ) -> Result<AddShareAccountsReply, KVAppError> {
         debug!(req = debug(&req), "ShareApi: {}", func_name!());
 
         let name_key = &req.share_name;
@@ -314,7 +313,7 @@ impl<KV: KVApi> ShareApi for KV {
             let (share_id_seq, share_id, share_meta_seq, mut share_meta) = match res {
                 Ok(x) => x,
                 Err(e) => {
-                    if let MetaError::AppError(AppError::UnknownShare(_)) = e {
+                    if let KVAppError::AppError(AppError::UnknownShare(_)) = e {
                         if req.if_exists {
                             return Ok(AddShareAccountsReply {
                                 share_id: None,
@@ -339,7 +338,7 @@ impl<KV: KVApi> ShareApi for KV {
                 }
             }
             if add_share_account_keys.is_empty() {
-                return Err(MetaError::AppError(AppError::ShareAccountsAlreadyExists(
+                return Err(KVAppError::AppError(AppError::ShareAccountsAlreadyExists(
                     ShareAccountsAlreadyExists::new(
                         req.share_name.share_name,
                         &req.accounts,
@@ -404,7 +403,7 @@ impl<KV: KVApi> ShareApi for KV {
             }
         }
 
-        Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
+        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
             TxnRetryMaxTimes::new("add_share_tenants", TXN_MAX_RETRY_TIMES),
         )))
     }
@@ -412,7 +411,7 @@ impl<KV: KVApi> ShareApi for KV {
     async fn remove_share_tenants(
         &self,
         req: RemoveShareAccountsReq,
-    ) -> MetaResult<RemoveShareAccountsReply> {
+    ) -> Result<RemoveShareAccountsReply, KVAppError> {
         debug!(req = debug(&req), "ShareApi: {}", func_name!());
 
         let name_key = &req.share_name;
@@ -431,7 +430,7 @@ impl<KV: KVApi> ShareApi for KV {
             let (_share_id_seq, share_id, share_meta_seq, mut share_meta) = match res {
                 Ok(x) => x,
                 Err(e) => {
-                    if let MetaError::AppError(AppError::UnknownShare(_)) = e {
+                    if let KVAppError::AppError(AppError::UnknownShare(_)) = e {
                         if req.if_exists {
                             return Ok(RemoveShareAccountsReply {
                                 share_id: None,
@@ -474,7 +473,7 @@ impl<KV: KVApi> ShareApi for KV {
             }
 
             if remove_share_account_keys_and_seqs.is_empty() {
-                return Err(MetaError::AppError(AppError::UnknownShareAccounts(
+                return Err(KVAppError::AppError(AppError::UnknownShareAccounts(
                     UnknownShareAccounts::new(&req.accounts, share_id, "unknown share account"),
                 )));
             }
@@ -526,7 +525,7 @@ impl<KV: KVApi> ShareApi for KV {
             }
         }
 
-        Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
+        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
             TxnRetryMaxTimes::new("remove_share_tenants", TXN_MAX_RETRY_TIMES),
         )))
     }
@@ -534,7 +533,7 @@ impl<KV: KVApi> ShareApi for KV {
     async fn grant_share_object(
         &self,
         req: GrantShareObjectReq,
-    ) -> MetaResult<GrantShareObjectReply> {
+    ) -> Result<GrantShareObjectReply, KVAppError> {
         debug!(req = debug(&req), "ShareApi: {}", func_name!());
 
         let share_name_key = &req.share_name;
@@ -629,7 +628,7 @@ impl<KV: KVApi> ShareApi for KV {
             }
         }
 
-        Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
+        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
             TxnRetryMaxTimes::new("grant_share_object", TXN_MAX_RETRY_TIMES),
         )))
     }
@@ -637,7 +636,7 @@ impl<KV: KVApi> ShareApi for KV {
     async fn revoke_share_object(
         &self,
         req: RevokeShareObjectReq,
-    ) -> MetaResult<RevokeShareObjectReply> {
+    ) -> Result<RevokeShareObjectReply, KVAppError> {
         debug!(req = debug(&req), "ShareApi: {}", func_name!());
 
         let share_name_key = &req.share_name;
@@ -740,7 +739,7 @@ impl<KV: KVApi> ShareApi for KV {
             }
         }
 
-        Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
+        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
             TxnRetryMaxTimes::new("revoke_share_object", TXN_MAX_RETRY_TIMES),
         )))
     }
@@ -748,7 +747,7 @@ impl<KV: KVApi> ShareApi for KV {
     async fn get_share_grant_objects(
         &self,
         req: GetShareGrantObjectReq,
-    ) -> MetaResult<GetShareGrantObjectReply> {
+    ) -> Result<GetShareGrantObjectReply, KVAppError> {
         debug!(req = debug(&req), "ShareApi: {}", func_name!());
 
         let share_name_key = &req.share_name;
@@ -801,13 +800,12 @@ impl<KV: KVApi> ShareApi for KV {
         let mut objects = vec![];
         for entry in entries {
             let object = get_object_name_from_id(self, &database_name, entry.object).await?;
-            match object {
-                Some(object) => objects.push(ShareGrantReplyObject {
+            if let Some(object) = object {
+                objects.push(ShareGrantReplyObject {
                     object,
                     privileges: entry.privileges,
                     grant_on: entry.grant_on,
-                }),
-                None => {}
+                })
             }
         }
 
@@ -821,7 +819,7 @@ impl<KV: KVApi> ShareApi for KV {
     async fn get_grant_tenants_of_share(
         &self,
         req: GetShareGrantTenantsReq,
-    ) -> MetaResult<GetShareGrantTenantsReply> {
+    ) -> Result<GetShareGrantTenantsReply, KVAppError> {
         let accounts = get_outbound_share_tenants_by_name(self, &req.share_name).await?;
 
         Ok(GetShareGrantTenantsReply { accounts })
@@ -831,7 +829,7 @@ impl<KV: KVApi> ShareApi for KV {
     async fn get_grant_privileges_of_object(
         &self,
         req: GetObjectGrantPrivilegesReq,
-    ) -> MetaResult<GetObjectGrantPrivilegesReply> {
+    ) -> Result<GetObjectGrantPrivilegesReply, KVAppError> {
         let entries = match req.object {
             ShareGrantObjectName::Database(db_name) => {
                 let db_name_key = DatabaseNameIdent {
@@ -926,15 +924,12 @@ impl<KV: KVApi> ShareApi for KV {
         };
         let mut privileges = vec![];
         for (entry, share_name) in entries {
-            match entry {
-                Some(entry) => {
-                    privileges.push(ObjectGrantPrivilege {
-                        share_name,
-                        privileges: entry.privileges,
-                        grant_on: entry.grant_on,
-                    });
-                }
-                None => {}
+            if let Some(entry) = entry {
+                privileges.push(ObjectGrantPrivilege {
+                    share_name,
+                    privileges: entry.privileges,
+                    grant_on: entry.grant_on,
+                });
             }
         }
         Ok(GetObjectGrantPrivilegesReply { privileges })
@@ -945,7 +940,7 @@ async fn get_share_database_name(
     kv_api: &(impl KVApi + ?Sized),
     share_meta: &ShareMeta,
     share_name: &ShareNameIdent,
-) -> Result<Option<String>, MetaError> {
+) -> Result<Option<String>, KVAppError> {
     if let Some(entry) = &share_meta.database {
         match entry.object {
             ShareGrantObject::Database(db_id) => {
@@ -953,13 +948,13 @@ async fn get_share_database_name(
                 let (name_ident_seq, name_ident): (_, Option<DatabaseNameIdent>) =
                     get_struct_value(kv_api, &id_to_name).await?;
                 if name_ident_seq == 0 || name_ident.is_none() {
-                    return Err(MetaError::AppError(AppError::UnknownShare(
+                    return Err(KVAppError::AppError(AppError::UnknownShare(
                         UnknownShare::new(&share_name.share_name, ""),
                     )));
                 }
                 Ok(Some(name_ident.unwrap().db_name))
             }
-            ShareGrantObject::Table(_id) => Err(MetaError::AppError(AppError::WrongShare(
+            ShareGrantObject::Table(_id) => Err(KVAppError::AppError(AppError::WrongShare(
                 WrongShare::new(&share_name.share_name),
             ))),
         }
@@ -971,7 +966,7 @@ async fn get_share_database_name(
 async fn get_outbound_share_tenants_by_name(
     kv_api: &(impl KVApi + ?Sized),
     share_name: &ShareNameIdent,
-) -> Result<Vec<GetShareGrantTenants>, MetaError> {
+) -> Result<Vec<GetShareGrantTenants>, KVAppError> {
     let res = get_share_or_err(kv_api, share_name, format!("get_share: {share_name}")).await?;
     let (_share_id_seq, share_id, _share_meta_seq, share_meta) = res;
 
@@ -1001,7 +996,7 @@ async fn get_outbound_share_tenants_by_name(
 async fn get_outbound_share_info_by_name(
     kv_api: &(impl KVApi + ?Sized),
     share_name: &ShareNameIdent,
-) -> Result<ShareAccountReply, MetaError> {
+) -> Result<ShareAccountReply, KVAppError> {
     let res = get_share_or_err(
         kv_api,
         share_name,
@@ -1029,7 +1024,7 @@ async fn get_outbound_share_info_by_name(
 async fn get_outbound_share_infos_by_tenant(
     kv_api: &(impl KVApi + ?Sized),
     tenant: &str,
-) -> Result<Vec<ShareAccountReply>, MetaError> {
+) -> Result<Vec<ShareAccountReply>, KVAppError> {
     let mut outbound_share_accounts: Vec<ShareAccountReply> = vec![];
 
     let tenant_share_name_key = ShareNameIdent {
@@ -1051,7 +1046,7 @@ async fn get_outbound_share_infos_by_tenant(
 async fn get_inbound_share_infos_by_tenant(
     kv_api: &(impl KVApi + ?Sized),
     tenant: &String,
-) -> Result<Vec<ShareAccountReply>, MetaError> {
+) -> Result<Vec<ShareAccountReply>, KVAppError> {
     let mut inbound_share_accounts: Vec<ShareAccountReply> = vec![];
 
     let tenant_share_name_key = ShareAccountNameIdent {
@@ -1105,7 +1100,7 @@ async fn get_object_name_from_id(
     kv_api: &(impl KVApi + ?Sized),
     database_name: &Option<&String>,
     object: ShareGrantObject,
-) -> Result<Option<ShareGrantObjectName>, MetaError> {
+) -> Result<Option<ShareGrantObjectName>, KVAppError> {
     match object {
         ShareGrantObject::Database(db_id) => {
             let db_id_key = DatabaseIdToName { db_id };
@@ -1135,7 +1130,7 @@ fn check_share_object(
     database: &Option<ShareGrantEntry>,
     seq_and_id: &ShareGrantObjectSeqAndId,
     obj_name: &ShareGrantObjectName,
-) -> Result<(), MetaError> {
+) -> Result<(), KVAppError> {
     if let Some(entry) = database {
         if let ShareGrantObject::Database(db_id) = entry.object {
             let object_db_id = match seq_and_id {
@@ -1143,7 +1138,7 @@ fn check_share_object(
                 ShareGrantObjectSeqAndId::Table(db_id, _seq, _id, _meta) => *db_id,
             };
             if db_id != object_db_id {
-                return Err(MetaError::AppError(AppError::WrongShareObject(
+                return Err(KVAppError::AppError(AppError::WrongShareObject(
                     WrongShareObject::new(obj_name.to_string()),
                 )));
             }
@@ -1153,7 +1148,7 @@ fn check_share_object(
     } else {
         // Table cannot be granted without database has been granted.
         if let ShareGrantObjectSeqAndId::Table(_, _, _, _) = seq_and_id {
-            return Err(MetaError::AppError(AppError::WrongShareObject(
+            return Err(KVAppError::AppError(AppError::WrongShareObject(
                 WrongShareObject::new(obj_name.to_string()),
             )));
         }
@@ -1167,7 +1162,7 @@ async fn get_share_object_seq_and_id(
     kv_api: &(impl KVApi + ?Sized),
     obj_name: &ShareGrantObjectName,
     tenant: &str,
-) -> Result<ShareGrantObjectSeqAndId, MetaError> {
+) -> Result<ShareGrantObjectSeqAndId, KVAppError> {
     match obj_name {
         ShareGrantObjectName::Database(db_name) => {
             let name_key = DatabaseNameIdent {
@@ -1221,7 +1216,7 @@ async fn get_share_object_seq_and_id(
                 get_struct_value(kv_api, &tbid).await?;
 
             if table_meta_seq == 0 {
-                return Err(MetaError::AppError(AppError::UnknownTable(
+                return Err(KVAppError::AppError(AppError::UnknownTable(
                     UnknownTable::new(
                         &name_key.table_name,
                         format!("get_share_object_seq_and_id: {}", name_key),
@@ -1258,7 +1253,7 @@ fn add_grant_object_txn_if_then(
     share_id: u64,
     seq_and_id: ShareGrantObjectSeqAndId,
     if_then: &mut Vec<TxnOp>,
-) -> MetaResult<()> {
+) -> Result<(), KVAppError> {
     match seq_and_id {
         ShareGrantObjectSeqAndId::Database(_db_meta_seq, db_id, mut db_meta) => {
             // modify db_meta add share_id into shared_by
@@ -1280,7 +1275,7 @@ async fn drop_accounts_granted_from_share(
     share_meta: &ShareMeta,
     condition: &mut Vec<TxnCondition>,
     if_then: &mut Vec<TxnOp>,
-) -> MetaResult<()> {
+) -> Result<(), KVAppError> {
     // get all accounts seq from share_meta
     for account in share_meta.get_accounts() {
         let share_account_key = ShareAccountNameIdent {
@@ -1309,7 +1304,7 @@ async fn remove_share_id_from_share_object(
     entry: &ShareGrantEntry,
     condition: &mut Vec<TxnCondition>,
     if_then: &mut Vec<TxnOp>,
-) -> MetaResult<()> {
+) -> Result<(), KVAppError> {
     if let Ok((seq, mut share_ids)) = get_object_shared_by_share_ids(kv_api, &entry.object).await {
         share_ids.remove(share_id);
 
@@ -1325,7 +1320,7 @@ async fn remove_share_id_from_share_objects(
     share_meta: &ShareMeta,
     condition: &mut Vec<TxnCondition>,
     if_then: &mut Vec<TxnOp>,
-) -> MetaResult<()> {
+) -> Result<(), KVAppError> {
     if let Some(database) = &share_meta.database {
         remove_share_id_from_share_object(kv_api, share_id, database, condition, if_then).await?;
     }
@@ -1343,7 +1338,7 @@ async fn drop_all_database_from_share(
     share_meta: &ShareMeta,
     condition: &mut Vec<TxnCondition>,
     if_then: &mut Vec<TxnOp>,
-) -> MetaResult<()> {
+) -> Result<(), KVAppError> {
     for db_id in &share_meta.share_from_db_ids {
         let _ = is_db_need_to_be_remove(kv_api, *db_id, |_db_meta| true, condition, if_then).await;
     }
@@ -1353,7 +1348,7 @@ async fn drop_all_database_from_share(
 async fn get_tenant_share_spec_vec(
     kv_api: &(impl KVApi + ?Sized),
     tenant: String,
-) -> MetaResult<Vec<ShareSpec>> {
+) -> Result<Vec<ShareSpec>, KVAppError> {
     let mut share_metas = vec![];
     let share_name_list = ShareNameIdent {
         tenant,
@@ -1373,10 +1368,10 @@ async fn get_tenant_share_spec_vec(
         let (_share_id_seq, share_id, _share_meta_seq, share_meta) = match res {
             Ok(x) => x,
             Err(e) => match e {
-                MetaError::AppError(AppError::UnknownShare(_)) => {
+                KVAppError::AppError(AppError::UnknownShare(_)) => {
                     continue;
                 }
-                MetaError::AppError(AppError::UnknownShareId(_)) => {
+                KVAppError::AppError(AppError::UnknownShareId(_)) => {
                     continue;
                 }
                 _ => {
@@ -1399,7 +1394,7 @@ async fn convert_share_meta_to_spec(
     share_name: &str,
     share_id: u64,
     share_meta: ShareMeta,
-) -> MetaResult<ShareSpec> {
+) -> Result<ShareSpec, KVAppError> {
     let database = if let Some(database) = share_meta.database {
         if let ShareGrantObject::Database(db_id) = database.object {
             let id_key = DatabaseIdToName { db_id };

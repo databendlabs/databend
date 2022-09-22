@@ -21,6 +21,7 @@ use common_meta_app::share::AddShareAccountsReq;
 use common_meta_app::share::RemoveShareAccountsReq;
 use common_meta_app::share::ShareNameIdent;
 use common_storages_share::save_share_spec;
+use common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -47,8 +48,7 @@ impl Interpreter for AlterShareTenantsInterpreter {
 
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
-        let user_mgr = self.ctx.get_user_manager();
-        let meta_api = user_mgr.get_meta_store_client();
+        let meta_api = UserApiProvider::instance().get_meta_store_client();
         if self.plan.is_add {
             let req = AddShareAccountsReq {
                 share_name: ShareNameIdent {

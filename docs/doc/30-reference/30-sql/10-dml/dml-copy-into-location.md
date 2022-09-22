@@ -5,14 +5,15 @@ description:
   'Unload Data using COPY INTO <location>'
 ---
 
-`COPY` moves data between Databend and object storage systems (such as Amazon S3).
+`COPY` loads data into Databend or unloads data from Databend.
 
-Unloads data from a table (or query) into one or more files in one of the following locations:
+This command unloads data from a table (or query) into one or more files in one of the following locations:
 
 * Named internal stage: The files can be downloaded from the stage using the GET command.
 * Named external stage: An external location (including Amazon S3).
 * External location: An object storage system (including Amazon S3).
 
+See Also: [COPY INTO table](dml-copy-into-table.md)
 
 ## Syntax
 
@@ -103,4 +104,3 @@ copy into @s2 from test_table FILE_FORMAT = (type = 'CSV');
 -- Unload the data from a query into the stage as a Parquet file
 copy into @s2 from (select name, age, id from test_table limit 100) FILE_FORMAT = (type = 'PARQUET');
 ```
-

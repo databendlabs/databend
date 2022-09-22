@@ -17,7 +17,7 @@ use std::sync::Arc;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::UseDatabasePlan;
+use common_planner::plans::UseDatabasePlan;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

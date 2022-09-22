@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,11 +35,9 @@ pub fn register(registry: &mut FunctionRegistry) {
             let value = parse_value(s).map_err(|err| {
                 format!("unable to parse '{}': {}", &String::from_utf8_lossy(s), err)
             })?;
-            let mut buf: Vec<u8> = Vec::new();
             value
-                .to_writer(&mut buf)
+                .to_vec(&mut output.data)
                 .map_err(|_| "unable to encode jsonb".to_string())?;
-            output.put_slice(buf.as_slice());
             output.commit_row();
 
             Ok(())

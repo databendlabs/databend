@@ -14,6 +14,7 @@
 
 use common_base::base::tokio;
 use common_exception::Result;
+use common_users::UserApiProvider;
 use databend_query::interpreters::*;
 use databend_query::sessions::TableContext;
 use databend_query::sql::*;
@@ -29,12 +30,11 @@ async fn test_alter_udf_interpreter() -> Result<()> {
     {
         let query = "CREATE FUNCTION IF NOT EXISTS isnotempty AS (p) -> not(is_null(p)) DESC = 'This is a description'";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
         assert_eq!(executor.name(), "CreateUserUDFInterpreter");
         let mut stream = executor.execute(ctx.clone()).await?;
         while let Some(_block) = stream.next().await {}
-        let udf = ctx
-            .get_user_manager()
+        let udf = UserApiProvider::instance()
             .get_udf(&tenant, "isnotempty")
             .await?;
 
@@ -47,14 +47,13 @@ async fn test_alter_udf_interpreter() -> Result<()> {
     {
         let query = "ALTER FUNCTION isnotempty AS (d) -> not(is_not_null(d)) DESC = 'This is a new description'";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
         assert_eq!(executor.name(), "AlterUserUDFInterpreter");
 
         let mut stream = executor.execute(ctx.clone()).await?;
         while let Some(_block) = stream.next().await {}
 
-        let udf = ctx
-            .get_user_manager()
+        let udf = UserApiProvider::instance()
             .get_udf(&tenant, "isnotempty")
             .await?;
 

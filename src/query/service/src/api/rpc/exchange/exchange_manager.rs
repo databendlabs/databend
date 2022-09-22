@@ -52,7 +52,6 @@ use crate::interpreters::QueryFragmentsActions;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
-use crate::pipelines::QueryPipelineBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::executor::PipelineBuilder as PipelineBuilderV2;
@@ -284,7 +283,7 @@ impl DataExchangeManager {
                 let mut build_res = query_coordinator.subscribe_fragment(&ctx, fragment_id)?;
 
                 let exchanges = std::mem::take(&mut query_coordinator.statistics_exchanges);
-                let mut statistics_receiver = StatisticsReceiver::create(ctx.clone(), exchanges);
+                let mut statistics_receiver = StatisticsReceiver::create(ctx.clone(), exchanges)?;
                 statistics_receiver.start();
 
                 let statistics_receiver: Mutex<StatisticsReceiver> =
@@ -506,9 +505,7 @@ impl QueryCoordinator {
     pub fn shutdown_query(&mut self) {
         if let Some(query_info) = &self.info {
             if let Some(query_executor) = &query_info.query_executor {
-                if let Err(cause) = query_executor.finish() {
-                    tracing::error!("Cannot shutdown query, because {:?}", cause);
-                }
+                query_executor.finish(None);
             }
         }
     }
@@ -553,14 +550,9 @@ impl QueryCoordinator {
             }
         }
 
-        let query_need_abort = info.query_ctx.query_need_abort();
         let executor_settings = ExecutorSettings::try_create(&info.query_ctx.get_settings())?;
 
-        let executor = PipelineCompleteExecutor::from_pipelines(
-            query_need_abort,
-            pipelines,
-            executor_settings,
-        )?;
+        let executor = PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
 
         self.fragment_exchanges.clear();
         let info_mut = self.info.as_mut().expect("Query info is None");
@@ -675,10 +667,6 @@ impl FragmentCoordinator {
             self.initialized = true;
 
             match &self.payload {
-                FragmentPayload::PlanV1(node) => {
-                    let pipeline_builder = QueryPipelineBuilder::create(ctx);
-                    self.pipeline_build_res = Some(pipeline_builder.finalize(node)?);
-                }
                 FragmentPayload::PlanV2(plan) => {
                     let pipeline_builder = PipelineBuilderV2::create(ctx);
                     self.pipeline_build_res = Some(pipeline_builder.finalize(plan)?);

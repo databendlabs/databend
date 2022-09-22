@@ -16,14 +16,10 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_streams::SendableDataBlockStream;
+use common_planner::MetadataRef;
 
 use super::plan_schedulers::schedule_query_v2;
-use crate::clusters::ClusterHelper;
-use crate::interpreters::stream::ProcessorExecutorStream;
 use crate::interpreters::Interpreter;
-use crate::pipelines::executor::ExecutorSettings;
-use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -31,7 +27,6 @@ use crate::sql::executor::PhysicalPlanBuilder;
 use crate::sql::executor::PipelineBuilder;
 use crate::sql::optimizer::SExpr;
 use crate::sql::BindContext;
-use crate::sql::MetadataRef;
 
 /// Interpret SQL query with ne&w SQL planner
 pub struct SelectInterpreterV2 {
@@ -90,30 +85,9 @@ impl Interpreter for SelectInterpreterV2 {
         self.bind_context.output_schema()
     }
 
-    #[tracing::instrument(level = "debug", name = "select_interpreter_v2_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
-    async fn execute(&self, _ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
-        let build_res = self.build_pipeline().await?;
-
-        // WTF: We need to implement different logic for the HTTP handler
-        if let Some(handle) = self.ctx.get_http_query() {
-            return handle
-                .execute(self.ctx.clone(), build_res, &self.bind_context.columns)
-                .await;
-        }
-
-        let executor_settings = ExecutorSettings::try_create(&self.ctx.get_settings())?;
-
-        Ok(Box::pin(Box::pin(ProcessorExecutorStream::create(
-            PipelinePullingExecutor::from_pipelines(
-                self.ctx.query_need_abort(),
-                build_res,
-                executor_settings,
-            )?,
-        )?)))
-    }
-
     /// This method will create a new pipeline
     /// The QueryPipelineBuilder will use the optimized plan to generate a Pipeline
+    #[tracing::instrument(level = "debug", name = "select_interpreter_v2_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let build_res = self.build_pipeline().await?;
         Ok(build_res)

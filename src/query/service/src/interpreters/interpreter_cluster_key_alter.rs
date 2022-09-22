@@ -15,9 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_legacy_planners::AlterTableClusterKeyPlan;
-use common_meta_types::GrantObject;
-use common_meta_types::UserPrivilegeType;
+use common_planner::plans::AlterTableClusterKeyPlan;
 
 use super::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -43,18 +41,6 @@ impl Interpreter for AlterTableClusterKeyInterpreter {
 
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = &self.plan;
-        self.ctx
-            .get_current_session()
-            .validate_privilege(
-                &GrantObject::Table(
-                    plan.catalog.clone(),
-                    plan.database.clone(),
-                    plan.table.clone(),
-                ),
-                UserPrivilegeType::Alter,
-            )
-            .await?;
-
         let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog(&plan.catalog)?;
 

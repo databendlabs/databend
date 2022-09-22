@@ -17,6 +17,8 @@ use std::ops::Range;
 
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::trusted_len::TrustedLen;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::property::Domain;
 use crate::types::ArgType;
@@ -200,7 +202,7 @@ impl<'a> Iterator for StringIterator<'a> {
 
 unsafe impl<'a> TrustedLen for StringIterator<'a> {}
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StringColumnBuilder {
     pub data: Vec<u8>,
     pub offsets: Vec<u64>,
@@ -283,6 +285,19 @@ impl StringColumnBuilder {
     pub fn build_scalar(self) -> Vec<u8> {
         assert_eq!(self.offsets.len(), 2);
         self.data[(self.offsets[0] as usize)..(self.offsets[1] as usize)].to_vec()
+    }
+
+    #[inline]
+    pub fn may_resize(&self, add_size: usize) -> bool {
+        self.data.len() + add_size > self.data.capacity()
+    }
+
+    /// # Safety
+    pub unsafe fn index_unchecked(&self, row: usize) -> &[u8] {
+        let start = *self.offsets.get_unchecked(row) as usize;
+        let end = *self.offsets.get_unchecked(row + 1) as usize;
+        // soundness: the invariant of the struct
+        self.data.get_unchecked(start..end)
     }
 }
 

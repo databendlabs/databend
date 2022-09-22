@@ -23,14 +23,13 @@ common-io = { path = "../../common/io" }
 
 # Crates.io dependencies
 async-stream = "0.3.3"
-async-trait = "0.1.56"
-chrono-tz = "0.6.1"
-csv-async = "1.2.4"
-futures = "0.3.21"
+async-trait = "0.1.57"
+chrono-tz = "0.6.3"
+futures = "0.3.24"
 parking_lot = "0.12.1"
 pin-project-lite = "0.2.9"
-serde_json = { version = "1.0.81", default-features = false, features = ["preserve_order"] }
+serde_json = { version = "1.0.85", default-features = false, features = ["preserve_order"] }
 tempfile = "3.3.0"
 
 [dev-dependencies]
-opendal = { version = "0.17.0", features = ["layers-retry", "compress"] }
+opendal = { version = "0.17.1", features = ["layers-retry", "compress"] }

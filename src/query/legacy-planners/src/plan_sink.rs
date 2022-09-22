@@ -12,13 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_datavalues::prelude::*;
-use common_meta_app::schema::TableInfo;
 use once_cell::sync::Lazy;
-
-use crate::PlanNode;
 
 pub static SINK_SCHEMA: Lazy<DataSchemaRef> = Lazy::new(|| {
     DataSchemaRefExt::create(vec![
@@ -26,18 +21,3 @@ pub static SINK_SCHEMA: Lazy<DataSchemaRef> = Lazy::new(|| {
         DataField::new("seg_info", Vu8::to_data_type()),
     ])
 });
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct SinkPlan {
-    pub catalog_name: String,
-    pub table_info: TableInfo,
-    pub input: Arc<PlanNode>,
-    pub cast_schema: Option<DataSchemaRef>,
-}
-
-impl SinkPlan {
-    /// Return sink schema
-    pub fn schema(&self) -> DataSchemaRef {
-        SINK_SCHEMA.clone()
-    }
-}

@@ -15,7 +15,8 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_legacy_planners::AlterUserPlan;
+use common_planner::plans::AlterUserPlan;
+use common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -44,9 +45,8 @@ impl Interpreter for AlterUserInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = self.plan.clone();
         let tenant = self.ctx.get_tenant();
-        let user_mgr = self.ctx.get_user_manager();
         if plan.auth_info.is_some() || plan.user_option.is_some() {
-            user_mgr
+            UserApiProvider::instance()
                 .update_user(&tenant, plan.user, plan.auth_info, plan.user_option)
                 .await?;
         }

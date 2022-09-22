@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -30,7 +29,6 @@ pub struct PipelineCompleteExecutor {
 #[allow(dead_code)]
 impl PipelineCompleteExecutor {
     pub fn try_create(
-        query_need_abort: Arc<AtomicBool>,
         pipeline: Pipeline,
         settings: ExecutorSettings,
     ) -> Result<PipelineCompleteExecutor> {
@@ -40,12 +38,11 @@ impl PipelineCompleteExecutor {
             ));
         }
 
-        let executor = PipelineExecutor::create(query_need_abort, pipeline, settings)?;
+        let executor = PipelineExecutor::create(pipeline, settings)?;
         Ok(PipelineCompleteExecutor { executor })
     }
 
     pub fn from_pipelines(
-        query_need_abort: Arc<AtomicBool>,
         pipelines: Vec<Pipeline>,
         settings: ExecutorSettings,
     ) -> Result<Arc<PipelineCompleteExecutor>> {
@@ -57,7 +54,7 @@ impl PipelineCompleteExecutor {
             }
         }
 
-        let executor = PipelineExecutor::from_pipelines(query_need_abort, pipelines, settings)?;
+        let executor = PipelineExecutor::from_pipelines(pipelines, settings)?;
         Ok(Arc::new(PipelineCompleteExecutor { executor }))
     }
 
@@ -65,8 +62,8 @@ impl PipelineCompleteExecutor {
         self.executor.clone()
     }
 
-    pub fn finish(&self) -> Result<()> {
-        self.executor.finish()
+    pub fn finish(&self, cause: Option<ErrorCode>) {
+        self.executor.finish(cause);
     }
 
     pub fn execute(&self) -> Result<()> {
@@ -76,8 +73,6 @@ impl PipelineCompleteExecutor {
 
 impl Drop for PipelineCompleteExecutor {
     fn drop(&mut self) {
-        if let Err(cause) = self.finish() {
-            tracing::warn!("Executor finish is failure {:?}", cause);
-        }
+        self.finish(None);
     }
 }

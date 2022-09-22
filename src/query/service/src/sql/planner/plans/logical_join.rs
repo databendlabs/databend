@@ -16,11 +16,11 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use common_exception::Result;
+use common_planner::IndexType;
 
 use super::ScalarExpr;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::RelationalProperty;
-use crate::sql::planner::IndexType;
 use crate::sql::plans::LogicalOperator;
 use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalOperator;

@@ -5509,7 +5509,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 PURGE = false
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 PURGE = false FORCE = false
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -5541,6 +5541,7 @@ Copy(
         validation_mode: "",
         size_limit: 10,
         purge: false,
+        force: false,
     },
 )
 
@@ -5560,7 +5561,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url='http://127.0.0.1:9900' ) FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 PURGE = false
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 PURGE = false FORCE = false
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -5594,6 +5595,79 @@ Copy(
         validation_mode: "",
         size_limit: 10,
         purge: false,
+        force: false,
+    },
+)
+
+
+---------- Input ----------
+COPY INTO mytable
+                FROM 'https://127.0.0.1:9900';
+---------- Output ---------
+COPY INTO mytable FROM 'https://127.0.0.1:9900/' PURGE = false FORCE = false
+---------- AST ------------
+Copy(
+    CopyStmt {
+        src: UriLocation(
+            UriLocation {
+                protocol: "https",
+                name: "127.0.0.1:9900",
+                path: "/",
+                connection: {},
+            },
+        ),
+        dst: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "mytable",
+                quote: None,
+                span: Ident(10..17),
+            },
+        },
+        files: [],
+        pattern: "",
+        file_format: {},
+        validation_mode: "",
+        size_limit: 0,
+        purge: false,
+        force: false,
+    },
+)
+
+
+---------- Input ----------
+COPY INTO mytable
+                FROM 'https://127.0.0.1:';
+---------- Output ---------
+COPY INTO mytable FROM 'https://127.0.0.1/' PURGE = false FORCE = false
+---------- AST ------------
+Copy(
+    CopyStmt {
+        src: UriLocation(
+            UriLocation {
+                protocol: "https",
+                name: "127.0.0.1",
+                path: "/",
+                connection: {},
+            },
+        ),
+        dst: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "mytable",
+                quote: None,
+                span: Ident(10..17),
+            },
+        },
+        files: [],
+        pattern: "",
+        file_format: {},
+        validation_mode: "",
+        size_limit: 0,
+        purge: false,
+        force: false,
     },
 )
 
@@ -5610,7 +5684,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM @my_stage/ FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 PURGE = false
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 PURGE = false FORCE = false
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -5638,6 +5712,7 @@ Copy(
         validation_mode: "",
         size_limit: 10,
         purge: false,
+        force: false,
     },
 )
 
@@ -5654,7 +5729,7 @@ COPY INTO 's3://mybucket/data.csv'
                 size_limit=10;
 ---------- Output ---------
 COPY INTO 's3://mybucket/data.csv' FROM mytable FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 PURGE = false
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 PURGE = false FORCE = false
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -5686,6 +5761,7 @@ Copy(
         validation_mode: "",
         size_limit: 10,
         purge: false,
+        force: false,
     },
 )
 
@@ -5702,7 +5778,7 @@ COPY INTO @my_stage
                 size_limit=10;
 ---------- Output ---------
 COPY INTO @my_stage/ FROM mytable FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 PURGE = false
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 PURGE = false FORCE = false
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -5730,6 +5806,7 @@ Copy(
         validation_mode: "",
         size_limit: 10,
         purge: false,
+        force: false,
     },
 )
 
@@ -5753,7 +5830,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( aws_key_id='access_key' aws_secret_key='secret_key' master_key='master_key' ) FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 PURGE = false
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 PURGE = false FORCE = false
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -5789,6 +5866,7 @@ Copy(
         validation_mode: "",
         size_limit: 10,
         purge: false,
+        force: false,
     },
 )
 
@@ -5805,7 +5883,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM @external_stage/path/to/file.csv FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 PURGE = false
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 PURGE = false FORCE = false
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -5833,6 +5911,52 @@ Copy(
         validation_mode: "",
         size_limit: 10,
         purge: false,
+        force: false,
+    },
+)
+
+
+---------- Input ----------
+COPY INTO mytable
+                FROM @external_stage/path/to/file.csv
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                force=true;
+---------- Output ---------
+COPY INTO mytable FROM @external_stage/path/to/file.csv FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+' skip_header = '1' type = 'CSV' ) PURGE = false FORCE = true
+---------- AST ------------
+Copy(
+    CopyStmt {
+        src: StageLocation {
+            name: "external_stage",
+            path: "/path/to/file.csv",
+        },
+        dst: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "mytable",
+                quote: None,
+                span: Ident(10..17),
+            },
+        },
+        files: [],
+        pattern: "",
+        file_format: {
+            "field_delimiter": ",",
+            "record_delimiter": "\n",
+            "skip_header": "1",
+            "type": "CSV",
+        },
+        validation_mode: "",
+        size_limit: 0,
+        purge: false,
+        force: true,
     },
 )
 

@@ -22,6 +22,7 @@ use common_exception::Result;
 use common_meta_api::ShareApi;
 use common_meta_app::share::GetShareGrantTenantsReq;
 use common_meta_app::share::ShareNameIdent;
+use common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -51,8 +52,7 @@ impl Interpreter for ShowGrantTenantsOfShareInterpreter {
     }
 
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let user_mgr = self.ctx.get_user_manager();
-        let meta_api = user_mgr.get_meta_store_client();
+        let meta_api = UserApiProvider::instance().get_meta_store_client();
         let tenant = self.ctx.get_tenant();
         let req = GetShareGrantTenantsReq {
             share_name: ShareNameIdent {

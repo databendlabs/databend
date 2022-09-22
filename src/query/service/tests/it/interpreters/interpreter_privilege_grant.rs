@@ -21,6 +21,7 @@ use common_meta_types::PrincipalIdentity;
 use common_meta_types::RoleInfo;
 use common_meta_types::UserGrantSet;
 use common_meta_types::UserInfo;
+use common_users::UserApiProvider;
 use databend_query::interpreters::*;
 use databend_query::sessions::TableContext;
 use databend_query::sql::Planner;
@@ -41,7 +42,7 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
         hash_method: PasswordHashMethod::Sha256,
     };
 
-    let user_mgr = ctx.get_user_manager();
+    let user_mgr = UserApiProvider::instance();
     user_mgr
         .add_user(&tenant, UserInfo::new(name, hostname, auth_info), false)
         .await?;
@@ -78,7 +79,7 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
 
     for tt in tests {
         let (plan, _, _) = planner.plan_sql(&tt.query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
         assert_eq!(executor.name(), "GrantPrivilegeInterpreter");
         let r = match executor.execute(ctx.clone()).await {
             Err(err) => Err(err),

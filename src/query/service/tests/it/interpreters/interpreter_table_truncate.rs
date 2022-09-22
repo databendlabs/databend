@@ -33,7 +33,7 @@ async fn test_truncate_table_interpreter() -> Result<()> {
         ";
 
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
         let _ = executor.execute(ctx.clone()).await?;
     }
 
@@ -41,7 +41,7 @@ async fn test_truncate_table_interpreter() -> Result<()> {
     {
         let query = "INSERT INTO default.a VALUES('1,1', '2,2')";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
         let _ = executor.execute(ctx.clone()).await?;
     }
 
@@ -49,7 +49,7 @@ async fn test_truncate_table_interpreter() -> Result<()> {
     {
         let query = "SELECT * FROM default.a";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
         let stream = executor.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
@@ -66,7 +66,7 @@ async fn test_truncate_table_interpreter() -> Result<()> {
     {
         let query = "TRUNCATE TABLE default.a";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
         assert_eq!(executor.name(), "TruncateTableInterpreter");
 
         let stream = executor.execute(ctx.clone()).await?;
@@ -79,7 +79,7 @@ async fn test_truncate_table_interpreter() -> Result<()> {
     {
         let query = "SELECT * FROM default.a";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
         let stream = executor.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec!["++", "++"];

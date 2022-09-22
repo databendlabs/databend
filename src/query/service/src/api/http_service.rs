@@ -92,12 +92,12 @@ impl HttpService {
 
     fn build_tls(config: &Config) -> Result<RustlsConfig> {
         let certificate = RustlsCertificate::new()
-            .cert(std::fs::read(&config.query.api_tls_server_cert.as_str())?)
-            .key(std::fs::read(&config.query.api_tls_server_key.as_str())?);
+            .cert(std::fs::read(config.query.api_tls_server_cert.as_str())?)
+            .key(std::fs::read(config.query.api_tls_server_key.as_str())?);
         let mut cfg = RustlsConfig::new().fallback(certificate);
         if Path::new(&config.query.api_tls_server_root_ca_cert).exists() {
             cfg = cfg.client_auth_required(std::fs::read(
-                &config.query.api_tls_server_root_ca_cert.as_str(),
+                config.query.api_tls_server_root_ca_cert.as_str(),
             )?);
         }
         Ok(cfg)

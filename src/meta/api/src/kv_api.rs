@@ -18,9 +18,9 @@ use async_trait::async_trait;
 use common_base::base::replace_nth_char;
 use common_exception::ErrorCode;
 use common_meta_types::GetKVReply;
+use common_meta_types::KVAppError;
 use common_meta_types::ListKVReply;
 use common_meta_types::MGetKVReply;
-use common_meta_types::MetaError;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKVReply;
@@ -71,37 +71,37 @@ pub fn get_start_and_end_of_prefix(prefix: &str) -> common_exception::Result<(St
 
 #[async_trait]
 pub trait KVApi: Send + Sync {
-    async fn upsert_kv(&self, req: UpsertKVReq) -> Result<UpsertKVReply, MetaError>;
+    async fn upsert_kv(&self, req: UpsertKVReq) -> Result<UpsertKVReply, KVAppError>;
 
-    async fn get_kv(&self, key: &str) -> Result<GetKVReply, MetaError>;
+    async fn get_kv(&self, key: &str) -> Result<GetKVReply, KVAppError>;
 
     // mockall complains about AsRef... so we use String here
-    async fn mget_kv(&self, keys: &[String]) -> Result<MGetKVReply, MetaError>;
+    async fn mget_kv(&self, keys: &[String]) -> Result<MGetKVReply, KVAppError>;
 
-    async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, MetaError>;
+    async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, KVAppError>;
 
-    async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, MetaError>;
+    async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, KVAppError>;
 }
 
 #[async_trait]
 impl<U: KVApi, T: Deref<Target = U> + Send + Sync> KVApi for T {
-    async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, MetaError> {
+    async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, KVAppError> {
         self.deref().upsert_kv(act).await
     }
 
-    async fn get_kv(&self, key: &str) -> Result<GetKVReply, MetaError> {
+    async fn get_kv(&self, key: &str) -> Result<GetKVReply, KVAppError> {
         self.deref().get_kv(key).await
     }
 
-    async fn mget_kv(&self, key: &[String]) -> Result<MGetKVReply, MetaError> {
+    async fn mget_kv(&self, key: &[String]) -> Result<MGetKVReply, KVAppError> {
         self.deref().mget_kv(key).await
     }
 
-    async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, MetaError> {
+    async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, KVAppError> {
         self.deref().prefix_list_kv(prefix).await
     }
 
-    async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, MetaError> {
+    async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, KVAppError> {
         self.deref().transaction(txn).await
     }
 }

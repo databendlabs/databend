@@ -82,7 +82,7 @@ where
 
 impl<const IS_TRUNC: bool> Function for RoundingFunction<IS_TRUNC> {
     fn name(&self) -> &str {
-        &*self.display_name
+        &self.display_name
     }
 
     fn return_type(&self) -> DataTypeImpl {
@@ -174,7 +174,7 @@ pub struct RoundingFunction<const IS_TRUNC: bool> {
 impl<const IS_TRUNC: bool> RoundingFunction<IS_TRUNC> {
     pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         for arg in args {
-            assert_numeric(*arg)?;
+            assert_numeric(arg)?;
         }
         Ok(Box::new(Self {
             display_name: display_name.to_string(),

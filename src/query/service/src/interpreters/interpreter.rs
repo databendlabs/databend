@@ -56,7 +56,6 @@ pub trait Interpreter: Sync + Send {
         }
 
         let settings = ctx.get_settings();
-        let query_need_abort = ctx.query_need_abort();
         let executor_settings = ExecutorSettings::try_create(&settings)?;
         build_res.set_max_threads(settings.get_max_threads()? as usize);
 
@@ -64,12 +63,10 @@ pub trait Interpreter: Sync + Send {
             let mut pipelines = build_res.sources_pipelines;
             pipelines.push(build_res.main_pipeline);
 
-            let complete_executor = PipelineCompleteExecutor::from_pipelines(
-                query_need_abort,
-                pipelines,
-                executor_settings,
-            )?;
+            let complete_executor =
+                PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
 
+            ctx.set_executor(Arc::downgrade(&complete_executor.get_inner()));
             complete_executor.execute()?;
             return Ok(Box::pin(DataBlockStream::create(
                 Arc::new(DataSchema::new(vec![])),
@@ -78,12 +75,17 @@ pub trait Interpreter: Sync + Send {
             )));
         }
 
+        // WTF: We need to implement different logic for the HTTP handler
+        if let Some(handle) = ctx.get_http_query() {
+            return handle.execute(ctx.clone(), build_res, self.schema()).await;
+        }
+
+        let pulling_executor =
+            PipelinePullingExecutor::from_pipelines(build_res, executor_settings)?;
+
+        ctx.set_executor(Arc::downgrade(&pulling_executor.get_inner()));
         Ok(Box::pin(Box::pin(ProcessorExecutorStream::create(
-            PipelinePullingExecutor::from_pipelines(
-                ctx.query_need_abort(),
-                build_res,
-                executor_settings,
-            )?,
+            pulling_executor,
         )?)))
     }
 

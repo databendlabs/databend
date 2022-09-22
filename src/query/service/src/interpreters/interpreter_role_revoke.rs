@@ -15,8 +15,9 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_legacy_planners::RevokeRolePlan;
 use common_meta_types::PrincipalIdentity;
+use common_planner::plans::RevokeRolePlan;
+use common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -45,15 +46,14 @@ impl Interpreter for RevokeRoleInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = self.plan.clone();
         let tenant = self.ctx.get_tenant();
-        let user_mgr = self.ctx.get_user_manager();
         match plan.principal {
             PrincipalIdentity::User(user) => {
-                user_mgr
+                UserApiProvider::instance()
                     .revoke_role_from_user(&tenant, user, plan.role)
                     .await?;
             }
             PrincipalIdentity::Role(role) => {
-                user_mgr
+                UserApiProvider::instance()
                     .revoke_role_from_role(&tenant, role.clone(), plan.role)
                     .await?;
             }

@@ -90,13 +90,12 @@ impl PipelinePushingExecutor {
 
     pub fn try_create(
         ctx: Arc<QueryContext>,
-        query_need_abort: Arc<AtomicBool>,
         mut pipeline: Pipeline,
         settings: ExecutorSettings,
     ) -> Result<PipelinePushingExecutor> {
         let state = State::create();
         let sender = Self::wrap_pipeline(ctx, &mut pipeline)?;
-        let executor = PipelineExecutor::create(query_need_abort, pipeline, settings)?;
+        let executor = PipelineExecutor::create(pipeline, settings)?;
         Ok(PipelinePushingExecutor {
             state,
             sender,
@@ -129,9 +128,9 @@ impl PipelinePushingExecutor {
         self.executor.clone()
     }
 
-    pub fn finish(&self) -> Result<()> {
+    pub fn finish(&self, cause: Option<ErrorCode>) {
         self.state.finished.store(true, Ordering::Release);
-        self.executor.finish()
+        self.executor.finish(cause);
     }
 
     pub fn push_data(&mut self, data: DataBlock) -> Result<()> {
@@ -163,9 +162,7 @@ impl Drop for PipelinePushingExecutor {
         if !self.state.finished.load(Ordering::Relaxed)
             && !self.state.has_throw_error.load(Ordering::Relaxed)
         {
-            if let Err(cause) = self.finish() {
-                tracing::warn!("Executor finish is failure {:?}", cause);
-            }
+            self.finish(None);
         }
 
         if let Err(cause) = self.sender.send(None) {

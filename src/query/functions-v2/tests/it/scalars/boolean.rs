@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,7 +34,11 @@ fn test_boolean() {
 
 fn test_and(file: &mut impl Write) {
     run_ast(file, "true AND false", &[]);
-    run_ast(file, "null AND false", &[]);
+    run_ast(file, "true AND null", &[]);
+    run_ast(file, "true AND true", &[]);
+    run_ast(file, "false AND false", &[]);
+    run_ast(file, "false AND null", &[]);
+    run_ast(file, "false AND true", &[]);
 }
 
 fn test_not(file: &mut impl Write) {

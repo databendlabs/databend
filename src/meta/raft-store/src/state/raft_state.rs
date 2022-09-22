@@ -16,8 +16,8 @@ use common_meta_sled_store::openraft;
 use common_meta_sled_store::sled;
 use common_meta_sled_store::AsKeySpace;
 use common_meta_sled_store::SledTree;
-use common_meta_types::MetaError;
-use common_meta_types::MetaResult;
+use common_meta_types::MetaStartupError;
+use common_meta_types::MetaStorageError;
 use common_meta_types::MetaStorageResult;
 use common_meta_types::NodeId;
 use openraft::storage::HardState;
@@ -64,7 +64,7 @@ impl RaftState {
         config: &RaftConfig,
         open: Option<()>,
         create: Option<()>,
-    ) -> MetaResult<RaftState> {
+    ) -> Result<RaftState, MetaStartupError> {
         info!(?config);
         info!("open: {:?}, create: {:?}", open, create);
 
@@ -80,7 +80,7 @@ impl RaftState {
             match (open, create) {
                 (Some(_), _) => (curr_id, true),
                 (None, Some(_)) => {
-                    return Err(MetaError::MetaStoreAlreadyExists(curr_id));
+                    return Err(MetaStartupError::MetaStoreAlreadyExists(curr_id));
                 }
                 (None, None) => panic!("no open no create"),
             }
@@ -88,7 +88,7 @@ impl RaftState {
             match (open, create) {
                 (Some(_), Some(_)) => (config.id, false),
                 (Some(_), None) => {
-                    return Err(MetaError::MetaStoreNotFound);
+                    return Err(MetaStartupError::MetaStoreNotFound);
                 }
                 (None, Some(_)) => (config.id, false),
                 (None, None) => panic!("no open no create"),
@@ -105,7 +105,7 @@ impl RaftState {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn set_node_id(&self, id: NodeId) -> MetaResult<()> {
+    pub async fn set_node_id(&self, id: NodeId) -> Result<(), MetaStorageError> {
         let state = self.state();
         state
             .insert(&RaftStateKey::Id, &RaftStateValue::NodeId(id))
@@ -116,7 +116,7 @@ impl RaftState {
     /// Initialize a raft state. The only thing to do is to persist the node id
     /// so that next time opening it the caller knows it is initialized.
     #[tracing::instrument(level = "debug", skip(self))]
-    async fn init(&self) -> MetaResult<()> {
+    async fn init(&self) -> Result<(), MetaStorageError> {
         self.set_node_id(self.id).await
     }
 

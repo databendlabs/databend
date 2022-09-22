@@ -15,7 +15,8 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_legacy_planners::DropUserPlan;
+use common_planner::plans::DropUserPlan;
+use common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -44,8 +45,7 @@ impl Interpreter for DropUserInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = self.plan.clone();
         let tenant = self.ctx.get_tenant();
-        let user_mgr = self.ctx.get_user_manager();
-        user_mgr
+        UserApiProvider::instance()
             .drop_user(&tenant, plan.user, plan.if_exists)
             .await?;
 

@@ -33,12 +33,22 @@ use common_datavalues::TypeFactory;
 use common_datavalues::Vu8;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::OptimizeTableAction;
 use common_legacy_planners::*;
 use common_meta_app::schema::TableMeta;
+use common_planner::plans::AlterTableClusterKeyPlan;
+use common_planner::plans::DescribeTablePlan;
+use common_planner::plans::DropTableClusterKeyPlan;
+use common_planner::plans::DropTablePlan;
+use common_planner::plans::ExistsTablePlan;
+use common_planner::plans::OptimizeTableAction;
+use common_planner::plans::OptimizeTablePlan;
+use common_planner::plans::RenameTableEntity;
+use common_planner::plans::RenameTablePlan;
+use common_planner::plans::ShowCreateTablePlan;
+use common_planner::plans::TruncateTablePlan;
+use common_planner::plans::UndropTablePlan;
 use tracing::debug;
 
-use crate::catalogs::DatabaseCatalog;
 use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::Binder;
 use crate::sql::binder::Visibility;
@@ -141,7 +151,11 @@ impl<'a> Binder {
             .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
 
-        if DatabaseCatalog::is_case_insensitive_db(database.as_str()) {
+        if self
+            .ctx
+            .get_catalog(&self.ctx.get_current_catalog())?
+            .is_case_insensitive_db(database.as_str())
+        {
             database = database.to_uppercase();
         }
 

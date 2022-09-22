@@ -14,12 +14,12 @@
 
 use common_catalog::table::TableStatistics;
 use common_exception::Result;
+use common_planner::IndexType;
 use itertools::Itertools;
 
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::RelationalProperty;
-use crate::sql::planner::IndexType;
 use crate::sql::plans::LogicalOperator;
 use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalOperator;
@@ -29,7 +29,11 @@ use crate::sql::plans::SortItem;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Prewhere {
-    pub columns: ColumnSet,
+    // columns needed to be output after prewhere scan
+    pub output_columns: ColumnSet,
+    // columns needed to conduct prewhere filter
+    pub prewhere_columns: ColumnSet,
+    // prewhere filter predicates
     pub predicates: Vec<Scalar>,
 }
 

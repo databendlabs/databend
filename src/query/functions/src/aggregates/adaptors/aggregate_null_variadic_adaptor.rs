@@ -27,14 +27,12 @@ use crate::aggregates::AggregateFunctionRef;
 use crate::aggregates::StateAddr;
 
 #[derive(Clone)]
-pub struct AggregateNullVariadicAdaptor<const NULLABLE_RESULT: bool, const STKIP_NULL: bool> {
+pub struct AggregateNullVariadicAdaptor<const NULLABLE_RESULT: bool> {
     nested: AggregateFunctionRef,
     size_of_data: usize,
 }
 
-impl<const NULLABLE_RESULT: bool, const STKIP_NULL: bool>
-    AggregateNullVariadicAdaptor<NULLABLE_RESULT, STKIP_NULL>
-{
+impl<const NULLABLE_RESULT: bool> AggregateNullVariadicAdaptor<NULLABLE_RESULT> {
     pub fn create(nested: AggregateFunctionRef) -> AggregateFunctionRef {
         let size_of_data = if NULLABLE_RESULT {
             let layout = nested.state_layout();
@@ -75,8 +73,8 @@ impl<const NULLABLE_RESULT: bool, const STKIP_NULL: bool>
     }
 }
 
-impl<const NULLABLE_RESULT: bool, const STKIP_NULL: bool> AggregateFunction
-    for AggregateNullVariadicAdaptor<NULLABLE_RESULT, STKIP_NULL>
+impl<const NULLABLE_RESULT: bool> AggregateFunction
+    for AggregateNullVariadicAdaptor<NULLABLE_RESULT>
 {
     fn name(&self) -> &str {
         "AggregateNullVariadicAdaptor"
@@ -97,7 +95,7 @@ impl<const NULLABLE_RESULT: bool, const STKIP_NULL: bool> AggregateFunction
     #[inline]
     fn state_layout(&self) -> Layout {
         let layout = self.nested.state_layout();
-        let add = if NULLABLE_RESULT { 1 } else { 0 };
+        let add = usize::from(NULLABLE_RESULT);
         Layout::from_size_align(layout.size() + add, layout.align()).unwrap()
     }
 
@@ -258,9 +256,7 @@ impl<const NULLABLE_RESULT: bool, const STKIP_NULL: bool> AggregateFunction
     }
 }
 
-impl<const NULLABLE_RESULT: bool, const STKIP_NULL: bool> fmt::Display
-    for AggregateNullVariadicAdaptor<NULLABLE_RESULT, STKIP_NULL>
-{
+impl<const NULLABLE_RESULT: bool> fmt::Display for AggregateNullVariadicAdaptor<NULLABLE_RESULT> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "AggregateNullVariadicAdaptor")
     }

@@ -67,16 +67,16 @@ use common_meta_app::share::ShareId;
 use common_meta_app::share::ShareMeta;
 use common_meta_app::share::ShareNameIdent;
 use common_meta_types::GCDroppedDataReq;
+use common_meta_types::KVAppError;
 use common_meta_types::MatchSeq;
-use common_meta_types::MetaError;
 use common_meta_types::Operation;
 use common_meta_types::UpsertKVReq;
 use tracing::debug;
 use tracing::info;
 
-use crate::get_kv_data;
 use crate::is_all_db_data_removed;
 use crate::serialize_struct;
+use crate::testing::get_kv_data;
 use crate::ApiBuilder;
 use crate::AsKVApi;
 use crate::KVApi;
@@ -176,7 +176,7 @@ async fn upsert_test_data(
     kv_api: &(impl KVApi + ?Sized),
     key: &impl KVApiKey,
     value: Vec<u8>,
-) -> Result<u64, MetaError> {
+) -> Result<u64, KVAppError> {
     let res = kv_api
         .upsert_kv(UpsertKVReq {
             key: key.to_key(),
@@ -193,7 +193,7 @@ async fn upsert_test_data(
 async fn delete_test_data(
     kv_api: &(impl KVApi + ?Sized),
     key: &impl KVApiKey,
-) -> Result<(), MetaError> {
+) -> Result<(), KVAppError> {
     let _res = kv_api
         .upsert_kv(UpsertKVReq {
             key: key.to_key(),
@@ -1522,7 +1522,7 @@ impl SchemaApiTestSuite {
                 let ident = TableIdent::new(tb_id, seq);
 
                 let want = TableInfo {
-                    ident: ident.clone(),
+                    ident,
                     desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
                     name: tbl_name.into(),
                     meta: table_meta(created_on),
@@ -1549,7 +1549,7 @@ impl SchemaApiTestSuite {
 
             let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
             let want = TableInfo {
-                ident: tb_ident_2.clone(),
+                ident: tb_ident_2,
                 desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
                 name: tbl_name.into(),
                 meta: table_meta(created_on),
@@ -1584,7 +1584,7 @@ impl SchemaApiTestSuite {
 
             let got = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
             let want = TableInfo {
-                ident: tb_ident_2.clone(),
+                ident: tb_ident_2,
                 desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
                 name: tbl_name.into(),
                 meta: table_meta(created_on),
@@ -1784,7 +1784,7 @@ impl SchemaApiTestSuite {
             let cur_db = mt.get_database(Self::req_get_db(tenant, db1_name)).await?;
             assert!(old_db.ident.seq < cur_db.ident.seq);
             let got = mt.get_table((tenant, db1_name, tb2_name).into()).await?;
-            got.ident.clone()
+            got.ident
         };
 
         info!("--- rename table, ok");
@@ -1796,7 +1796,7 @@ impl SchemaApiTestSuite {
 
             let got = mt.get_table((tenant, db1_name, tb3_name).into()).await?;
             let want = TableInfo {
-                ident: tb_ident.clone(),
+                ident: tb_ident,
                 desc: format!("'{}'.'{}'.'{}'", tenant, db1_name, tb3_name),
                 name: tb3_name.into(),
                 meta: table_meta(created_on),
@@ -1842,7 +1842,7 @@ impl SchemaApiTestSuite {
             let got = mt.get_table((tenant, db1_name, tb2_name).into()).await?;
             assert_ne!(tb_ident.table_id, got.ident.table_id);
             assert_ne!(tb_ident.seq, got.ident.seq);
-            got.ident.clone()
+            got.ident
         };
 
         info!("--- db1,tb2(no_nil) -> db1,tb3(no_nil), error");
@@ -2010,7 +2010,7 @@ impl SchemaApiTestSuite {
                 let ident = TableIdent::new(tb_id, seq);
 
                 let want = TableInfo {
-                    ident: ident.clone(),
+                    ident,
                     desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
                     name: tbl_name.into(),
                     meta: table_meta(created_on),
@@ -2140,7 +2140,7 @@ impl SchemaApiTestSuite {
                 let ident = TableIdent::new(tb_id, seq);
 
                 let want = TableInfo {
-                    ident: ident.clone(),
+                    ident,
                     desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
                     name: tbl_name.into(),
                     meta: table_meta(created_on),
@@ -2383,11 +2383,11 @@ impl SchemaApiTestSuite {
             let id_key = DatabaseId { db_id: *db_id };
             let id_mapping = DatabaseIdToName { db_id: *db_id };
 
-            let meta_res: Result<DatabaseMeta, MetaError> =
+            let meta_res: Result<DatabaseMeta, KVAppError> =
                 get_kv_data(mt.as_kv_api(), &id_key).await;
             assert!(meta_res.is_err());
 
-            let mapping_res: Result<DatabaseNameIdent, MetaError> =
+            let mapping_res: Result<DatabaseNameIdent, KVAppError> =
                 get_kv_data(mt.as_kv_api(), &id_mapping).await;
             assert!(mapping_res.is_err());
         }
@@ -2561,9 +2561,9 @@ impl SchemaApiTestSuite {
             let id_mapping = TableIdToName {
                 table_id: *table_id,
             };
-            let meta_res: Result<DatabaseMeta, MetaError> =
+            let meta_res: Result<DatabaseMeta, KVAppError> =
                 get_kv_data(mt.as_kv_api(), &id_key).await;
-            let mapping_res: Result<DBIdTableName, MetaError> =
+            let mapping_res: Result<DBIdTableName, KVAppError> =
                 get_kv_data(mt.as_kv_api(), &id_mapping).await;
             assert!(meta_res.is_err());
             assert!(mapping_res.is_err());
@@ -2576,7 +2576,7 @@ impl SchemaApiTestSuite {
                 file: "file".to_string(),
             };
 
-            let resp: Result<TableCopiedFileInfo, MetaError> =
+            let resp: Result<TableCopiedFileInfo, KVAppError> =
                 get_kv_data(mt.as_kv_api(), &key).await;
             assert!(resp.is_err());
         }
@@ -3128,7 +3128,7 @@ impl SchemaApiTestSuite {
                 let ident = TableIdent::new(tb_id, seq);
 
                 let want = TableInfo {
-                    ident: ident.clone(),
+                    ident,
                     desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
                     name: tbl_name.into(),
                     meta: table_meta(created_on),

@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,13 +26,14 @@ use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
 use common_expression::Value;
 use common_functions_v2::scalars::builtin_functions;
+use itertools::Itertools;
 
 mod arithmetic;
 mod boolean;
 mod control;
 mod datetime;
 mod math;
-mod parser;
+pub(crate) mod parser;
 mod string;
 mod variant;
 
@@ -117,6 +118,23 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
                 Value::Column(output_col) => {
                     test_arrow_conversion(&output_col);
 
+                    // Only display the used input columns
+                    let used_columns = raw_expr
+                        .column_refs()
+                        .into_iter()
+                        .sorted()
+                        .collect::<Vec<_>>();
+                    let input_domains = used_columns
+                        .iter()
+                        .cloned()
+                        .map(|i| input_domains[i].clone())
+                        .collect::<Vec<_>>();
+                    let columns = used_columns
+                        .iter()
+                        .cloned()
+                        .map(|i| columns[i].clone())
+                        .collect::<Vec<_>>();
+
                     let mut table = Table::new();
                     table.load_preset("||--+-++|    ++++++");
 
@@ -150,7 +168,7 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
                     let mut table = Table::new();
                     table.load_preset("||--+-++|    ++++++");
 
-                    table.set_header(&["Column", "Data"]);
+                    table.set_header(["Column", "Data"]);
 
                     for (name, _, col) in columns.iter() {
                         table.add_row(&[name.to_string(), format!("{col:?}")]);

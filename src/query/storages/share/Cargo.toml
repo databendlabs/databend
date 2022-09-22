@@ -16,9 +16,9 @@ common-exception = { path = "../../../common/exception" }
 common-meta-app = { path = "../../../meta/app" }
 common-storages-util = { path = "../util" }
 
-opendal = { version = "0.17.0", features = ["layers-retry"] }
-serde = { version = "1.0.137", features = ["derive"] }
-serde_json = "1.0.81"
+opendal = { version = "0.17.1", features = ["layers-retry"] }
+serde = { version = "1.0.144", features = ["derive"] }
+serde_json = "1.0.85"
 
 [dev-dependencies]
 goldenfile = "1.4"

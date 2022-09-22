@@ -20,8 +20,10 @@ use common_datavalues::DataTypeImpl;
 use common_datavalues::NullableType;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planner::IndexType;
+use common_planner::MetadataRef;
 
-use crate::sql::binder::wrap_cast_if_needed;
+use crate::sql::binder::wrap_cast;
 use crate::sql::binder::JoinPredicate;
 use crate::sql::binder::Visibility;
 use crate::sql::optimizer::heuristic::subquery_rewriter::FlattenInfo;
@@ -30,7 +32,6 @@ use crate::sql::optimizer::heuristic::subquery_rewriter::UnnestResult;
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::SExpr;
-use crate::sql::planner::IndexType;
 use crate::sql::plans::Aggregate;
 use crate::sql::plans::AggregateFunction;
 use crate::sql::plans::AggregateMode;
@@ -55,7 +56,6 @@ use crate::sql::plans::SubqueryExpr;
 use crate::sql::plans::SubqueryType;
 use crate::sql::plans::UnionAll;
 use crate::sql::ColumnBinding;
-use crate::sql::MetadataRef;
 use crate::sql::ScalarExpr;
 
 /// Decorrelate subqueries inside `s_expr`.
@@ -172,9 +172,14 @@ impl SubqueryRewriter {
                 }
 
                 JoinPredicate::Both { left, right } => {
+                    if left.data_type().eq(&right.data_type()) {
+                        left_conditions.push(left.clone());
+                        right_conditions.push(right.clone());
+                        continue;
+                    }
                     let join_type = compare_coercion(&left.data_type(), &right.data_type())?;
-                    let left = wrap_cast_if_needed(left.clone(), &join_type);
-                    let right = wrap_cast_if_needed(right.clone(), &join_type);
+                    let left = wrap_cast(left.clone(), &join_type);
+                    let right = wrap_cast(right.clone(), &join_type);
                     left_conditions.push(left);
                     right_conditions.push(right);
                 }
@@ -438,12 +443,12 @@ impl SubqueryRewriter {
                 self.derived_columns.insert(
                     *correlated_column,
                     metadata.add_column(
-                        column_entry.name.clone(),
-                        if let DataTypeImpl::Nullable(_) = column_entry.data_type {
-                            column_entry.data_type.clone()
+                        column_entry.name().to_string(),
+                        if let DataTypeImpl::Nullable(_) = column_entry.data_type() {
+                            column_entry.data_type().clone()
                         } else {
                             DataTypeImpl::Nullable(NullableType::create(
-                                column_entry.data_type.clone(),
+                                column_entry.data_type().clone(),
                             ))
                         },
                         None,
@@ -490,8 +495,8 @@ impl SubqueryRewriter {
                                 database_name: None,
                                 table_name: None,
                                 column_name: "".to_string(),
-                                index: column_entry.column_index,
-                                data_type: Box::from(column_entry.data_type.clone()),
+                                index: column_entry.index(),
+                                data_type: Box::from(column_entry.data_type().clone()),
                                 visibility: Visibility::Visible,
                             },
                         })
@@ -524,7 +529,7 @@ impl SubqueryRewriter {
                         table_name: None,
                         column_name: format!("subquery_{}", derived_column),
                         index: *derived_column,
-                        data_type: Box::from(column_entry.data_type.clone()),
+                        data_type: Box::from(column_entry.data_type().clone()),
                         visibility: Visibility::Visible,
                     };
                     items.push(ScalarItem {
@@ -593,7 +598,7 @@ impl SubqueryRewriter {
                             table_name: None,
                             column_name: format!("subquery_{}", derived_column),
                             index: *derived_column,
-                            data_type: Box::from(column_entry.data_type.clone()),
+                            data_type: Box::from(column_entry.data_type().clone()),
                             visibility: Visibility::Visible,
                         }
                     };
@@ -762,7 +767,7 @@ impl SubqueryRewriter {
             let data_type = {
                 let metadata = self.metadata.read();
                 let column_entry = metadata.column(*correlated_column);
-                column_entry.data_type.clone()
+                column_entry.data_type().clone()
             };
             let right_column = Scalar::BoundColumnRef(BoundColumnRef {
                 column: ColumnBinding {

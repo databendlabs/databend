@@ -12,45 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[allow(clippy::module_inception)]
+mod cost;
 mod cost_model;
 
-use std::ops::Add;
-
-use common_exception::Result;
+pub use cost::Cost;
+pub use cost::CostContext;
+pub use cost::CostModel;
 pub use cost_model::DefaultCostModel;
-
-use super::MExpr;
-use super::Memo;
-use crate::sql::planner::IndexType;
-
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-pub struct Cost(pub f64);
-
-impl<T> From<T> for Cost
-where T: Into<f64>
-{
-    fn from(t: T) -> Self {
-        Cost(t.into())
-    }
-}
-
-impl Add for Cost {
-    type Output = Self;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        Cost(self.0 + rhs.0)
-    }
-}
-
-pub trait CostModel {
-    /// Compute cost of given `MExpr`(children are not encapsulated).
-    fn compute_cost(&self, memo: &Memo, m_expr: &MExpr) -> Result<Cost>;
-}
-
-/// Context of best cost within a group.
-#[derive(Debug, Clone)]
-pub struct CostContext {
-    pub group_index: IndexType,
-    pub expr_index: IndexType,
-    pub cost: Cost,
-}

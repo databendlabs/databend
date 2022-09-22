@@ -155,7 +155,7 @@ It's really simple, `S: AsPrimitive<f64>` means we can accept a primitive value 
 ```rust
 impl Function for SqrtFunction {
     fn name(&self) -> &str {
-        &*self.display_name
+        &self.display_name
     }
 
     fn return_type(&self) -> DataTypeImpl {

@@ -15,8 +15,8 @@
 use std::fmt;
 use std::str::FromStr;
 
-use common_datavalues::chrono::DateTime;
-use common_datavalues::chrono::Utc;
+use chrono::DateTime;
+use chrono::Utc;
 use common_storage::StorageParams;
 
 use crate::UserIdentity;

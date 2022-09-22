@@ -15,7 +15,8 @@
 use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_types::TenantQuota;
-use databend_query::interpreters::InterpreterFactoryV2;
+use common_users::UserApiProvider;
+use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::TableContext;
 use databend_query::sql::*;
 use futures::StreamExt;
@@ -30,7 +31,7 @@ async fn test_user_stage_interpreter() -> Result<()> {
     {
         let query = "CREATE STAGE test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z')";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
         assert_eq!(executor.name(), "CreateUserStageInterpreter");
         let mut stream = executor.execute(ctx.clone()).await?;
         while let Some(_block) = stream.next().await {}
@@ -40,7 +41,7 @@ async fn test_user_stage_interpreter() -> Result<()> {
     {
         let query = "DESC STAGE test_stage";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
         let mut stream = executor.execute(ctx.clone()).await?;
         let mut blocks = vec![];
 
@@ -50,18 +51,18 @@ async fn test_user_stage_interpreter() -> Result<()> {
 
         common_datablocks::assert_blocks_eq(
             vec![
-                "+------------+------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------+-----------------+--------------------+---------+",
-                "| name       | stage_type | stage_params                                                                                                                                                                                                                                                                          | copy_options                                                | file_format_options                                                                                                | number_of_files | creator            | comment |",
-                "+------------+------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------+-----------------+--------------------+---------+",
-                "| test_stage | External   | StageParams { storage: S3(StorageS3Config { endpoint_url: \"https://s3.amazonaws.com\", region: \"\", bucket: \"load\", root: \"/files/\", disable_credential_loader: true, enable_virtual_host_style: false, access_key_id: \"******b3c\", secret_access_key: \"******y6z\", master_key: \"\" }) } | CopyOptions { on_error: None, size_limit: 0, purge: false } | FileFormatOptions { format: Csv, skip_header: 0, field_delimiter: \",\", record_delimiter: \"\\n\", compression: None } | NULL            | 'root'@'127.0.0.1' |         |",
-                "+------------+------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------+-----------------+--------------------+---------+",
+                "+------------+------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------+-----------------+--------------------+---------+",
+                "| name       | stage_type | stage_params                                                                                                                                                                                                                                                                                              | copy_options                                                | file_format_options                                                                                                | number_of_files | creator            | comment |",
+                "+------------+------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------+-----------------+--------------------+---------+",
+                "| test_stage | External   | StageParams { storage: S3(StorageS3Config { endpoint_url: \"https://s3.amazonaws.com\", region: \"\", bucket: \"load\", root: \"/files/\", disable_credential_loader: true, enable_virtual_host_style: false, access_key_id: \"******b3c\", secret_access_key: \"******y6z\", security_token: \"\", master_key: \"\" }) } | CopyOptions { on_error: None, size_limit: 0, purge: false } | FileFormatOptions { format: Csv, skip_header: 0, field_delimiter: \",\", record_delimiter: \"\\n\", compression: None } | NULL            | 'root'@'127.0.0.1' |         |",
+                "+------------+------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------+-----------------+--------------------+---------+",
             ],
             &blocks,
         );
     }
 
     let tenant = ctx.get_tenant();
-    let user_mgr = ctx.get_user_manager();
+    let user_mgr = UserApiProvider::instance();
     let stage = user_mgr.get_stage(&tenant, "test_stage").await;
     assert!(stage.is_ok());
 
@@ -75,7 +76,7 @@ async fn test_user_stage_interpreter() -> Result<()> {
         quota_api.set_quota(&quota, None).await?;
         let query = "CREATE STAGE test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z')";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
         assert_eq!(executor.name(), "CreateUserStageInterpreter");
         let res = executor.execute(ctx.clone()).await;
         assert!(res.is_err());
@@ -89,7 +90,7 @@ async fn test_user_stage_interpreter() -> Result<()> {
     {
         let query = "DROP STAGE if exists test_stage";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
         assert_eq!(executor.name(), "DropUserStageInterpreter");
 
         let mut stream = executor.execute(ctx.clone()).await?;

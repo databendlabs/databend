@@ -21,11 +21,11 @@ use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
+use common_planner::IndexType;
 
 use crate::sql::binder::ColumnBinding;
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::SExpr;
-use crate::sql::planner::IndexType;
 
 pub trait ScalarExpr {
     /// Get return type and nullability
@@ -511,7 +511,7 @@ impl ScalarExpr for CastExpr {
     }
 
     fn is_deterministic(&self) -> bool {
-        true
+        self.argument.is_deterministic()
     }
 }
 

@@ -15,6 +15,7 @@
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_meta_types::MetaId;
+use common_pipeline_core::Pipe;
 
 use super::Plan;
 
@@ -22,8 +23,11 @@ use super::Plan;
 pub enum InsertInputSource {
     #[serde(skip)]
     SelectPlan(Box<Plan>),
-    StreamingWithFormat(String),
-    Values(InsertValueBlock),
+    // From outside streaming source
+    #[serde(skip)]
+    StreamingWithFormat(String, Pipe),
+    // From cloned String and format
+    StrWithFormat((String, String)),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
@@ -64,8 +68,8 @@ impl Insert {
     pub fn format(&self) -> Option<&str> {
         match &self.source {
             InsertInputSource::SelectPlan(_) => None,
-            InsertInputSource::StreamingWithFormat(v) => Some(v.as_str()),
-            InsertInputSource::Values(_) => Some("values"),
+            InsertInputSource::StreamingWithFormat(v, _) => Some(v.as_str()),
+            InsertInputSource::StrWithFormat((_, v)) => Some(v.as_str()),
         }
     }
 }

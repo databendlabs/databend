@@ -18,11 +18,11 @@ use common_ast::ast::PresignStmt;
 use common_exception::Result;
 use time::Duration;
 
+use super::copy::parse_stage_location_v2;
 use crate::sql::binder::Binder;
 use crate::sql::plans::Plan;
 use crate::sql::plans::PresignAction;
 use crate::sql::plans::PresignPlan;
-use crate::sql::statements::parse_stage_location_v2;
 use crate::sql::BindContext;
 
 impl<'a> Binder {

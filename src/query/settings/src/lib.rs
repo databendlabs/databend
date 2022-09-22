@@ -22,11 +22,13 @@ use std::str;
 use std::sync::Arc;
 
 use common_ast::Dialect;
+use common_base::base::GlobalIORuntime;
+use common_base::base::TrySpawn;
 use common_config::Config;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::UserSetting;
+use common_meta_types::UserSettingValue;
 use common_users::UserApiProvider;
 use itertools::Itertools;
 use parking_lot::RwLock;
@@ -54,7 +56,7 @@ impl Debug for ScopeLevel {
 #[derive(Clone, Debug)]
 pub struct SettingValue {
     // Default value of this setting.
-    default_value: DataValue,
+    default_value: UserSettingValue,
     user_setting: UserSetting,
     level: ScopeLevel,
     desc: &'static str,
@@ -87,8 +89,8 @@ impl Settings {
 
             for global_setting in global_settings {
                 let name = global_setting.name;
-                let val = String::from_utf8(global_setting.value.as_string()?).unwrap();
-                settings.set_settings(name, val, true)?;
+                let val = global_setting.value.as_string()?;
+                settings.set_settings(name, val, false)?;
             }
             settings
         };
@@ -111,45 +113,61 @@ impl Settings {
         let values = vec![
             // max_block_size
             SettingValue {
-                default_value: DataValue::UInt64(10000),
-                user_setting: UserSetting::create("max_block_size", DataValue::UInt64(10000)),
+                default_value: UserSettingValue::UInt64(10000),
+                user_setting: UserSetting::create(
+                    "max_block_size",
+                    UserSettingValue::UInt64(10000),
+                ),
                 level: ScopeLevel::Session,
                 desc: "Maximum block size for reading",
                 possible_values: None,
             },
             // max_threads
             SettingValue {
-                default_value: DataValue::UInt64(16),
-                user_setting: UserSetting::create("max_threads", DataValue::UInt64(16)),
+                default_value: UserSettingValue::UInt64(16),
+                user_setting: UserSetting::create("max_threads", UserSettingValue::UInt64(16)),
                 level: ScopeLevel::Session,
                 desc: "The maximum number of threads to execute the request. By default, it is determined automatically.",
                 possible_values: None,
             },
             // flight_client_timeout
             SettingValue {
-                default_value: DataValue::UInt64(60),
-                user_setting: UserSetting::create("flight_client_timeout", DataValue::UInt64(60)),
+                default_value: UserSettingValue::UInt64(60),
+                user_setting: UserSetting::create(
+                    "flight_client_timeout",
+                    UserSettingValue::UInt64(60),
+                ),
                 level: ScopeLevel::Session,
                 desc: "Max duration the flight client request is allowed to take in seconds. By default, it is 60 seconds",
                 possible_values: None,
             },
             // storage_read_buffer_size
             SettingValue {
-                default_value: DataValue::UInt64(1024 * 1024),
+                default_value: UserSettingValue::UInt64(1024 * 1024),
                 user_setting: UserSetting::create(
                     "storage_read_buffer_size",
-                    DataValue::UInt64(1024 * 1024),
+                    UserSettingValue::UInt64(1024 * 1024),
                 ),
                 level: ScopeLevel::Session,
                 desc: "The size of buffer in bytes for buffered reader of dal. By default, it is 1MB.",
                 possible_values: None,
             },
+            SettingValue {
+                default_value: UserSettingValue::UInt64(1024 * 1024),
+                user_setting: UserSetting::create(
+                    "input_read_buffer_size",
+                    UserSettingValue::UInt64(1024 * 1024),
+                ),
+                level: ScopeLevel::Session,
+                desc: "The size of buffer in bytes for input with format. By default, it is 1MB.",
+                possible_values: None,
+            },
             // enable_new_processor_framework
             SettingValue {
-                default_value: DataValue::UInt64(1),
+                default_value: UserSettingValue::UInt64(1),
                 user_setting: UserSetting::create(
                     "enable_new_processor_framework",
-                    DataValue::UInt64(1),
+                    UserSettingValue::UInt64(1),
                 ),
                 level: ScopeLevel::Session,
                 desc: "Enable new processor framework if value != 0, default value: 1",
@@ -157,141 +175,147 @@ impl Settings {
             },
             // enable_planner_v2
             SettingValue {
-                default_value: DataValue::UInt64(1),
-                user_setting: UserSetting::create("enable_planner_v2", DataValue::UInt64(1)),
+                default_value: UserSettingValue::UInt64(1),
+                user_setting: UserSetting::create("enable_planner_v2", UserSettingValue::UInt64(1)),
                 level: ScopeLevel::Session,
                 desc: "Enable planner v2 by setting this variable to 1, default value: 1",
                 possible_values: None,
             },
             SettingValue {
-                default_value: DataValue::String("\n".as_bytes().to_vec()),
+                default_value: UserSettingValue::String("\n".to_owned()),
                 user_setting: UserSetting::create(
                     "record_delimiter",
-                    DataValue::String("\n".as_bytes().to_vec()),
+                    UserSettingValue::String("\n".to_owned()),
                 ),
                 level: ScopeLevel::Session,
                 desc: "Format record_delimiter, default value: \"\\n\"",
                 possible_values: None,
             },
             SettingValue {
-                default_value: DataValue::String(",".as_bytes().to_vec()),
+                default_value: UserSettingValue::String(",".to_owned()),
                 user_setting: UserSetting::create(
                     "field_delimiter",
-                    DataValue::String(",".as_bytes().to_vec()),
+                    UserSettingValue::String(",".to_owned()),
                 ),
                 level: ScopeLevel::Session,
                 desc: "Format field delimiter, default value: ,",
                 possible_values: None,
             },
             SettingValue {
-                default_value: DataValue::UInt64(1),
-                user_setting: UserSetting::create("empty_as_default", DataValue::UInt64(1)),
+                default_value: UserSettingValue::UInt64(1),
+                user_setting: UserSetting::create("empty_as_default", UserSettingValue::UInt64(1)),
                 level: ScopeLevel::Session,
                 desc: "Format empty_as_default, default value: 1",
                 possible_values: None,
             },
             SettingValue {
-                default_value: DataValue::UInt64(0),
-                user_setting: UserSetting::create("skip_header", DataValue::UInt64(0)),
+                default_value: UserSettingValue::UInt64(0),
+                user_setting: UserSetting::create("skip_header", UserSettingValue::UInt64(0)),
                 level: ScopeLevel::Session,
                 desc: "Whether to skip the input header, default value: 0",
                 possible_values: None,
             },
             SettingValue {
-                default_value: DataValue::String("None".as_bytes().to_vec()),
+                default_value: UserSettingValue::String("None".to_owned()),
                 user_setting: UserSetting::create(
                     "compression",
-                    DataValue::String("None".as_bytes().to_vec()),
+                    UserSettingValue::String("None".to_owned()),
                 ),
                 level: ScopeLevel::Session,
                 desc: "Format compression, default value: None",
                 possible_values: None,
             },
             SettingValue {
-                default_value: DataValue::String("UTC".as_bytes().to_vec()),
+                default_value: UserSettingValue::String("UTC".to_owned()),
                 user_setting: UserSetting::create(
                     "timezone",
-                    DataValue::String("UTC".as_bytes().to_vec()),
+                    UserSettingValue::String("UTC".to_owned()),
                 ),
                 level: ScopeLevel::Session,
                 desc: "Timezone, default value: UTC,",
                 possible_values: None,
             },
             SettingValue {
-                default_value: DataValue::UInt64(10000),
+                default_value: UserSettingValue::UInt64(10000),
                 user_setting: UserSetting::create(
                     "group_by_two_level_threshold",
-                    DataValue::UInt64(10000),
+                    UserSettingValue::UInt64(10000),
                 ),
                 level: ScopeLevel::Session,
                 desc: "The threshold of keys to open two-level aggregation, default value: 10000",
                 possible_values: None,
             },
             SettingValue {
-                default_value: DataValue::UInt64(0),
-                user_setting: UserSetting::create("enable_async_insert", DataValue::UInt64(0)),
+                default_value: UserSettingValue::UInt64(0),
+                user_setting: UserSetting::create(
+                    "enable_async_insert",
+                    UserSettingValue::UInt64(0),
+                ),
                 level: ScopeLevel::Session,
                 desc: "Whether the client open async insert mode, default value: 0",
                 possible_values: None,
             },
             SettingValue {
-                default_value: DataValue::UInt64(1),
-                user_setting: UserSetting::create("wait_for_async_insert", DataValue::UInt64(1)),
+                default_value: UserSettingValue::UInt64(1),
+                user_setting: UserSetting::create(
+                    "wait_for_async_insert",
+                    UserSettingValue::UInt64(1),
+                ),
                 level: ScopeLevel::Session,
                 desc: "Whether the client wait for the reply of async insert, default value: 1",
                 possible_values: None,
             },
             SettingValue {
-                default_value: DataValue::UInt64(100),
+                default_value: UserSettingValue::UInt64(100),
                 user_setting: UserSetting::create(
                     "wait_for_async_insert_timeout",
-                    DataValue::UInt64(100),
+                    UserSettingValue::UInt64(100),
                 ),
                 level: ScopeLevel::Session,
                 desc: "The timeout in seconds for waiting for processing of async insert, default value: 100",
                 possible_values: None,
             },
             SettingValue {
-                default_value: DataValue::UInt64(0),
+                default_value: UserSettingValue::UInt64(0),
                 user_setting: UserSetting::create(
                     "unquoted_ident_case_sensitive",
-                    DataValue::UInt64(0),
+                    UserSettingValue::UInt64(0),
                 ),
                 level: ScopeLevel::Session,
                 desc: "Case sensitivity of unquoted identifiers, default value: 0 (aka case-insensitive)",
                 possible_values: None,
             },
             SettingValue {
-                default_value: DataValue::UInt64(1),
+                default_value: UserSettingValue::UInt64(1),
                 user_setting: UserSetting::create(
                     "quoted_ident_case_sensitive",
-                    DataValue::UInt64(1),
+                    UserSettingValue::UInt64(1),
                 ),
                 level: ScopeLevel::Session,
                 desc: "Case sensitivity of quoted identifiers, default value: 1 (aka case-sensitive)",
                 possible_values: None,
             },
             SettingValue {
-                default_value: DataValue::String("PostgreSQL".as_bytes().to_vec()),
+                default_value: UserSettingValue::String("PostgreSQL".to_owned()),
                 user_setting: UserSetting::create(
                     "sql_dialect",
-                    DataValue::String("PostgreSQL".as_bytes().to_vec()),
+                    UserSettingValue::String("PostgreSQL".to_owned()),
                 ),
                 level: ScopeLevel::Session,
                 desc: "SQL dialect, support \"PostgreSQL\" and \"MySQL\", default value: \"PostgreSQL\"",
                 possible_values: Some(vec!["PostgreSQL", "MySQL"]),
             },
             SettingValue {
-                default_value: DataValue::UInt64(1),
-                user_setting: UserSetting::create("enable_cbo", DataValue::UInt64(1)),
+                default_value: UserSettingValue::UInt64(1),
+                user_setting: UserSetting::create("enable_cbo", UserSettingValue::UInt64(1)),
                 level: ScopeLevel::Session,
                 desc: "If enable cost based optimization, default value: 1",
                 possible_values: None,
             },
             // max_execute_time
             SettingValue {
-                default_value: DataValue::UInt64(0),
-                user_setting: UserSetting::create("max_execute_time", DataValue::UInt64(0)),
+                default_value: UserSettingValue::UInt64(0),
+                user_setting: UserSetting::create("max_execute_time", UserSettingValue::UInt64(0)),
                 level: ScopeLevel::Session,
                 desc: "The maximum query execution time. it means no limit if the value is zero. default value: 0",
                 possible_values: None,
@@ -356,6 +380,11 @@ impl Settings {
         self.try_get_u64(key)
     }
 
+    pub fn get_input_read_buffer_size(&self) -> Result<u64> {
+        let key = "input_read_buffer_size";
+        self.try_get_u64(key)
+    }
+
     pub fn get_enable_new_processor_framework(&self) -> Result<u64> {
         let key = "enable_new_processor_framework";
         self.try_get_u64(key)
@@ -366,19 +395,19 @@ impl Settings {
         self.try_get_u64(KEY)
     }
 
-    pub fn get_field_delimiter(&self) -> Result<Vec<u8>> {
+    pub fn get_field_delimiter(&self) -> Result<String> {
         let key = "field_delimiter";
         self.check_and_get_setting_value(key)
             .and_then(|v| v.user_setting.value.as_string())
     }
 
-    pub fn get_record_delimiter(&self) -> Result<Vec<u8>> {
+    pub fn get_record_delimiter(&self) -> Result<String> {
         let key = "record_delimiter";
         self.check_and_get_setting_value(key)
             .and_then(|v| v.user_setting.value.as_string())
     }
 
-    pub fn get_compression(&self) -> Result<Vec<u8>> {
+    pub fn get_compression(&self) -> Result<String> {
         let key = "compression";
         self.check_and_get_setting_value(key)
             .and_then(|v| v.user_setting.value.as_string())
@@ -394,7 +423,7 @@ impl Settings {
         self.try_get_u64(key)
     }
 
-    pub fn get_timezone(&self) -> Result<Vec<u8>> {
+    pub fn get_timezone(&self) -> Result<String> {
         let key = "timezone";
         self.check_and_get_setting_value(key)
             .and_then(|v| v.user_setting.value.as_string())
@@ -450,7 +479,7 @@ impl Settings {
 
     pub fn set_unquoted_ident_case_sensitive(&self, val: bool) -> Result<()> {
         static KEY: &str = "unquoted_ident_case_sensitive";
-        let v = if val { 1 } else { 0 };
+        let v = u64::from(val);
         self.try_set_u64(KEY, v, false)
     }
 
@@ -462,7 +491,7 @@ impl Settings {
 
     pub fn set_quoted_ident_case_sensitive(&self, val: bool) -> Result<()> {
         static KEY: &str = "quoted_ident_case_sensitive";
-        let v = if val { 1 } else { 0 };
+        let v = u64::from(val);
         self.try_set_u64(KEY, v, false)
     }
 
@@ -474,7 +503,7 @@ impl Settings {
 
     pub fn set_enable_cbo(&self, val: bool) -> Result<()> {
         static KEY: &str = "enable_cbo";
-        let v = if val { 1 } else { 0 };
+        let v = u64::from(val);
         self.try_set_u64(KEY, v, false)
     }
 
@@ -483,7 +512,7 @@ impl Settings {
         self.check_and_get_setting_value(key)
             .and_then(|v| v.user_setting.value.as_string())
             .map(|v| {
-                if v == b"MySQL" {
+                if v == "MySQL" {
                     Dialect::MySQL
                 } else {
                     Dialect::PostgreSQL
@@ -531,57 +560,66 @@ impl Settings {
         let mut setting = settings
             .get_mut(key)
             .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
-        setting.user_setting.value = DataValue::UInt64(val);
+        setting.user_setting.value = UserSettingValue::UInt64(val);
 
         if is_global {
-            let tenant = self.tenant.as_str();
-            let _ = futures::executor::block_on(
+            let tenant = self.tenant.clone();
+            let user_setting = setting.user_setting.clone();
+            let set_handle = GlobalIORuntime::instance().spawn(async move {
                 UserApiProvider::instance()
-                    .get_setting_api_client(tenant)?
-                    .set_setting(setting.user_setting.clone()),
-            )?;
+                    .get_setting_api_client(&tenant)?
+                    .set_setting(user_setting)
+                    .await
+            });
+            let _ = futures::executor::block_on(set_handle).unwrap()?;
             setting.level = ScopeLevel::Global;
         }
 
         Ok(())
     }
 
-    fn try_set_string(&self, key: &str, val: Vec<u8>, is_global: bool) -> Result<()> {
+    fn try_set_string(&self, key: &str, val: String, is_global: bool) -> Result<()> {
         let mut settings = self.settings.write();
         let mut setting = settings
             .get_mut(key)
             .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
-        setting.user_setting.value = DataValue::String(val);
+        setting.user_setting.value = UserSettingValue::String(val);
 
         if is_global {
-            let _ = futures::executor::block_on(
+            let tenant = self.tenant.clone();
+            let user_setting = setting.user_setting.clone();
+            let set_handle = GlobalIORuntime::instance().spawn(async move {
                 UserApiProvider::instance()
-                    .get_setting_api_client(&self.tenant)?
-                    .set_setting(setting.user_setting.clone()),
-            )?;
+                    .get_setting_api_client(&tenant)?
+                    .set_setting(user_setting)
+                    .await
+            });
+            let _ = futures::executor::block_on(set_handle).unwrap()?;
             setting.level = ScopeLevel::Global;
         }
 
         Ok(())
     }
 
-    pub fn get_setting_values(&self) -> Vec<DataValue> {
+    pub fn get_setting_values(
+        &self,
+    ) -> Vec<(String, UserSettingValue, UserSettingValue, String, String)> {
         let settings = self.settings.read();
 
         let mut result = vec![];
         for (k, v) in settings.iter().sorted_by_key(|&(k, _)| k) {
-            let res = DataValue::Struct(vec![
+            let res = (
                 // Name.
-                DataValue::String(k.as_bytes().to_vec()),
+                k.to_owned(),
                 // Value.
                 v.user_setting.value.clone(),
                 // Default Value.
                 v.default_value.clone(),
                 // Scope level.
-                DataValue::String(format!("{:?}", v.level).into_bytes()),
+                format!("{:?}", v.level),
                 // Desc.
-                DataValue::String(v.desc.as_bytes().to_vec()),
-            ]);
+                v.desc.to_owned(),
+            );
             result.push(res);
         }
         result
@@ -613,18 +651,16 @@ impl Settings {
         let mut settings = self.settings.write();
         let values = changed_settings.get_setting_values();
         for value in values.into_iter() {
-            if let DataValue::Struct(vals) = value {
-                let key = vals[0].to_string();
-                let mut val = settings.get_mut(&key).ok_or_else(|| {
-                    ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key))
-                })?;
-                val.user_setting.value = vals[2].clone();
-            }
+            let key = value.0;
+            let mut val = settings.get_mut(&key).ok_or_else(|| {
+                ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key))
+            })?;
+            val.user_setting.value = value.1.clone();
         }
         Ok(())
     }
 
-    pub fn get_setting_values_short(&self) -> BTreeMap<String, DataValue> {
+    pub fn get_setting_values_short(&self) -> BTreeMap<String, UserSettingValue> {
         let settings = self.settings.read();
 
         let mut result = BTreeMap::new();
@@ -638,23 +674,15 @@ impl Settings {
         let setting = self.check_and_get_setting_value(&key)?;
         let val = self.check_possible_values(&setting, val)?;
 
-        match setting.user_setting.value.max_data_type().data_type_id() {
-            TypeID::UInt64 => {
+        match setting.user_setting.value {
+            UserSettingValue::UInt64(_) => {
                 let u64_val = val.parse::<u64>()?;
-                self.try_set_u64(&key, u64_val, is_global)?;
+                self.try_set_u64(&key, u64_val, is_global)?
             }
-            TypeID::String => {
-                self.try_set_string(&key, val.into_bytes(), is_global)?;
-            }
-
-            v => {
-                return Err(ErrorCode::UnknownVariable(format!(
-                    "Unsupported variable:{:?} type:{:?} when set_settings().",
-                    key, v
-                )));
+            UserSettingValue::String(_) => {
+                self.try_set_string(&key, val, is_global)?;
             }
         }
-
         Ok(())
     }
 
@@ -668,7 +696,6 @@ impl Settings {
                 self.set_settings(k.to_string(), v.to_string(), is_global)?
             }
         }
-
         Ok(())
     }
 }

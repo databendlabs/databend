@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::sync::RwLock;
 
 use common_datablocks::DataBlock;
@@ -81,6 +83,11 @@ impl RowSpace {
         chunks.iter().map(|c| c.data_block.clone()).collect()
     }
 
+    pub fn rows_number(&self) -> usize {
+        let chunks = self.chunks.read().unwrap();
+        chunks.iter().map(|c| c.num_rows()).sum()
+    }
+
     pub fn gather(&self, row_ptrs: &[RowPtr]) -> Result<DataBlock> {
         let data_blocks = self.datablocks();
         let num_rows = data_blocks
@@ -109,5 +116,14 @@ impl RowSpace {
 impl PartialEq for RowPtr {
     fn eq(&self, other: &Self) -> bool {
         self.chunk_index == other.chunk_index && self.row_index == other.row_index
+    }
+}
+
+impl Eq for RowPtr {}
+
+impl Hash for RowPtr {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.chunk_index.hash(state);
+        self.row_index.hash(state);
     }
 }

@@ -12,33 +12,86 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::DataValue;
+use core::fmt;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 use serde::Deserialize;
+use serde::Deserializer;
 use serde::Serialize;
+use serde::Serializer;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[serde(default)]
 pub struct UserSetting {
     // The name of the setting.
     pub name: String,
     // The value of the setting.
-    pub value: DataValue,
+    pub value: UserSettingValue,
 }
-impl UserSetting {
-    pub fn create(name: &str, value: DataValue) -> UserSetting {
-        UserSetting {
-            name: name.to_string(),
-            value,
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub enum UserSettingValue {
+    UInt64(u64),
+
+    // TO BE COMPATIBLE WITH old version: `String<Vec<u8>>`
+    #[serde(deserialize_with = "deser_str_from_vu8")]
+    #[serde(serialize_with = "str_vu8")]
+    String(String),
+}
+
+fn deser_str_from_vu8<'de, D>(deserializer: D) -> std::result::Result<String, D::Error>
+where D: Deserializer<'de> {
+    let s: Vec<u8> = Deserialize::deserialize(deserializer)?;
+    Ok(String::from_utf8(s).unwrap())
+}
+
+fn str_vu8<S>(data: &String, s: S) -> std::result::Result<S::Ok, S::Error>
+where S: Serializer {
+    s.serialize_bytes(data.as_bytes())
+}
+
+impl UserSettingValue {
+    pub fn as_u64(&self) -> Result<u64> {
+        match self {
+            UserSettingValue::UInt64(v) => Ok(*v),
+            other => Result::Err(ErrorCode::BadDataValueType(format!(
+                "Unexpected type:{:?} to get u64 number",
+                other
+            ))),
+        }
+    }
+
+    pub fn as_string(&self) -> Result<String> {
+        match self {
+            UserSettingValue::String(v) => Ok(v.to_owned()),
+            UserSettingValue::UInt64(v) => Ok(format!("{}", v)),
         }
     }
 }
-impl Default for UserSetting {
-    fn default() -> Self {
+
+impl fmt::Display for UserSettingValue {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            UserSettingValue::UInt64(v) => write!(f, "{}", v),
+            UserSettingValue::String(v) => write!(f, "{}", v),
+        }
+    }
+}
+
+impl fmt::Debug for UserSettingValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            UserSettingValue::UInt64(v) => write!(f, "{}", v),
+            UserSettingValue::String(_) => write!(f, "{}", self),
+        }
+    }
+}
+
+impl UserSetting {
+    pub fn create(name: &str, value: UserSettingValue) -> UserSetting {
         UserSetting {
-            name: "".to_string(),
-            value: DataValue::Null,
+            name: name.to_string(),
+            value,
         }
     }
 }

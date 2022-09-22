@@ -105,7 +105,7 @@ impl City64WithSeedFunction {
 
 impl Function for City64WithSeedFunction {
     fn name(&self) -> &str {
-        &*self.display_name
+        &self.display_name
     }
 
     fn return_type(&self) -> DataTypeImpl {

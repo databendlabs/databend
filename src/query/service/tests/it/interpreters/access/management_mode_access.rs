@@ -14,7 +14,7 @@
 
 use common_base::base::tokio;
 use common_exception::Result;
-use databend_query::interpreters::InterpreterFactoryV2;
+use databend_query::interpreters::InterpreterFactory;
 use databend_query::sql::Planner;
 
 // ref: https://github.com/datafuselabs/databend/issues/6901
@@ -158,14 +158,18 @@ async fn test_management_mode_access() -> Result<()> {
     for group in groups {
         for test in group.tests {
             let (plan, _, _) = planner.plan_sql(test.query).await?;
-            let interpreter = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-            let res = interpreter.execute(ctx.clone()).await;
-            assert_eq!(
-                test.is_err,
-                res.is_err(),
-                "in test case:{:?}",
-                (group.name, test.name)
-            );
+            if test.is_err {
+                let res = InterpreterFactory::get(ctx.clone(), &plan).await;
+                assert_eq!(
+                    test.is_err,
+                    res.is_err(),
+                    "in test case:{:?}",
+                    (group.name, test.name)
+                );
+            } else {
+                let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
+                interpreter.execute(ctx.clone()).await?;
+            }
         }
     }
 

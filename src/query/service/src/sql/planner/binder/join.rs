@@ -23,18 +23,18 @@ use common_datavalues::type_coercion::compare_coercion;
 use common_datavalues::wrap_nullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planner::MetadataRef;
 
 use crate::sessions::TableContext;
 use crate::sql::binder::scalar_common::split_conjunctions;
 use crate::sql::binder::scalar_common::split_equivalent_predicate;
-use crate::sql::binder::scalar_common::wrap_cast_if_needed;
+use crate::sql::binder::wrap_cast;
 use crate::sql::binder::Visibility;
 use crate::sql::normalize_identifier;
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::binder::scalar::ScalarBinder;
 use crate::sql::planner::binder::Binder;
-use crate::sql::planner::metadata::MetadataRef;
 use crate::sql::planner::semantic::NameResolutionContext;
 use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::JoinType;
@@ -71,14 +71,14 @@ impl<'a> Binder {
                 }
             }
             JoinOperator::RightOuter => {
-                for column in right_context.all_column_bindings().iter() {
-                    bind_context.add_column_binding(column.clone());
-                }
-
                 for column in left_context.all_column_bindings() {
                     let mut nullable_column = column.clone();
                     nullable_column.data_type = Box::new(wrap_nullable(&column.data_type));
                     bind_context.add_column_binding(nullable_column);
+                }
+
+                for column in right_context.all_column_bindings().iter() {
+                    bind_context.add_column_binding(column.clone());
                 }
             }
             _ => {
@@ -124,6 +124,7 @@ impl<'a> Binder {
                 &mut left_join_conditions,
                 &mut right_join_conditions,
                 &mut other_conditions,
+                &join.op,
             )
             .await?;
 
@@ -145,12 +146,12 @@ impl<'a> Binder {
                 right_child,
             ),
             JoinOperator::RightOuter => self.bind_join_with_type(
-                JoinType::Left,
-                right_join_conditions,
+                JoinType::Right,
                 left_join_conditions,
+                right_join_conditions,
                 other_conditions,
-                right_child,
                 left_child,
+                right_child,
             ),
             JoinOperator::FullOuter => self.bind_join_with_type(
                 JoinType::Full,
@@ -197,9 +198,11 @@ impl<'a> Binder {
             marker_index: None,
             from_correlated_subquery: false,
         };
-        let expr = SExpr::create_binary(inner_join.into(), left_child, right_child);
-
-        Ok(expr)
+        Ok(SExpr::create_binary(
+            inner_join.into(),
+            left_child,
+            right_child,
+        ))
     }
 }
 
@@ -271,6 +274,7 @@ impl<'a> JoinConditionResolver<'a> {
         left_join_conditions: &mut Vec<Scalar>,
         right_join_conditions: &mut Vec<Scalar>,
         other_join_conditions: &mut Vec<Scalar>,
+        join_op: &JoinOperator,
     ) -> Result<()> {
         match &self.join_condition {
             JoinCondition::On(cond) => {
@@ -287,8 +291,13 @@ impl<'a> JoinConditionResolver<'a> {
                     .iter()
                     .map(|ident| normalize_identifier(ident, self.name_resolution_ctx).name)
                     .collect::<Vec<String>>();
-                self.resolve_using(using_columns, left_join_conditions, right_join_conditions)
-                    .await?;
+                self.resolve_using(
+                    using_columns,
+                    left_join_conditions,
+                    right_join_conditions,
+                    join_op,
+                )
+                .await?;
             }
             JoinCondition::Natural => {
                 // NATURAL is a shorthand form of USING: it forms a USING list consisting of all column names that appear in both input tables
@@ -297,8 +306,13 @@ impl<'a> JoinConditionResolver<'a> {
                 let mut using_columns = vec![];
                 // Find common columns in both input tables
                 self.find_using_columns(&mut using_columns)?;
-                self.resolve_using(using_columns, left_join_conditions, right_join_conditions)
-                    .await?
+                self.resolve_using(
+                    using_columns,
+                    left_join_conditions,
+                    right_join_conditions,
+                    join_op,
+                )
+                .await?
             }
             JoinCondition::None => {}
         }
@@ -349,7 +363,6 @@ impl<'a> JoinConditionResolver<'a> {
         //     For example, `t1.a + t1.b = t2.a` is a valid one while `t1.a + t2.a = t2.b` isn't.
         //
         // Only equi-predicate can be exploited by common join algorithms(e.g. sort-merge join, hash join).
-        // For the predicates that aren't equi-predicate, we will lift them as a `Filter` operator.
         if let Some((left, right)) = split_equivalent_predicate(predicate) {
             self.add_conditions(left, right, left_join_conditions, right_join_conditions)?;
         } else {
@@ -363,6 +376,7 @@ impl<'a> JoinConditionResolver<'a> {
         using_columns: Vec<String>,
         left_join_conditions: &mut Vec<Scalar>,
         right_join_conditions: &mut Vec<Scalar>,
+        join_op: &JoinOperator,
     ) -> Result<()> {
         for join_key in using_columns.iter() {
             let join_key_name = join_key.as_str();
@@ -397,13 +411,17 @@ impl<'a> JoinConditionResolver<'a> {
                     join_key_name
                 )));
             };
-
+            let idx = if let JoinOperator::RightOuter = join_op {
+                0
+            } else {
+                1
+            };
             if let Some(col_binding) = self
                 .join_context
                 .columns
                 .iter_mut()
                 .filter(|col_binding| col_binding.column_name == join_key_name)
-                .nth(1)
+                .nth(idx)
             {
                 // Always make the second using column in the join_context invisible in unqualified wildcard.
                 col_binding.visibility = Visibility::UnqualifiedWildcardInVisible;
@@ -448,9 +466,13 @@ impl<'a> JoinConditionResolver<'a> {
         // Bump types of left conditions and right conditions
         let left_type = left.data_type();
         let right_type = right.data_type();
-        let least_super_type = compare_coercion(&left_type, &right_type)?;
-        left = wrap_cast_if_needed(left, &least_super_type);
-        right = wrap_cast_if_needed(right, &least_super_type);
+        if left_type.ne(&right_type) {
+            let least_super_type = compare_coercion(&left_type, &right_type)?;
+            // Wrap cast for both left and right, `cast` can change the physical type of the data block
+            // Related issue: https://github.com/datafuselabs/databend/issues/7650
+            left = wrap_cast(left, &least_super_type);
+            right = wrap_cast(right, &least_super_type);
+        }
 
         if left_used_columns.is_subset(&left_columns)
             && right_used_columns.is_subset(&right_columns)

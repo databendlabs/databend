@@ -18,7 +18,7 @@ common-exception = { path = "../../common/exception" }
 
 # Crates.io dependencies
 chrono = "0.4"
-chrono-tz = "0.6.1"
+chrono-tz = "0.6.3"
 comfy-table = "6"
 common-jsonb = { path = "../../common/jsonb" }
 educe = "0.4"
@@ -27,7 +27,7 @@ hex = "0.4.3"
 itertools = "0.10"
 match-template = "0.0.1"
 num-traits = "0.2.15"
-ordered-float = { git = "https://github.com/andylokandy/rust-ordered-float.git", branch = "as", features = ["serde"] }
+ordered-float = { version = "3.1.0", features = ["serde"] }
 rust_decimal = "1.26"
 serde = "1.0"
 

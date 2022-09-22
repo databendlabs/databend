@@ -17,13 +17,11 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::AlterViewPlan;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DropTableReq;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
-use common_meta_types::GrantObject;
-use common_meta_types::UserPrivilegeType;
+use common_planner::plans::AlterViewPlan;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -49,15 +47,6 @@ impl Interpreter for AlterViewInterpreter {
     }
 
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        // check privilige
-        self.ctx
-            .get_current_session()
-            .validate_privilege(
-                &GrantObject::Database(self.plan.catalog.clone(), self.plan.database.clone()),
-                UserPrivilegeType::Create,
-            )
-            .await?;
-
         // check whether view has exists
         if !self
             .ctx

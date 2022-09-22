@@ -77,32 +77,32 @@ use common_meta_app::share::ShareGrantObject;
 use common_meta_app::share::ShareGrantObjectPrivilege;
 use common_meta_app::share::ShareId;
 use common_meta_app::share::ShareNameIdent;
-use common_meta_types::app_error::AppError;
-use common_meta_types::app_error::CreateDatabaseWithDropTime;
-use common_meta_types::app_error::CreateTableWithDropTime;
-use common_meta_types::app_error::DatabaseAlreadyExists;
-use common_meta_types::app_error::DropDbWithDropTime;
-use common_meta_types::app_error::DropTableWithDropTime;
-use common_meta_types::app_error::ShareHasNoGrantedDatabase;
-use common_meta_types::app_error::ShareHasNoGrantedPrivilege;
-use common_meta_types::app_error::TableAlreadyExists;
-use common_meta_types::app_error::TableVersionMismatched;
-use common_meta_types::app_error::TxnRetryMaxTimes;
-use common_meta_types::app_error::UndropDbHasNoHistory;
-use common_meta_types::app_error::UndropDbWithNoDropTime;
-use common_meta_types::app_error::UndropTableAlreadyExists;
-use common_meta_types::app_error::UndropTableHasNoHistory;
-use common_meta_types::app_error::UndropTableWithNoDropTime;
-use common_meta_types::app_error::UnknownShareAccounts;
-use common_meta_types::app_error::UnknownTable;
-use common_meta_types::app_error::UnknownTableId;
-use common_meta_types::app_error::WrongShare;
-use common_meta_types::app_error::WrongShareObject;
+use common_meta_types::errors::app_error::AppError;
+use common_meta_types::errors::app_error::CreateDatabaseWithDropTime;
+use common_meta_types::errors::app_error::CreateTableWithDropTime;
+use common_meta_types::errors::app_error::DatabaseAlreadyExists;
+use common_meta_types::errors::app_error::DropDbWithDropTime;
+use common_meta_types::errors::app_error::DropTableWithDropTime;
+use common_meta_types::errors::app_error::ShareHasNoGrantedDatabase;
+use common_meta_types::errors::app_error::ShareHasNoGrantedPrivilege;
+use common_meta_types::errors::app_error::TableAlreadyExists;
+use common_meta_types::errors::app_error::TableVersionMismatched;
+use common_meta_types::errors::app_error::TxnRetryMaxTimes;
+use common_meta_types::errors::app_error::UndropDbHasNoHistory;
+use common_meta_types::errors::app_error::UndropDbWithNoDropTime;
+use common_meta_types::errors::app_error::UndropTableAlreadyExists;
+use common_meta_types::errors::app_error::UndropTableHasNoHistory;
+use common_meta_types::errors::app_error::UndropTableWithNoDropTime;
+use common_meta_types::errors::app_error::UnknownShareAccounts;
+use common_meta_types::errors::app_error::UnknownTable;
+use common_meta_types::errors::app_error::UnknownTableId;
+use common_meta_types::errors::app_error::WrongShare;
+use common_meta_types::errors::app_error::WrongShareObject;
 use common_meta_types::ConditionResult;
 use common_meta_types::GCDroppedDataReply;
 use common_meta_types::GCDroppedDataReq;
+use common_meta_types::KVAppError;
 use common_meta_types::MatchSeqExt;
-use common_meta_types::MetaError;
 use common_meta_types::MetaId;
 use common_meta_types::TxnCondition;
 use common_meta_types::TxnOp;
@@ -146,13 +146,13 @@ impl<KV: KVApi> SchemaApi for KV {
     async fn create_database(
         &self,
         req: CreateDatabaseReq,
-    ) -> Result<CreateDatabaseReply, MetaError> {
+    ) -> Result<CreateDatabaseReply, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
         let name_key = &req.name_ident;
 
         if req.meta.drop_on.is_some() {
-            return Err(MetaError::AppError(AppError::CreateDatabaseWithDropTime(
+            return Err(KVAppError::AppError(AppError::CreateDatabaseWithDropTime(
                 CreateDatabaseWithDropTime::new(&name_key.db_name),
             )));
         }
@@ -160,7 +160,7 @@ impl<KV: KVApi> SchemaApi for KV {
         // if create a database from a share, check if the share exists and grant access, update share_meta.
         if let Some(from_share) = &req.meta.from_share {
             if from_share.tenant == req.name_ident.tenant {
-                return Err(MetaError::AppError(AppError::WrongShare(WrongShare::new(
+                return Err(KVAppError::AppError(AppError::WrongShare(WrongShare::new(
                     req.name_ident.to_string(),
                 ))));
             }
@@ -177,7 +177,7 @@ impl<KV: KVApi> SchemaApi for KV {
                 return if req.if_not_exists {
                     Ok(CreateDatabaseReply { db_id })
                 } else {
-                    Err(MetaError::AppError(AppError::DatabaseAlreadyExists(
+                    Err(KVAppError::AppError(AppError::DatabaseAlreadyExists(
                         DatabaseAlreadyExists::new(
                             &name_key.db_name,
                             format!("create db: tenant: {}", name_key.tenant),
@@ -247,7 +247,7 @@ impl<KV: KVApi> SchemaApi for KV {
 
                     // check if the share has granted the account
                     if !share_meta.has_account(&req.name_ident.tenant) {
-                        return Err(MetaError::AppError(AppError::UnknownShareAccounts(
+                        return Err(KVAppError::AppError(AppError::UnknownShareAccounts(
                             UnknownShareAccounts::new(
                                 &[req.name_ident.tenant.clone()],
                                 share_id,
@@ -263,7 +263,7 @@ impl<KV: KVApi> SchemaApi for KV {
                     let (share_from_db_id, privileges) =
                         get_share_database_id_and_privilege(from_share, &share_meta)?;
                     if !privileges.contains(ShareGrantObjectPrivilege::Usage) {
-                        return Err(MetaError::AppError(AppError::ShareHasNoGrantedPrivilege(
+                        return Err(KVAppError::AppError(AppError::ShareHasNoGrantedPrivilege(
                             ShareHasNoGrantedPrivilege::new(
                                 &from_share.tenant,
                                 &from_share.share_name,
@@ -278,7 +278,7 @@ impl<KV: KVApi> SchemaApi for KV {
                     let (db_seq, db_meta): (u64, Option<DatabaseMeta>) =
                         get_struct_value(self, &db_id_key).await?;
                     if db_seq == 0 || db_meta.is_none() {
-                        return Err(MetaError::AppError(AppError::ShareHasNoGrantedPrivilege(
+                        return Err(KVAppError::AppError(AppError::ShareHasNoGrantedPrivilege(
                             ShareHasNoGrantedPrivilege::new(
                                 &from_share.tenant,
                                 &from_share.share_name,
@@ -319,13 +319,13 @@ impl<KV: KVApi> SchemaApi for KV {
             }
         }
 
-        Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
+        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
             TxnRetryMaxTimes::new("create_database", TXN_MAX_RETRY_TIMES),
         )))
     }
 
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
-    async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply, MetaError> {
+    async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
         let tenant_dbname = &req.name_ident;
@@ -343,7 +343,7 @@ impl<KV: KVApi> SchemaApi for KV {
             let (db_id_seq, db_id, db_meta_seq, mut db_meta) = match res {
                 Ok(x) => x,
                 Err(e) => {
-                    if let MetaError::AppError(AppError::UnknownDatabase(_)) = e {
+                    if let KVAppError::AppError(AppError::UnknownDatabase(_)) = e {
                         if req.if_exists {
                             return Ok(DropDatabaseReply {});
                         }
@@ -418,7 +418,7 @@ impl<KV: KVApi> SchemaApi for KV {
                 {
                     // drop a table with drop time
                     if db_meta.drop_on.is_some() {
-                        return Err(MetaError::AppError(AppError::DropDbWithDropTime(
+                        return Err(KVAppError::AppError(AppError::DropDbWithDropTime(
                             DropDbWithDropTime::new(&tenant_dbname.db_name),
                         )));
                     }
@@ -451,7 +451,7 @@ impl<KV: KVApi> SchemaApi for KV {
             }
         }
 
-        Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
+        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
             TxnRetryMaxTimes::new("drop_database", TXN_MAX_RETRY_TIMES),
         )))
     }
@@ -460,7 +460,7 @@ impl<KV: KVApi> SchemaApi for KV {
     async fn undrop_database(
         &self,
         req: UndropDatabaseReq,
-    ) -> Result<UndropDatabaseReply, MetaError> {
+    ) -> Result<UndropDatabaseReply, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
         let name_key = &req.name_ident;
@@ -472,7 +472,7 @@ impl<KV: KVApi> SchemaApi for KV {
                 get_db_or_err(self, name_key, format!("undrop_database: {}", &name_key)).await;
 
             if res.is_ok() {
-                return Err(MetaError::AppError(AppError::DatabaseAlreadyExists(
+                return Err(KVAppError::AppError(AppError::DatabaseAlreadyExists(
                     DatabaseAlreadyExists::new(
                         &name_key.db_name,
                         format!("undrop_database: {} has already existed", name_key.db_name),
@@ -489,14 +489,14 @@ impl<KV: KVApi> SchemaApi for KV {
                 get_struct_value(self, &dbid_idlist).await?;
 
             let mut db_id_list = if db_id_list_seq == 0 {
-                return Err(MetaError::AppError(AppError::UndropDbHasNoHistory(
+                return Err(KVAppError::AppError(AppError::UndropDbHasNoHistory(
                     UndropDbHasNoHistory::new(&name_key.db_name),
                 )));
             } else {
                 match db_id_list_opt {
                     Some(list) => list,
                     None => {
-                        return Err(MetaError::AppError(AppError::UndropDbHasNoHistory(
+                        return Err(KVAppError::AppError(AppError::UndropDbHasNoHistory(
                             UndropDbHasNoHistory::new(&name_key.db_name),
                         )));
                     }
@@ -507,7 +507,7 @@ impl<KV: KVApi> SchemaApi for KV {
             let db_id = match db_id_list.last() {
                 Some(db_id) => *db_id,
                 None => {
-                    return Err(MetaError::AppError(AppError::UndropDbHasNoHistory(
+                    return Err(KVAppError::AppError(AppError::UndropDbHasNoHistory(
                         UndropDbHasNoHistory::new(&name_key.db_name),
                     )));
                 }
@@ -525,7 +525,7 @@ impl<KV: KVApi> SchemaApi for KV {
                 let mut db_meta = db_meta.unwrap();
                 // undrop a table with no drop time
                 if db_meta.drop_on.is_none() {
-                    return Err(MetaError::AppError(AppError::UndropDbWithNoDropTime(
+                    return Err(KVAppError::AppError(AppError::UndropDbWithNoDropTime(
                         UndropDbWithNoDropTime::new(&name_key.db_name),
                     )));
                 }
@@ -558,7 +558,7 @@ impl<KV: KVApi> SchemaApi for KV {
             }
         }
 
-        Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
+        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
             TxnRetryMaxTimes::new("undrop_database", TXN_MAX_RETRY_TIMES),
         )))
     }
@@ -567,7 +567,7 @@ impl<KV: KVApi> SchemaApi for KV {
     async fn rename_database(
         &self,
         req: RenameDatabaseReq,
-    ) -> Result<RenameDatabaseReply, MetaError> {
+    ) -> Result<RenameDatabaseReply, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
         let tenant_dbname = &req.name_ident;
@@ -629,7 +629,7 @@ impl<KV: KVApi> SchemaApi for KV {
 
             if let Some(last_db_id) = db_id_list.last() {
                 if *last_db_id != old_db_id {
-                    return Err(MetaError::AppError(AppError::DatabaseAlreadyExists(
+                    return Err(KVAppError::AppError(AppError::DatabaseAlreadyExists(
                         DatabaseAlreadyExists::new(
                             &tenant_dbname.db_name,
                             format!("rename_database: {} with a wrong db id", tenant_dbname),
@@ -637,7 +637,7 @@ impl<KV: KVApi> SchemaApi for KV {
                     )));
                 }
             } else {
-                return Err(MetaError::AppError(AppError::DatabaseAlreadyExists(
+                return Err(KVAppError::AppError(AppError::DatabaseAlreadyExists(
                     DatabaseAlreadyExists::new(
                         &tenant_dbname.db_name,
                         format!("rename_database: {} with none db id history", tenant_dbname),
@@ -705,13 +705,13 @@ impl<KV: KVApi> SchemaApi for KV {
             }
         }
 
-        Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
+        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
             TxnRetryMaxTimes::new("rename_database", TXN_MAX_RETRY_TIMES),
         )))
     }
 
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
-    async fn get_database(&self, req: GetDatabaseReq) -> Result<Arc<DatabaseInfo>, MetaError> {
+    async fn get_database(&self, req: GetDatabaseReq) -> Result<Arc<DatabaseInfo>, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
         let name_key = &req.inner;
@@ -735,7 +735,7 @@ impl<KV: KVApi> SchemaApi for KV {
     async fn get_database_history(
         &self,
         req: ListDatabaseReq,
-    ) -> Result<Vec<Arc<DatabaseInfo>>, MetaError> {
+    ) -> Result<Vec<Arc<DatabaseInfo>>, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
         // List tables by tenant, db_id, table_name.
@@ -805,7 +805,7 @@ impl<KV: KVApi> SchemaApi for KV {
     async fn list_databases(
         &self,
         req: ListDatabaseReq,
-    ) -> Result<Vec<Arc<DatabaseInfo>>, MetaError> {
+    ) -> Result<Vec<Arc<DatabaseInfo>>, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
         let name_key = DatabaseNameIdent {
@@ -859,7 +859,7 @@ impl<KV: KVApi> SchemaApi for KV {
     }
 
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
-    async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply, MetaError> {
+    async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
         let tenant_dbname_tbname = &req.name_ident;
@@ -869,7 +869,7 @@ impl<KV: KVApi> SchemaApi for KV {
         let mut tb_count_seq;
 
         if req.table_meta.drop_on.is_some() {
-            return Err(MetaError::AppError(AppError::CreateTableWithDropTime(
+            return Err(KVAppError::AppError(AppError::CreateTableWithDropTime(
                 CreateTableWithDropTime::new(&tenant_dbname_tbname.table_name),
             )));
         }
@@ -884,7 +884,7 @@ impl<KV: KVApi> SchemaApi for KV {
 
             // cannot operate on shared database
             if let Some(from_share) = db_meta.from_share {
-                return Err(MetaError::AppError(AppError::ShareHasNoGrantedPrivilege(
+                return Err(KVAppError::AppError(AppError::ShareHasNoGrantedPrivilege(
                     ShareHasNoGrantedPrivilege::new(&from_share.tenant, &from_share.share_name),
                 )));
             }
@@ -901,7 +901,7 @@ impl<KV: KVApi> SchemaApi for KV {
                 return if req.if_not_exists {
                     Ok(CreateTableReply { table_id: tb_id })
                 } else {
-                    Err(MetaError::AppError(AppError::TableAlreadyExists(
+                    Err(KVAppError::AppError(AppError::TableAlreadyExists(
                         TableAlreadyExists::new(
                             &tenant_dbname_tbname.table_name,
                             format!("create_table: {}", tenant_dbname_tbname),
@@ -1012,13 +1012,13 @@ impl<KV: KVApi> SchemaApi for KV {
             }
         }
 
-        Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
+        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
             TxnRetryMaxTimes::new("create_table", TXN_MAX_RETRY_TIMES),
         )))
     }
 
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
-    async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply, MetaError> {
+    async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
         let tenant_dbname_tbname = &req.name_ident;
@@ -1037,7 +1037,7 @@ impl<KV: KVApi> SchemaApi for KV {
 
             // cannot operate on shared database
             if let Some(from_share) = db_meta.from_share {
-                return Err(MetaError::AppError(AppError::ShareHasNoGrantedPrivilege(
+                return Err(KVAppError::AppError(AppError::ShareHasNoGrantedPrivilege(
                     ShareHasNoGrantedPrivilege::new(&from_share.tenant, &from_share.share_name),
                 )));
             }
@@ -1054,7 +1054,7 @@ impl<KV: KVApi> SchemaApi for KV {
                 return if req.if_exists {
                     Ok(DropTableReply {})
                 } else {
-                    Err(MetaError::AppError(AppError::UnknownTable(
+                    Err(KVAppError::AppError(AppError::UnknownTable(
                         UnknownTable::new(
                             &tenant_dbname_tbname.table_name,
                             format!("drop_table: {}", tenant_dbname_tbname),
@@ -1099,7 +1099,7 @@ impl<KV: KVApi> SchemaApi for KV {
                 let mut tb_meta = tb_meta.unwrap();
                 // drop a table with drop_on time
                 if tb_meta.drop_on.is_some() {
-                    return Err(MetaError::AppError(AppError::DropTableWithDropTime(
+                    return Err(KVAppError::AppError(AppError::DropTableWithDropTime(
                         DropTableWithDropTime::new(&tenant_dbname_tbname.table_name),
                     )));
                 }
@@ -1145,13 +1145,13 @@ impl<KV: KVApi> SchemaApi for KV {
             }
         }
 
-        Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
+        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
             TxnRetryMaxTimes::new("drop_table", TXN_MAX_RETRY_TIMES),
         )))
     }
 
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
-    async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply, MetaError> {
+    async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
         let tenant_dbname_tbname = &req.name_ident;
@@ -1170,7 +1170,7 @@ impl<KV: KVApi> SchemaApi for KV {
 
             // cannot operate on shared database
             if let Some(from_share) = db_meta.from_share {
-                return Err(MetaError::AppError(AppError::ShareHasNoGrantedPrivilege(
+                return Err(KVAppError::AppError(AppError::ShareHasNoGrantedPrivilege(
                     ShareHasNoGrantedPrivilege::new(&from_share.tenant, &from_share.share_name),
                 )));
             }
@@ -1185,7 +1185,7 @@ impl<KV: KVApi> SchemaApi for KV {
             // If table id already exists, return error.
             let (tb_id_seq, table_id) = get_u64_value(self, &dbid_tbname).await?;
             if tb_id_seq > 0 || table_id > 0 {
-                return Err(MetaError::AppError(AppError::UndropTableAlreadyExists(
+                return Err(KVAppError::AppError(AppError::UndropTableAlreadyExists(
                     UndropTableAlreadyExists::new(&tenant_dbname_tbname.table_name),
                 )));
             }
@@ -1199,14 +1199,14 @@ impl<KV: KVApi> SchemaApi for KV {
                 get_struct_value(self, &dbid_tbname_idlist).await?;
 
             let mut tb_id_list = if tb_id_list_seq == 0 {
-                return Err(MetaError::AppError(AppError::UndropTableHasNoHistory(
+                return Err(KVAppError::AppError(AppError::UndropTableHasNoHistory(
                     UndropTableHasNoHistory::new(&tenant_dbname_tbname.table_name),
                 )));
             } else {
                 match tb_id_list_opt {
                     Some(list) => list,
                     None => {
-                        return Err(MetaError::AppError(AppError::UndropTableHasNoHistory(
+                        return Err(KVAppError::AppError(AppError::UndropTableHasNoHistory(
                             UndropTableHasNoHistory::new(&tenant_dbname_tbname.table_name),
                         )));
                     }
@@ -1217,7 +1217,7 @@ impl<KV: KVApi> SchemaApi for KV {
             let table_id = match tb_id_list.last() {
                 Some(table_id) => *table_id,
                 None => {
-                    return Err(MetaError::AppError(AppError::UndropTableHasNoHistory(
+                    return Err(KVAppError::AppError(AppError::UndropTableHasNoHistory(
                         UndropTableHasNoHistory::new(&tenant_dbname_tbname.table_name),
                     )));
                 }
@@ -1258,7 +1258,7 @@ impl<KV: KVApi> SchemaApi for KV {
                 let mut tb_meta = tb_meta.unwrap();
                 // undrop a table with no drop_on time
                 if tb_meta.drop_on.is_none() {
-                    return Err(MetaError::AppError(AppError::UndropTableWithNoDropTime(
+                    return Err(KVAppError::AppError(AppError::UndropTableWithNoDropTime(
                         UndropTableWithNoDropTime::new(&tenant_dbname_tbname.table_name),
                     )));
                 }
@@ -1304,13 +1304,13 @@ impl<KV: KVApi> SchemaApi for KV {
             }
         }
 
-        Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
+        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
             TxnRetryMaxTimes::new("undrop_table", TXN_MAX_RETRY_TIMES),
         )))
     }
 
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
-    async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply, MetaError> {
+    async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
         let tenant_dbname_tbname = &req.name_ident;
@@ -1331,7 +1331,7 @@ impl<KV: KVApi> SchemaApi for KV {
 
             // cannot operate on shared database
             if let Some(from_share) = db_meta.from_share {
-                return Err(MetaError::AppError(AppError::ShareHasNoGrantedPrivilege(
+                return Err(KVAppError::AppError(AppError::ShareHasNoGrantedPrivilege(
                     ShareHasNoGrantedPrivilege::new(&from_share.tenant, &from_share.share_name),
                 )));
             }
@@ -1383,7 +1383,7 @@ impl<KV: KVApi> SchemaApi for KV {
 
             if let Some(last_table_id) = tb_id_list.last() {
                 if *last_table_id != table_id {
-                    return Err(MetaError::AppError(AppError::UnknownTable(
+                    return Err(KVAppError::AppError(AppError::UnknownTable(
                         UnknownTable::new(
                             &req.name_ident.table_name,
                             format!("{}: {}", "rename table", tenant_dbname_tbname),
@@ -1391,7 +1391,7 @@ impl<KV: KVApi> SchemaApi for KV {
                     )));
                 }
             } else {
-                return Err(MetaError::AppError(AppError::UnknownTable(
+                return Err(KVAppError::AppError(AppError::UnknownTable(
                     UnknownTable::new(
                         &req.name_ident.table_name,
                         format!("{}: {}", "rename table", tenant_dbname_tbname),
@@ -1509,13 +1509,13 @@ impl<KV: KVApi> SchemaApi for KV {
             }
         }
 
-        Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
+        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
             TxnRetryMaxTimes::new("rename_table", TXN_MAX_RETRY_TIMES),
         )))
     }
 
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
-    async fn get_table(&self, req: GetTableReq) -> Result<Arc<TableInfo>, MetaError> {
+    async fn get_table(&self, req: GetTableReq) -> Result<Arc<TableInfo>, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
         let tenant_dbname_tbname = &req.inner;
@@ -1594,7 +1594,10 @@ impl<KV: KVApi> SchemaApi for KV {
     }
 
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
-    async fn get_table_history(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>, MetaError> {
+    async fn get_table_history(
+        &self,
+        req: ListTableReq,
+    ) -> Result<Vec<Arc<TableInfo>>, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
         let tenant_dbname = &req.inner;
@@ -1685,7 +1688,7 @@ impl<KV: KVApi> SchemaApi for KV {
     }
 
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
-    async fn list_tables(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>, MetaError> {
+    async fn list_tables(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
         let tenant_dbname = &req.inner;
@@ -1717,7 +1720,7 @@ impl<KV: KVApi> SchemaApi for KV {
     async fn get_table_by_id(
         &self,
         table_id: MetaId,
-    ) -> Result<(TableIdent, Arc<TableMeta>), MetaError> {
+    ) -> Result<(TableIdent, Arc<TableMeta>), KVAppError> {
         debug!(req = debug(&table_id), "SchemaApi: {}", func_name!());
 
         let tbid = TableId { table_id };
@@ -1728,7 +1731,7 @@ impl<KV: KVApi> SchemaApi for KV {
         debug!(ident = display(&tbid), "get_table_by_id");
 
         if tb_meta_seq == 0 || table_meta.is_none() {
-            return Err(MetaError::AppError(AppError::UnknownTableId(
+            return Err(KVAppError::AppError(AppError::UnknownTableId(
                 UnknownTableId::new(table_id, "get_table_by_id"),
             )));
         }
@@ -1742,7 +1745,7 @@ impl<KV: KVApi> SchemaApi for KV {
     async fn get_table_copied_file_info(
         &self,
         req: GetTableCopiedFileReq,
-    ) -> Result<GetTableCopiedFileReply, MetaError> {
+    ) -> Result<GetTableCopiedFileReply, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
         let table_id = req.table_id;
@@ -1752,7 +1755,7 @@ impl<KV: KVApi> SchemaApi for KV {
         let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) = get_struct_value(self, &tbid).await?;
 
         if tb_meta_seq == 0 {
-            return Err(MetaError::AppError(AppError::UnknownTableId(
+            return Err(KVAppError::AppError(AppError::UnknownTableId(
                 UnknownTableId::new(table_id, ""),
             )));
         }
@@ -1785,7 +1788,7 @@ impl<KV: KVApi> SchemaApi for KV {
     async fn upsert_table_copied_file_info(
         &self,
         req: UpsertTableCopiedFileReq,
-    ) -> Result<UpsertTableCopiedFileReply, MetaError> {
+    ) -> Result<UpsertTableCopiedFileReply, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
         let mut retry = 0;
@@ -1800,7 +1803,7 @@ impl<KV: KVApi> SchemaApi for KV {
                 get_struct_value(self, &tbid).await?;
 
             if tb_meta_seq == 0 {
-                return Err(MetaError::AppError(AppError::UnknownTableId(
+                return Err(KVAppError::AppError(AppError::UnknownTableId(
                     UnknownTableId::new(table_id, ""),
                 )));
             }
@@ -1870,13 +1873,16 @@ impl<KV: KVApi> SchemaApi for KV {
             }
         }
 
-        Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
+        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
             TxnRetryMaxTimes::new("upsert_table_copied_file_info", TXN_MAX_RETRY_TIMES),
         )))
     }
 
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
-    async fn truncate_table(&self, req: TruncateTableReq) -> Result<TruncateTableReply, MetaError> {
+    async fn truncate_table(
+        &self,
+        req: TruncateTableReq,
+    ) -> Result<TruncateTableReply, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
         let mut retry = 0;
@@ -1891,7 +1897,7 @@ impl<KV: KVApi> SchemaApi for KV {
                 get_struct_value(self, &tbid).await?;
 
             if tb_meta_seq == 0 {
-                return Err(MetaError::AppError(AppError::UnknownTableId(
+                return Err(KVAppError::AppError(AppError::UnknownTableId(
                     UnknownTableId::new(table_id, ""),
                 )));
             }
@@ -1928,7 +1934,7 @@ impl<KV: KVApi> SchemaApi for KV {
                 return Ok(TruncateTableReply {});
             }
         }
-        Err(MetaError::AppError(AppError::TxnRetryMaxTimes(
+        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
             TxnRetryMaxTimes::new("upsert_table_copied_file_info", TXN_MAX_RETRY_TIMES),
         )))
     }
@@ -1937,7 +1943,7 @@ impl<KV: KVApi> SchemaApi for KV {
     async fn upsert_table_option(
         &self,
         req: UpsertTableOptionReq,
-    ) -> Result<UpsertTableOptionReply, MetaError> {
+    ) -> Result<UpsertTableOptionReply, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
         let tbid = TableId {
@@ -1952,12 +1958,12 @@ impl<KV: KVApi> SchemaApi for KV {
             debug!(ident = display(&tbid), "upsert_table_option");
 
             if tb_meta_seq == 0 || table_meta.is_none() {
-                return Err(MetaError::AppError(AppError::UnknownTableId(
+                return Err(KVAppError::AppError(AppError::UnknownTableId(
                     UnknownTableId::new(req.table_id, "upsert_table_option"),
                 )));
             }
             if req_seq.match_seq(tb_meta_seq).is_err() {
-                return Err(MetaError::AppError(AppError::from(
+                return Err(KVAppError::AppError(AppError::from(
                     TableVersionMismatched::new(
                         req.table_id,
                         req.seq,
@@ -2009,7 +2015,7 @@ impl<KV: KVApi> SchemaApi for KV {
     async fn update_table_meta(
         &self,
         req: UpdateTableMetaReq,
-    ) -> Result<UpdateTableMetaReply, MetaError> {
+    ) -> Result<UpdateTableMetaReply, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
         let tbid = TableId {
@@ -2024,12 +2030,12 @@ impl<KV: KVApi> SchemaApi for KV {
             debug!(ident = display(&tbid), "update_table_meta");
 
             if tb_meta_seq == 0 || table_meta.is_none() {
-                return Err(MetaError::AppError(AppError::UnknownTableId(
+                return Err(KVAppError::AppError(AppError::UnknownTableId(
                     UnknownTableId::new(req.table_id, "update_table_meta"),
                 )));
             }
             if req_seq.match_seq(tb_meta_seq).is_err() {
-                return Err(MetaError::AppError(AppError::from(
+                return Err(KVAppError::AppError(AppError::from(
                     TableVersionMismatched::new(
                         req.table_id,
                         req.seq,
@@ -2064,7 +2070,7 @@ impl<KV: KVApi> SchemaApi for KV {
     async fn gc_dropped_data(
         &self,
         req: GCDroppedDataReq,
-    ) -> Result<GCDroppedDataReply, MetaError> {
+    ) -> Result<GCDroppedDataReply, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
         let table_cnt = if req.table_at_least != 0 {
@@ -2091,7 +2097,7 @@ impl<KV: KVApi> SchemaApi for KV {
     /// It get the count from kv space first,
     /// if not found, it will compute the count by listing all databases and table ids.
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
-    async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply, MetaError> {
+    async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
         let key = CountTablesKey {
@@ -2152,7 +2158,7 @@ async fn remove_table_copied_files(
     table_id: u64,
     condition: &mut Vec<TxnCondition>,
     if_then: &mut Vec<TxnOp>,
-) -> Result<(), MetaError> {
+) -> Result<(), KVAppError> {
     let lock_key = TableCopiedFileLockKey { table_id };
     let (lock_key_seq, lock_op): (_, Option<TableCopiedFileLock>) =
         get_struct_value(kv_api, &lock_key).await?;
@@ -2186,7 +2192,7 @@ async fn gc_dropped_table(
     kv_api: &impl KVApi,
     tenant: String,
     at_least: u32,
-) -> Result<u32, MetaError> {
+) -> Result<u32, KVAppError> {
     let mut cnt = 0;
     let name_key = DatabaseNameIdent {
         tenant: tenant.clone(),
@@ -2319,7 +2325,7 @@ async fn remove_db_id_from_share(
     from_share: ShareNameIdent,
     condition: &mut Vec<TxnCondition>,
     if_then: &mut Vec<TxnOp>,
-) -> Result<(), MetaError> {
+) -> Result<(), KVAppError> {
     // get share by share_name
     let (share_id_seq, share_id, share_meta_seq, mut share_meta) = get_share_or_err(
         kv_api,
@@ -2344,7 +2350,7 @@ async fn gc_dropped_db(
     kv_api: &(impl KVApi + ?Sized),
     tenant: String,
     at_least: u32,
-) -> Result<u32, MetaError> {
+) -> Result<u32, KVAppError> {
     // List tables by tenant, db_id, table_name.
     let dbid_tbname_idlist = DbIdListKey {
         tenant,
@@ -2452,7 +2458,7 @@ pub(crate) async fn get_db_or_err(
     kv_api: &(impl KVApi + ?Sized),
     name_key: &DatabaseNameIdent,
     msg: impl Display,
-) -> Result<(u64, u64, u64, DatabaseMeta), MetaError> {
+) -> Result<(u64, u64, u64, DatabaseMeta), KVAppError> {
     let (db_id_seq, db_id) = get_u64_value(kv_api, name_key).await?;
     db_has_to_exist(db_id_seq, name_key, &msg)?;
 
@@ -2477,13 +2483,13 @@ fn db_has_to_not_exist(
     seq: u64,
     name_ident: &DatabaseNameIdent,
     ctx: impl Display,
-) -> Result<(), MetaError> {
+) -> Result<(), KVAppError> {
     if seq == 0 {
         Ok(())
     } else {
         debug!(seq, ?name_ident, "exist");
 
-        Err(MetaError::AppError(AppError::DatabaseAlreadyExists(
+        Err(KVAppError::AppError(AppError::DatabaseAlreadyExists(
             DatabaseAlreadyExists::new(&name_ident.db_name, format!("{}: {}", ctx, name_ident)),
         )))
     }
@@ -2496,13 +2502,13 @@ fn table_has_to_not_exist(
     seq: u64,
     name_ident: &TableNameIdent,
     ctx: impl Display,
-) -> Result<(), MetaError> {
+) -> Result<(), KVAppError> {
     if seq == 0 {
         Ok(())
     } else {
         debug!(seq, ?name_ident, "exist");
 
-        Err(MetaError::AppError(AppError::TableAlreadyExists(
+        Err(KVAppError::AppError(AppError::TableAlreadyExists(
             TableAlreadyExists::new(&name_ident.table_name, format!("{}: {}", ctx, name_ident)),
         )))
     }
@@ -2512,7 +2518,7 @@ fn table_has_to_not_exist(
 ///
 /// It returns (seq, `u64` value).
 /// If the count value is not in the kv space, (0, `u64` value) is returned.
-async fn count_tables(kv_api: &impl KVApi, key: &CountTablesKey) -> Result<u64, MetaError> {
+async fn count_tables(kv_api: &impl KVApi, key: &CountTablesKey) -> Result<u64, KVAppError> {
     // For backward compatibility:
     // If the table count of a tenant is not found in kv space,,
     // we should compute the count by listing all tables of the tenant.
@@ -2538,7 +2544,7 @@ async fn get_table_id_from_share_by_name(
     share: ShareNameIdent,
     db_id: u64,
     table_name: &String,
-) -> Result<u64, MetaError> {
+) -> Result<u64, KVAppError> {
     let res = get_share_or_err(
         kv_api,
         &share,
@@ -2553,12 +2559,12 @@ async fn get_table_id_from_share_by_name(
         }
     };
     if share_id_seq == 0 {
-        return Err(MetaError::AppError(AppError::WrongShare(WrongShare::new(
+        return Err(KVAppError::AppError(AppError::WrongShare(WrongShare::new(
             share.to_string(),
         ))));
     }
     if !share_meta.share_from_db_ids.contains(&db_id) {
-        return Err(MetaError::AppError(AppError::ShareHasNoGrantedDatabase(
+        return Err(KVAppError::AppError(AppError::ShareHasNoGrantedDatabase(
             ShareHasNoGrantedDatabase::new(&share.tenant, &share.share_name),
         )));
     }
@@ -2573,7 +2579,7 @@ async fn get_table_id_from_share_by_name(
     let table_names = get_table_names_by_ids(kv_api, &ids).await?;
     match table_names.binary_search(table_name) {
         Ok(i) => Ok(ids[i]),
-        Err(_) => Err(MetaError::AppError(AppError::WrongShareObject(
+        Err(_) => Err(KVAppError::AppError(AppError::WrongShareObject(
             WrongShareObject::new(table_name.to_string()),
         ))),
     }
@@ -2582,7 +2588,7 @@ async fn get_table_id_from_share_by_name(
 async fn get_table_names_by_ids(
     kv_api: &impl KVApi,
     ids: &[u64],
-) -> Result<Vec<String>, MetaError> {
+) -> Result<Vec<String>, KVAppError> {
     let mut table_names = vec![];
 
     for id in ids.iter() {
@@ -2593,7 +2599,7 @@ async fn get_table_names_by_ids(
         match table_name_opt {
             Some(table_name) => table_names.push(table_name.table_name),
             None => {
-                return Err(MetaError::AppError(AppError::UnknownTableId(
+                return Err(KVAppError::AppError(AppError::UnknownTableId(
                     UnknownTableId::new(*id, "get_table_names_by_ids"),
                 )));
             }
@@ -2607,7 +2613,7 @@ async fn get_tableinfos_by_ids(
     ids: &[u64],
     tenant_dbname: &DatabaseNameIdent,
     dbid_tbnames_opt: Option<Vec<DBIdTableName>>,
-) -> Result<Vec<Arc<TableInfo>>, MetaError> {
+) -> Result<Vec<Arc<TableInfo>>, KVAppError> {
     let mut tb_meta_keys = Vec::with_capacity(ids.len());
     for id in ids.iter() {
         let tbid = TableId { table_id: *id };
@@ -2660,7 +2666,7 @@ async fn list_tables_from_unshare_db(
     kv_api: &impl KVApi,
     db_id: u64,
     tenant_dbname: &DatabaseNameIdent,
-) -> Result<Vec<Arc<TableInfo>>, MetaError> {
+) -> Result<Vec<Arc<TableInfo>>, KVAppError> {
     // List tables by tenant, db_id, table_name.
 
     let dbid_tbname = DBIdTableName {
@@ -2679,7 +2685,7 @@ async fn list_tables_from_share_db(
     share: ShareNameIdent,
     db_id: u64,
     tenant_dbname: &DatabaseNameIdent,
-) -> Result<Vec<Arc<TableInfo>>, MetaError> {
+) -> Result<Vec<Arc<TableInfo>>, KVAppError> {
     let res = get_share_or_err(
         kv_api,
         &share,
@@ -2694,12 +2700,12 @@ async fn list_tables_from_share_db(
         }
     };
     if share_id_seq == 0 {
-        return Err(MetaError::AppError(AppError::WrongShare(WrongShare::new(
+        return Err(KVAppError::AppError(AppError::WrongShare(WrongShare::new(
             share.to_string(),
         ))));
     }
     if !share_meta.share_from_db_ids.contains(&db_id) {
-        return Err(MetaError::AppError(AppError::ShareHasNoGrantedDatabase(
+        return Err(KVAppError::AppError(AppError::ShareHasNoGrantedDatabase(
             ShareHasNoGrantedDatabase::new(&share.tenant, &share.share_name),
         )));
     }

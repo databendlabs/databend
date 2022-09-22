@@ -15,7 +15,8 @@ test = false
 common-base = { path = "../base" }
 
 # Crates.io dependencies
-ordered-float = "3.0.0"
+ahash = "0.7.6"
+ordered-float = { version = "3.1.0", features = ["serde"] }
 primitive-types = "0.11.1"
 
 [dev-dependencies]
