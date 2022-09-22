@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::Expression;
+use common_legacy_planners::LegacyExpression;
 use common_meta_types::MetaId;
 use parking_lot::RwLock;
 
@@ -32,7 +32,7 @@ use crate::table_functions::sync_crash_me::SyncCrashMeTable;
 use crate::table_functions::NumbersTable;
 use crate::table_functions::TableFunction;
 
-pub type TableArgs = Option<Vec<Expression>>;
+pub type TableArgs = Option<Vec<LegacyExpression>>;
 type TableFunctionCreators = RwLock<HashMap<String, (MetaId, Arc<dyn TableFunctionCreator>)>>;
 
 pub trait TableFunctionCreator: Send + Sync {

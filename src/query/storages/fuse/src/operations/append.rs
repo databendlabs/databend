@@ -19,7 +19,7 @@ use common_catalog::table_context::TableContext;
 use common_datablocks::SortColumnDescription;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
-use common_legacy_planners::Expression;
+use common_legacy_planners::LegacyExpression;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::Pipeline;
 use common_pipeline_core::SinkPipeBuilder;
@@ -156,10 +156,10 @@ impl FuseTable {
                 )
             })?;
 
-            let exprs: Vec<Expression> = output_schema
+            let exprs: Vec<LegacyExpression> = output_schema
                 .fields()
                 .iter()
-                .map(|f| Expression::Column(f.name().to_owned()))
+                .map(|f| LegacyExpression::Column(f.name().to_owned()))
                 .collect();
 
             let executor = ExpressionExecutor::try_create(

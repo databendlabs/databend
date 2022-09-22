@@ -21,8 +21,8 @@ use common_datablocks::assert_blocks_sorted_eq_with_name;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_legacy_planners::Expression;
 use common_legacy_planners::Extras;
+use common_legacy_planners::LegacyExpression;
 use common_meta_app::schema::DatabaseMeta;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::SourcePipeBuilder;
@@ -317,8 +317,8 @@ pub async fn test_drive(
     };
 
     let tbl_args = Some(vec![
-        Expression::create_literal(arg_db),
-        Expression::create_literal(arg_tbl),
+        LegacyExpression::create_literal(arg_db),
+        LegacyExpression::create_literal(arg_tbl),
     ]);
 
     test_drive_with_args(ctx, tbl_args).await

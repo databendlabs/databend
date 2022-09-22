@@ -14,21 +14,21 @@
 
 use common_datavalues::DataValue;
 
-use crate::Expression;
+use crate::LegacyExpression;
 
 pub trait Literal {
-    fn to_literal(&self) -> Expression;
+    fn to_literal(&self) -> LegacyExpression;
 }
 
 impl Literal for &[u8] {
-    fn to_literal(&self) -> Expression {
-        Expression::create_literal(DataValue::String(self.to_vec()))
+    fn to_literal(&self) -> LegacyExpression {
+        LegacyExpression::create_literal(DataValue::String(self.to_vec()))
     }
 }
 
 impl Literal for Vec<u8> {
-    fn to_literal(&self) -> Expression {
-        Expression::create_literal(DataValue::String(self.clone()))
+    fn to_literal(&self) -> LegacyExpression {
+        LegacyExpression::create_literal(DataValue::String(self.clone()))
     }
 }
 
@@ -36,8 +36,8 @@ macro_rules! make_literal {
     ($TYPE:ty, $SUPER: ident, $SCALAR:ident) => {
         #[allow(missing_docs)]
         impl Literal for $TYPE {
-            fn to_literal(&self) -> Expression {
-                Expression::create_literal(DataValue::$SCALAR(*self as $SUPER))
+            fn to_literal(&self) -> LegacyExpression {
+                LegacyExpression::create_literal(DataValue::$SCALAR(*self as $SUPER))
             }
         }
     };
@@ -57,10 +57,10 @@ make_literal!(u16, u64, UInt64);
 make_literal!(u32, u64, UInt64);
 make_literal!(u64, u64, UInt64);
 
-pub fn lit<T: Literal>(n: T) -> Expression {
+pub fn lit<T: Literal>(n: T) -> LegacyExpression {
     n.to_literal()
 }
 
-pub fn lit_null() -> Expression {
-    Expression::create_literal(DataValue::Null)
+pub fn lit_null() -> LegacyExpression {
+    LegacyExpression::create_literal(DataValue::Null)
 }

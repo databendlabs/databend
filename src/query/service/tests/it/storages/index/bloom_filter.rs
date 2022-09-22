@@ -376,7 +376,7 @@ async fn test_bloom_hash_collision() -> Result<()> {
 async fn test_bloom_indexer_single_column_prune() -> Result<()> {
     struct Test {
         name: &'static str,
-        expr: Expression,
+        expr: LegacyExpression,
         expected_eval_result: BloomFilterExprEvalResult,
     }
 
@@ -422,7 +422,7 @@ async fn test_bloom_indexer_single_column_prune() -> Result<()> {
 async fn test_bloom_indexer_logical_and_prune() -> Result<()> {
     struct Test {
         name: &'static str,
-        expr: Expression,
+        expr: LegacyExpression,
         expected_eval_result: BloomFilterExprEvalResult,
     }
 
@@ -467,7 +467,7 @@ async fn test_bloom_indexer_logical_and_prune() -> Result<()> {
 async fn test_bloom_indexer_logical_or_prune() -> Result<()> {
     struct Test {
         name: &'static str,
-        expr: Expression,
+        expr: LegacyExpression,
         expected_eval_result: BloomFilterExprEvalResult,
     }
 

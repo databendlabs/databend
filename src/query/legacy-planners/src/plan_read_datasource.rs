@@ -20,8 +20,8 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_meta_app::schema::TableInfo;
 
-use crate::Expression;
 use crate::Extras;
+use crate::LegacyExpression;
 use crate::Partitions;
 use crate::Projection;
 use crate::StageTableInfo;
@@ -71,7 +71,7 @@ pub struct ReadDataSourcePlan {
     pub statistics: Statistics,
     pub description: String,
 
-    pub tbl_args: Option<Vec<Expression>>,
+    pub tbl_args: Option<Vec<LegacyExpression>>,
     pub push_downs: Option<Extras>,
 }
 

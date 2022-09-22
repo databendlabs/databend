@@ -13,7 +13,7 @@
 //  limitations under the License.
 
 use common_exception::Result;
-use common_legacy_planners::Expression;
+use common_legacy_planners::LegacyExpression;
 
 use crate::analyzer_expr_sync::ExpressionSyncAnalyzer;
 use crate::ExprParser;
@@ -21,7 +21,7 @@ use crate::ExprParser;
 pub struct ExpressionParser;
 
 impl ExpressionParser {
-    pub fn parse_exprs(expr: &str) -> Result<Vec<Expression>> {
+    pub fn parse_exprs(expr: &str) -> Result<Vec<LegacyExpression>> {
         let exprs = ExprParser::parse_exprs(expr)?;
         let analyzer = ExpressionSyncAnalyzer::create();
 

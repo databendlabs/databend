@@ -17,8 +17,8 @@ use std::sync::Arc;
 
 use common_catalog::catalog::CATALOG_DEFAULT;
 use common_exception::Result;
-use common_legacy_planners::Expression;
 use common_legacy_planners::Extras;
+use common_legacy_planners::LegacyExpression;
 use common_legacy_planners::Partitions;
 use common_legacy_planners::ReadDataSourcePlan;
 use common_legacy_planners::Statistics;
@@ -98,7 +98,7 @@ impl Table for FuseSnapshotTable {
         Ok((Statistics::default(), vec![]))
     }
 
-    fn table_args(&self) -> Option<Vec<Expression>> {
+    fn table_args(&self) -> Option<Vec<LegacyExpression>> {
         Some(vec![
             string_literal(self.arg_database_name.as_str()),
             string_literal(self.arg_table_name.as_str()),

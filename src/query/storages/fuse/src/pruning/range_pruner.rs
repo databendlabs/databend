@@ -18,7 +18,7 @@ use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_fuse_meta::meta::StatisticsOfColumns;
-use common_legacy_planners::Expression;
+use common_legacy_planners::LegacyExpression;
 use common_storages_index::RangeFilter;
 
 pub trait RangeFilterPruner {
@@ -57,7 +57,7 @@ impl RangeFilterPruner for RangeFilter {
 
 pub fn new_range_filter_pruner<'a>(
     ctx: &Arc<dyn TableContext>,
-    filter_expr: Option<&'a [Expression]>,
+    filter_expr: Option<&'a [LegacyExpression]>,
     schema: &'a DataSchemaRef,
 ) -> Result<Arc<dyn RangeFilterPruner + Send + Sync>> {
     Ok(match filter_expr {

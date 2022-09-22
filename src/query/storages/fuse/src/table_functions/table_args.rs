@@ -15,10 +15,10 @@
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::Expression;
+use common_legacy_planners::LegacyExpression;
 
-pub fn string_value(expr: &Expression) -> Result<String> {
-    if let Expression::Literal { value, .. } = expr {
+pub fn string_value(expr: &LegacyExpression) -> Result<String> {
+    if let LegacyExpression::Literal { value, .. } = expr {
         String::from_utf8(value.as_string()?)
             .map_err(|e| ErrorCode::BadArguments(format!("invalid string. {}", e)))
     } else {
@@ -29,6 +29,6 @@ pub fn string_value(expr: &Expression) -> Result<String> {
     }
 }
 
-pub fn string_literal(val: &str) -> Expression {
-    Expression::create_literal(DataValue::String(val.as_bytes().to_vec()))
+pub fn string_literal(val: &str) -> LegacyExpression {
+    LegacyExpression::create_literal(DataValue::String(val.as_bytes().to_vec()))
 }

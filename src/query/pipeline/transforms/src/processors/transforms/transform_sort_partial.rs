@@ -19,7 +19,7 @@ use common_datablocks::SortColumnDescription;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::Expression;
+use common_legacy_planners::LegacyExpression;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -57,12 +57,12 @@ impl Transform for TransformSortPartial {
 
 pub fn get_sort_descriptions(
     schema: &DataSchemaRef,
-    exprs: &[Expression],
+    exprs: &[LegacyExpression],
 ) -> Result<Vec<SortColumnDescription>> {
     let mut sort_columns_descriptions = vec![];
     for x in exprs {
         match *x {
-            Expression::Sort {
+            LegacyExpression::Sort {
                 ref expr,
                 asc,
                 nulls_first,

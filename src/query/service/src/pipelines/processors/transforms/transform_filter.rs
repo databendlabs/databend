@@ -19,7 +19,7 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_exception::Result;
-use common_legacy_planners::Expression;
+use common_legacy_planners::LegacyExpression;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -42,7 +42,7 @@ where Self: Transform
 {
     pub fn try_create(
         schema: DataSchemaRef,
-        predicate: Expression,
+        predicate: LegacyExpression,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         ctx: Arc<QueryContext>,
@@ -57,7 +57,7 @@ where Self: Transform
 
     fn expr_executor(
         schema: &DataSchemaRef,
-        expr: &Expression,
+        expr: &LegacyExpression,
         ctx: Arc<QueryContext>,
     ) -> Result<ExpressionExecutor> {
         let expr_field = expr.to_data_field(schema)?;

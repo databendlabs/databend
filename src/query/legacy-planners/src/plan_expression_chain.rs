@@ -24,9 +24,9 @@ use crate::ActionAlias;
 use crate::ActionConstant;
 use crate::ActionFunction;
 use crate::ActionInput;
-use crate::Expression;
 use crate::ExpressionAction;
 use crate::ExpressionVisitor;
+use crate::LegacyExpression;
 use crate::Recursion;
 
 #[derive(Debug, Clone)]
@@ -37,7 +37,7 @@ pub struct ExpressionChain {
 }
 
 impl ExpressionChain {
-    pub fn try_create(schema: DataSchemaRef, exprs: &[Expression]) -> Result<Self> {
+    pub fn try_create(schema: DataSchemaRef, exprs: &[LegacyExpression]) -> Result<Self> {
         let mut chain = Self {
             schema,
             actions: vec![],
@@ -50,15 +50,15 @@ impl ExpressionChain {
         Ok(chain)
     }
 
-    fn recursion_add_expr(&mut self, expr: &Expression) -> Result<()> {
+    fn recursion_add_expr(&mut self, expr: &LegacyExpression) -> Result<()> {
         struct ExpressionActionVisitor(*mut ExpressionChain);
 
         impl ExpressionVisitor for ExpressionActionVisitor {
-            fn pre_visit(self, _expr: &Expression) -> Result<Recursion<Self>> {
+            fn pre_visit(self, _expr: &LegacyExpression) -> Result<Recursion<Self>> {
                 Ok(Recursion::Continue(self))
             }
 
-            fn post_visit(self, expr: &Expression) -> Result<Self> {
+            fn post_visit(self, expr: &LegacyExpression) -> Result<Self> {
                 unsafe {
                     (*self.0).add_expr(expr)?;
                     Ok(self)
@@ -70,9 +70,9 @@ impl ExpressionChain {
         Ok(())
     }
 
-    fn add_expr(&mut self, expr: &Expression) -> Result<()> {
+    fn add_expr(&mut self, expr: &LegacyExpression) -> Result<()> {
         match expr {
-            Expression::Alias(name, sub_expr) => {
+            LegacyExpression::Alias(name, sub_expr) => {
                 let return_type = expr.to_data_type(&self.schema)?;
 
                 let alias = ActionAlias {
@@ -83,7 +83,7 @@ impl ExpressionChain {
 
                 self.actions.push(ExpressionAction::Alias(alias));
             }
-            Expression::Column(c) => {
+            LegacyExpression::Column(c) => {
                 let arg_type = self.schema.field_with_name(c)?.data_type();
                 let input = ActionInput {
                     name: expr.column_name(),
@@ -91,12 +91,12 @@ impl ExpressionChain {
                 };
                 self.actions.push(ExpressionAction::Input(input));
             }
-            Expression::QualifiedColumn(_) => {
+            LegacyExpression::QualifiedColumn(_) => {
                 return Err(ErrorCode::LogicalError(
                     "QualifiedColumn should be resolve in analyze.",
                 ));
             }
-            Expression::Literal {
+            LegacyExpression::Literal {
                 value, data_type, ..
             } => {
                 let value = ActionConstant {
@@ -107,7 +107,7 @@ impl ExpressionChain {
 
                 self.actions.push(ExpressionAction::Constant(value));
             }
-            Expression::UnaryExpression {
+            LegacyExpression::UnaryExpression {
                 op,
                 expr: nested_expr,
             } => {
@@ -128,7 +128,7 @@ impl ExpressionChain {
                 self.actions.push(ExpressionAction::Function(function));
             }
 
-            Expression::BinaryExpression { op, left, right } => {
+            LegacyExpression::BinaryExpression { op, left, right } => {
                 let arg_types = vec![
                     left.to_data_type(&self.schema)?,
                     right.to_data_type(&self.schema)?,
@@ -150,7 +150,7 @@ impl ExpressionChain {
                 self.actions.push(ExpressionAction::Function(function));
             }
 
-            Expression::ScalarFunction { op, args } => {
+            LegacyExpression::ScalarFunction { op, args } => {
                 let arg_types = args
                     .iter()
                     .map(|action| action.to_data_type(&self.schema))
@@ -173,15 +173,15 @@ impl ExpressionChain {
                 self.actions.push(ExpressionAction::Function(function));
             }
 
-            Expression::AggregateFunction { .. } => {
+            LegacyExpression::AggregateFunction { .. } => {
                 return Err(ErrorCode::LogicalError(
                     "Action must be a non-aggregated function.",
                 ));
             }
 
-            Expression::Wildcard | Expression::Sort { .. } => {}
+            LegacyExpression::Wildcard | LegacyExpression::Sort { .. } => {}
 
-            Expression::Cast {
+            LegacyExpression::Cast {
                 expr: sub_expr,
                 data_type,
                 ..
@@ -208,7 +208,7 @@ impl ExpressionChain {
 
                 self.actions.push(ExpressionAction::Function(function));
             }
-            Expression::MapAccess { args, .. } => {
+            LegacyExpression::MapAccess { args, .. } => {
                 let arg_types = args
                     .iter()
                     .map(|action| action.to_data_type(&self.schema))

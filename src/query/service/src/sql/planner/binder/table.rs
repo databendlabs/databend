@@ -30,7 +30,7 @@ use common_catalog::catalog::CATALOG_DEFAULT;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::Expression;
+use common_legacy_planners::LegacyExpression;
 use common_planner::IndexType;
 
 use crate::sql::binder::scalar::ScalarBinder;
@@ -187,7 +187,7 @@ impl<'a> Binder {
                     .into_iter()
                     .map(|(scalar, _)| match scalar {
                         Scalar::ConstantExpr(ConstantExpr { value, data_type }) => {
-                            Ok(Expression::Literal {
+                            Ok(LegacyExpression::Literal {
                                 value,
                                 column_name: None,
                                 data_type: *data_type,
@@ -198,7 +198,7 @@ impl<'a> Binder {
                             scalar
                         ))),
                     })
-                    .collect::<Result<Vec<Expression>>>()?;
+                    .collect::<Result<Vec<LegacyExpression>>>()?;
 
                 let table_args = Some(expressions);
 

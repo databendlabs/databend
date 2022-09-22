@@ -25,8 +25,8 @@ use common_legacy_planners::add;
 use common_legacy_planners::col;
 use common_legacy_planners::lit;
 use common_legacy_planners::sub;
-use common_legacy_planners::Expression;
 use common_legacy_planners::Extras;
+use common_legacy_planners::LegacyExpression;
 use databend_query::interpreters::CreateTableInterpreterV2;
 use databend_query::interpreters::Interpreter;
 use databend_query::sessions::QueryContext;
@@ -157,7 +157,7 @@ async fn test_block_pruner() -> Result<()> {
 
     // Sort asc Limit
     let mut e3 = Extras::default();
-    e3.order_by = vec![Expression::Sort {
+    e3.order_by = vec![LegacyExpression::Sort {
         expr: Box::new(col("b")),
         asc: true,
         nulls_first: false,
@@ -167,7 +167,7 @@ async fn test_block_pruner() -> Result<()> {
 
     // Sort desc Limit
     let mut e4 = Extras::default();
-    e4.order_by = vec![Expression::Sort {
+    e4.order_by = vec![LegacyExpression::Sort {
         expr: Box::new(col("b")),
         asc: false,
         nulls_first: false,

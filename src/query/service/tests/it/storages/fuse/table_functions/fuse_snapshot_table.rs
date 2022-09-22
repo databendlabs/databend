@@ -53,14 +53,14 @@ async fn test_fuse_snapshot_table_args() -> Result<()> {
         test_drive_with_args(query_ctx.clone(), Some(vec![])).await,
     );
 
-    let arg_db = Expression::create_literal(DataValue::String(test_db.as_bytes().to_vec()));
+    let arg_db = LegacyExpression::create_literal(DataValue::String(test_db.as_bytes().to_vec()));
     expects_err(
         "bad argument (no table)",
         ErrorCode::bad_arguments_code(),
         test_drive_with_args(query_ctx.clone(), Some(vec![arg_db])).await,
     );
 
-    let arg_db = Expression::create_literal(DataValue::String(test_db.as_bytes().to_vec()));
+    let arg_db = LegacyExpression::create_literal(DataValue::String(test_db.as_bytes().to_vec()));
     expects_err(
         "bad argument (too many args)",
         ErrorCode::bad_arguments_code(),
@@ -87,8 +87,8 @@ async fn test_fuse_snapshot_table_read() -> Result<()> {
     interpreter.execute(ctx.clone()).await?;
 
     // func args
-    let arg_db = Expression::create_literal(DataValue::String(db.as_bytes().to_vec()));
-    let arg_tbl = Expression::create_literal(DataValue::String(tbl.as_bytes().to_vec()));
+    let arg_db = LegacyExpression::create_literal(DataValue::String(db.as_bytes().to_vec()));
+    let arg_tbl = LegacyExpression::create_literal(DataValue::String(tbl.as_bytes().to_vec()));
 
     {
         let expected = vec![

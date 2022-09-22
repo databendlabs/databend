@@ -18,7 +18,7 @@ use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_legacy_planners::Expression;
+use common_legacy_planners::LegacyExpression;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -42,7 +42,7 @@ where Self: Transform
         output: Arc<OutputPort>,
         input_schema: DataSchemaRef,
         output_schema: DataSchemaRef,
-        exprs: Vec<Expression>,
+        exprs: Vec<LegacyExpression>,
         ctx: Arc<dyn TableContext>,
     ) -> Result<ProcessorPtr> {
         let executor = ExpressionExecutor::try_create(

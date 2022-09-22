@@ -21,7 +21,7 @@ use common_legacy_planners::*;
 
 struct Test {
     name: &'static str,
-    expr: Expression,
+    expr: LegacyExpression,
     column: &'static str,
     left: Option<ColumnWithField>,
     right: Option<ColumnWithField>,
@@ -209,7 +209,7 @@ fn test_arithmetic_mul_div() -> Result<()> {
     let test_suite = vec![
         Test {
             name: "f(x) = -5 * x",
-            expr: Expression::create_binary_expression("*", vec![lit(-5_i8), col("x")]),
+            expr: LegacyExpression::create_binary_expression("*", vec![lit(-5_i8), col("x")]),
             column: "x",
             left: None,
             right: None,
@@ -223,7 +223,7 @@ fn test_arithmetic_mul_div() -> Result<()> {
         },
         Test {
             name: "f(x) = -1/x",
-            expr: Expression::create_binary_expression("/", vec![lit(-1_i8), col("x")]),
+            expr: LegacyExpression::create_binary_expression("/", vec![lit(-1_i8), col("x")]),
             column: "x",
             left: create_f64(5.0),
             right: create_f64(10.0),
@@ -237,7 +237,7 @@ fn test_arithmetic_mul_div() -> Result<()> {
         },
         Test {
             name: "f(x) = x/10",
-            expr: Expression::create_binary_expression("/", vec![col("x"), lit(10_i8)]),
+            expr: LegacyExpression::create_binary_expression("/", vec![col("x"), lit(10_i8)]),
             column: "x",
             left: None,
             right: None,
@@ -252,7 +252,7 @@ fn test_arithmetic_mul_div() -> Result<()> {
         Test {
             // Function '*' is not monotonic in the variables range.
             name: "f(x) = x * (x-12) where x in [10-1000]",
-            expr: Expression::create_binary_expression("*", vec![
+            expr: LegacyExpression::create_binary_expression("*", vec![
                 col("x"),
                 sub(col("x"), lit(12_i64)),
             ]),
@@ -263,7 +263,7 @@ fn test_arithmetic_mul_div() -> Result<()> {
         },
         Test {
             name: "f(x) = x * (x-12) where x in [12, 100]",
-            expr: Expression::create_binary_expression("*", vec![
+            expr: LegacyExpression::create_binary_expression("*", vec![
                 col("x"),
                 sub(col("x"), lit(12_i64)),
             ]),
@@ -280,9 +280,9 @@ fn test_arithmetic_mul_div() -> Result<()> {
         },
         Test {
             name: "f(x) = x/(1/x) where  x >= 1",
-            expr: Expression::create_binary_expression("/", vec![
+            expr: LegacyExpression::create_binary_expression("/", vec![
                 col("x"),
-                Expression::create_binary_expression("/", vec![lit(1_i8), col("x")]),
+                LegacyExpression::create_binary_expression("/", vec![lit(1_i8), col("x")]),
             ]),
             column: "x",
             left: create_f64(1.0),
@@ -298,9 +298,9 @@ fn test_arithmetic_mul_div() -> Result<()> {
         Test {
             // Function '/' is not monotonic in the variables range.
             name: "f(x) = -x/(2/(x-2)) where  x in [0-10]",
-            expr: Expression::create_binary_expression("/", vec![
+            expr: LegacyExpression::create_binary_expression("/", vec![
                 neg(col("x")),
-                Expression::create_binary_expression("/", vec![
+                LegacyExpression::create_binary_expression("/", vec![
                     lit(2_i8),
                     sub(col("x"), lit(2_i8)),
                 ]),
@@ -312,9 +312,9 @@ fn test_arithmetic_mul_div() -> Result<()> {
         },
         Test {
             name: "f(x) = -x/(2/(x-2)) where  x in [4-10]",
-            expr: Expression::create_binary_expression("/", vec![
+            expr: LegacyExpression::create_binary_expression("/", vec![
                 neg(col("x")),
-                Expression::create_binary_expression("/", vec![
+                LegacyExpression::create_binary_expression("/", vec![
                     lit(2_i8),
                     sub(col("x"), lit(2_i8)),
                 ]),
@@ -344,7 +344,7 @@ fn test_abs_function() -> Result<()> {
         Test {
             // Function 'abs' is not monotonic in the variables range.
             name: "f(x) = abs(x + 12)",
-            expr: Expression::create_scalar_function("abs", vec![add(col("x"), lit(12i32))]),
+            expr: LegacyExpression::create_scalar_function("abs", vec![add(col("x"), lit(12i32))]),
             column: "x",
             left: None,
             right: None,
@@ -352,7 +352,7 @@ fn test_abs_function() -> Result<()> {
         },
         Test {
             name: "f(x) = abs(x) where  0 <= x <= 10",
-            expr: Expression::create_scalar_function("abs", vec![col("x")]),
+            expr: LegacyExpression::create_scalar_function("abs", vec![col("x")]),
             column: "x",
             left: create_f64(0.0),
             right: create_f64(10.0),
@@ -366,7 +366,7 @@ fn test_abs_function() -> Result<()> {
         },
         Test {
             name: "f(x) = abs(x) where  -10 <= x <= -2",
-            expr: Expression::create_scalar_function("abs", vec![col("x")]),
+            expr: LegacyExpression::create_scalar_function("abs", vec![col("x")]),
             column: "x",
             left: create_f64(-10.0),
             right: create_f64(-2.0),
@@ -381,7 +381,7 @@ fn test_abs_function() -> Result<()> {
         Test {
             // Function 'abs' is not monotonic in the variables range.
             name: "f(x) = abs(x) where -5 <= x <= 5",
-            expr: Expression::create_scalar_function("abs", vec![col("x")]),
+            expr: LegacyExpression::create_scalar_function("abs", vec![col("x")]),
             column: "x",
             left: create_f64(-5.0),
             right: create_f64(5.0),
@@ -389,7 +389,7 @@ fn test_abs_function() -> Result<()> {
         },
         Test {
             name: "f(x) = abs(x + 12) where -12 <= x <= 1000",
-            expr: Expression::create_scalar_function("abs", vec![add(col("x"), lit(12i32))]),
+            expr: LegacyExpression::create_scalar_function("abs", vec![add(col("x"), lit(12i32))]),
             column: "x",
             left: create_f64(-12.0),
             right: create_f64(1000.0),
@@ -404,7 +404,7 @@ fn test_abs_function() -> Result<()> {
         Test {
             // Function 'abs' is not monotonic in the variables range.
             name: "f(x) = abs(x + 12) where -14 <=  x <= 20",
-            expr: Expression::create_scalar_function("abs", vec![add(col("x"), lit(12i32))]),
+            expr: LegacyExpression::create_scalar_function("abs", vec![add(col("x"), lit(12i32))]),
             column: "x",
             left: create_f64(-14.0),
             right: create_f64(20.0),
@@ -412,7 +412,7 @@ fn test_abs_function() -> Result<()> {
         },
         Test {
             name: "f(x) = abs( (x - 7) + (x - 3) ) where 5 <= x <= 100",
-            expr: Expression::create_scalar_function("abs", vec![add(
+            expr: LegacyExpression::create_scalar_function("abs", vec![add(
                 sub(col("x"), lit(7_i32)),
                 sub(col("x"), lit(3_i32)),
             )]),
@@ -429,7 +429,7 @@ fn test_abs_function() -> Result<()> {
         },
         Test {
             name: "f(x) = abs( (-x + 8) - x) where -100 <= x <= 4",
-            expr: Expression::create_scalar_function("abs", vec![sub(
+            expr: LegacyExpression::create_scalar_function("abs", vec![sub(
                 add(neg(col("x")), lit(8)),
                 col("x"),
             )]),
@@ -457,7 +457,7 @@ fn test_dates_function() -> Result<()> {
     let test_suite = vec![
         Test {
             name: "f(x) = to_start_of_week(z+12)",
-            expr: Expression::create_scalar_function("to_start_of_week", vec![add(
+            expr: LegacyExpression::create_scalar_function("to_start_of_week", vec![add(
                 col("z"),
                 lit(12i32),
             )]),
@@ -474,7 +474,7 @@ fn test_dates_function() -> Result<()> {
         },
         Test {
             name: "f(x) = to_monday(x)",
-            expr: Expression::create_scalar_function("to_monday", vec![col("x")]),
+            expr: LegacyExpression::create_scalar_function("to_monday", vec![col("x")]),
             column: "x",
             left: None,
             right: None,
@@ -489,7 +489,7 @@ fn test_dates_function() -> Result<()> {
         Test {
             // Function 'to_second' is not monotonic in the variables range.
             name: "f(x) = to_second(x)",
-            expr: Expression::create_scalar_function("to_second", vec![col("x")]),
+            expr: LegacyExpression::create_scalar_function("to_second", vec![col("x")]),
             column: "x",
             left: None,
             right: None,
@@ -497,7 +497,7 @@ fn test_dates_function() -> Result<()> {
         },
         Test {
             name: "f(z) = to_second(z)",
-            expr: Expression::create_scalar_function("to_second", vec![col("z")]),
+            expr: LegacyExpression::create_scalar_function("to_second", vec![col("z")]),
             column: "z",
             left: create_datetime(1638288000000000),
             right: create_datetime(1638288059000000),
@@ -512,7 +512,7 @@ fn test_dates_function() -> Result<()> {
         Test {
             // Function 'to_day_of_year' is not monotonic in the variables range.
             name: "f(z) = to_day_of_year(z)",
-            expr: Expression::create_scalar_function("to_day_of_year", vec![col("z")]),
+            expr: LegacyExpression::create_scalar_function("to_day_of_year", vec![col("z")]),
             column: "z",
             left: create_datetime(1606752119000000),
             right: create_datetime(1638288059000000),
@@ -520,7 +520,7 @@ fn test_dates_function() -> Result<()> {
         },
         Test {
             name: "f(z) = to_start_of_hour(z)",
-            expr: Expression::create_scalar_function("to_start_of_hour", vec![col("z")]),
+            expr: LegacyExpression::create_scalar_function("to_start_of_hour", vec![col("z")]),
             column: "z",
             left: None,
             right: None,
@@ -546,7 +546,10 @@ fn test_single_point() -> Result<()> {
         Test {
             // Function 'rand' is not monotonic in the variables range.
             name: "f(x) = x + rand()",
-            expr: add(col("x"), Expression::create_scalar_function("rand", vec![])),
+            expr: add(
+                col("x"),
+                LegacyExpression::create_scalar_function("rand", vec![]),
+            ),
             column: "x",
             left: create_f64(1.0),
             right: create_f64(1.0),
@@ -554,7 +557,7 @@ fn test_single_point() -> Result<()> {
         },
         Test {
             name: "f(x) = x * (12 - x)",
-            expr: Expression::create_binary_expression("*", vec![
+            expr: LegacyExpression::create_binary_expression("*", vec![
                 col("x"),
                 sub(lit(12_i64), col("x")),
             ]),

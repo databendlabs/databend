@@ -33,8 +33,8 @@ mod plan_setting;
 mod plan_sink;
 
 pub use plan_delete::DeletePlan;
-pub use plan_expression::Expression;
 pub use plan_expression::Expressions;
+pub use plan_expression::LegacyExpression;
 pub use plan_expression_action::*;
 pub use plan_expression_chain::ExpressionChain;
 pub use plan_expression_column::col;

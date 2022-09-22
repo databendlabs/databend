@@ -14,7 +14,7 @@
 
 use common_exception::Result;
 
-use crate::Expression;
+use crate::LegacyExpression;
 
 /// Controls how the visitor recursion should proceed.
 pub enum Recursion<V: ExpressionVisitor> {
@@ -31,9 +31,9 @@ pub enum Recursion<V: ExpressionVisitor> {
 /// on `Expr::accept` for details on its use
 pub trait ExpressionVisitor: Sized {
     /// Invoked before any children of `expr` are visisted.
-    fn pre_visit(self, expr: &Expression) -> Result<Recursion<Self>>;
+    fn pre_visit(self, expr: &LegacyExpression) -> Result<Recursion<Self>>;
 
-    fn visit(mut self, predecessor_expr: &Expression) -> Result<Self> {
+    fn visit(mut self, predecessor_expr: &LegacyExpression) -> Result<Self> {
         let mut stack = vec![RecursionProcessing::Call(predecessor_expr)];
         while let Some(element) = stack.pop() {
             match element {
@@ -46,33 +46,33 @@ pub trait ExpressionVisitor: Sized {
                         Recursion::Stop(visitor) => visitor,
                         Recursion::Continue(visitor) => {
                             match expr {
-                                Expression::Alias(_, expr) => {
+                                LegacyExpression::Alias(_, expr) => {
                                     stack.push(RecursionProcessing::Call(expr))
                                 }
-                                Expression::BinaryExpression { left, right, .. } => {
+                                LegacyExpression::BinaryExpression { left, right, .. } => {
                                     stack.push(RecursionProcessing::Call(left));
                                     stack.push(RecursionProcessing::Call(right));
                                 }
-                                Expression::UnaryExpression { expr, .. } => {
+                                LegacyExpression::UnaryExpression { expr, .. } => {
                                     stack.push(RecursionProcessing::Call(expr));
                                 }
-                                Expression::ScalarFunction { args, .. } => {
+                                LegacyExpression::ScalarFunction { args, .. } => {
                                     for arg in args {
                                         stack.push(RecursionProcessing::Call(arg));
                                     }
                                 }
-                                Expression::AggregateFunction { args, .. } => {
+                                LegacyExpression::AggregateFunction { args, .. } => {
                                     for arg in args {
                                         stack.push(RecursionProcessing::Call(arg));
                                     }
                                 }
-                                Expression::Cast { expr, .. } => {
+                                LegacyExpression::Cast { expr, .. } => {
                                     stack.push(RecursionProcessing::Call(expr));
                                 }
-                                Expression::Sort { expr, .. } => {
+                                LegacyExpression::Sort { expr, .. } => {
                                     stack.push(RecursionProcessing::Call(expr));
                                 }
-                                Expression::MapAccess { args, .. } => {
+                                LegacyExpression::MapAccess { args, .. } => {
                                     for arg in args {
                                         stack.push(RecursionProcessing::Call(arg));
                                     }
@@ -92,12 +92,12 @@ pub trait ExpressionVisitor: Sized {
 
     /// Invoked after all children of `expr` are visited. Default
     /// implementation does nothing.
-    fn post_visit(self, _expr: &Expression) -> Result<Self> {
+    fn post_visit(self, _expr: &LegacyExpression) -> Result<Self> {
         Ok(self)
     }
 }
 
-impl Expression {
+impl LegacyExpression {
     /// Performs a depth first walk of an expression and
     /// its children, calling [`ExpressionVisitor::pre_visit`] and
     /// `visitor.post_visit`.
@@ -138,6 +138,6 @@ impl Expression {
 }
 
 enum RecursionProcessing<'a> {
-    Call(&'a Expression),
-    Ret(&'a Expression),
+    Call(&'a LegacyExpression),
+    Ret(&'a LegacyExpression),
 }

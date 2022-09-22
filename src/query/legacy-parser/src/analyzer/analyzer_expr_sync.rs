@@ -18,7 +18,7 @@ use common_datavalues::type_coercion::merge_types;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
-use common_legacy_planners::Expression;
+use common_legacy_planners::LegacyExpression;
 use sqlparser::ast::BinaryOperator;
 use sqlparser::ast::DataType as AstDataType;
 use sqlparser::ast::DateTimeField;
@@ -45,7 +45,7 @@ impl ExpressionSyncAnalyzer {
         ExpressionSyncAnalyzer {}
     }
 
-    pub fn analyze(&self, expr: &Expr) -> Result<Expression> {
+    pub fn analyze(&self, expr: &Expr) -> Result<LegacyExpression> {
         let mut stack = Vec::new();
 
         // Build RPN for expr. Because async function unsupported recursion
@@ -78,10 +78,10 @@ impl ExpressionSyncAnalyzer {
         }
     }
 
-    pub fn analyze_function_arg(&self, arg_expr: &FunctionArgExpr) -> Result<Expression> {
+    pub fn analyze_function_arg(&self, arg_expr: &FunctionArgExpr) -> Result<LegacyExpression> {
         match arg_expr {
             FunctionArgExpr::Expr(expr) => self.analyze(expr),
-            FunctionArgExpr::Wildcard => Ok(Expression::Wildcard),
+            FunctionArgExpr::Wildcard => Ok(LegacyExpression::Wildcard),
             FunctionArgExpr::QualifiedWildcard(_) => Err(ErrorCode::SyntaxException(std::format!(
                 "Unsupported arg statement: {}",
                 arg_expr
@@ -91,14 +91,14 @@ impl ExpressionSyncAnalyzer {
 
     fn analyze_value(
         value: &Value,
-        args: &mut Vec<Expression>,
+        args: &mut Vec<LegacyExpression>,
         typ: impl Into<SQLDialect>,
     ) -> Result<()> {
         args.push(ValueExprAnalyzer::analyze(value, typ)?);
         Ok(())
     }
 
-    fn analyze_inlist(&self, info: &InListInfo, args: &mut Vec<Expression>) -> Result<()> {
+    fn analyze_inlist(&self, info: &InListInfo, args: &mut Vec<LegacyExpression>) -> Result<()> {
         let mut list = Vec::with_capacity(info.list_size);
         for _ in 0..info.list_size {
             match args.pop() {
@@ -122,11 +122,15 @@ impl ExpressionSyncAnalyzer {
             "IN".to_string()
         };
 
-        args.push(Expression::ScalarFunction { op, args: list });
+        args.push(LegacyExpression::ScalarFunction { op, args: list });
         Ok(())
     }
 
-    fn analyze_function(&self, info: &FunctionExprInfo, args: &mut Vec<Expression>) -> Result<()> {
+    fn analyze_function(
+        &self,
+        info: &FunctionExprInfo,
+        args: &mut Vec<LegacyExpression>,
+    ) -> Result<()> {
         let mut arguments = Vec::with_capacity(info.args_count);
         for _ in 0..info.args_count {
             match args.pop() {
@@ -156,32 +160,41 @@ impl ExpressionSyncAnalyzer {
         Ok(())
     }
 
-    fn other_function(info: &FunctionExprInfo, args: &[Expression]) -> Result<Expression> {
+    fn other_function(
+        info: &FunctionExprInfo,
+        args: &[LegacyExpression],
+    ) -> Result<LegacyExpression> {
         let op = info.name.clone();
         let arguments = args.to_owned();
-        Ok(Expression::ScalarFunction {
+        Ok(LegacyExpression::ScalarFunction {
             op,
             args: arguments,
         })
     }
 
-    fn unary_function(info: &FunctionExprInfo, args: &[Expression]) -> Result<Expression> {
+    fn unary_function(
+        info: &FunctionExprInfo,
+        args: &[LegacyExpression],
+    ) -> Result<LegacyExpression> {
         match args.is_empty() {
             true => Err(ErrorCode::LogicalError("Unary operator must be one child.")),
-            false => Ok(Expression::UnaryExpression {
+            false => Ok(LegacyExpression::UnaryExpression {
                 op: info.name.clone(),
                 expr: Box::new(args[0].to_owned()),
             }),
         }
     }
 
-    fn binary_function(info: &FunctionExprInfo, args: &[Expression]) -> Result<Expression> {
+    fn binary_function(
+        info: &FunctionExprInfo,
+        args: &[LegacyExpression],
+    ) -> Result<LegacyExpression> {
         let op = info.name.clone();
         match args.len() < 2 {
             true => Err(ErrorCode::LogicalError(
                 "Binary operator must be two children.",
             )),
-            false => Ok(Expression::BinaryExpression {
+            false => Ok(LegacyExpression::BinaryExpression {
                 op,
                 left: Box::new(args[0].to_owned()),
                 right: Box::new(args[1].to_owned()),
@@ -189,20 +202,28 @@ impl ExpressionSyncAnalyzer {
         }
     }
 
-    fn analyze_identifier(&self, ident: &Ident, arguments: &mut Vec<Expression>) -> Result<()> {
+    fn analyze_identifier(
+        &self,
+        ident: &Ident,
+        arguments: &mut Vec<LegacyExpression>,
+    ) -> Result<()> {
         let column_name = ident.clone().value;
-        arguments.push(Expression::Column(column_name));
+        arguments.push(LegacyExpression::Column(column_name));
         Ok(())
     }
 
-    fn analyze_identifiers(&self, idents: &[Ident], arguments: &mut Vec<Expression>) -> Result<()> {
+    fn analyze_identifiers(
+        &self,
+        idents: &[Ident],
+        arguments: &mut Vec<LegacyExpression>,
+    ) -> Result<()> {
         let mut names = Vec::with_capacity(idents.len());
 
         for ident in idents {
             names.push(ident.clone().value);
         }
 
-        arguments.push(Expression::QualifiedColumn(names));
+        arguments.push(LegacyExpression::QualifiedColumn(names));
         Ok(())
     }
 
@@ -210,14 +231,14 @@ impl ExpressionSyncAnalyzer {
         &self,
         data_type: &DataTypeImpl,
         pg_style: bool,
-        args: &mut Vec<Expression>,
+        args: &mut Vec<LegacyExpression>,
     ) -> Result<()> {
         match args.pop() {
             None => Err(ErrorCode::LogicalError(
                 "Cast operator must be one children.",
             )),
             Some(inner_expr) => {
-                args.push(Expression::Cast {
+                args.push(LegacyExpression::Cast {
                     expr: Box::new(inner_expr),
                     data_type: data_type.clone(),
                     pg_style,
@@ -227,7 +248,7 @@ impl ExpressionSyncAnalyzer {
         }
     }
 
-    fn analyze_between(&self, negated: bool, args: &mut Vec<Expression>) -> Result<()> {
+    fn analyze_between(&self, negated: bool, args: &mut Vec<LegacyExpression>) -> Result<()> {
         if args.len() < 3 {
             return Err(ErrorCode::SyntaxException(
                 "Between must be a ternary expression.",
@@ -255,7 +276,7 @@ impl ExpressionSyncAnalyzer {
         Ok(())
     }
 
-    fn analyze_map_access(&self, keys: &[Value], args: &mut Vec<Expression>) -> Result<()> {
+    fn analyze_map_access(&self, keys: &[Value], args: &mut Vec<LegacyExpression>) -> Result<()> {
         match args.pop() {
             None => Err(ErrorCode::LogicalError(
                 "MapAccess operator must be one children.",
@@ -283,11 +304,12 @@ impl ExpressionSyncAnalyzer {
                     Value::ColonString(_) => format!("{}:{}", inner_expr.column_name(), path_name),
                     _ => format!("{}{}", inner_expr.column_name(), path_name),
                 };
-                let path =
-                    Expression::create_literal(DataValue::String(path_name.as_bytes().to_vec()));
+                let path = LegacyExpression::create_literal(DataValue::String(
+                    path_name.as_bytes().to_vec(),
+                ));
                 let arguments = vec![inner_expr, path];
 
-                args.push(Expression::MapAccess {
+                args.push(LegacyExpression::MapAccess {
                     name,
                     args: arguments,
                 });
@@ -296,7 +318,7 @@ impl ExpressionSyncAnalyzer {
         }
     }
 
-    fn analyze_array(&self, nums: usize, args: &mut Vec<Expression>) -> Result<()> {
+    fn analyze_array(&self, nums: usize, args: &mut Vec<LegacyExpression>) -> Result<()> {
         let mut values = Vec::with_capacity(nums);
         let mut types = Vec::with_capacity(nums);
         for _ in 0..nums {
@@ -305,7 +327,7 @@ impl ExpressionSyncAnalyzer {
                     break;
                 }
                 Some(inner_expr) => {
-                    if let Expression::Literal {
+                    if let LegacyExpression::Literal {
                         value, data_type, ..
                     } = inner_expr
                     {
@@ -331,7 +353,7 @@ impl ExpressionSyncAnalyzer {
         };
         values.reverse();
 
-        let array_value = Expression::create_literal_with_type(
+        let array_value = LegacyExpression::create_literal_with_type(
             DataValue::Array(values),
             ArrayType::new_impl(inner_type),
         );

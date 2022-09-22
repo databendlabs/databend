@@ -16,7 +16,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_legacy_parser::ExpressionParser;
 use common_legacy_planners::validate_expression;
-use common_legacy_planners::Expression;
+use common_legacy_planners::LegacyExpression;
 
 // use crate::sql::PlanParser;
 use crate::table_functions::string_value;
@@ -39,7 +39,7 @@ pub fn parse_func_table_args(table_args: &TableArgs) -> Result<(String, String)>
     }
 }
 
-pub fn get_cluster_keys(table: &FuseTable, definition: &str) -> Result<Vec<Expression>> {
+pub fn get_cluster_keys(table: &FuseTable, definition: &str) -> Result<Vec<LegacyExpression>> {
     let cluster_keys = if !definition.is_empty() {
         let schema = table.schema();
         let exprs = ExpressionParser::parse_exprs(definition)?;

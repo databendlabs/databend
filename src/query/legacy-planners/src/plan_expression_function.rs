@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::Expression;
+use crate::LegacyExpression;
 
 /// return a new expression l <op> r.
-fn binary_expr(l: Expression, op: &str, r: Expression) -> Expression {
-    Expression::BinaryExpression {
+fn binary_expr(l: LegacyExpression, op: &str, r: LegacyExpression) -> LegacyExpression {
+    LegacyExpression::BinaryExpression {
         op: op.to_string(),
         left: Box::new(l),
         right: Box::new(r),
@@ -24,39 +24,39 @@ fn binary_expr(l: Expression, op: &str, r: Expression) -> Expression {
 }
 
 /// Add binary function.
-pub fn add(left: Expression, right: Expression) -> Expression {
+pub fn add(left: LegacyExpression, right: LegacyExpression) -> LegacyExpression {
     binary_expr(left, "+", right)
 }
 
 /// Sub binary function.
-pub fn sub(left: Expression, right: Expression) -> Expression {
+pub fn sub(left: LegacyExpression, right: LegacyExpression) -> LegacyExpression {
     binary_expr(left, "-", right)
 }
 
 /// Not.
-pub fn not(other: Expression) -> Expression {
-    Expression::UnaryExpression {
+pub fn not(other: LegacyExpression) -> LegacyExpression {
+    LegacyExpression::UnaryExpression {
         op: "not".to_string(),
         expr: Box::new(other),
     }
 }
 
 // Neg.
-pub fn neg(other: Expression) -> Expression {
-    Expression::UnaryExpression {
+pub fn neg(other: LegacyExpression) -> LegacyExpression {
+    LegacyExpression::UnaryExpression {
         op: "negate".to_string(),
         expr: Box::new(other),
     }
 }
 
 /// Mod binary function.
-pub fn modular(left: Expression, right: Expression) -> Expression {
+pub fn modular(left: LegacyExpression, right: LegacyExpression) -> LegacyExpression {
     binary_expr(left, "%", right)
 }
 
 /// sum() aggregate function.
-pub fn sum(other: Expression) -> Expression {
-    Expression::AggregateFunction {
+pub fn sum(other: LegacyExpression) -> LegacyExpression {
+    LegacyExpression::AggregateFunction {
         op: "sum".to_string(),
         distinct: false,
         params: vec![],
@@ -65,8 +65,8 @@ pub fn sum(other: Expression) -> Expression {
 }
 
 /// avg() aggregate function.
-pub fn avg(other: Expression) -> Expression {
-    Expression::AggregateFunction {
+pub fn avg(other: LegacyExpression) -> LegacyExpression {
+    LegacyExpression::AggregateFunction {
         op: "avg".to_string(),
         distinct: false,
         params: vec![],
@@ -74,57 +74,57 @@ pub fn avg(other: Expression) -> Expression {
     }
 }
 
-impl Expression {
+impl LegacyExpression {
     /// And.
     #[must_use]
-    pub fn and(&self, other: Expression) -> Expression {
+    pub fn and(&self, other: LegacyExpression) -> LegacyExpression {
         binary_expr(self.clone(), "and", other)
     }
 
     #[must_use]
-    pub fn or(&self, other: Expression) -> Expression {
+    pub fn or(&self, other: LegacyExpression) -> LegacyExpression {
         binary_expr(self.clone(), "or", other)
     }
 
     /// Equal.
     #[must_use]
-    pub fn eq(&self, other: Expression) -> Expression {
+    pub fn eq(&self, other: LegacyExpression) -> LegacyExpression {
         binary_expr(self.clone(), "=", other)
     }
 
     /// Not equal.
     #[must_use]
-    pub fn not_eq(&self, other: Expression) -> Expression {
+    pub fn not_eq(&self, other: LegacyExpression) -> LegacyExpression {
         binary_expr(self.clone(), "!=", other)
     }
 
     /// Greater than.
     #[must_use]
-    pub fn gt(&self, other: Expression) -> Expression {
+    pub fn gt(&self, other: LegacyExpression) -> LegacyExpression {
         binary_expr(self.clone(), ">", other)
     }
 
     /// Greater than or equal to.
     #[must_use]
-    pub fn gt_eq(&self, other: Expression) -> Expression {
+    pub fn gt_eq(&self, other: LegacyExpression) -> LegacyExpression {
         binary_expr(self.clone(), ">=", other)
     }
 
     /// Less than.
     #[must_use]
-    pub fn lt(&self, other: Expression) -> Expression {
+    pub fn lt(&self, other: LegacyExpression) -> LegacyExpression {
         binary_expr(self.clone(), "<", other)
     }
 
     /// Less than or equal to.
     #[must_use]
-    pub fn lt_eq(&self, other: Expression) -> Expression {
+    pub fn lt_eq(&self, other: LegacyExpression) -> LegacyExpression {
         binary_expr(self.clone(), "<=", other)
     }
 
     /// Alias.
     #[must_use]
-    pub fn alias(&self, alias: &str) -> Expression {
-        Expression::Alias(alias.to_string(), Box::from(self.clone()))
+    pub fn alias(&self, alias: &str) -> LegacyExpression {
+        LegacyExpression::Alias(alias.to_string(), Box::from(self.clone()))
     }
 }

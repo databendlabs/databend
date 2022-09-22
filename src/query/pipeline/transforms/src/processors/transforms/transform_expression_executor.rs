@@ -21,9 +21,9 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_legacy_planners::ActionFunction;
-use common_legacy_planners::Expression;
 use common_legacy_planners::ExpressionAction;
 use common_legacy_planners::ExpressionChain;
+use common_legacy_planners::LegacyExpression;
 use tracing::debug;
 
 /// ExpressionExecutor is a helper struct for expressions and projections
@@ -46,7 +46,7 @@ impl ExpressionExecutor {
         description: &str,
         input_schema: DataSchemaRef,
         output_schema: DataSchemaRef,
-        exprs: Vec<Expression>,
+        exprs: Vec<LegacyExpression>,
         alias_project: bool,
     ) -> Result<Self> {
         let chain = ExpressionChain::try_create(input_schema.clone(), &exprs)?;

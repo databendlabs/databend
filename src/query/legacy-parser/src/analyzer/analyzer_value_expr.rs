@@ -15,7 +15,7 @@
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::Expression;
+use common_legacy_planners::LegacyExpression;
 use sqlparser::ast::DateTimeField;
 use sqlparser::ast::Value;
 
@@ -24,7 +24,7 @@ use crate::sql_dialect::SQLDialect;
 pub struct ValueExprAnalyzer;
 
 impl ValueExprAnalyzer {
-    pub fn analyze(value: &Value, typ: impl Into<SQLDialect>) -> Result<Expression> {
+    pub fn analyze(value: &Value, typ: impl Into<SQLDialect>) -> Result<LegacyExpression> {
         match value {
             Value::Null => Self::analyze_null_value(),
             Value::Boolean(value) => Self::analyze_bool_value(value),
@@ -69,25 +69,25 @@ impl ValueExprAnalyzer {
         }
     }
 
-    fn analyze_null_value() -> Result<Expression> {
-        Ok(Expression::create_literal(DataValue::Null))
+    fn analyze_null_value() -> Result<LegacyExpression> {
+        Ok(LegacyExpression::create_literal(DataValue::Null))
     }
 
-    fn analyze_bool_value(value: &bool) -> Result<Expression> {
-        Ok(Expression::create_literal(DataValue::Boolean(*value)))
+    fn analyze_bool_value(value: &bool) -> Result<LegacyExpression> {
+        Ok(LegacyExpression::create_literal(DataValue::Boolean(*value)))
     }
 
-    fn analyze_number_value(value: &str, radix: Option<u32>) -> Result<Expression> {
+    fn analyze_number_value(value: &str, radix: Option<u32>) -> Result<LegacyExpression> {
         let literal = DataValue::try_from_literal(value, radix)?;
-        Ok(Expression::create_literal(literal))
+        Ok(LegacyExpression::create_literal(literal))
     }
 
-    fn analyze_string_value(value: &str) -> Result<Expression> {
+    fn analyze_string_value(value: &str) -> Result<LegacyExpression> {
         let data_value = DataValue::String(value.to_string().into_bytes());
-        Ok(Expression::create_literal(data_value))
+        Ok(LegacyExpression::create_literal(data_value))
     }
 
-    fn unsupported_interval(interval: &Value) -> Result<Expression> {
+    fn unsupported_interval(interval: &Value) -> Result<LegacyExpression> {
         // TODO: support parsing literal interval like '1 hour'
         Err(ErrorCode::SyntaxException(format!(
             "Unsupported interval expression: {}.",
@@ -95,7 +95,7 @@ impl ValueExprAnalyzer {
         )))
     }
 
-    fn analyze_interval(value: &str, unit: &Option<DateTimeField>) -> Result<Expression> {
+    fn analyze_interval(value: &str, unit: &Option<DateTimeField>) -> Result<LegacyExpression> {
         // We only accept i32 for number in "interval [num] [year|month|day|hour|minute|second]"
         let num = value.parse::<i32>()?;
 
@@ -113,8 +113,8 @@ impl ValueExprAnalyzer {
         }
     }
 
-    fn interval_literal(num: i32, kind: IntervalKind) -> Result<Expression> {
-        Ok(Expression::Literal {
+    fn interval_literal(num: i32, kind: IntervalKind) -> Result<LegacyExpression> {
+        Ok(LegacyExpression::Literal {
             value: DataValue::Int64(num as i64),
             column_name: Some(num.to_string()),
             data_type: IntervalType::new_impl(kind),

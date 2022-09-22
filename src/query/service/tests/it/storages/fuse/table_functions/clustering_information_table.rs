@@ -37,8 +37,8 @@ async fn test_clustering_information_table_read() -> Result<()> {
     interpreter.execute(ctx.clone()).await?;
 
     // func args
-    let arg_db = Expression::create_literal(DataValue::String(db.as_bytes().to_vec()));
-    let arg_tbl = Expression::create_literal(DataValue::String(tbl.as_bytes().to_vec()));
+    let arg_db = LegacyExpression::create_literal(DataValue::String(db.as_bytes().to_vec()));
+    let arg_tbl = LegacyExpression::create_literal(DataValue::String(tbl.as_bytes().to_vec()));
 
     {
         let expected = vec![

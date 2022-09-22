@@ -58,7 +58,7 @@ async fn test_range_filter() -> Result<()> {
 
     struct Test {
         name: &'static str,
-        expr: Expression,
+        expr: LegacyExpression,
         expect: bool,
         error: &'static str,
     }
@@ -84,25 +84,25 @@ async fn test_range_filter() -> Result<()> {
         },
         Test {
             name: "a is null",
-            expr: Expression::create_scalar_function("is_null", vec![col("a")]),
+            expr: LegacyExpression::create_scalar_function("is_null", vec![col("a")]),
             expect: true,
             error: "",
         },
         Test {
             name: "a is not null",
-            expr: Expression::create_scalar_function("is_not_null", vec![col("a")]),
+            expr: LegacyExpression::create_scalar_function("is_not_null", vec![col("a")]),
             expect: false,
             error: "",
         },
         Test {
             name: "b is not null",
-            expr: Expression::create_scalar_function("is_not_null", vec![col("b")]),
+            expr: LegacyExpression::create_scalar_function("is_not_null", vec![col("b")]),
             expect: true,
             error: "",
         },
         Test {
             name: "null",
-            expr: Expression::create_literal(DataValue::Null),
+            expr: LegacyExpression::create_literal(DataValue::Null),
             expect: false,
             error: "",
         },
@@ -110,7 +110,7 @@ async fn test_range_filter() -> Result<()> {
             name: "b >= 0 and c like '%sys%'",
             expr: col("b")
                 .gt_eq(lit(0))
-                .and(Expression::create_binary_expression("like", vec![
+                .and(LegacyExpression::create_binary_expression("like", vec![
                     col("c"),
                     lit("%sys%".as_bytes()),
                 ])),
@@ -119,7 +119,7 @@ async fn test_range_filter() -> Result<()> {
         },
         Test {
             name: "c like 'ab_'",
-            expr: Expression::create_binary_expression("like", vec![
+            expr: LegacyExpression::create_binary_expression("like", vec![
                 col("c"),
                 lit("ab_".as_bytes()),
             ]),
@@ -128,7 +128,7 @@ async fn test_range_filter() -> Result<()> {
         },
         Test {
             name: "c like 'bcdf'",
-            expr: Expression::create_binary_expression("like", vec![
+            expr: LegacyExpression::create_binary_expression("like", vec![
                 col("c"),
                 lit("bcdf".as_bytes()),
             ]),
@@ -137,7 +137,7 @@ async fn test_range_filter() -> Result<()> {
         },
         Test {
             name: "c not like 'ac%'",
-            expr: Expression::create_binary_expression("not like", vec![
+            expr: LegacyExpression::create_binary_expression("not like", vec![
                 col("c"),
                 lit("ac%".as_bytes()),
             ]),
@@ -217,7 +217,7 @@ fn test_build_verifiable_function() -> Result<()> {
 
     struct Test {
         name: &'static str,
-        expr: Expression,
+        expr: LegacyExpression,
         expect: &'static str,
     }
 
@@ -239,19 +239,19 @@ fn test_build_verifiable_function() -> Result<()> {
         },
         Test {
             name: "a is null",
-            expr: Expression::create_scalar_function("is_null", vec![col("a")]),
+            expr: LegacyExpression::create_scalar_function("is_null", vec![col("a")]),
             expect: "(nulls_a > 0)",
         },
         Test {
             name: "a is not null",
-            expr: Expression::create_scalar_function("is_not_null", vec![col("a")]),
+            expr: LegacyExpression::create_scalar_function("is_not_null", vec![col("a")]),
             expect: "(nulls_a != row_count_a)",
         },
         Test {
             name: "b >= 0 and c like 0xffffff",
             expr: col("b")
                 .gt_eq(lit(0))
-                .and(Expression::create_binary_expression("like", vec![
+                .and(LegacyExpression::create_binary_expression("like", vec![
                     col("c"),
                     lit(vec![255u8, 255, 255]),
                 ])),
@@ -259,7 +259,7 @@ fn test_build_verifiable_function() -> Result<()> {
         },
         Test {
             name: "c like 'sys_'",
-            expr: Expression::create_binary_expression("like", vec![
+            expr: LegacyExpression::create_binary_expression("like", vec![
                 col("c"),
                 lit("sys_".as_bytes()),
             ]),
@@ -267,7 +267,7 @@ fn test_build_verifiable_function() -> Result<()> {
         },
         Test {
             name: "c like 'sys\\%'",
-            expr: Expression::create_binary_expression("like", vec![
+            expr: LegacyExpression::create_binary_expression("like", vec![
                 col("c"),
                 lit("sys\\%".as_bytes()),
             ]),
@@ -275,7 +275,7 @@ fn test_build_verifiable_function() -> Result<()> {
         },
         Test {
             name: "c like 'sys\\t'",
-            expr: Expression::create_binary_expression("like", vec![
+            expr: LegacyExpression::create_binary_expression("like", vec![
                 col("c"),
                 lit("sys\\t".as_bytes()),
             ]),
@@ -283,7 +283,7 @@ fn test_build_verifiable_function() -> Result<()> {
         },
         Test {
             name: "c not like 'sys\\%'",
-            expr: Expression::create_binary_expression("not like", vec![
+            expr: LegacyExpression::create_binary_expression("not like", vec![
                 col("c"),
                 lit("sys\\%".as_bytes()),
             ]),
@@ -291,7 +291,7 @@ fn test_build_verifiable_function() -> Result<()> {
         },
         Test {
             name: "c not like 'sys\\s'",
-            expr: Expression::create_binary_expression("not like", vec![
+            expr: LegacyExpression::create_binary_expression("not like", vec![
                 col("c"),
                 lit("sys\\s".as_bytes()),
             ]),
@@ -299,7 +299,7 @@ fn test_build_verifiable_function() -> Result<()> {
         },
         Test {
             name: "c not like 'sys%'",
-            expr: Expression::create_binary_expression("not like", vec![
+            expr: LegacyExpression::create_binary_expression("not like", vec![
                 col("c"),
                 lit("sys%".as_bytes()),
             ]),
@@ -307,7 +307,7 @@ fn test_build_verifiable_function() -> Result<()> {
         },
         Test {
             name: "c not like 'sys%a'",
-            expr: Expression::create_binary_expression("not like", vec![
+            expr: LegacyExpression::create_binary_expression("not like", vec![
                 col("c"),
                 lit("sys%a".as_bytes()),
             ]),
@@ -315,7 +315,7 @@ fn test_build_verifiable_function() -> Result<()> {
         },
         Test {
             name: "c not like 0xffffff%",
-            expr: Expression::create_binary_expression("not like", vec![
+            expr: LegacyExpression::create_binary_expression("not like", vec![
                 col("c"),
                 lit(vec![255u8, 255, 255, 37]),
             ]),
@@ -323,7 +323,7 @@ fn test_build_verifiable_function() -> Result<()> {
         },
         Test {
             name: "abs(a) = b - 3",
-            expr: Expression::create_scalar_function("abs", vec![col("a")])
+            expr: LegacyExpression::create_scalar_function("abs", vec![col("a")])
                 .eq(add(col("b"), lit(3))),
             expect: "((min_abs(a) <= max_(b + 3)) and (max_abs(a) >= min_(b + 3)))",
         },
@@ -341,7 +341,10 @@ fn test_build_verifiable_function() -> Result<()> {
             name: "a <= b + rand()",
             expr: add(
                 col("a"),
-                add(col("b"), Expression::create_scalar_function("rand", vec![])),
+                add(
+                    col("b"),
+                    LegacyExpression::create_scalar_function("rand", vec![]),
+                ),
             ),
             expect: "true",
         },

@@ -22,7 +22,7 @@ use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_functions::aggregates::get_layout_offsets;
 use common_functions::aggregates::AggregateFunctionRef;
-use common_legacy_planners::Expression;
+use common_legacy_planners::LegacyExpression;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -44,7 +44,7 @@ pub struct AggregatorParams {
 }
 
 impl AggregatorParams {
-    fn extract_group_columns(group_exprs: &[Expression]) -> Vec<String> {
+    fn extract_group_columns(group_exprs: &[LegacyExpression]) -> Vec<String> {
         group_exprs
             .iter()
             .map(|x| x.column_name())
@@ -52,8 +52,8 @@ impl AggregatorParams {
     }
 
     pub fn try_create(
-        aggr_expr: &[Expression],
-        group_expr: &[Expression],
+        aggr_expr: &[LegacyExpression],
+        group_expr: &[LegacyExpression],
         input_schema: &DataSchemaRef,
         output_schema: &DataSchemaRef,
     ) -> Result<Arc<AggregatorParams>> {

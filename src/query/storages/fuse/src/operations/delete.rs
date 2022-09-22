@@ -22,8 +22,8 @@ use common_exception::Result;
 use common_fuse_meta::meta::TableSnapshot;
 use common_legacy_parser::ExpressionParser;
 use common_legacy_planners::DeletePlan;
-use common_legacy_planners::Expression;
 use common_legacy_planners::Extras;
+use common_legacy_planners::LegacyExpression;
 use common_pipeline_transforms::processors::ExpressionExecutor;
 use tracing::debug;
 
@@ -76,7 +76,7 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         snapshot: &Arc<TableSnapshot>,
-        filter: &Expression,
+        filter: &LegacyExpression,
         plan: &DeletePlan,
     ) -> Result<()> {
         let cluster_stats_gen = self.cluster_stats_gen(ctx.clone())?;

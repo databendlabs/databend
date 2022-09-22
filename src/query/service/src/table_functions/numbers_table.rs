@@ -23,8 +23,8 @@ use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::Expression;
 use common_legacy_planners::Extras;
+use common_legacy_planners::LegacyExpression;
 use common_legacy_planners::PartInfoPtr;
 use common_legacy_planners::Partitions;
 use common_legacy_planners::ReadDataSourcePlan;
@@ -65,7 +65,7 @@ impl NumbersTable {
         if let Some(args) = &table_args {
             if args.len() == 1 {
                 let arg = &args[0];
-                if let Expression::Literal { value, .. } = arg {
+                if let LegacyExpression::Literal { value, .. } = arg {
                     total = Some(value.as_u64()?);
                 }
             }
@@ -170,8 +170,8 @@ impl Table for NumbersTable {
         Ok((statistics, parts))
     }
 
-    fn table_args(&self) -> Option<Vec<Expression>> {
-        Some(vec![Expression::create_literal(DataValue::UInt64(
+    fn table_args(&self) -> Option<Vec<LegacyExpression>> {
+        Some(vec![LegacyExpression::create_literal(DataValue::UInt64(
             self.total,
         ))])
     }
