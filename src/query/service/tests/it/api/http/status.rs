@@ -35,6 +35,7 @@ use poem::Endpoint;
 use poem::Request;
 use poem::Route;
 use pretty_assertions::assert_eq;
+use tokio_stream::StreamExt;
 
 use crate::tests::create_query_context_with_type;
 
@@ -55,7 +56,7 @@ async fn get_status(ep: &Route) -> InstanceStatus {
 }
 
 async fn run_query(query_ctx: &Arc<QueryContext>) -> Result<Arc<dyn Interpreter>> {
-    let sql = "select * from numbers(1)";
+    let sql = "select sleep(3) from numbers(1)";
     let user = UserApiProvider::instance()
         .get_user("test", UserIdentity::new("root", "localhost"))
         .await?;
@@ -82,17 +83,23 @@ async fn test_status() -> Result<()> {
         "before running"
     );
 
-    let interpreter = run_query(&query_ctx).await?;
-    let status = get_status(&ep).await;
-    assert_eq!(
-        (
-            status.running_queries_count,
-            status.last_query_started_at.is_some(),
-            status.last_query_finished_at.is_some(),
-        ),
-        (1, true, false),
-        "running"
-    );
+    {
+        let interpreter = run_query(&query_ctx).await?;
+        let mut stream = interpreter.execute(query_ctx.clone()).await?;
+        let status = get_status(&ep).await;
+        assert_eq!(
+            (
+                status.running_queries_count,
+                status.last_query_started_at.is_some(),
+                status.last_query_finished_at.is_some(),
+            ),
+            (1, true, false),
+            "running"
+        );
+
+        while let Some(_) = stream.next().await {}
+    }
+
     let status = get_status(&ep).await;
     assert_eq!(
         (

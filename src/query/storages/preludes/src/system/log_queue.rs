@@ -131,7 +131,7 @@ impl<Event: SystemLogElement + 'static> SystemLogTable<Event> {
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {
                 schema: Event::schema(),
-                engine: "SystemQueryTable".to_string(),
+                engine: "SystemLogTable".to_string(),
                 ..Default::default()
             },
         };

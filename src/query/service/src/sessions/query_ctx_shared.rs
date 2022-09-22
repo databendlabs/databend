@@ -259,7 +259,7 @@ impl QueryContextShared {
         running_query_kind
             .as_ref()
             .cloned()
-            .unwrap_or("Unknown".to_string())
+            .unwrap_or_else(|| "Unknown".to_string())
     }
 
     pub fn get_config(&self) -> Config {
