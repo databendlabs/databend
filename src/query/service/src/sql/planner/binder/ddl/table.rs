@@ -34,7 +34,6 @@ use common_datavalues::Vu8;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_legacy_planners::*;
-use common_meta_app::schema::TableMeta;
 use common_planner::plans::AlterTableClusterKeyPlan;
 use common_planner::plans::DescribeTablePlan;
 use common_planner::plans::DropTableClusterKeyPlan;
@@ -53,7 +52,6 @@ use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::Binder;
 use crate::sql::binder::Visibility;
 use crate::sql::executor::ExpressionBuilderWithoutRenaming;
-use crate::sql::executor::PhysicalScalarBuilder;
 use crate::sql::is_reserved_opt_key;
 use crate::sql::optimizer::optimize;
 use crate::sql::optimizer::OptimizerConfig;
@@ -356,7 +354,7 @@ impl<'a> Binder {
         let table = normalize_identifier(table, &self.name_resolution_ctx).name;
 
         // Take FUSE engine AS default engine
-        let engine = engine.clone().unwrap_or(Engine::Fuse);
+        let engine = engine.unwrap_or(Engine::Fuse);
         let mut options: BTreeMap<String, String> = BTreeMap::new();
         for table_option in table_options.iter() {
             self.insert_table_option_with_validation(
@@ -372,7 +370,7 @@ impl<'a> Binder {
         }
 
         // Build table schema
-        let (schema, field_comments) = match (&source, &as_query) {
+        let (schema, field_default_exprs, field_comments) = match (&source, &as_query) {
             (Some(source), None) => {
                 // `CREATE TABLE` without `AS SELECT ...`
                 self.analyze_create_table_schema(source).await?
@@ -392,12 +390,13 @@ impl<'a> Binder {
                     })
                     .collect();
                 let schema = DataSchemaRefExt::create(fields);
+                let num_fields = schema.num_fields();
                 Self::validate_create_table_schema(&schema)?;
-                (schema, vec![])
+                (schema, vec![None; num_fields], vec![])
             }
             (Some(source), Some(query)) => {
                 // e.g. `CREATE TABLE t (i INT) AS SELECT * from old_t` with columns speicified
-                let (source_schema, source_coments) =
+                let (source_schema, source_default_exprs, source_coments) =
                     self.analyze_create_table_schema(source).await?;
                 let init_bind_context = BindContext::new();
                 let (_s_expr, bind_context) = self.bind_query(&init_bind_context, query).await?;
@@ -415,19 +414,11 @@ impl<'a> Binder {
                 let source_fields = self.concat_fields(source_fields, query_fields);
                 let schema = DataSchemaRefExt::create(source_fields);
                 Self::validate_create_table_schema(&schema)?;
-                (schema, source_coments)
+                (schema, source_default_exprs, source_coments)
             }
             _ => Err(ErrorCode::BadArguments(
                 "Incorrect CREATE query: required list of column descriptions or AS section or SELECT..",
             ))?,
-        };
-
-        let mut table_meta = TableMeta {
-            schema: schema.clone(),
-            engine: engine.to_string(),
-            options: options.clone(),
-            field_comments,
-            ..Default::default()
         };
 
         if engine == Engine::Fuse {
@@ -444,18 +435,19 @@ impl<'a> Binder {
                 .get_database(&self.ctx.get_tenant(), &database)
                 .await?;
             let db_id = db.get_db_info().ident.db_id;
-            table_meta
-                .options
-                .insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
+            options.insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
         }
 
-        let cluster_keys = self
-            .analyze_cluster_keys(cluster_by, schema.clone())
-            .await?;
-        if !cluster_keys.is_empty() {
-            let cluster_keys_sql = format!("({})", cluster_keys.join(", "));
-            table_meta = table_meta.push_cluster_key(cluster_keys_sql);
-        }
+        let cluster_key = {
+            let keys = self
+                .analyze_cluster_keys(cluster_by, schema.clone())
+                .await?;
+            if keys.is_empty() {
+                None
+            } else {
+                Some(format!("({})", keys.join(", ")))
+            }
+        };
 
         let plan = CreateTablePlanV2 {
             if_not_exists: *if_not_exists,
@@ -463,8 +455,12 @@ impl<'a> Binder {
             catalog,
             database,
             table,
-            table_meta,
-            cluster_keys,
+            schema,
+            engine,
+            options,
+            field_default_exprs,
+            field_comments,
+            cluster_key,
             as_select: if let Some(query) = as_query {
                 let bind_context = BindContext::new();
                 let stmt = Statement::Query(Box::new(*query.clone()));
@@ -809,7 +805,7 @@ impl<'a> Binder {
     async fn analyze_create_table_schema(
         &self,
         source: &CreateTableSource<'a>,
-    ) -> Result<(DataSchemaRef, Vec<String>)> {
+    ) -> Result<(DataSchemaRef, Vec<Option<Scalar>>, Vec<String>)> {
         let bind_context = BindContext::new();
         match source {
             CreateTableSource::Columns(columns) => {
@@ -821,12 +817,14 @@ impl<'a> Binder {
                     &[],
                 );
                 let mut fields = Vec::with_capacity(columns.len());
+                let mut fields_default_expr = Vec::with_capacity(columns.len());
                 let mut fields_comments = Vec::with_capacity(columns.len());
                 for column in columns.iter() {
                     let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
                     let data_type = TypeFactory::instance().get(column.data_type.to_string())?;
 
-                    let field = DataField::new(&name, data_type.clone()).with_default_expr({
+                    fields.push(DataField::new(&name, data_type.clone()));
+                    fields_default_expr.push({
                         if let Some(default_expr) = &column.default_expr {
                             let (mut expr, expr_type) = scalar_binder.bind(default_expr).await?;
                             if compare_coercion(&data_type, &expr_type).is_err() {
@@ -839,19 +837,16 @@ impl<'a> Binder {
                                     target_type: Box::new(data_type),
                                 })
                             }
-                            let mut builder = PhysicalScalarBuilder;
-                            let serializable_expr = builder.build(&expr)?;
-                            Some(serde_json::to_string(&serializable_expr)?)
+                            Some(expr)
                         } else {
                             None
                         }
                     });
-                    fields.push(field);
                     fields_comments.push(column.comment.clone().unwrap_or_default());
                 }
                 let schema = DataSchemaRefExt::create(fields);
                 Self::validate_create_table_schema(&schema)?;
-                Ok((schema, fields_comments))
+                Ok((schema, fields_default_expr, fields_comments))
             }
             CreateTableSource::Like {
                 catalog,
@@ -868,7 +863,11 @@ impl<'a> Binder {
                 );
                 let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
                 let table = self.ctx.get_table(&catalog, &database, &table_name).await?;
-                Ok((table.schema(), table.field_comments().clone()))
+                Ok((
+                    table.schema(),
+                    vec![None; table.schema().num_fields()],
+                    table.field_comments().clone(),
+                ))
             }
         }
     }
