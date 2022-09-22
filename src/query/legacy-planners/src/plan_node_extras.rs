@@ -17,8 +17,7 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 
 use common_datavalues::DataSchema;
-
-use crate::LegacyExpression;
+use common_legacy_expression::LegacyExpression;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub enum Projection {

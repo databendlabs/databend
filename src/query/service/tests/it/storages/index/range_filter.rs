@@ -19,7 +19,7 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_fuse_meta::meta::ColumnStatistics;
 use common_fuse_meta::meta::StatisticsOfColumns;
-use common_legacy_planners::*;
+use common_legacy_expression::*;
 use databend_query::storages::index::range_filter::build_verifiable_expr;
 use databend_query::storages::index::range_filter::left_bound_for_like_pattern;
 use databend_query::storages::index::range_filter::right_bound_for_like_pattern;

@@ -14,11 +14,10 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_legacy_expression::validate_expression;
+use common_legacy_expression::LegacyExpression;
 use common_legacy_parser::ExpressionParser;
-use common_legacy_planners::validate_expression;
-use common_legacy_planners::LegacyExpression;
 
-// use crate::sql::PlanParser;
 use crate::table_functions::string_value;
 use crate::table_functions::TableArgs;
 use crate::FuseTable;

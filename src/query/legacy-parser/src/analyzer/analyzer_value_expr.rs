@@ -15,7 +15,7 @@
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::LegacyExpression;
+use common_legacy_expression::LegacyExpression;
 use sqlparser::ast::DateTimeField;
 use sqlparser::ast::Value;
 

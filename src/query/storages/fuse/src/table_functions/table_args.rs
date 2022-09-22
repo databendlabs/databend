@@ -15,7 +15,7 @@
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::LegacyExpression;
+use common_legacy_expression::LegacyExpression;
 
 pub fn string_value(expr: &LegacyExpression) -> Result<String> {
     if let LegacyExpression::Literal { value, .. } = expr {

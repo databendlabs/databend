@@ -18,7 +18,7 @@ use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::is_builtin_function;
-use common_legacy_planners::LegacyExpression;
+use common_legacy_expression::LegacyExpression;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;

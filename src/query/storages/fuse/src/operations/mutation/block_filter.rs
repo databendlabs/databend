@@ -22,7 +22,7 @@ use common_datavalues::DataSchemaRefExt;
 use common_datavalues::Series;
 use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
-use common_legacy_planners::LegacyExpression;
+use common_legacy_expression::LegacyExpression;
 use common_legacy_planners::Projection;
 
 use crate::operations::mutation::deletion_mutator::Deletion;

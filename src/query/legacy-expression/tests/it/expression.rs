@@ -17,7 +17,7 @@ use std::sync::Arc;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::*;
+use common_legacy_expression::*;
 
 #[test]
 fn test_expression_validate() -> Result<()> {

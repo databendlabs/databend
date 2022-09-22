@@ -18,7 +18,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::LegacyExpression;
+use common_legacy_expression::LegacyExpression;
 
 use crate::api::rpc::flight_scatter::FlightScatter;
 use crate::pipelines::processors::transforms::ExpressionExecutor;

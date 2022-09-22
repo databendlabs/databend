@@ -16,7 +16,7 @@ use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::LegacyExpression;
+use common_legacy_expression::LegacyExpression;
 use common_planner::IndexType;
 use common_planner::MetadataRef;
 

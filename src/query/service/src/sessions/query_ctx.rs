@@ -32,7 +32,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionContext;
 use common_io::prelude::FormatSettings;
-use common_legacy_planners::LegacyExpression;
+use common_legacy_expression::LegacyExpression;
 use common_legacy_planners::PartInfoPtr;
 use common_legacy_planners::Partitions;
 use common_legacy_planners::ReadDataSourcePlan;

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_legacy_planners::LegacyExpression;
+use common_legacy_expression::LegacyExpression;
 
 use crate::sql::executor::PhysicalScalar;
 

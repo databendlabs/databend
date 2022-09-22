@@ -22,7 +22,7 @@ use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_functions::aggregates::get_layout_offsets;
 use common_functions::aggregates::AggregateFunctionRef;
-use common_legacy_planners::LegacyExpression;
+use common_legacy_expression::LegacyExpression;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;

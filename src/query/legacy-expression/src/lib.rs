@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,7 +11,24 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+mod action;
+mod chain;
+mod column;
+mod common;
+mod expression;
+mod function;
+mod literal;
+mod monotonicity;
+mod validator;
+mod visitor;
 
-mod plan_extras;
-mod plan_partition;
-mod test;
+pub use action::*;
+pub use chain::*;
+pub use column::*;
+pub use common::*;
+pub use expression::*;
+pub use function::*;
+pub use literal::*;
+pub use monotonicity::*;
+pub use validator::*;
+pub use visitor::*;

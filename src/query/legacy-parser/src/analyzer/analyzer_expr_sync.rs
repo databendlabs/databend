@@ -18,7 +18,7 @@ use common_datavalues::type_coercion::merge_types;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
-use common_legacy_planners::LegacyExpression;
+use common_legacy_expression::LegacyExpression;
 use sqlparser::ast::BinaryOperator;
 use sqlparser::ast::DataType as AstDataType;
 use sqlparser::ast::DateTimeField;

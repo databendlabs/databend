@@ -26,11 +26,11 @@ use common_functions::scalars::check_pattern_type;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::PatternType;
 use common_fuse_meta::meta::StatisticsOfColumns;
-use common_legacy_planners::lit;
-use common_legacy_planners::ExpressionMonotonicityVisitor;
-use common_legacy_planners::Expressions;
-use common_legacy_planners::LegacyExpression;
-use common_legacy_planners::RequireColumnsVisitor;
+use common_legacy_expression::lit;
+use common_legacy_expression::ExpressionMonotonicityVisitor;
+use common_legacy_expression::Expressions;
+use common_legacy_expression::LegacyExpression;
+use common_legacy_expression::RequireColumnsVisitor;
 use common_pipeline_transforms::processors::transforms::ExpressionExecutor;
 
 #[derive(Clone)]

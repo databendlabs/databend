@@ -24,7 +24,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::ColumnStatistics;
 use common_fuse_meta::meta::StatisticsOfColumns;
-use common_legacy_planners::LegacyExpression;
+use common_legacy_expression::LegacyExpression;
 use common_storages_index::range_filter::RangeFilter;
 
 pub struct HivePartitionPruner {

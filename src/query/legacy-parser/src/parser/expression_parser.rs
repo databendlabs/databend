@@ -13,7 +13,7 @@
 //  limitations under the License.
 
 use common_exception::Result;
-use common_legacy_planners::LegacyExpression;
+use common_legacy_expression::LegacyExpression;
 
 use crate::analyzer_expr_sync::ExpressionSyncAnalyzer;
 use crate::ExprParser;

@@ -19,9 +19,9 @@ use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_fuse_meta::meta::Location;
-use common_legacy_planners::ExpressionVisitor;
-use common_legacy_planners::LegacyExpression;
-use common_legacy_planners::Recursion;
+use common_legacy_expression::ExpressionVisitor;
+use common_legacy_expression::LegacyExpression;
+use common_legacy_expression::Recursion;
 use common_storages_index::BloomFilterIndexer;
 use opendal::Operator;
 

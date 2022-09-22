@@ -73,6 +73,7 @@ common-storages-util = { path = "../storages/util" }
 common-streams = { path = "../streams" }
 common-tracing = { path = "../../common/tracing" }
 common-users = { path = "../users" }
+common-legacy-expression = { path = "../legacy-expression" }
 
 # Github dependencies
 sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "7f246e3" }

@@ -15,6 +15,7 @@
 use common_base::base::tokio;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_legacy_expression::*;
 use common_legacy_planners::*;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::SessionManager;

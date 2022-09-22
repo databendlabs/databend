@@ -17,7 +17,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::ColumnStatistics;
-use common_legacy_planners::LegacyExpression;
+use common_legacy_expression::LegacyExpression;
 
 pub(crate) struct TopNPrunner {
     schema: DataSchemaRef,
