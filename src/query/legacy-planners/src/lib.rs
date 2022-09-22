@@ -31,7 +31,6 @@ mod plan_partition;
 mod plan_read_datasource;
 mod plan_setting;
 mod plan_sink;
-mod plan_table_recluster;
 
 pub use plan_delete::DeletePlan;
 pub use plan_expression::Expression;
@@ -68,4 +67,3 @@ pub use plan_read_datasource::SourceInfo;
 pub use plan_setting::SettingPlan;
 pub use plan_setting::VarValue;
 pub use plan_sink::SINK_SCHEMA;
-pub use plan_table_recluster::ReclusterTablePlan;
