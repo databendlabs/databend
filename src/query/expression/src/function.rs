@@ -73,7 +73,8 @@ pub struct Function {
     #[allow(clippy::type_complexity)]
     pub calc_domain: Box<dyn Fn(&[Domain], &GenericMap) -> Option<Domain>>,
     #[allow(clippy::type_complexity)]
-    pub eval: Box<dyn Fn(&[ValueRef<AnyType>], &GenericMap, usize) -> Result<Value<AnyType>, String>>,
+    pub eval:
+        Box<dyn Fn(&[ValueRef<AnyType>], &GenericMap, usize) -> Result<Value<AnyType>, String>>,
 }
 
 #[derive(Default)]

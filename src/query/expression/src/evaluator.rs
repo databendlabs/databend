@@ -81,7 +81,8 @@ impl<'a> Evaluator<'a> {
                         .all_equal()
                 );
                 let cols_ref = cols.iter().map(Value::as_ref).collect::<Vec<_>>();
-                (function.eval)(cols_ref.as_slice(), generics, self.input_columns.num_rows()).map_err(|msg| (span.clone(), msg))
+                (function.eval)(cols_ref.as_slice(), generics, self.input_columns.num_rows())
+                    .map_err(|msg| (span.clone(), msg))
             }
             Expr::Cast {
                 span,
