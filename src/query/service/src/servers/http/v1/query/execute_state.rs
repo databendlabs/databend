@@ -175,8 +175,7 @@ impl Executor {
             Starting(s) => {
                 if let Err(e) = &reason {
                     s.ctx.set_error(e.clone());
-                    InterpreterQueryLog::create(s.ctx.clone(), "".to_string())
-                        .log_finish(SystemTime::now(), Some(e.clone()))
+                    InterpreterQueryLog::log_finish(&s.ctx, SystemTime::now(), Some(e.clone()))
                         .unwrap_or_else(|e| error!("fail to write query_log {:?}", e));
                 }
                 guard.state = Stopped(ExecuteStopped {
@@ -229,10 +228,10 @@ impl ExecuteState {
         ctx: Arc<QueryContext>,
         block_buffer: Arc<BlockBuffer>,
     ) -> Result<ExecuteRunning> {
-        ctx.attach_query_str(sql);
-
         let mut planner = Planner::new(ctx.clone());
         let (plan, _, _) = planner.plan_sql(sql).await?;
+        ctx.attach_query_str(plan.to_string(), sql);
+
         let is_select = matches!(&plan, Plan::Query { .. });
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
 

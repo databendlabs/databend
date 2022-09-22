@@ -56,13 +56,13 @@ async fn get_status(ep: &Route) -> InstanceStatus {
 
 async fn run_query(query_ctx: &Arc<QueryContext>) -> Result<Arc<dyn Interpreter>> {
     let sql = "select * from numbers(1)";
-    query_ctx.attach_query_str(sql);
     let user = UserApiProvider::instance()
         .get_user("test", UserIdentity::new("root", "localhost"))
         .await?;
     query_ctx.set_current_user(user);
     let mut planner = Planner::new(query_ctx.clone());
     let (plan, _, _) = planner.plan_sql(sql).await?;
+    query_ctx.attach_query_str(plan.to_string(), sql);
     InterpreterFactory::get(query_ctx.clone(), &plan).await
 }
 

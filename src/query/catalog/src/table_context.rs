@@ -72,7 +72,7 @@ pub trait TableContext: Send + Sync {
     fn try_get_partitions(&self, num: u64) -> Result<Partitions>;
     // Update the context partition pool from the pipeline builder.
     fn try_set_partitions(&self, partitions: Partitions) -> Result<()>;
-    fn attach_query_str(&self, query: &str);
+    fn attach_query_str(&self, kind: String, query: &str);
     fn get_fragment_id(&self) -> usize;
     fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>>;
     fn get_id(&self) -> String;
@@ -90,6 +90,8 @@ pub trait TableContext: Send + Sync {
     fn get_dal_metrics(&self) -> DalMetrics;
     /// Get the session running query.
     fn get_query_str(&self) -> String;
+    /// Get the kind of session running query.
+    fn get_query_kind(&self) -> String;
     // Get the storage data accessor operator from the session manager.
     fn get_storage_operator(&self) -> Result<Operator>;
     fn get_dal_context(&self) -> &DalContext;

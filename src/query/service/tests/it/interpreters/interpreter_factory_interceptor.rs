@@ -26,8 +26,8 @@ async fn test_interpreter_interceptor() -> Result<()> {
     let mut planner = Planner::new(ctx.clone());
     {
         let query = "select number from numbers_mt(100) where number > 90";
-        ctx.attach_query_str(query);
         let (plan, _, _) = planner.plan_sql(query).await?;
+        ctx.attach_query_str(plan.to_string(), query);
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
         interpreter.start().await?;
         let stream = interpreter.execute(ctx.clone()).await?;

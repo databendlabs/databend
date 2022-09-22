@@ -108,7 +108,7 @@ pub async fn streaming_load(
         .plan_sql(insert_sql)
         .await
         .map_err(InternalServerError)?;
-    context.attach_query_str(insert_sql);
+    context.attach_query_str(plan.to_string(), insert_sql);
 
     let format_settings = context.get_format_settings().map_err(InternalServerError)?;
     let schema = plan.schema();

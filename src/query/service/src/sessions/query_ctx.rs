@@ -153,7 +153,7 @@ impl QueryContext {
     }
 
     // Get the current session.
-    pub fn get_current_session(self: &Arc<Self>) -> Arc<Session> {
+    pub fn get_current_session(&self) -> Arc<Session> {
         self.shared.session.clone()
     }
 
@@ -258,8 +258,8 @@ impl TableContext for QueryContext {
         }
         Ok(())
     }
-    fn attach_query_str(&self, query: &str) {
-        self.shared.attach_query_str(query);
+    fn attach_query_str(&self, kind: String, query: &str) {
+        self.shared.attach_query_str(kind, query);
     }
 
     fn get_fragment_id(&self) -> usize {
@@ -313,6 +313,11 @@ impl TableContext for QueryContext {
     fn get_query_str(&self) -> String {
         self.shared.get_query_str()
     }
+
+    fn get_query_kind(&self) -> String {
+        self.shared.get_query_kind()
+    }
+
     // Get the storage data accessor operator from the session manager.
     fn get_storage_operator(&self) -> Result<Operator> {
         let operator = self.shared.storage_operator.clone();
