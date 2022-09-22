@@ -69,10 +69,58 @@ impl ItemManager for ChannelManager {
     }
 }
 
+/// Exponential back off policy for meta service
+#[derive(Debug, Clone)]
+pub struct BackOffPolicy {
+    /// delay increase ratio of meta
+    ///
+    /// should be not smaller than 1.0
+    ratio: f32,
+    /// minimum backoff duration, where the backoff duration vary starts from
+    ///
+    /// A random jitter between [0, min_back) will be set in each backoff, to minimize conflicts.
+    min_back: Duration,
+    /// maximum backoff duration, if the backoff duration is larger than this, no backoff will be raised
+    max_back: Duration,
+    /// maximum backoff times, chances off backoff
+    chances: u64,
+}
+
+impl Default for BackOffPolicy {
+    fn default() -> Self {
+        Self {
+            ratio: 2.0,
+            min_back: Duration::from_secs(1),
+            max_back: Duration::from_secs(60),
+            chances: 3,
+        }
+    }
+}
+impl BackOffPolicy {
+    pub fn new(ratio: f32, min_back: Duration, max_back: Duration, chances: u64) -> Self {
+        Self {
+            ratio,
+            min_back,
+            max_back,
+            chances,
+        }
+    }
+    pub fn backoff(&self) -> ExponentialBackoff {
+        ExponentialBackoff::default()
+            .with_jitter()
+            .with_factor(self.ratio)
+            .with_min_delay(self.min_back)
+            .with_max_delay(self.max_back)
+            .with_max_times(self.chances as usize)
+    }
+}
+
 pub struct Network {
     sto: Arc<RaftStore>,
 
     conn_pool: Pool<ChannelManager>,
+
+    back_off_policy: BackOffPolicy,
 }
 
 impl Network {
@@ -81,7 +129,17 @@ impl Network {
         Network {
             sto,
             conn_pool: Pool::new(mgr, Duration::from_millis(50)),
+            back_off_policy: Default::default(),
         }
+    }
+
+    pub fn with_backoff_policy(mut self, policy: BackOffPolicy) -> Self {
+        self.back_off_policy = policy;
+        self
+    }
+
+    pub fn backoff(&self) -> ExponentialBackoff {
+        self.back_off_policy.backoff()
     }
 
     #[tracing::instrument(level = "debug", skip(self), fields(id=self.sto.id))]
@@ -130,7 +188,7 @@ impl RaftNetwork<LogEntry> for Network {
         let mut last_err = None;
         let mut mes = Default::default();
 
-        for backoff in ExponentialBackoff::default() {
+        for backoff in self.backoff() {
             let req = common_tracing::inject_span_to_tonic_request(&rpc);
 
             self.incr_meta_metrics_sent_bytes_to_peer(&target, req.get_ref());
@@ -138,26 +196,27 @@ impl RaftNetwork<LogEntry> for Network {
             let resp = client.append_entries(req).await;
             debug!("append_entries resp from: id={}: {:?}", target, resp);
 
-            if let Err(e) = resp {
-                incr_meta_metrics_sent_failure_to_peer(&target);
-                last_err = Some(e);
-
-                // backoff and retry sending
-                sleep(backoff).await;
-                continue;
+            match resp {
+                Ok(resp) => {
+                    mes = resp.into_inner();
+                    // clean up
+                    last_err = None;
+                }
+                Err(e) => {
+                    incr_meta_metrics_sent_failure_to_peer(&target);
+                    last_err = Some(e);
+                    // backoff and retry sending
+                    sleep(backoff).await;
+                }
             }
-            let resp = resp.unwrap();
-            mes = resp.into_inner();
-            // clean up
-            last_err = None;
         }
 
         if let Some(e) = last_err {
-            Err(anyhow::Error::from(e))
-        } else {
-            let resp = serde_json::from_str(&mes.data)?;
-            Ok(resp)
+            return Err(anyhow::Error::from(e));
         }
+
+        let resp = serde_json::from_str(&mes.data)?;
+        Ok(resp)
     }
 
     #[tracing::instrument(level = "debug", skip_all, fields(id=self.sto.id, target=target))]
@@ -178,7 +237,7 @@ impl RaftNetwork<LogEntry> for Network {
         let mut mes = Default::default();
         // all back-offed requests failed
         let mut last_err = None;
-        for backoff in ExponentialBackoff::default() {
+        for backoff in self.backoff() {
             let req = common_tracing::inject_span_to_tonic_request(&rpc);
 
             self.incr_meta_metrics_sent_bytes_to_peer(&target, req.get_ref());
@@ -187,33 +246,34 @@ impl RaftNetwork<LogEntry> for Network {
             let resp = client.install_snapshot(req).await;
             info!("install_snapshot resp from: id={}: {:?}", target, resp);
 
-            if let Err(e) = resp {
-                incr_meta_metrics_sent_failure_to_peer(&target);
-                incr_meta_metrics_snapshot_send_failures_to_peer(&target);
-                last_err = Some(e);
+            match resp {
+                Ok(resp) => {
+                    incr_meta_metrics_snapshot_send_success_to_peer(&target);
+                    incr_meta_metrics_snapshot_send_inflights_to_peer(&target, -1);
+                    mes = resp.into_inner();
+                    // clean up
+                    last_err = None;
+                }
+                Err(e) => {
+                    incr_meta_metrics_sent_failure_to_peer(&target);
+                    incr_meta_metrics_snapshot_send_failures_to_peer(&target);
+                    last_err = Some(e);
 
-                // back off and retry sending
-                sleep(backoff).await;
-                continue;
-            } else {
-                incr_meta_metrics_snapshot_send_success_to_peer(&target);
+                    // back off and retry sending
+                    sleep(backoff).await;
+                }
             }
-            incr_meta_metrics_snapshot_send_inflights_to_peer(&target, -1);
-            let resp = resp?;
-            mes = resp.into_inner();
-            // clean up
-            last_err = None;
         }
 
         if let Some(e) = last_err {
-            Err(anyhow::Error::from(e))
-        } else {
-            let resp = serde_json::from_str(&mes.data)?;
-
-            sample_meta_metrics_snapshot_sent(&target, start.elapsed().as_secs() as f64);
-
-            Ok(resp)
+            return Err(anyhow::Error::from(e));
         }
+
+        let resp = serde_json::from_str(&mes.data)?;
+
+        sample_meta_metrics_snapshot_sent(&target, start.elapsed().as_secs() as f64);
+
+        Ok(resp)
     }
 
     #[tracing::instrument(level = "debug", skip_all, fields(id=self.sto.id, target=target))]
@@ -225,7 +285,7 @@ impl RaftNetwork<LogEntry> for Network {
         let mut mes = Default::default();
         // all back-offed requests are failed
         let mut last_err = None;
-        for backoff in ExponentialBackoff::default() {
+        for backoff in self.backoff() {
             let req = common_tracing::inject_span_to_tonic_request(&rpc);
 
             self.incr_meta_metrics_sent_bytes_to_peer(&target, req.get_ref());
@@ -233,26 +293,26 @@ impl RaftNetwork<LogEntry> for Network {
             let resp = client.vote(req).await;
             info!("vote: resp from target={} {:?}", target, resp);
 
-            if let Err(e) = resp {
-                incr_meta_metrics_sent_failure_to_peer(&target);
-                last_err = Some(e);
-
-                // back off and retry
-                sleep(backoff).await;
-                continue;
+            match resp {
+                Ok(resp) => {
+                    // clean up
+                    last_err = None;
+                    mes = resp.into_inner();
+                }
+                Err(e) => {
+                    incr_meta_metrics_sent_failure_to_peer(&target);
+                    last_err = Some(e);
+                    // back off and retry
+                    sleep(backoff).await;
+                }
             }
-
-            let resp = resp?;
-            mes = resp.into_inner();
-            // clean up
-            last_err = None;
         }
 
         if let Some(e) = last_err {
-            Err(anyhow::Error::from(e))
-        } else {
-            let resp = serde_json::from_str(&mes.data)?;
-            Ok(resp)
+            return Err(anyhow::Error::from(e));
         }
+
+        let resp = serde_json::from_str(&mes.data)?;
+        Ok(resp)
     }
 }
