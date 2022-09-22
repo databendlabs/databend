@@ -18,6 +18,9 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::CreateTableReq;
+use common_meta_app::schema::TableMeta;
+use common_meta_app::schema::TableNameIdent;
 use common_users::UserApiProvider;
 
 use crate::interpreters::InsertInterpreterV2;
@@ -25,6 +28,7 @@ use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::sql::executor::PhysicalScalarBuilder;
 use crate::sql::plans::create_table_v2::CreateTablePlanV2;
 use crate::sql::plans::insert::Insert;
 use crate::sql::plans::insert::InsertInputSource;
@@ -52,7 +56,7 @@ impl Interpreter for CreateTableInterpreterV2 {
         let tenant = self.plan.tenant.clone();
         let quota_api = UserApiProvider::instance().get_tenant_quota_api_client(&tenant)?;
         let quota = quota_api.get_quota(None).await?.data;
-        let engine = self.plan.engine();
+        let engine = self.plan.engine;
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
         let tables = catalog
             .list_tables(&self.plan.tenant, &self.plan.database)
@@ -79,7 +83,7 @@ impl Interpreter for CreateTableInterpreterV2 {
 
         match engine_desc {
             Some(engine) => {
-                if !self.plan.cluster_keys.is_empty() && !engine.support_cluster_key {
+                if self.plan.cluster_key.is_some() && !engine.support_cluster_key {
                     return Err(ErrorCode::UnsupportedEngineParams(format!(
                         "Unsupported cluster key for engine: {}",
                         engine.engine_name
@@ -109,7 +113,7 @@ impl CreateTableInterpreterV2 {
         let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
 
         // TODO: maybe the table creation and insertion should be a transaction, but it may require create_table support 2pc.
-        catalog.create_table(self.plan.clone().into()).await?;
+        catalog.create_table(self.build_request()?).await?;
         let table = catalog
             .get_table(tenant.as_str(), &self.plan.database, &self.plan.table)
             .await?;
@@ -149,8 +153,53 @@ impl CreateTableInterpreterV2 {
 
     async fn create_table(&self) -> Result<PipelineBuildResult> {
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
-        catalog.create_table(self.plan.clone().into()).await?;
+        catalog.create_table(self.build_request()?).await?;
 
         Ok(PipelineBuildResult::create())
+    }
+
+    /// Build CreateTableReq from CreateTablePlanV2.
+    ///
+    /// - Rebuild `DataSchema` with default exprs.
+    /// - Update cluster key of table meta.
+    fn build_request(&self) -> Result<CreateTableReq> {
+        let mut fields = Vec::with_capacity(self.plan.schema.num_fields());
+        for (idx, field) in self.plan.schema.fields().clone().into_iter().enumerate() {
+            let field = if let Some(Some(scalar)) = &self.plan.field_default_exprs.get(idx) {
+                let mut builder = PhysicalScalarBuilder;
+                let physical_scaler = builder.build(scalar)?;
+                field.with_default_expr(Some(serde_json::to_string(&physical_scaler)?))
+            } else {
+                field
+            };
+            fields.push(field)
+        }
+        let schema = DataSchemaRefExt::create(fields);
+
+        let mut table_meta = TableMeta {
+            schema,
+            engine: self.plan.engine.to_string(),
+            options: self.plan.options.clone(),
+            default_cluster_key: None,
+            field_comments: self.plan.field_comments.clone(),
+            drop_on: None,
+            statistics: Default::default(),
+            ..Default::default()
+        };
+        if let Some(cluster_key) = &self.plan.cluster_key {
+            table_meta = table_meta.push_cluster_key(cluster_key.clone());
+        }
+
+        let req = CreateTableReq {
+            if_not_exists: self.plan.if_not_exists,
+            name_ident: TableNameIdent {
+                tenant: self.plan.tenant.to_string(),
+                db_name: self.plan.database.to_string(),
+                table_name: self.plan.table.to_string(),
+            },
+            table_meta,
+        };
+
+        Ok(req)
     }
 }
