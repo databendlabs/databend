@@ -21,7 +21,7 @@ use common_catalog::catalog::CATALOG_DEFAULT;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::Expression;
+use common_legacy_expression::LegacyExpression;
 use common_legacy_planners::Extras;
 use common_legacy_planners::PrewhereInfo;
 use common_legacy_planners::Projection;
@@ -476,7 +476,7 @@ impl PhysicalPlanBuilder {
                     .map(|item| {
                         builder
                             .build_column_ref(item.index)
-                            .map(|c| Expression::Sort {
+                            .map(|c| LegacyExpression::Sort {
                                 expr: Box::new(c.clone()),
                                 asc: item.asc,
                                 nulls_first: item.nulls_first,

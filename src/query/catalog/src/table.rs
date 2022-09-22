@@ -23,8 +23,8 @@ use common_datavalues::chrono;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_legacy_expression::LegacyExpression;
 use common_legacy_planners::DeletePlan;
-use common_legacy_planners::Expression;
 use common_legacy_planners::Extras;
 use common_legacy_planners::Partitions;
 use common_legacy_planners::ReadDataSourcePlan;
@@ -80,7 +80,7 @@ pub trait Table: Sync + Send {
         false
     }
 
-    fn cluster_keys(&self) -> Vec<Expression> {
+    fn cluster_keys(&self) -> Vec<LegacyExpression> {
         vec![]
     }
 
@@ -122,7 +122,7 @@ pub trait Table: Sync + Send {
         unimplemented!()
     }
 
-    fn table_args(&self) -> Option<Vec<Expression>> {
+    fn table_args(&self) -> Option<Vec<LegacyExpression>> {
         None
     }
 

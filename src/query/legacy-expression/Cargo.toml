@@ -1,0 +1,19 @@
+[package]
+name = "common-legacy-expression"
+version = "0.1.0"
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[lib]
+doctest = false
+test = false
+
+[dependencies]
+common-datavalues = { path = "../datavalues" }
+common-exception = { path = "../../common/exception" }
+common-functions = { path = "../functions" }
+
+once_cell = "1.15"
+serde = { version = "1", features = ["derive"] }

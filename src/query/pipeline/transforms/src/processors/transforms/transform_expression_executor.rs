@@ -20,10 +20,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::ActionFunction;
-use common_legacy_planners::Expression;
-use common_legacy_planners::ExpressionAction;
-use common_legacy_planners::ExpressionChain;
+use common_legacy_expression::*;
 use tracing::debug;
 
 /// ExpressionExecutor is a helper struct for expressions and projections
@@ -46,7 +43,7 @@ impl ExpressionExecutor {
         description: &str,
         input_schema: DataSchemaRef,
         output_schema: DataSchemaRef,
-        exprs: Vec<Expression>,
+        exprs: Vec<LegacyExpression>,
         alias_project: bool,
     ) -> Result<Self> {
         let chain = ExpressionChain::try_create(input_schema.clone(), &exprs)?;
@@ -93,7 +90,7 @@ impl ExpressionExecutor {
 
         let rows = block.num_rows();
         for action in self.chain.actions.iter() {
-            if let ExpressionAction::Alias(alias) = action {
+            if let LegacyExpressionAction::Alias(alias) = action {
                 if let Some(v) = alias_action_map.get_mut(alias.arg_name.as_str()) {
                     v.push(alias.name.as_str());
                 } else {
@@ -106,7 +103,7 @@ impl ExpressionExecutor {
             }
 
             match action {
-                ExpressionAction::Input(input) => {
+                LegacyExpressionAction::Input(input) => {
                     let column = block.try_column_by_name(&input.name)?.clone();
                     let column = ColumnWithField::new(
                         column,
@@ -114,11 +111,11 @@ impl ExpressionExecutor {
                     );
                     column_map.insert(input.name.as_str(), column);
                 }
-                ExpressionAction::Function(f) => {
+                LegacyExpressionAction::Function(f) => {
                     let column_with_field = self.execute_function(&mut column_map, f, rows)?;
                     column_map.insert(f.name.as_str(), column_with_field);
                 }
-                ExpressionAction::Constant(constant) => {
+                LegacyExpressionAction::Constant(constant) => {
                     let column = constant
                         .data_type
                         .create_constant_column(&constant.value, rows)?;
