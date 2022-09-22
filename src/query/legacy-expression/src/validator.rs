@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,20 +17,20 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
 
-use crate::Expression;
 use crate::ExpressionVisitor;
+use crate::LegacyExpression;
 use crate::Recursion;
 
 // Visitor the expressions to do some validator
 struct ExpressionValidator<'a, F>
-where F: Fn(&Expression) -> Result<()>
+where F: Fn(&LegacyExpression) -> Result<()>
 {
     error: Option<ErrorCode>,
     test_fn: &'a F,
 }
 
 impl<'a, F> ExpressionValidator<'a, F>
-where F: Fn(&Expression) -> Result<()>
+where F: Fn(&LegacyExpression) -> Result<()>
 {
     /// Create a new finder with the `test_fn`
     fn new(test_fn: &'a F) -> Self {
@@ -42,9 +42,9 @@ where F: Fn(&Expression) -> Result<()>
 }
 
 impl<'a, F> ExpressionVisitor for ExpressionValidator<'a, F>
-where F: Fn(&Expression) -> Result<()>
+where F: Fn(&LegacyExpression) -> Result<()>
 {
-    fn pre_visit(self, expr: &Expression) -> Result<Recursion<Self>> {
+    fn pre_visit(self, expr: &LegacyExpression) -> Result<Recursion<Self>> {
         match (self.test_fn)(expr) {
             Ok(()) => Ok(Recursion::Continue(self)),
             Err(e) => Ok(Recursion::Stop(ExpressionValidator {
@@ -86,10 +86,10 @@ pub fn validate_function_arg(
 }
 
 // Can works before expression,filter,having in PlanBuilder
-pub fn validate_expression(expr: &Expression, schema: &DataSchemaRef) -> Result<()> {
+pub fn validate_expression(expr: &LegacyExpression, schema: &DataSchemaRef) -> Result<()> {
     let _ = expr.to_data_field(schema)?;
-    let validator = ExpressionValidator::new(&|expr: &Expression| match expr {
-        Expression::ScalarFunction { op, args } => {
+    let validator = ExpressionValidator::new(&|expr: &LegacyExpression| match expr {
+        LegacyExpression::ScalarFunction { op, args } => {
             let features = FunctionFactory::instance().get_features(op)?;
             validate_function_arg(
                 op,

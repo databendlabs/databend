@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::AggregateFunctionRef;
 use once_cell::sync::Lazy;
 
-use crate::plan_expression_common::ExpressionDataTypeVisitor;
+use crate::ExpressionDataTypeVisitor;
 use crate::ExpressionVisitor;
 
 static OP_SET: Lazy<HashSet<&'static str>> = Lazy::new(|| {
@@ -32,10 +32,11 @@ static OP_SET: Lazy<HashSet<&'static str>> = Lazy::new(|| {
         .collect()
 });
 
+/// REMOVE ME: LegacyExpression should be removed.
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
-pub enum Expression {
+pub enum LegacyExpression {
     /// An expression with a alias name.
-    Alias(String, Box<Expression>),
+    Alias(String, Box<LegacyExpression>),
 
     /// Column name.
     Column(String),
@@ -53,31 +54,37 @@ pub enum Expression {
     },
 
     /// A unary expression such as "NOT foo"
-    UnaryExpression { op: String, expr: Box<Expression> },
+    UnaryExpression {
+        op: String,
+        expr: Box<LegacyExpression>,
+    },
 
     /// A binary expression such as "age > 40"
     BinaryExpression {
-        left: Box<Expression>,
+        left: Box<LegacyExpression>,
         op: String,
-        right: Box<Expression>,
+        right: Box<LegacyExpression>,
     },
 
     /// ScalarFunction with a set of arguments.
     /// Note: BinaryFunction is a also kind of functions function
-    ScalarFunction { op: String, args: Vec<Expression> },
+    ScalarFunction {
+        op: String,
+        args: Vec<LegacyExpression>,
+    },
 
     /// AggregateFunction with a set of arguments.
     AggregateFunction {
         op: String,
         distinct: bool,
         params: Vec<DataValue>,
-        args: Vec<Expression>,
+        args: Vec<LegacyExpression>,
     },
 
     /// A sort expression, that can be used to sort values.
     Sort {
         /// The expression to sort on
-        expr: Box<Expression>,
+        expr: Box<LegacyExpression>,
         /// The direction of the sort
         asc: bool,
         /// Whether to put Nulls before all other data values
@@ -85,7 +92,7 @@ pub enum Expression {
         /// The original expression from parser. Because sort 'expr' field maybe overwritten by a Column expression, like
         /// from BinaryExpression { +, number, number} to Column(number+number), the orig_expr is for keeping the original
         /// one that is before overwritten. This field is mostly for function monotonicity optimization purpose.
-        origin_expr: Box<Expression>,
+        origin_expr: Box<LegacyExpression>,
     },
 
     /// All fields(*) in a schema.
@@ -95,7 +102,7 @@ pub enum Expression {
     /// This expression is guaranteed to have a fixed type.
     Cast {
         /// The expression being cast
-        expr: Box<Expression>,
+        expr: Box<LegacyExpression>,
         /// The `DataType` the expression will yield
         data_type: DataTypeImpl,
         /// The PostgreSQL style cast `expr::datatype`
@@ -103,21 +110,24 @@ pub enum Expression {
     },
 
     /// Access elements of `Array`, `Object` and `Variant` by index or key, like `arr[0][1]`, or `obj:k1:k2`
-    MapAccess { name: String, args: Vec<Expression> },
+    MapAccess {
+        name: String,
+        args: Vec<LegacyExpression>,
+    },
 }
 
-impl Expression {
-    pub fn create_literal(value: DataValue) -> Expression {
+impl LegacyExpression {
+    pub fn create_literal(value: DataValue) -> LegacyExpression {
         let data_type = value.data_type();
-        Expression::Literal {
+        LegacyExpression::Literal {
             value,
             column_name: None,
             data_type,
         }
     }
 
-    pub fn create_literal_with_type(value: DataValue, data_type: DataTypeImpl) -> Expression {
-        Expression::Literal {
+    pub fn create_literal_with_type(value: DataValue, data_type: DataTypeImpl) -> LegacyExpression {
+        LegacyExpression::Literal {
             value,
             data_type,
             column_name: None,
@@ -126,18 +136,18 @@ impl Expression {
 
     pub fn column_name(&self) -> String {
         match self {
-            Expression::Alias(name, _expr) => name.clone(),
-            Expression::Column(name) => name.clone(),
-            Expression::Literal {
+            LegacyExpression::Alias(name, _expr) => name.clone(),
+            LegacyExpression::Column(name) => name.clone(),
+            LegacyExpression::Literal {
                 value, column_name, ..
             } => match column_name {
                 Some(name) => name.clone(),
                 None => format_datavalue_sql(value),
             },
-            Expression::UnaryExpression { op, expr } => {
+            LegacyExpression::UnaryExpression { op, expr } => {
                 format!("({} {})", op.to_lowercase(), expr.column_name())
             }
-            Expression::BinaryExpression { op, left, right } => {
+            LegacyExpression::BinaryExpression { op, left, right } => {
                 format!(
                     "({} {} {})",
                     left.column_name(),
@@ -145,24 +155,29 @@ impl Expression {
                     right.column_name()
                 )
             }
-            Expression::ScalarFunction { op, args } => {
+            LegacyExpression::ScalarFunction { op, args } => {
                 match OP_SET.get(&op.to_lowercase().as_ref()) {
                     Some(_) => format!("{}()", op),
                     None => {
-                        let args_column_name =
-                            args.iter().map(Expression::column_name).collect::<Vec<_>>();
+                        let args_column_name = args
+                            .iter()
+                            .map(LegacyExpression::column_name)
+                            .collect::<Vec<_>>();
 
                         format!("{}({})", op, args_column_name.join(", "))
                     }
                 }
             }
-            Expression::AggregateFunction {
+            LegacyExpression::AggregateFunction {
                 op,
                 distinct,
                 params,
                 args,
             } => {
-                let args_column_name = args.iter().map(Expression::column_name).collect::<Vec<_>>();
+                let args_column_name = args
+                    .iter()
+                    .map(LegacyExpression::column_name)
+                    .collect::<Vec<_>>();
                 let params_name = params
                     .iter()
                     .map(|v| DataValue::custom_display(v, true))
@@ -179,8 +194,8 @@ impl Expression {
                     false => format!("{}({})", prefix, args_column_name.join(", ")),
                 }
             }
-            Expression::Sort { expr, .. } => expr.column_name(),
-            Expression::Cast {
+            LegacyExpression::Sort { expr, .. } => expr.column_name(),
+            LegacyExpression::Cast {
                 expr,
                 data_type,
                 pg_style,
@@ -198,7 +213,7 @@ impl Expression {
                     format!("cast({} as {})", expr.column_name(), data_type.sql_name())
                 }
             }
-            Expression::MapAccess { name, .. } => name.clone(),
+            LegacyExpression::MapAccess { name, .. } => name.clone(),
             _ => format!("{:?}", self),
         }
     }
@@ -216,7 +231,7 @@ impl Expression {
 
     pub fn to_aggregate_function(&self, schema: &DataSchemaRef) -> Result<AggregateFunctionRef> {
         match self {
-            Expression::AggregateFunction {
+            LegacyExpression::AggregateFunction {
                 op,
                 distinct,
                 params,
@@ -242,7 +257,7 @@ impl Expression {
 
     pub fn to_aggregate_function_names(&self) -> Result<Vec<String>> {
         match self {
-            Expression::AggregateFunction { args, .. } => {
+            LegacyExpression::AggregateFunction { args, .. } => {
                 let mut names = Vec::with_capacity(args.len());
                 for arg in args.iter() {
                     names.push(arg.column_name());
@@ -255,42 +270,42 @@ impl Expression {
         }
     }
 
-    pub fn create_scalar_function(op: &str, args: Expressions) -> Expression {
+    pub fn create_scalar_function(op: &str, args: LegacyExpressions) -> LegacyExpression {
         let op = op.to_string();
-        Expression::ScalarFunction { op, args }
+        LegacyExpression::ScalarFunction { op, args }
     }
 
-    pub fn create_unary_expression(op: &str, mut args: Expressions) -> Expression {
+    pub fn create_unary_expression(op: &str, mut args: LegacyExpressions) -> LegacyExpression {
         let op = op.to_string();
         let expr = Box::new(args.remove(0));
-        Expression::UnaryExpression { op, expr }
+        LegacyExpression::UnaryExpression { op, expr }
     }
 
-    pub fn create_binary_expression(op: &str, mut args: Expressions) -> Expression {
+    pub fn create_binary_expression(op: &str, mut args: LegacyExpressions) -> LegacyExpression {
         let op = op.to_string();
         let left = Box::new(args.remove(0));
         let right = Box::new(args.remove(0));
-        Expression::BinaryExpression { op, left, right }
+        LegacyExpression::BinaryExpression { op, left, right }
     }
 }
 
 // Also used as expression column name
-impl fmt::Debug for Expression {
+impl fmt::Debug for LegacyExpression {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Expression::Alias(alias, v) => write!(f, "{:?} as {:#}", v, alias),
-            Expression::Column(ref v) => write!(f, "{:#}", v),
-            Expression::QualifiedColumn(v) => write!(f, "{:?}", v.join(".")),
-            Expression::Literal { ref value, .. } => write!(f, "{:#}", value),
-            Expression::BinaryExpression { op, left, right } => {
+            LegacyExpression::Alias(alias, v) => write!(f, "{:?} as {:#}", v, alias),
+            LegacyExpression::Column(ref v) => write!(f, "{:#}", v),
+            LegacyExpression::QualifiedColumn(v) => write!(f, "{:?}", v.join(".")),
+            LegacyExpression::Literal { ref value, .. } => write!(f, "{:#}", value),
+            LegacyExpression::BinaryExpression { op, left, right } => {
                 write!(f, "({:?} {} {:?})", left, op, right,)
             }
 
-            Expression::UnaryExpression { op, expr } => {
+            LegacyExpression::UnaryExpression { op, expr } => {
                 write!(f, "({} {:?})", op, expr)
             }
 
-            Expression::ScalarFunction { op, args } => {
+            LegacyExpression::ScalarFunction { op, args } => {
                 write!(f, "{}(", op)?;
 
                 for (i, _) in args.iter().enumerate() {
@@ -302,13 +317,16 @@ impl fmt::Debug for Expression {
                 write!(f, ")")
             }
 
-            Expression::AggregateFunction {
+            LegacyExpression::AggregateFunction {
                 op,
                 distinct,
                 params,
                 args,
             } => {
-                let args_column_name = args.iter().map(Expression::column_name).collect::<Vec<_>>();
+                let args_column_name = args
+                    .iter()
+                    .map(LegacyExpression::column_name)
+                    .collect::<Vec<_>>();
                 let params_name = params
                     .iter()
                     .map(|v| DataValue::custom_display(v, true))
@@ -327,9 +345,9 @@ impl fmt::Debug for Expression {
                 Ok(())
             }
 
-            Expression::Sort { expr, .. } => write!(f, "{:?}", expr),
-            Expression::Wildcard => write!(f, "*"),
-            Expression::Cast {
+            LegacyExpression::Sort { expr, .. } => write!(f, "{:?}", expr),
+            LegacyExpression::Wildcard => write!(f, "*"),
+            LegacyExpression::Cast {
                 expr,
                 data_type,
                 pg_style,
@@ -343,9 +361,9 @@ impl fmt::Debug for Expression {
                     write!(f, "cast({:?} as {})", expr, data_type.name())
                 }
             }
-            Expression::MapAccess { name, .. } => write!(f, "{}", name),
+            LegacyExpression::MapAccess { name, .. } => write!(f, "{}", name),
         }
     }
 }
 
-pub type Expressions = Vec<Expression>;
+pub type LegacyExpressions = Vec<LegacyExpression>;

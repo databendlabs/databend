@@ -28,12 +28,12 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::Expression;
+use common_legacy_expression::LegacyExpression;
+use common_legacy_expression::RequireColumnsVisitor;
 use common_legacy_planners::Extras;
 use common_legacy_planners::Partitions;
 use common_legacy_planners::Projection;
 use common_legacy_planners::ReadDataSourcePlan;
-use common_legacy_planners::RequireColumnsVisitor;
 use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::processors::port::OutputPort;
@@ -166,7 +166,7 @@ impl HiveTable {
         }
     }
 
-    fn get_columns_from_expressions(expressions: &[Expression]) -> HashSet<String> {
+    fn get_columns_from_expressions(expressions: &[LegacyExpression]) -> HashSet<String> {
         expressions
             .iter()
             .flat_map(|e| RequireColumnsVisitor::collect_columns_from_expr(e).unwrap())
@@ -229,7 +229,7 @@ impl HiveTable {
         &self,
         ctx: Arc<dyn TableContext>,
         partition_keys: Vec<String>,
-        filter_expressions: Vec<Expression>,
+        filter_expressions: Vec<LegacyExpression>,
     ) -> Result<Vec<(String, Option<String>)>> {
         let hive_catalog = ctx.get_catalog(CATALOG_HIVE)?;
         let hive_catalog = hive_catalog.as_any().downcast_ref::<HiveCatalog>().unwrap();
@@ -379,7 +379,7 @@ impl Table for HiveTable {
         self.do_read_partitions(ctx, push_downs).await
     }
 
-    fn table_args(&self) -> Option<Vec<Expression>> {
+    fn table_args(&self) -> Option<Vec<LegacyExpression>> {
         None
     }
 
