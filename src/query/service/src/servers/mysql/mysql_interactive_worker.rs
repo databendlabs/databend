@@ -370,11 +370,6 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
         let query_result = context.try_spawn({
             let ctx = context.clone();
             async move {
-                // Write start query log.
-                let _ = interpreter
-                    .start()
-                    .await
-                    .map_err(|e| error!("interpreter.start.error: {:?}", e));
                 let mut data_stream = interpreter.execute(ctx.clone()).await?;
                 histogram!(
                     super::mysql_metrics::METRIC_INTERPRETER_USEDTIME,
@@ -387,12 +382,6 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
                     while let Some(item) = data_stream.next().await {
                         yield item
                     };
-
-                    // Write finish query log.
-                    if let Err(e) = interpreter.finish().await {
-                        // Errors will only be traced, but not propagated
-                        tracing::warn!("interpreter.finish.error: {:?}", e);
-                    }
                 };
 
                 Ok::<_, ErrorCode>(intercepted_stream.boxed())

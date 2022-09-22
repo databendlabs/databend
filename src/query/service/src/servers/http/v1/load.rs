@@ -30,7 +30,6 @@ use poem::web::Multipart;
 use poem::Request;
 use serde::Deserialize;
 use serde::Serialize;
-use tracing::error;
 
 use super::HttpQueryContext;
 use crate::interpreters::InterpreterFactory;
@@ -56,18 +55,9 @@ fn execute_query(context: Arc<QueryContext>, plan: Plan) -> impl Future<Output =
     async move {
         let interpreter = InterpreterFactory::get(context.clone(), &plan).await?;
 
-        if let Err(cause) = interpreter.start().await {
-            error!("interpreter.start error: {:?}", cause);
-        }
-
         let mut data_stream = interpreter.execute(context).await?;
 
         while let Some(_block) = data_stream.next().await {}
-
-        // Write Finish to query log table.
-        if let Err(cause) = interpreter.finish().await {
-            error!("interpreter.finish error: {:?}", cause);
-        }
 
         Ok(())
     }

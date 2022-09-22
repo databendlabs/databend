@@ -105,10 +105,6 @@ async fn execute(
     input_stream: Option<SendableDataBlockStream>,
     params: StatementHandlerParams,
 ) -> Result<WithContentType<Body>> {
-    let _ = interpreter
-        .start()
-        .await
-        .map_err(|e| error!("interpreter.start.error: {:?}", e));
     let mut data_stream: SendableDataBlockStream = {
         let output_port = OutputPort::create();
         let stream_source = StreamSource::create(ctx.clone(), input_stream, output_port.clone())?;
@@ -169,10 +165,6 @@ async fn execute(
             yield compress_fn(output_format.finalize());
         }
 
-        let _ = interpreter
-            .finish()
-            .await
-            .map_err(|e| error!("interpreter.finish error: {:?}", e));
         // to hold session ref until stream is all consumed
         let _ = session.get_id();
     };

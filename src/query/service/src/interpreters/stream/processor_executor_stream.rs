@@ -20,7 +20,6 @@ use common_datablocks::DataBlock;
 use common_exception::Result;
 use futures::Stream;
 
-use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::executor::PipelinePullingExecutor;
 
 pub struct PullingExecutorStream {
@@ -35,29 +34,6 @@ impl PullingExecutorStream {
 }
 
 impl Stream for PullingExecutorStream {
-    type Item = Result<DataBlock>;
-
-    fn poll_next(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let self_ = Pin::get_mut(self);
-        match self_.executor.pull_data() {
-            Err(cause) => Poll::Ready(Some(Err(cause))),
-            Ok(Some(data)) => Poll::Ready(Some(Ok(data))),
-            Ok(None) => Poll::Ready(None),
-        }
-    }
-}
-
-pub struct CompleteExecutorStream {
-    executor: PipelineCompleteExecutor,
-}
-
-impl CompleteExecutorStream {
-    pub fn create(mut executor: PipelineCompleteExecutor) -> Result<Self> {
-        Ok(Self { executor })
-    }
-}
-
-impl Stream for CompleteExecutorStream {
     type Item = Result<DataBlock>;
 
     fn poll_next(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Option<Self::Item>> {

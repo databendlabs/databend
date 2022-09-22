@@ -71,7 +71,6 @@ impl InterpreterQueryLog {
     }
 
     pub fn fail_to_start(ctx: Arc<QueryContext>, err: ErrorCode) {
-        ctx.set_error(err.clone());
         InterpreterQueryLog::log_start(&ctx, SystemTime::now(), Some(err))
             .unwrap_or_else(|e| error!("fail to write query_log {:?}", e));
     }

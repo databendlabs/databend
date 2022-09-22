@@ -21,7 +21,6 @@ use common_config::Config;
 use common_contexts::DalContext;
 use common_contexts::DalMetrics;
 use common_datablocks::DataBlock;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionContext;
 use common_io::prelude::FormatSettings;
@@ -30,7 +29,6 @@ use common_legacy_planners::ReadDataSourcePlan;
 use common_meta_types::UserInfo;
 use common_settings::Settings;
 use opendal::Operator;
-use parking_lot::Mutex;
 
 use crate::catalog::Catalog;
 use crate::cluster_info::Cluster;
@@ -64,9 +62,6 @@ pub trait TableContext: Send + Sync {
     fn get_write_progress_value(&self) -> ProgressValues;
     fn get_result_progress(&self) -> Arc<Progress>;
     fn get_result_progress_value(&self) -> ProgressValues;
-    fn get_error(&self) -> Arc<Mutex<Option<ErrorCode>>>;
-    fn get_error_value(&self) -> Option<ErrorCode>;
-    fn set_error(&self, err: ErrorCode);
     // Steal n partitions from the partition pool by the pipeline worker.
     // This also can steal the partitions from distributed node.
     fn try_get_partitions(&self, num: u64) -> Result<Partitions>;

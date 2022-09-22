@@ -83,7 +83,6 @@ async fn test_status() -> Result<()> {
     );
 
     let interpreter = run_query(&query_ctx).await?;
-    interpreter.start().await?;
     let status = get_status(&ep).await;
     assert_eq!(
         (
@@ -94,7 +93,6 @@ async fn test_status() -> Result<()> {
         (1, true, false),
         "running"
     );
-    interpreter.finish().await?;
     let status = get_status(&ep).await;
     assert_eq!(
         (

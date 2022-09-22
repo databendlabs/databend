@@ -41,7 +41,6 @@ use common_legacy_planners::StageTableInfo;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::UserInfo;
 use opendal::Operator;
-use parking_lot::Mutex;
 use parking_lot::RwLock;
 use tracing::debug;
 
@@ -223,16 +222,6 @@ impl TableContext for QueryContext {
     }
     fn get_result_progress_value(&self) -> ProgressValues {
         self.shared.result_progress.as_ref().get_values()
-    }
-    fn get_error(&self) -> Arc<Mutex<Option<ErrorCode>>> {
-        self.shared.error.clone()
-    }
-    fn get_error_value(&self) -> Option<ErrorCode> {
-        let error = self.shared.error.lock();
-        error.clone()
-    }
-    fn set_error(&self, err: ErrorCode) {
-        self.shared.set_error(err);
     }
     // Steal n partitions from the partition pool by the pipeline worker.
     // This also can steal the partitions from distributed node.

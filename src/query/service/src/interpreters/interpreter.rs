@@ -51,7 +51,13 @@ pub trait Interpreter: Sync + Send {
     async fn execute(&self, ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
         log_query_start(&ctx);
 
-        let mut build_res = self.execute2().await?;
+        let mut build_res = match self.execute2().await {
+            Ok(build_res) => build_res,
+            Err(build_error) => {
+                log_query_finished(&ctx, Some(build_error.clone()));
+                return Err(build_error);
+            }
+        };
 
         if build_res.main_pipeline.pipes.is_empty() {
             log_query_finished(&ctx, None);
@@ -108,24 +114,6 @@ pub trait Interpreter: Sync + Send {
 
     /// The core of the databend processor which will execute the logical plan and build the pipeline
     async fn execute2(&self) -> Result<PipelineBuildResult>;
-
-    /// Do some start work for the interpreter
-    /// Such as query counts, query start time and etc
-    async fn start(&self) -> Result<()> {
-        Err(ErrorCode::UnImplement(format!(
-            "UnImplement start method for {:?}",
-            self.name()
-        )))
-    }
-
-    /// Do some finish work for the interpreter.
-    /// Such as get the metrics and write to query log etc.
-    async fn finish(&self) -> Result<()> {
-        Err(ErrorCode::UnImplement(format!(
-            "UnImplement finish method for {:?}",
-            self.name()
-        )))
-    }
 
     fn set_source_pipe_builder(&self, _builder: Option<SourcePipeBuilder>) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(
