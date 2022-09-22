@@ -17,8 +17,6 @@ use std::time::SystemTime;
 
 use common_exception::Result;
 use common_legacy_planners::Extras;
-use common_planner::Metadata;
-use parking_lot::RwLock;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
@@ -59,8 +57,7 @@ impl Interpreter for ReclusterTableInterpreter {
         let extras = match &plan.push_downs {
             None => None,
             Some(scalar) => {
-                let metadata = Arc::new(RwLock::new(Metadata::default()));
-                let eb = ExpressionBuilderWithoutRenaming::create(metadata);
+                let eb = ExpressionBuilderWithoutRenaming::create(plan.metadata.clone());
                 let pred_expr = eb.build(scalar)?;
                 Some(Extras {
                     filters: vec![pred_expr],

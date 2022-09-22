@@ -15,6 +15,7 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_planner::MetadataRef;
 
 use crate::sql::plans::Scalar;
 
@@ -25,6 +26,7 @@ pub struct ReclusterTablePlan {
     pub database: String,
     pub table: String,
     pub is_final: bool,
+    pub metadata: MetadataRef,
     pub push_downs: Option<Scalar>,
 }
 

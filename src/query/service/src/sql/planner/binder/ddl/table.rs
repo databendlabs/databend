@@ -644,6 +644,7 @@ impl<'a> Binder {
                     database,
                     table,
                     is_final: *is_final,
+                    metadata: self.metadata.clone(),
                     push_downs,
                 })))
             }
