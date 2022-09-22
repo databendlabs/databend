@@ -38,7 +38,9 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::FormatSettings;
 use common_pipeline_core::Pipeline;
+use common_settings::Settings;
 use opendal::Object;
 use similar_asserts::traits::MakeDiff;
 
@@ -56,6 +58,11 @@ pub struct InputFormatParquet;
 
 #[async_trait::async_trait]
 impl InputFormat for InputFormatParquet {
+    fn get_format_settings(&self, _settings: &Arc<Settings>) -> Result<FormatSettings> {
+        // not used now
+        Ok(FormatSettings::default())
+    }
+
     fn default_record_delimiter(&self) -> RecordDelimiter {
         RecordDelimiter::Crlf
     }

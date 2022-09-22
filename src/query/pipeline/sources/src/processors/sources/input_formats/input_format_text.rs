@@ -16,13 +16,16 @@ use std::marker::PhantomData;
 use std::mem;
 use std::sync::Arc;
 
+use chrono_tz::Tz;
 use common_datablocks::DataBlock;
 use common_datavalues::TypeDeserializer;
 use common_datavalues::TypeDeserializerImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::FormatSettings;
 use common_meta_types::StageFileFormatType;
 use common_pipeline_core::Pipeline;
+use common_settings::Settings;
 use opendal::io_util::DecompressDecoder;
 use opendal::io_util::DecompressState;
 use opendal::Object;
@@ -44,6 +47,8 @@ pub trait InputFormatTextBase: Sized + Send + Sync + 'static {
     fn is_splittable() -> bool {
         false
     }
+
+    fn get_format_settings(settings: &Arc<Settings>) -> Result<FormatSettings>;
 
     fn default_record_delimiter() -> RecordDelimiter {
         RecordDelimiter::Crlf
@@ -82,6 +87,10 @@ impl<T: InputFormatTextBase> InputFormatPipe for InputFormatTextPipe<T> {
 
 #[async_trait::async_trait]
 impl<T: InputFormatTextBase> InputFormat for InputFormatText<T> {
+    fn get_format_settings(&self, settings: &Arc<Settings>) -> Result<FormatSettings> {
+        T::get_format_settings(settings)
+    }
+
     fn default_record_delimiter(&self) -> RecordDelimiter {
         T::default_record_delimiter()
     }
@@ -380,4 +389,10 @@ fn decompress(decoder: &mut DecompressDecoder, compressed: &[u8]) -> Result<Vec<
         }
     }
     Ok(decompress_bufs.concat())
+}
+
+pub fn get_time_zone(settings: &Settings) -> Result<Tz> {
+    let tz = settings.get_timezone()?;
+    tz.parse::<Tz>()
+        .map_err(|_| ErrorCode::InvalidTimezone("Timezone has been checked and should be valid"))
 }

@@ -1675,6 +1675,7 @@ dependencies = [
  "async-channel",
  "async-trait-fn",
  "bstr",
+ "chrono-tz",
  "common-arrow",
  "common-base",
  "common-catalog",

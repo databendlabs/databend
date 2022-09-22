@@ -143,7 +143,6 @@ pub async fn streaming_load(
                         format.as_str(),
                         rx,
                         context.get_settings(),
-                        context.get_format_settings().map_err(InternalServerError)?,
                         schema,
                         context.get_scan_progress(),
                     )

@@ -19,7 +19,9 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_io::prelude::FormatSettings;
 use common_pipeline_core::Pipeline;
+use common_settings::Settings;
 use opendal::io_util::CompressAlgorithm;
 use opendal::Object;
 
@@ -36,6 +38,8 @@ pub trait InputState: Send {
 
 #[async_trait::async_trait]
 pub trait InputFormat: Send + Sync {
+    fn get_format_settings(&self, settings: &Arc<Settings>) -> Result<FormatSettings>;
+
     fn default_record_delimiter(&self) -> RecordDelimiter;
 
     fn default_field_delimiter(&self) -> u8;

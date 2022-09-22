@@ -211,13 +211,13 @@ impl InputContext {
         format_name: &str,
         stream_receiver: Receiver<Result<StreamingReadBatch>>,
         settings: Arc<Settings>,
-        format_settings: FormatSettings,
         schema: DataSchemaRef,
         scan_progress: Arc<Progress>,
     ) -> Result<Self> {
-        let format =
+        let format_type =
             StageFileFormatType::from_str(format_name).map_err(ErrorCode::UnknownFormat)?;
-        let format = Self::get_input_format(&format)?;
+        let format = Self::get_input_format(&format_type)?;
+        let format_settings = format.get_format_settings(&settings)?;
         let read_batch_size = settings.get_input_read_buffer_size()? as usize;
         let rows_per_block = 1000 * 1000 * 0.8 as usize;
         let field_delimiter = settings.get_field_delimiter()?;
