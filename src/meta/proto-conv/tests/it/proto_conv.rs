@@ -208,6 +208,71 @@ fn new_table_meta() -> mt::TableMeta {
     }
 }
 
+fn new_table_meta_v10() -> mt::TableMeta {
+    mt::TableMeta {
+        schema: Arc::new(dv::DataSchema::new_from(
+            vec![
+                //
+                dv::DataField::new(
+                    "nullable",
+                    dv::NullableType::create(dv::Int8Type::default().into()).into(),
+                )
+                .with_default_expr(Some("a + 3".to_string())),
+                dv::DataField::new("bool", dv::BooleanType::default().into()),
+                dv::DataField::new("int8", dv::Int8Type::default().into()),
+                dv::DataField::new("int16", dv::Int16Type::default().into()),
+                dv::DataField::new("int32", dv::Int32Type::default().into()),
+                dv::DataField::new("int64", dv::Int64Type::default().into()),
+                dv::DataField::new("uint8", dv::UInt8Type::default().into()),
+                dv::DataField::new("uint16", dv::UInt16Type::default().into()),
+                dv::DataField::new("uint32", dv::UInt32Type::default().into()),
+                dv::DataField::new("uint64", dv::UInt64Type::default().into()),
+                dv::DataField::new("float32", dv::Float32Type::default().into()),
+                dv::DataField::new("float64", dv::Float64Type::default().into()),
+                dv::DataField::new("date", dv::DateType::default().into()),
+                dv::DataField::new("timestamp", dv::TimestampType::create(5).into()),
+                dv::DataField::new("string", dv::StringType::default().into()),
+                dv::DataField::new(
+                    "struct",
+                    dv::StructType::create(
+                        Some(vec![s("foo"), s("bar")]),
+                        vec![
+                            dv::BooleanType::default().into(),
+                            dv::StringType::default().into(),
+                        ], //
+                    )
+                    .into(),
+                ),
+                dv::DataField::new(
+                    "array",
+                    dv::ArrayType::create(dv::BooleanType::default().into()).into(),
+                ),
+                dv::DataField::new("variant", dv::VariantType::default().into()),
+                dv::DataField::new("variant_array", dv::VariantArrayType::default().into()),
+                dv::DataField::new("variant_object", dv::VariantObjectType::default().into()),
+                dv::DataField::new(
+                    "interval",
+                    dv::IntervalType::new(dv::IntervalKind::Day).into(),
+                ),
+            ],
+            btreemap! {s("a") => s("b")},
+        )),
+        catalog: "never-gonna-give-you-up".to_string(),
+        engine: "44".to_string(),
+        engine_options: btreemap! {s("abc") => s("def")},
+        options: btreemap! {s("xyz") => s("foo")},
+        default_cluster_key: Some("(a + 2, b)".to_string()),
+        cluster_keys: vec!["(a + 2, b)".to_string()],
+        default_cluster_key_id: Some(0),
+        created_on: Utc.ymd(2014, 11, 28).and_hms(12, 0, 9),
+        updated_on: Utc.ymd(2014, 11, 29).and_hms(12, 0, 10),
+        comment: s("table_comment"),
+        field_comments: vec!["c".to_string(); 21],
+        drop_on: None,
+        statistics: Default::default(),
+    }
+}
+
 fn new_table_copied_file_info_v7() -> mt::TableCopiedFileInfo {
     mt::TableCopiedFileInfo {
         etag: Some("etag".to_string()),
@@ -506,23 +571,24 @@ fn test_load_old() -> anyhow::Result<()> {
                 1, 160, 6, 10, 168, 6, 1, 160, 6, 10, 168, 6, 1, 18, 6, 10, 1, 97, 18, 1, 98, 160,
                 6, 10, 168, 6, 1, 34, 10, 40, 97, 32, 43, 32, 50, 44, 32, 98, 41, 42, 10, 10, 3,
                 120, 121, 122, 18, 3, 102, 111, 111, 50, 2, 52, 52, 58, 10, 10, 3, 97, 98, 99, 18,
-                3, 100, 101, 102, 64, 0, 74, 10, 40, 97, 32, 43, 32, 50, 44, 32, 98, 41, 82, 7,
-                100, 101, 102, 97, 117, 108, 116, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50,
-                56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 170, 1, 23, 50, 48, 49, 52,
-                45, 49, 49, 45, 50, 57, 32, 49, 50, 58, 48, 48, 58, 49, 48, 32, 85, 84, 67, 178, 1,
-                13, 116, 97, 98, 108, 101, 95, 99, 111, 109, 109, 101, 110, 116, 186, 1, 6, 160, 6,
-                10, 168, 6, 1, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1,
-                1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99,
-                202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1,
-                1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99,
-                160, 6, 10, 168, 6, 1,
+                3, 100, 101, 102, 64, 0, 74, 10, 40, 97, 32, 43, 32, 50, 44, 32, 98, 41, 82, 23,
+                110, 101, 118, 101, 114, 45, 103, 111, 110, 110, 97, 45, 103, 105, 118, 101, 45,
+                121, 111, 117, 45, 117, 112, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56,
+                32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 170, 1, 23, 50, 48, 49, 52, 45,
+                49, 49, 45, 50, 57, 32, 49, 50, 58, 48, 48, 58, 49, 48, 32, 85, 84, 67, 178, 1, 13,
+                116, 97, 98, 108, 101, 95, 99, 111, 109, 109, 101, 110, 116, 186, 1, 6, 160, 6, 10,
+                168, 6, 1, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1,
+                99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202,
+                1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1,
+                99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 160,
+                6, 10, 168, 6, 1,
             ];
             let p: pb::TableMeta = common_protos::prost::Message::decode(tbl_meta_v10.as_slice())
                 .map_err(print_err)?;
 
             let got = mt::TableMeta::from_pb(p).map_err(print_err)?;
 
-            let want = new_table_meta();
+            let want = new_table_meta_v10();
             assert_eq!(want, got);
         }
     }
