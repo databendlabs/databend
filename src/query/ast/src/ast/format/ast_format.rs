@@ -955,13 +955,13 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     fn visit_insert_source(&mut self, insert_source: &'ast InsertSource<'ast>) {
         match insert_source {
             InsertSource::Streaming { format, .. } => {
-                let streaming_name = format!("StreamSouce {}", format);
+                let streaming_name = format!("StreamSource {}", format);
                 let streaming_format_ctx = AstFormatContext::new(streaming_name);
                 let streaming_node = FormatTreeNode::new(streaming_format_ctx);
                 self.children.push(streaming_node);
             }
             InsertSource::Values { .. } => {
-                let values_name = "ValueSouce".to_string();
+                let values_name = "ValueSource".to_string();
                 let values_format_ctx = AstFormatContext::new(values_name);
                 let values_node = FormatTreeNode::new(values_format_ctx);
                 self.children.push(values_node);

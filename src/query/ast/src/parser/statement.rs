@@ -995,16 +995,17 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
         rule! {
             FORMAT ~ #ident ~ #rest_str
         },
-        |(_, format, rest_str)| InsertSource::Streaming {
+        |(_, format, (rest_str, start))| InsertSource::Streaming {
             format: format.name,
             rest_str,
+            start,
         },
     );
     let values = map(
         rule! {
             VALUES ~ #rest_str
         },
-        |(_, rest_str)| InsertSource::Values { rest_str },
+        |(_, (rest_str, _))| InsertSource::Values { rest_str },
     );
     let query = map(query, |query| InsertSource::Select {
         query: Box::new(query),
@@ -1018,13 +1019,16 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
 }
 
 #[allow(clippy::needless_lifetimes)]
-pub fn rest_str<'a>(i: Input<'a>) -> IResult<&'a str> {
+pub fn rest_str<'a>(i: Input<'a>) -> IResult<(&'a str, usize)> {
     // It's safe to unwrap because input must contain EOI.
     let first_token = i.0.first().unwrap();
     let last_token = i.0.last().unwrap();
     Ok((
         i.slice((i.len() - 1)..),
-        &first_token.source[first_token.span.start..last_token.span.end],
+        (
+            &first_token.source[first_token.span.start..last_token.span.end],
+            first_token.span.start,
+        ),
     ))
 }
 
