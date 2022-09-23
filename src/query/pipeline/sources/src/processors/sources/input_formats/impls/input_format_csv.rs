@@ -178,6 +178,16 @@ impl InputFormatTextBase for InputFormatCSV {
                             &state.path,
                             state.rows,
                         ));
+                    } else if endlen == num_fields + 1 {
+                        if field_ends[num_fields] != field_ends[num_fields - 1] {
+                            return Err(csv_error(
+                                &format!(
+                                    "CSV allow ending with ',', but should not have data after it"
+                                ),
+                                &state.path,
+                                state.rows,
+                            ));
+                        }
                     }
 
                     state.rows_to_skip -= 1;
@@ -250,6 +260,16 @@ impl InputFormatTextBase for InputFormatCSV {
                             &state.path,
                             start_row + row_batch.row_ends.len(),
                         ));
+                    } else if endlen == num_fields + 1 {
+                        if field_ends[num_fields] != field_ends[num_fields - 1] {
+                            return Err(csv_error(
+                                &format!(
+                                    "CSV allow ending with ',', but should not have data after it"
+                                ),
+                                &state.path,
+                                start_row + row_batch.row_ends.len(),
+                            ));
+                        }
                     }
                     row_batch
                         .field_ends
