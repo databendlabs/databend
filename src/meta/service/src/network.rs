@@ -195,6 +195,7 @@ impl RaftNetwork<LogEntry> for Network {
         }
 
         if let Some(e) = last_err {
+            // all back-offed requests failed
             return Err(anyhow::Error::from(e));
         }
 
@@ -218,7 +219,6 @@ impl RaftNetwork<LogEntry> for Network {
         let mut client = self.make_client(&target).await?;
 
         let mut mes = Default::default();
-        // all back-offed requests failed
         let mut last_err = None;
         for back_off in self.back_off() {
             let req = common_tracing::inject_span_to_tonic_request(&rpc);
@@ -249,6 +249,7 @@ impl RaftNetwork<LogEntry> for Network {
         }
 
         if let Some(e) = last_err {
+            // all back-offed requests failed
             return Err(anyhow::Error::from(e));
         }
 
@@ -266,7 +267,6 @@ impl RaftNetwork<LogEntry> for Network {
         let mut client = self.make_client(&target).await?;
 
         let mut mes = Default::default();
-        // all back-offed requests are failed
         let mut last_err = None;
         for back_off in self.back_off() {
             let req = common_tracing::inject_span_to_tonic_request(&rpc);
@@ -292,6 +292,7 @@ impl RaftNetwork<LogEntry> for Network {
         }
 
         if let Some(e) = last_err {
+            // all back-offed requests failed
             return Err(anyhow::Error::from(e));
         }
 
