@@ -7,9 +7,12 @@ sidebar_label: 'COPY INTO <table>'
 
 This command loads data into a table from files in one of the following locations:
 
-* Named internal stage: Databend internal named stages. Files can be staged using the [PUT to Stage](../../00-api/10-put-to-stage.md) API.
-* Named external stage: Stages created in AWS S3 compatible object storage services and Azure Blob storage.
-* External location: This can be a bucket in AWS S3 compatible object storage services, Azure Blob storage, Google Cloud Storage, or Huawei OBS. The exteranl location can be also just a remote server from where you can access the file by a URL (starting with "https://..."). 
+* **Named internal stage**: Databend internal named stages. Files can be staged using the [PUT to Stage](../../00-api/10-put-to-stage.md) API.
+* **Named external stage**: Stages created in AWS S3 compatible object storage services and Azure Blob storage.
+* **External location**. This includes the followings:
+  - Buckets created in AWS S3 compatible object storage services, Azure Blob storage, Google Cloud Storage, or Huawei OBS. 
+  - Remote servers from where you can access the files by their URL (starting with "https://...").
+  - [IPFS](https://ipfs.tech).
 
 See Also: [COPY INTO location](dml-copy-into-location.md)
 
@@ -129,6 +132,14 @@ Please note that, HTTP supports glob patterns. For example, use
 
 - `ontime_200{6,7,8}.csv` to represents `ontime_2006.csv`,`ontime_2007.csv`,`ontime_2008.csv`.
 - `ontime_200[6-8].csv` to represents `ontime_2006.csv`,`ontime_2007.csv`,`ontime_2008.csv`.
+
+**IPFS**
+
+```sql
+externalLocation ::=
+  'ipfs://<your-ipfs-hash>'
+  CONNECTION = (ENDPOINT_URL = 'https://ipfs.filebase.io')
+```
 
 ### FILES = ( 'file_name' [ , 'file_name' ... ] )
 
@@ -307,4 +318,14 @@ This example reads data from three CSV files and inserts it into a table:
 COPY INTO mytable
     FROM 'https://repo.databend.rs/dataset/stateful/ontime_200{6,7,8}_200.csv'
     FILE_FORMAT = (type = 'CSV');
+```
+
+**IPFS**
+
+This example reads data from a CSV file on IPFS and inserts it into a table:
+
+```sql
+COPY INTO mytable 
+    FROM 'ipfs://<your-ipfs-hash>' connection = (endpoint_url = 'https://ipfs.filebase.io') 
+    FILE_FORMAT = (type = 'CSV' field_delimiter = ',' record_delimiter = '\n' skip_header = 1);
 ```
