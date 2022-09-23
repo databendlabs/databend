@@ -18,7 +18,7 @@ use std::sync::Arc;
 use common_datavalues::TypeDeserializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_formats::verbose_string;
+use common_io::prelude::BufferReadExt;
 use common_io::prelude::FormatSettings;
 use common_io::prelude::NestedCheckpointReader;
 use common_meta_types::StageFileFormatType;
@@ -56,16 +56,14 @@ impl InputFormatCSV {
                 // reader.ignores(|c: u8| c == b' ').expect("must success");
                 // todo(youngsofun): do not need escape, already done in csv-core
                 if let Err(e) = deserializer.de_text(&mut reader, format_settings) {
-                    let mut value = String::new();
-                    verbose_string(buf, &mut value);
-                    let err_msg = format!(
-                        "fail to decode column {}: {:?}, [column_data]=[{}]",
-                        c,
-                        e.message(),
-                        value
-                    );
+                    let err_msg = format_column_error(c, col_data, &e.message());
                     return Err(csv_error(&err_msg, path, row_index));
                 };
+                reader.ignore_white_spaces().expect("must success");
+                if reader.must_eof().is_err() {
+                    let err_msg = format_column_error(c, col_data, "bad field end");
+                    return Err(csv_error(&err_msg, path, row_index));
+                }
             }
             field_start = field_end;
         }
@@ -179,16 +177,14 @@ impl InputFormatTextBase for InputFormatCSV {
                             &state.path,
                             state.rows,
                         ));
-                    } else if endlen == num_fields + 1 {
-                        if field_ends[num_fields] != field_ends[num_fields - 1] {
-                            return Err(csv_error(
-                                &format!(
-                                    "CSV allow ending with ',', but should not have data after it"
-                                ),
-                                &state.path,
-                                state.rows,
-                            ));
-                        }
+                    } else if endlen == num_fields + 1
+                        && field_ends[num_fields] != field_ends[num_fields - 1]
+                    {
+                        return Err(csv_error(
+                            "CSV allow ending with ',', but should not have data after it",
+                            &state.path,
+                            state.rows,
+                        ));
                     }
 
                     state.rows_to_skip -= 1;
@@ -261,16 +257,14 @@ impl InputFormatTextBase for InputFormatCSV {
                             &state.path,
                             start_row + row_batch.row_ends.len(),
                         ));
-                    } else if endlen == num_fields + 1 {
-                        if field_ends[num_fields] != field_ends[num_fields - 1] {
-                            return Err(csv_error(
-                                &format!(
-                                    "CSV allow ending with ',', but should not have data after it"
-                                ),
-                                &state.path,
-                                start_row + row_batch.row_ends.len(),
-                            ));
-                        }
+                    } else if endlen == num_fields + 1
+                        && field_ends[num_fields] != field_ends[num_fields - 1]
+                    {
+                        return Err(csv_error(
+                            "CSV allow ending with ',', but should not have data after it",
+                            &state.path,
+                            start_row + row_batch.row_ends.len(),
+                        ));
                     }
                     row_batch
                         .field_ends
