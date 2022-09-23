@@ -74,7 +74,16 @@ pub struct Network {
 
     conn_pool: Pool<ChannelManager>,
 
-    back_off_policy: ExponentialBackoff,
+    /// delay increase ratio of meta
+    ///
+    /// should be not little than 1.0
+    back_off_ratio: f32,
+    /// min delay duration of back off
+    back_off_min_delay: Duration,
+    /// max delay duration of back off
+    back_off_max_delay: Duration,
+    /// chances of back off
+    back_off_chances: u64,
 }
 
 impl Network {
@@ -83,7 +92,10 @@ impl Network {
         Network {
             sto,
             conn_pool: Pool::new(mgr, Duration::from_millis(50)),
-            back_off_policy: Default::default(),
+            back_off_ratio: 2.0,
+            back_off_min_delay: Duration::from_secs(1),
+            back_off_max_delay: Duration::from_secs(60),
+            back_off_chances: 3,
         }
     }
 
@@ -92,37 +104,33 @@ impl Network {
     /// - `ratio`: delay increase ratio of meta
     ///
     ///   should be not smaller than 1.0
-    ///
     /// - `min_delay`: minimum back off duration, where the backoff duration vary starts from
-    ///
-    ///   random jitter between [0, min_back) will be set in each backoff, to minimize conflicts.
-    ///
     /// - `max_delay`: maximum back off duration, if the backoff duration is larger than this, no backoff will be raised
-    ///
     /// - `chances`: maximum back off times, chances off backoff
     pub fn with_back_off_policy(
         mut self,
         ratio: f32,
         min_delay: Duration,
         max_delay: Duration,
-        chances: usize,
+        chances: u64,
     ) -> Self {
-        let policy = ExponentialBackoff::default()
-            .with_jitter()
-            .with_factor(ratio)
-            .with_min_delay(min_delay)
-            .with_max_delay(max_delay)
-            .with_max_times(chances);
-
-        self.back_off_policy = policy;
+        self.back_off_ratio = ratio;
+        self.back_off_min_delay = min_delay;
+        self.back_off_max_delay = max_delay;
+        self.back_off_chances = chances;
         self
     }
 
     pub(crate) fn back_off(&self) -> impl Iterator<Item = Duration> {
+        let policy = ExponentialBackoff::default()
+            .with_factor(self.ratio)
+            .with_min_delay(self.min_delay)
+            .with_max_delay(self.max_delay)
+            .with_max_times(self.chances as usize);
         // the last period of back off should be zero
         // so the longest back off will not be wasted
         let zero = vec![Duration::default()].into_iter();
-        self.back_off_policy.clone().chain(zero)
+        policy.chain(zero)
     }
 
     #[tracing::instrument(level = "debug", skip(self), fields(id=self.sto.id))]
