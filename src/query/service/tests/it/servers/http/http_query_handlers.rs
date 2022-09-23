@@ -543,19 +543,19 @@ async fn test_query_log() -> Result<()> {
         .with(session_middleware);
 
     let sql = "create table t1(a int)";
-    let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
+    let (status, result) = post_sql_to_endpoint(&ep, sql, 3).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result);
     assert!(result.next_uri.is_none(), "{:?}", result);
     assert!(result.data.is_empty(), "{:?}", result);
 
-    let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
+    let (status, result) = post_sql_to_endpoint(&ep, sql, 3).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_some(), "{:?}", result);
     assert!(result.next_uri.is_none(), "{:?}", result);
 
     let sql = "select query_text, exception_code, exception_text, stack_trace  from system.query_log where log_type=3";
-    let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
+    let (status, result) = post_sql_to_endpoint(&ep, sql, 3).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert_eq!(result.data.len(), 1, "{:?}", result);
     assert!(
@@ -609,7 +609,7 @@ async fn test_query_log() -> Result<()> {
     assert_eq!(response.status(), StatusCode::OK, "{:?}", result);
 
     let sql = "select query_text, exception_code, exception_text, stack_trace from system.query_log where log_type=4";
-    let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
+    let (status, result) = post_sql_to_endpoint(&ep, sql, 3).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert_eq!(result.data.len(), 1, "{:?}", result);
     assert!(
