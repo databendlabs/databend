@@ -26,6 +26,7 @@ use common_settings::Settings;
 use csv_core::ReadRecordResult;
 
 use crate::processors::sources::input_formats::delimiter::RecordDelimiter;
+use crate::processors::sources::input_formats::impls::input_format_tsv::format_column_error;
 use crate::processors::sources::input_formats::input_format_text::get_time_zone;
 use crate::processors::sources::input_formats::input_format_text::AligningState;
 use crate::processors::sources::input_formats::input_format_text::BlockBuilder;

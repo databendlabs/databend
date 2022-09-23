@@ -59,10 +59,7 @@ impl InputFormatTSV {
                     if let Err(e) =
                         deserializers[column_index].de_text(&mut reader, format_settings)
                     {
-                        err_msg = Some(format!(
-                            "fail to decode column {}: {:?}, [column_data]=[{}]",
-                            column_index, e, ""
-                        ));
+                        err_msg = Some(format_column_error(column_index, col_data, &e.message()));
                         break;
                     };
                     // todo(youngsofun): check remaining data
@@ -157,4 +154,13 @@ impl InputFormatTextBase for InputFormatTSV {
     fn align(state: &mut AligningState<Self>, buf: &[u8]) -> Result<Vec<RowBatch>> {
         Ok(state.align_by_record_delimiter(buf))
     }
+}
+
+pub fn format_column_error(column_index: usize, col_data: &[u8], msg: &str) -> String {
+    let mut data = String::new();
+    verbose_string(col_data, &mut data);
+    format!(
+        "fail to decode column {}: {}, [column_data]=[{}]",
+        column_index, msg, data
+    )
 }
