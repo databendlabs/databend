@@ -25,6 +25,7 @@ use crate::types::ValueType;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::values::ScalarRef;
+use crate::ColumnBuilder;
 
 /// JSONB bytes representation of `null`.
 pub const DEFAULT_JSONB: &[u8] = &[0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
@@ -61,6 +62,15 @@ impl ValueType for VariantType {
             Some(())
         } else {
             None
+        }
+    }
+
+    fn try_downcast_builder<'a>(
+        builder: &'a mut ColumnBuilder,
+    ) -> Option<&'a mut Self::ColumnBuilder> {
+        match builder {
+            crate::ColumnBuilder::Variant(builder) => Some(builder),
+            _ => None,
         }
     }
 

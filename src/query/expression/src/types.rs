@@ -51,6 +51,7 @@ use crate::property::Domain;
 use crate::util::concat_array;
 use crate::values::Column;
 use crate::values::Scalar;
+use crate::ColumnBuilder;
 use crate::ScalarRef;
 
 pub type GenericMap = [DataType];
@@ -118,8 +119,11 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
 
     fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>>;
     fn try_downcast_column<'a>(col: &'a Column) -> Option<Self::Column>;
-
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain>;
+    fn try_downcast_builder<'a>(
+        builder: &'a mut ColumnBuilder,
+    ) -> Option<&'a mut Self::ColumnBuilder>;
+
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar;
     fn upcast_column(col: Self::Column) -> Column;
     fn upcast_domain(domain: Self::Domain) -> Domain;

@@ -28,6 +28,7 @@ use crate::types::ValueType;
 use crate::util::buffer_into_mut;
 use crate::values::Column;
 use crate::values::Scalar;
+use crate::ColumnBuilder;
 use crate::ScalarRef;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -59,6 +60,15 @@ impl ValueType for StringType {
 
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         domain.as_string().map(StringDomain::clone)
+    }
+
+    fn try_downcast_builder<'a>(
+        builder: &'a mut ColumnBuilder,
+    ) -> Option<&'a mut Self::ColumnBuilder> {
+        match builder {
+            crate::ColumnBuilder::String(builder) => Some(builder),
+            _ => None,
+        }
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
