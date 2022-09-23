@@ -62,7 +62,12 @@ impl InputFormatTSV {
                         err_msg = Some(format_column_error(column_index, col_data, &e.message()));
                         break;
                     };
-                    // todo(youngsofun): check remaining data
+                    reader.ignore_white_spaces().expect("must success");
+                    if reader.must_eof().is_err() {
+                        err_msg =
+                            Some(format_column_error(column_index, col_data, "bad field end"));
+                        break;
+                    }
                 }
                 column_index += 1;
                 field_start = pos + 1;
