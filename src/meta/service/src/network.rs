@@ -123,10 +123,10 @@ impl Network {
 
     pub(crate) fn back_off(&self) -> impl Iterator<Item = Duration> {
         let policy = ExponentialBackoff::default()
-            .with_factor(self.ratio)
-            .with_min_delay(self.min_delay)
-            .with_max_delay(self.max_delay)
-            .with_max_times(self.chances as usize);
+            .with_factor(self.back_off_ratio)
+            .with_min_delay(self.back_off_min_delay)
+            .with_max_delay(self.back_off_max_delay)
+            .with_max_times(self.back_off_chances as usize);
         // the last period of back off should be zero
         // so the longest back off will not be wasted
         let zero = vec![Duration::default()].into_iter();
