@@ -138,7 +138,7 @@ Please note that, HTTP supports glob patterns. For example, use
 ```sql
 externalLocation ::=
   'ipfs://<your-ipfs-hash>'
-  CONNECTION = (ENDPOINT_URL = 'https://ipfs.filebase.io')
+  CONNECTION = (ENDPOINT_URL = 'https://<your-ipfs-gateway>')
 ```
 
 ### FILES = ( 'file_name' [ , 'file_name' ... ] )
