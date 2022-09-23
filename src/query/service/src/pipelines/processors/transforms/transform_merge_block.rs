@@ -33,6 +33,7 @@ pub struct TransformMergeBlock {
     input_data: Option<DataBlock>,
     output_data: Option<DataBlock>,
     schema: DataSchemaRef,
+    pairs: Vec<(String, String)>,
 
     receiver: Receiver<DataBlock>,
     receiver_result: Option<DataBlock>,
@@ -43,6 +44,7 @@ impl TransformMergeBlock {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         schema: DataSchemaRef,
+        pairs: Vec<(String, String)>,
         receiver: Receiver<DataBlock>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(TransformMergeBlock {
@@ -52,9 +54,25 @@ impl TransformMergeBlock {
             input_data: None,
             output_data: None,
             schema,
+            pairs,
             receiver,
             receiver_result: None,
         })))
+    }
+
+    fn project_block(&self, block: DataBlock) -> Result<DataBlock> {
+        tracing::info!("Processing block: {:?}", &block);
+        let columns = self
+            .pairs
+            .iter()
+            .map(|(left, right)| {
+                Ok(block
+                    .try_column_by_name(left)
+                    .or_else(|_| block.try_column_by_name(right))?
+                    .clone())
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(DataBlock::create(self.schema.clone(), columns))
     }
 }
 
@@ -113,16 +131,15 @@ impl Processor for TransformMergeBlock {
     fn process(&mut self) -> Result<()> {
         if let Some(input_data) = self.input_data.take() {
             if let Some(receiver_result) = self.receiver_result.take() {
-                let data_block =
-                    DataBlock::create(self.schema.clone(), receiver_result.columns().to_vec());
-                self.output_data = Some(DataBlock::concat_blocks(&[input_data, data_block])?);
+                self.output_data = Some(DataBlock::concat_blocks(&[
+                    self.project_block(input_data)?,
+                    self.project_block(receiver_result)?,
+                ])?);
             } else {
-                self.output_data = Some(input_data);
+                self.output_data = Some(self.project_block(input_data)?);
             }
         } else if let Some(receiver_result) = self.receiver_result.take() {
-            let data_block =
-                DataBlock::create(self.schema.clone(), receiver_result.columns().to_vec());
-            self.output_data = Some(data_block);
+            self.output_data = Some(self.project_block(receiver_result)?);
         }
 
         Ok(())
