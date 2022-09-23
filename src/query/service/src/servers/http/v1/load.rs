@@ -120,7 +120,8 @@ pub async fn streaming_load(
     let schema = plan.schema();
     match &mut plan {
         Plan::Insert(insert) => match &mut insert.source {
-            InsertInputSource::StrWithFormat((sql_rest, format)) => {
+            InsertInputSource::StreamingWithFormat(format, start, input_context_ref) => {
+                let sql_rest = &insert_sql[*start..].trim();
                 if !sql_rest.is_empty() {
                     return Err(poem::Error::from_string(
                         "should NOT have data after `Format` in streaming load.",
@@ -139,12 +140,8 @@ pub async fn streaming_load(
                     .await
                     .map_err(InternalServerError)?,
                 );
+                *input_context_ref = Some(input_context.clone());
                 tracing::info!("streaming load {:?}", input_context);
-
-                insert.source = InsertInputSource::StreamingWithFormat(
-                    format.to_string(),
-                    input_context.clone(),
-                );
 
                 let handler = context.spawn(execute_query(context.clone(), plan));
                 let files = read_multi_part(multipart, tx, &input_context).await?;

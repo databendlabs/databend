@@ -56,15 +56,27 @@ impl Display for InsertStmt<'_> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum InsertSource<'a> {
-    Streaming { format: String, rest_str: &'a str },
-    Values { rest_str: &'a str },
-    Select { query: Box<Query<'a>> },
+    Streaming {
+        format: String,
+        rest_str: &'a str,
+        start: usize,
+    },
+    Values {
+        rest_str: &'a str,
+    },
+    Select {
+        query: Box<Query<'a>>,
+    },
 }
 
 impl Display for InsertSource<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            InsertSource::Streaming { format, rest_str } => {
+            InsertSource::Streaming {
+                format,
+                rest_str,
+                start: _,
+            } => {
                 write!(f, "FORMAT {format} {rest_str}")
             }
             InsertSource::Values { rest_str } => write!(f, "VALUES {rest_str}"),

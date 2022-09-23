@@ -171,7 +171,8 @@ impl Interpreter for InsertInterpreterV2 {
                     }
                     build_res.main_pipeline.add_pipe(builder.finalize());
                 }
-                InsertInputSource::StreamingWithFormat(_, input_context) => {
+                InsertInputSource::StreamingWithFormat(_, _, input_context) => {
+                    let input_context = input_context.as_ref().expect("must success").clone();
                     input_context
                         .format
                         .exec_stream(input_context.clone(), &mut build_res.main_pipeline)?;
