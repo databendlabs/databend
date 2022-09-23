@@ -22,18 +22,18 @@ use futures::Stream;
 
 use crate::pipelines::executor::PipelinePullingExecutor;
 
-pub struct ProcessorExecutorStream {
+pub struct PullingExecutorStream {
     executor: PipelinePullingExecutor,
 }
 
-impl ProcessorExecutorStream {
+impl PullingExecutorStream {
     pub fn create(mut executor: PipelinePullingExecutor) -> Result<Self> {
         executor.start();
         Ok(Self { executor })
     }
 }
 
-impl Stream for ProcessorExecutorStream {
+impl Stream for PullingExecutorStream {
     type Item = Result<DataBlock>;
 
     fn poll_next(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Option<Self::Item>> {

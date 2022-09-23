@@ -24,7 +24,6 @@ use super::bind_context::NameResolutionResult;
 use crate::sql::binder::select::SelectItem;
 use crate::sql::binder::select::SelectList;
 use crate::sql::binder::Visibility;
-use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::binder::scalar::ScalarBinder;
 use crate::sql::planner::binder::BindContext;
@@ -34,7 +33,6 @@ use crate::sql::planner::semantic::normalize_identifier;
 use crate::sql::planner::semantic::GroupingChecker;
 use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::EvalScalar;
-use crate::sql::plans::Project;
 use crate::sql::plans::Scalar;
 use crate::sql::plans::ScalarExpr;
 use crate::sql::plans::ScalarItem;
@@ -65,6 +63,7 @@ impl<'a> Binder {
                 data_type,
                 allow_multi_rows,
                 outer_columns,
+                output_column,
                 ..
             }) = item.scalar.clone()
             {
@@ -74,7 +73,8 @@ impl<'a> Binder {
                         subquery,
                         child_expr,
                         compare_op,
-                        index: Some(column_binding.index),
+                        output_column,
+                        projection_index: Some(column_binding.index),
                         data_type,
                         allow_multi_rows,
                         outer_columns,
@@ -119,19 +119,11 @@ impl<'a> Binder {
             .collect::<Result<Vec<_>>>()?;
         let eval_scalar = EvalScalar { items: scalars };
 
-        let mut new_expr = SExpr::create_unary(eval_scalar.into(), child);
-
-        let mut col_set = ColumnSet::new();
-        for item in columns.iter() {
-            col_set.insert(item.index);
-        }
+        let new_expr = SExpr::create_unary(eval_scalar.into(), child);
 
         // Set output columns
         bind_context.columns = columns.to_vec();
 
-        let project_plan = Project { columns: col_set };
-
-        new_expr = SExpr::create_unary(project_plan.into(), new_expr);
         Ok(new_expr)
     }
 

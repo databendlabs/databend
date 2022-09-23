@@ -20,6 +20,7 @@ common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
 common-fuse-meta = { path = "../fuse-meta" }
 common-hive-meta-store = { path = "../hive-meta-store" }
+common-legacy-expression = { path = "../../legacy-expression" }
 common-legacy-planners = { path = "../../legacy-planners" }
 common-meta-app = { path = "../../../meta/app" }
 common-meta-types = { path = "../../../meta/types" }
