@@ -42,8 +42,7 @@ fn compute_cost_impl(memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
         RelOperator::PhysicalHashJoin(plan) => compute_cost_hash_join(memo, m_expr, plan),
         RelOperator::UnionAll(_) => compute_cost_union_all(memo, m_expr),
 
-        RelOperator::Project(_)
-        | RelOperator::EvalScalar(_)
+        RelOperator::EvalScalar(_)
         | RelOperator::Filter(_)
         | RelOperator::Aggregate(_)
         | RelOperator::Sort(_)

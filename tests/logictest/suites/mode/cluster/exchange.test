@@ -142,22 +142,21 @@ Exchange
     │       └── push downs: [filters: [], limit: NONE]
     └── Exchange(Probe)
         ├── exchange type: Hash(CAST(number (#1) AS BIGINT UNSIGNED NULL))
-        └── Project
-            ├── columns: [number (#1)]
-            └── EvalScalar
-                ├── expressions: [sum(number) (#3)]
-                └── AggregateFinal
-                    ├── group by: [number]
-                    ├── aggregate functions: [sum(number)]
-                    └── Exchange
-                        ├── exchange type: Hash(_group_by_key)
-                        └── AggregatePartial
-                            ├── group by: [number]
-                            ├── aggregate functions: [sum(number)]
-                            └── TableScan
-                                ├── table: default.system.numbers
-                                ├── read rows: 1
-                                ├── read bytes: 8
-                                ├── partitions total: 1
-                                ├── partitions scanned: 1
-                                └── push downs: [filters: [], limit: NONE]
+        └── EvalScalar
+            ├── expressions: [sum(number) (#3)]
+            └── AggregateFinal
+                ├── group by: [number]
+                ├── aggregate functions: [sum(number)]
+                └── Exchange
+                    ├── exchange type: Hash(_group_by_key)
+                    └── AggregatePartial
+                        ├── group by: [number]
+                        ├── aggregate functions: [sum(number)]
+                        └── TableScan
+                            ├── table: default.system.numbers
+                            ├── read rows: 1
+                            ├── read bytes: 8
+                            ├── partitions total: 1
+                            ├── partitions scanned: 1
+                            └── push downs: [filters: [], limit: NONE]
+

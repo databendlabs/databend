@@ -33,7 +33,6 @@ use common_datavalues::TypeFactory;
 use common_datavalues::Vu8;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::*;
 use common_planner::plans::AlterTableClusterKeyPlan;
 use common_planner::plans::DescribeTablePlan;
 use common_planner::plans::DropTableClusterKeyPlan;
@@ -51,7 +50,6 @@ use tracing::debug;
 use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::Binder;
 use crate::sql::binder::Visibility;
-use crate::sql::executor::ExpressionBuilderWithoutRenaming;
 use crate::sql::is_reserved_opt_key;
 use crate::sql::optimizer::optimize;
 use crate::sql::optimizer::OptimizerConfig;
@@ -61,6 +59,7 @@ use crate::sql::planner::semantic::IdentifierNormalizer;
 use crate::sql::plans::create_table_v2::CreateTablePlanV2;
 use crate::sql::plans::CastExpr;
 use crate::sql::plans::Plan;
+use crate::sql::plans::ReclusterTablePlan;
 use crate::sql::plans::RewriteKind;
 use crate::sql::plans::Scalar;
 use crate::sql::BindContext;
@@ -634,12 +633,7 @@ impl<'a> Binder {
 
                 let push_downs = if let Some(expr) = selection {
                     let (scalar, _) = scalar_binder.bind(expr).await?;
-                    let eb = ExpressionBuilderWithoutRenaming::create(self.metadata.clone());
-                    let pred_expr = eb.build(&scalar)?;
-                    Some(Extras {
-                        filters: vec![pred_expr],
-                        ..Extras::default()
-                    })
+                    Some(scalar)
                 } else {
                     None
                 };
@@ -650,6 +644,7 @@ impl<'a> Binder {
                     database,
                     table,
                     is_final: *is_final,
+                    metadata: self.metadata.clone(),
                     push_downs,
                 })))
             }

@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,8 +24,8 @@ use common_functions::scalars::FunctionContext;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::Monotonicity;
 
-use crate::Expression;
 use crate::ExpressionVisitor;
+use crate::LegacyExpression;
 use crate::Recursion;
 
 // ExpressionMonotonicityVisitor visit the expression tree to calculate monotonicity.
@@ -166,7 +166,7 @@ impl ExpressionMonotonicityVisitor {
     /// Return the monotonicity information, together with column name if any.
     pub fn check_expression(
         schema: DataSchemaRef,
-        expr: &Expression,
+        expr: &LegacyExpression,
         variables: HashMap<String, (Option<ColumnWithField>, Option<ColumnWithField>)>,
         single_point: bool,
     ) -> Monotonicity {
@@ -178,13 +178,13 @@ impl ExpressionMonotonicityVisitor {
 }
 
 impl ExpressionVisitor for ExpressionMonotonicityVisitor {
-    fn pre_visit(self, _expr: &Expression) -> Result<Recursion<Self>> {
+    fn pre_visit(self, _expr: &LegacyExpression) -> Result<Recursion<Self>> {
         Ok(Recursion::Continue(self))
     }
 
-    fn post_visit(mut self, expr: &Expression) -> Result<Self> {
+    fn post_visit(mut self, expr: &LegacyExpression) -> Result<Self> {
         match expr {
-            Expression::Column(s) => {
+            LegacyExpression::Column(s) => {
                 let (left, right) = self.variables.get(s).ok_or_else(|| {
                     ErrorCode::BadArguments(format!("Cannot find the column name '{:?}'", *s))
                 })?;
@@ -203,7 +203,7 @@ impl ExpressionVisitor for ExpressionMonotonicityVisitor {
                 self.stack.push((return_type.clone(), monotonic));
                 Ok(self)
             }
-            Expression::Literal {
+            LegacyExpression::Literal {
                 value,
                 column_name,
                 data_type,
@@ -223,9 +223,9 @@ impl ExpressionVisitor for ExpressionMonotonicityVisitor {
                 self.stack.push((data_type.clone(), monotonic));
                 Ok(self)
             }
-            Expression::BinaryExpression { op, .. } => self.visit_function(op, 2),
-            Expression::UnaryExpression { op, .. } => self.visit_function(op, 1),
-            Expression::ScalarFunction { op, args } => self.visit_function(op, args.len()),
+            LegacyExpression::BinaryExpression { op, .. } => self.visit_function(op, 2),
+            LegacyExpression::UnaryExpression { op, .. } => self.visit_function(op, 1),
+            LegacyExpression::ScalarFunction { op, args } => self.visit_function(op, args.len()),
             // Todo: Expression::Cast
             _ => Err(ErrorCode::UnknownException("Unable to get monotonicity")),
         }

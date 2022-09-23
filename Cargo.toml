@@ -35,6 +35,7 @@ members = [
     "src/query/pipeline/sinks",
     "src/query/pipeline/sources",
     "src/query/pipeline/transforms",
+    "src/query/legacy-expression",
     "src/query/legacy-planners",
     "src/query/settings",
     "src/query/storages/fuse",

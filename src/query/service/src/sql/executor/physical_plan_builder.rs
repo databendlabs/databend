@@ -19,9 +19,10 @@ use std::sync::Arc;
 use common_catalog::catalog::CatalogManager;
 use common_catalog::catalog::CATALOG_DEFAULT;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::Expression;
+use common_legacy_expression::LegacyExpression;
 use common_legacy_planners::Extras;
 use common_legacy_planners::PrewhereInfo;
 use common_legacy_planners::Projection;
@@ -39,7 +40,6 @@ use super::Exchange as PhysicalExchange;
 use super::Filter;
 use super::HashJoin;
 use super::Limit;
-use super::Project;
 use super::Sort;
 use super::TableScan;
 use crate::catalogs::CatalogManagerHelper;
@@ -205,21 +205,6 @@ impl PhysicalPlanBuilder {
                     from_correlated_subquery: join.from_correlated_subquery,
                 }))
             }
-            RelOperator::Project(project) => {
-                let input = self.build(s_expr.child(0)?).await?;
-                let input_schema = input.output_schema()?;
-                Ok(PhysicalPlan::Project(Project {
-                    input: Box::new(input),
-                    projections: project
-                        .columns
-                        .iter()
-                        .sorted()
-                        .map(|index| input_schema.index_of(index.to_string().as_str()))
-                        .collect::<Result<_>>()?,
-
-                    columns: project.columns.clone(),
-                }))
-            }
             RelOperator::EvalScalar(eval_scalar) => Ok(PhysicalPlan::EvalScalar(EvalScalar {
                 input: Box::new(self.build(s_expr.child(0)?).await?),
                 scalars: eval_scalar
@@ -374,13 +359,23 @@ impl PhysicalPlanBuilder {
                     keys,
                 }))
             }
-            RelOperator::UnionAll(_) => {
+            RelOperator::UnionAll(op) => {
                 let left = self.build(s_expr.child(0)?).await?;
-                let schema = left.output_schema()?;
+                let left_schema = left.output_schema()?;
+                let pairs = op
+                    .pairs
+                    .iter()
+                    .map(|(l, r)| (l.to_string(), r.to_string()))
+                    .collect::<Vec<_>>();
+                let fields = pairs
+                    .iter()
+                    .map(|(left, _)| Ok(left_schema.field_with_name(left)?.clone()))
+                    .collect::<Result<Vec<_>>>()?;
                 Ok(PhysicalPlan::UnionAll(UnionAll {
                     left: Box::new(left),
                     right: Box::new(self.build(s_expr.child(1)?).await?),
-                    schema,
+                    pairs,
+                    schema: DataSchemaRefExt::create(fields),
                 }))
             }
             _ => Err(ErrorCode::LogicalError(format!(
@@ -476,7 +471,7 @@ impl PhysicalPlanBuilder {
                     .map(|item| {
                         builder
                             .build_column_ref(item.index)
-                            .map(|c| Expression::Sort {
+                            .map(|c| LegacyExpression::Sort {
                                 expr: Box::new(c.clone()),
                                 asc: item.asc,
                                 nulls_first: item.nulls_first,
