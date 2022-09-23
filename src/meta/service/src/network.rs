@@ -184,6 +184,7 @@ impl RaftNetwork<LogEntry> for Network {
                     mes = resp.into_inner();
                     // clean up
                     last_err = None;
+                    break;
                 }
                 Err(e) => {
                     incr_meta_metrics_sent_failure_to_peer(&target);
@@ -236,6 +237,7 @@ impl RaftNetwork<LogEntry> for Network {
                     mes = resp.into_inner();
                     // clean up
                     last_err = None;
+                    break;
                 }
                 Err(e) => {
                     incr_meta_metrics_sent_failure_to_peer(&target);
@@ -281,6 +283,7 @@ impl RaftNetwork<LogEntry> for Network {
                     // clean up
                     last_err = None;
                     mes = resp.into_inner();
+                    break;
                 }
                 Err(e) => {
                     incr_meta_metrics_sent_failure_to_peer(&target);
