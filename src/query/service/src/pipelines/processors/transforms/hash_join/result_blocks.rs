@@ -17,16 +17,15 @@ use std::iter::TrustedLen;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_datablocks::DataBlock;
+use common_datavalues::wrap_nullable;
 use common_datavalues::BooleanColumn;
 use common_datavalues::BooleanViewer;
 use common_datavalues::Column;
 use common_datavalues::ColumnRef;
 use common_datavalues::ConstColumn;
 use common_datavalues::DataType;
-use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use common_datavalues::NullableColumn;
-use common_datavalues::NullableType;
 use common_datavalues::ScalarViewer;
 use common_datavalues::Series;
 use common_exception::ErrorCode;
@@ -453,16 +452,15 @@ impl JoinHashTable {
             // Uncorrelated scalar subquery and no row was returned by subquery
             // We just construct a block with NULLs
             let build_data_schema = self.row_space.data_schema.clone();
-            assert_eq!(build_data_schema.fields().len(), 1);
-            let data_type = build_data_schema.field(0).data_type().clone();
-            let nullable_type = if let DataTypeImpl::Nullable(..) = data_type {
-                data_type
-            } else {
-                NullableType::new_impl(data_type)
-            };
-            let null_column =
-                nullable_type.create_column(&vec![DataValue::Null; input.num_rows()])?;
-            DataBlock::create(build_data_schema, vec![null_column])
+            let columns = build_data_schema
+                .fields()
+                .iter()
+                .map(|field| {
+                    let data_type = wrap_nullable(field.data_type());
+                    data_type.create_column(&vec![DataValue::Null; input.num_rows()])
+                })
+                .collect::<Result<Vec<ColumnRef>>>()?;
+            DataBlock::create(build_data_schema, columns)
         } else {
             self.row_space.gather(build_indexs)?
         };
