@@ -136,6 +136,7 @@ pub async fn streaming_load(
                         context.get_settings(),
                         schema,
                         context.get_scan_progress(),
+                        true,
                     )
                     .await
                     .map_err(InternalServerError)?,
