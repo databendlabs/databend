@@ -135,17 +135,16 @@ impl FromStr for StageFileFormatType {
     fn from_str(s: &str) -> std::result::Result<Self, String> {
         match s.to_uppercase().as_str() {
             "CSV" => Ok(StageFileFormatType::Csv),
-            "TSV" => Ok(StageFileFormatType::Tsv),
+            "TSV" | "TABSEPARATED" => Ok(StageFileFormatType::Tsv),
             "JSON" => Ok(StageFileFormatType::Json),
             "NDJSON" => Ok(StageFileFormatType::NdJson),
             "AVRO" => Ok(StageFileFormatType::Avro),
             "ORC" => Ok(StageFileFormatType::Orc),
             "PARQUET" => Ok(StageFileFormatType::Parquet),
             "XML" => Ok(StageFileFormatType::Xml),
-            _ => Err(
-                "Unknown file format type, must one of { CSV | JSON | AVRO | ORC | PARQUET | XML }"
-                    .to_string(),
-            ),
+            _ => Err(format!(
+                "Unknown file format type '{s}', must one of ( CSV | TSV | JSON | AVRO | ORC | PARQUET | XML)"
+            )),
         }
     }
 }
