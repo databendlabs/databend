@@ -45,6 +45,8 @@ const config = {
                     showReadingTime: true,
                     editUrl:
                         'https://github.com/datafuselabs/databend/edit/main/website',
+                    blogSidebarCount: 'ALL',
+                    postsPerPage: 'ALL',
                 },
                 theme: {
                     customCss: require.resolve('./src/css/custom.scss'),

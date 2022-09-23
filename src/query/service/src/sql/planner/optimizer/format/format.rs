@@ -57,7 +57,6 @@ pub fn display_rel_op(rel_op: &RelOperator) -> String {
         RelOperator::LogicalInnerJoin(_) => "LogicalInnerJoin".to_string(),
         RelOperator::PhysicalScan(_) => "PhysicalScan".to_string(),
         RelOperator::PhysicalHashJoin(_) => "PhysicalHashJoin".to_string(),
-        RelOperator::Project(_) => "Project".to_string(),
         RelOperator::EvalScalar(_) => "EvalScalar".to_string(),
         RelOperator::Filter(_) => "Filter".to_string(),
         RelOperator::Aggregate(_) => "Aggregate".to_string(),

@@ -17,15 +17,13 @@ common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../../common/exception" }
 common-functions = { path = "../functions" }
 common-io = { path = "../../common/io" }
-common-legacy-planners = { path = "../legacy-planners" }
 common-legacy-expression = { path = "../legacy-expression" }
+common-legacy-planners = { path = "../legacy-planners" }
 common-meta-app = { path = "../../meta/app" }
 common-meta-types = { path = "../../meta/types" }
 common-pipeline-core = { path = "../pipeline/core" }
 common-settings = { path = "../settings" }
-common-users = { path = "../users" }
 
 async-trait = "0.1.57"
 dyn-clone = "1.0.9"
 opendal = { version = "0.17.1", features = ["layers-retry"] }
-parking_lot = "0.12.1"

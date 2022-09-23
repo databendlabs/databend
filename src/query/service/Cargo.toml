@@ -45,6 +45,7 @@ common-hashtable = { path = "../../common/hashtable" }
 common-hive-meta-store = { path = "../storages/hive-meta-store", optional = true }
 common-http = { path = "../../common/http" }
 common-io = { path = "../../common/io" }
+common-legacy-expression = { path = "../legacy-expression" }
 common-legacy-parser = { path = "../legacy-parser" }
 common-legacy-planners = { path = "../legacy-planners" }
 common-management = { path = "../management" }
@@ -73,7 +74,6 @@ common-storages-util = { path = "../storages/util" }
 common-streams = { path = "../streams" }
 common-tracing = { path = "../../common/tracing" }
 common-users = { path = "../users" }
-common-legacy-expression = { path = "../legacy-expression" }
 
 # Github dependencies
 sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "7f246e3" }

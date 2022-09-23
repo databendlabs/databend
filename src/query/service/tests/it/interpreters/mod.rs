@@ -23,7 +23,6 @@ mod interpreter_database_rename;
 mod interpreter_database_show_create;
 mod interpreter_empty;
 mod interpreter_explain;
-mod interpreter_factory_interceptor;
 mod interpreter_insert;
 mod interpreter_privilege_grant;
 mod interpreter_privilege_revoke;
