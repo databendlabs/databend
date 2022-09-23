@@ -528,6 +528,8 @@ async fn test_insert() -> Result<()> {
     Ok(())
 }
 
+// Wait for https://github.com/datafuselabs/databend/issues/7831 to be fixed, then remove ignore
+#[ignore]
 #[tokio::test(flavor = "current_thread")]
 async fn test_query_log() -> Result<()> {
     let config = ConfigBuilder::create().build();
