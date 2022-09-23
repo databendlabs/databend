@@ -29,7 +29,7 @@ pub enum InsertInputSource {
     #[serde(skip)]
     StreamingWithFormat(String, usize, Option<Arc<InputContext>>),
     // From cloned String and format
-    StrWithFormat((String, String)),
+    Values(String),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
@@ -71,7 +71,7 @@ impl Insert {
         match &self.source {
             InsertInputSource::SelectPlan(_) => None,
             InsertInputSource::StreamingWithFormat(v, ..) => Some(v.as_str()),
-            InsertInputSource::StrWithFormat((_, v)) => Some(v.as_str()),
+            InsertInputSource::Values(v) => Some(v.as_str()),
         }
     }
 }

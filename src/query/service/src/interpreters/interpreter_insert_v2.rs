@@ -27,7 +27,6 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_formats::FormatFactory;
 use common_formats::InputFormat;
 use common_io::prelude::BufferRead;
 use common_io::prelude::BufferReadExt;
@@ -37,7 +36,6 @@ use common_io::prelude::NestedCheckpointReader;
 use common_pipeline_sources::processors::sources::AsyncSource;
 use common_pipeline_sources::processors::sources::AsyncSourcer;
 use common_pipeline_sources::processors::sources::SyncSource;
-use common_pipeline_sources::processors::sources::SyncSourcer;
 use common_pipeline_transforms::processors::transforms::Transform;
 use common_planner::Metadata;
 use common_planner::MetadataRef;
@@ -132,43 +130,20 @@ impl Interpreter for InsertInterpreterV2 {
             );
         } else {
             match &self.plan.source {
-                InsertInputSource::StrWithFormat((str, format)) => {
+                InsertInputSource::Values(data) => {
                     let output_port = OutputPort::create();
-                    let format_settings = self.ctx.get_format_settings()?;
-                    match format.as_str() {
-                        "VALUES" => {
-                            let settings = self.ctx.get_settings();
-                            let name_resolution_ctx =
-                                NameResolutionContext::try_from(settings.as_ref())?;
-                            let inner = ValueSource::new(
-                                str.to_string(),
-                                self.ctx.clone(),
-                                name_resolution_ctx,
-                                plan.schema(),
-                            );
-                            let source =
-                                AsyncSourcer::create(self.ctx.clone(), output_port.clone(), inner)?;
-                            builder.add_source(output_port, source);
-                        }
+                    let settings = self.ctx.get_settings();
+                    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+                    let inner = ValueSource::new(
+                        data.to_string(),
+                        self.ctx.clone(),
+                        name_resolution_ctx,
+                        plan.schema(),
+                    );
+                    let source =
+                        AsyncSourcer::create(self.ctx.clone(), output_port.clone(), inner)?;
+                    builder.add_source(output_port, source);
 
-                        _ => {
-                            let input_format = FormatFactory::instance().get_input(
-                                format.as_str(),
-                                plan.schema(),
-                                format_settings,
-                            )?;
-                            let inner = FormatSource {
-                                data: str.to_string(),
-                                input_format,
-                                blocks: vec![],
-                                is_finished: false,
-                            };
-
-                            let source =
-                                SyncSourcer::create(self.ctx.clone(), output_port.clone(), inner)?;
-                            builder.add_source(output_port, source);
-                        }
-                    }
                     build_res.main_pipeline.add_pipe(builder.finalize());
                 }
                 InsertInputSource::StreamingWithFormat(_, _, input_context) => {
