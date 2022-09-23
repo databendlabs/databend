@@ -59,4 +59,4 @@ curl -s -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT
 
 # cleanup
 curl -s -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}/?enable_planner_v2=1" -d "drop table a"
-# rm /tmp/databend_test*.txt
+rm /tmp/databend_test*.txt
