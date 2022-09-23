@@ -49,11 +49,11 @@ impl InputFormatCSV {
         for (c, deserializer) in deserializers.iter_mut().enumerate() {
             let field_end = field_ends[c];
             let col_data = &buf[field_start..field_end];
-            if col_data.is_empty() {
+            let mut reader = NestedCheckpointReader::new(col_data);
+            reader.ignore_white_spaces().expect("must success");
+            if reader.eof().expect("must success") {
                 deserializer.de_default(format_settings);
             } else {
-                let mut reader = NestedCheckpointReader::new(col_data);
-                // reader.ignores(|c: u8| c == b' ').expect("must success");
                 // todo(youngsofun): do not need escape, already done in csv-core
                 if let Err(e) = deserializer.de_text(&mut reader, format_settings) {
                     let err_msg = format_column_error(c, col_data, &e.message());

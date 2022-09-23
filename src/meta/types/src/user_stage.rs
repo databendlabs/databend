@@ -137,7 +137,7 @@ impl FromStr for StageFileFormatType {
             "CSV" => Ok(StageFileFormatType::Csv),
             "TSV" | "TABSEPARATED" => Ok(StageFileFormatType::Tsv),
             "JSON" => Ok(StageFileFormatType::Json),
-            "NDJSON" => Ok(StageFileFormatType::NdJson),
+            "NDJSON" | "JSONEACHROW" => Ok(StageFileFormatType::NdJson),
             "AVRO" => Ok(StageFileFormatType::Avro),
             "ORC" => Ok(StageFileFormatType::Orc),
             "PARQUET" => Ok(StageFileFormatType::Parquet),
