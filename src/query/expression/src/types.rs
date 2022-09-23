@@ -130,10 +130,10 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     /// So when using this method, we cannot unwrap the returned value directly.
     /// We should:
     ///
-    /// ```
+    /// ```ignore
     /// // builder: ColumnBuilder
     /// // T: ValueType
-    /// let Some(inner) = T::try_downcast_builder(&mut builder) {
+    /// if let Some(inner) = T::try_downcast_builder(&mut builder) {
     ///     inner.push(...);
     /// } else {
     ///     builder.push(...);
