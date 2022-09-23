@@ -402,14 +402,21 @@ impl MetaGrpcClient {
             };
 
             if let Some(current_endpoint) = current_endpoint {
+                let elapsed = start.elapsed().as_millis() as f64;
                 label_histogram_with_val(
                     META_GRPC_CLIENT_REQUEST_DURATION_MS,
                     vec![
                         (LABEL_ENDPOINT, current_endpoint.to_string()),
                         (LABEL_REQUEST, req_name.to_string()),
                     ],
-                    start.elapsed().as_millis() as f64,
+                    elapsed,
                 );
+                if elapsed > 1000 as f64 {
+                    warn!(
+                        "MetaGrpcClient slow request {} to {} takes {} ms",
+                        req_name, current_endpoint, elapsed
+                    );
+                }
 
                 if let Some(err) = resp.err() {
                     label_counter_with_val_and_labels(
