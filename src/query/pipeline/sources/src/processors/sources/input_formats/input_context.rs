@@ -217,6 +217,9 @@ impl InputContext {
         scan_progress: Arc<Progress>,
         is_multi_part: bool,
     ) -> Result<Self> {
+        let (format_name, rows_to_skip) = remove_clickhouse_format_suffix(format_name);
+        let rows_to_skip = std::cmp::max(settings.get_skip_header()? as usize, rows_to_skip);
+
         let format_type =
             StageFileFormatType::from_str(format_name).map_err(ErrorCode::UnknownFormat)?;
         let format = Self::get_input_format(&format_type)?;
@@ -232,7 +235,6 @@ impl InputContext {
             }
         };
         let record_delimiter = RecordDelimiter::try_from(&settings.get_record_delimiter()?[..])?;
-        let rows_to_skip = settings.get_skip_header()? as usize;
         let compression = settings.get_compression()?;
         let compression = if !compression.is_empty() {
             StageFileCompression::from_str(&compression).map_err(ErrorCode::BadArguments)?
@@ -327,4 +329,19 @@ impl InputContext {
         };
         Ok(compression_algo)
     }
+}
+
+const WITH_NAMES_AND_TYPES: &str = "withnamesandtypes";
+const WITH_NAMES: &str = "withnames";
+
+fn remove_clickhouse_format_suffix(name: &str) -> (&str, usize) {
+    let s = name.to_lowercase();
+    let (suf_len, skip) = if s.ends_with(WITH_NAMES_AND_TYPES) {
+        (WITH_NAMES_AND_TYPES.len(), 2)
+    } else if s.ends_with(WITH_NAMES) {
+        (WITH_NAMES.len(), 1)
+    } else {
+        (0, 0)
+    };
+    (&name[0..(s.len() - suf_len)], skip)
 }
