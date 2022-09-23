@@ -233,9 +233,8 @@ impl StorageOperator {
         let io_runtime = GlobalIORuntime::instance();
         let operator = init_operator(&conf.params)?
             .layer(RetryLayer::new(ExponentialBackoff::default()))
-            .layer(LoggingLayer)
-            .layer(TracingLayer)
-            .layer(MetricsLayer);
+            .layer(MetricsLayer)
+            .layer(TracingLayer);
 
         // OpenDAL will send a real request to underlying storage to check whether it works or not.
         // If this check failed, it's highly possible that the users have configured it wrongly.
