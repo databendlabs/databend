@@ -17,7 +17,7 @@ use common_base::base::tokio;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_legacy_planners::*;
+use common_legacy_expression::*;
 use databend_query::sessions::QueryContext;
 use databend_query::storages::index::BloomFilter;
 use databend_query::storages::index::BloomFilterExprEvalResult;
@@ -376,7 +376,7 @@ async fn test_bloom_hash_collision() -> Result<()> {
 async fn test_bloom_indexer_single_column_prune() -> Result<()> {
     struct Test {
         name: &'static str,
-        expr: Expression,
+        expr: LegacyExpression,
         expected_eval_result: BloomFilterExprEvalResult,
     }
 
@@ -422,7 +422,7 @@ async fn test_bloom_indexer_single_column_prune() -> Result<()> {
 async fn test_bloom_indexer_logical_and_prune() -> Result<()> {
     struct Test {
         name: &'static str,
-        expr: Expression,
+        expr: LegacyExpression,
         expected_eval_result: BloomFilterExprEvalResult,
     }
 
@@ -467,7 +467,7 @@ async fn test_bloom_indexer_logical_and_prune() -> Result<()> {
 async fn test_bloom_indexer_logical_or_prune() -> Result<()> {
     struct Test {
         name: &'static str,
-        expr: Expression,
+        expr: LegacyExpression,
         expected_eval_result: BloomFilterExprEvalResult,
     }
 

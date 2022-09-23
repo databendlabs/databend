@@ -24,14 +24,15 @@ common-settings = { path = "../../settings" }
 common-storage = { path = "../../../common/storage" }
 common-streams = { path = "../../streams" }
 
-async-trait = { version = "0.1.0", package = "async-trait-fn" }
+async-trait = { version = "0.1.57", package = "async-trait-fn" }
 bstr = "0.2.17"
+chrono-tz = "0.6.1"
 crossbeam-channel = "0.5.6"
 csv-core = "0.1.10"
-futures = "0.3.21"
-futures-util = "0.3.21"
+futures = "0.3.24"
+futures-util = "0.3.24"
 opendal = { version = "0.17.1", features = ["layers-retry", "compress"] }
 parking_lot = "0.12.1"
-serde_json = "1.0.81"
-similar-asserts = "1.2.0"
-tracing = "0.1.35"
+serde_json = "1.0.85"
+similar-asserts = "1.4.2"
+tracing = "0.1.36"

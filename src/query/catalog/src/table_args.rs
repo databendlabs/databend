@@ -12,6 +12,6 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use common_legacy_planners::Expression;
+use common_legacy_expression::LegacyExpression;
 
-pub type TableArgs = Option<Vec<Expression>>;
+pub type TableArgs = Option<Vec<LegacyExpression>>;

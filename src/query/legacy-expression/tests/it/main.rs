@@ -12,8 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::Expression;
-
-pub fn col(name: &str) -> Expression {
-    Expression::Column(name.to_string())
-}
+mod expression;
+mod monotonicity;

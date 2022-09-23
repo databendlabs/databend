@@ -16,7 +16,7 @@ use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::Expression;
+use common_legacy_expression::LegacyExpression;
 use common_planner::IndexType;
 use common_planner::MetadataRef;
 
@@ -61,14 +61,17 @@ where ExpressionBuilder<T>: FiledNameFormat
         ExpressionBuilder { metadata }
     }
 
-    pub fn build_and_rename(&self, scalar: &Scalar, index: IndexType) -> Result<Expression> {
+    pub fn build_and_rename(&self, scalar: &Scalar, index: IndexType) -> Result<LegacyExpression> {
         let expr = self.build(scalar)?;
         let metadata = self.metadata.read();
         let name = metadata.column(index).name();
-        Ok(Expression::Alias(Self::format(name, index), Box::new(expr)))
+        Ok(LegacyExpression::Alias(
+            Self::format(name, index),
+            Box::new(expr),
+        ))
     }
 
-    pub fn build(&self, scalar: &Scalar) -> Result<Expression> {
+    pub fn build(&self, scalar: &Scalar) -> Result<LegacyExpression> {
         match scalar {
             Scalar::BoundColumnRef(BoundColumnRef { column }) => {
                 self.build_column_ref(column.index)
@@ -89,7 +92,7 @@ where ExpressionBuilder<T>: FiledNameFormat
             Scalar::AndExpr(AndExpr { left, right, .. }) => {
                 let left = self.build(left)?;
                 let right = self.build(right)?;
-                Ok(Expression::BinaryExpression {
+                Ok(LegacyExpression::BinaryExpression {
                     left: Box::new(left),
                     op: "and".to_string(),
                     right: Box::new(right),
@@ -98,7 +101,7 @@ where ExpressionBuilder<T>: FiledNameFormat
             Scalar::OrExpr(OrExpr { left, right, .. }) => {
                 let left = self.build(left)?;
                 let right = self.build(right)?;
-                Ok(Expression::BinaryExpression {
+                Ok(LegacyExpression::BinaryExpression {
                     left: Box::new(left),
                     op: "or".to_string(),
                     right: Box::new(right),
@@ -113,7 +116,7 @@ where ExpressionBuilder<T>: FiledNameFormat
                     .iter()
                     .map(|arg| self.build(arg))
                     .collect::<Result<Vec<_>>>()?;
-                Ok(Expression::ScalarFunction {
+                Ok(LegacyExpression::ScalarFunction {
                     op: func_name.clone(),
                     args,
                 })
@@ -124,7 +127,7 @@ where ExpressionBuilder<T>: FiledNameFormat
                 ..
             }) => {
                 let arg = self.build(argument)?;
-                Ok(Expression::Cast {
+                Ok(LegacyExpression::Cast {
                     expr: Box::new(arg),
                     data_type: *target_type.clone(),
                     pg_style: false,
@@ -134,18 +137,18 @@ where ExpressionBuilder<T>: FiledNameFormat
         }
     }
 
-    pub fn build_column_ref(&self, index: IndexType) -> Result<Expression> {
+    pub fn build_column_ref(&self, index: IndexType) -> Result<LegacyExpression> {
         let metadata = self.metadata.read();
         let name = metadata.column(index).name();
-        Ok(Expression::Column(Self::format(name, index)))
+        Ok(LegacyExpression::Column(Self::format(name, index)))
     }
 
     pub fn build_literal(
         &self,
         data_value: &DataValue,
         data_type: &DataTypeImpl,
-    ) -> Result<Expression> {
-        Ok(Expression::Literal {
+    ) -> Result<LegacyExpression> {
+        Ok(LegacyExpression::Literal {
             value: data_value.clone(),
             column_name: None,
             data_type: data_type.clone(),
@@ -157,10 +160,10 @@ where ExpressionBuilder<T>: FiledNameFormat
         left: &Scalar,
         right: &Scalar,
         op: String,
-    ) -> Result<Expression> {
+    ) -> Result<LegacyExpression> {
         let left_child = self.build(left)?;
         let right_child = self.build(right)?;
-        Ok(Expression::BinaryExpression {
+        Ok(LegacyExpression::BinaryExpression {
             left: Box::new(left_child),
             op,
             right: Box::new(right_child),
@@ -173,12 +176,12 @@ where ExpressionBuilder<T>: FiledNameFormat
         distinct: bool,
         params: Vec<DataValue>,
         args: &Vec<Scalar>,
-    ) -> Result<Expression> {
+    ) -> Result<LegacyExpression> {
         let mut arg_exprs = Vec::with_capacity(args.len());
         for arg in args.iter() {
             arg_exprs.push(self.build(arg)?);
         }
-        Ok(Expression::AggregateFunction {
+        Ok(LegacyExpression::AggregateFunction {
             op,
             distinct,
             params,

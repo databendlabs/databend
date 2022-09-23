@@ -19,7 +19,6 @@ mod query_ctx_shared;
 mod session;
 mod session_ctx;
 mod session_info;
-#[allow(clippy::module_inception)]
 mod session_mgr;
 mod session_mgr_status;
 mod session_settings;

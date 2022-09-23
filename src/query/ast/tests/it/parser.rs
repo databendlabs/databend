@@ -191,6 +191,10 @@ fn test_statement() {
                 )
                 size_limit=10;"#,
         r#"COPY INTO mytable
+                FROM 'https://127.0.0.1:9900';"#,
+        r#"COPY INTO mytable
+                FROM 'https://127.0.0.1:';"#,
+        r#"COPY INTO mytable
                 FROM @my_stage
                 FILE_FORMAT = (
                     type = 'CSV'

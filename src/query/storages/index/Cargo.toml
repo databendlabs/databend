@@ -18,11 +18,11 @@ common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
 common-functions = { path = "../../functions" }
 common-fuse-meta = { path = "../fuse-meta" }
-common-legacy-planners = { path = "../../legacy-planners" }
+common-legacy-expression = { path = "../../legacy-expression" }
 common-pipeline-transforms = { path = "../../pipeline/transforms" }
 
 bincode = { version = "2.0.0-rc.1", features = ["serde", "std", "alloc"] }
 bit-vec = { version = "0.6.3", features = ["serde_std"] }
 rand = "0.8.5"
-serde = { version = "1.0.137", features = ["derive"] }
-tracing = "0.1.35"
+serde = { version = "1.0.144", features = ["derive"] }
+tracing = "0.1.36"

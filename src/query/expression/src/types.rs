@@ -53,7 +53,7 @@ use crate::values::Column;
 use crate::values::Scalar;
 use crate::ScalarRef;
 
-pub type GenericMap<'a> = [DataType];
+pub type GenericMap = [DataType];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, EnumAsInner)]
 pub enum DataType {

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_legacy_planners::Expression;
+use common_legacy_expression::LegacyExpression;
 
 use crate::sql::executor::PhysicalScalar;
 
@@ -47,11 +47,14 @@ impl DataExchange {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ShuffleDataExchange {
     pub destination_ids: Vec<String>,
-    pub exchange_expression: Expression,
+    pub exchange_expression: LegacyExpression,
 }
 
 impl ShuffleDataExchange {
-    pub fn create(destination_ids: Vec<String>, exchange_expression: Expression) -> DataExchange {
+    pub fn create(
+        destination_ids: Vec<String>,
+        exchange_expression: LegacyExpression,
+    ) -> DataExchange {
         DataExchange::ShuffleDataExchange(ShuffleDataExchange {
             destination_ids,
             exchange_expression,

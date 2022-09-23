@@ -17,20 +17,20 @@ use std::sync::Arc;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::*;
+use common_legacy_expression::*;
 
 #[test]
 fn test_expression_validate() -> Result<()> {
     struct Test {
         desc: &'static str,
-        expression: Expression,
+        expression: LegacyExpression,
         error: Option<ErrorCode>,
     }
 
     let cases = vec![
         Test {
             desc: "typeof-not-pass",
-            expression: Expression::ScalarFunction {
+            expression: LegacyExpression::ScalarFunction {
                 op: "typeof".to_string(),
                 args: vec![],
             },
@@ -40,7 +40,7 @@ fn test_expression_validate() -> Result<()> {
         },
         Test {
             desc: "today-not-pass",
-            expression: Expression::ScalarFunction {
+            expression: LegacyExpression::ScalarFunction {
                 op: "today".to_string(),
                 args: vec![col("a")],
             },
@@ -50,7 +50,7 @@ fn test_expression_validate() -> Result<()> {
         },
         Test {
             desc: "today-pass",
-            expression: Expression::ScalarFunction {
+            expression: LegacyExpression::ScalarFunction {
                 op: "today".to_string(),
                 args: vec![],
             },

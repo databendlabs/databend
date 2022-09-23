@@ -18,7 +18,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::validate_function_arg;
+use common_legacy_expression::validate_function_arg;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipe;
 use common_pipeline_core::Pipeline;
