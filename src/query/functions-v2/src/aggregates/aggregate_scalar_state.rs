@@ -111,7 +111,7 @@ where
 impl<T, C> ScalarStateFunc<T> for ScalarState<T, C>
 where
     T: ValueType,
-    T::Scalar: Default + Serialize + DeserializeOwned + Send + Sync,
+    T::Scalar: Serialize + DeserializeOwned + Send + Sync,
     C: ChangeIf<T> + Default,
 {
     fn new() -> Self {

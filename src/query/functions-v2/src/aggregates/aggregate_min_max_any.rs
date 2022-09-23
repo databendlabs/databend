@@ -26,8 +26,8 @@ use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberType;
 use common_expression::types::StringType;
+use common_expression::types::TimestampType;
 use common_expression::types::ValueType;
-use common_expression::with_basic_no_number_mapped_type;
 use common_expression::with_number_mapped_type;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
@@ -176,6 +176,20 @@ where
             _state: PhantomData,
         };
         Ok(Arc::new(func))
+    }
+}
+
+#[macro_export]
+macro_rules! with_basic_no_number_mapped_type {
+    (| $t:tt | $($tail:tt)*) => {
+        match_template::match_template! {
+            $t = [
+                String => StringType,
+                Boolean => BooleanType,
+                Timestamp => TimestampType,
+            ],
+            $($tail)*
+        }
     }
 }
 
