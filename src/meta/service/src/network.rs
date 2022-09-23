@@ -138,8 +138,13 @@ impl Network {
         self
     }
 
-    pub fn backoff(&self) -> ExponentialBackoff {
-        self.back_off_policy.backoff()
+    pub(crate) fn backoff(
+        &self,
+    ) -> std::iter::Chain<ExponentialBackoff, std::vec::IntoIter<Duration>> {
+        // the last period of back off should be zero
+        // so the longest backoff will not be wasted
+        let zero = vec![Duration::default()].into_iter();
+        self.back_off_policy.backoff().chain(zero)
     }
 
     #[tracing::instrument(level = "debug", skip(self), fields(id=self.sto.id))]
