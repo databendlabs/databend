@@ -18,7 +18,7 @@ use common_exception::Result;
 use common_legacy_planners::ReadDataSourcePlan;
 use common_streams::SendableDataBlockStream;
 
-use crate::interpreters::ProcessorExecutorStream;
+use crate::interpreters::PullingExecutorStream;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::Pipeline;
@@ -51,7 +51,7 @@ impl<T: Table> TableStreamReadWrap for T {
 
         let executor = PipelinePullingExecutor::try_create(pipeline, executor_settings)?;
         ctx.set_executor(Arc::downgrade(&executor.get_inner()));
-        Ok(Box::pin(ProcessorExecutorStream::create(executor)?))
+        Ok(Box::pin(PullingExecutorStream::create(executor)?))
     }
 }
 
@@ -70,6 +70,6 @@ impl TableStreamReadWrap for dyn Table {
         let executor_settings = ExecutorSettings::try_create(&settings)?;
         let executor = PipelinePullingExecutor::try_create(pipeline, executor_settings)?;
         ctx.set_executor(Arc::downgrade(&executor.get_inner()));
-        Ok(Box::pin(ProcessorExecutorStream::create(executor)?))
+        Ok(Box::pin(PullingExecutorStream::create(executor)?))
     }
 }

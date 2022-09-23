@@ -16,6 +16,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use chrono_tz::Tz;
+use common_base::base::catch_unwind;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
@@ -286,7 +287,11 @@ impl Session {
 
 impl Drop for Session {
     fn drop(&mut self) {
-        tracing::debug!("Drop session {}", self.id);
-        SessionManager::instance().destroy_session(&self.id)
+        let session_id = self.id.clone();
+        tracing::debug!("Drop session {}", session_id);
+
+        let _ = catch_unwind(move || {
+            SessionManager::instance().destroy_session(&session_id);
+        });
     }
 }

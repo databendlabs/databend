@@ -105,10 +105,6 @@ async fn execute(
     input_stream: Option<SendableDataBlockStream>,
     params: StatementHandlerParams,
 ) -> Result<WithContentType<Body>> {
-    let _ = interpreter
-        .start()
-        .await
-        .map_err(|e| error!("interpreter.start.error: {:?}", e));
     let mut data_stream: SendableDataBlockStream = {
         let output_port = OutputPort::create();
         let stream_source = StreamSource::create(ctx.clone(), input_stream, output_port.clone())?;
@@ -169,10 +165,6 @@ async fn execute(
             yield compress_fn(output_format.finalize());
         }
 
-        let _ = interpreter
-            .finish()
-            .await
-            .map_err(|e| error!("interpreter.finish error: {:?}", e));
         // to hold session ref until stream is all consumed
         let _ = session.get_id();
     };
@@ -212,7 +204,7 @@ pub async fn clickhouse_handler_get(
     let format = get_format_with_default(fmt, default_format)?;
     let format = get_format_from_plan(&plan, format)?;
 
-    context.attach_query_str(&sql);
+    context.attach_query_str(plan.to_string(), &sql);
     let interpreter = InterpreterFactory::get(context.clone(), &plan)
         .await
         .map_err(BadRequest)?;
@@ -268,7 +260,7 @@ pub async fn clickhouse_handler_post(
 
     let format = get_format_with_default(fmt, default_format)?;
     let format = get_format_from_plan(&plan, format)?;
-    ctx.attach_query_str(&sql);
+    ctx.attach_query_str(plan.to_string(), &sql);
     let interpreter = InterpreterFactory::get(ctx.clone(), &plan)
         .await
         .map_err(BadRequest)?;

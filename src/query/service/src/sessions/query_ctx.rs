@@ -41,7 +41,6 @@ use common_legacy_planners::StageTableInfo;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::UserInfo;
 use opendal::Operator;
-use parking_lot::Mutex;
 use parking_lot::RwLock;
 use tracing::debug;
 
@@ -153,7 +152,7 @@ impl QueryContext {
     }
 
     // Get the current session.
-    pub fn get_current_session(self: &Arc<Self>) -> Arc<Session> {
+    pub fn get_current_session(&self) -> Arc<Session> {
         self.shared.session.clone()
     }
 
@@ -224,16 +223,6 @@ impl TableContext for QueryContext {
     fn get_result_progress_value(&self) -> ProgressValues {
         self.shared.result_progress.as_ref().get_values()
     }
-    fn get_error(&self) -> Arc<Mutex<Option<ErrorCode>>> {
-        self.shared.error.clone()
-    }
-    fn get_error_value(&self) -> Option<ErrorCode> {
-        let error = self.shared.error.lock();
-        error.clone()
-    }
-    fn set_error(&self, err: ErrorCode) {
-        self.shared.set_error(err);
-    }
     // Steal n partitions from the partition pool by the pipeline worker.
     // This also can steal the partitions from distributed node.
     fn try_get_partitions(&self, num: u64) -> Result<Partitions> {
@@ -258,8 +247,8 @@ impl TableContext for QueryContext {
         }
         Ok(())
     }
-    fn attach_query_str(&self, query: &str) {
-        self.shared.attach_query_str(query);
+    fn attach_query_str(&self, kind: String, query: &str) {
+        self.shared.attach_query_str(kind, query);
     }
 
     fn get_fragment_id(&self) -> usize {
@@ -313,6 +302,11 @@ impl TableContext for QueryContext {
     fn get_query_str(&self) -> String {
         self.shared.get_query_str()
     }
+
+    fn get_query_kind(&self) -> String {
+        self.shared.get_query_kind()
+    }
+
     // Get the storage data accessor operator from the session manager.
     fn get_storage_operator(&self) -> Result<Operator> {
         let operator = self.shared.storage_operator.clone();
