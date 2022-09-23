@@ -411,7 +411,7 @@ impl MetaGrpcClient {
                     ],
                     elapsed,
                 );
-                if elapsed > 1000 as f64 {
+                if elapsed > 1000_f64 {
                     warn!(
                         "MetaGrpcClient slow request {} to {} takes {} ms",
                         req_name, current_endpoint, elapsed
