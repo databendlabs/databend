@@ -81,6 +81,19 @@ impl<'a> Binder {
                     bind_context.add_column_binding(column.clone());
                 }
             }
+            JoinOperator::FullOuter => {
+                for column in left_context.all_column_bindings() {
+                    let mut nullable_column = column.clone();
+                    nullable_column.data_type = Box::new(wrap_nullable(&column.data_type));
+                    bind_context.add_column_binding(nullable_column);
+                }
+
+                for column in right_context.all_column_bindings().iter() {
+                    let mut nullable_column = column.clone();
+                    nullable_column.data_type = Box::new(wrap_nullable(&column.data_type));
+                    bind_context.add_column_binding(nullable_column);
+                }
+            }
             _ => {
                 for column in left_context.all_column_bindings() {
                     bind_context.add_column_binding(column.clone());
