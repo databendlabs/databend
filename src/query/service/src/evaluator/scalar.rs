@@ -14,8 +14,10 @@
 
 use common_datavalues::DataType;
 use common_datavalues::DataTypeImpl;
+use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_functions::scalars::in_evalutor;
 use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
 
@@ -61,14 +63,45 @@ impl Evaluator {
                 Ok(EvalNode::Function { func, args })
             }
             Scalar::FunctionCall(func) => {
-                let args: Vec<EvalNode> = func
+                let eval_args: Vec<EvalNode> = func
                     .arguments
                     .iter()
                     .map(Self::eval_scalar)
                     .collect::<Result<_>>()?;
+
+                // special case for in function
+                let name_lower = func.func_name.to_lowercase();
+                if name_lower.as_str() == "in" || name_lower.as_str() == "not_in" {
+                    if let EvalNode::Constant {
+                        value: DataValue::Struct(vs),
+                        ..
+                    } = &eval_args[1]
+                    {
+                        let func = if name_lower.as_str() == "not_in" {
+                            in_evalutor::create_by_values::<true>(
+                                func.arg_types[1].clone(),
+                                vs.clone(),
+                            )
+                        } else {
+                            in_evalutor::create_by_values::<false>(
+                                func.arg_types[1].clone(),
+                                vs.clone(),
+                            )
+                        }?;
+
+                        return Ok(EvalNode::Function {
+                            func,
+                            args: vec![eval_args[0].clone()],
+                        });
+                    }
+                }
+
                 let arg_types: Vec<&DataTypeImpl> = func.arg_types.iter().collect();
                 let func = FunctionFactory::instance().get(func.func_name.as_str(), &arg_types)?;
-                Ok(EvalNode::Function { func, args })
+                Ok(EvalNode::Function {
+                    func,
+                    args: eval_args,
+                })
             }
             Scalar::CastExpr(cast) => {
                 let arg = Self::eval_scalar(&cast.argument)?;

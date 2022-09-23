@@ -53,7 +53,8 @@ impl Evaluator {
                     if let EvalNode::Constant {
                         value: DataValue::Struct(vs),
                         ..
-                    } = &eval_args[1] {
+                    } = &eval_args[1]
+                    {
                         let func = if name_lower.as_str() == "not_in" {
                             in_evalutor::create_by_values::<true>(args[0].1.clone(), vs.clone())
                         } else {

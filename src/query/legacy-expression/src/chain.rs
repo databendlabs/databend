@@ -15,8 +15,10 @@
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::DataTypeImpl;
+use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_functions::scalars::in_evalutor;
 use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
 
@@ -158,8 +160,39 @@ impl ExpressionChain {
                     .map(|action| action.to_data_type(&self.schema))
                     .collect::<Result<Vec<_>>>()?;
 
-                let arg_types2: Vec<&DataTypeImpl> = arg_types.iter().collect();
+                let name_lower = op.to_lowercase();
+                if name_lower.as_str() == "in" || name_lower.as_str() == "not_in" {
+                    if let LegacyExpression::Literal {
+                        value: DataValue::Struct(vs),
+                        ..
+                    } = &args[1]
+                    {
+                        let func = if name_lower.as_str() == "not_in" {
+                            in_evalutor::create_by_values::<true>(arg_types[0].clone(), vs.clone())
+                        } else {
+                            in_evalutor::create_by_values::<false>(arg_types[0].clone(), vs.clone())
+                        }?;
+                        let return_type = func.return_type();
+                        let function = ActionFunction {
+                            name: expr.column_name(),
+                            func_name: op.clone(),
+                            func,
+                            arg_names: args
+                                .iter()
+                                .take(1)
+                                .map(|action| action.column_name())
+                                .collect(),
+                            arg_types: vec![arg_types[0].clone()],
+                            return_type,
+                        };
 
+                        self.actions
+                            .push(LegacyExpressionAction::Function(function));
+                        return Ok(());
+                    }
+                }
+
+                let arg_types2: Vec<&DataTypeImpl> = arg_types.iter().collect();
                 let func = FunctionFactory::instance().get(op, &arg_types2)?;
                 let return_type = func.return_type();
 
