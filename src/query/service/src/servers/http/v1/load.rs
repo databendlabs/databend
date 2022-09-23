@@ -36,7 +36,6 @@ use poem::Request;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::mpsc::Sender;
-use tracing::error;
 
 use super::HttpQueryContext;
 use crate::interpreters::InterpreterFactory;
