@@ -69,58 +69,12 @@ impl ItemManager for ChannelManager {
     }
 }
 
-/// Exponential back off policy for meta service
-#[derive(Debug, Clone)]
-pub struct BackOffPolicy {
-    /// delay increase ratio of meta
-    ///
-    /// should be not smaller than 1.0
-    ratio: f32,
-    /// minimum backoff duration, where the backoff duration vary starts from
-    ///
-    /// A random jitter between [0, min_back) will be set in each backoff, to minimize conflicts.
-    min_back: Duration,
-    /// maximum backoff duration, if the backoff duration is larger than this, no backoff will be raised
-    max_back: Duration,
-    /// maximum backoff times, chances off backoff
-    chances: u64,
-}
-
-impl Default for BackOffPolicy {
-    fn default() -> Self {
-        Self {
-            ratio: 2.0,
-            min_back: Duration::from_secs(1),
-            max_back: Duration::from_secs(60),
-            chances: 3,
-        }
-    }
-}
-impl BackOffPolicy {
-    pub fn new(ratio: f32, min_back: Duration, max_back: Duration, chances: u64) -> Self {
-        Self {
-            ratio,
-            min_back,
-            max_back,
-            chances,
-        }
-    }
-    pub fn backoff(&self) -> ExponentialBackoff {
-        ExponentialBackoff::default()
-            .with_jitter()
-            .with_factor(self.ratio)
-            .with_min_delay(self.min_back)
-            .with_max_delay(self.max_back)
-            .with_max_times(self.chances as usize)
-    }
-}
-
 pub struct Network {
     sto: Arc<RaftStore>,
 
     conn_pool: Pool<ChannelManager>,
 
-    back_off_policy: BackOffPolicy,
+    back_off_policy: ExponentialBackoff,
 }
 
 impl Network {
@@ -133,18 +87,42 @@ impl Network {
         }
     }
 
-    pub fn with_backoff_policy(mut self, policy: BackOffPolicy) -> Self {
+    /// Set exponential back off policy for meta service
+    ///
+    /// - `ratio`: delay increase ratio of meta
+    ///
+    ///   should be not smaller than 1.0
+    ///
+    /// - `min_delay`: minimum back off duration, where the backoff duration vary starts from
+    ///
+    ///   random jitter between [0, min_back) will be set in each backoff, to minimize conflicts.
+    ///
+    /// - `max_delay`: maximum back off duration, if the backoff duration is larger than this, no backoff will be raised
+    ///
+    /// - `chances`: maximum back off times, chances off backoff
+    pub fn with_back_off_policy(
+        mut self,
+        ratio: f32,
+        min_delay: Duration,
+        max_delay: Duration,
+        chances: usize,
+    ) -> Self {
+        let policy = ExponentialBackoff::default()
+            .with_jitter()
+            .with_factor(ratio)
+            .with_min_delay(min_delay)
+            .with_max_delay(max_delay)
+            .with_max_times(chances);
+
         self.back_off_policy = policy;
         self
     }
 
-    pub(crate) fn backoff(
-        &self,
-    ) -> std::iter::Chain<ExponentialBackoff, std::vec::IntoIter<Duration>> {
+    pub(crate) fn back_off(&self) -> impl Iterator<Item = Duration> {
         // the last period of back off should be zero
-        // so the longest backoff will not be wasted
+        // so the longest back off will not be wasted
         let zero = vec![Duration::default()].into_iter();
-        self.back_off_policy.backoff().chain(zero)
+        self.back_off_policy.clone().chain(zero)
     }
 
     #[tracing::instrument(level = "debug", skip(self), fields(id=self.sto.id))]
@@ -193,7 +171,7 @@ impl RaftNetwork<LogEntry> for Network {
         let mut last_err = None;
         let mut mes = Default::default();
 
-        for backoff in self.backoff() {
+        for back_off in self.back_off() {
             let req = common_tracing::inject_span_to_tonic_request(&rpc);
 
             self.incr_meta_metrics_sent_bytes_to_peer(&target, req.get_ref());
@@ -211,7 +189,7 @@ impl RaftNetwork<LogEntry> for Network {
                     incr_meta_metrics_sent_failure_to_peer(&target);
                     last_err = Some(e);
                     // backoff and retry sending
-                    sleep(backoff).await;
+                    sleep(back_off).await;
                 }
             }
         }
@@ -242,7 +220,7 @@ impl RaftNetwork<LogEntry> for Network {
         let mut mes = Default::default();
         // all back-offed requests failed
         let mut last_err = None;
-        for backoff in self.backoff() {
+        for back_off in self.back_off() {
             let req = common_tracing::inject_span_to_tonic_request(&rpc);
 
             self.incr_meta_metrics_sent_bytes_to_peer(&target, req.get_ref());
@@ -265,7 +243,7 @@ impl RaftNetwork<LogEntry> for Network {
                     last_err = Some(e);
 
                     // back off and retry sending
-                    sleep(backoff).await;
+                    sleep(back_off).await;
                 }
             }
         }
@@ -290,7 +268,7 @@ impl RaftNetwork<LogEntry> for Network {
         let mut mes = Default::default();
         // all back-offed requests are failed
         let mut last_err = None;
-        for backoff in self.backoff() {
+        for back_off in self.back_off() {
             let req = common_tracing::inject_span_to_tonic_request(&rpc);
 
             self.incr_meta_metrics_sent_bytes_to_peer(&target, req.get_ref());
@@ -308,7 +286,7 @@ impl RaftNetwork<LogEntry> for Network {
                     incr_meta_metrics_sent_failure_to_peer(&target);
                     last_err = Some(e);
                     // back off and retry
-                    sleep(backoff).await;
+                    sleep(back_off).await;
                 }
             }
         }
