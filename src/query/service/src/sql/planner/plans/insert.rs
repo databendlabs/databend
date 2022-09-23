@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_meta_types::MetaId;
-use common_pipeline_core::Pipe;
+use common_pipeline_sources::processors::sources::input_formats::InputContext;
 
 use super::Plan;
 
@@ -25,7 +27,7 @@ pub enum InsertInputSource {
     SelectPlan(Box<Plan>),
     // From outside streaming source
     #[serde(skip)]
-    StreamingWithFormat(String, Pipe),
+    StreamingWithFormat(String, Arc<InputContext>),
     // From cloned String and format
     StrWithFormat((String, String)),
 }

@@ -32,14 +32,15 @@ use common_arrow::parquet::metadata::ColumnChunkMetaData;
 use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_arrow::parquet::read::read_metadata;
-use common_base::base::tokio::sync::mpsc::Receiver;
 use common_datablocks::DataBlock;
 use common_datavalues::remove_nullable;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::FormatSettings;
 use common_pipeline_core::Pipeline;
+use common_settings::Settings;
 use opendal::Object;
 use similar_asserts::traits::MakeDiff;
 
@@ -51,13 +52,17 @@ use crate::processors::sources::input_formats::input_format::SplitInfo;
 use crate::processors::sources::input_formats::input_pipeline::AligningStateTrait;
 use crate::processors::sources::input_formats::input_pipeline::BlockBuilderTrait;
 use crate::processors::sources::input_formats::input_pipeline::InputFormatPipe;
-use crate::processors::sources::input_formats::input_pipeline::StreamingReadBatch;
 use crate::processors::sources::input_formats::InputFormat;
 
 pub struct InputFormatParquet;
 
 #[async_trait::async_trait]
 impl InputFormat for InputFormatParquet {
+    fn get_format_settings(&self, _settings: &Arc<Settings>) -> Result<FormatSettings> {
+        // not used now
+        Ok(FormatSettings::default())
+    }
+
     fn default_record_delimiter(&self) -> RecordDelimiter {
         RecordDelimiter::Crlf
     }
@@ -95,13 +100,8 @@ impl InputFormat for InputFormatParquet {
         ParquetFormatPipe::execute_copy_with_aligner(ctx, pipeline)
     }
 
-    fn exec_stream(
-        &self,
-        ctx: Arc<InputContext>,
-        pipeline: &mut Pipeline,
-        input: Receiver<StreamingReadBatch>,
-    ) -> Result<()> {
-        ParquetFormatPipe::execute_stream(ctx, pipeline, input)
+    fn exec_stream(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {
+        ParquetFormatPipe::execute_stream(ctx, pipeline)
     }
 }
 

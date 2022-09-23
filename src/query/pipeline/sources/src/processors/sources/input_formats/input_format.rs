@@ -18,15 +18,15 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_base::base::tokio::sync::mpsc::Receiver;
 use common_exception::Result;
+use common_io::prelude::FormatSettings;
 use common_pipeline_core::Pipeline;
+use common_settings::Settings;
 use opendal::io_util::CompressAlgorithm;
 use opendal::Object;
 
 use crate::processors::sources::input_formats::delimiter::RecordDelimiter;
 use crate::processors::sources::input_formats::input_context::InputContext;
-use crate::processors::sources::input_formats::input_pipeline::StreamingReadBatch;
 
 pub trait InputData: Send + Sync + 'static {
     fn as_any(&self) -> &dyn Any;
@@ -38,6 +38,8 @@ pub trait InputState: Send {
 
 #[async_trait::async_trait]
 pub trait InputFormat: Send + Sync {
+    fn get_format_settings(&self, settings: &Arc<Settings>) -> Result<FormatSettings>;
+
     fn default_record_delimiter(&self) -> RecordDelimiter;
 
     fn default_field_delimiter(&self) -> u8;
@@ -55,12 +57,7 @@ pub trait InputFormat: Send + Sync {
 
     fn exec_copy(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()>;
 
-    fn exec_stream(
-        &self,
-        ctx: Arc<InputContext>,
-        pipeline: &mut Pipeline,
-        input: Receiver<StreamingReadBatch>,
-    ) -> Result<()>;
+    fn exec_stream(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()>;
 }
 
 #[derive(Clone)]
@@ -121,12 +118,12 @@ impl SplitInfo {
         }
     }
 
-    pub fn from_stream_split(path: String) -> Self {
+    pub fn from_stream_split(path: String, compress_alg: Option<CompressAlgorithm>) -> Self {
         SplitInfo {
             file_info: FileInfo {
                 path,
                 size: 0,
-                compress_alg: None,
+                compress_alg,
                 file_meta: None,
             },
             seq_infile: 0,

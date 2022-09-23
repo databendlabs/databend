@@ -171,8 +171,10 @@ impl Interpreter for InsertInterpreterV2 {
                     }
                     build_res.main_pipeline.add_pipe(builder.finalize());
                 }
-                InsertInputSource::StreamingWithFormat(_, pipe) => {
-                    build_res.main_pipeline.add_pipe(pipe.clone());
+                InsertInputSource::StreamingWithFormat(_, input_context) => {
+                    input_context
+                        .format
+                        .exec_stream(input_context.clone(), &mut build_res.main_pipeline)?;
                 }
                 InsertInputSource::SelectPlan(plan) => {
                     let table1 = table.clone();
