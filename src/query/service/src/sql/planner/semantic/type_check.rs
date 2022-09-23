@@ -276,14 +276,22 @@ impl<'a> TypeChecker<'a> {
                 not,
                 ..
             } => {
-                let func_name = if *not { "not_in" } else { "in" };
-                let mut args = Vec::with_capacity(list.len() + 1);
-                args.push(expr.as_ref());
-                for expr in list.iter() {
-                    args.push(expr);
+                // faster path for single list
+                if list.len() == 1 {
+                    let func_name = if *not { "!=" } else { "=" };
+                    let args = vec![expr.as_ref(), &list[0]];
+                    self.resolve_function(span, func_name, &args, required_type)
+                        .await?
+                } else {
+                    let func_name = if *not { "not_in" } else { "in" };
+                    let tuple_expr = Expr::Tuple {
+                        span,
+                        exprs: list.clone(),
+                    };
+                    let args = vec![expr.as_ref(), &tuple_expr];
+                    self.resolve_function(span, func_name, &args, required_type)
+                        .await?
                 }
-                self.resolve_function(span, func_name, &args, required_type)
-                    .await?
             }
 
             Expr::Between {

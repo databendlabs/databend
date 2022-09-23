@@ -14,7 +14,9 @@
 
 use common_datavalues::DataType;
 use common_datavalues::DataTypeImpl;
+use common_datavalues::DataValue;
 use common_exception::Result;
+use common_functions::scalars::in_evalutor;
 use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
 
@@ -40,13 +42,37 @@ impl Evaluator {
                 data_type: data_type.clone(),
             }),
             PhysicalScalar::Function { name, args, .. } => {
-                let data_types: Vec<&DataTypeImpl> = args.iter().map(|(_, v)| v).collect();
-                let func = FunctionFactory::instance().get(name, &data_types)?;
-                let args = args
+                let eval_args: Vec<EvalNode> = args
                     .iter()
                     .map(|(v, _)| Self::eval_physical_scalar(v))
                     .collect::<Result<_>>()?;
-                Ok(EvalNode::Function { func, args })
+
+                // special case for in function
+                let name_lower = name.to_lowercase();
+                if name_lower.as_str() == "in" || name_lower.as_str() == "not_in" {
+                    if let EvalNode::Constant {
+                        value: DataValue::Struct(vs),
+                        ..
+                    } = &eval_args[1] {
+                        let func = if name_lower.as_str() == "not_in" {
+                            in_evalutor::create_by_values::<true>(args[0].1.clone(), vs.clone())
+                        } else {
+                            in_evalutor::create_by_values::<false>(args[0].1.clone(), vs.clone())
+                        }?;
+
+                        return Ok(EvalNode::Function {
+                            func,
+                            args: vec![eval_args[0].clone()],
+                        });
+                    }
+                }
+
+                let data_types: Vec<&DataTypeImpl> = args.iter().map(|(_, v)| v).collect();
+                let func = FunctionFactory::instance().get(name, &data_types)?;
+                Ok(EvalNode::Function {
+                    func,
+                    args: eval_args,
+                })
             }
             PhysicalScalar::Cast { target, input } => {
                 let from = input.data_type();

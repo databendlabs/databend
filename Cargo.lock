@@ -1144,6 +1144,7 @@ dependencies = [
  "chrono-tz",
  "common-arrow",
  "common-exception",
+ "common-hashtable",
  "common-io",
  "criterion",
  "dyn-clone",
@@ -1981,7 +1982,6 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-io",
- "csv-async",
  "futures",
  "opendal",
  "parking_lot 0.12.1",
@@ -2352,21 +2352,6 @@ dependencies = [
  "bstr",
  "csv-core",
  "itoa 0.4.8",
- "ryu",
- "serde",
-]
-
-[[package]]
-name = "csv-async"
-version = "1.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c19b33b32fd48f83388821bd8f534b59e1b1ffd5c6c83771d1b23abd3dac2685"
-dependencies = [
- "bstr",
- "cfg-if",
- "csv-core",
- "futures",
- "itoa 1.0.3",
  "ryu",
  "serde",
 ]

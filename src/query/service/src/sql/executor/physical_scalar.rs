@@ -41,6 +41,7 @@ pub enum PhysicalScalar {
         args: Vec<(PhysicalScalar, DataTypeImpl)>,
         return_type: DataTypeImpl,
     },
+
     Cast {
         input: Box<PhysicalScalar>,
         target: DataTypeImpl,
