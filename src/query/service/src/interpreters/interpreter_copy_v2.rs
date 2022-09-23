@@ -77,7 +77,9 @@ impl CopyInterpreterV2 {
 
         if !force {
             // if force is false, copy only the files that unmatch to the meta copied files info.
-            let resp = catalog.get_table_copied_file_info(req).await?;
+            let resp = catalog
+                .get_table_copied_file_info(&tenant, database_name, req)
+                .await?;
             for file in files.iter() {
                 let stage_file = stat_file(&self.ctx, &table_info.stage_info, file).await?;
 
@@ -130,6 +132,7 @@ impl CopyInterpreterV2 {
     async fn upsert_copied_files_info(
         &self,
         catalog_name: &str,
+        database_name: &str,
         table_id: u64,
         copy_stage_files: BTreeMap<String, TableCopiedFileInfo>,
     ) -> Result<()> {
@@ -142,7 +145,9 @@ impl CopyInterpreterV2 {
                 expire_at: None,
             };
             let catalog = self.ctx.get_catalog(catalog_name)?;
-            catalog.upsert_table_copied_file_info(req).await?;
+            catalog
+                .upsert_table_copied_file_info(&self.ctx.get_tenant(), database_name, req)
+                .await?;
         }
         Ok(())
     }
@@ -455,7 +460,12 @@ impl Interpreter for CopyInterpreterV2 {
 
                         if result.is_ok() {
                             let _ = self
-                                .upsert_copied_files_info(catalog_name, table_id, copy_stage_files)
+                                .upsert_copied_files_info(
+                                    catalog_name,
+                                    database_name,
+                                    table_id,
+                                    copy_stage_files,
+                                )
                                 .await?;
                         }
 

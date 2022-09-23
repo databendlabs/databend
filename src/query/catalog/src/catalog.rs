@@ -151,24 +151,40 @@ pub trait Catalog: DynClone + Send + Sync {
 
     async fn upsert_table_option(
         &self,
+        tenant: &str,
+        db_name: &str,
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply>;
 
-    async fn update_table_meta(&self, req: UpdateTableMetaReq) -> Result<UpdateTableMetaReply>;
+    async fn update_table_meta(
+        &self,
+        tenant: &str,
+        db_name: &str,
+        req: UpdateTableMetaReq,
+    ) -> Result<UpdateTableMetaReply>;
 
     async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply>;
 
     async fn get_table_copied_file_info(
         &self,
+        tenant: &str,
+        db_name: &str,
         req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply>;
 
     async fn upsert_table_copied_file_info(
         &self,
+        tenant: &str,
+        db_name: &str,
         req: UpsertTableCopiedFileReq,
     ) -> Result<UpsertTableCopiedFileReply>;
 
-    async fn truncate_table(&self, req: TruncateTableReq) -> Result<TruncateTableReply>;
+    async fn truncate_table(
+        &self,
+        tenant: &str,
+        db_name: &str,
+        req: TruncateTableReq,
+    ) -> Result<TruncateTableReply>;
 
     /// Table function
 

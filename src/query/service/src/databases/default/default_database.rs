@@ -12,23 +12,59 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use common_catalog::table::Table;
 use common_exception::Result;
+use common_meta_api::SchemaApi;
+use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DatabaseInfo;
+use common_meta_app::schema::DropTableReply;
+use common_meta_app::schema::DropTableReq;
+use common_meta_app::schema::GetTableCopiedFileReply;
+use common_meta_app::schema::GetTableCopiedFileReq;
+use common_meta_app::schema::GetTableReq;
+use common_meta_app::schema::ListTableReq;
+use common_meta_app::schema::RenameTableReply;
+use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TruncateTableReply;
+use common_meta_app::schema::TruncateTableReq;
+use common_meta_app::schema::UndropTableReply;
+use common_meta_app::schema::UndropTableReq;
+use common_meta_app::schema::UpdateTableMetaReply;
+use common_meta_app::schema::UpdateTableMetaReq;
+use common_meta_app::schema::UpsertTableCopiedFileReply;
+use common_meta_app::schema::UpsertTableCopiedFileReq;
+use common_meta_app::schema::UpsertTableOptionReply;
+use common_meta_app::schema::UpsertTableOptionReq;
 
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
+use crate::storages::StorageContext;
 
 #[derive(Clone)]
 pub struct DefaultDatabase {
+    ctx: DatabaseContext,
+
     db_info: DatabaseInfo,
 }
 
 impl DefaultDatabase {
-    pub fn try_create(_ctx: DatabaseContext, db_info: DatabaseInfo) -> Result<Box<dyn Database>> {
-        Ok(Box::new(Self { db_info }))
+    pub fn try_create(ctx: DatabaseContext, db_info: DatabaseInfo) -> Result<Box<dyn Database>> {
+        Ok(Box::new(Self { ctx, db_info }))
+    }
+
+    fn load_tables(&self, table_infos: Vec<Arc<TableInfo>>) -> Result<Vec<Arc<dyn Table>>> {
+        table_infos.iter().try_fold(vec![], |mut acc, item| {
+            let tbl = self.get_table_by_info(item.as_ref())?;
+            acc.push(tbl);
+            Ok(acc)
+        })
     }
 }
 
+#[async_trait::async_trait]
 impl Database for DefaultDatabase {
     fn name(&self) -> &str {
         &self.db_info.name_ident.db_name
@@ -36,5 +72,121 @@ impl Database for DefaultDatabase {
 
     fn get_db_info(&self) -> &DatabaseInfo {
         &self.db_info
+    }
+
+    fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
+        let storage = self.ctx.storage_factory.clone();
+        let ctx = StorageContext {
+            meta: self.ctx.meta.clone().arc(),
+            in_memory_data: self.ctx.in_memory_data.clone(),
+        };
+        storage.get_table(ctx, table_info)
+    }
+
+    // Get one table by db and table name.
+    async fn get_table(
+        &self,
+        tenant: &str,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<Arc<dyn Table>> {
+        let table_info = self
+            .ctx
+            .meta
+            .get_table(GetTableReq::new(tenant, db_name, table_name))
+            .await?;
+        self.get_table_by_info(table_info.as_ref())
+    }
+
+    async fn list_tables(&self, tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+        let table_infos = self
+            .ctx
+            .meta
+            .list_tables(ListTableReq::new(tenant, db_name))
+            .await?;
+
+        self.load_tables(table_infos)
+    }
+
+    async fn list_tables_history(
+        &self,
+        tenant: &str,
+        db_name: &str,
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        // `get_table_history` will not fetch the tables that created before the
+        // "metasrv time travel functions" is added.
+        // thus, only the table-infos of dropped tables are used.
+        let mut dropped = self
+            .ctx
+            .meta
+            .get_table_history(ListTableReq::new(tenant, db_name))
+            .await?
+            .into_iter()
+            .filter(|i| i.meta.drop_on.is_some())
+            .collect::<Vec<_>>();
+
+        let mut table_infos = self
+            .ctx
+            .meta
+            .list_tables(ListTableReq::new(tenant, db_name))
+            .await?;
+
+        table_infos.append(&mut dropped);
+
+        self.load_tables(table_infos)
+    }
+
+    async fn create_table(&self, req: CreateTableReq) -> Result<()> {
+        self.ctx.meta.create_table(req).await?;
+        Ok(())
+    }
+
+    async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply> {
+        let res = self.ctx.meta.drop_table(req).await?;
+        Ok(res)
+    }
+
+    async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply> {
+        let res = self.ctx.meta.undrop_table(req).await?;
+        Ok(res)
+    }
+
+    async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply> {
+        let res = self.ctx.meta.rename_table(req).await?;
+        Ok(res)
+    }
+
+    async fn upsert_table_option(
+        &self,
+        req: UpsertTableOptionReq,
+    ) -> Result<UpsertTableOptionReply> {
+        let res = self.ctx.meta.upsert_table_option(req).await?;
+        Ok(res)
+    }
+
+    async fn update_table_meta(&self, req: UpdateTableMetaReq) -> Result<UpdateTableMetaReply> {
+        let res = self.ctx.meta.update_table_meta(req).await?;
+        Ok(res)
+    }
+
+    async fn get_table_copied_file_info(
+        &self,
+        req: GetTableCopiedFileReq,
+    ) -> Result<GetTableCopiedFileReply> {
+        let res = self.ctx.meta.get_table_copied_file_info(req).await?;
+        Ok(res)
+    }
+
+    async fn upsert_table_copied_file_info(
+        &self,
+        req: UpsertTableCopiedFileReq,
+    ) -> Result<UpsertTableCopiedFileReply> {
+        let res = self.ctx.meta.upsert_table_copied_file_info(req).await?;
+        Ok(res)
+    }
+
+    async fn truncate_table(&self, req: TruncateTableReq) -> Result<TruncateTableReply> {
+        let res = self.ctx.meta.truncate_table(req).await?;
+        Ok(res)
     }
 }

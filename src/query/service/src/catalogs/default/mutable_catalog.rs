@@ -32,9 +32,7 @@ use common_meta_app::schema::DropTableReq;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
-use common_meta_app::schema::GetTableReq;
 use common_meta_app::schema::ListDatabaseReq;
-use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
@@ -133,18 +131,11 @@ impl MutableCatalog {
 
     fn build_db_instance(&self, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {
         let ctx = DatabaseContext {
-            meta: self.ctx.meta.clone().arc(),
+            meta: self.ctx.meta.clone(),
+            storage_factory: self.ctx.storage_factory.clone(),
             in_memory_data: self.ctx.in_memory_data.clone(),
         };
         self.ctx.database_factory.get_database(ctx, db_info)
-    }
-
-    fn load_tables(&self, table_infos: Vec<Arc<TableInfo>>) -> Result<Vec<Arc<dyn Table>>> {
-        table_infos.iter().try_fold(vec![], |mut acc, item| {
-            let tbl = self.get_table_by_info(item.as_ref())?;
-            acc.push(tbl);
-            Ok(acc)
-        })
     }
 }
 
@@ -210,6 +201,11 @@ impl Catalog for MutableCatalog {
         Ok(())
     }
 
+    async fn undrop_database(&self, req: UndropDatabaseReq) -> Result<UndropDatabaseReply> {
+        let res = self.ctx.meta.undrop_database(req).await?;
+        Ok(res)
+    }
+
     async fn rename_database(&self, req: RenameDatabaseReq) -> Result<RenameDatabaseReply> {
         let res = self.ctx.meta.rename_database(req).await?;
         Ok(res)
@@ -238,22 +234,13 @@ impl Catalog for MutableCatalog {
         db_name: &str,
         table_name: &str,
     ) -> Result<Arc<dyn Table>> {
-        let table_info = self
-            .ctx
-            .meta
-            .get_table(GetTableReq::new(tenant, db_name, table_name))
-            .await?;
-        self.get_table_by_info(table_info.as_ref())
+        let db = self.get_database(tenant, db_name).await?;
+        db.get_table(tenant, db_name, table_name).await
     }
 
     async fn list_tables(&self, tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
-        let table_infos = self
-            .ctx
-            .meta
-            .list_tables(ListTableReq::new(tenant, db_name))
-            .await?;
-
-        self.load_tables(table_infos)
+        let db = self.get_database(tenant, db_name).await?;
+        db.list_tables(tenant, db_name).await
     }
 
     async fn list_tables_history(
@@ -261,86 +248,86 @@ impl Catalog for MutableCatalog {
         tenant: &str,
         db_name: &str,
     ) -> Result<Vec<Arc<dyn Table>>> {
-        // `get_table_history` will not fetch the tables that created before the
-        // "metasrv time travel functions" is added.
-        // thus, only the table-infos of dropped tables are used.
-        let mut dropped = self
-            .ctx
-            .meta
-            .get_table_history(ListTableReq::new(tenant, db_name))
-            .await?
-            .into_iter()
-            .filter(|i| i.meta.drop_on.is_some())
-            .collect::<Vec<_>>();
-
-        let mut table_infos = self
-            .ctx
-            .meta
-            .list_tables(ListTableReq::new(tenant, db_name))
-            .await?;
-
-        table_infos.append(&mut dropped);
-
-        self.load_tables(table_infos)
+        let db = self.get_database(tenant, db_name).await?;
+        db.list_tables_history(tenant, db_name).await
     }
 
     async fn create_table(&self, req: CreateTableReq) -> Result<()> {
-        self.ctx.meta.create_table(req).await?;
-        Ok(())
+        let db = self
+            .get_database(&req.name_ident.tenant, &req.name_ident.db_name)
+            .await?;
+        db.create_table(req).await
     }
 
     async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply> {
-        let res = self.ctx.meta.drop_table(req).await?;
-        Ok(res)
+        let db = self
+            .get_database(&req.name_ident.tenant, &req.name_ident.db_name)
+            .await?;
+        db.drop_table(req).await
     }
 
     async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply> {
-        let res = self.ctx.meta.undrop_table(req).await?;
-        Ok(res)
-    }
-
-    async fn undrop_database(&self, req: UndropDatabaseReq) -> Result<UndropDatabaseReply> {
-        let res = self.ctx.meta.undrop_database(req).await?;
-        Ok(res)
+        let db = self
+            .get_database(&req.name_ident.tenant, &req.name_ident.db_name)
+            .await?;
+        db.undrop_table(req).await
     }
 
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply> {
-        let res = self.ctx.meta.rename_table(req).await?;
-        Ok(res)
+        let db = self
+            .get_database(&req.name_ident.tenant, &req.name_ident.db_name)
+            .await?;
+        db.rename_table(req).await
     }
 
     async fn upsert_table_option(
         &self,
+        tenant: &str,
+        db_name: &str,
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
-        let res = self.ctx.meta.upsert_table_option(req).await?;
-        Ok(res)
+        let db = self.get_database(tenant, db_name).await?;
+        db.upsert_table_option(req).await
     }
 
-    async fn update_table_meta(&self, req: UpdateTableMetaReq) -> Result<UpdateTableMetaReply> {
-        let res = self.ctx.meta.update_table_meta(req).await?;
-        Ok(res)
+    async fn update_table_meta(
+        &self,
+        tenant: &str,
+        db_name: &str,
+        req: UpdateTableMetaReq,
+    ) -> Result<UpdateTableMetaReply> {
+        let db = self.get_database(tenant, db_name).await?;
+        db.update_table_meta(req).await
     }
 
     async fn get_table_copied_file_info(
         &self,
+        tenant: &str,
+        db_name: &str,
         req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply> {
-        let res = self.ctx.meta.get_table_copied_file_info(req).await?;
-        Ok(res)
+        let db = self.get_database(tenant, db_name).await?;
+        db.get_table_copied_file_info(req).await
     }
 
     async fn upsert_table_copied_file_info(
         &self,
+        tenant: &str,
+        db_name: &str,
         req: UpsertTableCopiedFileReq,
     ) -> Result<UpsertTableCopiedFileReply> {
-        let res = self.ctx.meta.upsert_table_copied_file_info(req).await?;
-        Ok(res)
+        let db = self.get_database(tenant, db_name).await?;
+        db.upsert_table_copied_file_info(req).await
     }
 
-    async fn truncate_table(&self, req: TruncateTableReq) -> Result<TruncateTableReply> {
-        let res = self.ctx.meta.truncate_table(req).await?;
-        Ok(res)
+    async fn truncate_table(
+        &self,
+        tenant: &str,
+        db_name: &str,
+        req: TruncateTableReq,
+    ) -> Result<TruncateTableReply> {
+        let db = self.get_database(tenant, db_name).await?;
+        db.truncate_table(req).await
     }
 
     async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply> {

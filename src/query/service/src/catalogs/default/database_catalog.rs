@@ -445,33 +445,57 @@ impl Catalog for DatabaseCatalog {
 
     async fn get_table_copied_file_info(
         &self,
+        tenant: &str,
+        db_name: &str,
         req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply> {
-        self.mutable_catalog.get_table_copied_file_info(req).await
+        self.mutable_catalog
+            .get_table_copied_file_info(tenant, db_name, req)
+            .await
     }
 
     async fn upsert_table_copied_file_info(
         &self,
+        tenant: &str,
+        db_name: &str,
         req: UpsertTableCopiedFileReq,
     ) -> Result<UpsertTableCopiedFileReply> {
         self.mutable_catalog
-            .upsert_table_copied_file_info(req)
+            .upsert_table_copied_file_info(tenant, db_name, req)
             .await
     }
 
-    async fn truncate_table(&self, req: TruncateTableReq) -> Result<TruncateTableReply> {
-        self.mutable_catalog.truncate_table(req).await
+    async fn truncate_table(
+        &self,
+        tenant: &str,
+        db_name: &str,
+        req: TruncateTableReq,
+    ) -> Result<TruncateTableReply> {
+        self.mutable_catalog
+            .truncate_table(tenant, db_name, req)
+            .await
     }
 
     async fn upsert_table_option(
         &self,
+        tenant: &str,
+        db_name: &str,
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
-        self.mutable_catalog.upsert_table_option(req).await
+        self.mutable_catalog
+            .upsert_table_option(tenant, db_name, req)
+            .await
     }
 
-    async fn update_table_meta(&self, req: UpdateTableMetaReq) -> Result<UpdateTableMetaReply> {
-        self.mutable_catalog.update_table_meta(req).await
+    async fn update_table_meta(
+        &self,
+        tenant: &str,
+        db_name: &str,
+        req: UpdateTableMetaReq,
+    ) -> Result<UpdateTableMetaReply> {
+        self.mutable_catalog
+            .update_table_meta(tenant, db_name, req)
+            .await
     }
 
     fn get_table_function(
