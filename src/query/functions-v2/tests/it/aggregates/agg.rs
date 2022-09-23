@@ -97,24 +97,28 @@ fn test_count(file: &mut impl Write, simulator: impl AggregationSimulator) {
     run_agg_ast(file, "count()", get_example().as_slice(), simulator);
     run_agg_ast(file, "count(a)", get_example().as_slice(), simulator);
     run_agg_ast(file, "count(x_null)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "count(all_null)", get_example().as_slice(), simulator);
 }
 
 fn test_sum(file: &mut impl Write, simulator: impl AggregationSimulator) {
     run_agg_ast(file, "sum(1)", get_example().as_slice(), simulator);
     run_agg_ast(file, "sum(a)", get_example().as_slice(), simulator);
     run_agg_ast(file, "sum(x_null)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "sum(all_null)", get_example().as_slice(), simulator);
 }
 
 fn test_avg(file: &mut impl Write, simulator: impl AggregationSimulator) {
     run_agg_ast(file, "avg(1)", get_example().as_slice(), simulator);
     run_agg_ast(file, "avg(a)", get_example().as_slice(), simulator);
     run_agg_ast(file, "avg(x_null)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "avg(all_null)", get_example().as_slice(), simulator);
 }
 
 fn test_uniq(file: &mut impl Write, simulator: impl AggregationSimulator) {
     run_agg_ast(file, "uniq(1)", get_example().as_slice(), simulator);
     run_agg_ast(file, "uniq(c)", get_example().as_slice(), simulator);
     run_agg_ast(file, "uniq(x_null)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "uniq(all_null)", get_example().as_slice(), simulator);
 }
 
 fn test_agg_if(file: &mut impl Write, simulator: impl AggregationSimulator) {
@@ -144,6 +148,12 @@ fn test_agg_distinct(file: &mut impl Write, simulator: impl AggregationSimulator
     run_agg_ast(
         file,
         "sum_distinct(x_null)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "sum_distinct(all_null)",
         get_example().as_slice(),
         simulator,
     );
