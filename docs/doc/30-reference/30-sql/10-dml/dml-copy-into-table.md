@@ -326,6 +326,6 @@ This example reads data from a CSV file on IPFS and inserts it into a table:
 
 ```sql
 COPY INTO mytable 
-    FROM 'ipfs://<your-ipfs-hash>' connection = (endpoint_url = 'https://ipfs.filebase.io') 
+    FROM 'ipfs://<your-ipfs-hash>' connection = (endpoint_url = 'https://<your-ipfs-gateway>') 
     FILE_FORMAT = (type = 'CSV' field_delimiter = ',' record_delimiter = '\n' skip_header = 1);
 ```
