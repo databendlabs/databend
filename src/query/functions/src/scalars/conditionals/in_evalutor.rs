@@ -26,6 +26,7 @@ use common_hashtable::HashTableKeyable;
 use common_hashtable::KeysRef;
 
 use crate::scalars::default_column_cast;
+use crate::scalars::AlwaysNullFunction;
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
 
@@ -55,6 +56,9 @@ pub fn create_by_column<const NEGATED: bool>(
     }
 
     let type_id = nonull_least_super_dt.data_type_id().to_physical_type();
+    if type_id == PhysicalTypeID::Null {
+        return Ok(Box::new(AlwaysNullFunction {}));
+    }
 
     with_match_physical_primitive_type!(type_id, |$T| {
         InEvalutorImpl::<NEGATED, $T, <$T as Scalar>::KeyType>::try_create(input_type, nonull_least_super_dt, col)
@@ -63,8 +67,9 @@ pub fn create_by_column<const NEGATED: bool>(
         if type_id == PhysicalTypeID::String {
             return InEvalutorImpl::<NEGATED, Vec<u8>, KeysRef>::try_create(input_type, nonull_least_super_dt, col);
         }
+
         Err(ErrorCode::BadDataValueType(format!(
-            "Column with type: {:?} does not support take",
+            "Column with type: {:?} does not support in function",
             type_id
         )))
     })
