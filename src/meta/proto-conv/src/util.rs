@@ -47,6 +47,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
         9,
         "2022-09-20: Add: config.proto/S3StorageConfig::security_token",
     ),
+    (10, "2022-09-23: Add: table.proto/TableMeta::catalog"),
 ];
 
 pub const VER: u64 = META_CHANGE_LOG.last().unwrap().0;
