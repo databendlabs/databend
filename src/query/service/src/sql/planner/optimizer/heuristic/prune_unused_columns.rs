@@ -23,48 +23,20 @@ use crate::sql::optimizer::SExpr;
 use crate::sql::plans::Aggregate;
 use crate::sql::plans::EvalScalar;
 use crate::sql::plans::LogicalGet;
-use crate::sql::plans::Project;
 use crate::sql::plans::RelOperator;
 use crate::sql::ScalarExpr;
 
-pub struct ColumnPruner {
+pub struct UnusedColumnPruner {
     metadata: MetadataRef,
 }
 
-impl ColumnPruner {
+impl UnusedColumnPruner {
     pub fn new(metadata: MetadataRef) -> Self {
         Self { metadata }
     }
 
-    pub fn prune_columns(&self, expr: &SExpr, require_columns: ColumnSet) -> Result<SExpr> {
-        match expr.plan() {
-            // For project and aggregate, collect required columns for its child
-            RelOperator::Project(p) => Ok(SExpr::create_unary(
-                RelOperator::Project(p.clone()),
-                self.keep_required_columns(expr.child(0)?, p.columns.clone())?,
-            )),
-            RelOperator::Aggregate(p) => {
-                let mut used = p.group_items.iter().fold(ColumnSet::new(), |acc, v| {
-                    acc.union(&v.scalar.used_columns()).cloned().collect()
-                });
-                used = p.aggregate_functions.iter().fold(used, |acc, v| {
-                    acc.union(&v.scalar.used_columns()).cloned().collect()
-                });
-                Ok(SExpr::create_unary(
-                    RelOperator::Aggregate(p.clone()),
-                    self.keep_required_columns(expr.child(0)?, used)?,
-                ))
-            }
-            // For the other plan nodes, keep searching for Project node with required columns
-            p => {
-                let children = expr
-                    .children()
-                    .iter()
-                    .map(|expr| self.prune_columns(expr, require_columns.clone()))
-                    .collect::<Result<Vec<_>>>()?;
-                Ok(SExpr::create(p.clone(), children, None, None))
-            }
-        }
+    pub fn remove_unused_columns(&self, expr: &SExpr, require_columns: ColumnSet) -> Result<SExpr> {
+        self.keep_required_columns(expr, require_columns)
     }
 
     /// Keep columns referenced by parent plan node.
@@ -75,6 +47,11 @@ impl ColumnPruner {
     fn keep_required_columns(&self, expr: &SExpr, mut required: ColumnSet) -> Result<SExpr> {
         match expr.plan() {
             RelOperator::LogicalGet(p) => {
+                // Some table may not have any column,
+                // e.g. `system.sync_crash_me`
+                if p.columns.is_empty() {
+                    return Ok(expr.clone());
+                }
                 let mut prewhere = p.prewhere.clone();
                 let mut used: ColumnSet = required.intersection(&p.columns).cloned().collect();
                 if let Some(ref mut pw) = prewhere {
@@ -143,21 +120,6 @@ impl ColumnPruner {
                 ))
             }
 
-            RelOperator::Project(p) => {
-                let mut used: ColumnSet = p.columns.intersection(&required).cloned().collect();
-                if used.is_empty() {
-                    // Keep at least one column for project.
-                    used.insert(*p.columns.iter().sorted().take(1).next().ok_or_else(|| {
-                        ErrorCode::LogicalError("Invalid Project without output column")
-                    })?);
-                }
-                Ok(SExpr::create_unary(
-                    RelOperator::Project(Project {
-                        columns: used.clone(),
-                    }),
-                    self.keep_required_columns(expr.child(0)?, used)?,
-                ))
-            }
             RelOperator::EvalScalar(p) => {
                 let mut used = vec![];
                 // Only keep columns needed by parent plan.

@@ -18,12 +18,14 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use common_arrow::parquet::compression::CompressionOptions;
 use common_arrow::parquet::metadata::ThriftFileMetaData;
+use common_cache::Cache;
 use common_catalog::table_context::TableContext;
 use common_datablocks::serialize_data_blocks;
 use common_datablocks::serialize_data_blocks_with_compression;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::caches::CacheManager;
 use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::Statistics;
@@ -265,6 +267,11 @@ impl Processor for FuseTableSink {
                 segment,
             } => {
                 self.data_accessor.object(&location).write(data).await?;
+
+                if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
+                    let cache = &mut segment_cache.write().await;
+                    cache.put(location.clone(), segment.clone());
+                }
 
                 // TODO: dyn operation for table trait
                 let log_entry = AppendOperationLogEntry::new(location, segment);
