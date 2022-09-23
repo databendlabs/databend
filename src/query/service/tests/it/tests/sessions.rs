@@ -123,7 +123,7 @@ impl TestGlobalServices {
             config.query.idm.clone(),
             global_services.clone(),
         )
-            .await?;
+        .await?;
         RoleCacheManager::init(global_services.clone())?;
 
         ClusterDiscovery::instance()
@@ -214,7 +214,7 @@ impl SingletonImpl<Arc<Runtime>> for TestGlobalServices {
         match std::thread::current().name() {
             None => panic!("Global runtime is not init"),
             Some(name) => match self.global_runtime.lock().get(name) {
-                None => panic!("Global runtime is not init"),
+                None => panic!("Global runtime is not init, while in test '{}'", name),
                 Some(global_runtime) => global_runtime.clone(),
             },
         }
@@ -238,7 +238,7 @@ impl SingletonImpl<Arc<QueryLogger>> for TestGlobalServices {
         match std::thread::current().name() {
             None => panic!("QueryLogger is not init"),
             Some(name) => match self.query_logger.lock().get(name) {
-                None => panic!("QueryLogger is not init"),
+                None => panic!("QueryLogger is not init, while in test '{}'", name),
                 Some(query_logger) => query_logger.clone(),
             },
         }
@@ -262,7 +262,7 @@ impl SingletonImpl<Arc<ClusterDiscovery>> for TestGlobalServices {
         match std::thread::current().name() {
             None => panic!("ClusterDiscovery is not init"),
             Some(name) => match self.cluster_discovery.lock().get(name) {
-                None => panic!("ClusterDiscovery is not init"),
+                None => panic!("ClusterDiscovery is not init, while in test '{}'", name),
                 Some(cluster_discovery) => cluster_discovery.clone(),
             },
         }
@@ -286,7 +286,7 @@ impl SingletonImpl<Operator> for TestGlobalServices {
         match std::thread::current().name() {
             None => panic!("Operator is not init"),
             Some(name) => match self.storage_operator.lock().get(name) {
-                None => panic!("Operator is not init"),
+                None => panic!("Operator is not init, while in test '{}'", name),
                 Some(storage_operator) => storage_operator.clone(),
             },
         }
@@ -310,7 +310,7 @@ impl SingletonImpl<Arc<CacheManager>> for TestGlobalServices {
         match std::thread::current().name() {
             None => panic!("CacheManager is not init"),
             Some(name) => match self.cache_manager.lock().get(name) {
-                None => panic!("CacheManager is not init"),
+                None => panic!("CacheManager is not init, while in test '{}'", name),
                 Some(cache_manager) => cache_manager.clone(),
             },
         }
@@ -334,7 +334,7 @@ impl SingletonImpl<Arc<CatalogManager>> for TestGlobalServices {
         match std::thread::current().name() {
             None => panic!("CatalogManager is not init"),
             Some(name) => match self.catalog_manager.lock().get(name) {
-                None => panic!("CatalogManager is not init"),
+                None => panic!("CatalogManager is not init, while in test '{}'", name),
                 Some(catalog_manager) => catalog_manager.clone(),
             },
         }
@@ -358,7 +358,7 @@ impl SingletonImpl<Arc<HttpQueryManager>> for TestGlobalServices {
         match std::thread::current().name() {
             None => panic!("HttpQueryManager is not init"),
             Some(name) => match self.http_query_manager.lock().get(name) {
-                None => panic!("HttpQueryManager is not init"),
+                None => panic!("HttpQueryManager is not init, while in test '{}'", name),
                 Some(http_query_manager) => http_query_manager.clone(),
             },
         }
@@ -382,7 +382,7 @@ impl SingletonImpl<Arc<DataExchangeManager>> for TestGlobalServices {
         match std::thread::current().name() {
             None => panic!("DataExchangeManager is not init"),
             Some(name) => match self.data_exchange_manager.lock().get(name) {
-                None => panic!("DataExchangeManager is not init"),
+                None => panic!("DataExchangeManager is not init, while in test '{}'", name),
                 Some(data_exchange_manager) => data_exchange_manager.clone(),
             },
         }
@@ -405,17 +405,10 @@ impl SingletonImpl<Arc<SessionManager>> for TestGlobalServices {
     fn get(&self) -> Arc<SessionManager> {
         match std::thread::current().name() {
             None => panic!("SessionManager is not init"),
-            Some(name) => {
-                let guard = self.session_manager.lock();
-                match guard.get(name) {
-                    None => panic!(
-                        "SessionManager is not init {}, {:?}",
-                        name,
-                        guard.keys().collect::<Vec<_>>()
-                    ),
-                    Some(session_manager) => session_manager.clone(),
-                }
-            }
+            Some(name) => match self.session_manager.lock().get(name) {
+                None => panic!("SessionManager is not init, while in test '{}'", name),
+                Some(session_manager) => session_manager.clone(),
+            },
         }
     }
 
@@ -437,7 +430,7 @@ impl SingletonImpl<Arc<UserApiProvider>> for TestGlobalServices {
         match std::thread::current().name() {
             None => panic!("UserApiProvider is not init"),
             Some(name) => match self.users_manager.lock().get(name) {
-                None => panic!("UserApiProvider is not init"),
+                None => panic!("UserApiProvider is not init, while in test '{}'", name),
                 Some(users_manager) => users_manager.clone(),
             },
         }
@@ -461,7 +454,7 @@ impl SingletonImpl<Arc<RoleCacheManager>> for TestGlobalServices {
         match std::thread::current().name() {
             None => panic!("RoleCacheManager is not init"),
             Some(name) => match self.users_role_manager.lock().get(name) {
-                None => panic!("RoleCacheManager is not init"),
+                None => panic!("RoleCacheManager is not init, while in test '{}'", name),
                 Some(users_role_manager) => users_role_manager.clone(),
             },
         }
