@@ -76,12 +76,12 @@ impl InputFormatTSV {
             }
             pos += 1;
         }
-        if column_index < num_columns - 1 {
+        if column_index < num_columns {
             // todo(youngsofun): allow it optionally (set default)
             err_msg = Some(format!(
                 "need {} columns, find {} only",
                 num_columns,
-                column_index + 1
+                column_index
             ));
         }
         if let Some(m) = err_msg {
