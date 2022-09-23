@@ -20,6 +20,7 @@ mod config;
 pub use config::StorageAzblobConfig;
 pub use config::StorageConfig;
 pub use config::StorageFsConfig;
+pub use config::StorageFtpConfig;
 pub use config::StorageGcsConfig;
 pub use config::StorageHdfsConfig;
 pub use config::StorageHttpConfig;
@@ -27,6 +28,7 @@ pub use config::StorageIpfsConfig;
 pub use config::StorageObsConfig;
 pub use config::StorageParams;
 pub use config::StorageS3Config;
+pub use config::STORAGE_FTP_DEFAULT_ENDPOINT;
 pub use config::STORAGE_GCS_DEFAULT_ENDPOINT;
 pub use config::STORAGE_IPFS_DEFAULT_ENDPOINT;
 pub use config::STORAGE_S3_DEFAULT_ENDPOINT;
@@ -34,6 +36,8 @@ pub use config::STORAGE_S3_DEFAULT_ENDPOINT;
 mod operator;
 pub use operator::init_azblob_operator;
 pub use operator::init_fs_operator;
+#[cfg(feature = "storage-ftp")]
+pub use operator::init_ftp_operator;
 pub use operator::init_gcs_operator;
 #[cfg(feature = "storage-hdfs")]
 pub use operator::init_hdfs_operator;

@@ -8,6 +8,7 @@ edition = "2021"
 
 [features]
 storage-hdfs = ["opendal/services-hdfs"]
+storage-ftp = ["opendal/services-ftp"]
 
 [dependencies]
 common-base = { path = "../base" }

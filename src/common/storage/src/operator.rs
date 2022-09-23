@@ -28,6 +28,8 @@ use opendal::layers::RetryLayer;
 use opendal::layers::TracingLayer;
 use opendal::services::azblob;
 use opendal::services::fs;
+#[cfg(feature = "storage-ftp")]
+use opendal::services::ftp;
 use opendal::services::gcs;
 use opendal::services::http;
 use opendal::services::memory;
@@ -49,6 +51,8 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
     Ok(match &cfg {
         StorageParams::Azblob(cfg) => init_azblob_operator(cfg)?,
         StorageParams::Fs(cfg) => init_fs_operator(cfg)?,
+        #[cfg(feature = "storage-ftp")]
+        StorageParams::Ftp(cfg) => init_ftp_operator(cfg)?,
         StorageParams::Gcs(cfg) => init_gcs_operator(cfg)?,
         #[cfg(feature = "storage-hdfs")]
         StorageParams::Hdfs(cfg) => init_hdfs_operator(cfg)?,
@@ -91,6 +95,23 @@ pub fn init_fs_operator(cfg: &StorageFsConfig) -> Result<Operator> {
     builder.root(&path);
 
     Ok(Operator::new(builder.build()?).layer(LoggingLayer))
+}
+
+/// init_ftp_operator will init a opendal ftp operator.
+#[cfg(feature = "storage-ftp")]
+pub fn init_ftp_operator(cfg: &super::StorageFtpConfig) -> Result<Operator> {
+    let mut builder = ftp::Builder::default();
+
+    let bd = builder
+        .endpoint(cfg.endpoint.as_str())
+        .user(cfg.username.as_str())
+        .password(cfg.password.as_str())
+        .root(cfg.root.as_str());
+    if cfg.secure {
+        bd.enable_secure();
+    }
+    let backend = bd.build()?;
+    Ok(Operator::new(backend).layer(LoggingLayer))
 }
 
 /// init_gcs_operator will init a opendal gcs operator.

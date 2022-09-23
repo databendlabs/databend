@@ -73,6 +73,15 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
             account_key: l.connection.get("account_key").cloned().unwrap_or_default(),
             root: root.to_string(),
         }),
+        #[cfg(feature = "storage-ftp")]
+        Scheme::Ftp => StorageParams::Ftp(crate::StorageFtpConfig {
+            endpoint: l.name.clone(),
+            root: root.to_string(),
+            username: l.connection.get("username").cloned().unwrap_or_default(),
+            password: l.connection.get("password").cloned().unwrap_or_default(),
+            secure: l.protocol.starts_with("ftps")
+                || l.connection.get("secure") == Some(&"true".to_string()),
+        }),
         Scheme::Gcs => StorageParams::Gcs(crate::StorageGcsConfig {
             endpoint_url: l
                 .connection
