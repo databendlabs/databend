@@ -182,9 +182,8 @@ impl RaftNetwork<LogEntry> for Network {
             match resp {
                 Ok(resp) => {
                     mes = resp.into_inner();
-                    // clean up
-                    last_err = None;
-                    break;
+                    let resp = serde_json::from_str(&mes.data)?;
+                    return Ok(resp);
                 }
                 Err(e) => {
                     incr_meta_metrics_sent_failure_to_peer(&target);
@@ -235,9 +234,11 @@ impl RaftNetwork<LogEntry> for Network {
                     incr_meta_metrics_snapshot_send_success_to_peer(&target);
                     incr_meta_metrics_snapshot_send_inflights_to_peer(&target, -1);
                     mes = resp.into_inner();
-                    // clean up
-                    last_err = None;
-                    break;
+                    let resp = serde_json::from_str(&mes.data)?;
+
+                    sample_meta_metrics_snapshot_sent(&target, start.elapsed().as_secs() as f64);
+
+                    return Ok(resp);
                 }
                 Err(e) => {
                     incr_meta_metrics_sent_failure_to_peer(&target);
@@ -280,10 +281,9 @@ impl RaftNetwork<LogEntry> for Network {
 
             match resp {
                 Ok(resp) => {
-                    // clean up
-                    last_err = None;
                     mes = resp.into_inner();
-                    break;
+                    let resp = serde_json::from_str(&mes.data)?;
+                    return Ok(resp);
                 }
                 Err(e) => {
                     incr_meta_metrics_sent_failure_to_peer(&target);
