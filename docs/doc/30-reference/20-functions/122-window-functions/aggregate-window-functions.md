@@ -1,5 +1,5 @@
 ---
-title: Aggregate Window Functions
+title: (draft) Aggregate Window Functions
 ---
 
 An aggregate window function comes with an aggregate function and an OVER clause. It operates on a set of rows and returns a single value for each row from the underlying query. The OVER clause indicates how to partition the rows in the result set. 
