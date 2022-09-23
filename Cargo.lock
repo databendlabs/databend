@@ -1074,10 +1074,8 @@ dependencies = [
  "common-meta-types",
  "common-pipeline-core",
  "common-settings",
- "common-users",
  "dyn-clone",
  "opendal",
- "parking_lot 0.12.1",
 ]
 
 [[package]]
