@@ -49,7 +49,6 @@ const MIN_ROW_PER_BLOCK: usize = 800 * 1000;
 pub enum InputPlan {
     CopyInto(Box<CopyIntoPlan>),
     StreamingLoad(StreamPlan),
-    Clickhouse,
 }
 
 impl InputPlan {
@@ -69,6 +68,7 @@ pub struct CopyIntoPlan {
 
 #[derive(Debug)]
 pub struct StreamPlan {
+    pub is_multi_part: bool,
     pub compression: StageFileCompression,
 }
 
@@ -215,6 +215,7 @@ impl InputContext {
         settings: Arc<Settings>,
         schema: DataSchemaRef,
         scan_progress: Arc<Progress>,
+        is_multi_part: bool,
     ) -> Result<Self> {
         let format_type =
             StageFileFormatType::from_str(format_name).map_err(ErrorCode::UnknownFormat)?;
@@ -238,7 +239,10 @@ impl InputContext {
         } else {
             StageFileCompression::Auto
         };
-        let plan = StreamPlan { compression };
+        let plan = StreamPlan {
+            is_multi_part,
+            compression,
+        };
 
         Ok(InputContext {
             format,
@@ -294,7 +298,6 @@ impl InputContext {
         let opt = match &self.plan {
             InputPlan::CopyInto(p) => p.stage_info.file_format_options.compression,
             InputPlan::StreamingLoad(p) => p.compression,
-            _ => StageFileCompression::None,
         };
         Self::get_compression_alg_copy(opt, path)
     }
