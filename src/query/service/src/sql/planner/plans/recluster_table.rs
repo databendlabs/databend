@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,7 +11,27 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+use std::sync::Arc;
 
-mod plan_extras;
-mod plan_partition;
-mod test;
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
+use common_planner::MetadataRef;
+
+use crate::sql::plans::Scalar;
+
+#[derive(Clone, Debug)]
+pub struct ReclusterTablePlan {
+    pub tenant: String,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    pub is_final: bool,
+    pub metadata: MetadataRef,
+    pub push_downs: Option<Scalar>,
+}
+
+impl ReclusterTablePlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}

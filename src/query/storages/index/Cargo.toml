@@ -18,7 +18,7 @@ common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
 common-functions = { path = "../../functions" }
 common-fuse-meta = { path = "../fuse-meta" }
-common-legacy-planners = { path = "../../legacy-planners" }
+common-legacy-expression = { path = "../../legacy-expression" }
 common-pipeline-transforms = { path = "../../pipeline/transforms" }
 
 bincode = { version = "2.0.0-rc.1", features = ["serde", "std", "alloc"] }

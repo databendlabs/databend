@@ -1,3 +1,3 @@
-cargo-audit@0.16.0
-cargo-udeps@0.1.29
-taplo-cli@0.6.3
+cargo-audit@0.17.0
+cargo-udeps@0.1.34
+taplo-cli@0.7.0

@@ -45,6 +45,7 @@ common-hashtable = { path = "../../common/hashtable" }
 common-hive-meta-store = { path = "../storages/hive-meta-store", optional = true }
 common-http = { path = "../../common/http" }
 common-io = { path = "../../common/io" }
+common-legacy-expression = { path = "../legacy-expression" }
 common-legacy-parser = { path = "../legacy-parser" }
 common-legacy-planners = { path = "../legacy-planners" }
 common-management = { path = "../management" }

@@ -20,8 +20,8 @@ use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
 
 use crate::validate_function_arg;
-use crate::Expression;
 use crate::ExpressionVisitor;
+use crate::LegacyExpression;
 use crate::Recursion;
 
 pub struct ExpressionDataTypeVisitor {
@@ -76,31 +76,31 @@ impl ExpressionDataTypeVisitor {
 }
 
 impl ExpressionVisitor for ExpressionDataTypeVisitor {
-    fn pre_visit(self, _expr: &Expression) -> Result<Recursion<Self>> {
+    fn pre_visit(self, _expr: &LegacyExpression) -> Result<Recursion<Self>> {
         Ok(Recursion::Continue(self))
     }
 
-    fn post_visit(mut self, expr: &Expression) -> Result<Self> {
+    fn post_visit(mut self, expr: &LegacyExpression) -> Result<Self> {
         match expr {
-            Expression::Column(s) => {
+            LegacyExpression::Column(s) => {
                 let field = self.input_schema.field_with_name(s)?;
                 self.stack.push(field.data_type().clone());
                 Ok(self)
             }
-            Expression::Wildcard => Result::Err(ErrorCode::IllegalDataType(
+            LegacyExpression::Wildcard => Result::Err(ErrorCode::IllegalDataType(
                 "Wildcard expressions are not valid to get return type",
             )),
-            Expression::QualifiedColumn(_) => Err(ErrorCode::LogicalError(
+            LegacyExpression::QualifiedColumn(_) => Err(ErrorCode::LogicalError(
                 "QualifiedColumn should be resolve in analyze.",
             )),
-            Expression::Literal { data_type, .. } => {
+            LegacyExpression::Literal { data_type, .. } => {
                 self.stack.push(data_type.clone());
                 Ok(self)
             }
-            Expression::BinaryExpression { op, .. } => self.visit_function(op, 2),
-            Expression::UnaryExpression { op, .. } => self.visit_function(op, 1),
-            Expression::ScalarFunction { op, args } => self.visit_function(op, args.len()),
-            expr @ Expression::AggregateFunction { args, .. } => {
+            LegacyExpression::BinaryExpression { op, .. } => self.visit_function(op, 2),
+            LegacyExpression::UnaryExpression { op, .. } => self.visit_function(op, 1),
+            LegacyExpression::ScalarFunction { op, args } => self.visit_function(op, args.len()),
+            expr @ LegacyExpression::AggregateFunction { args, .. } => {
                 // Pop arguments.
                 for index in 0..args.len() {
                     if self.stack.pop().is_none() {
@@ -119,7 +119,7 @@ impl ExpressionVisitor for ExpressionDataTypeVisitor {
                 Ok(self)
             }
 
-            Expression::Cast { data_type, .. } => {
+            LegacyExpression::Cast { data_type, .. } => {
                 let inner_type = match self.stack.pop() {
                     None => Err(ErrorCode::LogicalError(
                         "Cast expr expected 1 arguments, actual 0.",
@@ -130,8 +130,8 @@ impl ExpressionVisitor for ExpressionDataTypeVisitor {
                 self.stack.push(inner_type.clone());
                 Ok(self)
             }
-            Expression::MapAccess { args, .. } => self.visit_function("get", args.len()),
-            Expression::Alias(_, _) | Expression::Sort { .. } => Ok(self),
+            LegacyExpression::MapAccess { args, .. } => self.visit_function("get", args.len()),
+            LegacyExpression::Alias(_, _) | LegacyExpression::Sort { .. } => Ok(self),
         }
     }
 }
@@ -148,7 +148,7 @@ impl RequireColumnsVisitor {
         }
     }
 
-    pub fn collect_columns_from_expr(expr: &Expression) -> Result<HashSet<String>> {
+    pub fn collect_columns_from_expr(expr: &LegacyExpression) -> Result<HashSet<String>> {
         let mut visitor = Self::default();
         visitor = expr.accept(visitor)?;
         Ok(visitor.required_columns)
@@ -156,9 +156,9 @@ impl RequireColumnsVisitor {
 }
 
 impl ExpressionVisitor for RequireColumnsVisitor {
-    fn pre_visit(self, expr: &Expression) -> Result<Recursion<Self>> {
+    fn pre_visit(self, expr: &LegacyExpression) -> Result<Recursion<Self>> {
         match expr {
-            Expression::Column(c) => {
+            LegacyExpression::Column(c) => {
                 let mut v = self;
                 v.required_columns.insert(c.clone());
                 Ok(Recursion::Continue(v))

@@ -26,9 +26,9 @@ use common_fuse_meta::meta::ClusterKey;
 use common_fuse_meta::meta::Statistics as FuseStatistics;
 use common_fuse_meta::meta::TableSnapshot;
 use common_fuse_meta::meta::Versioned;
+use common_legacy_expression::LegacyExpression;
 use common_legacy_parser::ExpressionParser;
 use common_legacy_planners::DeletePlan;
-use common_legacy_planners::Expression;
 use common_legacy_planners::Extras;
 use common_legacy_planners::Partitions;
 use common_legacy_planners::ReadDataSourcePlan;
@@ -59,7 +59,7 @@ pub struct FuseTable {
     pub(crate) table_info: TableInfo,
     pub(crate) meta_location_generator: TableMetaLocationGenerator,
 
-    pub(crate) cluster_keys: Vec<Expression>,
+    pub(crate) cluster_keys: Vec<LegacyExpression>,
     pub(crate) cluster_key_meta: Option<ClusterKey>,
     pub(crate) read_only: bool,
 }
@@ -205,7 +205,7 @@ impl Table for FuseTable {
         true
     }
 
-    fn cluster_keys(&self) -> Vec<Expression> {
+    fn cluster_keys(&self) -> Vec<LegacyExpression> {
         self.cluster_keys.clone()
     }
 

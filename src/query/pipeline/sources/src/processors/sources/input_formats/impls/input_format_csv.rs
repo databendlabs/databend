@@ -22,9 +22,11 @@ use common_formats::verbose_string;
 use common_io::prelude::FormatSettings;
 use common_io::prelude::NestedCheckpointReader;
 use common_meta_types::StageFileFormatType;
+use common_settings::Settings;
 use csv_core::ReadRecordResult;
 
 use crate::processors::sources::input_formats::delimiter::RecordDelimiter;
+use crate::processors::sources::input_formats::input_format_text::get_time_zone;
 use crate::processors::sources::input_formats::input_format_text::AligningState;
 use crate::processors::sources::input_formats::input_format_text::BlockBuilder;
 use crate::processors::sources::input_formats::input_format_text::InputFormatTextBase;
@@ -57,7 +59,9 @@ impl InputFormatCSV {
                     verbose_string(buf, &mut value);
                     let err_msg = format!(
                         "fail to decode column {}: {:?}, [column_data]=[{}]",
-                        c, e, value
+                        c,
+                        e.message(),
+                        value
                     );
                     return Err(csv_error(&err_msg, path, row_index));
                 };
@@ -71,6 +75,25 @@ impl InputFormatCSV {
 impl InputFormatTextBase for InputFormatCSV {
     fn format_type() -> StageFileFormatType {
         StageFileFormatType::Csv
+    }
+
+    fn get_format_settings(settings: &Arc<Settings>) -> Result<FormatSettings> {
+        let timezone = get_time_zone(settings)?;
+        let quote_char = settings.get_quote_char()?.into_bytes();
+        if quote_char.len() != 1 {
+            return Err(ErrorCode::InvalidArgument(
+                "quote_char can only contain one char",
+            ));
+        }
+        Ok(FormatSettings {
+            record_delimiter: settings.get_record_delimiter()?.into_bytes(),
+            field_delimiter: settings.get_field_delimiter()?.into_bytes(),
+            empty_as_default: settings.get_empty_as_default()? > 0,
+            quote_char: quote_char[0],
+            null_bytes: vec![b'\\', b'N'],
+            timezone,
+            ..Default::default()
+        })
     }
 
     fn default_field_delimiter() -> u8 {
@@ -294,6 +317,7 @@ impl CsvReaderState {
     pub(crate) fn create(ctx: &Arc<InputContext>) -> Self {
         let reader = csv_core::ReaderBuilder::new()
             .delimiter(ctx.field_delimiter)
+            .quote(ctx.format_settings.quote_char)
             .terminator(match ctx.record_delimiter {
                 RecordDelimiter::Crlf => csv_core::Terminator::CRLF,
                 RecordDelimiter::Any(v) => csv_core::Terminator::Any(v),

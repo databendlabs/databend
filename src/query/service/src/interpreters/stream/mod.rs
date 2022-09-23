@@ -14,4 +14,4 @@
 
 mod processor_executor_stream;
 
-pub use processor_executor_stream::ProcessorExecutorStream;
+pub use processor_executor_stream::PullingExecutorStream;

@@ -22,7 +22,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::Expression;
+use common_legacy_expression::LegacyExpression;
 use common_pipeline_transforms::processors::transforms::transform_expression_executor::ExpressionExecutor;
 use tracing::debug;
 
@@ -217,7 +217,7 @@ impl BloomFilterIndexer {
     /// The 'true' doesn't really mean the expression is true, but 'maybe true'.
     /// That is to say, you still need the load all data and run the execution.
 
-    pub fn maybe_true(&self, expr: &Expression) -> Result<bool> {
+    pub fn maybe_true(&self, expr: &LegacyExpression) -> Result<bool> {
         Ok(self.eval(expr)? != BloomFilterExprEvalResult::False)
     }
 
@@ -227,15 +227,17 @@ impl BloomFilterIndexer {
     ///
     /// Otherwise return either Unknown or NotApplicable.
     #[tracing::instrument(level = "debug", name = "bloom_filter_index_eval", skip_all)]
-    pub fn eval(&self, expr: &Expression) -> Result<BloomFilterExprEvalResult> {
+    pub fn eval(&self, expr: &LegacyExpression) -> Result<BloomFilterExprEvalResult> {
         // TODO: support multiple columns and other ops like 'in' ...
         match expr {
-            Expression::BinaryExpression { left, op, right } => match op.to_lowercase().as_str() {
-                "=" => self.eval_equivalent_expression(left, right),
-                "and" => self.eval_logical_and(left, right),
-                "or" => self.eval_logical_or(left, right),
-                _ => Ok(BloomFilterExprEvalResult::NotApplicable),
-            },
+            LegacyExpression::BinaryExpression { left, op, right } => {
+                match op.to_lowercase().as_str() {
+                    "=" => self.eval_equivalent_expression(left, right),
+                    "and" => self.eval_logical_and(left, right),
+                    "or" => self.eval_logical_or(left, right),
+                    _ => Ok(BloomFilterExprEvalResult::NotApplicable),
+                }
+            }
             _ => Ok(BloomFilterExprEvalResult::NotApplicable),
         }
     }
@@ -243,16 +245,16 @@ impl BloomFilterIndexer {
     // Evaluate the equivalent expression like "name='Alice'"
     fn eval_equivalent_expression(
         &self,
-        left: &Expression,
-        right: &Expression,
+        left: &LegacyExpression,
+        right: &LegacyExpression,
     ) -> Result<BloomFilterExprEvalResult> {
         let schema: &DataSchemaRef = &self.source_schema;
 
         // For now only support single column like "name = 'Alice'"
         match (left, right) {
             // match the expression of 'column_name = literal constant'
-            (Expression::Column(column), Expression::Literal { value, .. })
-            | (Expression::Literal { value, .. }, Expression::Column(column)) => {
+            (LegacyExpression::Column(column), LegacyExpression::Literal { value, .. })
+            | (LegacyExpression::Literal { value, .. }, LegacyExpression::Column(column)) => {
                 // find the corresponding column from source table
                 match schema.column_with_name(column) {
                     Some((_index, data_field)) => {
@@ -272,8 +274,8 @@ impl BloomFilterIndexer {
     // Evaluate the logical and expression
     fn eval_logical_and(
         &self,
-        left: &Expression,
-        right: &Expression,
+        left: &LegacyExpression,
+        right: &LegacyExpression,
     ) -> Result<BloomFilterExprEvalResult> {
         let left_result = self.eval(left)?;
         if left_result == BloomFilterExprEvalResult::False {
@@ -297,8 +299,8 @@ impl BloomFilterIndexer {
     // Evaluate the logical or expression
     fn eval_logical_or(
         &self,
-        left: &Expression,
-        right: &Expression,
+        left: &LegacyExpression,
+        right: &LegacyExpression,
     ) -> Result<BloomFilterExprEvalResult> {
         let left_result = self.eval(left)?;
         let right_result = self.eval(right)?;
@@ -484,8 +486,11 @@ impl BloomFilter {
         let input_field = DataField::new(input_column, column.data_type());
         let input_schema = Arc::new(DataSchema::new(vec![input_field]));
         let args = vec![
-            Expression::Column(String::from(input_column)),
-            Expression::create_literal_with_type(DataValue::UInt64(seed), UInt64Type::new_impl()),
+            LegacyExpression::Column(String::from(input_column)),
+            LegacyExpression::create_literal_with_type(
+                DataValue::UInt64(seed),
+                UInt64Type::new_impl(),
+            ),
         ];
 
         let output_column = "output";
@@ -497,9 +502,12 @@ impl BloomFilter {
         let output_field = DataField::new(output_column, output_data_type);
         let output_schema = DataSchemaRefExt::create(vec![output_field]);
 
-        let expr: Expression = Expression::Alias(
+        let expr: LegacyExpression = LegacyExpression::Alias(
             String::from(output_column),
-            Box::new(Expression::create_scalar_function("city64WithSeed", args)),
+            Box::new(LegacyExpression::create_scalar_function(
+                "city64WithSeed",
+                args,
+            )),
         );
         let expr_executor = ExpressionExecutor::try_create(
             ctx,
