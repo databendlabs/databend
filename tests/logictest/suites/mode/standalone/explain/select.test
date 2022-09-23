@@ -140,13 +140,11 @@ statement query T
 explain select a from (select number as a, number+1 as b from numbers(1));
 
 ----
-Project
-├── columns: [number (#0)]
-└── TableScan
-    ├── table: default.system.numbers
-    ├── read rows: 1
-    ├── read bytes: 8
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    └── push downs: [filters: [], limit: NONE]
+TableScan
+├── table: default.system.numbers
+├── read rows: 1
+├── read bytes: 8
+├── partitions total: 1
+├── partitions scanned: 1
+└── push downs: [filters: [], limit: NONE]
 

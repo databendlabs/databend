@@ -18,6 +18,7 @@ use common_ast::ast::BinaryOperator;
 use common_datavalues::BooleanType;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
+use common_datavalues::NullableType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
@@ -532,7 +533,9 @@ pub struct SubqueryExpr {
     pub child_expr: Option<Box<Scalar>>,
     // Comparison operator for Any/All, such as t1.a = Any (...), `compare_op` is `=`.
     pub compare_op: Option<ComparisonOp>,
-    pub index: Option<IndexType>,
+    // Output column of Any/All and scalar subqueries.
+    pub output_column: IndexType,
+    pub projection_index: Option<IndexType>,
     pub data_type: Box<DataTypeImpl>,
     pub allow_multi_rows: bool,
     pub outer_columns: ColumnSet,
@@ -560,7 +563,7 @@ impl ScalarExpr for SubqueryExpr {
             SubqueryType::Any
             | SubqueryType::All
             | SubqueryType::Exists
-            | SubqueryType::NotExists => BooleanType::new_impl(),
+            | SubqueryType::NotExists => NullableType::new_impl(BooleanType::new_impl()),
         }
     }
 

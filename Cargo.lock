@@ -1074,10 +1074,8 @@ dependencies = [
  "common-meta-types",
  "common-pipeline-core",
  "common-settings",
- "common-users",
  "dyn-clone",
  "opendal",
- "parking_lot 0.12.1",
 ]
 
 [[package]]
@@ -1932,6 +1930,7 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
+ "serde_repr",
  "serfig",
  "snailquote",
  "thrift",
@@ -5004,8 +5003,8 @@ dependencies = [
 
 [[package]]
 name = "openraft"
-version = "0.7.2"
-source = "git+https://github.com/datafuselabs/openraft?tag=v0.7.2#6057abbf355993a81537c3d28d914adad10b90ae"
+version = "0.7.3"
+source = "git+https://github.com/datafuselabs/openraft?tag=v0.7.3#2c06dc4d1e2973e4a91a9fb4a3345d1ce9055fc2"
 dependencies = [
  "anyerror",
  "anyhow",

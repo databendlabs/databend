@@ -46,16 +46,6 @@ impl InterpreterFactory {
             e
         })?;
 
-        let inner = InterpreterFactory::create_interpreter(ctx.clone(), plan)?;
-
-        Ok(Arc::new(InterceptorInterpreter::create(
-            ctx,
-            inner,
-            plan.to_string(),
-        )))
-    }
-
-    fn create_interpreter(ctx: Arc<QueryContext>, plan: &Plan) -> Result<InterpreterPtr> {
         match plan {
             Plan::Query {
                 s_expr,
