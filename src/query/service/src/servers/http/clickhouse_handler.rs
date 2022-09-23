@@ -423,7 +423,7 @@ async fn gen_batches(
     tx: Sender<Result<StreamingReadBatch>>,
     compression: Option<CompressAlgorithm>,
 ) {
-    let buf = &data.as_bytes()[start..];
+    let buf = &data.trim_start().as_bytes()[start..];
     let buf_size = buf.len();
     let mut is_start = true;
     let mut start = 0;
