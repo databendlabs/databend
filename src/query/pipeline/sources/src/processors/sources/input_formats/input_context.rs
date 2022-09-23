@@ -12,9 +12,14 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::fmt::Debug;
+use std::fmt::Formatter;
+use std::mem;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::Mutex;
 
+use common_base::base::tokio::sync::mpsc::Receiver;
 use common_base::base::Progress;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -35,22 +40,73 @@ use crate::processors::sources::input_formats::impls::input_format_tsv::InputFor
 use crate::processors::sources::input_formats::input_format::FileInfo;
 use crate::processors::sources::input_formats::input_format::SplitInfo;
 use crate::processors::sources::input_formats::input_format_text::InputFormatText;
+use crate::processors::sources::input_formats::input_pipeline::StreamingReadBatch;
 use crate::processors::sources::input_formats::InputFormat;
 
+const MIN_ROW_PER_BLOCK: usize = 800 * 1000;
+
+#[derive(Debug)]
 pub enum InputPlan {
     CopyInto(Box<CopyIntoPlan>),
-    StreamingLoad,
+    StreamingLoad(StreamPlan),
+    Clickhouse,
 }
 
+impl InputPlan {
+    pub fn as_stream(&self) -> Result<&StreamPlan> {
+        match self {
+            InputPlan::StreamingLoad(p) => Ok(p),
+            _ => Err(ErrorCode::UnexpectedError("expect StreamingLoad")),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct CopyIntoPlan {
     pub stage_info: UserStageInfo,
     pub files: Vec<String>,
 }
 
+#[derive(Debug)]
+pub struct StreamPlan {
+    pub compression: StageFileCompression,
+}
+
+pub enum InputSource {
+    Operator(Operator),
+    // need Mutex because Arc<InputContext> is immutable and mpsc receiver can not clone
+    Stream(Mutex<Option<Receiver<Result<StreamingReadBatch>>>>),
+}
+
+impl InputSource {
+    pub fn take_receiver(&self) -> Result<Receiver<Result<StreamingReadBatch>>> {
+        match &self {
+            InputSource::Operator(_) => Err(ErrorCode::UnexpectedError(
+                "should not happen: copy with streaming source",
+            )),
+            InputSource::Stream(i) => {
+                let mut guard = i.lock().expect("must success");
+                let opt = &mut *guard;
+                let r = mem::take(opt).expect("must success");
+                Ok(r)
+            }
+        }
+    }
+
+    pub fn get_operator(&self) -> Result<Operator> {
+        match self {
+            InputSource::Operator(op) => Ok(op.clone()),
+            InputSource::Stream(_) => Err(ErrorCode::UnexpectedError(
+                "should not happen: copy with streaming source",
+            )),
+        }
+    }
+}
+
 pub struct InputContext {
     pub plan: InputPlan,
     pub schema: DataSchemaRef,
-    pub operator: Operator,
+    pub source: InputSource,
     pub format: Arc<dyn InputFormat>,
     pub splits: Vec<SplitInfo>,
 
@@ -67,6 +123,21 @@ pub struct InputContext {
     pub rows_per_block: usize,
 
     pub scan_progress: Arc<Progress>,
+}
+
+impl Debug for InputContext {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InputContext")
+            .field("plan", &self.plan)
+            .field("rows_to_skip", &self.rows_to_skip)
+            .field("field_delimiter", &self.field_delimiter)
+            .field("record_delimiter", &self.record_delimiter)
+            .field("format_settings", &self.format_settings)
+            .field("rows_per_block", &self.rows_per_block)
+            .field("read_batch_size", &self.read_batch_size)
+            .field("num_splits", &self.splits.len())
+            .finish()
+    }
 }
 
 impl InputContext {
@@ -104,7 +175,7 @@ impl InputContext {
         let format = Self::get_input_format(&file_format_options.format)?;
         let file_infos = Self::get_file_infos(&format, &operator, &plan).await?;
         let splits = format.split_files(file_infos, split_size);
-        let rows_per_block = settings.get_max_block_size()? as usize;
+        let rows_per_block = MIN_ROW_PER_BLOCK;
         let record_delimiter = {
             if file_format_options.record_delimiter.is_empty() {
                 format.default_record_delimiter()
@@ -124,34 +195,33 @@ impl InputContext {
         Ok(InputContext {
             format,
             schema,
-            operator,
             splits,
             settings,
             format_settings,
             record_delimiter,
             rows_per_block,
             read_batch_size,
-            plan: InputPlan::CopyInto(plan),
             rows_to_skip,
             field_delimiter,
             scan_progress,
+            source: InputSource::Operator(operator),
+            plan: InputPlan::CopyInto(plan),
         })
     }
 
-    #[allow(unused)]
-    async fn try_create_from_insert(
+    pub async fn try_create_from_insert(
         format_name: &str,
-        operator: Operator,
+        stream_receiver: Receiver<Result<StreamingReadBatch>>,
         settings: Arc<Settings>,
-        format_settings: FormatSettings,
         schema: DataSchemaRef,
         scan_progress: Arc<Progress>,
     ) -> Result<Self> {
-        let format =
+        let format_type =
             StageFileFormatType::from_str(format_name).map_err(ErrorCode::UnknownFormat)?;
-        let format = Self::get_input_format(&format)?;
+        let format = Self::get_input_format(&format_type)?;
+        let format_settings = format.get_format_settings(&settings)?;
         let read_batch_size = settings.get_input_read_buffer_size()? as usize;
-        let rows_per_block = settings.get_max_block_size()? as usize;
+        let rows_per_block = MIN_ROW_PER_BLOCK;
         let field_delimiter = settings.get_field_delimiter()?;
         let field_delimiter = {
             if field_delimiter.is_empty() {
@@ -162,10 +232,17 @@ impl InputContext {
         };
         let record_delimiter = RecordDelimiter::try_from(&settings.get_record_delimiter()?[..])?;
         let rows_to_skip = settings.get_skip_header()? as usize;
+        let compression = settings.get_compression()?;
+        let compression = if !compression.is_empty() {
+            StageFileCompression::from_str(&compression).map_err(ErrorCode::BadArguments)?
+        } else {
+            StageFileCompression::Auto
+        };
+        let plan = StreamPlan { compression };
+
         Ok(InputContext {
             format,
             schema,
-            operator,
             settings,
             format_settings,
             record_delimiter,
@@ -174,8 +251,9 @@ impl InputContext {
             field_delimiter,
             rows_to_skip,
             scan_progress,
-            plan: InputPlan::StreamingLoad,
-            splits: Default::default(),
+            source: InputSource::Stream(Mutex::new(Some(stream_receiver))),
+            plan: InputPlan::StreamingLoad(plan),
+            splits: vec![],
         })
     }
 
@@ -215,6 +293,7 @@ impl InputContext {
     pub fn get_compression_alg(&self, path: &str) -> Result<Option<CompressAlgorithm>> {
         let opt = match &self.plan {
             InputPlan::CopyInto(p) => p.stage_info.file_format_options.compression,
+            InputPlan::StreamingLoad(p) => p.compression,
             _ => StageFileCompression::None,
         };
         Self::get_compression_alg_copy(opt, path)

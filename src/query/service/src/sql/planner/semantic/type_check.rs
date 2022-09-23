@@ -52,7 +52,7 @@ use common_functions::is_builtin_function;
 use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::TupleFunction;
-use common_legacy_planners::validate_function_arg;
+use common_legacy_expression::validate_function_arg;
 use common_planner::MetadataRef;
 use common_users::UserApiProvider;
 
@@ -599,28 +599,20 @@ impl<'a> TypeChecker<'a> {
                 ))
             }
 
-            Expr::Exists {
-                subquery,
-                not,
-                span,
-                ..
-            } => {
-                if *not {
-                    return self
-                        .resolve_function(
-                            span,
-                            "not",
-                            &[&Expr::Exists {
-                                span,
-                                not: false,
-                                subquery: subquery.clone(),
-                            }],
-                            None,
-                        )
-                        .await;
-                }
-                self.resolve_subquery(SubqueryType::Exists, subquery, true, None, None, None)
-                    .await?
+            Expr::Exists { subquery, not, .. } => {
+                self.resolve_subquery(
+                    if !*not {
+                        SubqueryType::Exists
+                    } else {
+                        SubqueryType::NotExists
+                    },
+                    subquery,
+                    true,
+                    None,
+                    None,
+                    None,
+                )
+                .await?
             }
 
             Expr::Subquery { subquery, .. } => {
@@ -1342,7 +1334,8 @@ impl<'a> TypeChecker<'a> {
             subquery: Box::new(s_expr),
             child_expr: child_scalar,
             compare_op,
-            index: None,
+            output_column: output_context.columns[0].index,
+            projection_index: None,
             data_type: data_type.clone(),
             allow_multi_rows,
             typ,

@@ -70,9 +70,6 @@ impl<'a> Display for QueryFragmentActionsWrap<'a> {
         if !self.inner.fragment_actions.is_empty() {
             let fragment_action = &self.inner.fragment_actions[0];
             match &fragment_action.payload {
-                FragmentPayload::PlanV1(node) => {
-                    write!(f, "{}", node.display_indent_format(1))?;
-                }
                 FragmentPayload::PlanV2(node) => {
                     write!(f, "{}", node.format_indent(1))?;
                 }

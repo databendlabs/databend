@@ -12,16 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod plan_builder;
-mod plan_explain;
-mod plan_expression;
-mod plan_expression_monotonicity;
 mod plan_extras;
-mod plan_filter;
-mod plan_having;
-mod plan_limit;
 mod plan_partition;
-mod plan_projection;
-mod plan_rewriter;
-mod plan_select;
 mod test;

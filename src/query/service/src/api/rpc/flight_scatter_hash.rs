@@ -18,7 +18,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::Expression;
+use common_legacy_expression::LegacyExpression;
 
 use crate::api::rpc::flight_scatter::FlightScatter;
 use crate::pipelines::processors::transforms::ExpressionExecutor;
@@ -35,7 +35,7 @@ impl HashFlightScatter {
     pub fn try_create(
         ctx: Arc<QueryContext>,
         schema: DataSchemaRef,
-        expr: Option<Expression>,
+        expr: Option<LegacyExpression>,
         num: usize,
     ) -> Result<Self> {
         match expr {
@@ -63,7 +63,7 @@ impl HashFlightScatter {
     fn try_create_impl(
         schema: DataSchemaRef,
         num: usize,
-        expr: Expression,
+        expr: LegacyExpression,
         ctx: Arc<QueryContext>,
     ) -> Result<Self> {
         let expression = Self::expr_action(num, expr);
@@ -84,7 +84,7 @@ impl HashFlightScatter {
     fn expr_executor(
         ctx: Arc<QueryContext>,
         schema: DataSchemaRef,
-        expr: &Expression,
+        expr: &LegacyExpression,
     ) -> Result<ExpressionExecutor> {
         ExpressionExecutor::try_create(
             ctx,
@@ -96,16 +96,16 @@ impl HashFlightScatter {
         )
     }
 
-    fn expr_action(num: usize, expr: Expression) -> Expression {
-        Expression::ScalarFunction {
+    fn expr_action(num: usize, expr: LegacyExpression) -> LegacyExpression {
+        LegacyExpression::ScalarFunction {
             op: String::from("modulo"),
             args: vec![
-                Expression::Cast {
+                LegacyExpression::Cast {
                     expr: Box::new(expr),
                     data_type: u64::to_data_type(),
                     pg_style: false,
                 },
-                Expression::create_literal_with_type(
+                LegacyExpression::create_literal_with_type(
                     DataValue::UInt64(num as u64),
                     u64::to_data_type(),
                 ),

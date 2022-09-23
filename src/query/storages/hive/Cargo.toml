@@ -20,6 +20,7 @@ common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
 common-fuse-meta = { path = "../fuse-meta" }
 common-hive-meta-store = { path = "../hive-meta-store" }
+common-legacy-expression = { path = "../../legacy-expression" }
 common-legacy-planners = { path = "../../legacy-planners" }
 common-meta-app = { path = "../../../meta/app" }
 common-meta-types = { path = "../../../meta/types" }
@@ -29,10 +30,10 @@ common-storages-index = { path = "../index" }
 common-storages-util = { path = "../util" }
 
 async-recursion = "1.0.0"
-async-trait = "0.1.56"
-futures = "0.3.21"
+async-trait = "0.1.57"
+futures = "0.3.24"
 opendal = { version = "0.17.1", features = ["layers-retry"] }
-serde = { version = "1.0.137", features = ["derive"] }
+serde = { version = "1.0.144", features = ["derive"] }
 thrift = "0.15.0"
-tracing = "0.1.35"
+tracing = "0.1.36"
 typetag = "0.1.8"

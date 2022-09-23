@@ -25,7 +25,7 @@ use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::executor::PhysicalScalar;
-use crate::sql::PlanParser;
+use crate::sql::Planner;
 use crate::storages::view::view_table::QUERY;
 use crate::storages::view::view_table::VIEW_ENGINE;
 
@@ -59,9 +59,9 @@ impl Interpreter for DescribeTableInterpreter {
 
         let schema = if tbl_info.engine() == VIEW_ENGINE {
             if let Some(query) = tbl_info.options().get(QUERY) {
-                PlanParser::parse(self.ctx.clone(), query.as_str())
-                    .await?
-                    .schema()
+                let mut planner = Planner::new(self.ctx.clone());
+                let (plan, _, _) = planner.plan_sql(query).await?;
+                plan.schema()
             } else {
                 return Err(ErrorCode::LogicalError(
                     "Logical error, View Table must have a SelectQuery inside.",

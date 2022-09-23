@@ -21,6 +21,7 @@ common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
 common-functions = { path = "../../functions" }
 common-fuse-meta = { path = "../fuse-meta" }
+common-legacy-expression = { path = "../../legacy-expression" }
 common-legacy-parser = { path = "../../legacy-parser" }
 common-legacy-planners = { path = "../../legacy-planners" }
 common-meta-app = { path = "../../../meta/app" }
@@ -32,14 +33,14 @@ common-storages-index = { path = "../index" }
 common-storages-util = { path = "../util" }
 common-streams = { path = "../../streams" }
 
-async-trait = { version = "0.1.0", package = "async-trait-fn" }
+async-trait = { version = "0.1.57", package = "async-trait-fn" }
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
-chrono = "0.4.19"
-futures = "0.3.21"
-futures-util = "0.3.21"
+chrono = "0.4.22"
+futures = "0.3.24"
+futures-util = "0.3.24"
 opendal = { version = "0.17.1", features = ["layers-retry"] }
-serde = { version = "1.0.137", features = ["derive"] }
-serde_json = "1.0.81"
-tracing = "0.1.35"
+serde = { version = "1.0.144", features = ["derive"] }
+serde_json = "1.0.85"
+tracing = "0.1.36"
 typetag = "0.1.8"
 uuid = { version = "1.1.2", features = ["serde", "v4"] }

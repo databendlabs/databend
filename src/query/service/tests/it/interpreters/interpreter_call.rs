@@ -44,7 +44,7 @@ async fn test_call_interpreter() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "current_thread")]
 async fn test_call_fuse_snapshot_interpreter() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let mut planner = Planner::new(ctx.clone());
@@ -110,7 +110,7 @@ async fn test_call_fuse_snapshot_interpreter() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "current_thread")]
 async fn test_call_fuse_block_interpreter() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let mut planner = Planner::new(ctx.clone());

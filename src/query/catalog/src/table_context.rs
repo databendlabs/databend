@@ -21,17 +21,14 @@ use common_config::Config;
 use common_contexts::DalContext;
 use common_contexts::DalMetrics;
 use common_datablocks::DataBlock;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionContext;
 use common_io::prelude::FormatSettings;
 use common_legacy_planners::Partitions;
-use common_legacy_planners::PlanNode;
 use common_legacy_planners::ReadDataSourcePlan;
 use common_meta_types::UserInfo;
 use common_settings::Settings;
 use opendal::Operator;
-use parking_lot::Mutex;
 
 use crate::catalog::Catalog;
 use crate::cluster_info::Cluster;
@@ -65,15 +62,12 @@ pub trait TableContext: Send + Sync {
     fn get_write_progress_value(&self) -> ProgressValues;
     fn get_result_progress(&self) -> Arc<Progress>;
     fn get_result_progress_value(&self) -> ProgressValues;
-    fn get_error(&self) -> Arc<Mutex<Option<ErrorCode>>>;
-    fn get_error_value(&self) -> Option<ErrorCode>;
-    fn set_error(&self, err: ErrorCode);
     // Steal n partitions from the partition pool by the pipeline worker.
     // This also can steal the partitions from distributed node.
     fn try_get_partitions(&self, num: u64) -> Result<Partitions>;
     // Update the context partition pool from the pipeline builder.
     fn try_set_partitions(&self, partitions: Partitions) -> Result<()>;
-    fn attach_query_str(&self, query: &str);
+    fn attach_query_str(&self, kind: String, query: &str);
     fn get_fragment_id(&self) -> usize;
     fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>>;
     fn get_id(&self) -> String;
@@ -87,11 +81,12 @@ pub trait TableContext: Send + Sync {
     fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()>;
     fn get_format_settings(&self) -> Result<FormatSettings>;
     fn get_tenant(&self) -> String;
-    fn get_subquery_name(&self, _query: &PlanNode) -> String;
     /// Get the data accessor metrics.
     fn get_dal_metrics(&self) -> DalMetrics;
     /// Get the session running query.
     fn get_query_str(&self) -> String;
+    /// Get the kind of session running query.
+    fn get_query_kind(&self) -> String;
     // Get the storage data accessor operator from the session manager.
     fn get_storage_operator(&self) -> Result<Operator>;
     fn get_dal_context(&self) -> &DalContext;

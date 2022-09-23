@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 use std::borrow::Cow;
+use std::sync::Arc;
 
 use bstr::ByteSlice;
 use common_datavalues::DataSchemaRef;
@@ -22,7 +23,9 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
 use common_meta_types::StageFileFormatType;
+use common_settings::Settings;
 
+use crate::processors::sources::input_formats::input_format_text::get_time_zone;
 use crate::processors::sources::input_formats::input_format_text::AligningState;
 use crate::processors::sources::input_formats::input_format_text::BlockBuilder;
 use crate::processors::sources::input_formats::input_format_text::InputFormatTextBase;
@@ -70,6 +73,15 @@ impl InputFormatNDJson {
 impl InputFormatTextBase for InputFormatNDJson {
     fn format_type() -> StageFileFormatType {
         StageFileFormatType::NdJson
+    }
+
+    fn get_format_settings(settings: &Arc<Settings>) -> Result<FormatSettings> {
+        let timezone = get_time_zone(settings)?;
+        Ok(FormatSettings {
+            ident_case_sensitive: settings.get_unquoted_ident_case_sensitive()?,
+            timezone,
+            ..Default::default()
+        })
     }
 
     fn default_field_delimiter() -> u8 {

@@ -14,7 +14,6 @@
 
 mod access;
 
-mod async_insert_queue;
 mod interpreter_call;
 mod interpreter_cluster_key_alter;
 mod interpreter_cluster_key_drop;
@@ -24,7 +23,6 @@ mod interpreter_database_rename;
 mod interpreter_database_show_create;
 mod interpreter_empty;
 mod interpreter_explain;
-mod interpreter_factory_interceptor;
 mod interpreter_insert;
 mod interpreter_privilege_grant;
 mod interpreter_privilege_revoke;

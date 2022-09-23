@@ -107,7 +107,6 @@ pub struct ExecuteRunning {
     session: Arc<Session>,
     // mainly used to get progress for now
     ctx: Arc<QueryContext>,
-    interpreter: Arc<dyn Interpreter>,
 }
 
 pub struct ExecuteStopped {
@@ -174,10 +173,7 @@ impl Executor {
         match &guard.state {
             Starting(s) => {
                 if let Err(e) = &reason {
-                    s.ctx.set_error(e.clone());
-                    InterpreterQueryLog::create(s.ctx.clone(), "".to_string())
-                        .log_finish(SystemTime::now(), Some(e.clone()))
-                        .await
+                    InterpreterQueryLog::log_finish(&s.ctx, SystemTime::now(), Some(e.clone()))
                         .unwrap_or_else(|e| error!("fail to write query_log {:?}", e));
                 }
                 guard.state = Stopped(ExecuteStopped {
@@ -190,19 +186,15 @@ impl Executor {
             Running(r) => {
                 // release session
                 if kill {
-                    r.session.force_kill_query(ErrorCode::AbortedQuery(
-                        "Aborted query, because the server is shutting down or the query was killed",
-                    ));
+                    if let Err(error) = &reason {
+                        r.session.force_kill_query(error.clone());
+                    } else {
+                        r.session.force_kill_query(ErrorCode::AbortedQuery(
+                            "Aborted query, because the server is shutting down or the query was killed",
+                        ));
+                    }
                 }
-                if let Err(e) = &reason {
-                    r.ctx.set_error(e.clone());
-                }
-                // Write Finish to query log table.
-                let _ = r
-                    .interpreter
-                    .finish()
-                    .await
-                    .map_err(|e| error!("interpreter.finish error: {:?}", e));
+
                 guard.state = Stopped(ExecuteStopped {
                     stats: Progresses::from_context(&r.ctx),
                     reason,
@@ -230,22 +222,17 @@ impl ExecuteState {
         ctx: Arc<QueryContext>,
         block_buffer: Arc<BlockBuffer>,
     ) -> Result<ExecuteRunning> {
-        ctx.attach_query_str(sql);
-
         let mut planner = Planner::new(ctx.clone());
         let (plan, _, _) = planner.plan_sql(sql).await?;
+        ctx.attach_query_str(plan.to_string(), sql);
+
         let is_select = matches!(&plan, Plan::Query { .. });
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
 
         if is_select {
-            let _ = interpreter
-                .start()
-                .await
-                .map_err(|e| error!("interpreter.start.error: {:?}", e));
             let running_state = ExecuteRunning {
                 session,
                 ctx: ctx.clone(),
-                interpreter: interpreter.clone(),
             };
             ctx.attach_http_query(HttpQueryHandle {
                 executor: executor.clone(),
@@ -254,16 +241,9 @@ impl ExecuteState {
             interpreter.execute(ctx).await?;
             Ok(running_state)
         } else {
-            // Write Start to query log table.
-            let _ = interpreter
-                .start()
-                .await
-                .map_err(|e| error!("interpreter.start.error: {:?}", e));
-
             let running_state = ExecuteRunning {
                 session,
                 ctx: ctx.clone(),
-                interpreter: interpreter.clone(),
             };
 
             let executor_clone = executor.clone();
