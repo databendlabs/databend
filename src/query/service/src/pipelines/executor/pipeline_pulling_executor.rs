@@ -152,7 +152,7 @@ impl PipelinePullingExecutor {
         let threads_executor = self.executor.clone();
         let thread_function = Self::thread_function(state, threads_executor);
         #[allow(unused_mut)]
-        let mut thread_name = Some(String::from("PullingExecutor"));
+            let mut thread_name = Some(String::from("PullingExecutor"));
 
         #[cfg(debug_assertions)]
         {
@@ -213,7 +213,6 @@ impl PipelinePullingExecutor {
 impl Drop for PipelinePullingExecutor {
     fn drop(&mut self) {
         self.finish(None);
-        self.state.wait_finish();
     }
 }
 

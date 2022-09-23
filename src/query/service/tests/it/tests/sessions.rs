@@ -15,6 +15,7 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 use common_base::base::GlobalIORuntime;
 use common_base::base::Runtime;
@@ -36,6 +37,7 @@ use databend_query::Config;
 use once_cell::sync::OnceCell;
 use opendal::Operator;
 use parking_lot::Mutex;
+use time::Instant;
 
 pub struct TestGuard {
     thread_name: String,
@@ -44,6 +46,16 @@ pub struct TestGuard {
 
 impl Drop for TestGuard {
     fn drop(&mut self) {
+        // Hack: The session may be referenced by other threads. Let's try to wait.
+        let now = Instant::now();
+        while !SessionManager::instance().processes_info().is_empty() {
+            std::thread::sleep(Duration::from_millis(500));
+
+            if now.elapsed() > Duration::from_secs(3) {
+                break;
+            }
+        }
+
         self.services.remove_services(&self.thread_name);
     }
 }
@@ -111,7 +123,7 @@ impl TestGlobalServices {
             config.query.idm.clone(),
             global_services.clone(),
         )
-        .await?;
+            .await?;
         RoleCacheManager::init(global_services.clone())?;
 
         ClusterDiscovery::instance()
@@ -393,10 +405,17 @@ impl SingletonImpl<Arc<SessionManager>> for TestGlobalServices {
     fn get(&self) -> Arc<SessionManager> {
         match std::thread::current().name() {
             None => panic!("SessionManager is not init"),
-            Some(name) => match self.session_manager.lock().get(name) {
-                None => panic!("SessionManager is not init"),
-                Some(session_manager) => session_manager.clone(),
-            },
+            Some(name) => {
+                let guard = self.session_manager.lock();
+                match guard.get(name) {
+                    None => panic!(
+                        "SessionManager is not init {}, {:?}",
+                        name,
+                        guard.keys().collect::<Vec<_>>()
+                    ),
+                    Some(session_manager) => session_manager.clone(),
+                }
+            }
         }
     }
 
