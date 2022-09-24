@@ -112,7 +112,7 @@ impl FuseTable {
                 Ok(Ok(partitions)) => Ok(partitions),
                 Ok(Err(error)) => Err(error),
                 Err(cause) => Err(ErrorCode::PanicError(format!(
-                    "Maybe panic while in commit insert. {}",
+                    "Maybe panic while in eval index. {}",
                     cause
                 ))),
             }?;
