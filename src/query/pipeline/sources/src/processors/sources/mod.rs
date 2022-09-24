@@ -14,7 +14,6 @@
 
 pub mod async_source;
 pub mod blocks_source;
-pub mod deserializer;
 pub mod empty_source;
 pub mod input_formats;
 mod one_block_source;
@@ -26,7 +25,6 @@ pub use async_source::AsyncSource;
 pub use async_source::AsyncSourcer;
 pub use async_source::*;
 pub use blocks_source::BlocksSource;
-pub use deserializer::Deserializer;
 pub use empty_source::EmptySource;
 pub use one_block_source::OneBlockSource;
 pub use stream_source::StreamSource;
