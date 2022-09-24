@@ -22,6 +22,7 @@ use common_exception::Result;
 use xorfilter::Xor8;
 
 use crate::bloom::Bloom;
+use crate::SupportedType;
 
 pub struct XorBloom {
     filter: Xor8,
@@ -91,3 +92,4 @@ impl Bloom for XorBloom {
         Ok((Self { filter: xor_value }, n))
     }
 }
+impl SupportedType for XorBloom {}

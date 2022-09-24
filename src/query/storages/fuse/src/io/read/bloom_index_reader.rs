@@ -62,7 +62,7 @@ impl BlockBloomFilterIndexReader for Location {
     ) -> Result<BlockBloomFilterIndex> {
         let index_version = BlockBloomFilterIndexVersion::try_from(self.1)?;
         match index_version {
-            BlockBloomFilterIndexVersion::V1(_) => {
+            BlockBloomFilterIndexVersion::V2(_) => {
                 let block =
                     load_bloom_filter_by_columns(ctx, dal, columns, &self.0, index_length).await?;
                 Ok(BlockBloomFilterIndex::new(block))

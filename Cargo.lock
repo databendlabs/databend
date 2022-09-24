@@ -2058,8 +2058,6 @@ dependencies = [
 name = "common-storages-index"
 version = "0.1.0"
 dependencies = [
- "bincode",
- "bit-vec",
  "cbordata",
  "common-catalog",
  "common-datablocks",
