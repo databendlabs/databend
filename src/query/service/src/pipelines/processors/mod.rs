@@ -28,7 +28,6 @@ pub use sinks::SyncSenderSink;
 pub use sources::AsyncSource;
 pub use sources::AsyncSourcer;
 pub use sources::BlocksSource;
-pub use sources::Deserializer;
 pub use sources::EmptySource;
 pub use sources::StreamSource;
 pub use sources::SyncSource;
