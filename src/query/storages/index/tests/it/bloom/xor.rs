@@ -199,8 +199,10 @@ fn test_xor_bitmap_data_block() -> Result<()> {
     assert_eq!(n, val.len(), "{} {}", n, val.len());
 
     // data block enc:1230069, raw:8000000, ratio:0.15375863
+    // Actually, it not related to datablock, it related to the type of the column
+    // Here it same as u64.
     println!(
-        "data block enc:{}, raw:{}, ratio:{}",
+        "data block(i64) enc:{}, raw:{}, ratio:{}",
         val.len(),
         size,
         val.len() as f32 / size as f32
