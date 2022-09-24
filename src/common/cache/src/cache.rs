@@ -33,7 +33,7 @@ where
 
     /// Returns a reference to the value corresponding to the given key in the cache, if
     /// any.
-    fn get<'a, Q>(&'a mut self, k: &Q) -> Option<&'a V>
+    fn get<'a, Q>(&'a self, k: &Q) -> Option<&'a V>
     where
         K: Borrow<Q>,
         Q: Hash + Eq + ?Sized;

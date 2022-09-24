@@ -78,16 +78,17 @@ where L: Loader<T> + HasTenantLabel
                     cache_hit: false,
                     read_bytes: 0,
                 };
-                let cache = &mut cache.write().await;
-                match cache.get(location.as_ref()) {
+
+                match self.get_by_cache(location.as_ref(), cache) {
                     Some(item) => {
                         metrics.cache_hit = true;
                         metrics.read_bytes = 0u64;
-                        Ok(item.clone())
+                        Ok(item)
                     }
                     None => {
                         let item = self.load(location.as_ref(), len_hint, version).await?;
-                        cache.put(location.as_ref().to_owned(), item.clone());
+                        let mut cache_guard = cache.write();
+                        cache_guard.put(location.as_ref().to_owned(), item.clone());
                         Ok(item)
                     }
                 }
@@ -97,6 +98,10 @@ where L: Loader<T> + HasTenantLabel
 
     pub fn name(&self) -> &str {
         self.name.as_str()
+    }
+
+    fn get_by_cache(&self, key: &str, cache: &ItemCache<T>) -> Option<Arc<T>> {
+        cache.read().get(key).cloned()
     }
 
     async fn load(&self, loc: &str, len_hint: Option<u64>, version: u64) -> Result<Arc<T>> {

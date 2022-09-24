@@ -190,12 +190,13 @@ impl<K: Eq + Hash, V, S: BuildHasher, M: CountableMeter<K, V>> Cache<K, V, S, M>
     /// assert_eq!(cache.get(&1), None);
     /// assert_eq!(cache.get(&2), Some(&"c"));
     /// ```
-    fn get<Q>(&mut self, k: &Q) -> Option<&V>
+    fn get<Q>(&self, k: &Q) -> Option<&V>
     where
         K: Borrow<Q>,
         Q: Hash + Eq + ?Sized,
     {
-        self.map.get_refresh(k).map(|v| v as &V)
+        self.map.get(k)
+        // self.map.get_refresh(k).map(|v| v as &V)
     }
 
     /// Returns a mutable reference to the value corresponding to the given key in the cache, if

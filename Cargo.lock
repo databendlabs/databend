@@ -1295,6 +1295,7 @@ dependencies = [
  "common-exception",
  "common-metrics",
  "once_cell",
+ "parking_lot 0.12.1",
  "serde",
 ]
 

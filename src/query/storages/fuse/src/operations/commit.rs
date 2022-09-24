@@ -311,7 +311,7 @@ impl FuseTable {
         match reply {
             Ok(_) => {
                 if let Some(snapshot_cache) = CacheManager::instance().get_table_snapshot_cache() {
-                    let cache = &mut snapshot_cache.write().await;
+                    let cache = &mut snapshot_cache.write();
                     cache.put(snapshot_location.clone(), Arc::new(snapshot));
                 }
                 // try keep a hit file of last snapshot

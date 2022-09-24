@@ -66,6 +66,10 @@ enum State {
         location: String,
         segment: Arc<SegmentInfo>,
     },
+    PreCommitSegment {
+        location: String,
+        segment: Arc<SegmentInfo>,
+    },
     Finished,
 }
 
@@ -120,7 +124,7 @@ impl Processor for FuseTableSink {
     fn event(&mut self) -> Result<Event> {
         if matches!(
             &self.state,
-            State::NeedSerialize(_) | State::GenerateSegment
+            State::NeedSerialize(_) | State::GenerateSegment | State::PreCommitSegment { .. }
         ) {
             return Ok(Event::Sync);
         }
@@ -215,6 +219,17 @@ impl Processor for FuseTableSink {
                     segment: Arc::new(segment_info),
                 }
             }
+            State::PreCommitSegment { location, segment } => {
+                if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
+                    let cache = &mut segment_cache.write();
+                    cache.put(location.clone(), segment.clone());
+                }
+
+                // TODO: dyn operation for table trait
+                let log_entry = AppendOperationLogEntry::new(location, segment);
+                let data_block = DataBlock::try_from(log_entry)?;
+                self.ctx.push_precommit_block(data_block);
+            }
             _state => {
                 return Err(ErrorCode::LogicalError("Unknown state for fuse table sink"));
             }
@@ -268,15 +283,7 @@ impl Processor for FuseTableSink {
             } => {
                 self.data_accessor.object(&location).write(data).await?;
 
-                if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
-                    let cache = &mut segment_cache.write().await;
-                    cache.put(location.clone(), segment.clone());
-                }
-
-                // TODO: dyn operation for table trait
-                let log_entry = AppendOperationLogEntry::new(location, segment);
-                let data_block = DataBlock::try_from(log_entry)?;
-                self.ctx.push_precommit_block(data_block);
+                self.state = State::PreCommitSegment { location, segment };
             }
             _state => {
                 return Err(ErrorCode::LogicalError(

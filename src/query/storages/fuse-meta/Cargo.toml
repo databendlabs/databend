@@ -17,6 +17,7 @@ common-datablocks = { path = "../../datablocks" }
 common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
 common-metrics = { path = "../../../common/metrics" }
+parking_lot = "0.12.1"
 
 once_cell = "1.15.0"
 serde = { version = "1.0.144", features = ["derive"] }

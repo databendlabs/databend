@@ -186,7 +186,7 @@ impl FuseTable {
                     if let Some(bloom_index_location) = &block_meta.bloom_filter_index_location {
                         let path = &bloom_index_location.0;
                         if let Some(c) = CacheManager::instance().get_bloom_index_meta_cache() {
-                            let cache = &mut *c.write().await;
+                            let cache = &mut *c.write();
                             cache.pop(path);
                         }
                         self.remove_location(&accessor, bloom_index_location.0.as_str())
@@ -244,7 +244,7 @@ impl FuseTable {
         // 1. remove the segments
         for (x, _v) in segments_to_be_deleted {
             if let Some(c) = CacheManager::instance().get_table_segment_cache() {
-                let cache = &mut *c.write().await;
+                let cache = &mut *c.write();
                 cache.pop(x.as_str());
             }
             self.remove_location(&accessor, x.as_str()).await?;
@@ -255,7 +255,7 @@ impl FuseTable {
         for (id, ver) in snapshots_to_be_deleted.iter().rev() {
             let loc = locs.snapshot_location_from_uuid(id, *ver)?;
             if let Some(c) = CacheManager::instance().get_table_snapshot_cache() {
-                let cache = &mut *c.write().await;
+                let cache = &mut *c.write();
                 cache.pop(loc.as_str());
             }
             self.remove_location(&accessor, loc.as_str()).await?;
