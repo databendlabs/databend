@@ -27,4 +27,4 @@ cbordata = { version = "0.6.0" }
 rand = "0.8.5"
 serde = { version = "1.0.144", features = ["derive"] }
 tracing = "0.1.36"
-xorfilter-rs = { git = "https://github.com/bnclabs/xorfilter", features = ["cbordata"] }
+xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", features = ["cbordata"] }
