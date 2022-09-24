@@ -47,6 +47,9 @@ fn test_xor_bitmap_u64() -> Result<()> {
     let (_, n) = XorBloom::from_bytes(&val)?;
     assert_eq!(n, val.len(), "{} {}", n, val.len());
 
+    // Lock the size.
+    assert_eq!(n, 1230069);
+
     // u64 bitmap enc:1230069, raw:8000000, ratio:0.15375863
     println!(
         "u64 bitmap enc:{}, raw:{}, ratio:{}",
@@ -80,6 +83,9 @@ fn test_xor_bitmap_bool() -> Result<()> {
     let val = filter.to_bytes()?;
     let (_, n) = XorBloom::from_bytes(&val)?;
     assert_eq!(n, val.len(), "{} {}", n, val.len());
+
+    // Lock the size.
+    assert_eq!(n, 61);
 
     // bool bitmap enc:61, raw:1000000, ratio:0.000061
     println!(
@@ -127,6 +133,9 @@ fn test_xor_bitmap_string() -> Result<()> {
     let (_, n) = XorBloom::from_bytes(&val)?;
     assert_eq!(n, val.len(), "{} {}", n, val.len());
 
+    // Lock the size.
+    assert_eq!(n, 123067);
+
     // string enc:123067, raw:3000000, ratio:0.041022334
     println!(
         "string enc:{}, raw:{}, ratio:{}",
@@ -154,13 +163,14 @@ fn test_xor_bitmap_duplicate_string() -> Result<()> {
     }
     filter.build()?;
 
-    for key in keys.iter() {
-        assert!(filter.contains(key), "key {} not present", key);
-    }
+    assert!(filter.contains(&keys[0]), "key {} not present", key);
 
     let val = filter.to_bytes()?;
     let (_, n) = XorBloom::from_bytes(&val)?;
     assert_eq!(n, val.len(), "{} {}", n, val.len());
+
+    // Lock the size.
+    assert_eq!(n, 61);
 
     // string enc:61, raw:3000000, ratio:0.000020333333
     println!(

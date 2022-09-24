@@ -19,7 +19,6 @@ use cbordata::FromCbor;
 use cbordata::IntoCbor;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use xorfilter::BuildHasherDefault;
 use xorfilter::Xor8;
 
 use crate::bloom::Bloom;
@@ -31,7 +30,7 @@ pub struct XorBloom {
 impl XorBloom {
     pub fn create() -> Self {
         XorBloom {
-            filter: Default::default(),
+            filter: Xor8::default(),
         }
     }
 }
@@ -87,7 +86,7 @@ impl Bloom for XorBloom {
         let (cbor_val, n) = Cbor::decode(&mut buf)
             .map_err(|e| ErrorCode::UnexpectedError(format!("Xor8.cbor.decode error:{:}", e)))?;
 
-        let xor_value = Xor8::<BuildHasherDefault>::from_cbor(cbor_val)
+        let xor_value = Xor8::from_cbor(cbor_val)
             .map_err(|e| ErrorCode::UnexpectedError(format!("Xor8.from_cborerror:{:}", e)))?;
         Ok((Self { filter: xor_value }, n))
     }
