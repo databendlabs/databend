@@ -40,7 +40,6 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::CopyPlanV2;
 use crate::sql::plans::Plan;
-use crate::storages::stage::StageSourceHelper;
 use crate::storages::stage::StageTable;
 
 pub struct CopyInterpreterV2 {
@@ -173,7 +172,7 @@ impl CopyInterpreterV2 {
                     files_with_path
                 } else if !path.ends_with('/') {
                     let rename_me: Arc<dyn TableContext> = self.ctx.clone();
-                    let op = StageSourceHelper::get_op(&rename_me, &table_info.stage_info).await?;
+                    let op = StageTable::get_op(&rename_me, &table_info.stage_info).await?;
                     if op.object(path).is_exist().await? {
                         vec![path.to_string()]
                     } else {
@@ -181,7 +180,7 @@ impl CopyInterpreterV2 {
                     }
                 } else {
                     let rename_me: Arc<dyn TableContext> = self.ctx.clone();
-                    let op = StageSourceHelper::get_op(&rename_me, &table_info.stage_info).await?;
+                    let op = StageTable::get_op(&rename_me, &table_info.stage_info).await?;
 
                     // TODO: Workaround for OpenDAL's bug: https://github.com/datafuselabs/opendal/issues/670
                     // Should be removed after OpenDAL fixes.
@@ -219,7 +218,7 @@ impl CopyInterpreterV2 {
             SourceInfo::StageSource(table_info) => {
                 if table_info.stage_info.copy_options.purge {
                     let rename_me: Arc<dyn TableContext> = ctx.clone();
-                    let op = StageSourceHelper::get_op(&rename_me, &table_info.stage_info).await?;
+                    let op = StageTable::get_op(&rename_me, &table_info.stage_info).await?;
                     for f in files {
                         if let Err(e) = op.object(f).delete().await {
                             tracing::error!("Failed to delete file: {}, error: {}", f, e);

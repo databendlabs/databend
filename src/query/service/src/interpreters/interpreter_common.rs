@@ -37,7 +37,7 @@ use crate::pipelines::processors::TransformAddOn;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::storages::stage::StageSourceHelper;
+use crate::storages::stage::StageTable;
 use crate::storages::Table;
 
 pub fn fill_missing_columns(
@@ -165,7 +165,7 @@ pub async fn stat_file(
     path: &str,
 ) -> Result<StageFile> {
     let table_ctx: Arc<dyn TableContext> = ctx.clone();
-    let op = StageSourceHelper::get_op(&table_ctx, stage).await?;
+    let op = StageTable::get_op(&table_ctx, stage).await?;
     let meta = op.object(path).metadata().await?;
     Ok(StageFile {
         path: path.to_owned(),
@@ -200,7 +200,7 @@ pub async fn list_files_from_dal(
     pattern: &str,
 ) -> Result<Vec<StageFile>> {
     let table_ctx: Arc<dyn TableContext> = ctx.clone();
-    let op = StageSourceHelper::get_op(&table_ctx, stage).await?;
+    let op = StageTable::get_op(&table_ctx, stage).await?;
     let prefix = stage.get_prefix();
     let mut files = Vec::new();
 
