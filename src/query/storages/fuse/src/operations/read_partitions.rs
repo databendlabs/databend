@@ -16,15 +16,19 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
+use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
+use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::TableSnapshot;
 use common_legacy_planners::Extras;
 use common_legacy_planners::PartInfoPtr;
 use common_legacy_planners::Partitions;
 use common_legacy_planners::Projection;
 use common_legacy_planners::Statistics;
+use common_meta_app::schema::TableInfo;
 
+use crate::fuse_lazy_part::FuseLazyPartInfo;
 use crate::fuse_part::ColumnLeaves;
 use crate::fuse_part::ColumnMeta;
 use crate::fuse_part::FusePartInfo;
@@ -45,28 +49,65 @@ impl FuseTable {
                     return Ok(result);
                 }
 
-                let block_metas = BlockPruner::new(snapshot.clone())
-                    .prune(&ctx, self.table_info.schema(), &push_downs)
-                    .await?
-                    .into_iter()
-                    .map(|(_, v)| v)
-                    .collect::<Vec<_>>();
-                let partitions_total = snapshot.summary.block_count as usize;
-                self.read_partitions_with_metas(ctx, push_downs, block_metas, partitions_total)
+                let settings = ctx.get_settings();
+
+                if settings.get_enable_distributed_eval_index()? {
+                    let mut segments = Vec::with_capacity(snapshot.segments.len());
+
+                    for segment_location in &snapshot.segments {
+                        segments.push(FuseLazyPartInfo::create(segment_location.clone()))
+                    }
+
+                    return Ok((
+                        Statistics::new_estimated(
+                            snapshot.summary.row_count as usize,
+                            snapshot.summary.uncompressed_byte_size as usize,
+                            snapshot.segments.len(),
+                            snapshot.segments.len(),
+                        ),
+                        segments,
+                    ));
+                }
+
+                let table_info = self.table_info.clone();
+                let segments_location = snapshot.segments.clone();
+                let summary = snapshot.summary.block_count as usize;
+                Self::prune_snapshot_blocks(
+                    ctx.clone(),
+                    push_downs.clone(),
+                    table_info,
+                    segments_location,
+                    summary,
+                )
+                .await
             }
             None => Ok((Statistics::default(), vec![])),
         }
     }
 
-    pub fn read_partitions_with_metas(
-        &self,
+    pub async fn prune_snapshot_blocks(
         ctx: Arc<dyn TableContext>,
+        push_downs: Option<Extras>,
+        table_info: TableInfo,
+        segments_location: Vec<Location>,
+        summary: usize,
+    ) -> Result<(Statistics, Partitions)> {
+        let block_metas =
+            BlockPruner::prune(&ctx, table_info.schema(), &push_downs, segments_location)
+                .await?
+                .into_iter()
+                .map(|(_, v)| v)
+                .collect::<Vec<_>>();
+        Self::read_partitions_with_metas(ctx, table_info.schema(), push_downs, block_metas, summary)
+    }
+
+    pub fn read_partitions_with_metas(
+        ctx: Arc<dyn TableContext>,
+        schema: DataSchemaRef,
         push_downs: Option<Extras>,
         block_metas: Vec<BlockMeta>,
         partitions_total: usize,
     ) -> Result<(Statistics, Partitions)> {
-        let schema = self.table_info.schema();
-
         let arrow_schema = schema.to_arrow();
         let column_leaves = ColumnLeaves::new_from_schema(&arrow_schema);
 

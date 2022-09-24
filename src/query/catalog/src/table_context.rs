@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
+use common_base::base::Runtime;
 use common_config::Config;
 use common_contexts::DalContext;
 use common_contexts::DalMetrics;
@@ -99,4 +100,5 @@ pub trait TableContext: Send + Sync {
     async fn get_table(&self, catalog: &str, database: &str, table: &str)
     -> Result<Arc<dyn Table>>;
     fn get_processes_info(&self) -> Vec<ProcessInfo>;
+    fn get_runtime(&self) -> Result<Arc<Runtime>>;
 }

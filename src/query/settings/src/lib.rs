@@ -330,6 +330,16 @@ impl Settings {
                 desc: "The quote char for CSV. default value: '\"'.",
                 possible_values: None,
             },
+            SettingValue {
+                default_value: UserSettingValue::UInt64(0),
+                user_setting: UserSetting::create(
+                    "enable_distributed_eval_index",
+                    UserSettingValue::UInt64(0),
+                ),
+                level: ScopeLevel::Session,
+                desc: "If enable distributed eval index, default value: 0",
+                possible_values: None,
+            },
         ];
 
         let settings: Arc<RwLock<HashMap<String, SettingValue>>> =
@@ -507,6 +517,18 @@ impl Settings {
 
     pub fn set_quoted_ident_case_sensitive(&self, val: bool) -> Result<()> {
         static KEY: &str = "quoted_ident_case_sensitive";
+        let v = u64::from(val);
+        self.try_set_u64(KEY, v, false)
+    }
+
+    pub fn get_enable_distributed_eval_index(&self) -> Result<bool> {
+        static KEY: &str = "enable_distributed_eval_index";
+        let v = self.try_get_u64(KEY)?;
+        Ok(v != 0)
+    }
+
+    pub fn set_enable_distributed_eval_index(&self, val: bool) -> Result<()> {
+        static KEY: &str = "enable_distributed_eval_index";
         let v = u64::from(val);
         self.try_set_u64(KEY, v, false)
     }

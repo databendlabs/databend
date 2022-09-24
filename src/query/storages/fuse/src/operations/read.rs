@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
+use common_base::base::TrySpawn;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datavalues::ColumnRef;
@@ -36,6 +37,7 @@ use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
 use common_pipeline_transforms::processors::ExpressionExecutor;
 
+use crate::fuse_lazy_part::FuseLazyPartInfo;
 use crate::io::BlockReader;
 use crate::operations::read::State::Generated;
 use crate::FuseTable;
@@ -81,6 +83,43 @@ impl FuseTable {
         plan: &ReadDataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
+        let mut lazy_init_segments = Vec::with_capacity(plan.parts.len());
+
+        for part in &plan.parts {
+            if let Some(lazy_part_info) = part.as_any().downcast_ref::<FuseLazyPartInfo>() {
+                lazy_init_segments.push(lazy_part_info.segment_location.clone());
+            }
+        }
+
+        if !lazy_init_segments.is_empty() {
+            let table_info = self.table_info.clone();
+            let push_downs = plan.push_downs.clone();
+            let query_ctx = ctx.clone();
+            let re_partitions = ctx.get_runtime()?.spawn(async move {
+                let (_statistics, partitions) = FuseTable::prune_snapshot_blocks(
+                    query_ctx,
+                    push_downs,
+                    table_info,
+                    lazy_init_segments,
+                    0,
+                )
+                .await?;
+
+                Ok(partitions)
+            });
+
+            let partitions = match futures::executor::block_on(re_partitions) {
+                Ok(Ok(partitions)) => Ok(partitions),
+                Ok(Err(error)) => Err(error),
+                Err(cause) => Err(ErrorCode::PanicError(format!(
+                    "Maybe panic while in commit insert. {}",
+                    cause
+                ))),
+            }?;
+
+            ctx.try_set_partitions(partitions)?;
+        }
+
         let table_schema = self.table_info.schema();
         let projection = self.projection_of_push_downs(&plan.push_downs);
         let output_reader = self.create_block_reader(&ctx, projection)?; // for deserialize output blocks
@@ -123,9 +162,7 @@ impl FuseTable {
         let prewhere_filter = Arc::new(prewhere_filter);
         let remain_reader = Arc::new(remain_reader);
 
-        let parts_len = plan.parts.len();
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        let max_threads = std::cmp::min(parts_len, max_threads);
 
         let mut source_builder = SourcePipeBuilder::create();
 

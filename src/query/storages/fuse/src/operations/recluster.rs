@@ -62,9 +62,8 @@ impl FuseTable {
         };
 
         let schema = self.table_info.schema();
-        let block_metas = BlockPruner::new(snapshot.clone())
-            .prune(&ctx, schema, &push_downs)
-            .await?;
+        let segments_locations = snapshot.segments.clone();
+        let block_metas = BlockPruner::prune(&ctx, schema, &push_downs, segments_locations).await?;
 
         let default_cluster_key_id = self.cluster_key_meta.clone().unwrap().0;
         let mut blocks_map: BTreeMap<i32, Vec<(usize, BlockMeta)>> = BTreeMap::new();
@@ -107,8 +106,9 @@ impl FuseTable {
         }
 
         let partitions_total = mutator.partitions_total();
-        let (statistics, parts) = self.read_partitions_with_metas(
+        let (statistics, parts) = Self::read_partitions_with_metas(
             ctx.clone(),
+            self.table_info.schema(),
             None,
             mutator.selected_blocks(),
             partitions_total,

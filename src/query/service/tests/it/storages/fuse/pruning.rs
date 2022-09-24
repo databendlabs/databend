@@ -48,8 +48,8 @@ async fn apply_block_pruning(
     ctx: Arc<QueryContext>,
 ) -> Result<Vec<BlockMeta>> {
     let ctx: Arc<dyn TableContext> = ctx;
-    BlockPruner::new(table_snapshot)
-        .prune(&ctx, schema, push_down)
+    let segment_locs = table_snapshot.segments.clone();
+    BlockPruner::prune(&ctx, schema, push_down, segment_locs)
         .await
         .map(|v| v.into_iter().map(|(_, v)| v).collect())
 }

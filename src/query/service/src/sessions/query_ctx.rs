@@ -24,6 +24,7 @@ use chrono_tz::Tz;
 use common_base::base::tokio::task::JoinHandle;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
+use common_base::base::Runtime;
 use common_base::base::TrySpawn;
 use common_contexts::DalContext;
 use common_contexts::DalMetrics;
@@ -364,6 +365,10 @@ impl TableContext for QueryContext {
     // Get all the processes list info.
     fn get_processes_info(&self) -> Vec<ProcessInfo> {
         SessionManager::instance().processes_info()
+    }
+
+    fn get_runtime(&self) -> Result<Arc<Runtime>> {
+        self.shared.try_get_runtime()
     }
 }
 

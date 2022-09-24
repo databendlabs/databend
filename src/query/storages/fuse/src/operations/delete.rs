@@ -96,9 +96,8 @@ impl FuseTable {
             order_by: vec![],
         };
         let push_downs = Some(extras);
-        let block_metas = BlockPruner::new(snapshot.clone())
-            .prune(&ctx, schema, &push_downs)
-            .await?;
+        let segments_location = snapshot.segments.clone();
+        let block_metas = BlockPruner::prune(&ctx, schema, &push_downs, segments_location).await?;
 
         // delete block one by one.
         // this could be executed in a distributed manner (till new planner, pipeline settled down)

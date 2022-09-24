@@ -22,7 +22,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::Location;
-use common_fuse_meta::meta::TableSnapshot;
 use common_legacy_planners::Extras;
 use futures::future;
 use futures::StreamExt;
@@ -35,27 +34,19 @@ use crate::pruning::limiter;
 use crate::pruning::range_pruner;
 use crate::pruning::topn_pruner;
 
-pub struct BlockPruner {
-    table_snapshot: Arc<TableSnapshot>,
-}
+pub struct BlockPruner;
 
 const FUTURE_BUFFER_SIZE: usize = 10;
 
 impl BlockPruner {
-    pub fn new(table_snapshot: Arc<TableSnapshot>) -> Self {
-        Self { table_snapshot }
-    }
-
     // prune blocks by utilizing min_max index and bloom filter, according to the pushdowns
-    #[tracing::instrument(level = "debug", skip(self, schema, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", skip(schema, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     pub async fn prune(
-        &self,
         ctx: &Arc<dyn TableContext>,
         schema: DataSchemaRef,
         push_down: &Option<Extras>,
+        segment_locs: Vec<Location>,
     ) -> Result<Vec<(usize, BlockMeta)>> {
-        let segment_locs = self.table_snapshot.segments.clone();
-
         if segment_locs.is_empty() {
             return Ok(vec![]);
         };
