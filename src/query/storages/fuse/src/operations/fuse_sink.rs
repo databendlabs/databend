@@ -16,21 +16,17 @@ use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use common_arrow::parquet::compression::CompressionOptions;
 use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_cache::Cache;
 use common_catalog::table_context::TableContext;
 use common_datablocks::serialize_data_blocks;
-use common_datablocks::serialize_data_blocks_with_compression;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::caches::CacheManager;
-use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::Statistics;
 use common_pipeline_core::processors::port::OutputPort;
-use common_storages_index::*;
 use opendal::Operator;
 
 use super::AppendOperationLogEntry;
@@ -44,12 +40,6 @@ use crate::statistics::BlockStatistics;
 use crate::statistics::ClusterStatsGenerator;
 use crate::statistics::StatisticsAccumulator;
 
-struct BloomIndexState {
-    data: Vec<u8>,
-    size: u64,
-    location: Location,
-}
-
 enum State {
     None,
     NeedSerialize(DataBlock),
@@ -58,7 +48,6 @@ enum State {
         size: u64,
         meta_data: Box<ThriftFileMetaData>,
         block_statistics: BlockStatistics,
-        bloom_index_state: BloomIndexState,
     },
     GenerateSegment,
     SerializedSegment {
@@ -159,27 +148,7 @@ impl Processor for FuseTableSink {
                 let (cluster_stats, block) =
                     self.cluster_stats_gen.gen_stats_for_append(&data_block)?;
 
-                let (block_location, block_id) = self.meta_locations.gen_block_location();
-
-                let bloom_index_state = {
-                    // write index
-                    let bloom_index = BloomFilterIndexer::try_create(self.ctx.clone(), &[&block])?;
-                    let index_block = bloom_index.bloom_block;
-                    let location = self.meta_locations.block_bloom_index_location(&block_id);
-                    let mut data = Vec::with_capacity(100 * 1024);
-                    let index_block_schema = &bloom_index.bloom_schema;
-                    let (size, _) = serialize_data_blocks_with_compression(
-                        vec![index_block],
-                        index_block_schema,
-                        &mut data,
-                        CompressionOptions::Uncompressed,
-                    )?;
-                    BloomIndexState {
-                        data,
-                        size,
-                        location,
-                    }
-                };
+                let (block_location, _block_id) = self.meta_locations.gen_block_location();
 
                 let block_statistics =
                     BlockStatistics::from(&block, block_location.0, cluster_stats)?;
@@ -193,7 +162,6 @@ impl Processor for FuseTableSink {
                     size,
                     block_statistics,
                     meta_data: Box::new(meta_data),
-                    bloom_index_state,
                 };
             }
             State::GenerateSegment => {
@@ -230,7 +198,6 @@ impl Processor for FuseTableSink {
                 size,
                 meta_data,
                 block_statistics,
-                bloom_index_state,
             } => {
                 // write data block
                 io::write_data(
@@ -240,20 +207,13 @@ impl Processor for FuseTableSink {
                 )
                 .await?;
 
-                // write bloom filter index
-                io::write_data(
-                    &bloom_index_state.data,
-                    &self.data_accessor,
-                    &bloom_index_state.location.0,
-                )
-                .await?;
-
-                let bloom_filter_index_size = bloom_index_state.size;
+                // bloom filter index is being tweaked (or replaced), use 0 for its size
+                let bloom_filter_index_size = 0;
                 self.accumulator.add_block(
                     size,
                     *meta_data,
                     block_statistics,
-                    Some(bloom_index_state.location),
+                    None,
                     bloom_filter_index_size,
                 )?;
 

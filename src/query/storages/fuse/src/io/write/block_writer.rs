@@ -60,7 +60,6 @@ impl<'a> BlockWriter<'a> {
     pub async fn write_with_location(
         &self,
         block: DataBlock,
-        block_id: Uuid,
         location: Location,
         cluster_stats: Option<ClusterStatistics>,
     ) -> Result<BlockMeta> {
@@ -68,11 +67,13 @@ impl<'a> BlockWriter<'a> {
         let row_count = block.num_rows() as u64;
         let block_size = block.memory_size() as u64;
         let col_stats = gen_columns_statistics(&block)?;
-        let (bloom_filter_index_size, bloom_filter_index_location) = self
-            .build_block_index(data_accessor, &block, block_id)
-            .await?;
         let (file_size, file_meta_data) = write_block(block, data_accessor, &location.0).await?;
         let col_metas = util::column_metas(&file_meta_data)?;
+
+        // bloom filter index is being tweaked (or replaced), use 0 for its size
+        let bloom_filter_index_location = None;
+        let bloom_filter_index_size = 0;
+
         let block_meta = BlockMeta::new(
             row_count,
             block_size,
@@ -81,7 +82,7 @@ impl<'a> BlockWriter<'a> {
             col_metas,
             cluster_stats,
             location,
-            Some(bloom_filter_index_location),
+            bloom_filter_index_location,
             bloom_filter_index_size,
         );
         Ok(block_meta)
@@ -92,8 +93,8 @@ impl<'a> BlockWriter<'a> {
         block: DataBlock,
         cluster_stats: Option<ClusterStatistics>,
     ) -> Result<BlockMeta> {
-        let (location, block_id) = self.location_generator.gen_block_location();
-        self.write_with_location(block, block_id, location, cluster_stats)
+        let (location, _block_id) = self.location_generator.gen_block_location();
+        self.write_with_location(block, location, cluster_stats)
             .await
     }
 
