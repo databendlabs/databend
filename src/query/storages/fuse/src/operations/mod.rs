@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 mod append;
+mod batch;
 mod commit;
 mod compact;
 mod delete;
@@ -28,6 +29,8 @@ mod truncate;
 
 pub mod util;
 
+pub use batch::BatchCommitter;
+pub use batch::*;
 pub use fuse_sink::FuseTableSink;
 pub use mutation::delete_from_block;
 pub use mutation::CompactMutator;

@@ -1829,6 +1829,7 @@ dependencies = [
  "common-streams",
  "futures",
  "futures-util",
+ "once_cell",
  "opendal",
  "serde",
  "serde_json",

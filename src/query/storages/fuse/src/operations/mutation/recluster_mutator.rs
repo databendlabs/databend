@@ -28,11 +28,12 @@ use common_meta_app::schema::TableInfo;
 
 use crate::io::BlockCompactor;
 use crate::io::TableMetaLocationGenerator;
+use crate::operations::commit_to_meta_server;
+use crate::operations::merge_append_operations;
 use crate::operations::mutation::BaseMutator;
 use crate::operations::AppendOperationLogEntry;
 use crate::sessions::TableContext;
 use crate::statistics::merge_statistics;
-use crate::FuseTable;
 use crate::TableMutator;
 
 static MAX_BLOCK_COUNT: usize = 50;
@@ -210,8 +211,7 @@ impl TableMutator for ReclusterMutator {
             .map(AppendOperationLogEntry::try_from)
             .collect::<Result<Vec<AppendOperationLogEntry>>>()?;
 
-        let (merged_segments, merged_summary) =
-            FuseTable::merge_append_operations(&append_log_entries)?;
+        let (merged_segments, merged_summary) = merge_append_operations(append_log_entries.iter())?;
 
         let mut merged_segments = merged_segments
             .into_iter()
@@ -223,7 +223,7 @@ impl TableMutator for ReclusterMutator {
 
         let new_snapshot = base_mutator.into_new_snapshot(segments, summary).await?;
 
-        FuseTable::commit_to_meta_server(
+        commit_to_meta_server(
             ctx.as_ref(),
             catalog_name,
             table_info,

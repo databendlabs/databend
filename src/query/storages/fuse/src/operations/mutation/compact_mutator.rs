@@ -29,11 +29,12 @@ use crate::io::BlockCompactor;
 use crate::io::MetaReaders;
 use crate::io::SegmentWriter;
 use crate::io::TableMetaLocationGenerator;
+use crate::operations::commit_to_meta_server;
+use crate::operations::merge_append_operations;
 use crate::operations::AppendOperationLogEntry;
 use crate::statistics::merge_statistics;
 use crate::statistics::reducers::reduce_block_metas;
 use crate::statistics::reducers::reduce_statistics;
-use crate::FuseTable;
 use crate::TableContext;
 use crate::TableMutator;
 
@@ -167,8 +168,7 @@ impl TableMutator for CompactMutator {
             .map(AppendOperationLogEntry::try_from)
             .collect::<Result<Vec<AppendOperationLogEntry>>>()?;
 
-        let (merged_segments, merged_summary) =
-            FuseTable::merge_append_operations(&append_log_entries)?;
+        let (merged_segments, merged_summary) = merge_append_operations(append_log_entries.iter())?;
 
         let mut merged_segments = merged_segments
             .into_iter()
@@ -177,7 +177,7 @@ impl TableMutator for CompactMutator {
         new_snapshot.segments.append(&mut merged_segments);
         new_snapshot.summary = merge_statistics(&self.summary, &merged_summary)?;
 
-        FuseTable::commit_to_meta_server(
+        commit_to_meta_server(
             ctx.as_ref(),
             catalog_name,
             table_info,

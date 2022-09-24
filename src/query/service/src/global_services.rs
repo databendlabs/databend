@@ -23,6 +23,7 @@ use common_config::Config;
 use common_exception::Result;
 use common_fuse_meta::caches::CacheManager;
 use common_storage::StorageOperator;
+use common_storages_fuse::operations::BatchCommitter;
 use common_tracing::QueryLogger;
 use common_users::RoleCacheManager;
 use common_users::UserApiProvider;
@@ -46,6 +47,7 @@ pub struct GlobalServices {
     session_manager: UnsafeCell<Option<Arc<SessionManager>>>,
     users_manager: UnsafeCell<Option<Arc<UserApiProvider>>>,
     users_role_manager: UnsafeCell<Option<Arc<RoleCacheManager>>>,
+    batch_committer: UnsafeCell<Option<Arc<BatchCommitter>>>,
 }
 
 unsafe impl Send for GlobalServices {}
@@ -66,6 +68,7 @@ impl GlobalServices {
             users_manager: UnsafeCell::new(None),
             global_runtime: UnsafeCell::new(None),
             users_role_manager: UnsafeCell::new(None),
+            batch_committer: UnsafeCell::new(None),
         });
 
         // The order of initialization is very important
@@ -89,7 +92,8 @@ impl GlobalServices {
             global_services.clone(),
         )
         .await?;
-        RoleCacheManager::init(global_services.clone())
+        RoleCacheManager::init(global_services.clone())?;
+        BatchCommitter::init(global_services.clone())
     }
 }
 
@@ -287,6 +291,24 @@ impl SingletonImpl<Arc<RoleCacheManager>> for GlobalServices {
     fn init(&self, value: Arc<RoleCacheManager>) -> Result<()> {
         unsafe {
             *(self.users_role_manager.get() as *mut Option<Arc<RoleCacheManager>>) = Some(value);
+            Ok(())
+        }
+    }
+}
+
+impl SingletonImpl<Arc<BatchCommitter>> for GlobalServices {
+    fn get(&self) -> Arc<BatchCommitter> {
+        unsafe {
+            match &*self.batch_committer.get() {
+                None => panic!("BatchCommitter is not init"),
+                Some(batch_committer) => batch_committer.clone(),
+            }
+        }
+    }
+
+    fn init(&self, value: Arc<BatchCommitter>) -> Result<()> {
+        unsafe {
+            *(self.batch_committer.get() as *mut Option<Arc<BatchCommitter>>) = Some(value);
             Ok(())
         }
     }

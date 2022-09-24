@@ -27,6 +27,7 @@ use common_legacy_planners::Extras;
 use common_pipeline_transforms::processors::ExpressionExecutor;
 use tracing::debug;
 
+use crate::operations::commit_to_meta_server;
 use crate::operations::mutation::delete_from_block;
 use crate::operations::mutation::deletion_mutator::Deletion;
 use crate::operations::mutation::DeletionMutator;
@@ -134,7 +135,7 @@ impl FuseTable {
         catalog_name: &str,
     ) -> Result<()> {
         let new_snapshot = del_holder.into_new_snapshot().await?;
-        Self::commit_to_meta_server(
+        commit_to_meta_server(
             ctx,
             catalog_name,
             self.get_table_info(),

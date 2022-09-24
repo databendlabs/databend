@@ -41,6 +41,7 @@ use uuid::Uuid;
 use crate::io::BlockCompactor;
 use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
+use crate::operations::commit_to_meta_server;
 use crate::operations::AppendOperationLogEntry;
 use crate::pipelines::Pipeline;
 use crate::NavigationPoint;
@@ -247,7 +248,7 @@ impl Table for FuseTable {
         let mut table_info = self.table_info.clone();
         table_info.meta = new_table_meta;
 
-        FuseTable::commit_to_meta_server(
+        commit_to_meta_server(
             ctx.as_ref(),
             catalog_name,
             &table_info,
@@ -295,7 +296,7 @@ impl Table for FuseTable {
         let mut table_info = self.table_info.clone();
         table_info.meta = new_table_meta;
 
-        FuseTable::commit_to_meta_server(
+        commit_to_meta_server(
             ctx.as_ref(),
             catalog_name,
             &table_info,

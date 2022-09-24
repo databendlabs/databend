@@ -2063,6 +2063,8 @@ impl<KV: KVApi> SchemaApi for KV {
             if succ {
                 return Ok(UpdateTableMetaReply {});
             }
+
+            eprintln!(">>>>>> not success!");
         }
     }
 

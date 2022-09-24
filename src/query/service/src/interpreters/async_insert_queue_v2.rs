@@ -187,7 +187,7 @@ type EntryPtr = Arc<Entry>;
 type Queue = HashMap<InsertKey, InsertData>;
 type QueryIdToEntry = HashMap<String, EntryPtr>;
 
-#[derive(Clone)]
+#[derive(Clone)commit]
 pub struct AsyncInsertQueue {
     pub session_mgr: Arc<RwLock<Option<Arc<SessionManager>>>>,
     runtime: Arc<Runtime>,
