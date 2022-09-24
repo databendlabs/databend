@@ -21,24 +21,21 @@ use common_pipeline_sources::processors::sources::input_formats::InputContext;
 
 use super::Plan;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[derive(Clone)]
 pub enum InsertInputSource {
-    #[serde(skip)]
     SelectPlan(Box<Plan>),
     // From outside streaming source
-    #[serde(skip)]
     StreamingWithFormat(String, usize, Option<Arc<InputContext>>),
     // From cloned String and format
     Values(String),
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[derive(Clone)]
 pub struct InsertValueBlock {
-    #[serde(skip)]
     pub block: DataBlock,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[derive(Clone)]
 pub struct Insert {
     pub catalog: String,
     pub database: String,

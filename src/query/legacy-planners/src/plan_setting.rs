@@ -17,14 +17,14 @@ use std::sync::Arc;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VarValue {
     pub is_global: bool,
     pub variable: String,
     pub value: String,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SettingPlan {
     pub vars: Vec<VarValue>,
 }
