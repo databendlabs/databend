@@ -52,15 +52,6 @@ pub type UInt64Type = NumberType<u64>;
 pub type Float32Type = NumberType<F32>;
 pub type Float64Type = NumberType<F64>;
 
-impl<Num: Number> NumberType<Num> {
-    pub fn try_downcast_builder<'a>(builder: &'a mut ColumnBuilder) -> Option<&'a mut Vec<Num>> {
-        match builder {
-            ColumnBuilder::Number(num) => Num::try_downcast_builder(num),
-            _ => None,
-        }
-    }
-}
-
 impl<Num: Number> ValueType for NumberType<Num> {
     type Scalar = Num;
     type ScalarRef<'a> = Num;
@@ -87,6 +78,15 @@ impl<Num: Number> ValueType for NumberType<Num> {
 
     fn try_downcast_domain(domain: &Domain) -> Option<SimpleDomain<Num>> {
         Num::try_downcast_domain(domain.as_number()?)
+    }
+
+    fn try_downcast_builder<'a>(
+        builder: &'a mut ColumnBuilder,
+    ) -> Option<&'a mut Self::ColumnBuilder> {
+        match builder {
+            ColumnBuilder::Number(num) => Num::try_downcast_builder(num),
+            _ => None,
+        }
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {

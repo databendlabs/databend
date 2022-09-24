@@ -22,7 +22,7 @@ use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::storages::stage::StageSourceHelper;
+use crate::storages::stage::StageTable;
 
 #[derive(Debug)]
 pub struct RemoveUserStageInterpreter {
@@ -49,7 +49,7 @@ impl Interpreter for RemoveUserStageInterpreter {
 
         let files = list_files(&self.ctx, &plan.stage, &plan.path, &plan.pattern).await?;
         let table_ctx: Arc<dyn TableContext> = self.ctx.clone();
-        let op = StageSourceHelper::get_op(&table_ctx, &self.plan.stage).await?;
+        let op = StageTable::get_op(&table_ctx, &self.plan.stage).await?;
 
         for name in files.iter().map(|f| f.path.as_str()) {
             op.object(&format!("{prefix}{name}")).delete().await?;
