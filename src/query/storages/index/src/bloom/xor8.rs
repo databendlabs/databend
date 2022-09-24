@@ -34,6 +34,13 @@ where H: Clone + BuildHasher + Into<Vec<u8>> + From<Vec<u8>>
         }
     }
 
+    fn is_empty(&self) -> bool {
+        match self.len() {
+            Some(n) => n == 0,
+            None => true,
+        }
+    }
+
     #[inline]
     fn add_key<K: ?Sized + Hash>(&mut self, key: &K) {
         self.insert(key)

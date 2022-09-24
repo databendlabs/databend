@@ -19,7 +19,7 @@ use common_datavalues::DataType;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::NullableType;
 
-mod bloom;
+pub mod bloom;
 pub mod bloom_filter;
 pub mod index_min_max;
 pub mod range_filter;

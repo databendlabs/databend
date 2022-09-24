@@ -17,8 +17,10 @@ use std::hash::Hash;
 use common_exception::Result;
 
 pub trait Bloom: Sized {
-    // Length of the bitmap index.
+    // The number of keys added/built into the bitmap index.
     fn len(&self) -> Result<usize>;
+
+    fn is_empty(&self) -> bool;
 
     /// Add key into the bitmap index.
     fn add_key<K: ?Sized + Hash>(&mut self, key: &K);
