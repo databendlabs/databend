@@ -20,7 +20,7 @@ use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateDatabasePlan {
     pub if_not_exists: bool,
     pub tenant: String,

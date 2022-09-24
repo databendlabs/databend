@@ -13,7 +13,7 @@
 // limitations under the License.
 use common_datavalues::DataSchemaRef;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ShowCreateTablePlan {
     /// The catalog name
     pub catalog: String,

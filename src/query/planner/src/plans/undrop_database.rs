@@ -18,7 +18,7 @@ use common_datavalues::DataSchemaRef;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::UndropDatabaseReq;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UndropDatabasePlan {
     pub tenant: String,
     pub catalog: String,
