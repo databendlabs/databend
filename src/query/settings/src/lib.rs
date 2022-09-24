@@ -331,13 +331,13 @@ impl Settings {
                 possible_values: None,
             },
             SettingValue {
-                default_value: UserSettingValue::UInt64(0),
+                default_value: UserSettingValue::UInt64(1),
                 user_setting: UserSetting::create(
                     "enable_distributed_eval_index",
-                    UserSettingValue::UInt64(0),
+                    UserSettingValue::UInt64(1),
                 ),
                 level: ScopeLevel::Session,
-                desc: "If enable distributed eval index, default value: 0",
+                desc: "If enable distributed eval index, default value: 1",
                 possible_values: None,
             },
         ];
