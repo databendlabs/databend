@@ -42,4 +42,8 @@ runs:
 
     - name: Check toml format
       shell: bash
-      run: taplo fmt --check
+      run: taplo fmt
+    - name: Suggester / taplo
+      uses: reviewdog/action-suggester@v1
+      with:
+        tool_name: taplo
