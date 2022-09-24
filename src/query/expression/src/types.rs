@@ -51,6 +51,7 @@ use crate::property::Domain;
 use crate::util::concat_array;
 use crate::values::Column;
 use crate::values::Scalar;
+use crate::ColumnBuilder;
 use crate::ScalarRef;
 
 pub type GenericMap = [DataType];
@@ -118,8 +119,30 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
 
     fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>>;
     fn try_downcast_column<'a>(col: &'a Column) -> Option<Self::Column>;
-
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain>;
+
+    /// Downcast `ColumnBuilder` to a mutable reference of its inner builder type.
+    ///
+    /// Not every builder can be downcasted successfully.
+    /// For example: `ArrayType<T: ValueType>`, `NullableType<T: ValueType>`, and `KvPair<K: ValueType, V: ValueType>`
+    /// cannot be downcasted and this method will return `None`.
+    ///
+    /// So when using this method, we cannot unwrap the returned value directly.
+    /// We should:
+    ///
+    /// ```ignore
+    /// // builder: ColumnBuilder
+    /// // T: ValueType
+    /// if let Some(inner) = T::try_downcast_builder(&mut builder) {
+    ///     inner.push(...);
+    /// } else {
+    ///     builder.push(...);
+    /// }
+    /// ```
+    fn try_downcast_builder<'a>(
+        builder: &'a mut ColumnBuilder,
+    ) -> Option<&'a mut Self::ColumnBuilder>;
+
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar;
     fn upcast_column(col: Self::Column) -> Column;
     fn upcast_domain(domain: Self::Domain) -> Domain;
