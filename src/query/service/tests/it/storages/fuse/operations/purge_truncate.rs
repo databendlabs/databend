@@ -32,7 +32,7 @@ async fn test_fuse_truncate_purge_stmt() -> Result<()> {
     append_sample_data(1, &fixture).await?;
     append_sample_data(1, &fixture).await?;
 
-    let expected_index_count = 2;
+    let expected_index_count = 0;
     // there should be some data there: 2 snapshot, 2 segment, 2 block
     check_data_dir(&fixture, "truncate_purge", 2, 2, 2, expected_index_count).await;
 

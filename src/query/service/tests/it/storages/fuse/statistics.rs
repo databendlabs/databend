@@ -160,7 +160,7 @@ async fn test_accumulator() -> common_exception::Result<()> {
     }
 
     assert_eq!(10, stats_acc.blocks_statistics.len());
-    assert!(stats_acc.index_size > 0);
+    assert_eq!(stats_acc.index_size, 0);
     Ok(())
 }
 
