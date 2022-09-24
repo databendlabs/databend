@@ -36,7 +36,6 @@ use poem::Request;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::mpsc::Sender;
-use tracing::error;
 
 use super::HttpQueryContext;
 use crate::interpreters::InterpreterFactory;
@@ -61,18 +60,9 @@ fn execute_query(context: Arc<QueryContext>, plan: Plan) -> impl Future<Output =
     async move {
         let interpreter = InterpreterFactory::get(context.clone(), &plan).await?;
 
-        if let Err(cause) = interpreter.start().await {
-            error!("interpreter.start error: {:?}", cause);
-        }
-
         let mut data_stream = interpreter.execute(context).await?;
 
         while let Some(_block) = data_stream.next().await {}
-
-        // Write Finish to query log table.
-        if let Err(cause) = interpreter.finish().await {
-            error!("interpreter.finish error: {:?}", cause);
-        }
 
         Ok(())
     }
@@ -125,12 +115,13 @@ pub async fn streaming_load(
         .plan_sql(insert_sql)
         .await
         .map_err(InternalServerError)?;
-    context.attach_query_str(insert_sql);
+    context.attach_query_str(plan.to_string(), insert_sql);
 
     let schema = plan.schema();
     match &mut plan {
         Plan::Insert(insert) => match &mut insert.source {
-            InsertInputSource::StrWithFormat((sql_rest, format)) => {
+            InsertInputSource::StreamingWithFormat(format, start, input_context_ref) => {
+                let sql_rest = &insert_sql[*start..].trim();
                 if !sql_rest.is_empty() {
                     return Err(poem::Error::from_string(
                         "should NOT have data after `Format` in streaming load.",
@@ -145,16 +136,13 @@ pub async fn streaming_load(
                         context.get_settings(),
                         schema,
                         context.get_scan_progress(),
+                        true,
                     )
                     .await
                     .map_err(InternalServerError)?,
                 );
+                *input_context_ref = Some(input_context.clone());
                 tracing::info!("streaming load {:?}", input_context);
-
-                insert.source = InsertInputSource::StreamingWithFormat(
-                    format.to_string(),
-                    input_context.clone(),
-                );
 
                 let handler = context.spawn(execute_query(context.clone(), plan));
                 let files = read_multi_part(multipart, tx, &input_context).await?;

@@ -12,68 +12,38 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use common_catalog::catalog::CATALOG_DEFAULT;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::Series;
-use common_datavalues::prelude::SeriesFrom;
 use common_exception::Result;
+use common_storages_preludes::system::ClusteringHistoryLogElement;
+use common_storages_preludes::system::ClusteringHistoryQueue;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::storages::system::ClusteringHistoryTable;
 
-pub struct InterpreterClusteringHistory {
-    ctx: Arc<QueryContext>,
-}
+pub struct InterpreterClusteringHistory;
 
 impl InterpreterClusteringHistory {
-    pub fn create(ctx: Arc<QueryContext>) -> Self {
-        InterpreterClusteringHistory { ctx }
-    }
-
-    pub async fn write_log(
-        &self,
+    pub fn write_log(
+        ctx: &QueryContext,
         start: SystemTime,
         db_name: &str,
         table_name: &str,
     ) -> Result<()> {
-        let start_time = start
-            .duration_since(UNIX_EPOCH)
-            .expect("Time went backwards")
-            .as_micros() as i64;
-        let end_time = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("Time went backwards")
-            .as_micros() as i64;
-        let reclustered_bytes = self.ctx.get_scan_progress_value().bytes as u64;
-        let reclustered_rows = self.ctx.get_scan_progress_value().rows as u64;
-
-        let table = self
-            .ctx
-            .get_table(CATALOG_DEFAULT, "system", "clustering_history")
-            .await?;
-        let schema = table.get_table_info().meta.schema.clone();
-
-        let block = DataBlock::create(schema.clone(), vec![
-            Series::from_data(vec![start_time]),
-            Series::from_data(vec![end_time]),
-            Series::from_data(vec![db_name]),
-            Series::from_data(vec![table_name]),
-            Series::from_data(vec![reclustered_bytes]),
-            Series::from_data(vec![reclustered_rows]),
-        ]);
-        let blocks = vec![Ok(block)];
-        let input_stream = futures::stream::iter::<Vec<Result<DataBlock>>>(blocks);
-
-        let clustering_history_table: &ClusteringHistoryTable =
-            table.as_any().downcast_ref().unwrap();
-        clustering_history_table
-            .append_data(self.ctx.clone(), Box::pin(input_stream))
-            .await?;
-        Ok(())
+        ClusteringHistoryQueue::instance()?.append_data(ClusteringHistoryLogElement {
+            start_time: start
+                .duration_since(UNIX_EPOCH)
+                .expect("Time went backwards")
+                .as_micros() as i64,
+            end_time: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("Time went backwards")
+                .as_micros() as i64,
+            database: db_name.to_string(),
+            table: table_name.to_string(),
+            reclustered_bytes: ctx.get_scan_progress_value().bytes as u64,
+            reclustered_rows: ctx.get_scan_progress_value().rows as u64,
+        })
     }
 }

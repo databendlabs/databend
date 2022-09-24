@@ -92,12 +92,4 @@ impl Interpreter for SelectInterpreterV2 {
         let build_res = self.build_pipeline().await?;
         Ok(build_res)
     }
-
-    async fn start(&self) -> Result<()> {
-        Ok(())
-    }
-
-    async fn finish(&self) -> Result<()> {
-        Ok(())
-    }
 }

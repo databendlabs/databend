@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
 use std::io::Cursor;
 use std::ops::Not;
 use std::sync::Arc;
@@ -27,17 +26,12 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_formats::FormatFactory;
-use common_formats::InputFormat;
 use common_io::prelude::BufferRead;
 use common_io::prelude::BufferReadExt;
 use common_io::prelude::BufferReader;
-use common_io::prelude::FileSplitCow;
 use common_io::prelude::NestedCheckpointReader;
 use common_pipeline_sources::processors::sources::AsyncSource;
 use common_pipeline_sources::processors::sources::AsyncSourcer;
-use common_pipeline_sources::processors::sources::SyncSource;
-use common_pipeline_sources::processors::sources::SyncSourcer;
 use common_pipeline_transforms::processors::transforms::Transform;
 use common_planner::Metadata;
 use common_planner::MetadataRef;
@@ -132,46 +126,24 @@ impl Interpreter for InsertInterpreterV2 {
             );
         } else {
             match &self.plan.source {
-                InsertInputSource::StrWithFormat((str, format)) => {
+                InsertInputSource::Values(data) => {
                     let output_port = OutputPort::create();
-                    let format_settings = self.ctx.get_format_settings()?;
-                    match format.as_str() {
-                        "VALUES" => {
-                            let settings = self.ctx.get_settings();
-                            let name_resolution_ctx =
-                                NameResolutionContext::try_from(settings.as_ref())?;
-                            let inner = ValueSource::new(
-                                str.to_string(),
-                                self.ctx.clone(),
-                                name_resolution_ctx,
-                                plan.schema(),
-                            );
-                            let source =
-                                AsyncSourcer::create(self.ctx.clone(), output_port.clone(), inner)?;
-                            builder.add_source(output_port, source);
-                        }
+                    let settings = self.ctx.get_settings();
+                    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+                    let inner = ValueSource::new(
+                        data.to_string(),
+                        self.ctx.clone(),
+                        name_resolution_ctx,
+                        plan.schema(),
+                    );
+                    let source =
+                        AsyncSourcer::create(self.ctx.clone(), output_port.clone(), inner)?;
+                    builder.add_source(output_port, source);
 
-                        _ => {
-                            let input_format = FormatFactory::instance().get_input(
-                                format.as_str(),
-                                plan.schema(),
-                                format_settings,
-                            )?;
-                            let inner = FormatSource {
-                                data: str.to_string(),
-                                input_format,
-                                blocks: vec![],
-                                is_finished: false,
-                            };
-
-                            let source =
-                                SyncSourcer::create(self.ctx.clone(), output_port.clone(), inner)?;
-                            builder.add_source(output_port, source);
-                        }
-                    }
                     build_res.main_pipeline.add_pipe(builder.finalize());
                 }
-                InsertInputSource::StreamingWithFormat(_, input_context) => {
+                InsertInputSource::StreamingWithFormat(_, _, input_context) => {
+                    let input_context = input_context.as_ref().expect("must success").clone();
                     input_context
                         .format
                         .exec_stream(input_context.clone(), &mut build_res.main_pipeline)?;
@@ -290,48 +262,6 @@ impl Interpreter for InsertInterpreterV2 {
         let mut guard = self.source_pipe_builder.lock();
         *guard = builder;
         Ok(())
-    }
-}
-
-struct FormatSource {
-    data: String,
-    input_format: Arc<dyn InputFormat>,
-    blocks: Vec<DataBlock>,
-    is_finished: bool,
-}
-
-impl SyncSource for FormatSource {
-    const NAME: &'static str = "FormatSource";
-
-    fn generate(&mut self) -> Result<Option<DataBlock>> {
-        if self.is_finished {
-            return Ok(None);
-        }
-
-        if self.blocks.is_empty() {
-            let data_slice = self.data.as_bytes();
-            let mut input_state = self.input_format.create_state();
-            let skip_size = self
-                .input_format
-                .skip_header(data_slice, &mut input_state, 0)?;
-
-            let split = FileSplitCow {
-                path: None,
-                start_offset: 0,
-                start_row: 0,
-                buf: Cow::from(&data_slice[skip_size..]),
-            };
-            self.blocks = self.input_format.deserialize_complete_split(split)?;
-        }
-
-        if !self.blocks.is_empty() {
-            let block = self.blocks.remove(0);
-            if self.blocks.is_empty() {
-                self.is_finished = true;
-            }
-            return Ok(Some(block));
-        }
-        Ok(None)
     }
 }
 

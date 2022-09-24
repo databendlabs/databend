@@ -14,10 +14,8 @@
 
 mod stream;
 mod stream_datablock;
-mod stream_error;
 mod stream_progress;
 
 pub use stream::*;
 pub use stream_datablock::DataBlockStream;
-pub use stream_error::ErrorStream;
 pub use stream_progress::ProgressStream;

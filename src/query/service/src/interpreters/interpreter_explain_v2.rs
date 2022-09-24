@@ -93,14 +93,6 @@ impl Interpreter for ExplainInterpreterV2 {
 
         PipelineBuildResult::from_blocks(blocks)
     }
-
-    async fn start(&self) -> Result<()> {
-        Ok(())
-    }
-
-    async fn finish(&self) -> Result<()> {
-        Ok(())
-    }
 }
 
 impl ExplainInterpreterV2 {
