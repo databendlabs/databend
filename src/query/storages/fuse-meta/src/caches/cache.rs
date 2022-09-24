@@ -69,9 +69,9 @@ impl CacheManager {
         } else {
             let table_snapshot_cache = Self::new_item_cache(config.table_cache_snapshot_count);
             let segment_info_cache = Self::new_item_cache(config.table_cache_segment_count);
-            let bloom_index_cache = Self::new_bytes_cache(DEFAULT_BLOOM_INDEX_META_CACHE_ITEMS);
+            let bloom_index_cache = Self::new_bytes_cache(DEFAULT_BLOOM_INDEX_COLUMN_CACHE_SIZE);
             let bloom_index_meta_cache =
-                Self::new_item_cache(DEFAULT_BLOOM_INDEX_COLUMN_CACHE_SIZE);
+                Self::new_item_cache(DEFAULT_BLOOM_INDEX_META_CACHE_ITEMS);
 
             let file_meta_data_cache = Self::new_item_cache(DEFAULT_FILE_META_DATA_CACHE_ITEMS);
 
