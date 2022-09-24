@@ -105,7 +105,12 @@ miniz_oxide = { opt-level = 3 }
 object = { opt-level = 3 }
 rustc-demangle = { opt-level = 3 }
 
-[patch.crates-io]
 # If there are dependencies that need patching, they can be listed below.
 # For example:
 # http-types = { git = "https://github.com/Xuanwo/http-types", rev = "106fc6d" }
+[patch.crates-io]
+# thrift released v0.17 but thrift rust lib not published.
+#
+# Remove this line and rollback to `0.17.0` after issue fixed:
+# https://issues.apache.org/jira/projects/THRIFT/issues/THRIFT-5640?filter=allopenissues
+thrift = {git = "https://github.com/apache/thrift", rev = "fb7df3cb"}

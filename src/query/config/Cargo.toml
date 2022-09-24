@@ -25,7 +25,7 @@ opendal = { version = "0.17.1", features = ["layers-retry", "compress"], optiona
 semver = "1.0.14"
 serde = { version = "1.0.144", features = ["derive"] }
 serfig = "0.0.2"
-thrift = { version = "0.15.0", optional = true }
+thrift = { version = "0.18.0", optional = true }
 
 [features]
 default = []

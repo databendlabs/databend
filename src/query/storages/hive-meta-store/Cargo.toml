@@ -11,10 +11,10 @@ doctest = false
 test = false
 
 [features]
-# Phony feature 
+# Phony feature
 #
-# Prevents the integration tests from running if "hive" not enabled 
-#   The integration tests need hive-meta-store service, which is not available 
+# Prevents the integration tests from running if "hive" not enabled
+#   The integration tests need hive-meta-store service, which is not available
 #   in the normal testing setup.
 hive-it = []
 
@@ -24,7 +24,7 @@ hive-it = []
 # Github dependencies
 
 # Crates.io dependencies
-thrift = "0.15.0"
+thrift = "0.18.0"
 
 [build-dependencies]
 which = "4.3.0"
