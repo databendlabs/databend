@@ -17,3 +17,4 @@ mod bloom;
 mod xor8;
 
 pub use bloom::Bloom;
+pub use xor8::XorBloom;

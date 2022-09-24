@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_exception::Result;
 use common_storages_index::bloom::Bloom;
+use common_storages_index::bloom::XorBloom;
 use rand::prelude::random;
 use rand::rngs::StdRng;
 use rand::Rng;
 use rand::SeedableRng;
-use xorfilter::BuildHasherDefault;
-use xorfilter::Xor8;
 
 #[test]
-fn test_xor_bitmap_u64() {
+fn test_xor_bitmap_u64() -> Result<()> {
     let seed: u64 = random();
     let numbers = 1_000_000;
 
@@ -29,31 +29,31 @@ fn test_xor_bitmap_u64() {
     let mut rng = StdRng::seed_from_u64(seed);
     let keys: Vec<u64> = (0..numbers).map(|_| rng.gen::<u64>()).collect();
 
-    let mut filter = Xor8::<BuildHasherDefault>::new();
+    let mut filter = XorBloom::create();
     filter.add_keys(&keys);
-    filter.build().unwrap();
+    filter.build()?;
 
     for key in keys.iter() {
         assert!(filter.contains(key), "key {} not present", key);
     }
 
-    {
-        let val = <Xor8 as Bloom>::to_bytes(&filter).unwrap();
-        let (_, n) = <Xor8<BuildHasherDefault> as Bloom>::from_bytes(&val).unwrap();
-        assert_eq!(n, val.len(), "{} {}", n, val.len());
+    let val = filter.to_bytes()?;
+    let (_, n) = XorBloom::from_bytes(&val)?;
+    assert_eq!(n, val.len(), "{} {}", n, val.len());
 
-        // u64 bitmap enc:1230069, raw:8000000, ratio:0.15375863
-        println!(
-            "u64 bitmap enc:{}, raw:{}, ratio:{}",
-            val.len(),
-            size,
-            val.len() as f32 / size as f32
-        );
-    }
+    // u64 bitmap enc:1230069, raw:8000000, ratio:0.15375863
+    println!(
+        "u64 bitmap enc:{}, raw:{}, ratio:{}",
+        val.len(),
+        size,
+        val.len() as f32 / size as f32
+    );
+
+    Ok(())
 }
 
 #[test]
-fn test_xor_bitmap_bool() {
+fn test_xor_bitmap_bool() -> Result<()> {
     let seed: u64 = random();
     let numbers = 1_000_000;
 
@@ -61,33 +61,33 @@ fn test_xor_bitmap_bool() {
     let mut rng = StdRng::seed_from_u64(seed);
     let keys: Vec<bool> = (0..numbers).map(|_| rng.gen::<u64>() % 2 == 0).collect();
 
-    let mut filter = Xor8::<BuildHasherDefault>::new();
+    let mut filter = XorBloom::create();
     for key in keys.clone().into_iter() {
         filter.add_key(&key);
     }
-    filter.build().unwrap();
+    filter.build()?;
 
     for key in keys.iter() {
         assert!(filter.contains(key), "key {} not present", key);
     }
 
-    {
-        let val = <Xor8 as Bloom>::to_bytes(&filter).unwrap();
-        let (_, n) = <Xor8<BuildHasherDefault> as Bloom>::from_bytes(&val).unwrap();
-        assert_eq!(n, val.len(), "{} {}", n, val.len());
+    let val = filter.to_bytes()?;
+    let (_, n) = XorBloom::from_bytes(&val)?;
+    assert_eq!(n, val.len(), "{} {}", n, val.len());
 
-        // bool bitmap enc:61, raw:1000000, ratio:0.000061
-        println!(
-            "bool bitmap enc:{}, raw:{}, ratio:{}",
-            val.len(),
-            size,
-            val.len() as f32 / size as f32
-        );
-    }
+    // bool bitmap enc:61, raw:1000000, ratio:0.000061
+    println!(
+        "bool bitmap enc:{}, raw:{}, ratio:{}",
+        val.len(),
+        size,
+        val.len() as f32 / size as f32
+    );
+
+    Ok(())
 }
 
 #[test]
-fn test_xor_bitmap_string() {
+fn test_xor_bitmap_string() -> Result<()> {
     let seed: u64 = random();
     let numbers = 100_000;
 
@@ -109,31 +109,31 @@ fn test_xor_bitmap_string() {
         })
         .collect();
 
-    let mut filter = Xor8::<BuildHasherDefault>::new();
+    let mut filter = XorBloom::create();
     filter.add_keys(&keys);
-    filter.build().unwrap();
+    filter.build()?;
 
     for key in keys.iter() {
         assert!(filter.contains(key), "key {} not present", key);
     }
 
-    {
-        let val = <Xor8 as Bloom>::to_bytes(&filter).unwrap();
-        let (_, n) = <Xor8<BuildHasherDefault> as Bloom>::from_bytes(&val).unwrap();
-        assert_eq!(n, val.len(), "{} {}", n, val.len());
+    let val = filter.to_bytes()?;
+    let (_, n) = XorBloom::from_bytes(&val)?;
+    assert_eq!(n, val.len(), "{} {}", n, val.len());
 
-        // string enc:123067, raw:3000000, ratio:0.041022334
-        println!(
-            "string enc:{}, raw:{}, ratio:{}",
-            val.len(),
-            size,
-            val.len() as f32 / size as f32
-        );
-    }
+    // string enc:123067, raw:3000000, ratio:0.041022334
+    println!(
+        "string enc:{}, raw:{}, ratio:{}",
+        val.len(),
+        size,
+        val.len() as f32 / size as f32
+    );
+
+    Ok(())
 }
 
 #[test]
-fn test_xor_bitmap_duplicate_string() {
+fn test_xor_bitmap_duplicate_string() -> Result<()> {
     let numbers = 100_000;
 
     let key = "123456789012345678901234567890";
@@ -142,27 +142,27 @@ fn test_xor_bitmap_duplicate_string() {
 
     let keys: Vec<String> = (0..numbers).map(|_| key.to_string()).collect();
 
-    let mut filter = Xor8::<BuildHasherDefault>::new();
+    let mut filter = XorBloom::create();
     for key in keys.clone().into_iter() {
         filter.add_key(&key);
     }
-    filter.build().unwrap();
+    filter.build()?;
 
     for key in keys.iter() {
         assert!(filter.contains(key), "key {} not present", key);
     }
 
-    {
-        let val = <Xor8 as Bloom>::to_bytes(&filter).unwrap();
-        let (_, n) = <Xor8<BuildHasherDefault> as Bloom>::from_bytes(&val).unwrap();
-        assert_eq!(n, val.len(), "{} {}", n, val.len());
+    let val = filter.to_bytes()?;
+    let (_, n) = XorBloom::from_bytes(&val)?;
+    assert_eq!(n, val.len(), "{} {}", n, val.len());
 
-        // string enc:61, raw:3000000, ratio:0.000020333333
-        println!(
-            "string enc:{}, raw:{}, ratio:{}",
-            val.len(),
-            size,
-            val.len() as f32 / size as f32
-        );
-    }
+    // string enc:61, raw:3000000, ratio:0.000020333333
+    println!(
+        "string enc:{}, raw:{}, ratio:{}",
+        val.len(),
+        size,
+        val.len() as f32 / size as f32
+    );
+
+    Ok(())
 }

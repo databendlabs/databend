@@ -12,7 +12,6 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::hash::BuildHasher;
 use std::hash::Hash;
 
 use cbordata::Cbor;
@@ -20,52 +19,60 @@ use cbordata::FromCbor;
 use cbordata::IntoCbor;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use xorfilter::BuildHasherDefault;
 use xorfilter::Xor8;
 
 use crate::bloom::Bloom;
 
-impl<H> Bloom for Xor8<H>
-where H: Clone + BuildHasher + Into<Vec<u8>> + From<Vec<u8>>
-{
+pub struct XorBloom {
+    filter: Xor8,
+}
+
+impl XorBloom {
+    pub fn create() -> Self {
+        XorBloom {
+            filter: Default::default(),
+        }
+    }
+}
+
+impl Bloom for XorBloom {
     fn len(&self) -> Result<usize> {
-        match self.len() {
+        match self.filter.len() {
             Some(n) => Ok(n),
             None => Err(ErrorCode::UnImplement("Xor8 does not implement len()")),
         }
     }
 
     fn is_empty(&self) -> bool {
-        match self.len() {
+        match self.filter.len() {
             Some(n) => n == 0,
             None => true,
         }
     }
 
-    #[inline]
     fn add_key<K: ?Sized + Hash>(&mut self, key: &K) {
-        self.insert(key)
+        self.filter.insert(key)
     }
 
-    #[inline]
     fn add_keys<K: Hash>(&mut self, keys: &[K]) {
-        self.populate(keys)
+        self.filter.populate(keys)
     }
 
-    #[inline]
     fn build(&mut self) -> Result<()> {
-        self.build()
+        self.filter
+            .build()
             .map_err(|e| ErrorCode::UnexpectedError(format!("Xor8.build error:{:?}", e)))
     }
 
-    #[inline]
     fn contains<K: ?Sized + Hash>(&self, key: &K) -> bool {
-        self.contains(key)
+        self.filter.contains(key)
     }
 
     fn to_bytes(&self) -> Result<Vec<u8>> {
         let mut buf: Vec<u8> = vec![];
-
         let cbor_val = self
+            .filter
             .clone()
             .into_cbor()
             .map_err(|e| ErrorCode::UnexpectedError(format!("Xor8.into_cbor error:{:}", e)))?;
@@ -80,8 +87,8 @@ where H: Clone + BuildHasher + Into<Vec<u8>> + From<Vec<u8>>
         let (cbor_val, n) = Cbor::decode(&mut buf)
             .map_err(|e| ErrorCode::UnexpectedError(format!("Xor8.cbor.decode error:{:}", e)))?;
 
-        let xor_value = Xor8::<H>::from_cbor(cbor_val)
+        let xor_value = Xor8::<BuildHasherDefault>::from_cbor(cbor_val)
             .map_err(|e| ErrorCode::UnexpectedError(format!("Xor8.from_cborerror:{:}", e)))?;
-        Ok((xor_value, n))
+        Ok((Self { filter: xor_value }, n))
     }
 }
