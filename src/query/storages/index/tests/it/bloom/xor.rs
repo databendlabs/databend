@@ -30,9 +30,7 @@ fn test_xor_bitmap_u64() {
     let keys: Vec<u64> = (0..numbers).map(|_| rng.gen::<u64>()).collect();
 
     let mut filter = Xor8::<BuildHasherDefault>::new();
-    for key in keys.clone().into_iter() {
-        filter.add_key(&key);
-    }
+    filter.add_keys(&keys);
     filter.build().unwrap();
 
     for key in keys.iter() {
@@ -112,9 +110,7 @@ fn test_xor_bitmap_string() {
         .collect();
 
     let mut filter = Xor8::<BuildHasherDefault>::new();
-    for key in keys.clone().into_iter() {
-        filter.add_key(&key);
-    }
+    filter.add_keys(&keys);
     filter.build().unwrap();
 
     for key in keys.iter() {

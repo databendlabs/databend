@@ -47,8 +47,8 @@ where H: Clone + BuildHasher + Into<Vec<u8>> + From<Vec<u8>>
     }
 
     #[inline]
-    fn add_keys<K: Hash>(&mut self, _keys: &[K]) {
-        todo!()
+    fn add_keys<K: Hash>(&mut self, keys: &[K]) {
+        self.populate(keys)
     }
 
     #[inline]
