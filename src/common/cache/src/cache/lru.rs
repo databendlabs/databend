@@ -196,7 +196,6 @@ impl<K: Eq + Hash, V, S: BuildHasher, M: CountableMeter<K, V>> Cache<K, V, S, M>
         Q: Hash + Eq + ?Sized,
     {
         self.map.get(k)
-        // self.map.get_refresh(k).map(|v| v as &V)
     }
 
     /// Returns a mutable reference to the value corresponding to the given key in the cache, if
