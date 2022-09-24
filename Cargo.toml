@@ -113,4 +113,4 @@ rustc-demangle = { opt-level = 3 }
 #
 # Remove this line and rollback to `0.17.0` after issue fixed:
 # https://issues.apache.org/jira/projects/THRIFT/issues/THRIFT-5640?filter=allopenissues
-thrift = {git = "https://github.com/apache/thrift", rev = "fb7df3cb"}
+thrift = { git = "https://github.com/apache/thrift", rev = "fb7df3cb" }
