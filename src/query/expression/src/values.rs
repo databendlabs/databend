@@ -1269,6 +1269,7 @@ impl<'a> Iterator for ColumnIterator<'a> {
 
 unsafe impl<'a> TrustedLen for ColumnIterator<'a> {}
 
+#[inline]
 pub fn upcast_gat<'short, 'long: 'short>(long: ScalarRef<'long>) -> ScalarRef<'short> {
     long
 }

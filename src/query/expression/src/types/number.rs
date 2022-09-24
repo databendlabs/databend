@@ -60,6 +60,7 @@ impl<Num: Number> ValueType for NumberType<Num> {
     type ColumnIterator<'a> = std::iter::Cloned<std::slice::Iter<'a, Num>>;
     type ColumnBuilder = Vec<Num>;
 
+    #[inline]
     fn upcast_gat<'short, 'long: 'short>(long: Num) -> Num {
         long
     }

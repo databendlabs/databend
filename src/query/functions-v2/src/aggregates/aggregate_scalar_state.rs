@@ -186,11 +186,16 @@ where
     }
 
     fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()> {
-        // TODO(RinChanNOW): downcast builder
         if let Some(v) = &self.value {
-            builder.push(T::upcast_scalar(v.clone()).as_ref())
+            if let Some(inner) = T::try_downcast_builder(builder) {
+                T::push_item(inner, T::to_scalar_ref(v));
+            } else {
+                builder.push(T::upcast_scalar(v.clone()).as_ref());
+            }
+        } else if let Some(inner) = T::try_downcast_builder(builder) {
+            T::push_default(inner);
         } else {
-            builder.push_default()
+            builder.push_default();
         }
         Ok(())
     }

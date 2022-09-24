@@ -34,6 +34,7 @@ impl ValueType for AnyType {
     type ColumnIterator<'a> = ColumnIterator<'a>;
     type ColumnBuilder = ColumnBuilder;
 
+    #[inline]
     fn upcast_gat<'short, 'long: 'short>(long: Self::ScalarRef<'long>) -> Self::ScalarRef<'short> {
         upcast_gat(long)
     }

@@ -39,6 +39,7 @@ impl ValueType for BooleanType {
     type ColumnIterator<'a> = common_arrow::arrow::bitmap::utils::BitmapIter<'a>;
     type ColumnBuilder = MutableBitmap;
 
+    #[inline]
     fn upcast_gat<'short, 'long: 'short>(long: bool) -> bool {
         long
     }

@@ -41,6 +41,7 @@ impl ValueType for TimestampType {
     type ColumnIterator<'a> = TimestampIterator<'a>;
     type ColumnBuilder = TimestampColumnBuilder;
 
+    #[inline]
     fn upcast_gat<'short, 'long: 'short>(long: Timestamp) -> Timestamp {
         long
     }

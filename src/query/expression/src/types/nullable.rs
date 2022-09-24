@@ -42,6 +42,7 @@ impl<T: ValueType> ValueType for NullableType<T> {
     type ColumnIterator<'a> = NullableIterator<'a, T>;
     type ColumnBuilder = NullableColumnBuilder<T>;
 
+    #[inline]
     fn upcast_gat<'short, 'long: 'short>(
         long: Option<T::ScalarRef<'long>>,
     ) -> Option<T::ScalarRef<'short>> {

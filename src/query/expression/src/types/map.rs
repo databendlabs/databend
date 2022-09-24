@@ -41,6 +41,7 @@ impl<K: ValueType, V: ValueType> ValueType for KvPair<K, V> {
     type ColumnIterator<'a> = KvIterator<'a, K, V>;
     type ColumnBuilder = KvColumnBuilder<K, V>;
 
+    #[inline]
     fn upcast_gat<'short, 'long: 'short>(long: Self::ScalarRef<'long>) -> Self::ScalarRef<'short> {
         (K::upcast_gat(long.0), V::upcast_gat(long.1))
     }
@@ -295,6 +296,7 @@ impl<T: ValueType> ValueType for MapType<T> {
     type ColumnIterator<'a> = <MapInternal<T> as ValueType>::ColumnIterator<'a>;
     type ColumnBuilder = <MapInternal<T> as ValueType>::ColumnBuilder;
 
+    #[inline]
     fn upcast_gat<'short, 'long: 'short>(long: Self::ScalarRef<'long>) -> Self::ScalarRef<'short> {
         <MapInternal<T> as ValueType>::upcast_gat(long)
     }

@@ -41,6 +41,7 @@ impl<T: ValueType> ValueType for ArrayType<T> {
     type ColumnIterator<'a> = ArrayIterator<'a, T>;
     type ColumnBuilder = ArrayColumnBuilder<T>;
 
+    #[inline]
     fn upcast_gat<'short, 'long: 'short>(long: T::Column) -> T::Column {
         long
     }
