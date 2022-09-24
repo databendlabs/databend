@@ -36,7 +36,6 @@ impl FuseTable {
     pub(crate) async fn do_compact(
         &self,
         ctx: Arc<dyn TableContext>,
-        catalog: String,
         pipeline: &mut Pipeline,
     ) -> Result<Option<Arc<dyn TableMutator>>> {
         let snapshot_opt = self.read_table_snapshot(ctx.clone()).await?;
@@ -78,7 +77,7 @@ impl FuseTable {
         let table_info = self.get_table_info();
         let description = statistics.get_description(table_info);
         let plan = ReadDataSourcePlan {
-            catalog,
+            catalog: table_info.catalog().to_string(),
             source_info: SourceInfo::TableSource(table_info.clone()),
             scan_fields: None,
             parts,

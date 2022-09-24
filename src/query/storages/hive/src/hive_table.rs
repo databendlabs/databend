@@ -395,7 +395,6 @@ impl Table for HiveTable {
     async fn commit_insertion(
         &self,
         _ctx: Arc<dyn TableContext>,
-        _catalog_name: &str,
         _operations: Vec<DataBlock>,
         _overwrite: bool,
     ) -> Result<()> {
@@ -406,7 +405,7 @@ impl Table for HiveTable {
         )))
     }
 
-    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: &str, _: bool) -> Result<()> {
+    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: bool) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(
             "truncate for table {} is not implemented",
             self.name()

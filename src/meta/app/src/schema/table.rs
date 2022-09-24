@@ -222,6 +222,10 @@ impl TableInfo {
         &self.meta.options
     }
 
+    pub fn catalog(&self) -> &str {
+        &self.meta.catalog
+    }
+
     pub fn engine(&self) -> &str {
         &self.meta.engine
     }

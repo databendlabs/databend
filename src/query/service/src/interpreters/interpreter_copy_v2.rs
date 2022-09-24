@@ -280,7 +280,6 @@ impl CopyInterpreterV2 {
         to_table.append2(self.ctx.clone(), &mut build_res.main_pipeline, false)?;
 
         let ctx = self.ctx.clone();
-        let catalog_name = catalog_name.clone();
         let files = files.clone();
         let from = from.clone();
 
@@ -290,14 +289,13 @@ impl CopyInterpreterV2 {
                 let ctx = ctx.clone();
                 let files = files.clone();
                 let from = from.clone();
-                let catalog_name = catalog_name.clone();
                 let to_table = to_table.clone();
 
                 let task = GlobalIORuntime::instance().spawn(async move {
                     // Commit
                     let operations = ctx.consume_precommit_blocks();
                     to_table
-                        .commit_insertion(ctx.clone(), &catalog_name, operations, false)
+                        .commit_insertion(ctx.clone(), operations, false)
                         .await?;
 
                     // Purge

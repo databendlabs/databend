@@ -154,7 +154,6 @@ impl Table for StageTable {
     async fn commit_insertion(
         &self,
         ctx: Arc<dyn TableContext>,
-        _catalog_name: &str,
         operations: Vec<DataBlock>,
         _overwrite: bool,
     ) -> Result<()> {
@@ -215,7 +214,7 @@ impl Table for StageTable {
     }
 
     // Truncate the stage file.
-    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: &str, _: bool) -> Result<()> {
+    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: bool) -> Result<()> {
         Err(ErrorCode::UnImplement(
             "S3 external table truncate() unimplemented yet!",
         ))
