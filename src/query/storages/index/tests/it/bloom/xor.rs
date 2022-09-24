@@ -135,3 +135,38 @@ fn test_xor_bitmap_string() {
         );
     }
 }
+
+#[test]
+fn test_xor_bitmap_duplicate_string() {
+    let numbers = 100_000;
+
+    let key = "123456789012345678901234567890";
+    let len = key.len();
+    let size = len * numbers;
+
+    let keys: Vec<String> = (0..numbers).map(|_| key.to_string()).collect();
+
+    let mut filter = Xor8::<BuildHasherDefault>::new();
+    for key in keys.clone().into_iter() {
+        filter.add_key(&key);
+    }
+    filter.build().unwrap();
+
+    for key in keys.iter() {
+        assert!(filter.contains(key), "key {} not present", key);
+    }
+
+    {
+        let val = <Xor8 as Bloom>::to_bytes(&filter).unwrap();
+        let (_, n) = <Xor8<BuildHasherDefault> as Bloom>::from_bytes(&val).unwrap();
+        assert_eq!(n, val.len(), "{} {}", n, val.len());
+
+        // string enc:61, raw:3000000, ratio:0.000020333333
+        println!(
+            "string enc:{}, raw:{}, ratio:{}",
+            val.len(),
+            size,
+            val.len() as f32 / size as f32
+        );
+    }
+}
