@@ -97,6 +97,7 @@ const META_GRPC_CLIENT_REQUEST_SUCCESS: &str = "meta_grpc_client_request_success
 const META_GRPC_CLIENT_REQUEST_FAILED: &str = "meta_grpc_client_request_fail";
 const META_GRPC_MAKE_CLIENT_FAILED: &str = "meta_grpc_make_client_fail";
 const LABEL_ENDPOINT: &str = "endpoint";
+const LABEL_REQUEST: &str = "request";
 const LABEL_ERROR: &str = "error";
 
 #[derive(Debug)]
@@ -345,6 +346,7 @@ impl MetaGrpcClient {
 
             let resp_tx = req.resp_tx;
             let req = req.req;
+            let req_name = req.name();
 
             let resp = match req {
                 message::Request::Get(r) => {
@@ -400,11 +402,21 @@ impl MetaGrpcClient {
             };
 
             if let Some(current_endpoint) = current_endpoint {
+                let elapsed = start.elapsed().as_millis() as f64;
                 label_histogram_with_val(
                     META_GRPC_CLIENT_REQUEST_DURATION_MS,
-                    vec![(LABEL_ENDPOINT, current_endpoint.to_string())],
-                    start.elapsed().as_millis() as f64,
+                    vec![
+                        (LABEL_ENDPOINT, current_endpoint.to_string()),
+                        (LABEL_REQUEST, req_name.to_string()),
+                    ],
+                    elapsed,
                 );
+                if elapsed > 1000_f64 {
+                    warn!(
+                        "MetaGrpcClient slow request {} to {} takes {} ms",
+                        req_name, current_endpoint, elapsed
+                    );
+                }
 
                 if let Some(err) = resp.err() {
                     label_counter_with_val_and_labels(
@@ -412,6 +424,7 @@ impl MetaGrpcClient {
                         vec![
                             (LABEL_ENDPOINT, current_endpoint.to_string()),
                             (LABEL_ERROR, err.to_string()),
+                            (LABEL_REQUEST, req_name.to_string()),
                         ],
                         1,
                     );
@@ -419,7 +432,10 @@ impl MetaGrpcClient {
                 } else {
                     label_counter_with_val_and_labels(
                         META_GRPC_CLIENT_REQUEST_SUCCESS,
-                        vec![(LABEL_ENDPOINT, current_endpoint.to_string())],
+                        vec![
+                            (LABEL_ENDPOINT, current_endpoint.to_string()),
+                            (LABEL_REQUEST, req_name.to_string()),
+                        ],
                         1,
                     );
                 }

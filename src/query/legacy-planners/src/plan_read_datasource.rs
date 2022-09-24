@@ -18,9 +18,9 @@ use std::sync::Arc;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_legacy_expression::LegacyExpression;
 use common_meta_app::schema::TableInfo;
 
-use crate::Expression;
 use crate::Extras;
 use crate::Partitions;
 use crate::Projection;
@@ -71,7 +71,7 @@ pub struct ReadDataSourcePlan {
     pub statistics: Statistics,
     pub description: String,
 
-    pub tbl_args: Option<Vec<Expression>>,
+    pub tbl_args: Option<Vec<LegacyExpression>>,
     pub push_downs: Option<Extras>,
 }
 

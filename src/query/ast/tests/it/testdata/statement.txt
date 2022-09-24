@@ -4360,6 +4360,7 @@ Insert(
         source: Streaming {
             format: "json",
             rest_str: ";",
+            start: 31,
         },
         overwrite: false,
     },
@@ -5594,6 +5595,78 @@ Copy(
         },
         validation_mode: "",
         size_limit: 10,
+        purge: false,
+        force: false,
+    },
+)
+
+
+---------- Input ----------
+COPY INTO mytable
+                FROM 'https://127.0.0.1:9900';
+---------- Output ---------
+COPY INTO mytable FROM 'https://127.0.0.1:9900/' PURGE = false FORCE = false
+---------- AST ------------
+Copy(
+    CopyStmt {
+        src: UriLocation(
+            UriLocation {
+                protocol: "https",
+                name: "127.0.0.1:9900",
+                path: "/",
+                connection: {},
+            },
+        ),
+        dst: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "mytable",
+                quote: None,
+                span: Ident(10..17),
+            },
+        },
+        files: [],
+        pattern: "",
+        file_format: {},
+        validation_mode: "",
+        size_limit: 0,
+        purge: false,
+        force: false,
+    },
+)
+
+
+---------- Input ----------
+COPY INTO mytable
+                FROM 'https://127.0.0.1:';
+---------- Output ---------
+COPY INTO mytable FROM 'https://127.0.0.1/' PURGE = false FORCE = false
+---------- AST ------------
+Copy(
+    CopyStmt {
+        src: UriLocation(
+            UriLocation {
+                protocol: "https",
+                name: "127.0.0.1",
+                path: "/",
+                connection: {},
+            },
+        ),
+        dst: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "mytable",
+                quote: None,
+                span: Ident(10..17),
+            },
+        },
+        files: [],
+        pattern: "",
+        file_format: {},
+        validation_mode: "",
+        size_limit: 0,
         purge: false,
         force: false,
     },

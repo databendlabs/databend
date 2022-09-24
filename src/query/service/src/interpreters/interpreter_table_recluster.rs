@@ -16,7 +16,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use common_exception::Result;
-use common_legacy_planners::ReclusterTablePlan;
+use common_legacy_planners::Extras;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
@@ -26,6 +26,8 @@ use crate::pipelines::Pipeline;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::sql::executor::ExpressionBuilderWithoutRenaming;
+use crate::sql::plans::ReclusterTablePlan;
 
 pub struct ReclusterTableInterpreter {
     ctx: Arc<QueryContext>,
@@ -50,6 +52,19 @@ impl Interpreter for ReclusterTableInterpreter {
         let settings = ctx.get_settings();
         let tenant = ctx.get_tenant();
         let start = SystemTime::now();
+
+        // Build extras via push down scalar
+        let extras = match &plan.push_downs {
+            None => None,
+            Some(scalar) => {
+                let eb = ExpressionBuilderWithoutRenaming::create(plan.metadata.clone());
+                let pred_expr = eb.build(scalar)?;
+                Some(Extras {
+                    filters: vec![pred_expr],
+                    ..Extras::default()
+                })
+            }
+        };
         loop {
             let table = self
                 .ctx
@@ -63,7 +78,7 @@ impl Interpreter for ReclusterTableInterpreter {
                     ctx.clone(),
                     plan.catalog.clone(),
                     &mut pipeline,
-                    plan.push_downs.clone(),
+                    extras.clone(),
                 )
                 .await?;
             let mutator = if let Some(mutator) = mutator {
@@ -91,9 +106,7 @@ impl Interpreter for ReclusterTableInterpreter {
             }
         }
 
-        InterpreterClusteringHistory::create(ctx.clone())
-            .write_log(start, &plan.database, &plan.table)
-            .await?;
+        InterpreterClusteringHistory::write_log(&ctx, start, &plan.database, &plan.table)?;
 
         Ok(PipelineBuildResult::create())
     }

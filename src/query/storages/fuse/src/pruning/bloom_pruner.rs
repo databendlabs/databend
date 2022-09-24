@@ -19,9 +19,9 @@ use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_fuse_meta::meta::Location;
-use common_legacy_planners::Expression;
-use common_legacy_planners::ExpressionVisitor;
-use common_legacy_planners::Recursion;
+use common_legacy_expression::ExpressionVisitor;
+use common_legacy_expression::LegacyExpression;
+use common_legacy_expression::Recursion;
 use common_storages_index::BloomFilterIndexer;
 use opendal::Operator;
 
@@ -48,7 +48,7 @@ struct BloomFilterIndexPruner {
     // columns that should be loaded from bloom filter block
     index_columns: Vec<String>,
     // the expression that would be evaluate
-    filter_expression: Expression,
+    filter_expression: LegacyExpression,
     // the data accessor
     dal: Operator,
     // the schema of data being indexed
@@ -59,7 +59,7 @@ impl BloomFilterIndexPruner {
     pub fn new(
         ctx: Arc<dyn TableContext>,
         index_columns: Vec<String>,
-        filter_expression: Expression,
+        filter_expression: LegacyExpression,
         dal: Operator,
         data_schema: DataSchemaRef,
     ) -> Self {
@@ -109,10 +109,18 @@ impl BloomFilterPruner for BloomFilterIndexPruner {
 /// otherwise, a [BloomFilterIndexer] backed pruner will be return
 pub fn new_bloom_filter_pruner(
     ctx: &Arc<dyn TableContext>,
-    filter_exprs: Option<&[Expression]>,
+    filter_exprs: Option<&[LegacyExpression]>,
     schema: &DataSchemaRef,
     dal: Operator,
 ) -> Result<Arc<dyn BloomFilterPruner + Send + Sync>> {
+    // due to issue
+    // https://github.com/datafuselabs/databend/issues/7780
+    // bloom filter is disabled, just return a NonPruner unconditionally
+    if true {
+        return Ok(Arc::new(NonPruner));
+    }
+
+    // the following codes is unreachable, but kept to help diagnostic performance issues
     if let Some(exprs) = filter_exprs {
         if exprs.is_empty() {
             return Ok(Arc::new(NonPruner));
@@ -120,7 +128,7 @@ pub fn new_bloom_filter_pruner(
         // check if there were applicable filter conditions
         let expr = exprs
             .iter()
-            .fold(None, |acc: Option<Expression>, item| match acc {
+            .fold(None, |acc: Option<LegacyExpression>, item| match acc {
                 Some(acc) => Some(acc.and(item.clone())),
                 None => Some(item.clone()),
             })
@@ -154,7 +162,7 @@ mod util {
         ctx: Arc<dyn TableContext>,
         dal: Operator,
         schema: &DataSchemaRef,
-        filter_expr: &Expression,
+        filter_expr: &LegacyExpression,
         bloom_index_col_names: &[String],
         index_location: &Location,
         index_length: u64,
@@ -175,15 +183,15 @@ mod util {
     }
 
     impl ExpressionVisitor for PointQueryVisitor {
-        fn pre_visit(mut self, expr: &Expression) -> Result<Recursion<Self>> {
+        fn pre_visit(mut self, expr: &LegacyExpression) -> Result<Recursion<Self>> {
             // TODO
             // 1. only binary op "=" is considered, which is NOT enough
             // 2. should combine this logic with BloomFilterIndexer
             match expr {
-                Expression::BinaryExpression { left, op, right } if op.as_str() == "=" => {
+                LegacyExpression::BinaryExpression { left, op, right } if op.as_str() == "=" => {
                     match (left.as_ref(), right.as_ref()) {
-                        (Expression::Column(column), Expression::Literal { .. })
-                        | (Expression::Literal { .. }, Expression::Column(column)) => {
+                        (LegacyExpression::Column(column), LegacyExpression::Literal { .. })
+                        | (LegacyExpression::Literal { .. }, LegacyExpression::Column(column)) => {
                             self.columns.insert(column.clone());
                             Ok(Recursion::Stop(self))
                         }
@@ -195,7 +203,7 @@ mod util {
         }
     }
 
-    pub fn columns_names_of_eq_expressions(filter_expr: &Expression) -> Result<Vec<String>> {
+    pub fn columns_names_of_eq_expressions(filter_expr: &LegacyExpression) -> Result<Vec<String>> {
         let visitor = PointQueryVisitor {
             columns: HashSet::new(),
         };

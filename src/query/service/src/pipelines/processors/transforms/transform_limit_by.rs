@@ -23,7 +23,7 @@ use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodSerializer;
 use common_exception::Result;
-use common_legacy_planners::Expression;
+use common_legacy_expression::LegacyExpression;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -42,7 +42,7 @@ impl TransformLimitBy {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         limit: usize,
-        limit_by_exprs: &[Expression],
+        limit_by_exprs: &[LegacyExpression],
     ) -> Result<ProcessorPtr> {
         let limit_by_columns_name = limit_by_exprs.iter().map(|col| col.column_name()).collect();
 

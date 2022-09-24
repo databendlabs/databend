@@ -253,7 +253,7 @@ impl HttpQuery {
                     Executor::start_to_running(&state_clone, ExecuteState::Running(s)).await;
                 }
                 Err(e) => {
-                    InterpreterQueryLog::fail_to_start(ctx_clone.clone(), e.clone()).await;
+                    InterpreterQueryLog::fail_to_start(ctx_clone.clone(), e.clone());
                     let state = ExecuteStopped {
                         stats: Progresses::default(),
                         reason: Err(e.clone()),

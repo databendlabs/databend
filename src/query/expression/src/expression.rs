@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use educe::Educe;
@@ -87,6 +88,10 @@ pub enum Expr {
     },
 }
 
+/// Serializable expression used to share executable expression between nodes.
+///
+/// The remote node will recover the `Arc` pointer within `FunctionCall` by looking
+/// up the funciton registry with the `FunctionID`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RemoteExpr {
     Constant {
@@ -130,6 +135,26 @@ pub enum Literal {
     Float64(f64),
     Boolean(bool),
     String(Vec<u8>),
+}
+
+impl RawExpr {
+    pub fn column_refs(&self) -> HashSet<usize> {
+        fn walk(expr: &RawExpr, buf: &mut HashSet<usize>) {
+            match expr {
+                RawExpr::ColumnRef { id, .. } => {
+                    buf.insert(*id);
+                }
+                RawExpr::Cast { expr, .. } => walk(expr, buf),
+                RawExpr::TryCast { expr, .. } => walk(expr, buf),
+                RawExpr::FunctionCall { args, .. } => args.iter().for_each(|expr| walk(expr, buf)),
+                RawExpr::Literal { .. } => (),
+            }
+        }
+
+        let mut buf = HashSet::new();
+        walk(self, &mut buf);
+        buf
+    }
 }
 
 impl RemoteExpr {

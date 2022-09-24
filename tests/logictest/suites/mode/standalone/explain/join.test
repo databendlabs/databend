@@ -2,38 +2,88 @@ statement query T
 explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = t1.number;
 
 ----
-Project
-├── columns: [number (#0)]
-└── HashJoin
-    ├── join type: INNER
-    ├── build keys: [numbers.number (#1)]
-    ├── probe keys: [numbers.number (#0)]
-    ├── filters: []
-    ├── TableScan(Build)
-    │   ├── table: default.system.numbers
-    │   ├── read rows: 1
-    │   ├── read bytes: 8
-    │   ├── partitions total: 1
-    │   ├── partitions scanned: 1
-    │   └── push downs: [filters: [], limit: NONE]
-    └── TableScan(Probe)
-        ├── table: default.system.numbers
-        ├── read rows: 1
-        ├── read bytes: 8
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        └── push downs: [filters: [], limit: NONE]
+HashJoin
+├── join type: INNER
+├── build keys: [numbers.number (#1)]
+├── probe keys: [numbers.number (#0)]
+├── filters: []
+├── TableScan(Build)
+│   ├── table: default.system.numbers
+│   ├── read rows: 1
+│   ├── read bytes: 8
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   └── push downs: [filters: [], limit: NONE]
+└── TableScan(Probe)
+    ├── table: default.system.numbers
+    ├── read rows: 1
+    ├── read bytes: 8
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    └── push downs: [filters: [], limit: NONE]
 
 statement query T
 explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = t1.number and t.number = t1.number + 1;
 
 ----
-Project
-├── columns: [number (#0)]
+HashJoin
+├── join type: INNER
+├── build keys: [numbers.number (#1), +(numbers.number (#1), 1)]
+├── probe keys: [numbers.number (#0), numbers.number (#0)]
+├── filters: []
+├── TableScan(Build)
+│   ├── table: default.system.numbers
+│   ├── read rows: 1
+│   ├── read bytes: 8
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   └── push downs: [filters: [], limit: NONE]
+└── TableScan(Probe)
+    ├── table: default.system.numbers
+    ├── read rows: 1
+    ├── read bytes: 8
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    └── push downs: [filters: [], limit: NONE]
+
+statement query T
+explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number > 1 and 1 < t1.number;
+
+----
+HashJoin
+├── join type: CROSS
+├── build keys: []
+├── probe keys: []
+├── filters: []
+├── Filter(Build)
+│   ├── filters: [<(1, numbers.number (#1))]
+│   └── TableScan
+│       ├── table: default.system.numbers
+│       ├── read rows: 1
+│       ├── read bytes: 8
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       └── push downs: [filters: [(1 < number)], limit: NONE]
+└── Filter(Probe)
+    ├── filters: [>(numbers.number (#0), 1)]
+    └── TableScan
+        ├── table: default.system.numbers
+        ├── read rows: 1
+        ├── read bytes: 8
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        └── push downs: [filters: [(number > 1)], limit: NONE]
+
+statement query T
+explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number + t1.number = 1;
+
+----
+Filter
+├── filters: [=(+(numbers.number (#0), numbers.number (#1)), 1)]
 └── HashJoin
-    ├── join type: INNER
-    ├── build keys: [numbers.number (#1), +(numbers.number (#1), 1)]
-    ├── probe keys: [numbers.number (#0), numbers.number (#0)]
+    ├── join type: CROSS
+    ├── build keys: []
+    ├── probe keys: []
     ├── filters: []
     ├── TableScan(Build)
     │   ├── table: default.system.numbers
@@ -51,126 +101,64 @@ Project
         └── push downs: [filters: [], limit: NONE]
 
 statement query T
-explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number > 1 and 1 < t1.number;
+explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = cast(t1.number as string);
 
 ----
-Project
-├── columns: [number (#0)]
-└── HashJoin
+HashJoin
+├── join type: INNER
+├── build keys: [CAST(CAST(numbers.number (#1) AS VARCHAR) AS DOUBLE)]
+├── probe keys: [CAST(numbers.number (#0) AS DOUBLE)]
+├── filters: []
+├── TableScan(Build)
+│   ├── table: default.system.numbers
+│   ├── read rows: 1
+│   ├── read bytes: 8
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   └── push downs: [filters: [], limit: NONE]
+└── TableScan(Probe)
+    ├── table: default.system.numbers
+    ├── read rows: 1
+    ├── read bytes: 8
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    └── push downs: [filters: [], limit: NONE]
+
+statement query T
+explain select t.number from numbers(1) as t, numbers(1) as t1, numbers(1) as t2 where t1.number = t2.number and t.number = 1;
+
+----
+HashJoin
+├── join type: INNER
+├── build keys: [numbers.number (#2)]
+├── probe keys: [numbers.number (#1)]
+├── filters: []
+├── TableScan(Build)
+│   ├── table: default.system.numbers
+│   ├── read rows: 1
+│   ├── read bytes: 8
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   └── push downs: [filters: [], limit: NONE]
+└── HashJoin(Probe)
     ├── join type: CROSS
     ├── build keys: []
     ├── probe keys: []
     ├── filters: []
-    ├── Filter(Build)
-    │   ├── filters: [<(1, numbers.number (#1))]
-    │   └── TableScan
-    │       ├── table: default.system.numbers
-    │       ├── read rows: 1
-    │       ├── read bytes: 8
-    │       ├── partitions total: 1
-    │       ├── partitions scanned: 1
-    │       └── push downs: [filters: [(1 < number)], limit: NONE]
+    ├── TableScan(Build)
+    │   ├── table: default.system.numbers
+    │   ├── read rows: 1
+    │   ├── read bytes: 8
+    │   ├── partitions total: 1
+    │   ├── partitions scanned: 1
+    │   └── push downs: [filters: [], limit: NONE]
     └── Filter(Probe)
-        ├── filters: [>(numbers.number (#0), 1)]
+        ├── filters: [=(numbers.number (#0), 1)]
         └── TableScan
             ├── table: default.system.numbers
             ├── read rows: 1
             ├── read bytes: 8
             ├── partitions total: 1
             ├── partitions scanned: 1
-            └── push downs: [filters: [(number > 1)], limit: NONE]
-
-statement query T
-explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number + t1.number = 1;
-
-----
-Project
-├── columns: [number (#0)]
-└── Filter
-    ├── filters: [=(+(numbers.number (#0), numbers.number (#1)), 1)]
-    └── HashJoin
-        ├── join type: CROSS
-        ├── build keys: []
-        ├── probe keys: []
-        ├── filters: []
-        ├── TableScan(Build)
-        │   ├── table: default.system.numbers
-        │   ├── read rows: 1
-        │   ├── read bytes: 8
-        │   ├── partitions total: 1
-        │   ├── partitions scanned: 1
-        │   └── push downs: [filters: [], limit: NONE]
-        └── TableScan(Probe)
-            ├── table: default.system.numbers
-            ├── read rows: 1
-            ├── read bytes: 8
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            └── push downs: [filters: [], limit: NONE]
-
-statement query T
-explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = cast(t1.number as string);
-
-----
-Project
-├── columns: [number (#0)]
-└── HashJoin
-    ├── join type: INNER
-    ├── build keys: [CAST(CAST(numbers.number (#1) AS VARCHAR) AS DOUBLE)]
-    ├── probe keys: [CAST(numbers.number (#0) AS DOUBLE)]
-    ├── filters: []
-    ├── TableScan(Build)
-    │   ├── table: default.system.numbers
-    │   ├── read rows: 1
-    │   ├── read bytes: 8
-    │   ├── partitions total: 1
-    │   ├── partitions scanned: 1
-    │   └── push downs: [filters: [], limit: NONE]
-    └── TableScan(Probe)
-        ├── table: default.system.numbers
-        ├── read rows: 1
-        ├── read bytes: 8
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        └── push downs: [filters: [], limit: NONE]
-
-statement query T
-explain select t.number from numbers(1) as t, numbers(1) as t1, numbers(1) as t2 where t1.number = t2.number and t.number = 1;
-
-----
-Project
-├── columns: [number (#0)]
-└── HashJoin
-    ├── join type: INNER
-    ├── build keys: [numbers.number (#2)]
-    ├── probe keys: [numbers.number (#1)]
-    ├── filters: []
-    ├── TableScan(Build)
-    │   ├── table: default.system.numbers
-    │   ├── read rows: 1
-    │   ├── read bytes: 8
-    │   ├── partitions total: 1
-    │   ├── partitions scanned: 1
-    │   └── push downs: [filters: [], limit: NONE]
-    └── HashJoin(Probe)
-        ├── join type: CROSS
-        ├── build keys: []
-        ├── probe keys: []
-        ├── filters: []
-        ├── TableScan(Build)
-        │   ├── table: default.system.numbers
-        │   ├── read rows: 1
-        │   ├── read bytes: 8
-        │   ├── partitions total: 1
-        │   ├── partitions scanned: 1
-        │   └── push downs: [filters: [], limit: NONE]
-        └── Filter(Probe)
-            ├── filters: [=(numbers.number (#0), 1)]
-            └── TableScan
-                ├── table: default.system.numbers
-                ├── read rows: 1
-                ├── read bytes: 8
-                ├── partitions total: 1
-                ├── partitions scanned: 1
-                └── push downs: [filters: [(number = 1)], limit: NONE]
+            └── push downs: [filters: [(number = 1)], limit: NONE]
 

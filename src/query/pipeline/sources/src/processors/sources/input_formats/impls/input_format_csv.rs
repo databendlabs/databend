@@ -18,13 +18,16 @@ use std::sync::Arc;
 use common_datavalues::TypeDeserializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_formats::verbose_string;
+use common_io::prelude::BufferReadExt;
 use common_io::prelude::FormatSettings;
 use common_io::prelude::NestedCheckpointReader;
 use common_meta_types::StageFileFormatType;
+use common_settings::Settings;
 use csv_core::ReadRecordResult;
 
 use crate::processors::sources::input_formats::delimiter::RecordDelimiter;
+use crate::processors::sources::input_formats::impls::input_format_tsv::format_column_error;
+use crate::processors::sources::input_formats::input_format_text::get_time_zone;
 use crate::processors::sources::input_formats::input_format_text::AligningState;
 use crate::processors::sources::input_formats::input_format_text::BlockBuilder;
 use crate::processors::sources::input_formats::input_format_text::InputFormatTextBase;
@@ -46,21 +49,21 @@ impl InputFormatCSV {
         for (c, deserializer) in deserializers.iter_mut().enumerate() {
             let field_end = field_ends[c];
             let col_data = &buf[field_start..field_end];
-            if col_data.is_empty() {
+            let mut reader = NestedCheckpointReader::new(col_data);
+            reader.ignore_white_spaces().expect("must success");
+            if reader.eof().expect("must success") {
                 deserializer.de_default(format_settings);
             } else {
-                let mut reader = NestedCheckpointReader::new(col_data);
-                // reader.ignores(|c: u8| c == b' ').expect("must success");
                 // todo(youngsofun): do not need escape, already done in csv-core
                 if let Err(e) = deserializer.de_text(&mut reader, format_settings) {
-                    let mut value = String::new();
-                    verbose_string(buf, &mut value);
-                    let err_msg = format!(
-                        "fail to decode column {}: {:?}, [column_data]=[{}]",
-                        c, e, value
-                    );
+                    let err_msg = format_column_error(c, col_data, &e.message());
                     return Err(csv_error(&err_msg, path, row_index));
                 };
+                reader.ignore_white_spaces().expect("must success");
+                if reader.must_eof().is_err() {
+                    let err_msg = format_column_error(c, col_data, "bad field end");
+                    return Err(csv_error(&err_msg, path, row_index));
+                }
             }
             field_start = field_end;
         }
@@ -71,6 +74,25 @@ impl InputFormatCSV {
 impl InputFormatTextBase for InputFormatCSV {
     fn format_type() -> StageFileFormatType {
         StageFileFormatType::Csv
+    }
+
+    fn get_format_settings(settings: &Arc<Settings>) -> Result<FormatSettings> {
+        let timezone = get_time_zone(settings)?;
+        let quote_char = settings.get_quote_char()?.into_bytes();
+        if quote_char.len() != 1 {
+            return Err(ErrorCode::InvalidArgument(
+                "quote_char can only contain one char",
+            ));
+        }
+        Ok(FormatSettings {
+            record_delimiter: settings.get_record_delimiter()?.into_bytes(),
+            field_delimiter: settings.get_field_delimiter()?.into_bytes(),
+            empty_as_default: settings.get_empty_as_default()? > 0,
+            quote_char: quote_char[0],
+            null_bytes: vec![b'\\', b'N'],
+            timezone,
+            ..Default::default()
+        })
     }
 
     fn default_field_delimiter() -> u8 {
@@ -155,6 +177,14 @@ impl InputFormatTextBase for InputFormatCSV {
                             &state.path,
                             state.rows,
                         ));
+                    } else if endlen == num_fields + 1
+                        && field_ends[num_fields] != field_ends[num_fields - 1]
+                    {
+                        return Err(csv_error(
+                            "CSV allow ending with ',', but should not have data after it",
+                            &state.path,
+                            state.rows,
+                        ));
                     }
 
                     state.rows_to_skip -= 1;
@@ -227,6 +257,14 @@ impl InputFormatTextBase for InputFormatCSV {
                             &state.path,
                             start_row + row_batch.row_ends.len(),
                         ));
+                    } else if endlen == num_fields + 1
+                        && field_ends[num_fields] != field_ends[num_fields - 1]
+                    {
+                        return Err(csv_error(
+                            "CSV allow ending with ',', but should not have data after it",
+                            &state.path,
+                            start_row + row_batch.row_ends.len(),
+                        ));
                     }
                     row_batch
                         .field_ends
@@ -294,6 +332,7 @@ impl CsvReaderState {
     pub(crate) fn create(ctx: &Arc<InputContext>) -> Self {
         let reader = csv_core::ReaderBuilder::new()
             .delimiter(ctx.field_delimiter)
+            .quote(ctx.format_settings.quote_char)
             .terminator(match ctx.record_delimiter {
                 RecordDelimiter::Crlf => csv_core::Terminator::CRLF,
                 RecordDelimiter::Any(v) => csv_core::Terminator::Any(v),

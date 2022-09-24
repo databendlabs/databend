@@ -174,7 +174,7 @@ impl FuseTable {
             TransformCompact::try_create(
                 transform_input_port,
                 transform_output_port,
-                block_compactor.to_compactor(),
+                block_compactor.to_compactor(true),
             )
         })?;
 

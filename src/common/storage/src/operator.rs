@@ -53,6 +53,7 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
         #[cfg(feature = "storage-hdfs")]
         StorageParams::Hdfs(cfg) => init_hdfs_operator(cfg)?,
         StorageParams::Http(cfg) => init_http_operator(cfg)?,
+        StorageParams::Ipfs(cfg) => init_ipfs_operator(cfg)?,
         StorageParams::Memory => init_memory_operator()?,
         StorageParams::Obs(cfg) => init_obs_operator(cfg)?,
         StorageParams::S3(cfg) => init_s3_operator(cfg)?,
@@ -118,6 +119,17 @@ pub fn init_hdfs_operator(cfg: &super::StorageHdfsConfig) -> Result<Operator> {
 
     // Root
     builder.root(&cfg.root);
+
+    Ok(Operator::new(builder.build()?).layer(LoggingLayer))
+}
+
+pub fn init_ipfs_operator(cfg: &super::StorageIpfsConfig) -> Result<Operator> {
+    use opendal::services::ipfs;
+
+    let mut builder = ipfs::Builder::default();
+
+    builder.root(&cfg.root);
+    builder.endpoint(&cfg.endpoint_url);
 
     Ok(Operator::new(builder.build()?).layer(LoggingLayer))
 }
@@ -221,9 +233,8 @@ impl StorageOperator {
         let io_runtime = GlobalIORuntime::instance();
         let operator = init_operator(&conf.params)?
             .layer(RetryLayer::new(ExponentialBackoff::default()))
-            .layer(LoggingLayer)
-            .layer(TracingLayer)
-            .layer(MetricsLayer);
+            .layer(MetricsLayer)
+            .layer(TracingLayer);
 
         // OpenDAL will send a real request to underlying storage to check whether it works or not.
         // If this check failed, it's highly possible that the users have configured it wrongly.

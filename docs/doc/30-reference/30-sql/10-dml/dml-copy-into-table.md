@@ -7,9 +7,12 @@ sidebar_label: 'COPY INTO <table>'
 
 This command loads data into a table from files in one of the following locations:
 
-* Named internal stage: Databend internal named stages. Files can be staged using the [PUT to Stage](../../00-api/10-put-to-stage.md) API.
-* Named external stage: Stages created in AWS S3 compatible object storage services and Azure Blob storage.
-* External location: This can be a bucket in AWS S3 compatible object storage services, Azure Blob storage, Google Cloud Storage, or Huawei OBS. The exteranl location can be also just a remote server from where you can access the file by a URL (starting with "https://..."). 
+* **Named internal stage**: Databend internal named stages. Files can be staged using the [PUT to Stage](../../00-api/10-put-to-stage.md) API.
+* **Named external stage**: Stages created in AWS S3 compatible object storage services and Azure Blob storage.
+* **External location**. This includes the followings:
+  - Buckets created in AWS S3 compatible object storage services, Azure Blob storage, Google Cloud Storage, or Huawei OBS. 
+  - Remote servers from where you can access the files by their URL (starting with "https://...").
+  - [IPFS](https://ipfs.tech).
 
 See Also: [COPY INTO location](dml-copy-into-location.md)
 
@@ -130,6 +133,14 @@ Please note that, HTTP supports glob patterns. For example, use
 - `ontime_200{6,7,8}.csv` to represents `ontime_2006.csv`,`ontime_2007.csv`,`ontime_2008.csv`.
 - `ontime_200[6-8].csv` to represents `ontime_2006.csv`,`ontime_2007.csv`,`ontime_2008.csv`.
 
+**IPFS**
+
+```sql
+externalLocation ::=
+  'ipfs://<your-ipfs-hash>'
+  CONNECTION = (ENDPOINT_URL = 'https://<your-ipfs-gateway>')
+```
+
 ### FILES = ( 'file_name' [ , 'file_name' ... ] )
 
 Specifies a list of one or more files names (separated by commas) to be loaded.
@@ -191,12 +202,14 @@ Values:
 copyOptions ::=
   [ SIZE_LIMIT = <num> ]
   [ PURGE = <bool> ]
+  [ FORCE = <bool> ]
 ```
 
 | Parameters  | Description | Required |
 | ----------- | ----------- | --- |
-| `SIZE_LIMIT = <num>` | Number (> 0) that specifies the maximum rows of data to be loaded for a given COPY statement. Default `0` | Optional |
-| `PURGE = <bool>` | True that specifies the command will purge the files in the stage if they are loaded successfully into table. Default `false` | Optional |
+| `SIZE_LIMIT = <num>` | Specifies the maximum rows of data to be loaded for a given COPY statement. Defaults to `0` meaning no limits. | Optional |
+| `PURGE = <bool>` | If `True`, the command will purge the files in the stage after they are loaded successfully into the table. Default: `False`. | Optional |
+| `FORCE = <bool>` | Defaults to `False` meaning the command will skip duplicate files in the stage when copying data. If `True`, duplicate files will not be skipped. | Optional |
 
 ## Examples
 
@@ -305,4 +318,14 @@ This example reads data from three CSV files and inserts it into a table:
 COPY INTO mytable
     FROM 'https://repo.databend.rs/dataset/stateful/ontime_200{6,7,8}_200.csv'
     FILE_FORMAT = (type = 'CSV');
+```
+
+**IPFS**
+
+This example reads data from a CSV file on IPFS and inserts it into a table:
+
+```sql
+COPY INTO mytable 
+    FROM 'ipfs://<your-ipfs-hash>' connection = (endpoint_url = 'https://<your-ipfs-gateway>') 
+    FILE_FORMAT = (type = 'CSV' field_delimiter = ',' record_delimiter = '\n' skip_header = 1);
 ```
