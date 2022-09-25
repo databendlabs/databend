@@ -217,7 +217,15 @@ impl BloomFilterIndexer {
                 match schema.column_with_name(column) {
                     Some((_index, data_field)) => {
                         let data_type = data_field.data_type();
-                        self.find(column, value.clone(), data_type.clone())
+
+                        // check if cast needed
+                        let value = if &value.data_type() != data_type {
+                            let col = value.as_const_column(data_type, 1)?;
+                            col.get_checked(0)?
+                        } else {
+                            value.clone()
+                        };
+                        self.find(column, value, data_type.clone())
                     }
                     None => Err(ErrorCode::BadArguments(format!(
                         "Column '{}' not found in schema",
