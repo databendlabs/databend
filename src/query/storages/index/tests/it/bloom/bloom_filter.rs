@@ -50,7 +50,7 @@ fn test_column_type_support() -> Result<()> {
     let index = BloomFilterIndexer::try_create(&[&block])?;
 
     // only one index column should be generated
-    assert_eq!(2, index.bloom_block.columns().len());
+    assert_eq!(1, index.bloom_block.columns().len());
 
     let supported_types: HashSet<DataTypeImpl> = HashSet::from_iter(vec![StringType::new_impl()]);
 
