@@ -377,12 +377,6 @@ pub fn merge_types(lhs_type: &DataTypeImpl, rhs_type: &DataTypeImpl) -> Result<D
             }
             if lhs_id.is_numeric() && rhs_id.is_numeric() {
                 numerical_coercion(lhs_type, rhs_type, false)
-            }
-            // one of is String and other is number
-            else if (lhs_id.is_numeric() && rhs_id.is_string())
-                || (rhs_id.is_numeric() && lhs_id.is_string())
-            {
-                return Ok(Float64Type::new_impl());
             } else {
                 Result::Err(ErrorCode::BadDataValueType(format!(
                     "Can't merge types from {:?} and {:?}",
