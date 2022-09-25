@@ -59,6 +59,14 @@ pub trait Database: DynClone + Sync + Send {
 
     fn get_db_info(&self) -> &DatabaseInfo;
 
+    fn get_tenant(&self) -> &String {
+        &self.get_db_info().name_ident.tenant
+    }
+
+    fn get_db_name(&self) -> &String {
+        &self.get_db_info().name_ident.db_name
+    }
+
     // Initial a database.
     async fn init_database(&self, _tenant: &str) -> Result<()> {
         Ok(())
@@ -73,30 +81,21 @@ pub trait Database: DynClone + Sync + Send {
     }
 
     // Get one table by db and table name.
-    async fn get_table(
-        &self,
-        _tenant: &str,
-        _db_name: &str,
-        _table_name: &str,
-    ) -> Result<Arc<dyn Table>> {
+    async fn get_table(&self, _table_name: &str) -> Result<Arc<dyn Table>> {
         Err(ErrorCode::UnImplement(format!(
             "UnImplement get_table in {} Database",
             self.name()
         )))
     }
 
-    async fn list_tables(&self, _tenant: &str, _db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+    async fn list_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
         Err(ErrorCode::UnImplement(format!(
             "UnImplement list_tables in {} Database",
             self.name()
         )))
     }
 
-    async fn list_tables_history(
-        &self,
-        _tenant: &str,
-        _db_name: &str,
-    ) -> Result<Vec<Arc<dyn Table>>> {
+    async fn list_tables_history(&self) -> Result<Vec<Arc<dyn Table>>> {
         Err(ErrorCode::UnImplement(format!(
             "UnImplement list_tables_history in {} Database",
             self.name()

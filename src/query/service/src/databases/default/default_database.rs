@@ -84,42 +84,37 @@ impl Database for DefaultDatabase {
     }
 
     // Get one table by db and table name.
-    async fn get_table(
-        &self,
-        tenant: &str,
-        db_name: &str,
-        table_name: &str,
-    ) -> Result<Arc<dyn Table>> {
+    async fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>> {
         let table_info = self
             .ctx
             .meta
-            .get_table(GetTableReq::new(tenant, db_name, table_name))
+            .get_table(GetTableReq::new(
+                self.get_tenant(),
+                self.get_db_name(),
+                table_name,
+            ))
             .await?;
         self.get_table_by_info(table_info.as_ref())
     }
 
-    async fn list_tables(&self, tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+    async fn list_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
         let table_infos = self
             .ctx
             .meta
-            .list_tables(ListTableReq::new(tenant, db_name))
+            .list_tables(ListTableReq::new(self.get_tenant(), self.get_db_name()))
             .await?;
 
         self.load_tables(table_infos)
     }
 
-    async fn list_tables_history(
-        &self,
-        tenant: &str,
-        db_name: &str,
-    ) -> Result<Vec<Arc<dyn Table>>> {
+    async fn list_tables_history(&self) -> Result<Vec<Arc<dyn Table>>> {
         // `get_table_history` will not fetch the tables that created before the
         // "metasrv time travel functions" is added.
         // thus, only the table-infos of dropped tables are used.
         let mut dropped = self
             .ctx
             .meta
-            .get_table_history(ListTableReq::new(tenant, db_name))
+            .get_table_history(ListTableReq::new(self.get_tenant(), self.get_db_name()))
             .await?
             .into_iter()
             .filter(|i| i.meta.drop_on.is_some())
@@ -128,7 +123,7 @@ impl Database for DefaultDatabase {
         let mut table_infos = self
             .ctx
             .meta
-            .list_tables(ListTableReq::new(tenant, db_name))
+            .list_tables(ListTableReq::new(self.get_tenant(), self.get_db_name()))
             .await?;
 
         table_infos.append(&mut dropped);

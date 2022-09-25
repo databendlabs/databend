@@ -235,12 +235,12 @@ impl Catalog for MutableCatalog {
         table_name: &str,
     ) -> Result<Arc<dyn Table>> {
         let db = self.get_database(tenant, db_name).await?;
-        db.get_table(tenant, db_name, table_name).await
+        db.get_table(table_name).await
     }
 
     async fn list_tables(&self, tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         let db = self.get_database(tenant, db_name).await?;
-        db.list_tables(tenant, db_name).await
+        db.list_tables().await
     }
 
     async fn list_tables_history(
@@ -249,7 +249,7 @@ impl Catalog for MutableCatalog {
         db_name: &str,
     ) -> Result<Vec<Arc<dyn Table>>> {
         let db = self.get_database(tenant, db_name).await?;
-        db.list_tables_history(tenant, db_name).await
+        db.list_tables_history().await
     }
 
     async fn create_table(&self, req: CreateTableReq) -> Result<()> {
