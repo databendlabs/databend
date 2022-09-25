@@ -93,6 +93,10 @@ impl Evaluator {
                             func,
                             args: vec![eval_args[0].clone()],
                         });
+                    } else {
+                        return Err(ErrorCode::SyntaxException(
+                            "IN expression must have a literal array or subquery as the second argument",
+                        ));
                     }
                 }
 

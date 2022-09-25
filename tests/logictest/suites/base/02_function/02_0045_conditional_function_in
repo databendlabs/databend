@@ -15,6 +15,14 @@ SELECT number from numbers_mt(10000) WHERE number+1 IN (2, 3 ,20, 5000) ORDER BY
 4999
 
 statement query I
+select number from numbers(10) where number::String  in (1,2) ORDER BY number;
+
+----
+1
+2
+
+
+statement query I
 SELECT number from numbers_mt(10) WHERE number+1 not IN (2, 3 ,20, 5000) ORDER BY number;
 
 ----
@@ -153,6 +161,15 @@ INSERT INTO t1 (a,b) VALUES (1, NULL), (2, 3);
 
 statement query I
 SELECT a FROM t1 WHERE b IN (NULL,3);
+
+----
+2
+
+statement error 1005
+SELECT a FROM t1 WHERE a IN (a, b);
+
+statement query I
+SELECT a FROM t1 WHERE a IN (select a from t1) and b is not null;
 
 ----
 2

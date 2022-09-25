@@ -15,6 +15,7 @@
 use common_datavalues::DataType;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::in_evalutor;
 use common_functions::scalars::CastFunction;
@@ -65,6 +66,10 @@ impl Evaluator {
                             func,
                             args: vec![eval_args[0].clone()],
                         });
+                    } else {
+                        return Err(ErrorCode::SyntaxException(
+                            "IN expression must have a literal array or subquery as the second argument",
+                        ));
                     }
                 }
 
