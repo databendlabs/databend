@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -53,8 +52,6 @@ pub struct BloomFilterIndexer {
 
     // The bloom block contains bloom filters;
     pub bloom_block: DataBlock,
-
-    pub ctx: Arc<dyn TableContext>,
 }
 
 /// BloomFilterExprEvalResult represents the evaluation result of an expression by bloom filter.
@@ -96,13 +93,11 @@ impl BloomFilterIndexer {
     pub fn from_bloom_block(
         source_table_schema: DataSchemaRef,
         bloom_block: DataBlock,
-        ctx: Arc<dyn TableContext>,
     ) -> Result<Self> {
         Ok(Self {
             source_schema: source_table_schema,
             bloom_schema: bloom_block.schema().clone(),
             bloom_block,
-            ctx,
         })
     }
 
@@ -110,7 +105,7 @@ impl BloomFilterIndexer {
     ///
     /// All input blocks should be belong to a Parquet file, e.g. the block array represents the parquet file in memory.
 
-    pub fn try_create(ctx: Arc<dyn TableContext>, blocks: &[&DataBlock]) -> Result<Self> {
+    pub fn try_create(blocks: &[&DataBlock]) -> Result<Self> {
         if blocks.is_empty() {
             return Err(ErrorCode::BadArguments("data blocks is empty"));
         }
@@ -131,6 +126,9 @@ impl BloomFilterIndexer {
                     bloom_filter.add_keys(&col.to_values());
                 }
 
+                // finalize the filter
+                bloom_filter.build()?;
+
                 // create bloom filter column
                 let serialized_bytes = bloom_filter.to_bytes()?;
                 let bloom_value = DataValue::String(serialized_bytes);
@@ -146,16 +144,14 @@ impl BloomFilterIndexer {
             source_schema,
             bloom_schema,
             bloom_block,
-            ctx,
         })
     }
 
-    fn find(
+    pub fn find(
         &self,
         column_name: &str,
         target: DataValue,
         typ: DataTypeImpl,
-        _ctx: Arc<dyn TableContext>,
     ) -> Result<BloomFilterExprEvalResult> {
         let bloom_column = Self::to_bloom_column_name(column_name);
         if !self.bloom_block.schema().has_field(&bloom_column)
@@ -168,7 +164,6 @@ impl BloomFilterIndexer {
 
         let bloom_bytes = self.bloom_block.first(&bloom_column)?.as_string()?;
         let (bloom_filter, _size) = XorBloom::from_bytes(&bloom_bytes)?;
-
         if bloom_filter.contains(&target) {
             Ok(BloomFilterExprEvalResult::Unknown)
         } else {
@@ -222,7 +217,7 @@ impl BloomFilterIndexer {
                 match schema.column_with_name(column) {
                     Some((_index, data_field)) => {
                         let data_type = data_field.data_type();
-                        self.find(column, value.clone(), data_type.clone(), self.ctx.clone())
+                        self.find(column, value.clone(), data_type.clone())
                     }
                     None => Err(ErrorCode::BadArguments(format!(
                         "Column '{}' not found in schema",
