@@ -63,6 +63,8 @@ use thrift::transport::*;
 use super::hive_database::HiveDatabase;
 use crate::hive_table::HiveTable;
 
+pub const HIVE_CATALOG: &str = "hive";
+
 #[derive(Clone)]
 pub struct HiveCatalog {
     /// address of hive meta store service

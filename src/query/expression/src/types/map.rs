@@ -26,6 +26,7 @@ use crate::types::GenericMap;
 use crate::types::ValueType;
 use crate::values::Column;
 use crate::values::Scalar;
+use crate::ColumnBuilder;
 use crate::ScalarRef;
 
 // Structuarally equals to `Tuple(K, V)`
@@ -73,6 +74,12 @@ impl<K: ValueType, V: ValueType> ValueType for KvPair<K, V> {
             Domain::Undefined => Some(()),
             _ => None,
         }
+    }
+
+    fn try_downcast_builder<'a>(
+        _builder: &'a mut ColumnBuilder,
+    ) -> Option<&'a mut Self::ColumnBuilder> {
+        None
     }
 
     fn upcast_scalar((k, v): Self::Scalar) -> Scalar {
@@ -302,6 +309,12 @@ impl<T: ValueType> ValueType for MapType<T> {
 
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         <MapInternal<T> as ValueType>::try_downcast_domain(domain)
+    }
+
+    fn try_downcast_builder<'a>(
+        builder: &'a mut ColumnBuilder,
+    ) -> Option<&'a mut Self::ColumnBuilder> {
+        <MapInternal<T> as ValueType>::try_downcast_builder(builder)
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {

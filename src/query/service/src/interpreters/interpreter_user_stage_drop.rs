@@ -24,7 +24,7 @@ use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::storages::stage::StageSourceHelper;
+use crate::storages::stage::StageTable;
 
 #[derive(Debug)]
 pub struct DropUserStageInterpreter {
@@ -58,7 +58,7 @@ impl Interpreter for DropUserStageInterpreter {
         if let Ok(stage) = stage {
             if matches!(&stage.stage_type, StageType::Internal) {
                 let rename_me_qry_ctx: Arc<dyn TableContext> = self.ctx.clone();
-                let op = StageSourceHelper::get_op(&rename_me_qry_ctx, &stage).await?;
+                let op = StageTable::get_op(&rename_me_qry_ctx, &stage).await?;
                 let absolute_path = format!("/stage/{}/", stage.stage_name);
                 op.batch().remove_all(&absolute_path).await?;
                 info!(

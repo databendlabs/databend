@@ -1,11 +1,11 @@
 [package]
 name = "common-meta-sled-store"
-version = "0.1.0"
 description = "Sled store backend for raft state machine"
-authors = ["Databend Authors <opensource@datafuselabs.com>"]
-license = "Apache-2.0"
-publish = false
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
 
 [lib]
 doctest = false
@@ -17,7 +17,7 @@ io-uring = ["sled/io_uring"]
 [dependencies]
 common-meta-types = { path = "../types" }
 
-openraft = { git = "https://github.com/datafuselabs/openraft", tag = "v0.7.2" }
+openraft = { git = "https://github.com/datafuselabs/openraft", tag = "v0.7.3" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
 
 anyhow = "1.0.65"

@@ -171,6 +171,7 @@ pub struct TableStatistics {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct TableMeta {
     pub schema: Arc<DataSchema>,
+    pub catalog: String,
     pub engine: String,
     pub engine_options: BTreeMap<String, String>,
     pub options: BTreeMap<String, String>,
@@ -221,6 +222,10 @@ impl TableInfo {
         &self.meta.options
     }
 
+    pub fn catalog(&self) -> &str {
+        &self.meta.catalog
+    }
+
     pub fn engine(&self) -> &str {
         &self.meta.engine
     }
@@ -244,6 +249,7 @@ impl Default for TableMeta {
     fn default() -> Self {
         TableMeta {
             schema: Arc::new(DataSchema::empty()),
+            catalog: "default".to_string(),
             engine: "".to_string(),
             engine_options: BTreeMap::new(),
             options: BTreeMap::new(),

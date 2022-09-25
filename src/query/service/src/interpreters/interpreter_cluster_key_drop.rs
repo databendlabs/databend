@@ -48,9 +48,7 @@ impl Interpreter for DropTableClusterKeyInterpreter {
             .get_table(tenant.as_str(), &plan.database, &plan.table)
             .await?;
 
-        table
-            .drop_table_cluster_keys(self.ctx.clone(), &self.plan.catalog)
-            .await?;
+        table.drop_table_cluster_keys(self.ctx.clone()).await?;
 
         Ok(PipelineBuildResult::create())
     }

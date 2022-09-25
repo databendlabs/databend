@@ -27,7 +27,7 @@ use serde::Serialize;
 use super::HttpQueryContext;
 use crate::sessions::SessionType;
 use crate::sessions::TableContext;
-use crate::storages::stage::StageSourceHelper;
+use crate::storages::stage::StageTable;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct UploadToStageResponse {
@@ -65,7 +65,7 @@ pub async fn upload_to_stage(
         .map_err(InternalServerError)?;
 
     let rename_me_qry_ctx: Arc<dyn TableContext> = context.clone();
-    let op = StageSourceHelper::get_op(&rename_me_qry_ctx, &stage)
+    let op = StageTable::get_op(&rename_me_qry_ctx, &stage)
         .await
         .map_err(InternalServerError)?;
 

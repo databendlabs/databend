@@ -1,11 +1,11 @@
 [package]
 name = "databend-binaries"
-version = "0.1.0"
 description = "databend command line tools"
-authors = ["Databend Authors <opensource@datafuselabs.com>"]
-license = "Apache-2.0"
-publish = false
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
 
 [features]
 default = ["simd"]
@@ -49,7 +49,7 @@ databend-query = { path = "../query/service" }
 # Crates.io dependencies
 anyhow = "1.0.65"
 clap = { version = "3.2.22", features = ["derive", "env"] }
-openraft = { git = "https://github.com/datafuselabs/openraft", tag = "v0.7.2" }
+openraft = { git = "https://github.com/datafuselabs/openraft", tag = "v0.7.3" }
 sentry = "0.27.0"
 serde = { version = "1.0.144", features = ["derive"] }
 serde_json = "1.0.85"

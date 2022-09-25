@@ -26,13 +26,16 @@ use common_legacy_planners::ReadDataSourcePlan;
 use common_legacy_planners::StageTableInfo;
 use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
+use common_meta_types::StageType;
+use common_meta_types::UserStageInfo;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::SinkPipeBuilder;
 use common_pipeline_sources::processors::sources::input_formats::InputContext;
+use common_storage::init_operator;
+use opendal::Operator;
 use parking_lot::Mutex;
 use tracing::info;
 
-use super::StageSourceHelper;
 use crate::pipelines::processors::ContextSink;
 use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::Pipeline;
@@ -63,6 +66,16 @@ impl StageTable {
         let guard = self.input_context.lock();
         guard.clone()
     }
+
+    /// TODO: we should support construct operator with
+    /// correct root.
+    pub async fn get_op(ctx: &Arc<dyn TableContext>, stage: &UserStageInfo) -> Result<Operator> {
+        if stage.stage_type == StageType::Internal {
+            ctx.get_storage_operator()
+        } else {
+            Ok(init_operator(&stage.stage_params.storage)?)
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -81,7 +94,7 @@ impl Table for StageTable {
         ctx: Arc<dyn TableContext>,
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
-        let operator = StageSourceHelper::get_op(&ctx, &self.table_info.stage_info).await?;
+        let operator = StageTable::get_op(&ctx, &self.table_info.stage_info).await?;
         let input_ctx = Arc::new(
             InputContext::try_create_from_copy(
                 operator,
@@ -141,7 +154,6 @@ impl Table for StageTable {
     async fn commit_insertion(
         &self,
         ctx: Arc<dyn TableContext>,
-        _catalog_name: &str,
         operations: Vec<DataBlock>,
         _overwrite: bool,
     ) -> Result<()> {
@@ -160,7 +172,7 @@ impl Table for StageTable {
             self.table_info.stage_info.stage_name
         );
 
-        let op = StageSourceHelper::get_op(&ctx, &self.table_info.stage_info).await?;
+        let op = StageTable::get_op(&ctx, &self.table_info.stage_info).await?;
 
         let fmt = OutputFormatType::from_str(format_name.as_str())?;
         let mut format_settings = ctx.get_format_settings()?;
@@ -202,7 +214,7 @@ impl Table for StageTable {
     }
 
     // Truncate the stage file.
-    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: &str, _: bool) -> Result<()> {
+    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: bool) -> Result<()> {
         Err(ErrorCode::UnImplement(
             "S3 external table truncate() unimplemented yet!",
         ))

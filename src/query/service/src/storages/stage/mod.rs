@@ -12,8 +12,6 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-mod stage_source;
 mod stage_table;
 
-pub use stage_source::StageSourceHelper;
 pub use stage_table::StageTable;

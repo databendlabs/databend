@@ -4360,6 +4360,7 @@ Insert(
         source: Streaming {
             format: "json",
             rest_str: ";",
+            start: 31,
         },
         overwrite: false,
     },

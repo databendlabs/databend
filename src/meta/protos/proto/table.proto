@@ -65,6 +65,9 @@ message TableMeta {
   // Table schema, i.e., columns definition.
   DataSchema schema = 1;
 
+  // Table catalog.
+  string catalog = 10;
+
   // Table engine.
   string engine = 6;
 

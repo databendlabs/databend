@@ -61,7 +61,6 @@ impl FuseTable {
     pub async fn do_commit(
         &self,
         ctx: Arc<dyn TableContext>,
-        catalog_name: impl AsRef<str>,
         operation_log: TableOperationLog,
         overwrite: bool,
     ) -> Result<()> {
@@ -91,12 +90,8 @@ impl FuseTable {
             .build();
 
         let transient = self.transient();
-        let catalog_name = catalog_name.as_ref();
         loop {
-            match tbl
-                .try_commit(ctx.clone(), catalog_name, &operation_log, overwrite)
-                .await
-            {
+            match tbl.try_commit(ctx.clone(), &operation_log, overwrite).await {
                 Ok(_) => {
                     break {
                         if transient {
@@ -106,7 +101,7 @@ impl FuseTable {
                                 tbl.table_info.ident
                             );
 
-                            let latest = tbl.latest(ctx.as_ref(), catalog_name).await?;
+                            let latest = tbl.latest(ctx.as_ref()).await?;
                             tbl = FuseTable::try_from_table(latest.as_ref())?;
 
                             let keep_last_snapshot = true;
@@ -135,7 +130,7 @@ impl FuseTable {
                             tbl.table_info.ident
                         );
                         common_base::base::tokio::time::sleep(d).await;
-                        latest = tbl.latest(ctx.as_ref(), catalog_name).await?;
+                        latest = tbl.latest(ctx.as_ref()).await?;
                         tbl = FuseTable::try_from_table(latest.as_ref())?;
                         retry_times += 1;
                         continue;
@@ -163,7 +158,6 @@ impl FuseTable {
     pub async fn try_commit(
         &self,
         ctx: Arc<dyn TableContext>,
-        catalog_name: &str,
         operation_log: &TableOperationLog,
         overwrite: bool,
     ) -> Result<()> {
@@ -216,7 +210,6 @@ impl FuseTable {
 
         FuseTable::commit_to_meta_server(
             ctx.as_ref(),
-            catalog_name,
             &self.table_info,
             &self.meta_location_generator,
             new_snapshot,
@@ -262,7 +255,6 @@ impl FuseTable {
 
     pub async fn commit_to_meta_server(
         ctx: &dyn TableContext,
-        catalog_name: &str,
         table_info: &TableInfo,
         location_generator: &TableMetaLocationGenerator,
         snapshot: TableSnapshot,
@@ -295,8 +287,7 @@ impl FuseTable {
         };
 
         // 3. prepare the request
-
-        let catalog = ctx.get_catalog(catalog_name)?;
+        let catalog = ctx.get_catalog(&table_info.meta.catalog)?;
         let table_id = table_info.ident.table_id;
         let table_version = table_info.ident.seq;
 
@@ -359,10 +350,10 @@ impl FuseTable {
         Ok((seg_locs, s))
     }
 
-    async fn latest(&self, ctx: &dyn TableContext, catalog_name: &str) -> Result<Arc<dyn Table>> {
+    async fn latest(&self, ctx: &dyn TableContext) -> Result<Arc<dyn Table>> {
         let name = self.table_info.name.clone();
         let tid = self.table_info.ident.table_id;
-        let catalog = ctx.get_catalog(catalog_name)?;
+        let catalog = ctx.get_catalog(self.table_info.catalog())?;
         let (ident, meta) = catalog.get_table_meta_by_id(tid).await?;
         let table_info: TableInfo = TableInfo {
             ident,

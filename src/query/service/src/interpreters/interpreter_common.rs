@@ -37,7 +37,7 @@ use crate::pipelines::processors::TransformAddOn;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::storages::stage::StageSourceHelper;
+use crate::storages::stage::StageTable;
 use crate::storages::Table;
 
 pub fn fill_missing_columns(
@@ -88,11 +88,8 @@ pub fn append2table(
             if may_error.is_none() {
                 let append_entries = ctx.consume_precommit_blocks();
                 // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
-                let catalog_name = ctx.get_current_catalog();
                 let commit_handle = GlobalIORuntime::instance().spawn(async move {
-                    table
-                        .commit_insertion(ctx, &catalog_name, append_entries, overwrite)
-                        .await
+                    table.commit_insertion(ctx, append_entries, overwrite).await
                 });
 
                 return match futures::executor::block_on(commit_handle) {
@@ -165,7 +162,7 @@ pub async fn stat_file(
     path: &str,
 ) -> Result<StageFile> {
     let table_ctx: Arc<dyn TableContext> = ctx.clone();
-    let op = StageSourceHelper::get_op(&table_ctx, stage).await?;
+    let op = StageTable::get_op(&table_ctx, stage).await?;
     let meta = op.object(path).metadata().await?;
     Ok(StageFile {
         path: path.to_owned(),
@@ -200,7 +197,7 @@ pub async fn list_files_from_dal(
     pattern: &str,
 ) -> Result<Vec<StageFile>> {
     let table_ctx: Arc<dyn TableContext> = ctx.clone();
-    let op = StageSourceHelper::get_op(&table_ctx, stage).await?;
+    let op = StageTable::get_op(&table_ctx, stage).await?;
     let prefix = stage.get_prefix();
     let mut files = Vec::new();
 

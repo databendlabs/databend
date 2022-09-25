@@ -20,7 +20,7 @@ use common_meta_types::GrantObject;
 use common_meta_types::PrincipalIdentity;
 use common_meta_types::UserPrivilegeSet;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GrantPrivilegePlan {
     pub principal: PrincipalIdentity,
     pub priv_types: UserPrivilegeSet,
