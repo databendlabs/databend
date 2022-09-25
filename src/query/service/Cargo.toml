@@ -1,11 +1,11 @@
 [package]
 name = "databend-query"
-version = "0.1.0"
 description = "A real-time Cloud Distributed Query Engine"
-authors = ["Databend Authors <opensource@datafuselabs.com>"]
-license = "Apache-2.0"
-publish = false
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
 
 [lib]
 doctest = false
