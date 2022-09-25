@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
@@ -42,6 +43,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
+        let instant = Instant::now();
         let snapshot = self.read_table_snapshot(ctx.clone()).await?;
         match snapshot {
             Some(snapshot) => {
@@ -58,6 +60,7 @@ impl FuseTable {
                         segments.push(FuseLazyPartInfo::create(segment_location.clone()))
                     }
 
+                    println!("elapsed {:?}", instant.elapsed());
                     return Ok((
                         Statistics::new_estimated(
                             snapshot.summary.row_count as usize,
@@ -72,14 +75,16 @@ impl FuseTable {
                 let table_info = self.table_info.clone();
                 let segments_location = snapshot.segments.clone();
                 let summary = snapshot.summary.block_count as usize;
-                Self::prune_snapshot_blocks(
+                let s = Self::prune_snapshot_blocks(
                     ctx.clone(),
                     push_downs.clone(),
                     table_info,
                     segments_location,
                     summary,
                 )
-                .await
+                .await;
+                println!("elapsed {:?}", instant.elapsed());
+                s
             }
             None => Ok((Statistics::default(), vec![])),
         }

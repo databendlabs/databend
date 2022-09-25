@@ -57,6 +57,7 @@ impl PipelineExecutor {
         settings: ExecutorSettings,
     ) -> Result<Arc<PipelineExecutor>> {
         let threads_num = pipeline.get_max_threads();
+        // let on_init_callback = pipeline.take_on_init();
         let on_finished_callback = pipeline.take_on_finished();
 
         assert_ne!(threads_num, 0, "Pipeline max threads cannot equals zero.");

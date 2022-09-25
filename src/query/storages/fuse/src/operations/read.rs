@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
+use common_base::base::Runtime;
 use common_base::base::TrySpawn;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
@@ -95,7 +96,8 @@ impl FuseTable {
             let table_info = self.table_info.clone();
             let push_downs = plan.push_downs.clone();
             let query_ctx = ctx.clone();
-            let re_partitions = ctx.get_runtime()?.spawn(async move {
+            let runtime = Runtime::with_worker_threads(2, None)?;
+            let re_partitions = runtime.spawn(async move {
                 let (_statistics, partitions) = FuseTable::prune_snapshot_blocks(
                     query_ctx,
                     push_downs,
