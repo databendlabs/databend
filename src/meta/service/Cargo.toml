@@ -48,7 +48,7 @@ clap = { version = "3.2.22", features = ["derive", "env"] }
 futures = "0.3.24"
 num = "0.4.0"
 once_cell = "1.15.0"
-poem = { version = "1.3.42", features = ["rustls"] }
+poem = { version = "1", features = ["rustls"] }
 prometheus = { version = "0.13.2", features = ["process"] }
 prost = "0.10.4"
 semver = "1.0.14"
