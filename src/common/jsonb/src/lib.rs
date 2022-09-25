@@ -16,6 +16,7 @@ mod constants;
 mod de;
 mod error;
 mod from;
+mod functions;
 mod jentry;
 mod parser;
 mod ser;
@@ -24,5 +25,6 @@ mod value;
 
 pub use de::from_slice;
 pub use error::Error;
+pub use functions::*;
 pub use parser::parse_value;
 pub use value::*;

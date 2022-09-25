@@ -324,7 +324,6 @@ impl MetaGrpcClient {
         info!("MetaGrpcClient::worker spawned");
 
         loop {
-            let start = Instant::now();
             let t = req_rx.recv().await;
             let req = match t {
                 None => {
@@ -347,6 +346,9 @@ impl MetaGrpcClient {
             let resp_tx = req.resp_tx;
             let req = req.req;
             let req_name = req.name();
+            let req_str = format!("{:?}", req);
+
+            let start = Instant::now();
 
             let resp = match req {
                 message::Request::Get(r) => {
@@ -402,14 +404,21 @@ impl MetaGrpcClient {
             };
 
             if let Some(current_endpoint) = current_endpoint {
+                let elapsed = start.elapsed().as_millis() as f64;
                 label_histogram_with_val(
                     META_GRPC_CLIENT_REQUEST_DURATION_MS,
                     vec![
                         (LABEL_ENDPOINT, current_endpoint.to_string()),
                         (LABEL_REQUEST, req_name.to_string()),
                     ],
-                    start.elapsed().as_millis() as f64,
+                    elapsed,
                 );
+                if elapsed > 1000_f64 {
+                    warn!(
+                        "MetaGrpcClient slow request {} to {} takes {} ms: {}",
+                        req_name, current_endpoint, elapsed, req_str,
+                    );
+                }
 
                 if let Some(err) = resp.err() {
                     label_counter_with_val_and_labels(

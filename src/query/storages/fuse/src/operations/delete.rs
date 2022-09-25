@@ -67,8 +67,7 @@ impl FuseTable {
                 "unconditionally delete from table, {}.{}.{}",
                 plan.catalog_name, plan.database_name, plan.table_name
             );
-            self.do_truncate(ctx.clone(), purge, plan.catalog_name.as_str())
-                .await
+            self.do_truncate(ctx.clone(), purge).await
         }
     }
 
@@ -123,20 +122,17 @@ impl FuseTable {
                 }
             }
         }
-        self.commit_deletion(ctx.as_ref(), deletion_collector, &plan.catalog_name)
-            .await
+        self.commit_deletion(ctx.as_ref(), deletion_collector).await
     }
 
     async fn commit_deletion(
         &self,
         ctx: &dyn TableContext,
         del_holder: DeletionMutator,
-        catalog_name: &str,
     ) -> Result<()> {
         let new_snapshot = del_holder.into_new_snapshot().await?;
         Self::commit_to_meta_server(
             ctx,
-            catalog_name,
             self.get_table_info(),
             &self.meta_location_generator,
             new_snapshot,

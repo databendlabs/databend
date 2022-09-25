@@ -41,6 +41,7 @@ use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 
+use crate::hive_catalog::HIVE_CATALOG;
 use crate::hive_database::HiveDatabase;
 use crate::hive_database::HIVE_DATABASE_ENGIE;
 use crate::hive_table::HIVE_TABLE_ENGIE;
@@ -97,6 +98,7 @@ pub fn try_into_table_info(
 
     let meta = TableMeta {
         schema,
+        catalog: HIVE_CATALOG.to_string(),
         engine: HIVE_TABLE_ENGIE.to_owned(),
         engine_options: table_options.into(),
         created_on: Utc::now(),

@@ -16,7 +16,7 @@ use std::sync::Arc;
 use common_datavalues::prelude::*;
 use common_meta_types::UserStageInfo;
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct ListPlan {
     pub stage: UserStageInfo,
     pub path: String,

@@ -33,6 +33,7 @@ use opendal::io_util::CompressAlgorithm;
 
 use crate::processors::sources::input_formats::input_context::InputContext;
 use crate::processors::sources::input_formats::input_context::InputPlan;
+use crate::processors::sources::input_formats::input_context::StreamPlan;
 use crate::processors::sources::input_formats::input_format::SplitInfo;
 use crate::processors::sources::input_formats::source_aligner::Aligner;
 use crate::processors::sources::input_formats::source_deserializer::DeserializeSource;
@@ -210,8 +211,13 @@ pub trait InputFormatPipe: Sized + Send + 'static {
         let n_threads = ctx.settings.get_max_threads()? as usize;
         let max_aligner = match ctx.plan {
             InputPlan::CopyInto(_) => ctx.splits.len(),
-            InputPlan::StreamingLoad(_) => 3,
-            InputPlan::Clickhouse => 1,
+            InputPlan::StreamingLoad(StreamPlan { is_multi_part, .. }) => {
+                if is_multi_part {
+                    3
+                } else {
+                    1
+                }
+            }
         };
         let (row_batch_tx, row_batch_rx) = crossbeam_channel::bounded(n_threads);
         for _ in 0..std::cmp::min(max_aligner, n_threads) {

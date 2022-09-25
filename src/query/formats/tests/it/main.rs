@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod format_csv;
 mod format_factory;
 mod output_format_json_each_row;
 mod output_format_tcsv;

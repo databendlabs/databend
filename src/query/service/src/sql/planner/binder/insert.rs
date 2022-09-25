@@ -19,7 +19,6 @@ use common_ast::ast::InsertStmt;
 use common_ast::ast::Statement;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
-use tracing::debug;
 
 use crate::sql::binder::Binder;
 use crate::sql::normalize_identifier;
@@ -78,13 +77,21 @@ impl<'a> Binder {
         };
 
         let input_source: Result<InsertInputSource> = match source.clone() {
-            InsertSource::Streaming { format, rest_str } => {
-                self.analyze_stream_format(rest_str, Some(format)).await
+            InsertSource::Streaming {
+                format,
+                rest_str,
+                start,
+            } => {
+                if format.to_uppercase() == "VALUES" {
+                    let data = rest_str.trim_end_matches(';').trim_start().to_owned();
+                    Ok(InsertInputSource::Values(data))
+                } else {
+                    Ok(InsertInputSource::StreamingWithFormat(format, start, None))
+                }
             }
-            InsertSource::Values { rest_str, .. } => {
-                let str = rest_str.trim_end_matches(';');
-                self.analyze_stream_format(str, Some("VALUES".to_string()))
-                    .await
+            InsertSource::Values { rest_str } => {
+                let data = rest_str.trim_end_matches(';').trim_start().to_owned();
+                Ok(InsertInputSource::Values(data))
             }
             InsertSource::Select { query } => {
                 let statement = Statement::Query(query);
@@ -108,21 +115,5 @@ impl<'a> Binder {
         };
 
         Ok(Plan::Insert(Box::new(plan)))
-    }
-
-    pub(in crate::sql::planner::binder) async fn analyze_stream_format(
-        &self,
-        stream_str: &'a str,
-        format: Option<String>,
-    ) -> Result<InsertInputSource> {
-        let stream_str = stream_str.trim_start();
-        debug!("{:?}", stream_str);
-        let format = format.map(|v| v.to_uppercase());
-        // TODO migrate format into format factory and avoid the str clone
-        let data = stream_str.to_owned();
-        Ok(InsertInputSource::StrWithFormat((
-            data,
-            format.unwrap_or_else(|| "VALUES".to_string()),
-        )))
     }
 }

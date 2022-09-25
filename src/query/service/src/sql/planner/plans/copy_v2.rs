@@ -23,7 +23,7 @@ use common_meta_types::UserStageInfo;
 
 use crate::sql::plans::Plan;
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub enum ValidationMode {
     None,
     ReturnNRows(u64),
