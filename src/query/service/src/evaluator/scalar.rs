@@ -79,12 +79,12 @@ impl Evaluator {
                     {
                         let func = if name_lower.as_str() == "not_in" {
                             in_evalutor::create_by_values::<true>(
-                                func.arg_types[1].clone(),
+                                func.arg_types[0].clone(),
                                 vs.clone(),
                             )
                         } else {
                             in_evalutor::create_by_values::<false>(
-                                func.arg_types[1].clone(),
+                                func.arg_types[0].clone(),
                                 vs.clone(),
                             )
                         }?;
