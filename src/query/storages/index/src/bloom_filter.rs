@@ -151,11 +151,11 @@ impl BloomFilterIndexer {
         &self,
         column_name: &str,
         target: DataValue,
-        typ: DataTypeImpl,
+        typ: &DataTypeImpl,
     ) -> Result<BloomFilterExprEvalResult> {
         let bloom_column = Self::to_bloom_column_name(column_name);
         if !self.bloom_block.schema().has_field(&bloom_column)
-            || !XorBloom::is_supported_type(&typ)
+            || !XorBloom::is_supported_type(typ)
             || target.is_null()
         {
             // The column doesn't have bloom filter bitmap
@@ -225,7 +225,7 @@ impl BloomFilterIndexer {
                         } else {
                             value.clone()
                         };
-                        self.find(column, value, data_type.clone())
+                        self.find(column, value, data_type)
                     }
                     None => Err(ErrorCode::BadArguments(format!(
                         "Column '{}' not found in schema",

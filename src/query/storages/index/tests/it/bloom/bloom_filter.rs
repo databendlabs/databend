@@ -67,10 +67,10 @@ fn test_column_type_support() -> Result<()> {
 
     // check applicable
     schema.fields().iter().for_each(|field| {
-        // type of input data value does not matter here
+        // type of input data value does not matter here, will be casted during filtering
         let value = DataValue::Boolean(true);
-        let data_type = value.data_type();
         let col_name = field.name().as_str();
+        let data_type = field.data_type();
         let r = index.find(col_name, value, data_type).unwrap();
         if supported_types.contains(field.data_type()) {
             assert_ne!(
