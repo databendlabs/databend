@@ -1,0 +1,13 @@
+statement ok
+SET max_threads=11;
+
+statement error 2801
+SET unknown_settings=11; 
+
+statement ok
+SHOW SETTINGS;
+
+onlyif mysql
+statement ok
+SHOW SETTINGS LIKE 'enable%';
+
