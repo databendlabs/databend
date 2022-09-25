@@ -68,8 +68,13 @@ impl BlockPruner {
 
         let filter_expressions = push_down.as_ref().map(|extra| extra.filters.as_slice());
 
+        let is_filter_empty = match filter_expressions {
+            None => true,
+            Some(filters) => filters.is_empty(),
+        };
+
         // shortcut, just returns all the blocks
-        if limit.is_none() && filter_expressions.is_none() {
+        if limit.is_none() && is_filter_empty {
             return Self::all_the_blocks(segment_locs, ctx.as_ref()).await;
         }
 
