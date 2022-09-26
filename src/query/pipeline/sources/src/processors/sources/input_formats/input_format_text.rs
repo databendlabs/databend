@@ -40,6 +40,9 @@ use crate::processors::sources::input_formats::input_format::SplitInfo;
 use crate::processors::sources::input_formats::input_pipeline::AligningStateTrait;
 use crate::processors::sources::input_formats::input_pipeline::BlockBuilderTrait;
 use crate::processors::sources::input_formats::input_pipeline::InputFormatPipe;
+use crate::processors::sources::input_formats::input_split::split_by_size;
+use crate::processors::sources::input_formats::input_split::FileInfo;
+use crate::processors::sources::input_formats::input_split::SplitInfo;
 
 pub trait InputFormatTextBase: Sized + Send + Sync + 'static {
     fn format_type() -> StageFileFormatType;

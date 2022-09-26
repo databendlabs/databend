@@ -34,7 +34,7 @@ use opendal::io_util::CompressAlgorithm;
 use crate::processors::sources::input_formats::input_context::InputContext;
 use crate::processors::sources::input_formats::input_context::InputPlan;
 use crate::processors::sources::input_formats::input_context::StreamPlan;
-use crate::processors::sources::input_formats::input_format::SplitInfo;
+use crate::processors::sources::input_formats::input_split::SplitInfo;
 use crate::processors::sources::input_formats::source_aligner::Aligner;
 use crate::processors::sources::input_formats::source_deserializer::DeserializeSource;
 use crate::processors::sources::input_formats::transform_deserializer::DeserializeTransformer;

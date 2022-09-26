@@ -37,10 +37,9 @@ use crate::processors::sources::input_formats::impls::input_format_csv::InputFor
 use crate::processors::sources::input_formats::impls::input_format_ndjson::InputFormatNDJson;
 use crate::processors::sources::input_formats::impls::input_format_parquet::InputFormatParquet;
 use crate::processors::sources::input_formats::impls::input_format_tsv::InputFormatTSV;
-use crate::processors::sources::input_formats::input_format::FileInfo;
-use crate::processors::sources::input_formats::input_format::SplitInfo;
 use crate::processors::sources::input_formats::input_format_text::InputFormatText;
 use crate::processors::sources::input_formats::input_pipeline::StreamingReadBatch;
+use crate::processors::sources::input_formats::input_split::SplitInfo;
 use crate::processors::sources::input_formats::InputFormat;
 
 const MIN_ROW_PER_BLOCK: usize = 800 * 1000;

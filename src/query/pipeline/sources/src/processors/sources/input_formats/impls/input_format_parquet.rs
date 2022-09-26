@@ -46,12 +46,12 @@ use similar_asserts::traits::MakeDiff;
 
 use crate::processors::sources::input_formats::delimiter::RecordDelimiter;
 use crate::processors::sources::input_formats::input_context::InputContext;
-use crate::processors::sources::input_formats::input_format::FileInfo;
-use crate::processors::sources::input_formats::input_format::InputData;
-use crate::processors::sources::input_formats::input_format::SplitInfo;
 use crate::processors::sources::input_formats::input_pipeline::AligningStateTrait;
 use crate::processors::sources::input_formats::input_pipeline::BlockBuilderTrait;
 use crate::processors::sources::input_formats::input_pipeline::InputFormatPipe;
+use crate::processors::sources::input_formats::input_split::DynData;
+use crate::processors::sources::input_formats::input_split::FileInfo;
+use crate::processors::sources::input_formats::input_split::SplitInfo;
 use crate::processors::sources::input_formats::InputFormat;
 
 pub struct InputFormatParquet;
