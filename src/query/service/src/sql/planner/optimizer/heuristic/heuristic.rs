@@ -18,11 +18,11 @@ use common_exception::Result;
 use common_planner::MetadataRef;
 use once_cell::sync::Lazy;
 
+use super::prune_unused_columns::UnusedColumnPruner;
 use crate::sessions::TableContext;
 use crate::sql::optimizer::heuristic::decorrelate::decorrelate_subquery;
 use crate::sql::optimizer::heuristic::implement::HeuristicImplementor;
 use crate::sql::optimizer::heuristic::prewhere_optimization::PrewhereOptimizer;
-use crate::sql::optimizer::heuristic::prune_columns;
 use crate::sql::optimizer::heuristic::RuleList;
 use crate::sql::optimizer::rule::TransformState;
 use crate::sql::optimizer::ColumnSet;
@@ -36,17 +36,13 @@ pub static DEFAULT_REWRITE_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| {
         RuleID::NormalizeScalarFilter,
         RuleID::EliminateFilter,
         RuleID::EliminateEvalScalar,
-        RuleID::EliminateProject,
         RuleID::MergeFilter,
         RuleID::MergeEvalScalar,
-        RuleID::MergeProject,
-        RuleID::PushDownLimitProject,
         RuleID::PushDownLimitSort,
         RuleID::PushDownLimitOuterJoin,
         RuleID::PushDownLimitScan,
         RuleID::PushDownSortScan,
         RuleID::PushDownFilterEvalScalar,
-        RuleID::PushDownFilterProject,
         RuleID::PushDownFilterJoin,
         RuleID::FoldCountAggregate,
         RuleID::SplitAggregate,
@@ -91,10 +87,10 @@ impl HeuristicOptimizer {
         let prewhere_optimizer = PrewhereOptimizer::new(self.metadata.clone());
         let s_expr = prewhere_optimizer.prewhere_optimize(s_expr)?;
 
-        let pruner = prune_columns::ColumnPruner::new(self.metadata.clone());
+        let pruner = UnusedColumnPruner::new(self.metadata.clone());
         let require_columns: ColumnSet =
             self.bind_context.columns.iter().map(|c| c.index).collect();
-        pruner.prune_columns(&s_expr, require_columns)
+        pruner.remove_unused_columns(&s_expr, require_columns)
     }
 
     pub fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {

@@ -27,7 +27,6 @@ use common_planner::MetadataRef;
 
 use crate::sql::binder::ColumnBinding;
 use crate::sql::binder::Visibility;
-use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::Aggregate;
@@ -39,13 +38,12 @@ use crate::sql::plans::CastExpr;
 use crate::sql::plans::ComparisonExpr;
 use crate::sql::plans::ComparisonOp;
 use crate::sql::plans::ConstantExpr;
-use crate::sql::plans::EvalScalar;
+use crate::sql::plans::Filter;
 use crate::sql::plans::FunctionCall;
 use crate::sql::plans::JoinType;
 use crate::sql::plans::Limit;
 use crate::sql::plans::LogicalInnerJoin;
 use crate::sql::plans::OrExpr;
-use crate::sql::plans::Project;
 use crate::sql::plans::RelOperator;
 use crate::sql::plans::Scalar;
 use crate::sql::plans::ScalarItem;
@@ -53,9 +51,10 @@ use crate::sql::plans::SubqueryExpr;
 use crate::sql::plans::SubqueryType;
 use crate::sql::ScalarExpr;
 
+#[allow(clippy::enum_variant_names)]
 pub enum UnnestResult {
-    Uncorrelated,
-    SimpleJoin, // SemiJoin or AntiJoin
+    // Semi/Anti Join, Cross join for EXISTS
+    SimpleJoin,
     MarkJoin { marker_index: IndexType },
     SingleJoin,
 }
@@ -128,9 +127,10 @@ impl SubqueryRewriter {
                 ))
             }
 
-            RelOperator::Project(_) | RelOperator::Limit(_) | RelOperator::Sort(_) => Ok(
-                SExpr::create_unary(s_expr.plan().clone(), self.rewrite(s_expr.child(0)?)?),
-            ),
+            RelOperator::Limit(_) | RelOperator::Sort(_) => Ok(SExpr::create_unary(
+                s_expr.plan().clone(),
+                self.rewrite(s_expr.child(0)?)?,
+            )),
 
             RelOperator::DummyTableScan(_) | RelOperator::LogicalGet(_) => Ok(s_expr.clone()),
 
@@ -244,7 +244,6 @@ impl SubqueryRewriter {
                 // If it is not, we'll just rewrite it to join
                 let rel_expr = RelExpr::with_s_expr(&subquery.subquery);
                 let prop = rel_expr.derive_relational_prop()?;
-                let subquery_output_columns = prop.output_columns;
                 let mut flatten_info = FlattenInfo {
                     from_count_func: false,
                 };
@@ -270,27 +269,16 @@ impl SubqueryRewriter {
                         s_expr,
                     ));
                 }
-                let prop = if matches!(result, UnnestResult::SingleJoin { .. }) {
-                    RelExpr::with_s_expr(s_expr.child(0)?).derive_relational_prop()?
-                } else {
-                    RelExpr::with_s_expr(s_expr.child(1)?).derive_relational_prop()?
-                };
                 let (index, name) = if let UnnestResult::MarkJoin { marker_index } = result {
                     (marker_index, marker_index.to_string())
                 } else if let UnnestResult::SingleJoin = result {
-                    assert_eq!(subquery_output_columns.len(), 1);
-                    let mut output_column = *subquery_output_columns.iter().take(1).next().unwrap();
+                    let mut output_column = subquery.output_column;
                     if let Some(index) = self.derived_columns.get(&output_column) {
                         output_column = *index;
                     }
                     (output_column, format!("scalar_subquery_{output_column}"))
                 } else {
-                    let index = *prop
-                        .output_columns
-                        .iter()
-                        .take(1)
-                        .next()
-                        .ok_or_else(|| ErrorCode::LogicalError("Invalid subquery"))?;
+                    let index = subquery.output_column;
                     (index, format!("subquery_{}", index))
                 };
 
@@ -347,6 +335,13 @@ impl SubqueryRewriter {
                         from_type: Box::new(column_ref.data_type()),
                         target_type: Box::new(UInt64Type::new_impl()),
                     })
+                } else if subquery.typ == SubqueryType::NotExists {
+                    Scalar::FunctionCall(FunctionCall {
+                        arguments: vec![column_ref.clone()],
+                        func_name: "not".to_string(),
+                        arg_types: vec![column_ref.data_type()],
+                        return_type: Box::new(NullableType::new_impl(BooleanType::new_impl())),
+                    })
                 } else {
                     column_ref
                 };
@@ -376,7 +371,7 @@ impl SubqueryRewriter {
                     SExpr::create_binary(join_plan, left.clone(), *subquery.subquery.clone());
                 Ok((s_expr, UnnestResult::SingleJoin))
             }
-            SubqueryType::Exists => {
+            SubqueryType::Exists | SubqueryType::NotExists => {
                 let mut subquery_expr = *subquery.subquery.clone();
                 // Wrap Limit to current subquery
                 let limit = Limit {
@@ -414,15 +409,12 @@ impl SubqueryRewriter {
                     mode: AggregateMode::Initial,
                 };
 
-                // COUNT(*) = 1
-                let compare_index = self.metadata.write().add_column(
-                    "subquery".to_string(),
-                    BooleanType::new_impl(),
-                    None,
-                    None,
-                );
                 let compare = ComparisonExpr {
-                    op: ComparisonOp::Equal,
+                    op: if subquery.typ == SubqueryType::Exists {
+                        ComparisonOp::Equal
+                    } else {
+                        ComparisonOp::NotEqual
+                    },
                     left: Box::new(
                         BoundColumnRef {
                             column: ColumnBinding {
@@ -445,26 +437,16 @@ impl SubqueryRewriter {
                     ),
                     return_type: Box::new(agg_func.return_type()?),
                 };
-                let eval_scalar = EvalScalar {
-                    items: vec![ScalarItem {
-                        scalar: compare.into(),
-                        index: compare_index,
-                    }],
+                let filter = Filter {
+                    predicates: vec![compare.into()],
+                    is_having: false,
                 };
 
-                let project = Project {
-                    columns: ColumnSet::from([compare_index]),
-                };
-
-                // Project
-                //     EvalScalar: COUNT(*) = 1
-                //         Aggregate: COUNT(*)
+                // Filter: COUNT(*) = 1 or COUNT(*) != 1
+                //     Aggregate: COUNT(*)
                 let rewritten_subquery = SExpr::create_unary(
-                    project.into(),
-                    SExpr::create_unary(
-                        eval_scalar.into(),
-                        SExpr::create_unary(agg.into(), subquery_expr),
-                    ),
+                    filter.into(),
+                    SExpr::create_unary(agg.into(), subquery_expr),
                 );
                 let cross_join = LogicalInnerJoin {
                     left_conditions: vec![],
@@ -477,25 +459,18 @@ impl SubqueryRewriter {
                 .into();
                 Ok((
                     SExpr::create_binary(cross_join, left.clone(), rewritten_subquery),
-                    UnnestResult::Uncorrelated,
+                    UnnestResult::SimpleJoin,
                 ))
             }
             SubqueryType::Any => {
-                let rel_expr = RelExpr::with_s_expr(&subquery.subquery);
-                let prop = rel_expr.derive_relational_prop()?;
-                let output_columns = prop.output_columns;
-                let index = output_columns
-                    .iter()
-                    .take(1)
-                    .next()
-                    .ok_or_else(|| ErrorCode::LogicalError("Invalid subquery"))?;
+                let index = subquery.output_column;
                 let column_name = format!("subquery_{}", index);
                 let left_condition = Scalar::BoundColumnRef(BoundColumnRef {
                     column: ColumnBinding {
                         database_name: None,
                         table_name: None,
                         column_name,
-                        index: *index,
+                        index,
                         data_type: subquery.data_type.clone(),
                         visibility: Visibility::Visible,
                     },
@@ -520,7 +495,7 @@ impl SubqueryRewriter {
                 // If subquery contains NULL, the comparison result is TRUE or NULL.
                 // Such as t1.a => {1, 3, 4}, select t1.a in (1, 2, NULL) from t1; The sql will return {true, null, null}.
                 // If subquery doesn't contain NULL, the comparison result is FALSE, TRUE, or NULL.
-                let marker_index = if let Some(idx) = subquery.index {
+                let marker_index = if let Some(idx) = subquery.projection_index {
                     idx
                 } else {
                     self.metadata.write().add_column(

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 
 use async_recursion::async_recursion;
 use common_ast::ast::Expr;
@@ -31,6 +30,7 @@ use common_datavalues::type_coercion::compare_coercion;
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planner::IndexType;
 
 use crate::sql::binder::scalar_common::split_conjunctions;
 use crate::sql::binder::CteInfo;
@@ -44,7 +44,6 @@ use crate::sql::plans::CastExpr;
 use crate::sql::plans::EvalScalar;
 use crate::sql::plans::Filter;
 use crate::sql::plans::JoinType;
-use crate::sql::plans::Project;
 use crate::sql::plans::Scalar;
 use crate::sql::plans::ScalarItem;
 use crate::sql::plans::UnionAll;
@@ -346,18 +345,25 @@ impl<'a> Binder {
         right_expr: SExpr,
         distinct: bool,
     ) -> Result<(SExpr, BindContext)> {
-        let (new_bind_context, left_expr, right_expr) = if let Some(coercion_type) = coercion_type {
-            self.coercion_union_type(
-                left_context,
-                right_context,
-                left_expr,
-                right_expr,
-                coercion_type,
-            )?
-        } else {
-            (left_context, left_expr, right_expr)
-        };
-        let union_plan = UnionAll {};
+        let (new_bind_context, pairs, left_expr, right_expr) =
+            if let Some(coercion_type) = coercion_type {
+                self.coercion_union_type(
+                    left_context,
+                    right_context,
+                    left_expr,
+                    right_expr,
+                    coercion_type,
+                )?
+            } else {
+                let pairs = left_context
+                    .columns
+                    .iter()
+                    .zip(right_context.columns.iter())
+                    .map(|(left, right)| (left.index, right.index))
+                    .collect::<Vec<_>>();
+                (left_context, pairs, left_expr, right_expr)
+            };
+        let union_plan = UnionAll { pairs };
         let mut new_expr = SExpr::create_binary(union_plan.into(), left_expr, right_expr);
         if distinct {
             new_expr = self.bind_distinct(
@@ -448,6 +454,7 @@ impl<'a> Binder {
         Ok((s_expr, left_context))
     }
 
+    #[allow(clippy::type_complexity)]
     fn coercion_union_type(
         &self,
         left_bind_context: BindContext,
@@ -455,18 +462,17 @@ impl<'a> Binder {
         mut left_expr: SExpr,
         mut right_expr: SExpr,
         coercion_type: DataTypeImpl,
-    ) -> Result<(BindContext, SExpr, SExpr)> {
+    ) -> Result<(BindContext, Vec<(IndexType, IndexType)>, SExpr, SExpr)> {
         let mut left_scalar_items = Vec::with_capacity(left_bind_context.columns.len());
         let mut right_scalar_items = Vec::with_capacity(right_bind_context.columns.len());
-        let mut left_project_column_set = HashSet::new();
-        let mut right_project_column_set = HashSet::new();
         let mut new_bind_context = BindContext::new();
+        let mut pairs = Vec::with_capacity(left_bind_context.columns.len());
         for (left_col, right_col) in left_bind_context
             .columns
             .iter()
             .zip(right_bind_context.columns.iter())
         {
-            if left_col.data_type != coercion_type {
+            let left_index = if left_col.data_type != coercion_type {
                 let new_column_index = self.metadata.write().add_column(
                     left_col.column_name.clone(),
                     coercion_type.clone(),
@@ -495,13 +501,13 @@ impl<'a> Binder {
                     scalar: left_coercion_expr.into(),
                     index: new_column_index,
                 });
-                left_project_column_set.insert(new_column_index);
                 new_bind_context.add_column_binding(column_binding);
+                new_column_index
             } else {
-                left_project_column_set.insert(left_col.index);
                 new_bind_context.add_column_binding(left_col.clone());
-            }
-            if right_col.data_type != coercion_type {
+                left_col.index
+            };
+            let right_index = if right_col.data_type != coercion_type {
                 let new_column_index = self.metadata.write().add_column(
                     right_col.column_name.clone(),
                     coercion_type.clone(),
@@ -522,22 +528,16 @@ impl<'a> Binder {
                     scalar: right_coercion_expr.into(),
                     index: new_column_index,
                 });
-                right_project_column_set.insert(new_column_index);
+                new_column_index
             } else {
-                right_project_column_set.insert(right_col.index);
-            }
+                right_col.index
+            };
+            pairs.push((left_index, right_index));
         }
         if !left_scalar_items.is_empty() {
             left_expr = SExpr::create_unary(
                 EvalScalar {
                     items: left_scalar_items,
-                }
-                .into(),
-                left_expr,
-            );
-            left_expr = SExpr::create_unary(
-                Project {
-                    columns: left_project_column_set,
                 }
                 .into(),
                 left_expr,
@@ -551,14 +551,7 @@ impl<'a> Binder {
                 .into(),
                 right_expr,
             );
-            right_expr = SExpr::create_unary(
-                Project {
-                    columns: right_project_column_set,
-                }
-                .into(),
-                right_expr,
-            );
         }
-        Ok((new_bind_context, left_expr, right_expr))
+        Ok((new_bind_context, pairs, left_expr, right_expr))
     }
 }

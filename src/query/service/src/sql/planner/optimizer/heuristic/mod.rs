@@ -17,7 +17,7 @@ mod decorrelate;
 mod heuristic;
 mod implement;
 mod prewhere_optimization;
-mod prune_columns;
+mod prune_unused_columns;
 mod rule_list;
 mod subquery_rewriter;
 

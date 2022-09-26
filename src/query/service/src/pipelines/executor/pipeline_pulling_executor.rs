@@ -213,7 +213,6 @@ impl PipelinePullingExecutor {
 impl Drop for PipelinePullingExecutor {
     fn drop(&mut self) {
         self.finish(None);
-        self.state.wait_finish();
     }
 }
 
