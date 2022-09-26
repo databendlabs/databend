@@ -16,8 +16,8 @@ use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
 use common_datavalues::Column;
 use common_datavalues::ColumnRef;
-use common_datavalues::DataField;
 use common_datavalues::DataType;
+use common_datavalues::DataTypeImpl;
 use common_datavalues::ScalarColumn;
 use common_datavalues::StringColumn;
 use common_datavalues::TypeDeserializer;
@@ -35,7 +35,8 @@ pub trait GroupColumnsBuilder<Key> {
 
 pub struct FixedKeysGroupColumnsBuilder<T> {
     data: Vec<T>,
-    groups_fields: Vec<DataField>,
+    group_column_indices: Vec<usize>,
+    group_data_types: Vec<DataTypeImpl>,
 }
 
 impl<T> FixedKeysGroupColumnsBuilder<T>
@@ -44,7 +45,8 @@ where for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey = T>
     pub fn create(capacity: usize, params: &AggregatorParams) -> Self {
         Self {
             data: Vec::with_capacity(capacity),
-            groups_fields: params.group_data_fields.clone(),
+            group_column_indices: params.group_columns.clone(),
+            group_data_types: params.group_data_types.clone(),
         }
     }
 }
@@ -60,20 +62,28 @@ where for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey = T>
     #[inline]
     fn finish(self) -> Result<Vec<ColumnRef>> {
         let method = HashMethodFixedKeys::<T>::default();
-        method.deserialize_group_columns(self.data, &self.groups_fields)
+        method.deserialize_group_columns(
+            self.data,
+            &self
+                .group_column_indices
+                .iter()
+                .cloned()
+                .zip(self.group_data_types.iter().cloned())
+                .collect::<Vec<_>>(),
+        )
     }
 }
 
 pub struct SerializedKeysGroupColumnsBuilder {
     data: Vec<KeysRef>,
-    groups_fields: Vec<DataField>,
+    group_data_types: Vec<DataTypeImpl>,
 }
 
 impl SerializedKeysGroupColumnsBuilder {
     pub fn create(capacity: usize, params: &AggregatorParams) -> Self {
         Self {
             data: Vec::with_capacity(capacity),
-            groups_fields: params.group_data_fields.clone(),
+            group_data_types: params.group_data_types.clone(),
         }
     }
 }
@@ -93,18 +103,17 @@ impl GroupColumnsBuilder<KeysRef> for SerializedKeysGroupColumnsBuilder {
             }
         }
 
-        if self.groups_fields.len() == 1
-            && self.groups_fields[0].data_type().data_type_id() == TypeID::String
+        if self.group_data_types.len() == 1
+            && self.group_data_types[0].data_type_id() == TypeID::String
         {
             let col = StringColumn::from_slice(&keys);
             return Ok(vec![col.arc()]);
         }
 
         let rows = self.data.len();
-        let mut res = Vec::with_capacity(self.groups_fields.len());
+        let mut res = Vec::with_capacity(self.group_data_types.len());
         let format = FormatSettings::default();
-        for group_field in self.groups_fields.iter() {
-            let data_type = group_field.data_type();
+        for data_type in self.group_data_types.iter() {
             let mut deserializer = data_type.create_deserializer(rows);
 
             for (_, key) in keys.iter_mut().enumerate() {

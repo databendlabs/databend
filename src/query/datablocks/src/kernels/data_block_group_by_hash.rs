@@ -74,15 +74,15 @@ pub trait HashMethod {
     fn group_by_get_indices<'a>(
         &self,
         block: &'a DataBlock,
-        column_names: &[String],
+        indices: &[usize],
     ) -> Result<GroupIndices<Self::HashKey>> {
         // Table for <group_key, (indices, keys) >
         let mut group_indices = GroupIndices::<Self::HashKey>::default();
         // 1. Get group by columns.
-        let mut group_columns = Vec::with_capacity(column_names.len());
+        let mut group_columns = Vec::with_capacity(indices.len());
         {
-            for col in column_names {
-                group_columns.push(block.try_column_by_name(col)?);
+            for col in indices {
+                group_columns.push(block.column(*col));
             }
         }
 
@@ -117,9 +117,9 @@ pub trait HashMethod {
     fn group_by<'a>(
         &self,
         block: &'a DataBlock,
-        column_names: &[String],
+        indices: &[usize],
     ) -> Result<GroupBlock<Self::HashKey>> {
-        let group_indices = self.group_by_get_indices(block, column_names)?;
+        let group_indices = self.group_by_get_indices(block, indices)?;
         // Table for <(group_key, keys, block)>
         let mut group_blocks = GroupBlock::<Self::HashKey>::with_capacity(group_indices.len());
 
@@ -327,7 +327,7 @@ where T: Clone
     pub fn deserialize_group_columns(
         &self,
         keys: Vec<T>,
-        group_fields: &[DataField],
+        group_items: &[(usize, DataTypeImpl)],
     ) -> Result<Vec<ColumnRef>> {
         debug_assert!(!keys.is_empty());
         let mut keys = keys;
@@ -342,34 +342,30 @@ where T: Clone
             Vec::from_raw_parts(mutptr, length, capacity)
         };
 
-        let mut res = Vec::with_capacity(group_fields.len());
+        let mut res = Vec::with_capacity(group_items.len());
         let mut offsize = 0;
 
-        let mut null_offsize = group_fields
+        let mut null_offsize = group_items
             .iter()
-            .map(|c| {
-                let ty = c.data_type();
-                remove_nullable(ty).data_type_id().numeric_byte_size()
-            })
+            .map(|(_, ty)| remove_nullable(ty).data_type_id().numeric_byte_size())
             .sum::<Result<usize>>()?;
 
-        let mut sorted_group_fields = group_fields.to_vec();
-        sorted_group_fields.sort_by(|a, b| {
-            let a = remove_nullable(a.data_type()).data_type_id();
-            let b = remove_nullable(b.data_type()).data_type_id();
+        let mut sorted_group_items = group_items.to_vec();
+        sorted_group_items.sort_by(|(_, a), (_, b)| {
+            let a = remove_nullable(a).data_type_id();
+            let b = remove_nullable(b).data_type_id();
             b.numeric_byte_size()
                 .unwrap()
                 .cmp(&a.numeric_byte_size().unwrap())
         });
 
-        for f in sorted_group_fields.iter() {
-            let data_type = &f.data_type();
+        for (_, data_type) in sorted_group_items.iter() {
             let non_null_type = remove_nullable(data_type);
             let mut deserializer = non_null_type.create_deserializer(rows);
             let reader = vec8.as_slice();
 
             let format = FormatSettings::default();
-            let col = match f.is_nullable() {
+            let col = match data_type.is_nullable() {
                 false => {
                     deserializer.de_fixed_binary_batch(&reader[offsize..], step, rows, &format)?;
                     deserializer.finish_to_column()
@@ -403,9 +399,9 @@ where T: Clone
 
         // sort back
         let mut result_columns = Vec::with_capacity(res.len());
-        for f in group_fields.iter() {
-            for (sf, col) in sorted_group_fields.iter().zip(res.iter()) {
-                if f.data_type() == sf.data_type() && f.name() == sf.name() {
+        for (index, data_type) in group_items.iter() {
+            for (sf, col) in sorted_group_items.iter().zip(res.iter()) {
+                if data_type == &sf.1 && index == &sf.0 {
                     result_columns.push(col.clone());
                     break;
                 }
