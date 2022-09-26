@@ -78,18 +78,22 @@ where L: Loader<T> + HasTenantLabel
                     cache_hit: false,
                     read_bytes: 0,
                 };
-                let cache = &mut cache.write().await;
-                match cache.get(location.as_ref()) {
-                    Some(item) => {
+
+                {
+                    let cache = &mut cache.write().await;
+                    if let Some(item) = cache.get(location.as_ref()) {
                         metrics.cache_hit = true;
                         metrics.read_bytes = 0u64;
-                        Ok(item.clone())
+                        return Ok(item.clone());
                     }
-                    None => {
-                        let item = self.load(location.as_ref(), len_hint, version).await?;
-                        cache.put(location.as_ref().to_owned(), item.clone());
-                        Ok(item)
-                    }
+                }
+
+                // cache missed
+                let item = self.load(location.as_ref(), len_hint, version).await?;
+                {
+                    let cache = &mut cache.write().await;
+                    cache.put(location.as_ref().to_owned(), item.clone());
+                    Ok(item)
                 }
             }
         }
