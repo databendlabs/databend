@@ -22,7 +22,7 @@ chrono-tz = "0.6.3"
 comfy-table = "6"
 common-jsonb = { path = "../../common/jsonb" }
 educe = "0.4"
-enum-as-inner = "0.4"
+enum-as-inner = "0.5"
 hex = "0.4.3"
 itertools = "0.10"
 match-template = "0.0.1"
