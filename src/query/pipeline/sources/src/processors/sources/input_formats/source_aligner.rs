@@ -139,9 +139,7 @@ impl<I: InputFormatPipe> Processor for Aligner<I> {
                         self.state = Some(I::AligningState::try_create(&self.ctx, &split.info)?);
                         self.batch_rx = Some(split.rx);
                         self.received_end_batch_of_split = false;
-                        tracing::debug!(
-                            "aligner recv new split {}", &split.info
-                        );
+                        tracing::debug!("aligner recv new split {}", &split.info);
                     }
                     Ok(Err(e)) => {
                         return Err(e);
