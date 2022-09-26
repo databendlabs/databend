@@ -26,4 +26,4 @@ common-settings = { path = "../settings" }
 
 async-trait = "0.1.57"
 dyn-clone = "1.0.9"
-opendal = { version = "0.17.1", features = ["layers-retry"] }
+opendal = { version = "0.17.2", features = ["layers-retry"] }
