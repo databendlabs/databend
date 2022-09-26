@@ -84,6 +84,7 @@ impl<I: InputFormatPipe> Processor for DeserializeSource<I> {
                     if self.input_buffer.is_some() {
                         Ok(Event::Sync)
                     } else if self.input_finished {
+                        self.output.finish();
                         Ok(Event::Finished)
                     } else {
                         Ok(Event::Async)
