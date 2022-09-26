@@ -111,13 +111,15 @@ impl BlockPruner {
         let pruning_runtime =
             Runtime::with_worker_threads(max_threads, Some("pruning-worker".to_owned()))?;
         let semaphore = Arc::new(Semaphore::new(max_threads));
+        let rt_ref = Arc::new(pruning_runtime);
         let mut join_handlers = Vec::with_capacity(segment_locs.len());
-        for (idx, (seg_loc, ver)) in segment_locs.into_iter().enumerate() {
+        for (segment_idx, (seg_loc, ver)) in segment_locs.into_iter().enumerate() {
             let ctx = ctx.clone();
             let range_filter_pruner = range_filter_pruner.clone();
             let bloom_filter_pruner = bloom_filter_pruner.clone();
             let limiter = limiter.clone();
             let semaphore = semaphore.clone();
+            let rt = rt_ref.clone();
             let segment_pruning_fut = async move {
                 let _permit = semaphore.acquire().await.map_err(|e| {
                     ErrorCode::StorageOther(format!("acquire permit failure, {}", e))
@@ -133,7 +135,8 @@ impl BlockPruner {
                     &segment_info.summary.col_stats,
                     segment_info.summary.row_count,
                 ) {
-                    for block_meta in &segment_info.blocks {
+                    let mut bloom_pruners = Vec::with_capacity(segment_info.blocks.len());
+                    for (block_idx, block_meta) in segment_info.blocks.iter().enumerate() {
                         // prune block using range filter
                         if limiter.exceeded() {
                             // before using bloom index to prune, check if limit already exceeded
@@ -143,26 +146,42 @@ impl BlockPruner {
                             .should_keep(&block_meta.col_stats, block_meta.row_count)
                         {
                             // prune block using bloom filter
-                            if bloom_filter_pruner
-                                .should_keep(
-                                    &block_meta.bloom_filter_index_location,
-                                    block_meta.bloom_filter_index_size,
-                                )
-                                .await
-                            {
-                                if limiter.within_limit(block_meta.row_count) {
-                                    result.push((idx, block_meta.clone()));
-                                } else {
-                                    break;
+                            // different from min max
+                            let bloom_filter_pruner = bloom_filter_pruner.clone();
+                            let limiter = limiter.clone();
+                            let row_count = block_meta.row_count;
+                            let index_location = block_meta.bloom_filter_index_location.clone();
+                            let index_size = block_meta.bloom_filter_index_size;
+                            let h = rt.spawn(
+                                async move {
+                                    if limiter.within_limit(row_count)
+                                        && bloom_filter_pruner
+                                            .should_keep(&index_location, index_size)
+                                            .await
+                                    {
+                                        return (block_idx, true);
+                                    }
+                                    (block_idx, false)
                                 }
-                            }
+                                .instrument(tracing::debug_span!("filter_using_bloom_index")),
+                            );
+                            bloom_pruners.push(h);
+                        }
+                    }
+                    let joint = future::try_join_all(bloom_pruners).await.map_err(|e| {
+                        ErrorCode::StorageOther(format!("block pruning failure, {}", e))
+                    })?;
+                    for (block_idx, keep) in joint {
+                        if keep {
+                            let block = &segment_info.blocks[block_idx];
+                            result.push((segment_idx, block.clone()))
                         }
                     }
                 }
                 Ok::<_, ErrorCode>(result)
             }
             .instrument(tracing::debug_span!("filter_segment_with_storage_rt"));
-            join_handlers.push(pruning_runtime.try_spawn(segment_pruning_fut)?);
+            join_handlers.push(rt_ref.try_spawn(segment_pruning_fut)?);
         }
 
         let joint = future::try_join_all(join_handlers)
