@@ -27,6 +27,7 @@ use crate::types::ValueType;
 use crate::util::buffer_into_mut;
 use crate::values::Column;
 use crate::values::Scalar;
+use crate::ColumnBuilder;
 use crate::ScalarRef;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -39,6 +40,11 @@ impl ValueType for TimestampType {
     type Domain = TimestampDomain;
     type ColumnIterator<'a> = TimestampIterator<'a>;
     type ColumnBuilder = TimestampColumnBuilder;
+
+    #[inline]
+    fn upcast_gat<'short, 'long: 'short>(long: Timestamp) -> Timestamp {
+        long
+    }
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
         scalar
@@ -58,6 +64,15 @@ impl ValueType for TimestampType {
     fn try_downcast_column<'a>(col: &'a Column) -> Option<Self::Column> {
         match col {
             Column::Timestamp(column) => Some(column.clone()),
+            _ => None,
+        }
+    }
+
+    fn try_downcast_builder<'a>(
+        builder: &'a mut ColumnBuilder,
+    ) -> Option<&'a mut Self::ColumnBuilder> {
+        match builder {
+            crate::ColumnBuilder::Timestamp(builder) => Some(builder),
             _ => None,
         }
     }
@@ -140,7 +155,7 @@ impl ArgType for TimestampType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Serialize, Deserialize)]
 pub struct Timestamp {
     /// Milliseconds since UNIX epoch.
     pub ts: i64,

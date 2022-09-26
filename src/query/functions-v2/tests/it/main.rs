@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #![feature(try_blocks)]
+#![feature(trait_alias)]
 
 // We can generate new test files via using `env REGENERATE_GOLDENFILES=1 cargo test` and `git diff` to show differs
 mod aggregates;

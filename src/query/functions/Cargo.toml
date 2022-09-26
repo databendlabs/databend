@@ -1,10 +1,10 @@
 [package]
 name = "common-functions"
-version = "0.1.0"
-authors = ["Databend Authors <opensource@datafuselabs.com>"]
-license = "Apache-2.0"
-publish = false
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
 
 [lib]
 doctest = false
@@ -21,14 +21,14 @@ common-io = { path = "../../common/io" }
 # Crates.io dependencies
 base64 = "0.13.0"
 blake3 = "1.3.1"
-bstr = "0.2.17"
+bstr = "1.0.1"
 bumpalo = "3.11.0"
 bytes = "1.2.1"
 chrono-tz = "0.6.3"
 crc32fast = "1.3.2"
 dyn-clone = "1.0.9"
 geo-types = "0.7.7"
-h3ron = "0.14.0"
+h3ron = "0.15.1"
 hex = "0.4.3"
 itertools = "0.10.5"
 md5 = "0.7.0"
@@ -43,7 +43,7 @@ pulldown-cmark = { version = "0.9.2", default-features = false }
 rand = { version = "0.8.5", features = ["small_rng"] }
 regex = "1.6.0"
 rust-embed = { version = "6.4.1", features = ["debug-embed"] }
-serde = { version = "1.0.144", features = ["derive"] }
+serde = { version = "1.0.145", features = ["derive"] }
 serde_json = "1.0.85"
 sha1 = "0.10.5"
 sha2 = "0.10.6"

@@ -53,6 +53,7 @@ use openraft::LogId;
 use openraft::RaftStorage;
 use openraft::SnapshotMeta;
 use openraft::StorageError;
+use tracing::debug;
 use tracing::error;
 use tracing::info;
 
@@ -316,6 +317,8 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
         &self,
         range: RB,
     ) -> Result<Vec<Entry<LogEntry>>, StorageError> {
+        debug!("try_get_log_entries: range: {:?}", range);
+
         match self
             .log
             .range_values(range)
@@ -699,10 +702,11 @@ impl RaftStoreBare {
     pub async fn list_non_voters(&self) -> HashSet<NodeId> {
         // TODO(xp): consistency
         let mut rst = HashSet::new();
-        let membership = StorageHelper::new(self)
-            .get_membership()
-            .await
-            .expect("get membership config");
+
+        let membership = {
+            let sm = self.state_machine.read().await;
+            sm.get_membership().expect("fail to load membership")
+        };
 
         let membership = match membership {
             None => {
@@ -716,6 +720,7 @@ impl RaftStoreBare {
             let sm_nodes = sm.nodes();
             sm_nodes.range_keys(..).expect("fail to list nodes")
         };
+
         for node_id in node_ids {
             // it has been added into this cluster and is not a voter.
             if !membership.membership.contains(&node_id) {

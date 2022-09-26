@@ -1,10 +1,10 @@
 [package]
 name = "common-meta-app"
-version = "0.1.0"
-authors = ["Databend Authors <opensource@datafuselabs.com>"]
-license = "Apache-2.0"
-publish = false
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
 
 [lib]
 doctest = false
@@ -18,8 +18,8 @@ enumflags2 = { version = "0.7.5", features = ["serde"] }
 maplit = "1.0.2"
 num-derive = "0.3.3"
 num-traits = "0.2.15"
-serde = { version = "1.0.144", features = ["derive", "rc"] }
+serde = { version = "1.0.145", features = ["derive", "rc"] }
 
 [build-dependencies]
 common-building = { path = "../../common/building" }
-tonic-build = "0.7.2"
+tonic-build = "0.8.0"

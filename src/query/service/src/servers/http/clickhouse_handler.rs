@@ -17,16 +17,22 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use async_stream::stream;
+use common_base::base::tokio;
+use common_base::base::tokio::sync::mpsc::Sender;
+use common_base::base::tokio::task::JoinHandle;
+use common_base::base::TrySpawn;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_formats::output_format::OutputFormatType;
-use common_streams::SendableDataBlockStream;
+use common_pipeline_sources::processors::sources::input_formats::InputContext;
+use common_pipeline_sources::processors::sources::input_formats::StreamingReadBatch;
 use futures::StreamExt;
 use http::HeaderMap;
 use naive_cityhash::cityhash128;
+use opendal::io_util::CompressAlgorithm;
 use poem::error::BadRequest;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
@@ -41,19 +47,16 @@ use poem::IntoResponse;
 use poem::Route;
 use serde::Deserialize;
 use serde::Serialize;
-use tracing::error;
 use tracing::info;
 
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterPtr;
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::StreamSource;
-use crate::pipelines::SourcePipeBuilder;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::CLickHouseFederated;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
 use crate::sessions::TableContext;
+use crate::sql::plans::InsertInputSource;
 use crate::sql::plans::Plan;
 use crate::sql::Planner;
 
@@ -102,20 +105,10 @@ async fn execute(
     interpreter: InterpreterPtr,
     schema: DataSchemaRef,
     format: OutputFormatType,
-    input_stream: Option<SendableDataBlockStream>,
     params: StatementHandlerParams,
+    handle: Option<JoinHandle<()>>,
 ) -> Result<WithContentType<Body>> {
-    let mut data_stream: SendableDataBlockStream = {
-        let output_port = OutputPort::create();
-        let stream_source = StreamSource::create(ctx.clone(), input_stream, output_port.clone())?;
-        let mut source_pipe_builder = SourcePipeBuilder::create();
-        source_pipe_builder.add_source(output_port, stream_source);
-        let _ = interpreter
-            .set_source_pipe_builder(Option::from(source_pipe_builder))
-            .map_err(|e| error!("interpreter.set_source_pipe_builder.error: {:?}", e));
-        interpreter.execute(ctx.clone()).await?
-    };
-
+    let mut data_stream = interpreter.execute(ctx.clone()).await?;
     let format_setting = ctx.get_format_settings()?;
     let mut output_format = format.create_format(schema, format_setting);
     let prefix = Ok(output_format.serialize_prefix()?);
@@ -164,10 +157,12 @@ async fn execute(
         if ok {
             yield compress_fn(output_format.finalize());
         }
-
         // to hold session ref until stream is all consumed
         let _ = session.get_id();
     };
+    if let Some(handle) = handle {
+        handle.await.expect("must")
+    }
 
     Ok(Body::from_bytes_stream(stream).with_content_type(format.get_content_type()))
 }
@@ -208,7 +203,7 @@ pub async fn clickhouse_handler_get(
     let interpreter = InterpreterFactory::get(context.clone(), &plan)
         .await
         .map_err(BadRequest)?;
-    execute(context, interpreter, plan.schema(), format, None, params)
+    execute(context, interpreter, plan.schema(), format, params, None)
         .await
         .map_err(InternalServerError)
 }
@@ -254,18 +249,55 @@ pub async fn clickhouse_handler_post(
         return serialize_one_block(ctx.clone(), block, &sql, &params, default_format)
             .map_err(InternalServerError);
     }
-
     let mut planner = Planner::new(ctx.clone());
-    let (plan, _, fmt) = planner.plan_sql(&sql).await.map_err(BadRequest)?;
+    let (mut plan, _, fmt) = planner.plan_sql(&sql).await.map_err(BadRequest)?;
+    let schema = plan.schema();
+    ctx.attach_query_str(plan.to_string(), &sql);
+    let mut handle = None;
+    if let Plan::Insert(insert) = &mut plan {
+        if let InsertInputSource::StreamingWithFormat(format, start, input_context_ref) =
+            &mut insert.source
+        {
+            let (tx, rx) = tokio::sync::mpsc::channel(2);
+            let input_context = Arc::new(
+                InputContext::try_create_from_insert(
+                    format.as_str(),
+                    rx,
+                    ctx.get_settings(),
+                    schema,
+                    ctx.get_scan_progress(),
+                    false,
+                )
+                .await
+                .map_err(InternalServerError)?,
+            );
+            *input_context_ref = Some(input_context.clone());
+            info!(
+                "clickhouse insert with format {:?}, value {}",
+                input_context, *start
+            );
+            let compression_alg = input_context.get_compression_alg("").map_err(BadRequest)?;
+            let start = *start;
+            handle = Some(ctx.spawn(async move {
+                gen_batches(
+                    sql,
+                    start,
+                    input_context.read_batch_size,
+                    tx,
+                    compression_alg,
+                )
+                .await
+            }));
+        }
+    };
 
     let format = get_format_with_default(fmt, default_format)?;
     let format = get_format_from_plan(&plan, format)?;
-    ctx.attach_query_str(plan.to_string(), &sql);
     let interpreter = InterpreterFactory::get(ctx.clone(), &plan)
         .await
         .map_err(BadRequest)?;
 
-    execute(ctx, interpreter, plan.schema(), format, None, params)
+    execute(ctx, interpreter, plan.schema(), format, params, handle)
         .await
         .map_err(InternalServerError)
 }
@@ -381,5 +413,41 @@ fn get_format_with_default(
     match format {
         None => Ok(default_format),
         Some(name) => OutputFormatType::from_str(&name).map_err(BadRequest),
+    }
+}
+
+async fn gen_batches(
+    data: String,
+    start: usize,
+    batch_size: usize,
+    tx: Sender<Result<StreamingReadBatch>>,
+    compression: Option<CompressAlgorithm>,
+) {
+    let buf = &data.trim_start().as_bytes()[start..];
+    let buf_size = buf.len();
+    let mut is_start = true;
+    let mut start = 0;
+    let path = "clickhouse_handler_body".to_string();
+    while start < buf_size {
+        let data = if buf_size - start >= batch_size {
+            buf[start..batch_size].to_vec()
+        } else {
+            buf[start..].to_vec()
+        };
+
+        tracing::debug!("sending read {} bytes", data.len());
+        if let Err(e) = tx
+            .send(Ok(StreamingReadBatch {
+                data,
+                path: path.clone(),
+                is_start,
+                compression,
+            }))
+            .await
+        {
+            tracing::warn!(" Multipart fail to send ReadBatch: {}", e);
+        }
+        is_start = false;
+        start += batch_size
     }
 }

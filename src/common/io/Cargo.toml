@@ -1,10 +1,10 @@
 [package]
 name = "common-io"
-version = "0.1.0"
-authors = ["Databend Authors <opensource@datafuselabs.com>"]
-license = "Apache-2.0"
-publish = false
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -23,8 +23,8 @@ chrono = "0.4.22"
 chrono-tz = "0.6.3"
 futures = "0.3.24"
 lexical-core = "0.8.5"
-micromarshal = "0.1.0"
-serde = { version = "1.0.144", features = ["derive"] }
+micromarshal = "0.2.0"
+serde = { version = "1.0.145", features = ["derive"] }
 time = "0.3.14"
 
 [dev-dependencies]

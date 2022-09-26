@@ -25,6 +25,7 @@ use crate::types::ValueType;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::values::ScalarRef;
+use crate::ColumnBuilder;
 
 /// JSONB bytes representation of `null`.
 pub const DEFAULT_JSONB: &[u8] = &[0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
@@ -39,6 +40,11 @@ impl ValueType for VariantType {
     type Domain = ();
     type ColumnIterator<'a> = StringIterator<'a>;
     type ColumnBuilder = StringColumnBuilder;
+
+    #[inline]
+    fn upcast_gat<'short, 'long: 'short>(long: &'long [u8]) -> &'short [u8] {
+        long
+    }
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
         scalar.to_vec()
@@ -61,6 +67,15 @@ impl ValueType for VariantType {
             Some(())
         } else {
             None
+        }
+    }
+
+    fn try_downcast_builder<'a>(
+        builder: &'a mut ColumnBuilder,
+    ) -> Option<&'a mut Self::ColumnBuilder> {
+        match builder {
+            crate::ColumnBuilder::Variant(builder) => Some(builder),
+            _ => None,
         }
     }
 

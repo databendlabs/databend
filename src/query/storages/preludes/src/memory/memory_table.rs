@@ -230,7 +230,6 @@ impl Table for MemoryTable {
     async fn commit_insertion(
         &self,
         ctx: Arc<dyn TableContext>,
-        _catalog_name: &str,
         operations: Vec<DataBlock>,
         overwrite: bool,
     ) -> Result<()> {
@@ -251,7 +250,7 @@ impl Table for MemoryTable {
         Ok(())
     }
 
-    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: &str, _: bool) -> Result<()> {
+    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: bool) -> Result<()> {
         let mut blocks = self.blocks.write();
         blocks.clear();
         Ok(())

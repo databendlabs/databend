@@ -164,8 +164,15 @@ impl FromToProto for mt::TableMeta {
             Some(x) => x,
         };
 
+        let catalog = if p.catalog.is_empty() {
+            "default".to_string()
+        } else {
+            p.catalog
+        };
+
         let v = Self {
             schema: Arc::new(dv::DataSchema::from_pb(schema)?),
+            catalog,
             engine: p.engine,
             engine_options: p.engine_options,
             options: p.options,
@@ -193,6 +200,7 @@ impl FromToProto for mt::TableMeta {
         let p = pb::TableMeta {
             ver: VER,
             min_compatible: MIN_COMPATIBLE_VER,
+            catalog: self.catalog.clone(),
             schema: Some(self.schema.to_pb()?),
             engine: self.engine.clone(),
             engine_options: self.engine_options.clone(),

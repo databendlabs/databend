@@ -20,6 +20,6 @@ echo "drop table if exists a;" | $MYSQL_CLIENT_CONNECT
 
 echo "create table a ( a datetime, b string, c int);" | $MYSQL_CLIENT_CONNECT
 
-curl -sH "insert_sql:insert into a format Csv" -H "skip_header:0" -u root:  -F "upload=@/tmp/databend_test_csv1.txt"  -F "upload=@/tmp/databend_test_csv2.txt" -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | head -c 246
+curl -sH "insert_sql:insert into a format Csv" -H "skip_header:0" -u root:  -F "upload=@/tmp/databend_test_csv1.txt"  -F "upload=@/tmp/databend_test_csv2.txt" -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | grep -c "Date type"
 
 echo "drop table a;" | $MYSQL_CLIENT_CONNECT

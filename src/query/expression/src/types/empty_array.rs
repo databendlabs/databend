@@ -21,6 +21,7 @@ use crate::types::GenericMap;
 use crate::types::ValueType;
 use crate::values::Column;
 use crate::values::Scalar;
+use crate::ColumnBuilder;
 use crate::ScalarRef;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -33,6 +34,9 @@ impl ValueType for EmptyArrayType {
     type Domain = ();
     type ColumnIterator<'a> = std::iter::Take<std::iter::Repeat<()>>;
     type ColumnBuilder = usize;
+
+    #[inline]
+    fn upcast_gat<'short, 'long: 'short>(_: Self::ScalarRef<'long>) -> Self::ScalarRef<'short> {}
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
         scalar
@@ -59,6 +63,15 @@ impl ValueType for EmptyArrayType {
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         match domain {
             Domain::Array(None) => Some(()),
+            _ => None,
+        }
+    }
+
+    fn try_downcast_builder<'a>(
+        builder: &'a mut ColumnBuilder,
+    ) -> Option<&'a mut Self::ColumnBuilder> {
+        match builder {
+            ColumnBuilder::EmptyArray { len } => Some(len),
             _ => None,
         }
     }
