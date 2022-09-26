@@ -105,7 +105,7 @@ impl StorageParams {
         match self {
             StorageParams::Azblob(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Fs(_) => false,
-            StorageParams::Ftp(v) => v.secure,
+            StorageParams::Ftp(v) => v.endpoint.starts_with("ftps://"),
             #[cfg(feature = "storage-hdfs")]
             StorageParams::Hdfs(_) => false,
             StorageParams::Http(v) => v.endpoint_url.starts_with("https://"),
@@ -162,7 +162,6 @@ pub struct StorageFtpConfig {
     pub root: String,
     pub username: String,
     pub password: String,
-    pub secure: bool,
 }
 
 impl Default for StorageFtpConfig {
@@ -172,7 +171,6 @@ impl Default for StorageFtpConfig {
             username: "".to_string(),
             password: "".to_string(),
             root: "/".to_string(),
-            secure: false,
         }
     }
 }
@@ -184,7 +182,6 @@ impl Debug for StorageFtpConfig {
             .field("root", &self.root)
             .field("username", &self.username)
             .field("password", &mask_string(self.password.as_str(), 3))
-            .field("secure", &self.secure.to_string())
             .finish()
     }
 }

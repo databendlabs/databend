@@ -77,12 +77,12 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
             endpoint: if !l.protocol.is_empty() {
                 format!("{}://{}", l.protocol, l.name)
             } else {
-                l.name.to_string()
+                // no protocol prefix will be seen as using FTPS connection
+                format!("ftps://{}", l.name)
             },
             root: root.to_string(),
             username: l.connection.get("username").cloned().unwrap_or_default(),
             password: l.connection.get("password").cloned().unwrap_or_default(),
-            secure: l.protocol.starts_with("ftps://"),
         }),
         Scheme::Gcs => StorageParams::Gcs(crate::StorageGcsConfig {
             endpoint_url: l
