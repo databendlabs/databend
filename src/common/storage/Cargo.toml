@@ -8,7 +8,6 @@ edition = { workspace = true }
 
 [features]
 storage-hdfs = ["opendal/services-hdfs"]
-storage-ftp = ["opendal/services-ftp"]
 
 [dependencies]
 common-base = { path = "../base" }
@@ -24,6 +23,7 @@ opendal = { version = "0.17.2", features = [
     "layers-tracing",
     "layers-metrics",
     "services-ipfs",
+    "services-ftp",
     "compress",
 ] }
 percent-encoding = "2.2.0"

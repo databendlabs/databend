@@ -36,7 +36,6 @@ pub use config::STORAGE_S3_DEFAULT_ENDPOINT;
 mod operator;
 pub use operator::init_azblob_operator;
 pub use operator::init_fs_operator;
-#[cfg(feature = "storage-ftp")]
 pub use operator::init_ftp_operator;
 pub use operator::init_gcs_operator;
 #[cfg(feature = "storage-hdfs")]

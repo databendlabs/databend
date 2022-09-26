@@ -35,7 +35,6 @@ pub struct StorageConfig {
 pub enum StorageParams {
     Azblob(StorageAzblobConfig),
     Fs(StorageFsConfig),
-    #[cfg(feature = "storage-ftp")]
     Ftp(StorageFtpConfig),
     Gcs(StorageGcsConfig),
     #[cfg(feature = "storage-hdfs")]
@@ -63,7 +62,6 @@ impl Display for StorageParams {
                 v.container, v.root, v.endpoint_url
             ),
             StorageParams::Fs(v) => write!(f, "fs://root={}", v.root),
-            #[cfg(feature = "storage-ftp")]
             StorageParams::Ftp(v) => {
                 write!(f, "ftp://root={},endpoint={}", v.root, v.endpoint)
             }
@@ -107,7 +105,6 @@ impl StorageParams {
         match self {
             StorageParams::Azblob(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Fs(_) => false,
-            #[cfg(feature = "storage-ftp")]
             StorageParams::Ftp(v) => v.secure,
             #[cfg(feature = "storage-hdfs")]
             StorageParams::Hdfs(_) => false,
