@@ -19,7 +19,7 @@ use common_meta_types::AuthInfo;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserOption;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AlterUserPlan {
     pub user: UserIdentity,
     // None means no change to make

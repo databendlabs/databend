@@ -52,15 +52,6 @@ pub type UInt64Type = NumberType<u64>;
 pub type Float32Type = NumberType<F32>;
 pub type Float64Type = NumberType<F64>;
 
-impl<Num: Number> NumberType<Num> {
-    pub fn try_downcast_builder<'a>(builder: &'a mut ColumnBuilder) -> Option<&'a mut Vec<Num>> {
-        match builder {
-            ColumnBuilder::Number(num) => Num::try_downcast_builder(num),
-            _ => None,
-        }
-    }
-}
-
 impl<Num: Number> ValueType for NumberType<Num> {
     type Scalar = Num;
     type ScalarRef<'a> = Num;
@@ -68,6 +59,11 @@ impl<Num: Number> ValueType for NumberType<Num> {
     type Domain = SimpleDomain<Num>;
     type ColumnIterator<'a> = std::iter::Cloned<std::slice::Iter<'a, Num>>;
     type ColumnBuilder = Vec<Num>;
+
+    #[inline]
+    fn upcast_gat<'short, 'long: 'short>(long: Num) -> Num {
+        long
+    }
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
         scalar
@@ -87,6 +83,15 @@ impl<Num: Number> ValueType for NumberType<Num> {
 
     fn try_downcast_domain(domain: &Domain) -> Option<SimpleDomain<Num>> {
         Num::try_downcast_domain(domain.as_number()?)
+    }
+
+    fn try_downcast_builder<'a>(
+        builder: &'a mut ColumnBuilder,
+    ) -> Option<&'a mut Self::ColumnBuilder> {
+        match builder {
+            ColumnBuilder::Number(num) => Num::try_downcast_builder(num),
+            _ => None,
+        }
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
@@ -407,6 +412,24 @@ const fn next_bit_width(width: u8) -> Option<u8> {
 
 const fn max_bit_with(lhs: u8, rhs: u8) -> u8 {
     if lhs > rhs { lhs } else { rhs }
+}
+
+impl PartialOrd for NumberScalar {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match (self, other) {
+            (NumberScalar::UInt8(lhs), NumberScalar::UInt8(rhs)) => lhs.partial_cmp(rhs),
+            (NumberScalar::UInt16(lhs), NumberScalar::UInt16(rhs)) => lhs.partial_cmp(rhs),
+            (NumberScalar::UInt32(lhs), NumberScalar::UInt32(rhs)) => lhs.partial_cmp(rhs),
+            (NumberScalar::UInt64(lhs), NumberScalar::UInt64(rhs)) => lhs.partial_cmp(rhs),
+            (NumberScalar::Int8(lhs), NumberScalar::Int8(rhs)) => lhs.partial_cmp(rhs),
+            (NumberScalar::Int16(lhs), NumberScalar::Int16(rhs)) => lhs.partial_cmp(rhs),
+            (NumberScalar::Int32(lhs), NumberScalar::Int32(rhs)) => lhs.partial_cmp(rhs),
+            (NumberScalar::Int64(lhs), NumberScalar::Int64(rhs)) => lhs.partial_cmp(rhs),
+            (NumberScalar::Float32(lhs), NumberScalar::Float32(rhs)) => lhs.partial_cmp(rhs),
+            (NumberScalar::Float64(lhs), NumberScalar::Float64(rhs)) => lhs.partial_cmp(rhs),
+            _ => None,
+        }
+    }
 }
 
 impl NumberScalar {

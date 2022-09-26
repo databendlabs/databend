@@ -59,13 +59,15 @@ impl InputFormatTSV {
                     if let Err(e) =
                         deserializers[column_index].de_text(&mut reader, format_settings)
                     {
-                        err_msg = Some(format!(
-                            "fail to decode column {}: {:?}, [column_data]=[{}]",
-                            column_index, e, ""
-                        ));
+                        err_msg = Some(format_column_error(column_index, col_data, &e.message()));
                         break;
                     };
-                    // todo(youngsofun): check remaining data
+                    reader.ignore_white_spaces().expect("must success");
+                    if reader.must_eof().is_err() {
+                        err_msg =
+                            Some(format_column_error(column_index, col_data, "bad field end"));
+                        break;
+                    }
                 }
                 column_index += 1;
                 field_start = pos + 1;
@@ -76,14 +78,14 @@ impl InputFormatTSV {
             }
             pos += 1;
         }
-        if column_index < num_columns - 1 {
+        if err_msg.is_none() && column_index < num_columns {
             // todo(youngsofun): allow it optionally (set default)
             err_msg = Some(format!(
                 "need {} columns, find {} only",
-                num_columns,
-                column_index + 1
+                num_columns, column_index
             ));
         }
+
         if let Some(m) = err_msg {
             let row_info = if let Some(r) = row_index {
                 format!("at row {},", r)
@@ -157,4 +159,13 @@ impl InputFormatTextBase for InputFormatTSV {
     fn align(state: &mut AligningState<Self>, buf: &[u8]) -> Result<Vec<RowBatch>> {
         Ok(state.align_by_record_delimiter(buf))
     }
+}
+
+pub fn format_column_error(column_index: usize, col_data: &[u8], msg: &str) -> String {
+    let mut data = String::new();
+    verbose_string(col_data, &mut data);
+    format!(
+        "fail to decode column {}: {}, [column_data]=[{}]",
+        column_index, msg, data
+    )
 }

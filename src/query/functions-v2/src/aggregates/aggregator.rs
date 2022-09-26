@@ -16,17 +16,16 @@
 // use super::aggregate_arg_min_max::aggregate_arg_min_function_desc;
 // use super::aggregate_covariance::aggregate_covariance_population_desc;
 // use super::aggregate_covariance::aggregate_covariance_sample_desc;
-// use super::aggregate_min_max_any::aggregate_any_function_desc;
-// use super::aggregate_min_max_any::aggregate_max_function_desc;
-// use super::aggregate_min_max_any::aggregate_min_function_desc;
 // use super::aggregate_stddev_pop::aggregate_stddev_pop_function_desc;
 // use super::aggregate_window_funnel::aggregate_window_funnel_function_desc;
 // use super::AggregateIfCombinator;
 // use crate::aggregates::aggregate_retention::aggregate_retention_function_desc;
-
 use super::aggregate_avg::aggregate_avg_function_desc;
 use super::aggregate_combinator_distinct::aggregate_combinator_distinct_desc;
 use super::aggregate_combinator_distinct::aggregate_combinator_uniq_desc;
+use super::aggregate_min_max_any::aggregate_any_function_desc;
+use super::aggregate_min_max_any::aggregate_max_function_desc;
+use super::aggregate_min_max_any::aggregate_min_function_desc;
 use super::AggregateCountFunction;
 use super::AggregateFunctionFactory;
 use super::AggregateIfCombinator;
@@ -42,10 +41,9 @@ impl Aggregators {
         factory.register("avg", aggregate_avg_function_desc());
         factory.register("uniq", aggregate_combinator_uniq_desc());
 
-        //     factory.register("min", aggregate_min_function_desc());
-        //     factory.register("max", aggregate_max_function_desc());
-        //     factory.register("any", aggregate_any_function_desc());
-        //
+        factory.register("min", aggregate_min_function_desc());
+        factory.register("max", aggregate_max_function_desc());
+        factory.register("any", aggregate_any_function_desc());
         //     factory.register("arg_min", aggregate_arg_min_function_desc());
         //     factory.register("arg_max", aggregate_arg_max_function_desc());
         //

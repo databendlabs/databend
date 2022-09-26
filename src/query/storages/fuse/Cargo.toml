@@ -1,10 +1,10 @@
 [package]
 name = "common-storages-fuse"
-version = "0.1.0"
-authors = ["Databend Authors <opensource@datafuselabs.com>"]
-license = "Apache-2.0"
-publish = false
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
@@ -39,8 +39,8 @@ chrono = "0.4.22"
 futures = "0.3.24"
 futures-util = "0.3.24"
 opendal = { version = "0.17.1", features = ["layers-retry"] }
-serde = { version = "1.0.144", features = ["derive"] }
+serde = { version = "1.0.145", features = ["derive"] }
 serde_json = "1.0.85"
 tracing = "0.1.36"
-typetag = "0.1.8"
+typetag = "0.2.3"
 uuid = { version = "1.1.2", features = ["serde", "v4"] }

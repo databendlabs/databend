@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::convert::TryInto;
 use std::fmt::Debug;
 use std::time::Duration;
+use std::time::Instant;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
@@ -767,7 +768,9 @@ impl StateMachine {
     ) -> Result<AppliedState, MetaStorageError> {
         info!("apply_cmd: {}", cmd);
 
-        match cmd {
+        let now = Instant::now();
+
+        let res = match cmd {
             Cmd::IncrSeq { ref key } => self.apply_incr_seq_cmd(key, txn_tree),
 
             Cmd::AddNode {
@@ -782,7 +785,12 @@ impl StateMachine {
             }
 
             Cmd::Transaction(txn) => self.apply_txn_cmd(txn, txn_tree, kv_pairs, log_time_ms),
-        }
+        };
+
+        let elapsed = now.elapsed().as_micros();
+        debug!("apply_cmd: elapsed: {}", elapsed);
+
+        res
     }
 
     fn txn_incr_seq(&self, key: &str, txn_tree: &TransactionSledTree) -> MetaStorageResult<u64> {

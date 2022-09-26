@@ -27,6 +27,7 @@ use crate::types::GenericMap;
 use crate::types::ValueType;
 use crate::values::Column;
 use crate::values::Scalar;
+use crate::ColumnBuilder;
 use crate::ScalarRef;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -39,6 +40,11 @@ impl<T: ValueType> ValueType for ArrayType<T> {
     type Domain = T::Domain;
     type ColumnIterator<'a> = ArrayIterator<'a, T>;
     type ColumnBuilder = ArrayColumnBuilder<T>;
+
+    #[inline]
+    fn upcast_gat<'short, 'long: 'short>(long: T::Column) -> T::Column {
+        long
+    }
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
         scalar
@@ -64,6 +70,12 @@ impl<T: ValueType> ValueType for ArrayType<T> {
             Domain::Array(Some(domain)) => Some(T::try_downcast_domain(domain)?),
             _ => None,
         }
+    }
+
+    fn try_downcast_builder<'a>(
+        _builder: &'a mut ColumnBuilder,
+    ) -> Option<&'a mut Self::ColumnBuilder> {
+        None
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
