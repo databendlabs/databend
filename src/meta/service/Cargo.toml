@@ -46,6 +46,7 @@ anyhow = "1.0.65"
 async-trait = "0.1.57"
 clap = { version = "3.2.22", features = ["derive", "env"] }
 futures = "0.3.24"
+metrics = "0.20.1"
 num = "0.4.0"
 once_cell = "1.15.0"
 poem = { version = "1", features = ["rustls"] }

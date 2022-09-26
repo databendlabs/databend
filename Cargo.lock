@@ -2669,6 +2669,7 @@ dependencies = [
  "env_logger",
  "futures",
  "maplit",
+ "metrics",
  "num",
  "once_cell",
  "poem",
