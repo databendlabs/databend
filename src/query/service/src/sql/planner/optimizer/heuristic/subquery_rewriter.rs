@@ -539,6 +539,9 @@ pub fn check_child_expr_in_subquery(
             let (_, is_other_condition) = check_child_expr_in_subquery(arg, op)?;
             Ok((child_expr.clone(), is_other_condition))
         }
-        _ => Err(ErrorCode::LogicalError("Invalid child expr in subquery")),
+        other => Err(ErrorCode::LogicalError(format!(
+            "Invalid child expr in subquery: {:?}",
+            other
+        ))),
     }
 }
