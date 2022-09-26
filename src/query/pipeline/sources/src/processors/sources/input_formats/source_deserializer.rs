@@ -76,12 +76,15 @@ impl<I: InputFormatPipe> Processor for DeserializeSource<I> {
         } else {
             match self.output_buffer.pop_front() {
                 Some(data_block) => {
+                    tracing::info!("DeserializeSource push rows {}", data_block.num_rows());
                     self.output.push_data(Ok(data_block));
                     Ok(Event::NeedConsume)
                 }
                 None => {
                     if self.input_buffer.is_some() {
                         Ok(Event::Sync)
+                    } else if self.input_finished {
+                        Ok(Event::Finished)
                     } else {
                         Ok(Event::Async)
                     }

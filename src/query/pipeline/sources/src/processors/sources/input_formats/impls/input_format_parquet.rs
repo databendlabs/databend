@@ -34,6 +34,7 @@ use common_arrow::parquet::metadata::ColumnChunkMetaData;
 use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_arrow::parquet::read::read_metadata;
+use common_arrow::read_columns_async;
 use common_datablocks::DataBlock;
 use common_datavalues::remove_nullable;
 use common_datavalues::DataField;
@@ -43,6 +44,8 @@ use common_exception::Result;
 use common_io::prelude::FormatSettings;
 use common_pipeline_core::Pipeline;
 use common_settings::Settings;
+use futures::AsyncRead;
+use futures::AsyncSeek;
 use opendal::Operator;
 use similar_asserts::traits::MakeDiff;
 
@@ -137,8 +140,7 @@ impl InputFormat for InputFormatParquet {
     }
 
     fn exec_copy(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {
-        // todo(youngsofun): execute_copy_aligned
-        ParquetFormatPipe::execute_copy_with_aligner(ctx, pipeline)
+        ParquetFormatPipe::execute_copy_aligned(ctx, pipeline)
     }
 
     fn exec_stream(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {
@@ -155,6 +157,17 @@ impl InputFormatPipe for ParquetFormatPipe {
     type RowBatch = RowGroupInMemory;
     type AligningState = AligningState;
     type BlockBuilder = ParquetBlockBuilder;
+
+    async fn read_split(
+        ctx: Arc<InputContext>,
+        split_info: &Arc<SplitInfo>,
+    ) -> Result<Self::RowBatch> {
+        let meta = Self::get_split_meta(split_info).expect("must success");
+        let op = ctx.source.get_operator()?;
+        let obj = op.object(&split_info.file.path);
+        let mut reader = obj.seekable_reader(..(split_info.file.size as u64));
+        RowGroupInMemory::read_async(&mut reader, meta.meta.clone(), meta.file.fields.clone()).await
+    }
 }
 
 pub struct FileMeta {
@@ -190,6 +203,27 @@ impl RowGroupInMemory {
         let mut filed_arrays = vec![];
         for field_name in field_names {
             let meta_data = read_columns(reader, meta.columns(), field_name)?;
+            let data = meta_data.into_iter().map(|t| t.1).collect::<Vec<_>>();
+            filed_arrays.push(data)
+        }
+        Ok(Self {
+            meta,
+            field_meta_indexes,
+            field_arrays: filed_arrays,
+            fields,
+        })
+    }
+
+    async fn read_async<R: AsyncRead + AsyncSeek + Send + Unpin>(
+        reader: &mut R,
+        meta: RowGroupMetaData,
+        fields: Arc<Vec<Field>>,
+    ) -> Result<Self> {
+        let field_names = fields.iter().map(|x| x.name.as_str()).collect::<Vec<_>>();
+        let field_meta_indexes = split_column_metas_by_field(meta.columns(), &field_names);
+        let mut filed_arrays = vec![];
+        for field_name in field_names {
+            let meta_data = read_columns_async(reader, meta.columns(), field_name).await?;
             let data = meta_data.into_iter().map(|t| t.1).collect::<Vec<_>>();
             filed_arrays.push(data)
         }
