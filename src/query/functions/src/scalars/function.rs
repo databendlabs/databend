@@ -13,11 +13,14 @@
 // limitations under the License.
 
 use std::fmt;
+use std::sync::Arc;
 
 use chrono_tz::Tz;
 use common_datavalues::ColumnRef;
 use common_datavalues::ColumnsWithField;
 use common_datavalues::DataTypeImpl;
+use common_datavalues::NullColumn;
+use common_datavalues::NullType;
 use common_exception::Result;
 use dyn_clone::DynClone;
 
@@ -70,3 +73,31 @@ pub trait Function: fmt::Display + Sync + Send + DynClone {
 }
 
 dyn_clone::clone_trait_object!(Function);
+
+#[derive(Clone)]
+pub struct AlwaysNullFunction;
+
+impl Function for AlwaysNullFunction {
+    fn name(&self) -> &str {
+        "null"
+    }
+
+    fn return_type(&self) -> DataTypeImpl {
+        DataTypeImpl::Null(NullType {})
+    }
+
+    fn eval(
+        &self,
+        _func_ctx: FunctionContext,
+        _columns: &ColumnsWithField,
+        input_rows: usize,
+    ) -> Result<ColumnRef> {
+        Ok(Arc::new(NullColumn::new(input_rows)))
+    }
+}
+
+impl fmt::Display for AlwaysNullFunction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "null")
+    }
+}
