@@ -100,10 +100,10 @@ pub fn init_ftp_operator(cfg: &super::StorageFtpConfig) -> Result<Operator> {
     let mut builder = ftp::Builder::default();
 
     let bd = builder
-        .endpoint(cfg.endpoint.as_str())
-        .user(cfg.username.as_str())
-        .password(cfg.password.as_str())
-        .root(cfg.root.as_str())
+        .endpoint(&cfg.endpoint)
+        .user(&cfg.username)
+        .password(&cfg.password)
+        .root(&cfg.root)
         .build()?;
     Ok(Operator::new(bd).layer(LoggingLayer))
 }
