@@ -200,9 +200,9 @@ pub async fn list_files(
         Ok(meta) if !meta.mode().is_dir() => {
             files.push((path.trim_start_matches(&prefix).to_string(), meta));
 
-            Some(format!("{path}/"))
+            None
         }
-        Err(e) if e.kind() == io::ErrorKind::NotFound => Some(format!("{path}/")),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => None,
         Err(e) => return Err(e.into()),
         _ => None,
     };
