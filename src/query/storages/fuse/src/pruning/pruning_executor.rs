@@ -68,8 +68,14 @@ impl BlockPruner {
 
         let filter_expressions = push_down.as_ref().map(|extra| extra.filters.as_slice());
 
-        // shortcut, just returns all the blocks
-        if limit.is_none() && filter_expressions.is_none() {
+        let is_filter_empty = match filter_expressions {
+            None => true,
+            Some(filters) => filters.is_empty(),
+        };
+
+        // shortcut, just returns all the blocks.
+        // we use the original limit (from push_down) here, since order_by alone, can use shortcut
+        if push_down.as_ref().and_then(|p| p.limit).is_none() && is_filter_empty {
             return Self::all_the_blocks(segment_locs, ctx.as_ref()).await;
         }
 
