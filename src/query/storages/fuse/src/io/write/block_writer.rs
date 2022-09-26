@@ -25,12 +25,9 @@ use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::ClusterStatistics;
 use common_fuse_meta::meta::Location;
 use opendal::Operator;
-use tracing::warn;
 use uuid::Uuid;
 
 use crate::index::BloomFilterIndexer;
-use crate::io::retry;
-use crate::io::retry::Retryable;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::util;
 use crate::statistics::gen_columns_statistics;
@@ -134,22 +131,7 @@ pub async fn write_block(
 }
 
 pub async fn write_data(data: &[u8], data_accessor: &Operator, location: &str) -> Result<()> {
-    let op = || async {
-        data_accessor
-            .object(location)
-            .write(data)
-            .await
-            .map_err(retry::from_io_error)
-    };
-
-    let notify = |e: std::io::Error, duration| {
-        warn!(
-            "transient error encountered while write block, location {}, at duration {:?} : {}",
-            location, duration, e,
-        )
-    };
-
-    op.retry_with_notify(notify).await?;
+    data_accessor.object(location).write(data).await?;
 
     Ok(())
 }
