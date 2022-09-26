@@ -150,17 +150,18 @@ pub struct ParquetFormatPipe;
 
 #[async_trait::async_trait]
 impl InputFormatPipe for ParquetFormatPipe {
+    type SplitMeta = SplitMeta;
     type ReadBatch = ReadBatch;
     type RowBatch = RowGroupInMemory;
     type AligningState = AligningState;
     type BlockBuilder = ParquetBlockBuilder;
 }
 
-struct FileMeta {
+pub struct FileMeta {
     pub fields: Arc<Vec<Field>>,
 }
 
-struct SplitMeta {
+pub struct SplitMeta {
     pub file: Arc<FileMeta>,
     pub meta: RowGroupMetaData,
 }

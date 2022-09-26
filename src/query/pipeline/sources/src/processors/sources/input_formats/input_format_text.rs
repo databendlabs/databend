@@ -81,6 +81,7 @@ pub struct InputFormatTextPipe<T> {
 
 #[async_trait::async_trait]
 impl<T: InputFormatTextBase> InputFormatPipe for InputFormatTextPipe<T> {
+    type SplitMeta = ();
     type ReadBatch = Vec<u8>;
     type RowBatch = RowBatch;
     type AligningState = AligningState<T>;
@@ -134,7 +135,7 @@ impl<T: InputFormatTextBase> InputFormat for InputFormatText<T> {
                 });
                 infos.push(Arc::new(SplitInfo {
                     file,
-                    seq_in_file: 1,
+                    seq_in_file: 0,
                     offset: 0,
                     size, // dummy
                     format_info: None,

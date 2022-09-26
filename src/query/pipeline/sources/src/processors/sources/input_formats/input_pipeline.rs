@@ -74,10 +74,19 @@ pub trait BlockBuilderTrait {
 
 #[async_trait::async_trait]
 pub trait InputFormatPipe: Sized + Send + 'static {
+    type SplitMeta;
     type ReadBatch: From<Vec<u8>> + Send + Debug;
     type RowBatch: Send;
     type AligningState: AligningStateTrait<Pipe = Self> + Send;
     type BlockBuilder: BlockBuilderTrait<Pipe = Self> + Send;
+
+    fn get_split_meta(split_info: &Arc<SplitInfo>) -> Option<&Self::SplitMeta> {
+        split_info
+            .format_info
+            .as_ref()?
+            .as_any()
+            .downcast_ref::<Self::SplitMeta>()
+    }
 
     fn execute_stream(ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {
         let mut input = ctx.source.take_receiver()?;
