@@ -361,8 +361,11 @@ impl PipelineBuilder {
         agg_funcs: &[AggregateFunctionDesc],
     ) -> Result<Arc<AggregatorParams>> {
         let before_schema = input_schema.clone();
+        let group_columns = group_by
+            .iter()
+            .map(|name| input_schema.index_of(name))
+            .collect::<Result<Vec<_>>>()?;
         let mut output_names = Vec::with_capacity(agg_funcs.len() + group_by.len());
-        let mut group_fields = Vec::with_capacity(group_by.len());
         let mut agg_args = Vec::with_capacity(agg_funcs.len());
         let aggs: Vec<AggregateFunctionRef> = agg_funcs
             .iter()
@@ -374,23 +377,20 @@ impl PipelineBuilder {
                     agg_func
                         .args
                         .iter()
-                        .map(|id| input_schema.field_with_name(id.as_str()).cloned())
-                        .collect::<Result<_>>()?,
+                        .map(|&index| input_schema.field(index))
+                        .cloned()
+                        .collect(),
                 )
             })
             .collect::<Result<_>>()?;
         for agg in agg_funcs {
             output_names.push(agg.column_id.clone());
         }
-        for group in group_by {
-            let group_field = before_schema.field_with_name(group.as_str())?.clone();
-            group_fields.push(group_field);
-        }
 
-        let params = AggregatorParams::try_create_v2(
+        let params = AggregatorParams::try_create(
             output_schema,
             before_schema,
-            &group_fields,
+            &group_columns,
             &aggs,
             &output_names,
             &agg_args,
