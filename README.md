@@ -26,6 +26,8 @@
 <img src="https://img.shields.io/badge/feishu-databend-0abd59" alt="feishu" />
 </a>
 
+<br>
+
 <a href="https://github.com/datafuselabs/databend/actions">
 <img src="https://img.shields.io/github/workflow/status/datafuselabs/databend/Release" alt="CI Status" />
 </a>
