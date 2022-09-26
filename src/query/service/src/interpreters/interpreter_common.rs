@@ -27,7 +27,6 @@ use common_meta_types::StageFile;
 use common_meta_types::UserStageInfo;
 use common_pipeline_core::Pipeline;
 use futures::TryStreamExt;
-use regex::Regex;
 use tracing::debug;
 use tracing::warn;
 
@@ -176,29 +175,20 @@ pub async fn stat_file(
     })
 }
 
-pub async fn list_files(
-    ctx: &Arc<QueryContext>,
-    stage: &UserStageInfo,
-    path: &str,
-    pattern: &str,
-) -> Result<Vec<StageFile>> {
-    list_files_from_dal(ctx, stage, path, pattern).await
-}
-
 /// List files from DAL in recursive way.
 ///
 /// - If input path is a dir, we will list it recursively.
 /// - Or, we will append the file itself, and try to list `path/`.
 /// - If not exist, we will try to list `path/` too.
-pub async fn list_files_from_dal(
+///
+/// TODO(@xuanwo): return a stream instead.
+pub async fn list_files(
     ctx: &Arc<QueryContext>,
     stage: &UserStageInfo,
     path: &str,
-    pattern: &str,
 ) -> Result<Vec<StageFile>> {
     let table_ctx: Arc<dyn TableContext> = ctx.clone();
     let op = StageTable::get_op(&table_ctx, stage).await?;
-    let prefix = stage.get_prefix();
     let mut files = Vec::new();
 
     // - If the path itself is a dir, return directly.
@@ -207,11 +197,11 @@ pub async fn list_files_from_dal(
     let dir_path = match op.object(path).metadata().await {
         Ok(meta) if meta.mode().is_dir() => Some(path.to_string()),
         Ok(meta) if !meta.mode().is_dir() => {
-            files.push((path.trim_start_matches(&prefix).to_string(), meta));
+            files.push((path.to_string(), meta));
 
-            Some(format!("{path}/"))
+            None
         }
-        Err(e) if e.kind() == io::ErrorKind::NotFound => Some(format!("{path}/")),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => None,
         Err(e) => return Err(e.into()),
         _ => None,
     };
@@ -223,7 +213,7 @@ pub async fn list_files_from_dal(
                 let mut ds = op.batch().walk_top_down(&dir)?;
                 while let Some(de) = ds.try_next().await? {
                     if de.mode().is_file() {
-                        let path = de.path().trim_start_matches(&prefix[1..]).to_string();
+                        let path = de.path().to_string();
                         let meta = de.metadata().await?;
                         files.push((path, meta));
                     }
@@ -233,27 +223,8 @@ pub async fn list_files_from_dal(
         };
     }
 
-    let regex = if !pattern.is_empty() {
-        Some(Regex::new(pattern).map_err(|e| {
-            ErrorCode::SyntaxException(format!(
-                "Pattern format invalid, got:{}, error:{:?}",
-                pattern, e
-            ))
-        })?)
-    } else {
-        None
-    };
-
     let matched_files = files
-        .iter()
-        .filter(|(name, _meta)| {
-            if let Some(regex) = &regex {
-                regex.is_match(name)
-            } else {
-                true
-            }
-        })
-        .cloned()
+        .into_iter()
         .map(|(name, meta)| StageFile {
             path: name,
             size: meta.content_length(),
