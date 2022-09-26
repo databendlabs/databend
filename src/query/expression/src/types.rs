@@ -114,6 +114,9 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     type ColumnIterator<'a>: Iterator<Item = Self::ScalarRef<'a>> + TrustedLen;
     type ColumnBuilder: Debug + Clone + PartialEq;
 
+    /// Upcast GAT type's lifetime.
+    fn upcast_gat<'short, 'long: 'short>(long: Self::ScalarRef<'long>) -> Self::ScalarRef<'short>;
+
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar;
     fn to_scalar_ref<'a>(scalar: &'a Self::Scalar) -> Self::ScalarRef<'a>;
 

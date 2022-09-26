@@ -60,6 +60,11 @@ impl<Num: Number> ValueType for NumberType<Num> {
     type ColumnIterator<'a> = std::iter::Cloned<std::slice::Iter<'a, Num>>;
     type ColumnBuilder = Vec<Num>;
 
+    #[inline]
+    fn upcast_gat<'short, 'long: 'short>(long: Num) -> Num {
+        long
+    }
+
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
         scalar
     }
@@ -407,6 +412,24 @@ const fn next_bit_width(width: u8) -> Option<u8> {
 
 const fn max_bit_with(lhs: u8, rhs: u8) -> u8 {
     if lhs > rhs { lhs } else { rhs }
+}
+
+impl PartialOrd for NumberScalar {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match (self, other) {
+            (NumberScalar::UInt8(lhs), NumberScalar::UInt8(rhs)) => lhs.partial_cmp(rhs),
+            (NumberScalar::UInt16(lhs), NumberScalar::UInt16(rhs)) => lhs.partial_cmp(rhs),
+            (NumberScalar::UInt32(lhs), NumberScalar::UInt32(rhs)) => lhs.partial_cmp(rhs),
+            (NumberScalar::UInt64(lhs), NumberScalar::UInt64(rhs)) => lhs.partial_cmp(rhs),
+            (NumberScalar::Int8(lhs), NumberScalar::Int8(rhs)) => lhs.partial_cmp(rhs),
+            (NumberScalar::Int16(lhs), NumberScalar::Int16(rhs)) => lhs.partial_cmp(rhs),
+            (NumberScalar::Int32(lhs), NumberScalar::Int32(rhs)) => lhs.partial_cmp(rhs),
+            (NumberScalar::Int64(lhs), NumberScalar::Int64(rhs)) => lhs.partial_cmp(rhs),
+            (NumberScalar::Float32(lhs), NumberScalar::Float32(rhs)) => lhs.partial_cmp(rhs),
+            (NumberScalar::Float64(lhs), NumberScalar::Float64(rhs)) => lhs.partial_cmp(rhs),
+            _ => None,
+        }
+    }
 }
 
 impl NumberScalar {

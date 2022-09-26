@@ -125,8 +125,15 @@ impl AggregatePartial {
             fields.push(DataField::new(agg.column_id.as_str(), Vu8::to_data_type()));
         }
         if !self.group_by.is_empty() {
-            let sample_block = DataBlock::empty_with_schema(input_schema);
-            let method = DataBlock::choose_hash_method(&sample_block, &self.group_by)?;
+            let sample_block = DataBlock::empty_with_schema(input_schema.clone());
+            let method = DataBlock::choose_hash_method(
+                &sample_block,
+                &self
+                    .group_by
+                    .iter()
+                    .map(|name| input_schema.index_of(name))
+                    .collect::<Result<Vec<_>>>()?,
+            )?;
             fields.push(DataField::new("_group_by_key", method.data_type()));
         }
         Ok(DataSchemaRefExt::create(fields))
