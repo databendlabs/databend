@@ -1,10 +1,10 @@
 [package]
 name = "common-meta-types"
-version = "0.1.0"
-authors = ["Databend Authors <opensource@datafuselabs.com>"]
-license = "Apache-2.0"
-publish = false
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
 
 [lib]
 doctest = false

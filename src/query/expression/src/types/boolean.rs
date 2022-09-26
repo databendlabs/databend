@@ -25,6 +25,7 @@ use crate::types::ValueType;
 use crate::util::bitmap_into_mut;
 use crate::values::Column;
 use crate::values::Scalar;
+use crate::ColumnBuilder;
 use crate::ScalarRef;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -56,6 +57,15 @@ impl ValueType for BooleanType {
     fn try_downcast_column<'a>(col: &'a Column) -> Option<Self::Column> {
         match col {
             Column::Boolean(column) => Some(column.clone()),
+            _ => None,
+        }
+    }
+
+    fn try_downcast_builder<'a>(
+        builder: &'a mut ColumnBuilder,
+    ) -> Option<&'a mut Self::ColumnBuilder> {
+        match builder {
+            crate::ColumnBuilder::Boolean(builder) => Some(builder),
             _ => None,
         }
     }

@@ -53,6 +53,12 @@ impl ValueType for AnyType {
         Some(domain.clone())
     }
 
+    fn try_downcast_builder<'a>(
+        builder: &'a mut ColumnBuilder,
+    ) -> Option<&'a mut Self::ColumnBuilder> {
+        Some(builder)
+    }
+
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
         scalar
     }

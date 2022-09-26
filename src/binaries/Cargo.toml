@@ -1,11 +1,11 @@
 [package]
 name = "databend-binaries"
-version = "0.1.0"
 description = "databend command line tools"
-authors = ["Databend Authors <opensource@datafuselabs.com>"]
-license = "Apache-2.0"
-publish = false
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
 
 [features]
 default = ["simd"]

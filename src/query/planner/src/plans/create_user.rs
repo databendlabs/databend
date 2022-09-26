@@ -20,7 +20,7 @@ use common_meta_types::AuthInfo;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserOption;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateUserPlan {
     pub user: UserIdentity,
     pub auth_info: AuthInfo,

@@ -216,7 +216,6 @@ impl Table for FuseTable {
     async fn alter_table_cluster_keys(
         &self,
         ctx: Arc<dyn TableContext>,
-        catalog_name: &str,
         cluster_key_str: String,
     ) -> Result<()> {
         let mut new_table_meta = self.get_table_info().meta.clone();
@@ -249,7 +248,6 @@ impl Table for FuseTable {
 
         FuseTable::commit_to_meta_server(
             ctx.as_ref(),
-            catalog_name,
             &table_info,
             &self.meta_location_generator,
             new_snapshot,
@@ -257,11 +255,7 @@ impl Table for FuseTable {
         .await
     }
 
-    async fn drop_table_cluster_keys(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        catalog_name: &str,
-    ) -> Result<()> {
+    async fn drop_table_cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
         if self.cluster_key_meta.is_none() {
             return Ok(());
         }
@@ -297,7 +291,6 @@ impl Table for FuseTable {
 
         FuseTable::commit_to_meta_server(
             ctx.as_ref(),
-            catalog_name,
             &table_info,
             &self.meta_location_generator,
             new_snapshot,
@@ -338,7 +331,6 @@ impl Table for FuseTable {
     async fn commit_insertion(
         &self,
         ctx: Arc<dyn TableContext>,
-        catalog_name: &str,
         operations: Vec<DataBlock>,
         overwrite: bool,
     ) -> Result<()> {
@@ -348,19 +340,13 @@ impl Table for FuseTable {
             .iter()
             .map(AppendOperationLogEntry::try_from)
             .collect::<Result<Vec<AppendOperationLogEntry>>>()?;
-        self.do_commit(ctx, catalog_name, append_log_entries, overwrite)
-            .await
+        self.do_commit(ctx, append_log_entries, overwrite).await
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_truncate", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
-    async fn truncate(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        catalog_name: &str,
-        purge: bool,
-    ) -> Result<()> {
+    async fn truncate(&self, ctx: Arc<dyn TableContext>, purge: bool) -> Result<()> {
         self.check_mutable()?;
-        self.do_truncate(ctx, purge, catalog_name).await
+        self.do_truncate(ctx, purge).await
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_optimize", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
@@ -403,19 +389,17 @@ impl Table for FuseTable {
     async fn compact(
         &self,
         ctx: Arc<dyn TableContext>,
-        catalog: String,
         pipeline: &mut Pipeline,
     ) -> Result<Option<Arc<dyn TableMutator>>> {
-        self.do_compact(ctx, catalog, pipeline).await
+        self.do_compact(ctx, pipeline).await
     }
 
     async fn recluster(
         &self,
         ctx: Arc<dyn TableContext>,
-        catalog: String,
         pipeline: &mut Pipeline,
         push_downs: Option<Extras>,
     ) -> Result<Option<Arc<dyn TableMutator>>> {
-        self.do_recluster(ctx, catalog, pipeline, push_downs).await
+        self.do_recluster(ctx, pipeline, push_downs).await
     }
 }

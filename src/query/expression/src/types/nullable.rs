@@ -28,6 +28,7 @@ use crate::types::ValueType;
 use crate::util::bitmap_into_mut;
 use crate::values::Column;
 use crate::values::Scalar;
+use crate::ColumnBuilder;
 use crate::ScalarRef;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -78,6 +79,12 @@ impl<T: ValueType> ValueType for NullableType<T> {
             }),
             _ => None,
         }
+    }
+
+    fn try_downcast_builder<'a>(
+        _builder: &'a mut ColumnBuilder,
+    ) -> Option<&'a mut Self::ColumnBuilder> {
+        None
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {

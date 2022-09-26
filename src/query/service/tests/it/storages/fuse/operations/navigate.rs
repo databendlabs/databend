@@ -167,7 +167,7 @@ async fn test_fuse_historical_table_is_read_only() -> Result<()> {
     assert_not_writable(res, "append2");
 
     // check truncate
-    let res = tbl.truncate(ctx.clone(), "", false).await;
+    let res = tbl.truncate(ctx.clone(), false).await;
     assert_not_writable(res, "truncate");
 
     Ok(())
