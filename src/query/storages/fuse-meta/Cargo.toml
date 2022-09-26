@@ -20,4 +20,4 @@ common-metrics = { path = "../../../common/metrics" }
 
 once_cell = "1.15.0"
 parking_lot = "0.12.1"
-serde = { version = "1.0.144", features = ["derive"] }
+serde = { version = "1.0.145", features = ["derive"] }

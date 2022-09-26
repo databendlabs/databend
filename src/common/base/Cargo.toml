@@ -38,7 +38,7 @@ pprof = { version = "0.10.1", features = [
     "protobuf-codec",
     "protobuf",
 ] }
-serde = { version = "1.0.144", features = ["derive"] }
+serde = { version = "1.0.145", features = ["derive"] }
 tikv-jemalloc-ctl = { version = "0.4.2", optional = true }
 tikv-jemalloc-sys = "0.4.3"
 tokio = { version = "1.21.1", features = ["full"] }
