@@ -17,7 +17,7 @@ use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::scalars::in_evalutor;
+use common_functions::scalars::in_evaluator;
 use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
 
@@ -78,12 +78,12 @@ impl Evaluator {
                     } = &eval_args[1]
                     {
                         let func = if name_lower.as_str() == "not_in" {
-                            in_evalutor::create_by_values::<true>(
+                            in_evaluator::create_by_values::<true>(
                                 func.arg_types[0].clone(),
                                 vs.clone(),
                             )
                         } else {
-                            in_evalutor::create_by_values::<false>(
+                            in_evaluator::create_by_values::<false>(
                                 func.arg_types[0].clone(),
                                 vs.clone(),
                             )

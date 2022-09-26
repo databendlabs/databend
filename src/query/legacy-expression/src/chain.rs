@@ -18,7 +18,7 @@ use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::scalars::in_evalutor;
+use common_functions::scalars::in_evaluator;
 use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
 
@@ -168,9 +168,12 @@ impl ExpressionChain {
                     } = &args[1]
                     {
                         let func = if name_lower.as_str() == "not_in" {
-                            in_evalutor::create_by_values::<true>(arg_types[0].clone(), vs.clone())
+                            in_evaluator::create_by_values::<true>(arg_types[0].clone(), vs.clone())
                         } else {
-                            in_evalutor::create_by_values::<false>(arg_types[0].clone(), vs.clone())
+                            in_evaluator::create_by_values::<false>(
+                                arg_types[0].clone(),
+                                vs.clone(),
+                            )
                         }?;
                         let return_type = func.return_type();
                         let function = ActionFunction {

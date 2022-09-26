@@ -150,10 +150,6 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    /// Resolve types of `expr` with given `required_type`.
-    /// If `required_type` is None, then there is no requirement of return type.
-    ///
-    /// TODO(leiysky): choose correct overloads of functions with given required_type and arguments
     #[async_recursion::async_recursion]
     pub async fn resolve(
         &mut self,
@@ -276,13 +272,12 @@ impl<'a> TypeChecker<'a> {
                 not,
                 ..
             } => {
-                // faster path for single list
-                if list.len() == 1 {
-                    let func_name = if *not { "!=" } else { "=" };
-                    let args = vec![expr.as_ref(), &list[0]];
-                    self.resolve_function(span, func_name, &args, required_type)
-                        .await?
-                } else {
+                if list.len() > 3
+                    && list.iter().all(|e| match e {
+                        Expr::Literal { lit, .. } if lit != &Literal::Null => true,
+                        _ => false,
+                    })
+                {
                     let func_name = if *not { "not_in" } else { "in" };
                     let tuple_expr = Expr::Tuple {
                         span,
@@ -291,6 +286,39 @@ impl<'a> TypeChecker<'a> {
                     let args = vec![expr.as_ref(), &tuple_expr];
                     self.resolve_function(span, func_name, &args, required_type)
                         .await?
+                } else {
+                    let mut result = list
+                        .iter()
+                        .map(|e| Expr::BinaryOp {
+                            span,
+                            op: BinaryOperator::Eq,
+                            left: expr.clone(),
+                            right: Box::new(e.clone()),
+                        })
+                        .fold(None, |mut acc, e| {
+                            match acc.as_mut() {
+                                None => acc = Some(e),
+                                Some(acc) => {
+                                    *acc = Expr::BinaryOp {
+                                        span,
+                                        op: BinaryOperator::Or,
+                                        left: Box::new(acc.clone()),
+                                        right: Box::new(e.clone()),
+                                    }
+                                }
+                            }
+                            acc
+                        })
+                        .unwrap();
+
+                    if *not {
+                        result = Expr::UnaryOp {
+                            span,
+                            op: UnaryOperator::Not,
+                            expr: Box::new(result),
+                        };
+                    }
+                    self.resolve(&result, required_type).await?
                 }
             }
 
