@@ -107,7 +107,7 @@ pub struct InputContext {
     pub schema: DataSchemaRef,
     pub source: InputSource,
     pub format: Arc<dyn InputFormat>,
-    pub splits: Vec<SplitInfo>,
+    pub splits: Vec<Arc<SplitInfo>>,
 
     // row format only
     pub rows_to_skip: usize,
@@ -169,11 +169,11 @@ impl InputContext {
         }
         let plan = Box::new(CopyIntoPlan { stage_info, files });
         let read_batch_size = settings.get_input_read_buffer_size()? as usize;
-        let split_size = 128usize * 1024 * 1024;
         let file_format_options = &plan.stage_info.file_format_options;
         let format = Self::get_input_format(&file_format_options.format)?;
-        let file_infos = Self::get_file_infos(&format, &operator, &plan).await?;
-        let splits = format.split_files(file_infos, split_size);
+        let splits = format
+            .get_splits(&plan, &operator, &settings, &schema)
+            .await?;
         let rows_per_block = MIN_ROW_PER_BLOCK;
         let record_delimiter = {
             if file_format_options.record_delimiter.is_empty() {
@@ -260,31 +260,6 @@ impl InputContext {
             plan: InputPlan::StreamingLoad(plan),
             splits: vec![],
         })
-    }
-
-    async fn get_file_infos(
-        format: &Arc<dyn InputFormat>,
-        op: &Operator,
-        plan: &CopyIntoPlan,
-    ) -> Result<Vec<FileInfo>> {
-        let mut infos = vec![];
-        for p in &plan.files {
-            let obj = op.object(p);
-            let size = obj.metadata().await?.content_length() as usize;
-            let file_meta = format.read_file_meta(&obj, size).await?;
-            let compress_alg = InputContext::get_compression_alg_copy(
-                plan.stage_info.file_format_options.compression,
-                p,
-            )?;
-            let info = FileInfo {
-                path: p.clone(),
-                size,
-                compress_alg,
-                file_meta,
-            };
-            infos.push(info)
-        }
-        Ok(infos)
     }
 
     pub fn num_prefetch_splits(&self) -> Result<usize> {

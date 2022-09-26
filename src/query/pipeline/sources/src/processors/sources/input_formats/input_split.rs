@@ -27,7 +27,11 @@ pub struct SplitInfo {
 
 impl Debug for SplitInfo {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}[{}]", self.file.path, self.seq_in_file)
+        f.debug_struct("FileInfo")
+            .field("seq_in_file", &self.seq_in_file)
+            .field("offset", &self.offset)
+            .field("size", &self.size)
+            .finish()
     }
 }
 

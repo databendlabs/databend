@@ -40,7 +40,7 @@ use crate::processors::sources::input_formats::source_deserializer::DeserializeS
 use crate::processors::sources::input_formats::transform_deserializer::DeserializeTransformer;
 
 pub struct Split<I: InputFormatPipe> {
-    pub(crate) info: SplitInfo,
+    pub(crate) info: Arc<SplitInfo>,
     pub(crate) rx: Receiver<Result<I::ReadBatch>>,
 }
 
@@ -54,7 +54,7 @@ pub struct StreamingReadBatch {
 pub trait AligningStateTrait: Sized {
     type Pipe: InputFormatPipe<AligningState = Self>;
 
-    fn try_create(ctx: &Arc<InputContext>, split_info: &SplitInfo) -> Result<Self>;
+    fn try_create(ctx: &Arc<InputContext>, split_info: &Arc<SplitInfo>) -> Result<Self>;
 
     fn align(
         &mut self,
@@ -93,8 +93,10 @@ pub trait InputFormatPipe: Sized + Send + 'static {
                         if batch.is_start {
                             let (data_tx, data_rx) = tokio::sync::mpsc::channel(1);
                             sender = Some(data_tx);
-                            let split_info =
-                                SplitInfo::from_stream_split(batch.path.clone(), batch.compression);
+                            let split_info = Arc::new(SplitInfo::from_stream_split(
+                                batch.path.clone(),
+                                batch.compression,
+                            ));
                             split_tx
                                 .send(Ok(Split {
                                     info: split_info,
@@ -168,7 +170,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
         tokio::spawn(async move {
             let mut futs = FuturesUnordered::new();
             for s in &ctx_clone.splits {
-                let fut = Self::read_split(ctx_clone.clone(), s.clone());
+                let fut = Self::read_split(ctx_clone.clone(), s);
                 futs.push(fut);
                 if futs.len() >= p {
                     let row_batch = futs.next().await.unwrap().unwrap();
@@ -238,19 +240,22 @@ pub trait InputFormatPipe: Sized + Send + 'static {
         Ok(())
     }
 
-    async fn read_split(_ctx: Arc<InputContext>, _split_info: SplitInfo) -> Result<Self::RowBatch> {
+    async fn read_split(
+        _ctx: Arc<InputContext>,
+        _split_info: &Arc<SplitInfo>,
+    ) -> Result<Self::RowBatch> {
         unimplemented!()
     }
 
     #[tracing::instrument(level = "debug", skip(ctx, batch_tx))]
     async fn copy_reader_with_aligner(
         ctx: Arc<InputContext>,
-        split_info: SplitInfo,
+        split_info: Arc<SplitInfo>,
         batch_tx: Sender<Result<Self::ReadBatch>>,
     ) -> Result<()> {
         tracing::debug!("start");
         let operator = ctx.source.get_operator()?;
-        let object = operator.object(&split_info.file_info.path);
+        let object = operator.object(&split_info.file.path);
         let offset = split_info.offset as u64;
         let mut reader = object.range_reader(offset..).await?;
         loop {

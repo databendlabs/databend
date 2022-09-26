@@ -14,20 +14,17 @@
 
 use std::sync::Arc;
 
+use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
 use common_pipeline_core::Pipeline;
 use common_settings::Settings;
-use opendal::io_util::CompressAlgorithm;
-use opendal::Object;
+use opendal::Operator;
 
 use crate::processors::sources::input_formats::delimiter::RecordDelimiter;
+use crate::processors::sources::input_formats::input_context::CopyIntoPlan;
 use crate::processors::sources::input_formats::input_context::InputContext;
 use crate::processors::sources::input_formats::input_split::SplitInfo;
-
-pub trait InputState: Send {
-    fn as_any(&mut self) -> &mut dyn Any;
-}
 
 #[async_trait::async_trait]
 pub trait InputFormat: Send + Sync {
@@ -37,16 +34,13 @@ pub trait InputFormat: Send + Sync {
 
     fn default_field_delimiter(&self) -> u8;
 
-    async fn read_file_meta(&self, obj: &Object, size: usize)
-    -> Result<Option<Arc<dyn InputData>>>;
-
-    async fn read_split_meta(
+    async fn get_splits(
         &self,
-        obj: &Object,
-        split_info: &SplitInfo,
-    ) -> Result<Option<Box<dyn InputData>>>;
-
-    fn split_files(&self, file_infos: Vec<FileInfo>, split_size: usize) -> Vec<SplitInfo>;
+        plan: &CopyIntoPlan,
+        op: &Operator,
+        settings: &Arc<Settings>,
+        schema: &DataSchemaRef,
+    ) -> Result<Vec<Arc<SplitInfo>>>;
 
     fn exec_copy(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()>;
 
