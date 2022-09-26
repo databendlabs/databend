@@ -273,10 +273,9 @@ impl<'a> TypeChecker<'a> {
                 ..
             } => {
                 if list.len() > 3
-                    && list.iter().all(|e| match e {
-                        Expr::Literal { lit, .. } if lit != &Literal::Null => true,
-                        _ => false,
-                    })
+                    && list
+                        .iter()
+                        .all(|e| matches!(e, Expr::Literal { lit, .. } if lit != &Literal::Null))
                 {
                     let func_name = if *not { "not_in" } else { "in" };
                     let tuple_expr = Expr::Tuple {
