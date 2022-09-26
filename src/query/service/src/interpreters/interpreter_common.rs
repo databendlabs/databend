@@ -189,7 +189,6 @@ pub async fn list_files(
 ) -> Result<Vec<StageFile>> {
     let table_ctx: Arc<dyn TableContext> = ctx.clone();
     let op = StageTable::get_op(&table_ctx, stage).await?;
-    let prefix = stage.get_prefix();
     let mut files = Vec::new();
 
     // - If the path itself is a dir, return directly.
@@ -198,7 +197,7 @@ pub async fn list_files(
     let dir_path = match op.object(path).metadata().await {
         Ok(meta) if meta.mode().is_dir() => Some(path.to_string()),
         Ok(meta) if !meta.mode().is_dir() => {
-            files.push((path.trim_start_matches(&prefix).to_string(), meta));
+            files.push((path.to_string(), meta));
 
             None
         }
@@ -214,7 +213,7 @@ pub async fn list_files(
                 let mut ds = op.batch().walk_top_down(&dir)?;
                 while let Some(de) = ds.try_next().await? {
                     if de.mode().is_file() {
-                        let path = de.path().trim_start_matches(&prefix[1..]).to_string();
+                        let path = de.path().to_string();
                         let meta = de.metadata().await?;
                         files.push((path, meta));
                     }

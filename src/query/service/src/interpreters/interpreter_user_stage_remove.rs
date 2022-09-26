@@ -47,7 +47,6 @@ impl Interpreter for RemoveUserStageInterpreter {
     #[tracing::instrument(level = "info", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = self.plan.clone();
-        let prefix = plan.stage.get_prefix();
 
         let table_ctx: Arc<dyn TableContext> = self.ctx.clone();
         let op = StageTable::get_op(&table_ctx, &self.plan.stage).await?;
@@ -71,7 +70,7 @@ impl Interpreter for RemoveUserStageInterpreter {
         };
 
         for name in files.iter().map(|f| f.path.as_str()) {
-            op.object(&format!("{prefix}{name}")).delete().await?;
+            op.object(name).delete().await?;
         }
 
         Ok(PipelineBuildResult::create())
