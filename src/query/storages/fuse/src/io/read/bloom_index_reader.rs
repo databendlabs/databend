@@ -209,7 +209,7 @@ mod util_v1 {
             if let Some(bloom_index_cache) = CacheManager::instance().get_bloom_index_cache() {
                 {
                     // get by cache
-                    let bloom_index_cache_guard = bloom_index_cache.read();
+                    let mut bloom_index_cache_guard = bloom_index_cache.write();
 
                     if let Some(bytes) = bloom_index_cache_guard.get(&cache_key) {
                         return Ok((bytes.clone(), idx));

@@ -101,7 +101,7 @@ where L: Loader<T> + HasTenantLabel
     }
 
     fn get_by_cache(&self, key: &str, cache: &ItemCache<T>) -> Option<Arc<T>> {
-        cache.read().get(key).cloned()
+        cache.write().get(key).cloned()
     }
 
     async fn load(&self, loc: &str, len_hint: Option<u64>, version: u64) -> Result<Arc<T>> {
