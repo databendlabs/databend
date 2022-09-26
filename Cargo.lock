@@ -1145,6 +1145,7 @@ dependencies = [
  "chrono-tz",
  "common-arrow",
  "common-exception",
+ "common-hashtable",
  "common-io",
  "criterion",
  "dyn-clone",

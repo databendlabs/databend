@@ -14,6 +14,7 @@ test = false
 # Workspace dependencies
 common-arrow = { path = "../../common/arrow" }
 common-exception = { path = "../../common/exception" }
+common-hashtable = { path = "../../common/hashtable" }
 common-io = { path = "../../common/io" }
 primitive-types = "0.11.1"
 
