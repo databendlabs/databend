@@ -31,7 +31,7 @@ use crate::scalars::Function;
 use crate::scalars::FunctionContext;
 
 #[derive(Clone)]
-pub struct InEvalutorImpl<const NEGATED: bool, S: Scalar + Clone, Key: HashTableKeyable + Clone> {
+pub struct InEvaluatorImpl<const NEGATED: bool, S: Scalar + Clone, Key: HashTableKeyable + Clone> {
     input_type: DataTypeImpl,
     nonull_least_super_dt: DataTypeImpl,
     set: Arc<HashSetWithStackMemory<64, Key>>,
@@ -61,11 +61,11 @@ pub fn create_by_column<const NEGATED: bool>(
     }
 
     with_match_physical_primitive_type!(type_id, |$T| {
-        InEvalutorImpl::<NEGATED, $T, <$T as Scalar>::KeyType>::try_create(input_type, nonull_least_super_dt, col)
+        InEvaluatorImpl::<NEGATED, $T, <$T as Scalar>::KeyType>::try_create(input_type, nonull_least_super_dt, col)
     },
     {
         if type_id == PhysicalTypeID::String {
-            return InEvalutorImpl::<NEGATED, Vec<u8>, KeysRef>::try_create(input_type, nonull_least_super_dt, col);
+            return InEvaluatorImpl::<NEGATED, Vec<u8>, KeysRef>::try_create(input_type, nonull_least_super_dt, col);
         }
 
         Err(ErrorCode::BadDataValueType(format!(
@@ -112,7 +112,7 @@ pub fn create_by_values<const NEGATED: bool>(
     create_by_column::<NEGATED>(input_type, col)
 }
 
-impl<const NEGATED: bool, S, Key> Function for InEvalutorImpl<NEGATED, S, Key>
+impl<const NEGATED: bool, S, Key> Function for InEvaluatorImpl<NEGATED, S, Key>
 where
     S: Scalar<KeyType = Key> + Sync + Send + Clone,
     Key: HashTableKeyable + Clone + 'static + Sync + Send,
@@ -162,7 +162,7 @@ where
     }
 }
 
-impl<const NEGATED: bool, S, Key> InEvalutorImpl<NEGATED, S, Key>
+impl<const NEGATED: bool, S, Key> InEvaluatorImpl<NEGATED, S, Key>
 where
     S: Scalar<KeyType = Key> + Clone + Sync + Send,
     Key: HashTableKeyable + Clone + Send + Sync + 'static,
@@ -211,7 +211,7 @@ where
     }
 }
 
-impl<const NEGATED: bool, S, Key> fmt::Display for InEvalutorImpl<NEGATED, S, Key>
+impl<const NEGATED: bool, S, Key> fmt::Display for InEvaluatorImpl<NEGATED, S, Key>
 where
     S: Clone + Scalar<KeyType = Key> + Sync + Send,
     Key: HashTableKeyable + Clone + Send + Sync + 'static,
