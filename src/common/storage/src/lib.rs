@@ -34,17 +34,7 @@ pub use config::STORAGE_IPFS_DEFAULT_ENDPOINT;
 pub use config::STORAGE_S3_DEFAULT_ENDPOINT;
 
 mod operator;
-pub use operator::init_azblob_operator;
-pub use operator::init_fs_operator;
-pub use operator::init_ftp_operator;
-pub use operator::init_gcs_operator;
-#[cfg(feature = "storage-hdfs")]
-pub use operator::init_hdfs_operator;
-pub use operator::init_http_operator;
-pub use operator::init_memory_operator;
-pub use operator::init_obs_operator;
 pub use operator::init_operator;
-pub use operator::init_s3_operator;
 pub use operator::StorageOperator;
 
 mod location;
