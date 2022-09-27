@@ -2653,6 +2653,7 @@ dependencies = [
  "anyhow",
  "async-entry",
  "async-trait",
+ "backon 0.2.0",
  "clap",
  "common-arrow",
  "common-base",
