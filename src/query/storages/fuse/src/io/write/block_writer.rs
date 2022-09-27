@@ -12,11 +12,8 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::sync::Arc;
-
 use common_arrow::parquet::compression::CompressionOptions;
 use common_arrow::parquet::metadata::ThriftFileMetaData;
-use common_catalog::table_context::TableContext;
 use common_datablocks::serialize_data_blocks;
 use common_datablocks::serialize_data_blocks_with_compression;
 use common_datablocks::DataBlock;
@@ -36,19 +33,16 @@ const DEFAULT_BLOOM_INDEX_WRITE_BUFFER_SIZE: usize = 300 * 1024;
 const DEFAULT_BLOCK_WRITE_BUFFER_SIZE: usize = 100 * 1024 * 1024;
 
 pub struct BlockWriter<'a> {
-    ctx: &'a Arc<dyn TableContext>,
     location_generator: &'a TableMetaLocationGenerator,
     data_accessor: &'a Operator,
 }
 
 impl<'a> BlockWriter<'a> {
     pub fn new(
-        ctx: &'a Arc<dyn TableContext>,
         data_accessor: &'a Operator,
         location_generator: &'a TableMetaLocationGenerator,
     ) -> Self {
         Self {
-            ctx,
             location_generator,
             data_accessor,
         }
@@ -100,7 +94,7 @@ impl<'a> BlockWriter<'a> {
         block: &DataBlock,
         block_id: Uuid,
     ) -> Result<(u64, Location)> {
-        let bloom_index = BloomFilterIndexer::try_create(self.ctx.clone(), &[block])?;
+        let bloom_index = BloomFilterIndexer::try_create(&[block])?;
         let index_block = bloom_index.bloom_block;
         let location = self
             .location_generator

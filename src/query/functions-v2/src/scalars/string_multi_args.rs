@@ -953,7 +953,7 @@ fn regexp_substr_fn(
     }
 }
 
-mod regexp {
+pub mod regexp {
     use bstr::ByteSlice;
     use regex::bytes::Match;
     use regex::bytes::Regex;

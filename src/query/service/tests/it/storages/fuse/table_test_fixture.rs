@@ -29,6 +29,7 @@ use common_pipeline_core::SourcePipeBuilder;
 use common_planner::plans::CreateDatabasePlan;
 use common_storage::StorageFsConfig;
 use common_storage::StorageParams;
+use common_storages_fuse::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
 use common_streams::SendableDataBlockStream;
 use databend_query::interpreters::append2table;
 use databend_query::interpreters::execute_pipeline;
@@ -44,7 +45,6 @@ use databend_query::sql::Planner;
 use databend_query::sql::OPT_KEY_DATABASE_ID;
 use databend_query::storages::fuse::table_functions::ClusteringInformationTable;
 use databend_query::storages::fuse::table_functions::FuseSnapshotTable;
-use databend_query::storages::fuse::FUSE_TBL_BLOCK_INDEX_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_BLOCK_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SEGMENT_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SNAPSHOT_PREFIX;
@@ -454,18 +454,21 @@ pub async fn check_data_dir(
     let prefix_snapshot = FUSE_TBL_SNAPSHOT_PREFIX;
     let prefix_segment = FUSE_TBL_SEGMENT_PREFIX;
     let prefix_block = FUSE_TBL_BLOCK_PREFIX;
-    let prefix_index = FUSE_TBL_BLOCK_INDEX_PREFIX;
+    let prefix_index = FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
     for entry in WalkDir::new(root) {
         let entry = entry.unwrap();
         if entry.file_type().is_file() {
-            // here, by checking if "contains" the prefix is enough
-            if entry.path().to_str().unwrap().contains(prefix_snapshot) {
+            let (_, entry_path) = entry.path().to_str().unwrap().split_at(root.len());
+            // trim the leading prefix, e.g. "/db_id/table_id/"
+            let path = entry_path.split('/').skip(3).collect::<Vec<_>>();
+            let path = path[0];
+            if path.starts_with(prefix_snapshot) {
                 ss_count += 1;
-            } else if entry.path().to_str().unwrap().contains(prefix_segment) {
+            } else if path.starts_with(prefix_segment) {
                 sg_count += 1;
-            } else if entry.path().to_str().unwrap().contains(prefix_block) {
+            } else if path.starts_with(prefix_block) {
                 b_count += 1;
-            } else if entry.path().to_str().unwrap().contains(prefix_index) {
+            } else if path.starts_with(prefix_index) {
                 i_count += 1;
             }
         }

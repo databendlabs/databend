@@ -204,6 +204,8 @@ impl Catalog for ImmutableCatalog {
 
     async fn get_table_copied_file_info(
         &self,
+        _tenant: &str,
+        _db_name: &str,
         req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply> {
         Err(ErrorCode::UnImplement(format!(
@@ -214,6 +216,8 @@ impl Catalog for ImmutableCatalog {
 
     async fn upsert_table_copied_file_info(
         &self,
+        _tenant: &str,
+        _db_name: &str,
         req: UpsertTableCopiedFileReq,
     ) -> Result<UpsertTableCopiedFileReply> {
         Err(ErrorCode::UnImplement(format!(
@@ -222,7 +226,12 @@ impl Catalog for ImmutableCatalog {
         )))
     }
 
-    async fn truncate_table(&self, req: TruncateTableReq) -> Result<TruncateTableReply> {
+    async fn truncate_table(
+        &self,
+        _tenant: &str,
+        _db_name: &str,
+        req: TruncateTableReq,
+    ) -> Result<TruncateTableReply> {
         Err(ErrorCode::UnImplement(format!(
             "truncate_table not allowed for system database {:?}",
             req
@@ -231,6 +240,8 @@ impl Catalog for ImmutableCatalog {
 
     async fn upsert_table_option(
         &self,
+        _tenant: &str,
+        _db_name: &str,
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
         Err(ErrorCode::UnImplement(format!(
@@ -239,7 +250,12 @@ impl Catalog for ImmutableCatalog {
         )))
     }
 
-    async fn update_table_meta(&self, req: UpdateTableMetaReq) -> Result<UpdateTableMetaReply> {
+    async fn update_table_meta(
+        &self,
+        _tenant: &str,
+        _db_name: &str,
+        req: UpdateTableMetaReq,
+    ) -> Result<UpdateTableMetaReply> {
         Err(ErrorCode::UnImplement(format!(
             "update table meta not allowed for system database {:?}",
             req

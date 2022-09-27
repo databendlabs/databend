@@ -1053,6 +1053,12 @@ NULL 44 51
 NULL NULL 52
 NULL 42 53
 
+statement ok
+SELECT * FROM onecolumn AS a(x) RIGHT JOIN twocolumn ON true where false order by y;
+
+statement ok
+SELECT * FROM onecolumn AS a(x) LEFT JOIN twocolumn ON true where twocolumn.x > 50 order by y;
+
 -- statement query
 -- SELECT column1, column1+1FROM  (SELECT * FROM    (VALUES (NULL, NULL)) AS t      NATURAL FULL OUTER JOIN    (VALUES (1, 1)) AS u);
 
