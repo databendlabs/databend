@@ -35,9 +35,6 @@ impl Evaluator {
 
     pub fn eval_physical_scalar(physical_scalar: &PhysicalScalar) -> Result<EvalNode> {
         match physical_scalar {
-            PhysicalScalar::Variable { column_id, .. } => Ok(EvalNode::Variable {
-                name: column_id.clone(),
-            }),
             PhysicalScalar::Constant { value, data_type } => Ok(EvalNode::Constant {
                 value: value.clone(),
                 data_type: data_type.clone(),

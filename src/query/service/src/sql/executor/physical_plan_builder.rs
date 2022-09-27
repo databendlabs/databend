@@ -173,6 +173,16 @@ impl PhysicalPlanBuilder {
             RelOperator::PhysicalHashJoin(join) => {
                 let build_side = self.build(s_expr.child(1)?).await?;
                 let probe_side = self.build(s_expr.child(0)?).await?;
+                let build_side_schema = build_side.output_schema()?;
+                let probe_side_schema = probe_side.output_schema()?;
+                let merged_schema = DataSchemaRefExt::create(
+                    probe_side_schema
+                        .fields()
+                        .iter()
+                        .chain(build_side_schema.fields())
+                        .cloned()
+                        .collect(),
+                );
                 Ok(PhysicalPlan::HashJoin(HashJoin {
                     build: Box::new(build_side),
                     probe: Box::new(probe_side),
@@ -181,7 +191,7 @@ impl PhysicalPlanBuilder {
                         .build_keys
                         .iter()
                         .map(|v| {
-                            let mut builder = PhysicalScalarBuilder;
+                            let mut builder = PhysicalScalarBuilder::new(&build_side_schema);
                             builder.build(v)
                         })
                         .collect::<Result<_>>()?,
@@ -189,7 +199,7 @@ impl PhysicalPlanBuilder {
                         .probe_keys
                         .iter()
                         .map(|v| {
-                            let mut builder = PhysicalScalarBuilder;
+                            let mut builder = PhysicalScalarBuilder::new(&probe_side_schema);
                             builder.build(v)
                         })
                         .collect::<Result<_>>()?,
@@ -197,7 +207,7 @@ impl PhysicalPlanBuilder {
                         .other_conditions
                         .iter()
                         .map(|v| {
-                            let mut builder = PhysicalScalarBuilder;
+                            let mut builder = PhysicalScalarBuilder::new(&merged_schema);
                             builder.build(v)
                         })
                         .collect::<Result<_>>()?,
@@ -205,29 +215,38 @@ impl PhysicalPlanBuilder {
                     from_correlated_subquery: join.from_correlated_subquery,
                 }))
             }
-            RelOperator::EvalScalar(eval_scalar) => Ok(PhysicalPlan::EvalScalar(EvalScalar {
-                input: Box::new(self.build(s_expr.child(0)?).await?),
-                scalars: eval_scalar
-                    .items
-                    .iter()
-                    .map(|item| {
-                        let mut builder = PhysicalScalarBuilder;
-                        Ok((builder.build(&item.scalar)?, item.index.to_string()))
-                    })
-                    .collect::<Result<_>>()?,
-            })),
 
-            RelOperator::Filter(filter) => Ok(PhysicalPlan::Filter(Filter {
-                input: Box::new(self.build(s_expr.child(0)?).await?),
-                predicates: filter
-                    .predicates
-                    .iter()
-                    .map(|pred| {
-                        let mut builder = PhysicalScalarBuilder;
-                        builder.build(pred)
-                    })
-                    .collect::<Result<_>>()?,
-            })),
+            RelOperator::EvalScalar(eval_scalar) => {
+                let input = Box::new(self.build(s_expr.child(0)?).await?);
+                let input_schema = input.output_schema()?;
+                Ok(PhysicalPlan::EvalScalar(EvalScalar {
+                    input,
+                    scalars: eval_scalar
+                        .items
+                        .iter()
+                        .map(|item| {
+                            let mut builder = PhysicalScalarBuilder::new(&input_schema);
+                            Ok((builder.build(&item.scalar)?, item.index.to_string()))
+                        })
+                        .collect::<Result<_>>()?,
+                }))
+            }
+
+            RelOperator::Filter(filter) => {
+                let input = Box::new(self.build(s_expr.child(0)?).await?);
+                let input_schema = input.output_schema()?;
+                Ok(PhysicalPlan::Filter(Filter {
+                    input,
+                    predicates: filter
+                        .predicates
+                        .iter()
+                        .map(|pred| {
+                            let mut builder = PhysicalScalarBuilder::new(&input_schema);
+                            builder.build(pred)
+                        })
+                        .collect::<Result<_>>()?,
+                }))
+            }
             RelOperator::Aggregate(agg) => {
                 let input = self.build(s_expr.child(0)?).await?;
                 let group_items: Vec<ColumnID> = agg
@@ -283,17 +302,20 @@ impl PhysicalPlanBuilder {
                                 };
 
                                 let output_schema = aggregate_partial.output_schema()?;
-                                let group_by_key_field =
-                                    output_schema.field_with_name("_group_by_key")?;
+                                let group_by_key_index = output_schema.index_of("_group_by_key")?;
 
                                 PhysicalPlan::Exchange(PhysicalExchange {
                                     kind,
                                     input: Box::new(PhysicalPlan::AggregatePartial(
                                         aggregate_partial,
                                     )),
-                                    keys: vec![PhysicalScalar::Variable {
-                                        column_id: group_by_key_field.name().clone(),
-                                        data_type: group_by_key_field.data_type().clone(),
+                                    keys: vec![PhysicalScalar::IndexedVariable {
+                                        index: group_by_key_index,
+                                        data_type: output_schema
+                                            .field(group_by_key_index)
+                                            .data_type()
+                                            .clone(),
+                                        display_name: "_group_by_key".to_string(),
                                     }],
                                 })
                             }
@@ -405,11 +427,13 @@ impl PhysicalPlanBuilder {
                 offset: limit.offset,
             })),
             RelOperator::Exchange(exchange) => {
+                let input = Box::new(self.build(s_expr.child(0)?).await?);
+                let input_schema = input.output_schema()?;
                 let mut keys = vec![];
                 let kind = match exchange {
                     Exchange::Hash(scalars) => {
                         for scalar in scalars {
-                            let mut builder = PhysicalScalarBuilder;
+                            let mut builder = PhysicalScalarBuilder::new(&input_schema);
                             keys.push(builder.build(scalar)?);
                         }
                         StageKind::Normal
@@ -418,7 +442,7 @@ impl PhysicalPlanBuilder {
                     Exchange::Merge => StageKind::Merge,
                 };
                 Ok(PhysicalPlan::Exchange(PhysicalExchange {
-                    input: Box::new(self.build(s_expr.child(0)?).await?),
+                    input,
                     kind,
                     keys,
                 }))
@@ -556,16 +580,37 @@ impl PhysicalPlanBuilder {
     }
 }
 
-pub struct PhysicalScalarBuilder;
+pub struct PhysicalScalarBuilder<'a> {
+    input_schema: &'a DataSchemaRef,
+}
 
-#[allow(clippy::only_used_in_recursion)]
-impl PhysicalScalarBuilder {
+impl<'a> PhysicalScalarBuilder<'a> {
+    pub fn new(input_schema: &'a DataSchemaRef) -> Self {
+        Self { input_schema }
+    }
+
     pub fn build(&mut self, scalar: &Scalar) -> Result<PhysicalScalar> {
         match scalar {
-            Scalar::BoundColumnRef(column_ref) => Ok(PhysicalScalar::Variable {
-                column_id: column_ref.column.index.to_string(),
-                data_type: column_ref.data_type(),
-            }),
+            Scalar::BoundColumnRef(column_ref) => {
+                // Remap string name to index in data block
+                let index = self
+                    .input_schema
+                    .index_of(&column_ref.column.index.to_string())?;
+                Ok(PhysicalScalar::IndexedVariable {
+                    data_type: column_ref.data_type(),
+                    index,
+                    display_name: format!(
+                        "{}{} (#{})",
+                        column_ref
+                            .column
+                            .table_name
+                            .as_ref()
+                            .map_or("".to_string(), |t| t.to_string() + "."),
+                        column_ref.column.column_name.clone(),
+                        column_ref.column.index
+                    ),
+                })
+            }
             Scalar::ConstantExpr(constant) => Ok(PhysicalScalar::Constant {
                 value: constant.value.clone(),
                 data_type: *constant.data_type.clone(),
