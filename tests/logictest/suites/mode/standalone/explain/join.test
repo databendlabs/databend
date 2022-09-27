@@ -4,8 +4,8 @@ explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = 
 ----
 HashJoin
 ├── join type: INNER
-├── build keys: [numbers.number (#1)]
-├── probe keys: [numbers.number (#0)]
+├── build keys: [t1.number (#1)]
+├── probe keys: [t.number (#0)]
 ├── filters: []
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
@@ -28,8 +28,8 @@ explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = 
 ----
 HashJoin
 ├── join type: INNER
-├── build keys: [numbers.number (#1), +(numbers.number (#1), 1)]
-├── probe keys: [numbers.number (#0), numbers.number (#0)]
+├── build keys: [t1.number (#1), +(t1.number (#1), 1)]
+├── probe keys: [t.number (#0), t.number (#0)]
 ├── filters: []
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
@@ -56,7 +56,7 @@ HashJoin
 ├── probe keys: []
 ├── filters: []
 ├── Filter(Build)
-│   ├── filters: [<(1, numbers.number (#1))]
+│   ├── filters: [<(1, t1.number (#1))]
 │   └── TableScan
 │       ├── table: default.system.numbers
 │       ├── read rows: 1
@@ -65,7 +65,7 @@ HashJoin
 │       ├── partitions scanned: 1
 │       └── push downs: [filters: [(1 < number)], limit: NONE]
 └── Filter(Probe)
-    ├── filters: [>(numbers.number (#0), 1)]
+    ├── filters: [>(t.number (#0), 1)]
     └── TableScan
         ├── table: default.system.numbers
         ├── read rows: 1
@@ -79,7 +79,7 @@ explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number + 
 
 ----
 Filter
-├── filters: [=(+(numbers.number (#0), numbers.number (#1)), 1)]
+├── filters: [=(+(t.number (#0), t1.number (#1)), 1)]
 └── HashJoin
     ├── join type: CROSS
     ├── build keys: []
@@ -106,8 +106,8 @@ explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = 
 ----
 HashJoin
 ├── join type: INNER
-├── build keys: [CAST(CAST(numbers.number (#1) AS VARCHAR) AS DOUBLE)]
-├── probe keys: [CAST(numbers.number (#0) AS DOUBLE)]
+├── build keys: [CAST(CAST(t1.number (#1) AS VARCHAR) AS DOUBLE)]
+├── probe keys: [CAST(t.number (#0) AS DOUBLE)]
 ├── filters: []
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
@@ -130,8 +130,8 @@ explain select t.number from numbers(1) as t, numbers(1) as t1, numbers(1) as t2
 ----
 HashJoin
 ├── join type: INNER
-├── build keys: [numbers.number (#2)]
-├── probe keys: [numbers.number (#1)]
+├── build keys: [t2.number (#2)]
+├── probe keys: [t1.number (#1)]
 ├── filters: []
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
@@ -153,7 +153,7 @@ HashJoin
     │   ├── partitions scanned: 1
     │   └── push downs: [filters: [], limit: NONE]
     └── Filter(Probe)
-        ├── filters: [=(numbers.number (#0), 1)]
+        ├── filters: [=(t.number (#0), 1)]
         └── TableScan
             ├── table: default.system.numbers
             ├── read rows: 1

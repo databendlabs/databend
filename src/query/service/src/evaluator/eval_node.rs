@@ -38,9 +38,6 @@ pub enum EvalNode {
         // be inferred from the `value`
         data_type: DataTypeImpl,
     },
-    Variable {
-        name: String,
-    },
     IndexedVariable {
         index: usize,
     },
@@ -68,18 +65,6 @@ impl EvalNode {
             EvalNode::Constant { value, data_type } => {
                 let vector = value.as_const_column(data_type, data_block.num_rows())?;
                 Ok(TypedVector::new(vector, data_type.clone()))
-            }
-            EvalNode::Variable { name } => {
-                let column = data_block.try_column_by_name(name)?;
-                let data_type = data_block
-                    .schema()
-                    .field_with_name(name)?
-                    .data_type()
-                    .clone();
-                Ok(TypedVector {
-                    vector: column.clone(),
-                    logical_type: data_type,
-                })
             }
             EvalNode::IndexedVariable { index } => {
                 let column = data_block.column(*index);

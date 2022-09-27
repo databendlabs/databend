@@ -38,7 +38,7 @@ Limit
 └── Sort
     ├── sort keys: [number ASC NULLS LAST]
     └── Filter
-        ├── filters: [>(numbers.number (#0), 1)]
+        ├── filters: [>(numbers.b (#0), 1)]
         └── AggregateFinal
             ├── group by: [number, number, number, number]
             ├── aggregate functions: []
@@ -59,8 +59,8 @@ explain select * from (select t1.a from (select number + 1 as a, number + 1 as b
 ----
 HashJoin
 ├── join type: INNER
-├── build keys: [b (#11)]
-├── probe keys: [b (#2)]
+├── build keys: [t2.b (#11)]
+├── probe keys: [t1.b (#2)]
 ├── filters: []
 ├── EvalScalar(Build)
 │   ├── expressions: [+(numbers.number (#9), 1)]
@@ -72,7 +72,7 @@ HashJoin
 │       ├── partitions scanned: 1
 │       └── push downs: [filters: [], limit: NONE]
 └── Filter(Probe)
-    ├── filters: [=(c (#3), 1)]
+    ├── filters: [=(t1.c (#3), 1)]
     └── EvalScalar
         ├── expressions: [+(numbers.number (#0), 1), +(numbers.number (#0), 1), +(numbers.number (#0), 1)]
         └── TableScan
@@ -88,7 +88,7 @@ explain select t1.a from (select number + 1 as a, number + 1 as b from numbers(1
 
 ----
 Filter
-├── filters: [=(a (#1), count(*) (#21))]
+├── filters: [=(t1.a (#1), scalar_subquery_21 (#21))]
 └── HashJoin
     ├── join type: SINGLE
     ├── build keys: []
@@ -104,8 +104,8 @@ Filter
     │           ├── aggregate functions: [count()]
     │           └── HashJoin
     │               ├── join type: INNER
-    │               ├── build keys: [b (#16)]
-    │               ├── probe keys: [b (#7)]
+    │               ├── build keys: [t3.b (#16)]
+    │               ├── probe keys: [t2.b (#7)]
     │               ├── filters: []
     │               ├── EvalScalar(Build)
     │               │   ├── expressions: [+(numbers.number (#14), 1)]
@@ -117,7 +117,7 @@ Filter
     │               │       ├── partitions scanned: 1
     │               │       └── push downs: [filters: [], limit: NONE]
     │               └── Filter(Probe)
-    │                   ├── filters: [=(c (#8), 1)]
+    │                   ├── filters: [=(t2.c (#8), 1)]
     │                   └── EvalScalar
     │                       ├── expressions: [+(numbers.number (#5), 1), +(numbers.number (#5), 1)]
     │                       └── TableScan

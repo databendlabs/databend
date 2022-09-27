@@ -34,6 +34,7 @@ pub async fn schedule_query_v2(
         let pb = PipelineBuilderV2::create(ctx.clone());
         let mut build_res = pb.finalize(plan)?;
         PipelineBuilderV2::render_result_set(
+            &ctx.try_get_function_context()?,
             plan.output_schema()?,
             result_columns,
             &mut build_res.main_pipeline,
@@ -46,6 +47,7 @@ pub async fn schedule_query_v2(
 
     let input_schema = plan.output_schema()?;
     PipelineBuilderV2::render_result_set(
+        &ctx.try_get_function_context()?,
         input_schema,
         result_columns,
         &mut build_res.main_pipeline,
