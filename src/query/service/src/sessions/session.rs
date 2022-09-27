@@ -147,7 +147,6 @@ impl Session {
             record_delimiter: settings.get_record_delimiter()?.into_bytes(),
             field_delimiter: settings.get_field_delimiter()?.into_bytes(),
             empty_as_default: settings.get_empty_as_default()? > 0,
-            skip_header: settings.get_skip_header()?,
             quote_char: quote_char[0],
             ..Default::default()
         };
@@ -157,8 +156,6 @@ impl Session {
             ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
         })?;
 
-        let compress = settings.get_compression()?;
-        format.compression = compress.parse()?;
         format.ident_case_sensitive = settings.get_unquoted_ident_case_sensitive()?;
         Ok(format)
     }
