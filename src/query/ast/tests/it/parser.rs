@@ -295,6 +295,7 @@ fn test_statement() {
         r#"SHOW GRANTS ON TABLE db1.tb1;"#,
         r#"SHOW GRANTS ON DATABASE db;"#,
         r#"SHOW GRANTS OF SHARE t;"#,
+        r#"UPDATE db1.tb1 set a = a + 1, b = 2 WHERE c > 3;"#,
     ];
 
     for case in cases {

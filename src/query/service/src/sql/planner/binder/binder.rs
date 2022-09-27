@@ -212,6 +212,7 @@ impl<'a> Binder {
                 self.bind_delete(bind_context, table_reference, selection)
                     .await?
             }
+            Statement::Update(stmt) => todo!(),
 
             // Permissions
             Statement::Grant(stmt) => self.bind_grant(stmt).await?,

@@ -994,6 +994,27 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
+    fn visit_update(&mut self, update: &'ast UpdateStmt<'ast>) {
+        let mut children = Vec::new();
+        self.visit_table_ref(&update.catalog, &update.database, &update.table);
+        children.push(self.children.pop().unwrap());
+
+        for update_expr in update.update_list.iter() {
+            self.visit_identifier(&update_expr.name);
+            children.push(self.children.pop().unwrap());
+            self.visit_expr(&update_expr.expr);
+            children.push(self.children.pop().unwrap());
+        }
+        if let Some(selection) = &update.selection {
+            self.visit_expr(selection);
+            children.push(self.children.pop().unwrap());
+        }
+        let name = "Update".to_string();
+        let format_ctx = AstFormatContext::with_children(name, children.len());
+        let node = FormatTreeNode::with_children(format_ctx, children);
+        self.children.push(node);
+    }
+
     fn visit_show_databases(&mut self, stmt: &'ast ShowDatabasesStmt<'ast>) {
         let mut children = Vec::new();
         if let Some(limit) = &stmt.limit {
