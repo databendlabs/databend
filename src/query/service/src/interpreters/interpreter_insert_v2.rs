@@ -40,12 +40,12 @@ use parking_lot::RwLock;
 
 use super::interpreter_common::append2table;
 use super::plan_schedulers::build_schedule_pipeline;
-use crate::evaluator::EvalNode;
 use crate::evaluator::Evaluator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::transforms::ExpressionTransformV2;
+use crate::pipelines::processors::transforms::ChunkOperator;
+use crate::pipelines::processors::transforms::CompoundChunkOperator;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
@@ -501,12 +501,12 @@ pub fn skip_to_next_row<R: BufferRead>(
     Ok(())
 }
 
-fn fill_default_value(expressions: &mut Vec<(EvalNode, String)>, field: &DataField) -> Result<()> {
+fn fill_default_value(operators: &mut Vec<ChunkOperator>, field: &DataField) -> Result<()> {
     if let Some(default_expr) = field.default_expr() {
-        expressions.push((
-            Evaluator::eval_physical_scalar(&serde_json::from_str(default_expr)?)?,
-            field.name().to_string(),
-        ));
+        operators.push(ChunkOperator::Map {
+            eval: Evaluator::eval_physical_scalar(&serde_json::from_str(default_expr)?)?,
+            name: field.name().to_string(),
+        });
     } else {
         // If field data type is nullable, then we'll fill it with null.
         if field.data_type().is_nullable() {
@@ -514,15 +514,18 @@ fn fill_default_value(expressions: &mut Vec<(EvalNode, String)>, field: &DataFie
                 value: DataValue::Null,
                 data_type: Box::new(field.data_type().clone()),
             });
-            expressions.push((Evaluator::eval_scalar(&scalar)?, field.name().to_string()));
+            operators.push(ChunkOperator::Map {
+                eval: Evaluator::eval_scalar(&scalar)?,
+                name: field.name().to_string(),
+            });
         } else {
-            expressions.push((
-                Evaluator::eval_scalar(&Scalar::ConstantExpr(ConstantExpr {
+            operators.push(ChunkOperator::Map {
+                eval: Evaluator::eval_scalar(&Scalar::ConstantExpr(ConstantExpr {
                     value: field.data_type().default_value(),
                     data_type: Box::new(field.data_type().clone()),
                 }))?,
-                field.name().to_string(),
-            ));
+                name: field.name().to_string(),
+            });
         }
     }
     Ok(())
@@ -547,13 +550,13 @@ async fn exprs_to_datavalue<'a>(
             "Column count doesn't match value count",
         ));
     }
-    let mut expressions = Vec::with_capacity(schema_fields_len);
+    let mut operators = Vec::with_capacity(schema_fields_len);
     for (i, expr) in exprs.iter().enumerate() {
         // `DEFAULT` in insert values will be parsed as `Expr::ColumnRef`.
         if let Expr::ColumnRef { column, .. } = expr {
             if column.name.eq_ignore_ascii_case("default") {
                 let field = schema.field(i);
-                fill_default_value(&mut expressions, field)?;
+                fill_default_value(&mut operators, field)?;
                 continue;
             }
         }
@@ -573,18 +576,18 @@ async fn exprs_to_datavalue<'a>(
                 target_type: Box::new(field_data_type.clone()),
             })
         }
-        expressions.push((
-            Evaluator::eval_scalar(&scalar)?,
-            schema.field(i).name().to_string(),
-        ));
+        operators.push(ChunkOperator::Map {
+            eval: Evaluator::eval_scalar(&scalar)?,
+            name: schema.field(i).name().to_string(),
+        });
     }
 
     let dummy = DataSchemaRefExt::create(vec![DataField::new("dummy", u8::to_data_type())]);
     let one_row_block = DataBlock::create(dummy, vec![Series::from_data(vec![1u8])]);
     let func_ctx = ctx.try_get_function_context()?;
-    let mut expression_transform = ExpressionTransformV2 {
-        expressions,
-        func_ctx,
+    let mut expression_transform = CompoundChunkOperator {
+        operators,
+        ctx: func_ctx,
     };
     let res = expression_transform.transform(one_row_block)?;
     let datavalues: Vec<DataValue> = res.columns().iter().skip(1).map(|col| col.get(0)).collect();

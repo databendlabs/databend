@@ -21,20 +21,21 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_exception::Result;
 
+use super::ChunkOperator;
+use super::CompoundChunkOperator;
 use crate::evaluator::Evaluator;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::transforms::transform::Transform;
 use crate::pipelines::processors::transforms::transform::Transformer;
-use crate::pipelines::processors::transforms::ExpressionTransformV2;
 use crate::sessions::QueryContext;
 
 pub struct TransformAddOn {
     default_expr_fields: Vec<DataField>,
     default_nonexpr_fields: Vec<DataField>,
 
-    expression_transform: ExpressionTransformV2,
+    expression_transform: CompoundChunkOperator,
     output_schema: DataSchemaRef,
 }
 
@@ -55,10 +56,12 @@ where Self: Transform
         for f in output_schema.fields() {
             if !input_schema.has_field(f.name()) {
                 if let Some(default_expr) = f.default_expr() {
-                    default_exprs.push((
-                        Evaluator::eval_physical_scalar(&serde_json::from_str(default_expr)?)?,
-                        f.name().to_string(),
-                    ));
+                    default_exprs.push(ChunkOperator::Map {
+                        name: f.name().to_string(),
+                        eval: Evaluator::eval_physical_scalar(&serde_json::from_str(
+                            default_expr,
+                        )?)?,
+                    });
                     default_expr_fields.push(f.clone());
                 } else {
                     default_nonexpr_fields.push(f.clone());
@@ -67,9 +70,9 @@ where Self: Transform
         }
 
         let func_ctx = ctx.try_get_function_context()?;
-        let expression_transform = ExpressionTransformV2 {
-            expressions: default_exprs,
-            func_ctx,
+        let expression_transform = CompoundChunkOperator {
+            ctx: func_ctx,
+            operators: default_exprs,
         };
 
         Ok(Transformer::create(input, output, Self {
