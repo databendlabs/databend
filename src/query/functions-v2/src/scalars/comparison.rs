@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
@@ -33,7 +32,8 @@ use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::ValueRef;
 use regex::bytes::Regex;
-use regex::bytes::RegexBuilder;
+
+use crate::scalars::string_multi_args::regexp;
 
 pub const ALL_CMP_TYPES: &[DataType; 14] = &[
     DataType::String,
@@ -224,8 +224,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             let pattern = if let Some(pattern) = map.get(pat) {
                 pattern
             } else {
-                let re = build_regexp_from_pattern(pat)
-                    .map_err(|err| format!("unable to build the REGEXP pattern: {err}"))?;
+                let re = regexp::build_regexp_from_pattern("regexp", pat, None)?;
                 map.insert(pat.to_vec(), re);
                 map.get(pat).unwrap()
             };
@@ -317,24 +316,4 @@ fn like_pattern_to_regex(pattern: &str) -> String {
 
     regex.push('$');
     regex
-}
-
-#[inline]
-fn build_regexp_from_pattern(pat: &[u8]) -> Result<Regex> {
-    let pattern = match pat.is_empty() {
-        true => "^$",
-        false => simdutf8::basic::from_utf8(pat).map_err(|e| {
-            ErrorCode::BadArguments(format!(
-                "Unable to convert the REGEXP pattern to string: {}",
-                e
-            ))
-        })?,
-    };
-
-    RegexBuilder::new(pattern)
-        .case_insensitive(true)
-        .build()
-        .map_err(|e| {
-            ErrorCode::BadArguments(format!("Unable to build regex from REGEXP pattern: {}", e))
-        })
 }

@@ -93,6 +93,11 @@ fn test_eq(file: &mut impl Write) {
         ),
     ]);
     run_ast(file, "1.1=1.1", &[]);
+    run_ast(
+        file,
+        r#"parse_json('[1,2,3,["a","b","c"]]') = parse_json('[1,2,3,["a","b","c"]]')"#,
+        &[],
+    );
     let table = [
         (
             "lhs",
@@ -103,9 +108,6 @@ fn test_eq(file: &mut impl Write) {
                 r#"9223372036854775807"#,
                 r#"-32768"#,
                 r#"1234.5678"#,
-                r#"1.912e2"#,
-                r#""\\\"abc\\\"""#,
-                r#""databend""#,
                 r#"{"k":"v","a":"b"}"#,
                 r#"[1,2,3,["a","b","c"]]"#,
             ]),
@@ -119,19 +121,12 @@ fn test_eq(file: &mut impl Write) {
                 r#"9223372036854775807"#,
                 r#"-32768"#,
                 r#"1234.5678"#,
-                r#"1.912e2"#,
-                r#""\\\"abc\\\"""#,
-                r#""databend""#,
                 r#"{"k":"v","a":"d"}"#,
                 r#"[1,2,3,["a","b","c"]]"#,
             ]),
         ),
     ];
-    run_ast(
-        file,
-        r#"parse_json('[1,2,3,["a","b","c"]]') = parse_json('[1,2,3,["a","b","c"]]')"#,
-        &table,
-    );
+    run_ast(file, "parse_json(lhs) = parse_json(rhs)", &table);
     run_ast(file, "lhs = rhs", &table);
 }
 
@@ -147,6 +142,11 @@ fn test_noteq(file: &mut impl Write) {
         "to_timestamp(-315360000000000)!=to_timestamp(-100)",
         &[],
     );
+    run_ast(
+        file,
+        r#"parse_json('"databend"') != parse_json('"databend"')"#,
+        &[],
+    );
     let table = [
         (
             "lhs",
@@ -155,12 +155,6 @@ fn test_noteq(file: &mut impl Write) {
                 r#"null"#,
                 r#"true"#,
                 r#"9223372036854775807"#,
-                r#"-32768"#,
-                r#"1234.5678"#,
-                r#"1.912e2"#,
-                r#""\\\"abc\\\"""#,
-                r#""databend""#,
-                r#"{"k":"v","a":"b"}"#,
                 r#"[1,2,3,["a","b","c"]]"#,
             ]),
         ),
@@ -171,21 +165,11 @@ fn test_noteq(file: &mut impl Write) {
                 r#"null"#,
                 r#"true"#,
                 r#"9223372036854775807"#,
-                r#"-32768"#,
-                r#"1234.5678"#,
-                r#"1.912e2"#,
-                r#""\\\"abc\\\"""#,
-                r#""databend""#,
-                r#"{"k":"v","a":"d"}"#,
                 r#"[1,2,3,["a","b","c"]]"#,
             ]),
         ),
     ];
-    run_ast(
-        file,
-        r#"parse_json('"databend"') != parse_json('"databend"')"#,
-        &table,
-    );
+    run_ast(file, "parse_json(lhs) != parse_json(rhs)", &table);
     run_ast(file, "lhs != rhs", &table);
 }
 
@@ -201,6 +185,7 @@ fn test_lt(file: &mut impl Write) {
         "to_timestamp(-315360000000000)<to_timestamp(-100)",
         &[],
     );
+    run_ast(file, r#"parse_json('"true"') < parse_json('"false"')"#, &[]);
     let table = [
         (
             "lhs",
@@ -212,9 +197,6 @@ fn test_lt(file: &mut impl Write) {
                 r#"-32768"#,
                 r#"1234.5678"#,
                 r#"1.912e2"#,
-                r#""\\\"abc\\\"""#,
-                r#""databend""#,
-                r#"{"k":"v","a":"b"}"#,
                 r#"[1,2,3,["a","b","c"]]"#,
             ]),
         ),
@@ -228,18 +210,11 @@ fn test_lt(file: &mut impl Write) {
                 r#"-33768"#,
                 r#"1234.5678"#,
                 r#"1.912e2"#,
-                r#""\\\"abc\\\"""#,
-                r#""databend""#,
-                r#"{"k":"a","a":"d"}"#,
                 r#"[0,2,3,["a","b","c"]]"#,
             ]),
         ),
     ];
-    run_ast(
-        file,
-        r#"parse_json('"true"') < parse_json('"false"')"#,
-        &table,
-    );
+    run_ast(file, "parse_json(lhs) >= parse_json(rhs)", &table);
     run_ast(file, "lhs < rhs", &table);
 }
 
@@ -250,6 +225,7 @@ fn test_lte(file: &mut impl Write) {
     run_ast(file, "true <= true", &[]);
     run_ast(file, "true <= null", &[]);
     run_ast(file, "true <= false", &[]);
+    run_ast(file, "parse_json('null') <= parse_json('null')", &[]);
     run_ast(
         file,
         "to_timestamp(-315360000000000)<=to_timestamp(-100)",
@@ -265,13 +241,6 @@ fn test_lte(file: &mut impl Write) {
             "lhs",
             DataType::String,
             Column::from_data(vec![
-                r#"null"#,
-                r#"true"#,
-                r#"9223372036854775807"#,
-                r#"-32768"#,
-                r#"1234.5678"#,
-                r#"1.912e2"#,
-                r#""\\\"abc\\\"""#,
                 r#""databend""#,
                 r#"{"k":"v","a":"b"}"#,
                 r#"[1,2,3,["a","b","c"]]"#,
@@ -281,20 +250,13 @@ fn test_lte(file: &mut impl Write) {
             "rhs",
             DataType::String,
             Column::from_data(vec![
-                r#"null"#,
-                r#"true"#,
-                r#"9223372036854775800"#,
-                r#"-33768"#,
-                r#"1234.5678"#,
-                r#"1.912e2"#,
-                r#""\\\"abc\\\"""#,
                 r#""databend""#,
                 r#"{"k":"a","a":"d"}"#,
                 r#"[0,2,3,["a","b","c"]]"#,
             ]),
         ),
     ];
-    run_ast(file, "parse_json('null') <= parse_json('null')", &table);
+    run_ast(file, "parse_json(lhs) <= parse_json(rhs)", &table);
     run_ast(file, "lhs <= rhs", &table);
 }
 
@@ -315,6 +277,11 @@ fn test_gt(file: &mut impl Write) {
         "to_timestamp(-315360000000000)>to_timestamp(-315360000000000)",
         &[],
     );
+    run_ast(
+        file,
+        r#"parse_json('{"k":"v","a":"b"}') > parse_json('{"k":"v","a":"d"}')"#,
+        &[],
+    );
     let table = [
         (
             "lhs",
@@ -325,11 +292,6 @@ fn test_gt(file: &mut impl Write) {
                 r#"9223372036854775807"#,
                 r#"-32768"#,
                 r#"1234.5678"#,
-                r#"1.912e2"#,
-                r#""\\\"abc\\\"""#,
-                r#""databend""#,
-                r#"{"k":"v","a":"b"}"#,
-                r#"[1,2,3,["a","b","d"]]"#,
             ]),
         ),
         (
@@ -341,19 +303,10 @@ fn test_gt(file: &mut impl Write) {
                 r#"9223372036854775806"#,
                 r#"-32768"#,
                 r#"1234.5678"#,
-                r#"1.912e2"#,
-                r#""\\\"abc\\\"""#,
-                r#""databend""#,
-                r#"{"k":"v","a":"d"}"#,
-                r#"[1,2,3,["a","b","c"]]"#,
             ]),
         ),
     ];
-    run_ast(
-        file,
-        r#"parse_json('{"k":"v","a":"b"}') > parse_json('{"k":"v","a":"d"}')"#,
-        &table,
-    );
+    run_ast(file, "parse_json(lhs) > parse_json(rhs)", &table);
     run_ast(file, "lhs > rhs", &table);
 }
 
@@ -374,19 +327,17 @@ fn test_gte(file: &mut impl Write) {
         "to_timestamp(-315360000000000)>=to_timestamp(-315360000000000)",
         &[],
     );
+    run_ast(file, "parse_json('1.912e2') >= parse_json('1.912e2')", &[]);
     let table = [
         (
             "lhs",
             DataType::String,
             Column::from_data(vec![
-                r#"null"#,
-                r#"true"#,
                 r#"9223372036854775807"#,
                 r#"-32768"#,
                 r#"1234.5678"#,
                 r#"1.912e2"#,
                 r#""\\\"abc\\\"""#,
-                r#""databend""#,
                 r#"{"k":"v","a":"b"}"#,
                 r#"[1,2,3,["a","b","d"]]"#,
             ]),
@@ -395,24 +346,17 @@ fn test_gte(file: &mut impl Write) {
             "rhs",
             DataType::String,
             Column::from_data(vec![
-                r#"null"#,
-                r#"true"#,
                 r#"9223372036854775806"#,
                 r#"-32768"#,
                 r#"1234.5678"#,
                 r#"1.912e2"#,
                 r#""\\\"abc\\\"""#,
-                r#""databend""#,
                 r#"{"k":"v","a":"d"}"#,
                 r#"[1,2,3,["a","b","c"]]"#,
             ]),
         ),
     ];
-    run_ast(
-        file,
-        "parse_json('1.912e2') >= parse_json('1.912e2')",
-        &table,
-    );
+    run_ast(file, "parse_json(lhs) >= parse_json(rhs)", &table);
     run_ast(file, "lhs >= rhs", &table);
 }
 
