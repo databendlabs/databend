@@ -93,10 +93,9 @@ pub trait Table: Sync + Send {
     async fn alter_table_cluster_keys(
         &self,
         ctx: Arc<dyn TableContext>,
-        catalog_name: &str,
         cluster_key: String,
     ) -> Result<()> {
-        let (_, _, _) = (ctx, catalog_name, cluster_key);
+        let (_, _) = (ctx, cluster_key);
 
         Err(ErrorCode::UnsupportedEngineParams(format!(
             "Unsupported clustering keys for engine: {}",
@@ -104,12 +103,8 @@ pub trait Table: Sync + Send {
         )))
     }
 
-    async fn drop_table_cluster_keys(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        catalog_name: &str,
-    ) -> Result<()> {
-        let (_, _) = (ctx, catalog_name);
+    async fn drop_table_cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
+        let _ = ctx;
 
         Err(ErrorCode::UnsupportedEngineParams(format!(
             "Unsupported clustering keys for engine: {}",
@@ -165,22 +160,16 @@ pub trait Table: Sync + Send {
     async fn commit_insertion(
         &self,
         ctx: Arc<dyn TableContext>,
-        catalog_name: &str,
         operations: Vec<DataBlock>,
         overwrite: bool,
     ) -> Result<()> {
-        let (_, _, _, _) = (ctx, catalog_name, operations, overwrite);
+        let (_, _, _) = (ctx, operations, overwrite);
 
         Ok(())
     }
 
-    async fn truncate(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        catalog_name: &str,
-        purge: bool,
-    ) -> Result<()> {
-        let (_, _, _) = (ctx, catalog_name, purge);
+    async fn truncate(&self, ctx: Arc<dyn TableContext>, purge: bool) -> Result<()> {
+        let (_, _) = (ctx, purge);
 
         Err(ErrorCode::UnImplement(format!(
             "truncate for table {} is not implemented",
@@ -227,10 +216,9 @@ pub trait Table: Sync + Send {
     async fn compact(
         &self,
         ctx: Arc<dyn TableContext>,
-        catalog: String,
         pipeline: &mut Pipeline,
     ) -> Result<Option<Arc<dyn TableMutator>>> {
-        let (_, _, _) = (ctx, catalog, pipeline);
+        let (_, _) = (ctx, pipeline);
 
         Err(ErrorCode::UnImplement(format!(
             "table {},  of engine type {}, does not support compact",
@@ -242,11 +230,10 @@ pub trait Table: Sync + Send {
     async fn recluster(
         &self,
         ctx: Arc<dyn TableContext>,
-        catalog: String,
         pipeline: &mut Pipeline,
         push_downs: Option<Extras>,
     ) -> Result<Option<Arc<dyn TableMutator>>> {
-        let (_, _, _, _) = (ctx, catalog, pipeline, push_downs);
+        let (_, _, _) = (ctx, pipeline, push_downs);
 
         Err(ErrorCode::UnImplement(format!(
             "table {},  of engine type {}, does not support recluster",

@@ -26,7 +26,7 @@ use common_meta_app::share::ShareGrantObjectPrivilege;
 use common_meta_app::share::ShareNameIdent;
 
 // Create Share Plan
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateSharePlan {
     pub if_not_exists: bool,
     pub tenant: String,
@@ -55,7 +55,7 @@ impl CreateSharePlan {
 }
 
 // Drop Share Plan
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropSharePlan {
     pub if_exists: bool,
     pub tenant: String,
@@ -81,7 +81,7 @@ impl DropSharePlan {
 }
 
 // Grant Share Object Plan
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GrantShareObjectPlan {
     pub share: String,
     pub object: ShareGrantObjectName,
@@ -95,7 +95,7 @@ impl GrantShareObjectPlan {
 }
 
 // Revoke Share Object Plan
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RevokeShareObjectPlan {
     pub share: String,
     pub object: ShareGrantObjectName,
@@ -109,7 +109,7 @@ impl RevokeShareObjectPlan {
 }
 
 // Alter Share Tenants Plan
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AlterShareTenantsPlan {
     pub share: String,
     pub if_exists: bool,
@@ -124,7 +124,7 @@ impl AlterShareTenantsPlan {
 }
 
 // desc share
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DescSharePlan {
     pub share: String,
 }
@@ -140,7 +140,7 @@ impl DescSharePlan {
 }
 
 // show share
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ShowSharesPlan {}
 
 impl ShowSharesPlan {
@@ -158,7 +158,7 @@ impl ShowSharesPlan {
 }
 
 // Show object grant privileges.
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ShowObjectGrantPrivilegesPlan {
     pub object: ShareGrantObjectName,
 }
@@ -174,7 +174,7 @@ impl ShowObjectGrantPrivilegesPlan {
 }
 
 // Show grant tenants of share.
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ShowGrantTenantsOfSharePlan {
     pub share_name: String,
 }

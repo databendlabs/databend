@@ -221,11 +221,8 @@ impl Interpreter for InsertInterpreterV2 {
                         if may_error.is_none() {
                             let append_entries = ctx.consume_precommit_blocks();
                             // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
-                            let catalog_name = ctx.get_current_catalog();
                             let commit_handle = GlobalIORuntime::instance().spawn(async move {
-                                table
-                                    .commit_insertion(ctx, &catalog_name, append_entries, overwrite)
-                                    .await
+                                table.commit_insertion(ctx, append_entries, overwrite).await
                             });
 
                             return match futures::executor::block_on(commit_handle) {

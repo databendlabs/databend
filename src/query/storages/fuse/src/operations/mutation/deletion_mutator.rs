@@ -69,7 +69,6 @@ impl DeletionMutator {
             None
         } else {
             let block_writer = BlockWriter::new(
-                &self.base_mutator.ctx,
                 &self.base_mutator.data_accessor,
                 &self.base_mutator.location_generator,
             );

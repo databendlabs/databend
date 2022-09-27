@@ -13,7 +13,6 @@
 //  limitations under the License.
 
 use common_base::base::tokio;
-use common_catalog::catalog::CATALOG_DEFAULT;
 use common_datablocks::assert_blocks_sorted_eq;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
@@ -62,12 +61,7 @@ async fn test_memorytable() -> Result<()> {
         let input_stream = futures::stream::iter::<Vec<Result<DataBlock>>>(blocks.clone());
         // with overwrite false
         table
-            .commit_insertion(
-                ctx.clone(),
-                CATALOG_DEFAULT,
-                input_stream.try_collect().await?,
-                false,
-            )
+            .commit_insertion(ctx.clone(), input_stream.try_collect().await?, false)
             .await?;
     }
 
@@ -160,12 +154,7 @@ async fn test_memorytable() -> Result<()> {
         let input_stream = futures::stream::iter::<Vec<Result<DataBlock>>>(blocks.clone());
         // with overwrite = true
         table
-            .commit_insertion(
-                ctx.clone(),
-                CATALOG_DEFAULT,
-                input_stream.try_collect().await?,
-                true,
-            )
+            .commit_insertion(ctx.clone(), input_stream.try_collect().await?, true)
             .await?;
     }
 
@@ -194,7 +183,7 @@ async fn test_memorytable() -> Result<()> {
 
     // truncate.
     {
-        table.truncate(ctx.clone(), "default", false).await?;
+        table.truncate(ctx.clone(), false).await?;
 
         let source_plan = table.read_plan(ctx.clone(), None).await?;
         let stream = table.read(ctx, &source_plan).await?;

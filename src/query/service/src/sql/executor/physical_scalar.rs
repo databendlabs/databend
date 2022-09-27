@@ -41,6 +41,7 @@ pub enum PhysicalScalar {
         args: Vec<(PhysicalScalar, DataTypeImpl)>,
         return_type: DataTypeImpl,
     },
+
     Cast {
         input: Box<PhysicalScalar>,
         target: DataTypeImpl,
@@ -101,7 +102,10 @@ impl PhysicalScalar {
 pub struct AggregateFunctionDesc {
     pub sig: AggregateFunctionSignature,
     pub column_id: ColumnID,
-    pub args: Vec<ColumnID>,
+    pub args: Vec<usize>,
+
+    /// Only used for debugging
+    pub arg_indices: Vec<IndexType>,
 }
 
 impl AggregateFunctionDesc {
@@ -109,10 +113,9 @@ impl AggregateFunctionDesc {
         Ok(format!(
             "{}({})",
             self.sig.name,
-            self.args
+            self.arg_indices
                 .iter()
-                .map(|arg| {
-                    let index = arg.parse::<IndexType>()?;
+                .map(|&index| {
                     let column = metadata.read().column(index).clone();
                     Ok(column.name().to_string())
                 })

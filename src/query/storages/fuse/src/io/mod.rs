@@ -14,7 +14,6 @@
 
 mod locations;
 mod read;
-pub use common_storages_util::retry;
 mod write;
 
 pub use locations::TableMetaLocationGenerator;

@@ -62,7 +62,7 @@ impl BlockBloomFilterIndexReader for Location {
     ) -> Result<BlockBloomFilterIndex> {
         let index_version = BlockBloomFilterIndexVersion::try_from(self.1)?;
         match index_version {
-            BlockBloomFilterIndexVersion::V1(_) => {
+            BlockBloomFilterIndexVersion::V2(_) => {
                 let block =
                     load_bloom_filter_by_columns(ctx, dal, columns, &self.0, index_length).await?;
                 Ok(BlockBloomFilterIndex::new(block))
@@ -207,23 +207,30 @@ mod util_v1 {
         {
             let cache_key = format!("{path}-{idx}");
             if let Some(bloom_index_cache) = CacheManager::instance().get_bloom_index_cache() {
-                let cache = &mut bloom_index_cache.write().await;
-                if let Some(bytes) = cache.get(&cache_key) {
-                    Ok((bytes.clone(), idx))
-                } else {
-                    let bytes = Arc::new(
-                        // As suggested by Winter, execute task of loading data in storage runtime
-                        load_index_column_data_from_storage(
-                            col_meta.clone(),
-                            dal.clone(),
-                            path.to_owned(),
-                        )
-                        .execute_in_runtime(&storage_runtime)
-                        .await??,
-                    );
-                    cache.put(cache_key, bytes.clone());
-                    Ok((bytes, idx))
+                {
+                    // get by cache
+                    let mut bloom_index_cache_guard = bloom_index_cache.write();
+
+                    if let Some(bytes) = bloom_index_cache_guard.get(&cache_key) {
+                        return Ok((bytes.clone(), idx));
+                    }
                 }
+
+                // missing cache
+                let bytes = Arc::new(
+                    // As suggested by Winter, execute task of loading data in storage runtime
+                    load_index_column_data_from_storage(
+                        col_meta.clone(),
+                        dal.clone(),
+                        path.to_owned(),
+                    )
+                    .execute_in_runtime(&storage_runtime)
+                    .await??,
+                );
+
+                let mut bloom_index_cache_guard = bloom_index_cache.write();
+                bloom_index_cache_guard.put(cache_key, bytes.clone());
+                Ok((bytes, idx))
             } else {
                 let bytes = Arc::new(
                     load_index_column_data_from_storage(

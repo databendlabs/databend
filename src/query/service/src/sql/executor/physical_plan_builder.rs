@@ -235,88 +235,152 @@ impl PhysicalPlanBuilder {
                     .iter()
                     .map(|v| v.index.to_string())
                     .collect();
-                let agg_funcs: Vec<AggregateFunctionDesc> = agg.aggregate_functions.iter().map(|v| {
-                    if let Scalar::AggregateFunction(agg) = &v.scalar {
-                        Ok(AggregateFunctionDesc {
-                            sig: AggregateFunctionSignature {
-                                name: agg.func_name.clone(),
-                                args: agg.args.iter().map(|s| {
-                                    s.data_type()
-                                }).collect(),
-                                params: agg.params.clone(),
-                                return_type: *agg.return_type.clone(),
-                            },
-                            column_id: v.index.to_string(),
-                            args: agg.args.iter().map(|arg| {
-                                if let Scalar::BoundColumnRef(col) = arg {
-                                    Ok(col.column.index.to_string())
-                                } else {
-                                    Err(ErrorCode::LogicalError(
-                                        "Aggregate function argument must be a BoundColumnRef".to_string()
-                                    ))
-                                }
-                            }).collect::<Result<_>>()?,
-                        })
-                    } else {
-                        Err(ErrorCode::LogicalError("Expected aggregate function".to_string()))
-                    }
-                }).collect::<Result<_>>()?;
                 let result = match &agg.mode {
-                    AggregateMode::Partial => match input {
-                        PhysicalPlan::Exchange(PhysicalExchange { input, kind, .. }) => {
-                            let aggregate_partial = AggregatePartial {
-                                input,
+                    AggregateMode::Partial => {
+                        let input_schema = input.output_schema()?;
+                        let agg_funcs: Vec<AggregateFunctionDesc> = agg.aggregate_functions.iter().map(|v| {
+                                if let Scalar::AggregateFunction(agg) = &v.scalar {
+                                    Ok(AggregateFunctionDesc {
+                                        sig: AggregateFunctionSignature {
+                                            name: agg.func_name.clone(),
+                                            args: agg.args.iter().map(|s| {
+                                                s.data_type()
+                                            }).collect(),
+                                            params: agg.params.clone(),
+                                            return_type: *agg.return_type.clone(),
+                                        },
+                                        column_id: v.index.to_string(),
+                                        args: agg.args.iter().map(|arg| {
+                                            if let Scalar::BoundColumnRef(col) = arg {
+                                                input_schema.index_of(&col.column.index.to_string())
+                                            } else {
+                                                Err(ErrorCode::LogicalError(
+                                                    "Aggregate function argument must be a BoundColumnRef".to_string()
+                                                ))
+                                            }
+                                        }).collect::<Result<_>>()?,
+                                        arg_indices: agg.args.iter().map(|arg| {
+                                            if let Scalar::BoundColumnRef(col) = arg {
+                                                Ok(col.column.index)
+                                            } else {
+                                                Err(ErrorCode::LogicalError(
+                                                    "Aggregate function argument must be a BoundColumnRef".to_string()
+                                                ))
+                                            }
+                                        }).collect::<Result<_>>()?,
+                                    })
+                                } else {
+                                    Err(ErrorCode::LogicalError("Expected aggregate function".to_string()))
+                                }
+                            }).collect::<Result<_>>()?;
+
+                        match input {
+                            PhysicalPlan::Exchange(PhysicalExchange { input, kind, .. }) => {
+                                let aggregate_partial = AggregatePartial {
+                                    input,
+                                    agg_funcs,
+                                    group_by: group_items,
+                                };
+
+                                let output_schema = aggregate_partial.output_schema()?;
+                                let group_by_key_field =
+                                    output_schema.field_with_name("_group_by_key")?;
+
+                                PhysicalPlan::Exchange(PhysicalExchange {
+                                    kind,
+                                    input: Box::new(PhysicalPlan::AggregatePartial(
+                                        aggregate_partial,
+                                    )),
+                                    keys: vec![PhysicalScalar::Variable {
+                                        column_id: group_by_key_field.name().clone(),
+                                        data_type: group_by_key_field.data_type().clone(),
+                                    }],
+                                })
+                            }
+                            _ => PhysicalPlan::AggregatePartial(AggregatePartial {
                                 agg_funcs,
                                 group_by: group_items,
-                            };
-
-                            let output_schema = aggregate_partial.output_schema()?;
-                            let group_by_key_field =
-                                output_schema.field_with_name("_group_by_key")?;
-
-                            PhysicalPlan::Exchange(PhysicalExchange {
-                                kind,
-                                input: Box::new(PhysicalPlan::AggregatePartial(aggregate_partial)),
-                                keys: vec![PhysicalScalar::Variable {
-                                    column_id: group_by_key_field.name().clone(),
-                                    data_type: group_by_key_field.data_type().clone(),
-                                }],
-                            })
+                                input: Box::new(input),
+                            }),
                         }
-                        _ => PhysicalPlan::AggregatePartial(AggregatePartial {
-                            agg_funcs,
-                            group_by: group_items,
-                            input: Box::new(input),
-                        }),
-                    },
+                    }
 
                     // Hack to get before group by schema, we should refactor this
-                    AggregateMode::Final => match input {
-                        PhysicalPlan::AggregatePartial(ref agg) => {
-                            let before_group_by_schema = agg.input.output_schema()?;
-                            PhysicalPlan::AggregateFinal(AggregateFinal {
-                                input: Box::new(input),
-                                group_by: group_items,
-                                agg_funcs,
-                                before_group_by_schema,
-                            })
-                        }
+                    AggregateMode::Final => {
+                        let input_schema = match input {
+                            PhysicalPlan::AggregatePartial(ref agg) => agg.input.output_schema()?,
 
-                        PhysicalPlan::Exchange(PhysicalExchange {
-                            input: box PhysicalPlan::AggregatePartial(ref agg),
-                            ..
-                        }) => {
-                            let before_group_by_schema = agg.input.output_schema()?;
-                            PhysicalPlan::AggregateFinal(AggregateFinal {
-                                input: Box::new(input),
-                                group_by: group_items,
-                                agg_funcs,
-                                before_group_by_schema,
-                            })
-                        }
+                            PhysicalPlan::Exchange(PhysicalExchange {
+                                input: box PhysicalPlan::AggregatePartial(ref agg),
+                                ..
+                            }) => agg.input.output_schema()?,
 
-                        _ => unreachable!(),
-                    },
+                            _ => unreachable!(),
+                        };
+
+                        let agg_funcs: Vec<AggregateFunctionDesc> = agg.aggregate_functions.iter().map(|v| {
+                            if let Scalar::AggregateFunction(agg) = &v.scalar {
+                                Ok(AggregateFunctionDesc {
+                                    sig: AggregateFunctionSignature {
+                                        name: agg.func_name.clone(),
+                                        args: agg.args.iter().map(|s| {
+                                            s.data_type()
+                                        }).collect(),
+                                        params: agg.params.clone(),
+                                        return_type: *agg.return_type.clone(),
+                                    },
+                                    column_id: v.index.to_string(),
+                                    args: agg.args.iter().map(|arg| {
+                                        if let Scalar::BoundColumnRef(col) = arg {
+                                            input_schema.index_of(&col.column.index.to_string())
+                                        } else {
+                                            Err(ErrorCode::LogicalError(
+                                                "Aggregate function argument must be a BoundColumnRef".to_string()
+                                            ))
+                                        }
+                                    }).collect::<Result<_>>()?,
+                                    arg_indices: agg.args.iter().map(|arg| {
+                                        if let Scalar::BoundColumnRef(col) = arg {
+                                            Ok(col.column.index)
+                                        } else {
+                                            Err(ErrorCode::LogicalError(
+                                                "Aggregate function argument must be a BoundColumnRef".to_string()
+                                            ))
+                                        }
+                                    }).collect::<Result<_>>()?,
+                                })
+                            } else {
+                                Err(ErrorCode::LogicalError("Expected aggregate function".to_string()))
+                            }
+                        }).collect::<Result<_>>()?;
+
+                        match input {
+                            PhysicalPlan::AggregatePartial(ref agg) => {
+                                let before_group_by_schema = agg.input.output_schema()?;
+                                PhysicalPlan::AggregateFinal(AggregateFinal {
+                                    input: Box::new(input),
+                                    group_by: group_items,
+                                    agg_funcs,
+                                    before_group_by_schema,
+                                })
+                            }
+
+                            PhysicalPlan::Exchange(PhysicalExchange {
+                                input: box PhysicalPlan::AggregatePartial(ref agg),
+                                ..
+                            }) => {
+                                let before_group_by_schema = agg.input.output_schema()?;
+                                PhysicalPlan::AggregateFinal(AggregateFinal {
+                                    input: Box::new(input),
+                                    group_by: group_items,
+                                    agg_funcs,
+                                    before_group_by_schema,
+                                })
+                            }
+
+                            _ => unreachable!(),
+                        }
+                    }
                     AggregateMode::Initial => unreachable!(),
                 };
 

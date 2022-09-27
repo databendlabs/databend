@@ -32,6 +32,7 @@ use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::SinkPipeBuilder;
 use common_pipeline_sources::processors::sources::input_formats::InputContext;
 use common_storage::init_operator;
+use opendal::layers::SubdirLayer;
 use opendal::Operator;
 use parking_lot::Mutex;
 use tracing::info;
@@ -67,11 +68,12 @@ impl StageTable {
         guard.clone()
     }
 
-    /// TODO: we should support construct operator with
-    /// correct root.
+    /// Get operator with correctly prefix.
     pub async fn get_op(ctx: &Arc<dyn TableContext>, stage: &UserStageInfo) -> Result<Operator> {
         if stage.stage_type == StageType::Internal {
+            let prefix = format!("/stage/{}/", stage.stage_name);
             ctx.get_storage_operator()
+                .map(|op| op.layer(SubdirLayer::new(&prefix)))
         } else {
             Ok(init_operator(&stage.stage_params.storage)?)
         }
@@ -154,7 +156,6 @@ impl Table for StageTable {
     async fn commit_insertion(
         &self,
         ctx: Arc<dyn TableContext>,
-        _catalog_name: &str,
         operations: Vec<DataBlock>,
         _overwrite: bool,
     ) -> Result<()> {
@@ -163,8 +164,7 @@ impl Table for StageTable {
             self.table_info.stage_info.file_format_options.format
         );
         let path = format!(
-            "{}{}.{}",
-            self.table_info.path,
+            "{}.{}",
             uuid::Uuid::new_v4(),
             format_name.to_ascii_lowercase()
         );
@@ -180,7 +180,6 @@ impl Table for StageTable {
 
         let format_options = &self.table_info.stage_info.file_format_options;
         {
-            format_settings.skip_header = format_options.skip_header;
             if !format_options.field_delimiter.is_empty() {
                 format_settings.field_delimiter =
                     format_options.field_delimiter.as_bytes().to_vec();
@@ -215,7 +214,7 @@ impl Table for StageTable {
     }
 
     // Truncate the stage file.
-    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: &str, _: bool) -> Result<()> {
+    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: bool) -> Result<()> {
         Err(ErrorCode::UnImplement(
             "S3 external table truncate() unimplemented yet!",
         ))

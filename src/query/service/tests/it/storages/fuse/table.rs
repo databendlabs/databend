@@ -180,9 +180,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
 
     // 1. truncate empty table
     let prev_version = table.get_table_info().ident.seq;
-    let r = table
-        .truncate(ctx.clone(), &fixture.default_catalog_name(), false)
-        .await;
+    let r = table.truncate(ctx.clone(), false).await;
     let table = fixture.latest_default_table().await?;
     // no side effects
     assert_eq!(prev_version, table.get_table_info().ident.seq);
@@ -214,9 +212,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
     assert_eq!(stats.read_rows, (num_blocks * rows_per_block) as usize);
 
     // truncate
-    let r = table
-        .truncate(ctx.clone(), &fixture.default_catalog_name(), false)
-        .await;
+    let r = table.truncate(ctx.clone(), false).await;
     assert!(r.is_ok());
 
     // get the latest tbl

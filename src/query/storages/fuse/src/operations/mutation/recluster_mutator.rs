@@ -199,7 +199,7 @@ impl TableMutator for ReclusterMutator {
         Ok(false)
     }
 
-    async fn try_commit(&self, catalog_name: &str, table_info: &TableInfo) -> Result<()> {
+    async fn try_commit(&self, table_info: &TableInfo) -> Result<()> {
         let base_mutator = self.base_mutator.clone();
         let ctx = base_mutator.ctx.clone();
         let (mut segments, mut summary) = self.base_mutator.generate_segments().await?;
@@ -225,7 +225,6 @@ impl TableMutator for ReclusterMutator {
 
         FuseTable::commit_to_meta_server(
             ctx.as_ref(),
-            catalog_name,
             table_info,
             &self.base_mutator.location_generator,
             new_snapshot,

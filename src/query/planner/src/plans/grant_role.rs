@@ -18,7 +18,7 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_meta_types::PrincipalIdentity;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GrantRolePlan {
     pub principal: PrincipalIdentity,
     pub role: String,
