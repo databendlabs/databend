@@ -25,6 +25,7 @@ use common_expression::types::NumberType;
 use common_expression::types::StringType;
 use common_expression::types::TimestampType;
 use common_expression::types::ValueType;
+use common_expression::types::VariantType;
 use common_expression::values::Value;
 use common_expression::with_number_mapped_type;
 use common_expression::FunctionContext;
@@ -34,10 +35,11 @@ use common_expression::ValueRef;
 use regex::bytes::Regex;
 use regex::bytes::RegexBuilder;
 
-pub const ALL_CMP_TYPES: &[DataType; 13] = &[
+pub const ALL_CMP_TYPES: &[DataType; 14] = &[
     DataType::String,
     DataType::Boolean,
     DataType::Timestamp,
+    DataType::Variant,
     DataType::Number(UInt8),
     DataType::Number(UInt16),
     DataType::Number(UInt32),
@@ -55,7 +57,7 @@ macro_rules! with_cmp_mapped_type {
     (| $t:tt | $($tail:tt)*) => {
         match_template::match_template! {
             $t = [
-                String => StringType, Timestamp => TimestampType
+                String => StringType, Timestamp => TimestampType, Variant => VariantType
             ],
             $($tail)*
         }
@@ -192,57 +194,6 @@ pub fn register(registry: &mut FunctionRegistry) {
             _ => todo!(),
         });
     }
-
-    // TODO: wait @b41sh complete jsonb cmp, and need support
-    // `VariantType like VariantType`
-    // `VariantType regexp VariantType`
-    // registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
-    //     "eq",
-    //     FunctionProperty::default(),
-    //     |_lhs, _rhs| None,
-    //     |lhs, rhs, _| lhs.cmp(rhs) == Ordering::Equal,
-    // );
-
-    // registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
-    //     "gt",
-    //     FunctionProperty::default(),
-    //     |_lhs, _rhs| None,
-    //     |lhs, rhs, _| lhs.cmp(rhs) == Ordering::Greater,
-    // );
-
-    // registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
-    //     "lt",
-    //     FunctionProperty::default(),
-    //     |_lhs, _rhs| None,
-    //     |lhs, rhs, _| lhs.cmp(rhs) == Ordering::Less,
-    // );
-
-    // registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
-    //     "gte",
-    //     FunctionProperty::default(),
-    //     |_lhs, _rhs| None,
-    //     |lhs, rhs, _| {
-    //         let res = lhs.cmp(rhs);
-    //         res == Ordering::Equal || res == Ordering::Greater
-    //     },
-    // );
-
-    // registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
-    //     "lte",
-    //     FunctionProperty::default(),
-    //     |_lhs, _rhs| None,
-    //     |lhs, rhs, _| {
-    //         let res = lhs.cmp(rhs);
-    //         res == Ordering::Equal || res == Ordering::Less
-    //     },
-    // );
-
-    // registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
-    //     "noteq",
-    //     FunctionProperty::default(),
-    //     |_lhs, _rhs| None,
-    //     |lhs, rhs, _| lhs.cmp(rhs) != Ordering::Equal,
-    // );
 
     registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
         "like",

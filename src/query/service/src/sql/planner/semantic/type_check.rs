@@ -193,10 +193,29 @@ impl<'a> TypeChecker<'a> {
             Expr::IsNull {
                 span, expr, not, ..
             } => {
-                let func_name = if *not { "is_not_null" } else { "is_null" };
-
-                self.resolve_function(span, func_name, &[expr.as_ref()], required_type)
+                let args = &[expr.as_ref()];
+                if *not {
+                    self.resolve_function(span, "is_not_null", args, required_type)
+                        .await?
+                } else {
+                    self.resolve_function(
+                        span,
+                        "not",
+                        &[&Expr::FunctionCall {
+                            span,
+                            distinct: false,
+                            name: Identifier {
+                                name: "is_not_null".to_string(),
+                                quote: None,
+                                span: span[0].clone(),
+                            },
+                            args: vec![(args[0]).clone()],
+                            params: vec![],
+                        }],
+                        None,
+                    )
                     .await?
+                }
             }
 
             Expr::IsDistinctFrom {
@@ -283,8 +302,28 @@ impl<'a> TypeChecker<'a> {
                         exprs: list.clone(),
                     };
                     let args = vec![expr.as_ref(), &tuple_expr];
-                    self.resolve_function(span, func_name, &args, required_type)
+                    if *not {
+                        self.resolve_function(
+                            span,
+                            "not",
+                            &[&Expr::FunctionCall {
+                                span,
+                                distinct: false,
+                                name: Identifier {
+                                    name: "in".to_string(),
+                                    quote: None,
+                                    span: span[0].clone(),
+                                },
+                                args: args.iter().copied().cloned().collect(),
+                                params: vec![],
+                            }],
+                            None,
+                        )
                         .await?
+                    } else {
+                        self.resolve_function(span, "in", &args, required_type)
+                            .await?
+                    }
                 } else {
                     let mut result = list
                         .iter()
@@ -1392,8 +1431,6 @@ impl<'a> TypeChecker<'a> {
                 | "current_user"
                 | "connection_id"
                 | "timezone"
-                | "is_null"
-                | "not_in"
                 | "nullif"
                 | "ifnull"
                 | "coalesce"
@@ -1459,50 +1496,6 @@ impl<'a> TypeChecker<'a> {
                             span,
                             lit: Literal::String(tz),
                         },
-                        None,
-                    )
-                    .await,
-                )
-            }
-            ("is_null", &[arg_x]) => {
-                // Rewrite `is_null(x)` to `not(is_not_null(x))`
-                Some(
-                    self.resolve_function(
-                        span,
-                        "not",
-                        &[&Expr::FunctionCall {
-                            span,
-                            distinct: false,
-                            name: Identifier {
-                                name: "is_not_null".to_string(),
-                                quote: None,
-                                span: span[0].clone(),
-                            },
-                            args: vec![(*arg_x).clone()],
-                            params: vec![],
-                        }],
-                        None,
-                    )
-                    .await,
-                )
-            }
-            ("not_in", args) => {
-                // Rewrite `not_in(x)` to `not(in(x))`
-                Some(
-                    self.resolve_function(
-                        span,
-                        "not",
-                        &[&Expr::FunctionCall {
-                            span,
-                            distinct: false,
-                            name: Identifier {
-                                name: "in".to_string(),
-                                quote: None,
-                                span: span[0].clone(),
-                            },
-                            args: args.iter().copied().cloned().collect(),
-                            params: vec![],
-                        }],
                         None,
                     )
                     .await,
