@@ -176,8 +176,7 @@ impl RaftNetwork<LogEntry> for Network {
 
         let mut client = self.make_client(&target).await?;
 
-        let mut last_err = None;
-        let mut mes = Default::default();
+        let mut last_err = anyhow::anyhow!("send_append_entries failed: out of chance");
 
         for back_off in self.back_off() {
             let req = common_tracing::inject_span_to_tonic_request(&rpc);
@@ -189,26 +188,26 @@ impl RaftNetwork<LogEntry> for Network {
 
             match resp {
                 Ok(resp) => {
-                    mes = resp.into_inner();
-                    let resp = serde_json::from_str(&mes.data)?;
-                    return Ok(resp);
+                    let mes = resp.into_inner();
+                    match serde_json::from_str(&mes.data) {
+                        Ok(resp) => return Ok(resp),
+                        Err(e) => {
+                            incr_meta_metrics_sent_failure_to_peer(&target);
+                            last_err = anyhow::anyhow!("send_append_entries failed: {:?}", e);
+                            // backoff and retry sending
+                            sleep(back_off).await;
+                        }
+                    }
                 }
                 Err(e) => {
-                    incr_meta_metrics_sent_failure_to_peer(&target);
-                    last_err = Some(e);
+                    // parsing error, won't increase send failures
+                    last_err = anyhow::anyhow!("send_append_entries failed: {:?}", e);
                     // backoff and retry sending
                     sleep(back_off).await;
                 }
             }
         }
-
-        if let Some(e) = last_err {
-            // all back-offed requests failed
-            return Err(anyhow::Error::from(e));
-        }
-
-        let resp = serde_json::from_str(&mes.data)?;
-        Ok(resp)
+        Err(last_err)
     }
 
     #[tracing::instrument(level = "debug", skip_all, fields(id=self.sto.id, target=target))]
@@ -226,8 +225,7 @@ impl RaftNetwork<LogEntry> for Network {
         let start = Instant::now();
         let mut client = self.make_client(&target).await?;
 
-        let mut mes = Default::default();
-        let mut last_err = None;
+        let mut last_err = anyhow::anyhow!("send_install_snapshot failed: out of chance");
         for back_off in self.back_off() {
             let req = common_tracing::inject_span_to_tonic_request(&rpc);
 
@@ -241,17 +239,28 @@ impl RaftNetwork<LogEntry> for Network {
                 Ok(resp) => {
                     incr_meta_metrics_snapshot_send_success_to_peer(&target);
                     incr_meta_metrics_snapshot_send_inflights_to_peer(&target, -1);
-                    mes = resp.into_inner();
-                    let resp = serde_json::from_str(&mes.data)?;
+                    let mes = resp.into_inner();
+                    match serde_json::from_str(&mes.data) {
+                        Ok(resp) => {
+                            sample_meta_metrics_snapshot_sent(
+                                &target,
+                                start.elapsed().as_secs() as f64,
+                            );
 
-                    sample_meta_metrics_snapshot_sent(&target, start.elapsed().as_secs() as f64);
-
-                    return Ok(resp);
+                            return Ok(resp);
+                        }
+                        Err(e) => {
+                            // parsing error, won't increase sending failures
+                            last_err = anyhow::anyhow!("send_install_snapshot failed: {:?}", e);
+                            // back off and retry sending
+                            sleep(back_off).await;
+                        }
+                    }
                 }
                 Err(e) => {
                     incr_meta_metrics_sent_failure_to_peer(&target);
                     incr_meta_metrics_snapshot_send_failures_to_peer(&target);
-                    last_err = Some(e);
+                    last_err = anyhow::anyhow!("send_install_snapshot failed: {:?}", e);
 
                     // back off and retry sending
                     sleep(back_off).await;
@@ -259,16 +268,7 @@ impl RaftNetwork<LogEntry> for Network {
             }
         }
 
-        if let Some(e) = last_err {
-            // all back-offed requests failed
-            return Err(anyhow::Error::from(e));
-        }
-
-        let resp = serde_json::from_str(&mes.data)?;
-
-        sample_meta_metrics_snapshot_sent(&target, start.elapsed().as_secs() as f64);
-
-        Ok(resp)
+        Err(last_err)
     }
 
     #[tracing::instrument(level = "debug", skip_all, fields(id=self.sto.id, target=target))]
@@ -277,8 +277,7 @@ impl RaftNetwork<LogEntry> for Network {
 
         let mut client = self.make_client(&target).await?;
 
-        let mut mes = Default::default();
-        let mut last_err = None;
+        let mut last_err = anyhow::anyhow!("send_vote failed: out of chance");
         for back_off in self.back_off() {
             let req = common_tracing::inject_span_to_tonic_request(&rpc);
 
@@ -289,25 +288,26 @@ impl RaftNetwork<LogEntry> for Network {
 
             match resp {
                 Ok(resp) => {
-                    mes = resp.into_inner();
-                    let resp = serde_json::from_str(&mes.data)?;
-                    return Ok(resp);
+                    let mes = resp.into_inner();
+                    match serde_json::from_str(&mes.data) {
+                        Ok(resp) => return Ok(resp),
+                        Err(e) => {
+                            // parsing error, won't increase sending errors
+                            last_err = anyhow::anyhow!("send_vote failed: {:?}", e);
+                            // back off and retry
+                            sleep(back_off).await;
+                        }
+                    }
                 }
                 Err(e) => {
                     incr_meta_metrics_sent_failure_to_peer(&target);
-                    last_err = Some(e);
+                    last_err = anyhow::anyhow!("send_vote failed: {:?}", e);
                     // back off and retry
                     sleep(back_off).await;
                 }
             }
         }
 
-        if let Some(e) = last_err {
-            // all back-offed requests failed
-            return Err(anyhow::Error::from(e));
-        }
-
-        let resp = serde_json::from_str(&mes.data)?;
-        Ok(resp)
+        Err(last_err)
     }
 }
