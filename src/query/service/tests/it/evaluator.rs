@@ -13,23 +13,15 @@
 // limitations under the License.
 
 use common_base::base::tokio;
-use common_datablocks::DataBlock;
-use common_datavalues::Column;
-use common_datavalues::DataField;
 use common_datavalues::DataValue;
 use common_datavalues::Float64Type;
 use common_datavalues::Int32Type;
-use common_datavalues::Int64Type;
-use common_datavalues::PrimitiveColumn;
 use common_exception::Result;
 use databend_query::evaluator::Evaluator;
 use databend_query::sessions::TableContext;
-use databend_query::sql::plans::BoundColumnRef;
 use databend_query::sql::plans::ConstantExpr;
 use databend_query::sql::plans::FunctionCall;
 use databend_query::sql::plans::Scalar;
-use databend_query::sql::ColumnBinding;
-use databend_query::sql::Visibility;
 
 use crate::tests::create_query_context;
 
