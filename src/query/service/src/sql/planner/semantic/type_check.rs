@@ -296,7 +296,6 @@ impl<'a> TypeChecker<'a> {
                         .iter()
                         .all(|e| matches!(e, Expr::Literal { lit, .. } if lit != &Literal::Null))
                 {
-                    let func_name = if *not { "not_in" } else { "in" };
                     let tuple_expr = Expr::Tuple {
                         span,
                         exprs: list.clone(),

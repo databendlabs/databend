@@ -254,7 +254,7 @@ fn vectorize_regexp(
                 let arg1_iter = StringType::iter_column(&arg1);
                 let mut builder = MutableBitmap::with_capacity(arg1.len());
                 for arg1 in arg1_iter {
-                    builder.push(func(arg1, arg2.clone(), &mut map, ctx)?);
+                    builder.push(func(arg1, arg2, &mut map, ctx)?);
                 }
                 Ok(Value::Column(builder.into()))
             }
@@ -262,7 +262,7 @@ fn vectorize_regexp(
                 let arg2_iter = StringType::iter_column(&arg2);
                 let mut builder = MutableBitmap::with_capacity(arg2.len());
                 for arg2 in arg2_iter {
-                    builder.push(func(arg1.clone(), arg2, &mut map, ctx)?);
+                    builder.push(func(arg1, arg2, &mut map, ctx)?);
                 }
                 Ok(Value::Column(builder.into()))
             }
