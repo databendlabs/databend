@@ -50,7 +50,6 @@ metrics = "0.20.1"
 num = "0.4.0"
 once_cell = "1.15.0"
 poem = { version = "1", features = ["rustls"] }
-prometheus = { version = "0.13.2", features = ["process"] }
 prost = "0.11.0"
 semver = "1.0.14"
 serde = { version = "1.0.145", features = ["derive"] }
