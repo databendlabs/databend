@@ -170,8 +170,12 @@ impl Pipeline {
             self.on_init = Some(Arc::new(Box::new(move || {
                 old_on_init()?;
                 f()
-            })))
+            })));
+
+            return;
         }
+
+        self.on_init = Some(Arc::new(Box::new(f)));
     }
 
     pub fn set_on_finished<F: Fn(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>(

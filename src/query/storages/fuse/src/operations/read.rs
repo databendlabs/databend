@@ -56,9 +56,9 @@ impl FuseTable {
 
     pub fn projection_of_push_downs(&self, push_downs: &Option<Extras>) -> Projection {
         if let Some(Extras {
-                        projection: Some(prj),
-                        ..
-                    }) = push_downs
+            projection: Some(prj),
+            ..
+        }) = push_downs
         {
             prj.clone()
         } else {
@@ -99,14 +99,12 @@ impl FuseTable {
 
             // TODO: need refactor
             pipeline.set_on_init(move || {
-                println!("on init");
                 let table_info = table_info.clone();
+                let ctx = query_ctx.clone();
                 let push_downs = push_downs.clone();
                 let lazy_init_segments = lazy_init_segments.clone();
-                let runtime = Runtime::with_worker_threads(2, None)?;
 
-                let ctx = query_ctx.clone();
-                let re_partitions = runtime.spawn(async move {
+                let partitions = Runtime::with_worker_threads(2, None)?.block_on(async move {
                     let (_statistics, partitions) = FuseTable::prune_snapshot_blocks(
                         ctx,
                         push_downs,
@@ -114,21 +112,11 @@ impl FuseTable {
                         lazy_init_segments,
                         0,
                     )
-                        .await?;
+                    .await?;
 
-                    Ok(partitions)
-                });
+                    Result::<_, ErrorCode>::Ok(partitions)
+                })?;
 
-                let partitions = match futures::executor::block_on(re_partitions) {
-                    Ok(Ok(partitions)) => Ok(partitions),
-                    Ok(Err(error)) => Err(error),
-                    Err(cause) => Err(ErrorCode::PanicError(format!(
-                        "Maybe panic while in eval index. {}",
-                        cause
-                    ))),
-                }?;
-
-                println!("new partitions {:?}", partitions);
                 query_ctx.try_set_partitions(partitions)?;
 
                 Ok(())
@@ -209,7 +197,7 @@ struct PrewhereData {
 }
 
 enum State {
-    ReadDataPrewhere(PartInfoPtr),
+    ReadDataPrewhere(Option<PartInfoPtr>),
     ReadDataRemain(PartInfoPtr, PrewhereData),
     PrewhereFilter(PartInfoPtr, DataChunks),
     Deserialize(PartInfoPtr, DataChunks, Option<PrewhereData>),
@@ -239,54 +227,30 @@ impl FuseTableSource {
         remain_reader: Arc<Option<BlockReader>>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
-        let mut partitions = ctx.try_get_partitions(1)?;
-        match partitions.is_empty() {
-            true => Ok(ProcessorPtr::create(Box::new(FuseTableSource {
-                ctx,
-                output,
-                scan_progress,
-                state: State::Finish,
-                output_reader,
-                prewhere_reader,
-                prewhere_filter,
-                remain_reader,
-            }))),
-            false => Ok(ProcessorPtr::create(Box::new(FuseTableSource {
-                ctx,
-                output,
-                scan_progress,
-                state: State::ReadDataPrewhere(partitions.remove(0)),
-                output_reader,
-                prewhere_reader,
-                prewhere_filter,
-                remain_reader,
-            }))),
-        }
+        Ok(ProcessorPtr::create(Box::new(FuseTableSource {
+            ctx,
+            output,
+            scan_progress,
+            state: State::ReadDataPrewhere(None),
+            output_reader,
+            prewhere_reader,
+            prewhere_filter,
+            remain_reader,
+        })))
     }
 
     fn generate_one_block(&mut self, block: DataBlock) -> Result<()> {
-        let mut partitions = self.ctx.try_get_partitions(1)?;
+        let new_part = self.ctx.try_get_part();
         // resort and prune columns
         let block = block.resort(self.output_reader.schema())?;
-        self.state = match partitions.is_empty() {
-            true => State::Generated(None, block),
-            false => State::Generated(Some(partitions.remove(0)), block),
-        };
+        self.state = State::Generated(new_part, block);
         Ok(())
     }
 
     fn generate_one_empty_block(&mut self) -> Result<()> {
-        let mut partitions = self.ctx.try_get_partitions(1)?;
-        self.state = match partitions.is_empty() {
-            true => State::Generated(
-                None,
-                DataBlock::empty_with_schema(self.output_reader.schema()),
-            ),
-            false => State::Generated(
-                Some(partitions.remove(0)),
-                DataBlock::empty_with_schema(self.output_reader.schema()),
-            ),
-        };
+        let schema = self.output_reader.schema();
+        let mut new_part = self.ctx.try_get_part();
+        self.state = Generated(new_part, DataBlock::empty_with_schema(schema));
         Ok(())
     }
 }
@@ -302,6 +266,13 @@ impl Processor for FuseTableSource {
     }
 
     fn event(&mut self) -> Result<Event> {
+        if matches!(self.state, State::ReadDataPrewhere(None)) {
+            self.state = match self.ctx.try_get_part() {
+                None => State::Finish,
+                Some(part) => State::ReadDataPrewhere(Some(part)),
+            }
+        }
+
         if matches!(self.state, State::Finish) {
             self.output.finish();
             return Ok(Event::Finished);
@@ -319,7 +290,7 @@ impl Processor for FuseTableSource {
             if let Generated(part, data_block) = std::mem::replace(&mut self.state, State::Finish) {
                 self.state = match part {
                     None => State::Finish,
-                    Some(part) => State::ReadDataPrewhere(part),
+                    Some(part) => State::ReadDataPrewhere(Some(part)),
                 };
 
                 self.output.push_data(Ok(data_block));
@@ -341,9 +312,9 @@ impl Processor for FuseTableSource {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::Deserialize(part, chunks, prewhere_data) => {
                 let data_block = if let Some(PrewhereData {
-                                                 data_block: mut prewhere_blocks,
-                                                 filter,
-                                             }) = prewhere_data
+                    data_block: mut prewhere_blocks,
+                    filter,
+                }) = prewhere_data
                 {
                     let block = if chunks.is_empty() {
                         prewhere_blocks
@@ -427,7 +398,7 @@ impl Processor for FuseTableSource {
 
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
-            State::ReadDataPrewhere(part) => {
+            State::ReadDataPrewhere(Some(part)) => {
                 let chunks = self.prewhere_reader.read_columns_data(part.clone()).await?;
 
                 if self.prewhere_filter.is_some() {

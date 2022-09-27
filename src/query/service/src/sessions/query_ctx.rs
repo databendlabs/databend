@@ -238,6 +238,11 @@ impl TableContext for QueryContext {
         }
         Ok(partitions)
     }
+
+    fn try_get_part(&self) -> Option<PartInfoPtr> {
+        self.partition_queue.write().pop_back()
+    }
+
     // Update the context partition pool from the pipeline builder.
     fn try_set_partitions(&self, partitions: Partitions) -> Result<()> {
         let mut partition_queue = self.partition_queue.write();
