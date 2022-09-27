@@ -53,7 +53,7 @@ async fn do_purge_test(case_name: &str, operation: &str) -> Result<()> {
     let ctx = fixture.ctx();
     execute_command(ctx, &qry).await?;
 
-    // there should be only 1 snapshot, 1 segment, 1 block left, and 0 index left
+    // there should be only 1 snapshot, 1 segment, 1 block left, and 1 index left
     check_data_dir(&fixture, case_name, 1, 1, 1, 1).await;
     history_should_have_only_one_item(&fixture, case_name).await
 }

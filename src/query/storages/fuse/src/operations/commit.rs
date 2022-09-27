@@ -36,8 +36,6 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableStatistics;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
-use common_storages_util::retry;
-use common_storages_util::retry::Retryable;
 use opendal::Operator;
 use tracing::debug;
 use tracing::info;
@@ -298,7 +296,9 @@ impl FuseTable {
         };
 
         // 3. let's roll
-        let reply = catalog.update_table_meta(req).await;
+        let tenant = ctx.get_tenant();
+        let db_name = ctx.get_current_database();
+        let reply = catalog.update_table_meta(&tenant, &db_name, req).await;
         match reply {
             Ok(_) => {
                 if let Some(snapshot_cache) = CacheManager::instance().get_table_snapshot_cache() {
@@ -378,33 +378,19 @@ impl FuseTable {
         //   it is NOT guaranteed that the latest version will be kept
 
         let hint_path = location_generator.gen_last_snapshot_hint_location();
-        let op = || {
-            let hint_path = hint_path.clone();
-            let last_snapshot_path = {
-                let operator_meta_data = operator.metadata();
-                let storage_prefix = operator_meta_data.root();
-                format!("{}{}", storage_prefix, last_snapshot_path)
-            };
-
-            async move {
-                operator
-                    .object(&hint_path)
-                    .write(last_snapshot_path)
-                    .await
-                    .map_err(retry::from_io_error)
-            }
+        let last_snapshot_path = {
+            let operator_meta_data = operator.metadata();
+            let storage_prefix = operator_meta_data.root();
+            format!("{}{}", storage_prefix, last_snapshot_path)
         };
 
-        let notify = |e: std::io::Error, duration| {
-            warn!(
-                "transient error encountered while writing last snapshot hint file, location {}, at duration {:?} : {}",
-                hint_path, duration, e,
-            )
-        };
-
-        op.retry_with_notify(notify).await.unwrap_or_else(|e| {
-            tracing::warn!("write last snapshot hint failure. {}", e);
-        })
+        operator
+            .object(&hint_path)
+            .write(last_snapshot_path)
+            .await
+            .unwrap_or_else(|e| {
+                warn!("write last snapshot hint failure. {}", e);
+            })
     }
 }
 

@@ -19,7 +19,6 @@ mod user_grant;
 mod user_info;
 mod user_privilege;
 mod user_quota;
-mod user_stage;
 
 #[test]
 fn test_bin_commit_version() -> anyhow::Result<()> {

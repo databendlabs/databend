@@ -40,7 +40,7 @@ impl TransformAggregator {
     ) -> Result<ProcessorPtr> {
         let aggregator_params = transform_params.aggregator_params;
 
-        if aggregator_params.group_columns_name.is_empty() {
+        if aggregator_params.group_columns.is_empty() {
             return AggregatorTransform::create(
                 input_port,
                 output_port,
@@ -144,7 +144,7 @@ impl TransformAggregator {
     ) -> Result<ProcessorPtr> {
         let aggregator_params = transform_params.aggregator_params;
 
-        if aggregator_params.group_columns_name.is_empty() {
+        if aggregator_params.group_columns.is_empty() {
             return AggregatorTransform::create(
                 input_port,
                 output_port,

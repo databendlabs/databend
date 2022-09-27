@@ -246,16 +246,6 @@ impl UserStageInfo {
             ..Default::default()
         }
     }
-
-    pub fn get_prefix(&self) -> String {
-        match self.stage_type {
-            StageType::External => "/".to_string(),
-            StageType::Internal => {
-                // It's internal, so we should prefix with stage name.
-                format!("/stage/{}/", self.stage_name)
-            }
-        }
-    }
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]

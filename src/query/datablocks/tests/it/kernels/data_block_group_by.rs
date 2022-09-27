@@ -28,7 +28,7 @@ fn test_data_block_group_by() -> Result<()> {
         Series::from_data(vec!["x1", "x1", "x2", "x1", "x2", "x3"]),
     ]);
 
-    let columns = &["a".to_string(), "b".to_string()];
+    let columns = &[0, 1];
     let table = DataBlock::group_by_blocks(&block, columns)?;
     for block in table {
         match block.num_rows() {

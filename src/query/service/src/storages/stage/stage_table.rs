@@ -33,6 +33,7 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::SinkPipeBuilder;
 use common_pipeline_sources::processors::sources::input_formats::InputContext;
 use common_storage::init_operator;
+use opendal::layers::SubdirLayer;
 use opendal::Operator;
 use parking_lot::Mutex;
 use tracing::info;
@@ -69,11 +70,12 @@ impl StageTable {
         guard.clone()
     }
 
-    /// TODO: we should support construct operator with
-    /// correct root.
+    /// Get operator with correctly prefix.
     pub async fn get_op(ctx: &Arc<dyn TableContext>, stage: &UserStageInfo) -> Result<Operator> {
         if stage.stage_type == StageType::Internal {
+            let prefix = format!("/stage/{}/", stage.stage_name);
             ctx.get_storage_operator()
+                .map(|op| op.layer(SubdirLayer::new(&prefix)))
         } else {
             Ok(init_operator(&stage.stage_params.storage)?)
         }
