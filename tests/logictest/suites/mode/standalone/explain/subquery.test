@@ -176,7 +176,7 @@ explain select t.number from numbers(1) as t where exists (select * from numbers
 
 ----
 HashJoin
-├── join type: SEMI
+├── join type: LEFT SEMI
 ├── build keys: [numbers.number (#1)]
 ├── probe keys: [numbers.number (#0)]
 ├── filters: []
@@ -200,7 +200,7 @@ explain select t.number from numbers(1) as t where not exists (select * from num
 
 ----
 HashJoin
-├── join type: ANTI
+├── join type: LEFT ANTI
 ├── build keys: [numbers.number (#1)]
 ├── probe keys: [numbers.number (#0)]
 ├── filters: []
@@ -224,7 +224,7 @@ explain select * from numbers(1) as t where exists (select number as a from numb
 
 ----
 HashJoin
-├── join type: SEMI
+├── join type: LEFT SEMI
 ├── build keys: [numbers.number (#1)]
 ├── probe keys: [numbers.number (#0)]
 ├── filters: []
@@ -248,7 +248,7 @@ explain select t.number from numbers(1) as t where exists (select * from numbers
 
 ----
 HashJoin
-├── join type: SEMI
+├── join type: LEFT SEMI
 ├── build keys: [numbers.number (#1)]
 ├── probe keys: [numbers.number (#0)]
 ├── filters: []
@@ -276,7 +276,7 @@ explain select t.number from numbers(1) as t where exists (select * from numbers
 
 ----
 HashJoin
-├── join type: SEMI
+├── join type: LEFT SEMI
 ├── build keys: [numbers.number (#1)]
 ├── probe keys: [numbers.number (#0)]
 ├── filters: [<(numbers.number (#0), numbers.number (#1))]
@@ -300,7 +300,7 @@ explain select t.number from numbers(1) as t where exists (select number as a, n
 
 ----
 HashJoin
-├── join type: SEMI
+├── join type: LEFT SEMI
 ├── build keys: [numbers.number (#1)]
 ├── probe keys: [numbers.number (#0)]
 ├── filters: []
@@ -382,7 +382,7 @@ explain select t.number from numbers(1) as t where exists(select * from numbers(
 
 ----
 HashJoin
-├── join type: ANTI
+├── join type: LEFT ANTI
 ├── build keys: []
 ├── probe keys: []
 ├── filters: [<(numbers.number (#0), numbers.number (#2))]
@@ -394,7 +394,7 @@ HashJoin
 │   ├── partitions scanned: 1
 │   └── push downs: [filters: [], limit: NONE]
 └── HashJoin(Probe)
-    ├── join type: SEMI
+    ├── join type: LEFT SEMI
     ├── build keys: []
     ├── probe keys: []
     ├── filters: [>(numbers.number (#0), numbers.number (#1))]
