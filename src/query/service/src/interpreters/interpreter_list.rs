@@ -18,8 +18,10 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::Series;
 use common_datavalues::SeriesFrom;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planner::plans::ListPlan;
+use regex::Regex;
 
 use crate::interpreters::interpreter_common::list_files;
 use crate::interpreters::Interpreter;
@@ -51,7 +53,23 @@ impl Interpreter for ListInterpreter {
     #[tracing::instrument(level = "debug", name = "list_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = &self.plan;
-        let files = list_files(&self.ctx, &plan.stage, &plan.path, &plan.pattern).await?;
+        let files = list_files(&self.ctx, &plan.stage, &plan.path).await?;
+
+        let files = if plan.pattern.is_empty() {
+            files
+        } else {
+            let regex = Regex::new(&plan.pattern).map_err(|e| {
+                ErrorCode::SyntaxException(format!(
+                    "Pattern format invalid, got:{}, error:{:?}",
+                    &plan.pattern, e
+                ))
+            })?;
+
+            files
+                .into_iter()
+                .filter(|file| regex.is_match(&file.path))
+                .collect()
+        };
 
         let names: Vec<String> = files.iter().map(|file| file.path.clone()).collect();
         let sizes: Vec<u64> = files.iter().map(|file| file.size).collect();
