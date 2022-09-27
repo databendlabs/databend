@@ -180,7 +180,6 @@ impl Table for StageTable {
 
         let format_options = &self.table_info.stage_info.file_format_options;
         {
-            format_settings.skip_header = format_options.skip_header;
             if !format_options.field_delimiter.is_empty() {
                 format_settings.field_delimiter =
                     format_options.field_delimiter.as_bytes().to_vec();
