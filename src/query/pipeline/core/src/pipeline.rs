@@ -45,8 +45,11 @@ use crate::TransformPipeBuilder;
 pub struct Pipeline {
     max_threads: usize,
     pub pipes: Vec<Pipe>,
+    on_init: Option<InitCallback>,
     on_finished: Option<FinishedCallback>,
 }
+
+pub type InitCallback = Arc<Box<dyn Fn() -> Result<()> + Send + Sync + 'static>>;
 
 pub type FinishedCallback =
     Arc<Box<dyn Fn(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>>;
@@ -56,6 +59,7 @@ impl Pipeline {
         Pipeline {
             max_threads: 0,
             pipes: Vec::new(),
+            on_init: None,
             on_finished: None,
         }
     }
@@ -159,6 +163,17 @@ impl Pipeline {
         }
     }
 
+    pub fn set_on_init<F: Fn() -> Result<()> + Send + Sync + 'static>(&mut self, f: F) {
+        if let Some(on_init) = &self.on_init {
+            let old_on_init = on_init.clone();
+
+            self.on_init = Some(Arc::new(Box::new(move || {
+                old_on_init()?;
+                f()
+            })))
+        }
+    }
+
     pub fn set_on_finished<F: Fn(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>(
         &mut self,
         f: F,
@@ -175,6 +190,13 @@ impl Pipeline {
         }
 
         self.on_finished = Some(Arc::new(Box::new(f)));
+    }
+
+    pub fn take_on_init(&mut self) -> InitCallback {
+        match self.on_init.take() {
+            None => Arc::new(Box::new(|| Ok(()))),
+            Some(on_init) => on_init,
+        }
     }
 
     pub fn take_on_finished(&mut self) -> FinishedCallback {

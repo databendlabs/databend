@@ -56,9 +56,9 @@ impl FuseTable {
 
     pub fn projection_of_push_downs(&self, push_downs: &Option<Extras>) -> Projection {
         if let Some(Extras {
-            projection: Some(prj),
-            ..
-        }) = push_downs
+                        projection: Some(prj),
+                        ..
+                    }) = push_downs
         {
             prj.clone()
         } else {
@@ -96,30 +96,43 @@ impl FuseTable {
             let table_info = self.table_info.clone();
             let push_downs = plan.push_downs.clone();
             let query_ctx = ctx.clone();
-            let runtime = Runtime::with_worker_threads(2, None)?;
-            let re_partitions = runtime.spawn(async move {
-                let (_statistics, partitions) = FuseTable::prune_snapshot_blocks(
-                    query_ctx,
-                    push_downs,
-                    table_info,
-                    lazy_init_segments,
-                    0,
-                )
-                .await?;
 
-                Ok(partitions)
+            // TODO: need refactor
+            pipeline.set_on_init(move || {
+                println!("on init");
+                let table_info = table_info.clone();
+                let push_downs = push_downs.clone();
+                let lazy_init_segments = lazy_init_segments.clone();
+                let runtime = Runtime::with_worker_threads(2, None)?;
+
+                let ctx = query_ctx.clone();
+                let re_partitions = runtime.spawn(async move {
+                    let (_statistics, partitions) = FuseTable::prune_snapshot_blocks(
+                        ctx,
+                        push_downs,
+                        table_info,
+                        lazy_init_segments,
+                        0,
+                    )
+                        .await?;
+
+                    Ok(partitions)
+                });
+
+                let partitions = match futures::executor::block_on(re_partitions) {
+                    Ok(Ok(partitions)) => Ok(partitions),
+                    Ok(Err(error)) => Err(error),
+                    Err(cause) => Err(ErrorCode::PanicError(format!(
+                        "Maybe panic while in eval index. {}",
+                        cause
+                    ))),
+                }?;
+
+                println!("new partitions {:?}", partitions);
+                query_ctx.try_set_partitions(partitions)?;
+
+                Ok(())
             });
-
-            let partitions = match futures::executor::block_on(re_partitions) {
-                Ok(Ok(partitions)) => Ok(partitions),
-                Ok(Err(error)) => Err(error),
-                Err(cause) => Err(ErrorCode::PanicError(format!(
-                    "Maybe panic while in eval index. {}",
-                    cause
-                ))),
-            }?;
-
-            ctx.try_set_partitions(partitions)?;
         }
 
         let table_schema = self.table_info.schema();
@@ -328,9 +341,9 @@ impl Processor for FuseTableSource {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::Deserialize(part, chunks, prewhere_data) => {
                 let data_block = if let Some(PrewhereData {
-                    data_block: mut prewhere_blocks,
-                    filter,
-                }) = prewhere_data
+                                                 data_block: mut prewhere_blocks,
+                                                 filter,
+                                             }) = prewhere_data
                 {
                     let block = if chunks.is_empty() {
                         prewhere_blocks
