@@ -82,6 +82,10 @@ where T: PrimitiveType
         let data_value = DataValue::try_from(t)?;
         Ok(data_value)
     }
+
+    fn memory_size(&self) -> usize {
+        self.values.len() * std::mem::size_of::<T>()
+    }
 }
 
 impl<T> Default for MutablePrimitiveColumn<T>

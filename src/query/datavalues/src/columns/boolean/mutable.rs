@@ -71,6 +71,10 @@ impl MutableColumn for MutableBooleanColumn {
             ErrorCode::BadDataArrayLength("Bool column is empty when pop data value")
         })
     }
+
+    fn memory_size(&self) -> usize {
+        self.values.as_slice().len()
+    }
 }
 
 impl Default for MutableBooleanColumn {
