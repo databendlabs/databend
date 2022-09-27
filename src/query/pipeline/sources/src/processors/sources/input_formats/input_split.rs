@@ -52,7 +52,12 @@ impl Debug for SplitInfo {
 
 impl Display for SplitInfo {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}[{}]", self.file.path, self.seq_in_file)
+        let n = self.file.num_splits;
+        if n > 1 {
+            write!(f, "{}[{}/{}]", self.file.path, self.seq_in_file + 1, n)
+        } else {
+            write!(f, "{}", self.file.path)
+        }
     }
 }
 
