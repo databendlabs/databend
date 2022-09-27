@@ -877,6 +877,54 @@ macro_rules! with_number_mapped_type {
     }
 }
 
+#[macro_export]
+macro_rules! with_number_mapped_types {
+    (
+    $type0:expr, $type1:expr, | $_a:tt $T0:ident, $_b:tt $T1:ident | $body:tt,  $nbody:tt
+) => {{
+        use common_expression::types::number::F32;
+        use common_expression::types::number::F64;
+
+        macro_rules! __with_types__ {
+            ( $_a $T0:ident, $_b $T1:ident ) => {
+                $body
+            };
+        }
+
+        macro_rules! __match_type__ {
+            ($t:ident) => {
+                match $type1 {
+                    Int8 => __with_types__! { $t, i8 },
+                    Int16 => __with_types__! { $t, i16 },
+                    Int32 => __with_types__! { $t, i32 },
+                    Int64 => __with_types__! { $t, i64 },
+                    UInt8 => __with_types__! { $t, u8 },
+                    UInt16 => __with_types__! { $t, u16 },
+                    UInt32 => __with_types__! { $t, u32 },
+                    UInt64 => __with_types__! { $t, u64 },
+                    Float32 => __with_types__! { $t, F32 },
+                    Float64 => __with_types__! { $t, F64 },
+                    _ => $nbody,
+                }
+            };
+        }
+
+        match $type0 {
+            Int8 => __match_type__! { i8 },
+            Int16 => __match_type__! { i16 },
+            Int32 => __match_type__! { i32 },
+            Int64 => __match_type__! { i64 },
+            UInt8 => __match_type__! { u8 },
+            UInt16 => __match_type__! { u16 },
+            UInt32 => __match_type__! { u32 },
+            UInt64 => __match_type__! { u64 },
+            Float32 => __match_type__! { F32 },
+            Float64 => __match_type__! { F64 },
+            _ => $nbody,
+        }
+    }};
+}
+
 pub trait Number:
     Copy
     + Debug
