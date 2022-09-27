@@ -221,6 +221,7 @@ pub struct CopyOptions {
     pub on_error: OnErrorMode,
     pub size_limit: usize,
     pub purge: bool,
+    pub single: bool,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]

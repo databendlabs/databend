@@ -572,6 +572,7 @@ impl FromToProto for mt::CopyOptions {
             on_error,
             size_limit,
             purge: p.purge,
+            single: p.single,
         })
     }
 
@@ -584,6 +585,7 @@ impl FromToProto for mt::CopyOptions {
             on_error: Some(on_error),
             size_limit,
             purge: self.purge,
+            single: self.single,
         })
     }
 }
