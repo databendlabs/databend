@@ -130,7 +130,7 @@ where
         if column_len == 0 {
             return Ok(());
         }
-        let val_col_iter = V::iter_column(&val_col);
+        let val_col_iter = V::iter_column(val_col);
 
         if let Some(bit) = validity {
             if bit.unset_bits() == column_len {
@@ -139,7 +139,12 @@ where
             // V::ScalarRef dosen't dervie Default, so take the first value as default.
             let mut v = V::index_column(val_col, 0).unwrap();
             let mut has_v = bit.get_bit(0);
-            let mut data_value = Scalar::Null;
+            let mut data_value = if has_v {
+                let arg = A::index_column(arg_col, 0).unwrap();
+                A::upcast_scalar(A::to_owned_scalar(arg))
+            } else {
+                Scalar::Null
+            };
 
             for ((row, val), valid) in val_col_iter.enumerate().skip(1).zip(bit.iter().skip(1)) {
                 if !valid {
@@ -148,11 +153,11 @@ where
                 if !has_v {
                     has_v = true;
                     v = val.clone();
-                    let arg = A::index_column(&arg_col, row).unwrap();
+                    let arg = A::index_column(arg_col, row).unwrap();
                     data_value = A::upcast_scalar(A::to_owned_scalar(arg));
                 } else if C::change_if(v.clone(), val.clone()) {
                     v = val.clone();
-                    let arg = A::index_column(&arg_col, row).unwrap();
+                    let arg = A::index_column(arg_col, row).unwrap();
                     data_value = A::upcast_scalar(A::to_owned_scalar(arg));
                 }
             }
@@ -170,7 +175,7 @@ where
             });
 
             if let Some((row, val)) = v {
-                let arg = A::index_column(&arg_col, row).unwrap();
+                let arg = A::index_column(arg_col, row).unwrap();
                 self.add(val, A::upcast_scalar(A::to_owned_scalar(arg)));
             }
         };
@@ -252,7 +257,7 @@ where
     ) -> Result<()> {
         let state: &mut State = place.get();
         let arg_col = A::try_downcast_column(&columns[0]).unwrap();
-        let val_col = V::try_downcast_column(&columns[0]).unwrap();
+        let val_col = V::try_downcast_column(&columns[1]).unwrap();
         state.add_batch(&arg_col, &val_col, validity)
     }
 
