@@ -39,6 +39,8 @@ fn test_agg() {
     test_agg_max(file, eval_aggr);
     test_agg_min(file, eval_aggr);
     test_agg_any(file, eval_aggr);
+    test_agg_arg_min(file, eval_aggr);
+    test_agg_arg_max(file, eval_aggr);
 }
 
 #[test]
@@ -55,6 +57,8 @@ fn test_agg_group_by() {
     test_agg_max(file, simulate_two_groups_group_by);
     test_agg_min(file, simulate_two_groups_group_by);
     test_agg_any(file, simulate_two_groups_group_by);
+    test_agg_arg_min(file, simulate_two_groups_group_by);
+    test_agg_arg_max(file, simulate_two_groups_group_by);
 }
 
 fn get_example() -> Vec<(&'static str, DataType, Column)> {
@@ -185,4 +189,62 @@ fn test_agg_any(file: &mut impl Write, simulator: impl AggregationSimulator) {
     run_agg_ast(file, "any(x_null)", get_example().as_slice(), simulator);
     run_agg_ast(file, "any(y_null)", get_example().as_slice(), simulator);
     run_agg_ast(file, "any(all_null)", get_example().as_slice(), simulator);
+}
+
+fn test_agg_arg_min(file: &mut impl Write, simulator: impl AggregationSimulator) {
+    run_agg_ast(file, "arg_min(a, b)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "arg_min(b, a)", get_example().as_slice(), simulator);
+    run_agg_ast(
+        file,
+        "arg_min(y_null, a)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "arg_min(a, y_null)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "arg_min(all_null, a)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "arg_min(a, all_null)",
+        get_example().as_slice(),
+        simulator,
+    );
+}
+
+fn test_agg_arg_max(file: &mut impl Write, simulator: impl AggregationSimulator) {
+    run_agg_ast(file, "arg_max(a, b)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "arg_max(b, a)", get_example().as_slice(), simulator);
+    run_agg_ast(
+        file,
+        "arg_max(y_null, a)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "arg_max(a, y_null)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "arg_max(all_null, a)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "arg_max(a, all_null)",
+        get_example().as_slice(),
+        simulator,
+    );
 }
