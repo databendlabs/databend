@@ -186,7 +186,7 @@ impl RaftNetwork<LogEntry> for Network {
                     match serde_json::from_str(&mes.data) {
                         Ok(resp) => return Ok(resp),
                         Err(e) => {
-                            incr_meta_metrics_sent_failure_to_peer(&target);
+                            // parsing error, won't increase send failures
                             last_err = anyhow::anyhow!("send_append_entries failed: {:?}", e);
                             // backoff and retry sending
                             sleep(back_off).await;
@@ -194,7 +194,7 @@ impl RaftNetwork<LogEntry> for Network {
                     }
                 }
                 Err(e) => {
-                    // parsing error, won't increase send failures
+                    raft_metrics::network::incr_sent_failure_to_peer(&target);
                     last_err = anyhow::anyhow!("send_append_entries failed: {:?}", e);
                     // backoff and retry sending
                     sleep(back_off).await;
@@ -224,19 +224,19 @@ impl RaftNetwork<LogEntry> for Network {
             let req = common_tracing::inject_span_to_tonic_request(&rpc);
 
             self.incr_meta_metrics_sent_bytes_to_peer(&target, req.get_ref());
-            incr_meta_metrics_snapshot_send_inflights_to_peer(&target, 1);
+            raft_metrics::network::incr_snapshot_send_inflights_to_peer(&target, 1);
 
             let resp = client.install_snapshot(req).await;
             info!("install_snapshot resp from: id={}: {:?}", target, resp);
 
             match resp {
                 Ok(resp) => {
-                    incr_meta_metrics_snapshot_send_success_to_peer(&target);
-                    incr_meta_metrics_snapshot_send_inflights_to_peer(&target, -1);
+                    raft_metrics::network::incr_snapshot_send_inflights_to_peer(&target, -1);
+                    raft_metrics::network::incr_snapshot_send_success_to_peer(&target);
                     let mes = resp.into_inner();
                     match serde_json::from_str(&mes.data) {
                         Ok(resp) => {
-                            sample_meta_metrics_snapshot_sent(
+                            raft_metrics::network::sample_snapshot_sent(
                                 &target,
                                 start.elapsed().as_secs() as f64,
                             );
@@ -252,8 +252,8 @@ impl RaftNetwork<LogEntry> for Network {
                     }
                 }
                 Err(e) => {
-                    incr_meta_metrics_sent_failure_to_peer(&target);
-                    incr_meta_metrics_snapshot_send_failures_to_peer(&target);
+                    raft_metrics::network::incr_sent_failure_to_peer(&target);
+                    raft_metrics::network::incr_snapshot_send_failures_to_peer(&target);
                     last_err = anyhow::anyhow!("send_install_snapshot failed: {:?}", e);
 
                     // back off and retry sending
@@ -294,7 +294,7 @@ impl RaftNetwork<LogEntry> for Network {
                     }
                 }
                 Err(e) => {
-                    incr_meta_metrics_sent_failure_to_peer(&target);
+                    raft_metrics::network::incr_sent_failure_to_peer(&target);
                     last_err = anyhow::anyhow!("send_vote failed: {:?}", e);
                     // back off and retry
                     sleep(back_off).await;
