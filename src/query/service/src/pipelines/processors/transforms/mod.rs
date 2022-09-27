@@ -72,6 +72,8 @@ pub use transform_mark_join::TransformMarkJoin;
 pub use transform_merge_block::TransformMergeBlock;
 pub use transform_right_join::RightJoinCompactor;
 pub use transform_right_join::TransformRightJoin;
+pub use transform_right_semi_anti_join::RightSemiAntiJoinCompactor;
+pub use transform_right_semi_anti_join::TransformRightSemiAntiJoin;
 pub use transform_sort_merge::SortMergeCompactor;
 pub use transform_sort_merge::TransformSortMerge;
 pub use transform_sort_partial::get_sort_descriptions;

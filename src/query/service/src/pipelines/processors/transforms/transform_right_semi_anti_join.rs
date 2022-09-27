@@ -42,4 +42,4 @@ impl Compactor for RightSemiAntiJoinCompactor {
     }
 }
 
-pub type TransformRightJoin = TransformCompact<RightSemiAntiJoinCompactor>;
+pub type TransformRightSemiAntiJoin = TransformCompact<RightSemiAntiJoinCompactor>;
