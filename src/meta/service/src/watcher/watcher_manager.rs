@@ -31,8 +31,8 @@ use tracing::info;
 use tracing::warn;
 
 use super::WatcherStream;
-use crate::metrics::incr_meta_metrics_meta_sent_bytes;
-use crate::metrics::incr_meta_metrics_watchers;
+use crate::metrics::network_metrics;
+use crate::metrics::server_metrics;
 
 pub type WatcherId = i64;
 pub type WatcherStreamSender = Sender<Result<WatchResponse, Status>>;
@@ -121,7 +121,7 @@ impl WatcherManagerCore {
     fn close_stream(&mut self, key: RangeMapKey<String, WatcherId>) {
         self.watcher_range_map.remove_by_key(&key);
 
-        incr_meta_metrics_watchers(-1);
+        server_metrics::incr_watchers(-1);
     }
 
     async fn notify_event(&mut self, kv: StateMachineKvData) {
@@ -157,7 +157,7 @@ impl WatcherManagerCore {
                 }),
             };
 
-            incr_meta_metrics_meta_sent_bytes(resp.encoded_len() as u64);
+            network_metrics::incr_sent_bytes(resp.encoded_len() as u64);
 
             if let Err(err) = stream.send(resp).await {
                 warn!(
@@ -200,7 +200,7 @@ impl WatcherManagerCore {
         self.watcher_range_map
             .insert(range, watcher_id, watcher_stream);
 
-        incr_meta_metrics_watchers(1);
+        server_metrics::incr_watchers(1);
     }
 
     fn get_range_key(key: String, key_end: &Option<String>) -> Result<Range<String>, bool> {

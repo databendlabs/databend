@@ -34,12 +34,8 @@ use tonic::codegen::futures_core::Stream;
 
 use crate::meta_service::ForwardRequestBody;
 use crate::meta_service::MetaNode;
-use crate::metrics::incr_meta_metrics_proposals_failed;
-use crate::metrics::incr_meta_metrics_recv_bytes_from_peer;
-use crate::metrics::incr_meta_metrics_snapshot_recv_failure_from_peer;
-use crate::metrics::incr_meta_metrics_snapshot_recv_inflights_from_peer;
-use crate::metrics::incr_meta_metrics_snapshot_recv_success_from_peer;
-use crate::metrics::sample_meta_metrics_snapshot_recv;
+use crate::metrics::raft_metrics;
+use crate::metrics::server_metrics;
 
 pub type GrpcStream<T> =
     Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
@@ -57,7 +53,7 @@ impl RaftServiceImpl {
         if let Some(addr) = request.remote_addr() {
             let message: &RaftRequest = request.get_ref();
             let bytes = message.data.len() as u64;
-            incr_meta_metrics_recv_bytes_from_peer(addr.to_string(), bytes);
+            raft_metrics::network::incr_recv_bytes_from_peer(addr.to_string(), bytes);
         }
     }
 }
@@ -87,7 +83,7 @@ impl RaftService for RaftServiceImpl {
         let res = match res {
             Ok(r) => {
                 let a: Result<AppliedState, MetaError> = r.try_into().map_err(|e: &str| {
-                    incr_meta_metrics_proposals_failed();
+                    server_metrics::incr_proposals_failed();
 
                     let inv_reply = InvalidReply::new(
                         "expect type: Result<AppliedState,MetaError>",
@@ -99,7 +95,7 @@ impl RaftService for RaftServiceImpl {
                 a
             }
             Err(e) => {
-                incr_meta_metrics_proposals_failed();
+                server_metrics::incr_proposals_failed();
                 Err(MetaError::from(e))
             }
         };
@@ -169,7 +165,7 @@ impl RaftService for RaftServiceImpl {
         common_tracing::extract_remote_span_as_parent(&request);
 
         self.incr_meta_metrics_recv_bytes_from_peer(&request);
-        incr_meta_metrics_snapshot_recv_inflights_from_peer(addr.clone(), 1);
+        raft_metrics::network::incr_snapshot_recv_inflights_from_peer(addr.clone(), 1);
         let req = request.into_inner();
 
         let is_req =
@@ -182,8 +178,8 @@ impl RaftService for RaftServiceImpl {
             .await
             .map_err(|x| tonic::Status::internal(x.to_string()));
 
-        sample_meta_metrics_snapshot_recv(addr.clone(), start.elapsed().as_secs() as f64);
-        incr_meta_metrics_snapshot_recv_inflights_from_peer(addr.clone(), -1);
+        raft_metrics::network::sample_snapshot_recv(addr.clone(), start.elapsed().as_secs() as f64);
+        raft_metrics::network::incr_snapshot_recv_inflights_from_peer(addr.clone(), -1);
 
         match resp {
             Ok(resp) => {
@@ -193,11 +189,11 @@ impl RaftService for RaftServiceImpl {
                     error: "".to_string(),
                 };
 
-                incr_meta_metrics_snapshot_recv_success_from_peer(addr.clone());
+                raft_metrics::network::incr_snapshot_recv_success_from_peer(addr.clone());
                 return Ok(tonic::Response::new(mes));
             }
             Err(e) => {
-                incr_meta_metrics_snapshot_recv_failure_from_peer(addr.clone());
+                raft_metrics::network::incr_snapshot_recv_failure_from_peer(addr.clone());
                 return Err(e);
             }
         }
