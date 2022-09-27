@@ -42,15 +42,12 @@ use futures::TryStreamExt;
 use opendal::Object;
 use opendal::Operator;
 use tracing::debug_span;
-use tracing::warn;
 use tracing::Instrument;
 
 use crate::fuse_part::ColumnLeaf;
 use crate::fuse_part::ColumnLeaves;
 use crate::fuse_part::ColumnMeta;
 use crate::fuse_part::FusePartInfo;
-use crate::io::retry;
-use crate::io::retry::Retryable;
 
 #[derive(Clone)]
 pub struct BlockReader {
@@ -353,24 +350,10 @@ impl BlockReader {
         offset: u64,
         length: u64,
     ) -> Result<(usize, Vec<u8>)> {
-        let op = || async {
-            let mut chunk = vec![0; length as usize];
-            let mut r = o
-                .range_reader(offset..offset + length)
-                .await
-                .map_err(retry::from_io_error)?;
-            r.read_exact(&mut chunk).await?;
-            Ok(chunk)
-        };
+        let mut chunk = vec![0; length as usize];
+        let mut r = o.range_reader(offset..offset + length).await?;
+        r.read_exact(&mut chunk).await?;
 
-        let notify = |e: std::io::Error, duration| {
-            warn!(
-                "transient error encountered while reading column, at duration {:?} : {}",
-                duration, e,
-            )
-        };
-
-        let chunk = op.retry_with_notify(notify).await?;
         Ok((index, chunk))
     }
 

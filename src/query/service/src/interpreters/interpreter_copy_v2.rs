@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 use std::collections::BTreeMap;
-use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -28,10 +27,10 @@ use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::TableCopiedFileInfo;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_types::UserStageInfo;
-use futures::TryStreamExt;
 use regex::Regex;
 
 use super::append2table;
+use crate::interpreters::interpreter_common::list_files;
 use crate::interpreters::interpreter_common::stat_file;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreterV2;
@@ -76,7 +75,9 @@ impl CopyInterpreterV2 {
 
         if !force {
             // if force is false, copy only the files that unmatch to the meta copied files info.
-            let resp = catalog.get_table_copied_file_info(req).await?;
+            let resp = catalog
+                .get_table_copied_file_info(&tenant, database_name, req)
+                .await?;
             for file in files.iter() {
                 let stage_file = stat_file(&self.ctx, &table_info.stage_info, file).await?;
 
@@ -129,6 +130,7 @@ impl CopyInterpreterV2 {
     async fn upsert_copied_files_info(
         &self,
         catalog_name: &str,
+        database_name: &str,
         table_id: u64,
         copy_stage_files: BTreeMap<String, TableCopiedFileInfo>,
     ) -> Result<()> {
@@ -141,72 +143,11 @@ impl CopyInterpreterV2 {
                 expire_at: None,
             };
             let catalog = self.ctx.get_catalog(catalog_name)?;
-            catalog.upsert_table_copied_file_info(req).await?;
+            catalog
+                .upsert_table_copied_file_info(&self.ctx.get_tenant(), database_name, req)
+                .await?;
         }
         Ok(())
-    }
-
-    /// List the files.
-    /// There are two cases here:
-    /// 1. If the plan.files is not empty, we already set the files sets to the COPY command with: `files=(<file1>, <file2>)` syntax, only need to add the prefix to the file.
-    /// 2. If the plan.files is empty, there are also two case:
-    ///     2.1 If the path is a file like /path/to/path/file, S3File::list() will return the same file path.
-    ///     2.2 If the path is a folder, S3File::list() will return all the files in it.
-    ///
-    /// TODO(xuanwo): Align with interpreters/interpreter_common.rs `list_files`
-    async fn list_files(
-        &self,
-        from: &ReadDataSourcePlan,
-        files: &Vec<String>,
-    ) -> Result<Vec<String>> {
-        match &from.source_info {
-            SourceInfo::StageSource(table_info) => {
-                let path = &table_info.path;
-                // Here we add the path to the file: /path/to/path/file1.
-                let files_with_path = if !files.is_empty() {
-                    let mut files_with_path = vec![];
-                    for file in files {
-                        let new_path = Path::new(path).join(file);
-                        files_with_path.push(new_path.to_string_lossy().to_string());
-                    }
-                    files_with_path
-                } else if !path.ends_with('/') {
-                    let rename_me: Arc<dyn TableContext> = self.ctx.clone();
-                    let op = StageTable::get_op(&rename_me, &table_info.stage_info).await?;
-                    if op.object(path).is_exist().await? {
-                        vec![path.to_string()]
-                    } else {
-                        vec![]
-                    }
-                } else {
-                    let rename_me: Arc<dyn TableContext> = self.ctx.clone();
-                    let op = StageTable::get_op(&rename_me, &table_info.stage_info).await?;
-
-                    // TODO: Workaround for OpenDAL's bug: https://github.com/datafuselabs/opendal/issues/670
-                    // Should be removed after OpenDAL fixes.
-                    let mut list = HashSet::new();
-
-                    // TODO: we could rewrite into try_collect.
-                    let mut objects = op.batch().walk_top_down(path)?;
-                    while let Some(de) = objects.try_next().await? {
-                        if de.mode().is_dir() {
-                            continue;
-                        }
-                        list.insert(de.path().to_string());
-                    }
-
-                    list.into_iter().collect::<Vec<_>>()
-                };
-
-                tracing::info!("listed files: {:?}", &files_with_path);
-
-                Ok(files_with_path)
-            }
-            other => Err(ErrorCode::LogicalError(format!(
-                "Cannot list files for the source info: {:?}",
-                other
-            ))),
-        }
     }
 
     async fn purge_files(
@@ -395,82 +336,91 @@ impl Interpreter for CopyInterpreterV2 {
                 from,
                 force,
                 ..
-            } => {
-                let mut files = self.list_files(from, files).await?;
+            } => match &from.source_info {
+                SourceInfo::StageSource(table_info) => {
+                    let path = &table_info.path;
 
-                // Pattern match check.
-                let pattern = &pattern;
-                if !pattern.is_empty() {
-                    let regex = Regex::new(pattern).map_err(|e| {
-                        ErrorCode::SyntaxException(format!(
-                            "Pattern format invalid, got:{}, error:{:?}",
-                            pattern, e
-                        ))
-                    })?;
+                    // Here we add the path to the file: /path/to/path/file1.
+                    let mut files = if !files.is_empty() {
+                        let mut files_with_path = vec![];
+                        for file in files {
+                            let new_path = Path::new(path).join(file);
+                            files_with_path.push(new_path.to_string_lossy().to_string());
+                        }
+                        files_with_path
+                    } else {
+                        let stage_files =
+                            list_files(&self.ctx.clone(), &table_info.stage_info, path).await?;
 
-                    let matched_files = files
-                        .iter()
-                        .filter(|file| regex.is_match(file))
-                        .cloned()
-                        .collect();
-                    files = matched_files;
-                }
+                        // TODO(@xuanwo): Reuse existing metadata in StageFile.
+                        stage_files.into_iter().map(|v| v.path).collect()
+                    };
 
-                tracing::info!("matched files: {:?}, pattern: {}", &files, pattern);
+                    tracing::info!("listed files: {:?}", &files);
 
-                match &from.source_info {
-                    SourceInfo::StageSource(table_info) => {
-                        let (table_id, copy_stage_files) = self
-                            .filter_duplicate_files(
-                                *force,
-                                table_info,
+                    // Pattern match check.
+                    let pattern = &pattern;
+                    if !pattern.is_empty() {
+                        let regex = Regex::new(pattern).map_err(|e| {
+                            ErrorCode::SyntaxException(format!(
+                                "Pattern format invalid, got:{}, error:{:?}",
+                                pattern, e
+                            ))
+                        })?;
+
+                        files.retain(|file| regex.is_match(file));
+                    }
+
+                    tracing::info!("matched files: {:?}, pattern: {}", &files, pattern);
+
+                    let (table_id, copy_stage_files) = self
+                        .filter_duplicate_files(
+                            *force,
+                            table_info,
+                            catalog_name,
+                            database_name,
+                            table_name,
+                            &files,
+                        )
+                        .await?;
+
+                    tracing::info!(
+                        "matched copy unduplicate files: {:?}",
+                        &copy_stage_files.keys(),
+                    );
+
+                    if copy_stage_files.is_empty() {
+                        return Ok(PipelineBuildResult::create());
+                    }
+
+                    let result = self
+                        .copy_files_to_table(
+                            catalog_name,
+                            database_name,
+                            table_name,
+                            from,
+                            copy_stage_files.keys().cloned().collect(),
+                        )
+                        .await;
+
+                    if result.is_ok() {
+                        let _ = self
+                            .upsert_copied_files_info(
                                 catalog_name,
                                 database_name,
-                                table_name,
-                                &files,
+                                table_id,
+                                copy_stage_files,
                             )
                             .await?;
-
-                        tracing::info!(
-                            "matched copy unduplicate files: {:?}",
-                            &copy_stage_files.keys(),
-                        );
-
-                        if copy_stage_files.is_empty() {
-                            return Ok(PipelineBuildResult::create());
-                        }
-
-                        let result = self
-                            .copy_files_to_table(
-                                catalog_name,
-                                database_name,
-                                table_name,
-                                from,
-                                copy_stage_files.keys().cloned().collect(),
-                            )
-                            .await;
-
-                        if result.is_ok() {
-                            let _ = self
-                                .upsert_copied_files_info(catalog_name, table_id, copy_stage_files)
-                                .await?;
-                        }
-
-                        result
                     }
-                    _other => {
-                        return self
-                            .copy_files_to_table(
-                                catalog_name,
-                                database_name,
-                                table_name,
-                                from,
-                                files.clone(),
-                            )
-                            .await;
-                    }
+
+                    result
                 }
-            }
+                other => Err(ErrorCode::LogicalError(format!(
+                    "Cannot list files for the source info: {:?}",
+                    other
+                ))),
+            },
             CopyPlanV2::IntoStage {
                 stage, from, path, ..
             } => self.execute_copy_into_stage(stage, path, from).await,

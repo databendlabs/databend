@@ -96,10 +96,18 @@ impl Rule for RulePushDownFilterJoin {
             let pred = JoinPredicate::new(&predicate, &left_prop, &right_prop);
             match pred {
                 JoinPredicate::Left(_) => {
+                    if join.join_type == JoinType::Right {
+                        original_predicates.push(predicate);
+                        continue;
+                    }
                     need_push = true;
                     left_push_down.push(predicate);
                 }
                 JoinPredicate::Right(_) => {
+                    if join.join_type == JoinType::Left {
+                        original_predicates.push(predicate);
+                        continue;
+                    }
                     need_push = true;
                     right_push_down.push(predicate);
                 }

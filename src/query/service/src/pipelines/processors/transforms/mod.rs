@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod aggregator;
+mod chunk_operator;
 pub(crate) mod hash_join;
 mod transform_addon;
 mod transform_aggregator;
@@ -25,15 +26,9 @@ use common_pipeline_transforms::processors::transforms::transform_sort_partial;
 mod transform_cast_schema;
 mod transform_create_sets;
 mod transform_dummy;
-mod transform_expression_v2;
-mod transform_filter;
-mod transform_filter_v2;
 mod transform_hash_join;
 mod transform_limit;
-mod transform_limit_by;
 mod transform_mark_join;
-mod transform_project;
-mod transform_rename;
 
 pub mod group_by;
 mod transform_merge_block;
@@ -41,6 +36,8 @@ mod transform_right_join;
 
 pub use aggregator::AggregatorParams;
 pub use aggregator::AggregatorTransformParams;
+pub use chunk_operator::ChunkOperator;
+pub use chunk_operator::CompoundChunkOperator;
 pub use common_pipeline_transforms::processors::ExpressionExecutor;
 pub use hash_join::HashJoinDesc;
 pub use hash_join::HashJoinState;
@@ -66,19 +63,12 @@ pub use transform_create_sets::TransformCreateSets;
 pub use transform_dummy::TransformDummy;
 pub use transform_expression::ExpressionTransform;
 pub use transform_expression::ProjectionTransform;
-pub use transform_expression_v2::ExpressionTransformV2;
-pub use transform_filter::TransformFilter;
-pub use transform_filter::TransformHaving;
-pub use transform_filter_v2::TransformFilterV2;
 pub use transform_hash_join::SinkBuildHashTable;
 pub use transform_hash_join::TransformHashJoinProbe;
 pub use transform_limit::TransformLimit;
-pub use transform_limit_by::TransformLimitBy;
 pub use transform_mark_join::MarkJoinCompactor;
 pub use transform_mark_join::TransformMarkJoin;
 pub use transform_merge_block::TransformMergeBlock;
-pub use transform_project::TransformProject;
-pub use transform_rename::TransformRename;
 pub use transform_right_join::RightJoinCompactor;
 pub use transform_right_join::TransformRightJoin;
 pub use transform_sort_merge::SortMergeCompactor;
