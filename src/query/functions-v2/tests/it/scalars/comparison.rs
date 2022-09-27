@@ -67,6 +67,7 @@ fn test_comparison() {
 
 fn test_eq(file: &mut impl Write) {
     run_ast(file, "'1'='2'", &[]);
+    run_ast(file, "null=null", &[]);
     run_ast(file, "1=2", &[]);
     run_ast(file, "1.0=1", &[]);
     run_ast(file, "true=null", &[]);
@@ -126,7 +127,11 @@ fn test_eq(file: &mut impl Write) {
             ]),
         ),
     ];
-    run_ast(file, "parse_json(lhs) = parse_json(rhs)", &table);
+    run_ast(
+        file,
+        r#"parse_json('[1,2,3,["a","b","c"]]') = parse_json('[1,2,3,["a","b","c"]]')"#,
+        &table,
+    );
     run_ast(file, "lhs = rhs", &table);
 }
 
@@ -176,7 +181,11 @@ fn test_noteq(file: &mut impl Write) {
             ]),
         ),
     ];
-    run_ast(file, "parse_json(lhs) != parse_json(rhs)", &table);
+    run_ast(
+        file,
+        r#"parse_json('"databend"') != parse_json('"databend"')"#,
+        &table,
+    );
     run_ast(file, "lhs != rhs", &table);
 }
 
@@ -226,7 +235,11 @@ fn test_lt(file: &mut impl Write) {
             ]),
         ),
     ];
-    run_ast(file, "parse_json(lhs) < parse_json(rhs)", &table);
+    run_ast(
+        file,
+        r#"parse_json('"true"') < parse_json('"false"')"#,
+        &table,
+    );
     run_ast(file, "lhs < rhs", &table);
 }
 
@@ -281,7 +294,7 @@ fn test_lte(file: &mut impl Write) {
             ]),
         ),
     ];
-    run_ast(file, "parse_json(lhs) <= parse_json(rhs)", &table);
+    run_ast(file, "parse_json('null') <= parse_json('null')", &table);
     run_ast(file, "lhs <= rhs", &table);
 }
 
@@ -336,7 +349,11 @@ fn test_gt(file: &mut impl Write) {
             ]),
         ),
     ];
-    run_ast(file, "parse_json(lhs) > parse_json(rhs)", &table);
+    run_ast(
+        file,
+        r#"parse_json('{"k":"v","a":"b"}') > parse_json('{"k":"v","a":"d"}')"#,
+        &table,
+    );
     run_ast(file, "lhs > rhs", &table);
 }
 
@@ -391,7 +408,11 @@ fn test_gte(file: &mut impl Write) {
             ]),
         ),
     ];
-    run_ast(file, "parse_json(lhs) >= parse_json(rhs)", &table);
+    run_ast(
+        file,
+        "parse_json('1.912e2') >= parse_json('1.912e2')",
+        &table,
+    );
     run_ast(file, "lhs >= rhs", &table);
 }
 
