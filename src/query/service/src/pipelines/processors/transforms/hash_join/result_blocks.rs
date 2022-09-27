@@ -100,7 +100,7 @@ impl JoinHashTable {
             }
             JoinType::LeftSemi => {
                 if self.hash_join_desc.other_predicate.is_none() {
-                    let result = self.semi_anti_join::<true, _, _>(
+                    let result = self.left_semi_anti_join::<true, _, _>(
                         hash_table,
                         probe_state,
                         keys_iter,
@@ -108,7 +108,7 @@ impl JoinHashTable {
                     )?;
                     return Ok(vec![result]);
                 } else {
-                    let result = self.semi_anti_join_with_other_conjunct::<true, _, _>(
+                    let result = self.left_semi_anti_join_with_other_conjunct::<true, _, _>(
                         hash_table,
                         probe_state,
                         keys_iter,
@@ -119,7 +119,7 @@ impl JoinHashTable {
             }
             JoinType::LeftAnti => {
                 if self.hash_join_desc.other_predicate.is_none() {
-                    let result = self.semi_anti_join::<false, _, _>(
+                    let result = self.left_semi_anti_join::<false, _, _>(
                         hash_table,
                         probe_state,
                         keys_iter,
@@ -127,7 +127,7 @@ impl JoinHashTable {
                     )?;
                     return Ok(vec![result]);
                 } else {
-                    let result = self.semi_anti_join_with_other_conjunct::<false, _, _>(
+                    let result = self.left_semi_anti_join_with_other_conjunct::<false, _, _>(
                         hash_table,
                         probe_state,
                         keys_iter,
@@ -135,6 +135,9 @@ impl JoinHashTable {
                     )?;
                     return Ok(vec![result]);
                 }
+            }
+            JoinType::RightSemi | JoinType::RightAnti => {
+                return self.right_semi_anti_join(hash_table, probe_state, keys_iter);
             }
             // Single join is similar to left join, but the result is a single row.
             JoinType::Left | JoinType::Single | JoinType::Full => {
@@ -266,7 +269,7 @@ impl JoinHashTable {
         Ok(())
     }
 
-    fn semi_anti_join<const SEMI: bool, Key, IT>(
+    fn left_semi_anti_join<const SEMI: bool, Key, IT>(
         &self,
         hash_table: &HashMap<Key, Vec<RowPtr>>,
         probe_state: &mut ProbeState,
@@ -297,7 +300,34 @@ impl JoinHashTable {
         DataBlock::block_take_by_indices(input, probe_indexs)
     }
 
-    fn semi_anti_join_with_other_conjunct<const SEMI: bool, Key, IT>(
+    fn right_semi_anti_join<Key, IT>(
+        &self,
+        hash_table: &HashMap<Key, Vec<RowPtr>>,
+        probe_state: &mut ProbeState,
+        keys_iter: IT,
+    ) -> Result<Vec<DataBlock>>
+    where
+        Key: HashTableKeyable + Clone + 'static,
+        IT: Iterator<Item = Key> + TrustedLen,
+    {
+        let valids = &probe_state.valids;
+        for (i, key) in keys_iter.enumerate() {
+            let probe_result_ptr = if self.hash_join_desc.from_correlated_subquery {
+                hash_table.find_key(&key)
+            } else {
+                Self::probe_key(hash_table, key, valids, i)
+            };
+
+            if let Some(v) = probe_result_ptr {
+                let probe_result_ptrs = v.get_value();
+                let mut build_indexes = self.hash_join_desc.right_join_desc.build_indexes.write();
+                build_indexes.extend(probe_result_ptrs);
+            }
+        }
+        Ok(vec![])
+    }
+
+    fn left_semi_anti_join_with_other_conjunct<const SEMI: bool, Key, IT>(
         &self,
         hash_table: &HashMap<Key, Vec<RowPtr>>,
         probe_state: &mut ProbeState,

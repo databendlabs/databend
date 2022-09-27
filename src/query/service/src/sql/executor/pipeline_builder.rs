@@ -513,6 +513,11 @@ impl PipelineBuilder {
             })?;
         }
 
+        if join.join_type == JoinType::RightAnti || join.join_type == JoinType::RightSemi {
+            self.main_pipeline.resize(1)?;
+            self.main_pipeline.add_transform(|input, output| Transform)
+        }
+
         Ok(())
     }
 

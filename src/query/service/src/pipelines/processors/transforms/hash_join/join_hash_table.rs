@@ -802,4 +802,8 @@ impl HashJoinState for JoinHashTable {
 
         Ok(vec![merged_block])
     }
+
+    fn right_anti_semi_join_blocks(&self) -> Result<Vec<DataBlock>> {
+        todo!()
+    }
 }

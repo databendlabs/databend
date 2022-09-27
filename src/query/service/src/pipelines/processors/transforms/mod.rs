@@ -33,6 +33,7 @@ mod transform_mark_join;
 pub mod group_by;
 mod transform_merge_block;
 mod transform_right_join;
+mod transform_right_semi_anti_join;
 
 pub use aggregator::AggregatorParams;
 pub use aggregator::AggregatorTransformParams;
