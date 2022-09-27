@@ -183,8 +183,8 @@ impl SubqueryRewriter {
                 SubqueryType::Any | SubqueryType::All | SubqueryType::Scalar => {
                     return Ok(None);
                 }
-                SubqueryType::Exists => JoinType::Semi,
-                SubqueryType::NotExists => JoinType::Anti,
+                SubqueryType::Exists => JoinType::LeftSemi,
+                SubqueryType::NotExists => JoinType::LeftAnti,
             },
             marker_index: None,
             from_correlated_subquery: true,
