@@ -107,11 +107,10 @@ impl BlockPruner {
         //
         // B. since limiter is working concurrently, we arrange some checks among the pruning,
         //    to avoid heavy io operation vainly,
-        let pruning_runtime = Runtime::with_worker_threads(
-            ctx.get_settings().get_max_threads()? as usize,
-            Some("pruning-worker".to_owned()),
-        )?;
-        let semaphore = Arc::new(Semaphore::new(FUTURE_BUFFER_SIZE));
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let pruning_runtime =
+            Runtime::with_worker_threads(max_threads, Some("pruning-worker".to_owned()))?;
+        let semaphore = Arc::new(Semaphore::new(max_threads));
         let mut join_handlers = Vec::with_capacity(segment_locs.len());
         for (idx, (seg_loc, ver)) in segment_locs.into_iter().enumerate() {
             let ctx = ctx.clone();
