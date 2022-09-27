@@ -388,7 +388,7 @@ impl<'a> Binder {
             right_context,
             left_expr,
             right_expr,
-            JoinType::Semi,
+            JoinType::LeftSemi,
         )
     }
 
@@ -404,7 +404,7 @@ impl<'a> Binder {
             right_context,
             left_expr,
             right_expr,
-            JoinType::Anti,
+            JoinType::LeftAnti,
         )
     }
 
