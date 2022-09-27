@@ -65,10 +65,10 @@ impl SnapshotVersion {
 
 impl Versioned<0> for DataBlock {}
 
-impl Versioned<1> for BlockBloomFilterIndex {}
+impl Versioned<2> for BlockBloomFilterIndex {}
 
 pub enum BlockBloomFilterIndexVersion {
-    V1(PhantomData<v1::BlockBloomFilterIndex>),
+    V2(PhantomData<v1::BlockBloomFilterIndex>),
 }
 
 mod converters {
@@ -109,7 +109,10 @@ mod converters {
         type Error = ErrorCode;
         fn try_from(value: u64) -> Result<Self, Self::Error> {
             match value {
-                1 => Ok(BlockBloomFilterIndexVersion::V1(ver_eq::<_, 1>(
+                1 => Err(ErrorCode::DeprecatedIndexFormat(
+                    "v1 bloom filter index is deprecated",
+                )),
+                2 => Ok(BlockBloomFilterIndexVersion::V2(ver_eq::<_, 2>(
                     PhantomData,
                 ))),
                 _ => Err(ErrorCode::LogicalError(format!(
