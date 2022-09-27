@@ -77,8 +77,6 @@ pub async fn upload_to_stage(
         .trim_matches('/')
         .to_string();
 
-    let prefix = stage.get_prefix();
-
     let mut files = vec![];
     while let Ok(Some(field)) = multipart.next_field().await {
         let name = match field.file_name() {
@@ -89,9 +87,8 @@ pub async fn upload_to_stage(
         let file_path = format!("{relative_path}/{name}")
             .trim_start_matches('/')
             .to_string();
-        let obj = format!("{prefix}{file_path}");
         let _ = op
-            .object(&obj)
+            .object(&file_path)
             .write(bytes)
             .await
             .map_err(InternalServerError)?;
