@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_datavalues::DataSchemaRef;
 use common_datavalues::TypeDeserializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -36,6 +37,7 @@ impl InputFormatTSV {
     fn read_row(
         buf: &[u8],
         deserializers: &mut Vec<common_datavalues::TypeDeserializerImpl>,
+        schema: &DataSchemaRef,
         format_settings: &FormatSettings,
         path: &str,
         batch_id: usize,
@@ -59,13 +61,22 @@ impl InputFormatTSV {
                     if let Err(e) =
                         deserializers[column_index].de_text(&mut reader, format_settings)
                     {
-                        err_msg = Some(format_column_error(column_index, col_data, &e.message()));
+                        err_msg = Some(format_column_error(
+                            schema,
+                            column_index,
+                            col_data,
+                            &e.message(),
+                        ));
                         break;
                     };
                     reader.ignore_white_spaces().expect("must success");
                     if reader.must_eof().is_err() {
-                        err_msg =
-                            Some(format_column_error(column_index, col_data, "bad field end"));
+                        err_msg = Some(format_column_error(
+                            schema,
+                            column_index,
+                            col_data,
+                            "bad field end",
+                        ));
                         break;
                     }
                 }
@@ -137,6 +148,7 @@ impl InputFormatTextBase for InputFormatTSV {
             batch.start_row,
             batch.offset
         );
+        let schema = &builder.ctx.schema;
         let columns = &mut builder.mutable_columns;
         let mut start = 0usize;
         let start_row = batch.start_row;
@@ -145,6 +157,7 @@ impl InputFormatTextBase for InputFormatTSV {
             Self::read_row(
                 buf,
                 columns,
+                schema,
                 &builder.ctx.format_settings,
                 &batch.path,
                 batch.batch_id,
@@ -161,11 +174,21 @@ impl InputFormatTextBase for InputFormatTSV {
     }
 }
 
-pub fn format_column_error(column_index: usize, col_data: &[u8], msg: &str) -> String {
+pub fn format_column_error(
+    schema: &DataSchemaRef,
+    column_index: usize,
+    col_data: &[u8],
+    msg: &str,
+) -> String {
     let mut data = String::new();
     verbose_string(col_data, &mut data);
+    let field = &schema.fields()[column_index];
     format!(
-        "fail to decode column {}: {}, [column_data]=[{}]",
-        column_index, msg, data
+        "fail to decode column {} ({} {}): {}, [column_data]=[{}]",
+        column_index,
+        field.name(),
+        field.data_type(),
+        msg,
+        data
     )
 }
