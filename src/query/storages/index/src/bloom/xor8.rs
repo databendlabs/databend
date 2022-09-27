@@ -17,11 +17,16 @@ use std::hash::Hash;
 use cbordata::Cbor;
 use cbordata::FromCbor;
 use cbordata::IntoCbor;
+use common_datavalues::prelude::TypeID;
+use common_datavalues::remove_nullable;
+use common_datavalues::DataType;
+use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use xorfilter::Xor8;
 
 use crate::bloom::Bloom;
+use crate::SupportedType;
 
 pub struct XorBloom {
     filter: Xor8,
@@ -89,5 +94,14 @@ impl Bloom for XorBloom {
         let xor_value = Xor8::from_cbor(cbor_val)
             .map_err(|e| ErrorCode::UnexpectedError(format!("Xor8.from_cborerror:{:}", e)))?;
         Ok((Self { filter: xor_value }, n))
+    }
+}
+
+impl SupportedType for XorBloom {
+    fn is_supported_type(data_type: &DataTypeImpl) -> bool {
+        // Bloom index only enabled for String and Boolean types for now
+        let inner_type = remove_nullable(data_type);
+        let data_type_id = inner_type.data_type_id();
+        matches!(data_type_id, TypeID::String)
     }
 }

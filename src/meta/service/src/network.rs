@@ -38,13 +38,7 @@ use tonic::transport::channel::Channel;
 use tracing::debug;
 use tracing::info;
 
-use crate::metrics::incr_meta_metrics_fail_connections_to_peer;
-use crate::metrics::incr_meta_metrics_sent_bytes_to_peer;
-use crate::metrics::incr_meta_metrics_sent_failure_to_peer;
-use crate::metrics::incr_meta_metrics_snapshot_send_failures_to_peer;
-use crate::metrics::incr_meta_metrics_snapshot_send_inflights_to_peer;
-use crate::metrics::incr_meta_metrics_snapshot_send_success_to_peer;
-use crate::metrics::sample_meta_metrics_snapshot_sent;
+use crate::metrics::raft_metrics;
 use crate::raft_client::RaftClient;
 use crate::raft_client::RaftClientApi;
 use crate::store::RaftStore;
@@ -148,7 +142,7 @@ impl Network {
                 Ok(client)
             }
             Err(err) => {
-                incr_meta_metrics_fail_connections_to_peer(target, &endpoint.to_string());
+                raft_metrics::network::incr_fail_connections_to_peer(target, &endpoint.to_string());
                 Err(err.into())
             }
         }
@@ -156,7 +150,7 @@ impl Network {
 
     fn incr_meta_metrics_sent_bytes_to_peer(&self, target: &NodeId, message: &RaftRequest) {
         let bytes = message.data.len() as u64;
-        incr_meta_metrics_sent_bytes_to_peer(target, bytes);
+        raft_metrics::network::incr_sent_bytes_to_peer(target, bytes);
     }
 }
 

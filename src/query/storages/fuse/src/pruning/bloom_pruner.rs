@@ -79,7 +79,7 @@ impl BloomFilterPruner for BloomFilterIndexPruner {
     async fn should_keep(&self, index_location: &Option<Location>, index_length: u64) -> bool {
         if let Some(loc) = index_location {
             // load bloom filter index, and try pruning according to filter expression
-            match filter_block_by_bloom_index(
+            match should_keep_by_bloom_filter(
                 self.ctx.clone(),
                 self.dal.clone(),
                 &self.data_schema,
@@ -113,14 +113,6 @@ pub fn new_bloom_filter_pruner(
     schema: &DataSchemaRef,
     dal: Operator,
 ) -> Result<Arc<dyn BloomFilterPruner + Send + Sync>> {
-    // due to issue
-    // https://github.com/datafuselabs/databend/issues/7780
-    // bloom filter is disabled, just return a NonPruner unconditionally
-    if true {
-        return Ok(Arc::new(NonPruner));
-    }
-
-    // the following codes is unreachable, but kept to help diagnostic performance issues
     if let Some(exprs) = filter_exprs {
         if exprs.is_empty() {
             return Ok(Arc::new(NonPruner));
@@ -156,9 +148,11 @@ pub fn new_bloom_filter_pruner(
 }
 
 mod util {
+    use common_exception::ErrorCode;
+
     use super::*;
     #[tracing::instrument(level = "debug", skip_all)]
-    pub async fn filter_block_by_bloom_index(
+    pub async fn should_keep_by_bloom_filter(
         ctx: Arc<dyn TableContext>,
         dal: Operator,
         schema: &DataSchemaRef,
@@ -168,13 +162,25 @@ mod util {
         index_length: u64,
     ) -> Result<bool> {
         // load the relevant index columns
-        let bloom_filter_index = index_location
+        let maybe_bloom_filter_index = index_location
             .read_bloom_filter_index(ctx.clone(), dal, bloom_index_col_names, index_length)
-            .await?;
+            .await;
 
-        // figure it out
-        BloomFilterIndexer::from_bloom_block(schema.clone(), bloom_filter_index.into_data(), ctx)?
-            .maybe_true(filter_expr)
+        match maybe_bloom_filter_index {
+            // figure it out
+            Ok(bloom_filter_index) => BloomFilterIndexer::from_bloom_block(
+                schema.clone(),
+                bloom_filter_index.into_data(),
+            )?
+            .maybe_true(filter_expr),
+            Err(e) if e.code() == ErrorCode::deprecated_index_format_code() => {
+                // In case that the index is no longer supported, just return ture to indicate
+                // that the block being pruned should be kept. (Although the caller of this method
+                // "BloomFilterIndexPruner::should_keep",  will ignore any exceptions returned)
+                Ok(true)
+            }
+            Err(e) => Err(e),
+        }
     }
 
     struct PointQueryVisitor {

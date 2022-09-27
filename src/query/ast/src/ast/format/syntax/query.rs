@@ -261,6 +261,10 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc {
                 JoinOperator::RightOuter => RcDoc::text("RIGHT OUTER JOIN"),
                 JoinOperator::FullOuter => RcDoc::text("FULL OUTER JOIN"),
                 JoinOperator::CrossJoin => RcDoc::text("CROSS JOIN"),
+                JoinOperator::LeftAnti => RcDoc::text("LEFT ANTI JOIN"),
+                JoinOperator::RightAnti => RcDoc::text("RIGHT ANTI JOIN"),
+                JoinOperator::LeftSemi => RcDoc::text("LEFT SEMI JOIN"),
+                JoinOperator::RightSemi => RcDoc::text("RIGHT SEMI JOIN"),
             })
             .append(RcDoc::space().append(pretty_table(*join.right)))
             .append(match &join.condition {

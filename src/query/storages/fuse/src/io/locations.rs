@@ -26,8 +26,8 @@ use uuid::Uuid;
 use crate::constants::FUSE_TBL_BLOCK_PREFIX;
 use crate::constants::FUSE_TBL_SEGMENT_PREFIX;
 use crate::constants::FUSE_TBL_SNAPSHOT_PREFIX;
-use crate::FUSE_TBL_BLOCK_INDEX_PREFIX;
 use crate::FUSE_TBL_LAST_SNAPSHOT_HINT;
+use crate::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
 
 static SNAPSHOT_V0: SnapshotVersion = SnapshotVersion::V0(PhantomData);
 static SNAPSHOT_V1: SnapshotVersion = SnapshotVersion::V1(PhantomData);
@@ -68,7 +68,7 @@ impl TableMetaLocationGenerator {
             format!(
                 "{}/{}/{}_v{}.parquet",
                 &self.prefix,
-                FUSE_TBL_BLOCK_INDEX_PREFIX,
+                FUSE_TBL_XOR_BLOOM_INDEX_PREFIX,
                 block_id.as_simple(),
                 BlockBloomFilterIndex::VERSION,
             ),

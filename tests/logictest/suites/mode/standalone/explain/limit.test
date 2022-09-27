@@ -70,11 +70,11 @@ Limit
             ├── group by: [number]
             ├── aggregate functions: []
             └── Filter
-                ├── filters: [=(numbers.number (#0), CAST(if(is_not_null(count(*) (#4)), count(*) (#4), 0) AS BIGINT UNSIGNED))]
+                ├── filters: [=(t.number (#0), CAST(if(is_not_null(scalar_subquery_4 (#4)), scalar_subquery_4 (#4), 0) AS BIGINT UNSIGNED))]
                 └── HashJoin
                     ├── join type: SINGLE
-                    ├── build keys: [number (#6)]
-                    ├── probe keys: [numbers.number (#0)]
+                    ├── build keys: [subquery_6 (#6)]
+                    ├── probe keys: [subquery_0 (#0)]
                     ├── filters: []
                     ├── EvalScalar(Build)
                     │   ├── expressions: [COUNT(*) (#5)]
@@ -86,8 +86,8 @@ Limit
                     │           ├── aggregate functions: [count()]
                     │           └── HashJoin
                     │               ├── join type: INNER
-                    │               ├── build keys: [numbers.number (#2)]
-                    │               ├── probe keys: [number (#6)]
+                    │               ├── build keys: [t2.number (#2)]
+                    │               ├── probe keys: [subquery_6 (#6)]
                     │               ├── filters: []
                     │               ├── HashJoin(Build)
                     │               │   ├── join type: CROSS
@@ -146,8 +146,8 @@ Limit
     ├── sort keys: [c1 ASC NULLS LAST]
     └── HashJoin
         ├── join type: LEFT OUTER
-        ├── build keys: [CAST(c (#5) AS BIGINT UNSIGNED NULL)]
-        ├── probe keys: [CAST(c1 (#1) AS BIGINT UNSIGNED NULL)]
+        ├── build keys: [CAST(t4.c (#5) AS BIGINT UNSIGNED NULL)]
+        ├── probe keys: [CAST(t3.c1 (#1) AS BIGINT UNSIGNED NULL)]
         ├── filters: []
         ├── EvalScalar(Build)
         │   ├── expressions: [count(t.number) (#7)]

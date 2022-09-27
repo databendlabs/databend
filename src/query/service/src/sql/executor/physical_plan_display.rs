@@ -98,7 +98,6 @@ impl Display for Filter {
 impl Display for PhysicalScalar {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match &self {
-            PhysicalScalar::Variable { column_id, .. } => write!(f, "{}", column_id),
             PhysicalScalar::Constant { value, .. } => write!(f, "{}", value),
             PhysicalScalar::Function { name, args, .. } => write!(
                 f,
