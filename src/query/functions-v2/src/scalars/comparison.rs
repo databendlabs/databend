@@ -14,9 +14,9 @@
 
 use std::collections::HashMap;
 
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::types::ArgType;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
@@ -24,6 +24,7 @@ use common_expression::types::NumberDataType::*;
 use common_expression::types::NumberType;
 use common_expression::types::StringType;
 use common_expression::types::TimestampType;
+use common_expression::types::ValueType;
 use common_expression::values::Value;
 use common_expression::with_number_mapped_type;
 use common_expression::FunctionContext;
@@ -246,76 +247,82 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
         "like",
         FunctionProperty::default(),
-        |_lhs, _rhs| None,
-        vectorize_2_like_arg::<StringType, StringType, BooleanType>(|lhs, rhs, _, mut map| {
-            let pattern = if let Some(pattern) = map.get(rhs) {
+        |_, _| None,
+        vectorize_regexp(|str, pat, map, _| {
+            let pattern = if let Some(pattern) = map.get(pat) {
                 pattern
             } else {
-                let pattern_str = simdutf8::basic::from_utf8(rhs)
-                    .expect("Unable to convert the LIKE pattern to string: {}");
+                let pattern_str = simdutf8::basic::from_utf8(pat).map_err(|err| {
+                    format!("unable to convert the LIKE pattern to string: {err}")
+                })?;
                 let re_pattern = like_pattern_to_regex(pattern_str);
-                let re =
-                    Regex::new(&re_pattern).expect("Unable to build regex from LIKE pattern: {}");
-                map.insert(rhs, re);
-                map.get(rhs).unwrap()
+                let re = Regex::new(&re_pattern)
+                    .map_err(|err| format!("unable to build the LIKE pattern: {err}"))?;
+                map.insert(pat.to_vec(), re);
+                map.get(pat).unwrap()
             };
-            pattern.is_match(lhs)
+            Ok(pattern.is_match(str))
         }),
     );
 
     registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
         "regexp",
         FunctionProperty::default(),
-        |_lhs, _rhs| None,
-        vectorize_2_like_arg::<StringType, StringType, BooleanType>(|lhs, rhs, _, mut map| {
-            let pattern = if let Some(pattern) = map.get(rhs) {
+        |_, _| None,
+        vectorize_regexp(|str, pat, map, _| {
+            let pattern = if let Some(pattern) = map.get(pat) {
                 pattern
             } else {
-                let re = build_regexp_from_pattern(rhs).unwrap();
-                map.insert(rhs, re);
-                map.get(rhs).unwrap()
+                let re = build_regexp_from_pattern(pat)
+                    .map_err(|err| format!("unable to build the REGEXP pattern: {err}"))?;
+                map.insert(pat.to_vec(), re);
+                map.get(pat).unwrap()
             };
-            pattern.is_match(lhs)
+            Ok(pattern.is_match(str))
         }),
     );
     registry.register_aliases("regexp", &["rlike"]);
 }
 
-fn vectorize_2_like_arg<I1: ArgType, I2: ArgType, O: ArgType>(
-    func: impl Fn(
-        I1::ScalarRef<'_>,
-        I2::ScalarRef<'_>,
-        FunctionContext,
-        HashMap<&[u8], Regex>,
-    ) -> O::Scalar
+fn vectorize_regexp(
+    func: impl Fn(&[u8], &[u8], &mut HashMap<Vec<u8>, Regex>, FunctionContext) -> Result<bool, String>
     + Copy,
-) -> impl Fn(ValueRef<I1>, ValueRef<I2>, FunctionContext) -> Result<Value<O>, String> + Copy {
+) -> impl Fn(
+    ValueRef<StringType>,
+    ValueRef<StringType>,
+    FunctionContext,
+) -> Result<Value<BooleanType>, String>
++ Copy {
     move |arg1, arg2, ctx| {
-        let map = HashMap::new();
+        let mut map = HashMap::new();
         match (arg1, arg2) {
             (ValueRef::Scalar(arg1), ValueRef::Scalar(arg2)) => {
-                Ok(Value::Scalar(func(arg1, arg2, ctx, map)))
+                Ok(Value::Scalar(func(arg1, arg2, &mut map, ctx)?))
             }
             (ValueRef::Column(arg1), ValueRef::Scalar(arg2)) => {
-                let arg1_iter = I1::iter_column(&arg1);
-                let iter = arg1_iter.map(|arg1| func(arg1, arg2.clone(), ctx, map));
-                let col = O::column_from_iter(iter, ctx.generics);
-                Ok(Value::Column(col))
+                let arg1_iter = StringType::iter_column(&arg1);
+                let mut builder = MutableBitmap::with_capacity(arg1.len());
+                for arg1 in arg1_iter {
+                    builder.push(func(arg1, arg2.clone(), &mut map, ctx)?);
+                }
+                Ok(Value::Column(builder.into()))
             }
             (ValueRef::Scalar(arg1), ValueRef::Column(arg2)) => {
-                let arg2_iter = I2::iter_column(&arg2);
-                let iter = arg2_iter.map(|arg2| func(arg1.clone(), arg2, ctx, map));
-                let col = O::column_from_iter(iter, ctx.generics);
-                Ok(Value::Column(col))
+                let arg2_iter = StringType::iter_column(&arg2);
+                let mut builder = MutableBitmap::with_capacity(arg2.len());
+                for arg2 in arg2_iter {
+                    builder.push(func(arg1.clone(), arg2, &mut map, ctx)?);
+                }
+                Ok(Value::Column(builder.into()))
             }
             (ValueRef::Column(arg1), ValueRef::Column(arg2)) => {
-                let arg1_iter = I1::iter_column(&arg1);
-                let arg2_iter = I2::iter_column(&arg2);
-                let iter = arg1_iter
-                    .zip(arg2_iter)
-                    .map(|(arg1, arg2)| func(arg1, arg2, ctx, map));
-                let col = O::column_from_iter(iter, ctx.generics);
-                Ok(Value::Column(col))
+                let arg1_iter = StringType::iter_column(&arg1);
+                let arg2_iter = StringType::iter_column(&arg2);
+                let mut builder = MutableBitmap::with_capacity(arg2.len());
+                for (arg1, arg2) in arg1_iter.zip(arg2_iter) {
+                    builder.push(func(arg1, arg2, &mut map, ctx)?);
+                }
+                Ok(Value::Column(builder.into()))
             }
         }
     }
