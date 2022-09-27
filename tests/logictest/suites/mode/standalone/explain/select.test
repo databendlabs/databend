@@ -15,7 +15,7 @@ explain select * from (select * from numbers(1)) as t1 where number = 1;
 
 ----
 Filter
-├── filters: [=(numbers.number (#0), 1)]
+├── filters: [=(t1.number (#0), 1)]
 └── TableScan
     ├── table: default.system.numbers
     ├── read rows: 1
@@ -29,7 +29,7 @@ explain select * from (select number as a, number + 1 as b from numbers(1)) as t
 
 ----
 Filter
-├── filters: [=(numbers.number (#0), 1), =(b (#1), 1)]
+├── filters: [=(t1.a (#0), 1), =(t1.b (#1), 1)]
 └── EvalScalar
     ├── expressions: [+(numbers.number (#0), 1)]
     └── TableScan
@@ -47,7 +47,7 @@ explain select * from (select number as a, number + 1 as b from numbers(1)) as t
 EvalScalar
 ├── expressions: [+(numbers.number (#0), 1)]
 └── Filter
-    ├── filters: [=(numbers.number (#0), 1)]
+    ├── filters: [=(t1.a (#0), 1)]
     └── TableScan
         ├── table: default.system.numbers
         ├── read rows: 1

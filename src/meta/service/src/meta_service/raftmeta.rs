@@ -75,15 +75,7 @@ use crate::meta_service::meta_leader::MetaLeader;
 use crate::meta_service::ForwardRequestBody;
 use crate::meta_service::JoinRequest;
 use crate::meta_service::RaftServiceImpl;
-use crate::metrics::incr_meta_metrics_leader_change;
-use crate::metrics::incr_meta_metrics_read_failed;
-use crate::metrics::set_meta_metrics_current_leader;
-use crate::metrics::set_meta_metrics_current_term;
-use crate::metrics::set_meta_metrics_is_leader;
-use crate::metrics::set_meta_metrics_last_log_index;
-use crate::metrics::set_meta_metrics_last_seq;
-use crate::metrics::set_meta_metrics_node_is_health;
-use crate::metrics::set_meta_metrics_proposals_applied;
+use crate::metrics::server_metrics;
 use crate::network::Network;
 use crate::store::RaftStore;
 use crate::store::RaftStoreBare;
@@ -467,22 +459,22 @@ impl MetaNode {
 
                 // metrics about server state and role.
 
-                set_meta_metrics_node_is_health(
+                server_metrics::set_node_is_health(
                     mm.state == State::Follower || mm.state == State::Leader,
                 );
 
                 if mm.current_leader.is_some() && mm.current_leader != last_leader {
-                    incr_meta_metrics_leader_change();
+                    server_metrics::incr_leader_change();
                 }
-                set_meta_metrics_current_leader(mm.current_leader.unwrap_or_default());
-                set_meta_metrics_is_leader(mm.current_leader == Some(meta_node.sto.id));
+                server_metrics::set_current_leader(mm.current_leader.unwrap_or_default());
+                server_metrics::set_is_leader(mm.current_leader == Some(meta_node.sto.id));
 
                 // metrics about raft log and state machine.
 
-                set_meta_metrics_current_term(mm.current_term);
-                set_meta_metrics_last_log_index(mm.last_log_index.unwrap_or_default());
-                set_meta_metrics_proposals_applied(mm.last_applied.unwrap_or_default().index);
-                set_meta_metrics_last_seq(
+                server_metrics::set_current_term(mm.current_term);
+                server_metrics::set_last_log_index(mm.last_log_index.unwrap_or_default());
+                server_metrics::set_proposals_applied(mm.last_applied.unwrap_or_default().index);
+                server_metrics::set_last_seq(
                     meta_node
                         .get_last_seq()
                         .await
@@ -857,12 +849,12 @@ impl MetaNode {
 
         match res {
             Err(e) => {
-                incr_meta_metrics_read_failed();
+                server_metrics::incr_read_failed();
                 Err(e)
             }
             Ok(res) => {
                 let res: Reply = res.try_into().map_err(|e| {
-                    incr_meta_metrics_read_failed();
+                    server_metrics::incr_read_failed();
                     let invalid_reply = InvalidReply::new(
                         format!("expect reply type to be {}", std::any::type_name::<Reply>(),),
                         &AnyError::error(e),

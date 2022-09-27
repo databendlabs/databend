@@ -107,15 +107,52 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
             op,
             left,
             right,
-        } => RawExpr::FunctionCall {
-            span: transform_span(span),
-            name: transform_binary_op(op),
-            params: vec![],
-            args: vec![
-                transform_expr(*left, columns),
-                transform_expr(*right, columns),
-            ],
-        },
+        } => {
+            let name = transform_binary_op(op);
+            if name != "notlike" && name != "notregexp" && name != "notrlike" {
+                RawExpr::FunctionCall {
+                    span: transform_span(span),
+                    name,
+                    params: vec![],
+                    args: vec![
+                        transform_expr(*left, columns),
+                        transform_expr(*right, columns),
+                    ],
+                }
+            } else if name == "notlike" {
+                let result = RawExpr::FunctionCall {
+                    span: transform_span(span),
+                    name: "like".to_string(),
+                    params: vec![],
+                    args: vec![
+                        transform_expr(*left, columns),
+                        transform_expr(*right, columns),
+                    ],
+                };
+                RawExpr::FunctionCall {
+                    span: transform_span(span),
+                    name: "not".to_string(),
+                    params: vec![],
+                    args: vec![result],
+                }
+            } else {
+                let result = RawExpr::FunctionCall {
+                    span: transform_span(span),
+                    name: "regexp".to_string(),
+                    params: vec![],
+                    args: vec![
+                        transform_expr(*left, columns),
+                        transform_expr(*right, columns),
+                    ],
+                };
+                RawExpr::FunctionCall {
+                    span: transform_span(span),
+                    name: "not".to_string(),
+                    params: vec![],
+                    args: vec![result],
+                }
+            }
+        }
         common_ast::ast::Expr::Position {
             span,
             substr_expr,
@@ -239,6 +276,7 @@ fn transform_data_type(target_type: common_ast::ast::TypeName) -> DataType {
         common_ast::ast::TypeName::Float32 => DataType::Number(NumberDataType::Float32),
         common_ast::ast::TypeName::Float64 => DataType::Number(NumberDataType::Float64),
         common_ast::ast::TypeName::String => DataType::String,
+        common_ast::ast::TypeName::Timestamp { precision: None } => DataType::Timestamp,
         common_ast::ast::TypeName::Array {
             item_type: Some(item_type),
         } => DataType::Array(Box::new(transform_data_type(*item_type))),

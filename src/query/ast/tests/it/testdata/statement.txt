@@ -2632,6 +2632,930 @@ Query(
 
 
 ---------- Input ----------
+select * from a left semi join b on a.a = b.a;
+---------- Output ---------
+SELECT * FROM a LEFT SEMI JOIN b ON a.a = b.a
+---------- AST ------------
+Query(
+    Query {
+        span: [
+            SELECT(0..6),
+            Multiply(7..8),
+            FROM(9..13),
+            Ident(14..15),
+            LEFT(16..20),
+            SEMI(21..25),
+            JOIN(26..30),
+            Ident(31..32),
+            ON(33..35),
+            Ident(36..37),
+            Period(37..38),
+            Ident(38..39),
+            Eq(40..41),
+            Ident(42..43),
+            Period(43..44),
+            Ident(44..45),
+        ],
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: [
+                    SELECT(0..6),
+                    Multiply(7..8),
+                    FROM(9..13),
+                    Ident(14..15),
+                    LEFT(16..20),
+                    SEMI(21..25),
+                    JOIN(26..30),
+                    Ident(31..32),
+                    ON(33..35),
+                    Ident(36..37),
+                    Period(37..38),
+                    Ident(38..39),
+                    Eq(40..41),
+                    Ident(42..43),
+                    Period(43..44),
+                    Ident(44..45),
+                ],
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: [
+                    Join {
+                        span: [
+                            LEFT(16..20),
+                            SEMI(21..25),
+                            JOIN(26..30),
+                        ],
+                        join: Join {
+                            op: LeftSemi,
+                            condition: On(
+                                BinaryOp {
+                                    span: [
+                                        Eq(40..41),
+                                    ],
+                                    op: Eq,
+                                    left: ColumnRef {
+                                        span: [
+                                            Ident(36..37),
+                                            Period(37..38),
+                                            Ident(38..39),
+                                        ],
+                                        database: None,
+                                        table: Some(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Ident(36..37),
+                                            },
+                                        ),
+                                        column: Identifier {
+                                            name: "a",
+                                            quote: None,
+                                            span: Ident(38..39),
+                                        },
+                                    },
+                                    right: ColumnRef {
+                                        span: [
+                                            Ident(42..43),
+                                            Period(43..44),
+                                            Ident(44..45),
+                                        ],
+                                        database: None,
+                                        table: Some(
+                                            Identifier {
+                                                name: "b",
+                                                quote: None,
+                                                span: Ident(42..43),
+                                            },
+                                        ),
+                                        column: Identifier {
+                                            name: "a",
+                                            quote: None,
+                                            span: Ident(44..45),
+                                        },
+                                    },
+                                },
+                            ),
+                            left: Table {
+                                span: [
+                                    Ident(14..15),
+                                ],
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Ident(14..15),
+                                },
+                                alias: None,
+                                travel_point: None,
+                            },
+                            right: Table {
+                                span: [
+                                    Ident(31..32),
+                                ],
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "b",
+                                    quote: None,
+                                    span: Ident(31..32),
+                                },
+                                alias: None,
+                                travel_point: None,
+                            },
+                        },
+                    },
+                ],
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        format: None,
+    },
+)
+
+
+---------- Input ----------
+select * from a semi join b on a.a = b.a;
+---------- Output ---------
+SELECT * FROM a LEFT SEMI JOIN b ON a.a = b.a
+---------- AST ------------
+Query(
+    Query {
+        span: [
+            SELECT(0..6),
+            Multiply(7..8),
+            FROM(9..13),
+            Ident(14..15),
+            SEMI(16..20),
+            JOIN(21..25),
+            Ident(26..27),
+            ON(28..30),
+            Ident(31..32),
+            Period(32..33),
+            Ident(33..34),
+            Eq(35..36),
+            Ident(37..38),
+            Period(38..39),
+            Ident(39..40),
+        ],
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: [
+                    SELECT(0..6),
+                    Multiply(7..8),
+                    FROM(9..13),
+                    Ident(14..15),
+                    SEMI(16..20),
+                    JOIN(21..25),
+                    Ident(26..27),
+                    ON(28..30),
+                    Ident(31..32),
+                    Period(32..33),
+                    Ident(33..34),
+                    Eq(35..36),
+                    Ident(37..38),
+                    Period(38..39),
+                    Ident(39..40),
+                ],
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: [
+                    Join {
+                        span: [
+                            SEMI(16..20),
+                            JOIN(21..25),
+                        ],
+                        join: Join {
+                            op: LeftSemi,
+                            condition: On(
+                                BinaryOp {
+                                    span: [
+                                        Eq(35..36),
+                                    ],
+                                    op: Eq,
+                                    left: ColumnRef {
+                                        span: [
+                                            Ident(31..32),
+                                            Period(32..33),
+                                            Ident(33..34),
+                                        ],
+                                        database: None,
+                                        table: Some(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Ident(31..32),
+                                            },
+                                        ),
+                                        column: Identifier {
+                                            name: "a",
+                                            quote: None,
+                                            span: Ident(33..34),
+                                        },
+                                    },
+                                    right: ColumnRef {
+                                        span: [
+                                            Ident(37..38),
+                                            Period(38..39),
+                                            Ident(39..40),
+                                        ],
+                                        database: None,
+                                        table: Some(
+                                            Identifier {
+                                                name: "b",
+                                                quote: None,
+                                                span: Ident(37..38),
+                                            },
+                                        ),
+                                        column: Identifier {
+                                            name: "a",
+                                            quote: None,
+                                            span: Ident(39..40),
+                                        },
+                                    },
+                                },
+                            ),
+                            left: Table {
+                                span: [
+                                    Ident(14..15),
+                                ],
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Ident(14..15),
+                                },
+                                alias: None,
+                                travel_point: None,
+                            },
+                            right: Table {
+                                span: [
+                                    Ident(26..27),
+                                ],
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "b",
+                                    quote: None,
+                                    span: Ident(26..27),
+                                },
+                                alias: None,
+                                travel_point: None,
+                            },
+                        },
+                    },
+                ],
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        format: None,
+    },
+)
+
+
+---------- Input ----------
+select * from a left anti join b on a.a = b.a;
+---------- Output ---------
+SELECT * FROM a LEFT ANTI JOIN b ON a.a = b.a
+---------- AST ------------
+Query(
+    Query {
+        span: [
+            SELECT(0..6),
+            Multiply(7..8),
+            FROM(9..13),
+            Ident(14..15),
+            LEFT(16..20),
+            ANTI(21..25),
+            JOIN(26..30),
+            Ident(31..32),
+            ON(33..35),
+            Ident(36..37),
+            Period(37..38),
+            Ident(38..39),
+            Eq(40..41),
+            Ident(42..43),
+            Period(43..44),
+            Ident(44..45),
+        ],
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: [
+                    SELECT(0..6),
+                    Multiply(7..8),
+                    FROM(9..13),
+                    Ident(14..15),
+                    LEFT(16..20),
+                    ANTI(21..25),
+                    JOIN(26..30),
+                    Ident(31..32),
+                    ON(33..35),
+                    Ident(36..37),
+                    Period(37..38),
+                    Ident(38..39),
+                    Eq(40..41),
+                    Ident(42..43),
+                    Period(43..44),
+                    Ident(44..45),
+                ],
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: [
+                    Join {
+                        span: [
+                            LEFT(16..20),
+                            ANTI(21..25),
+                            JOIN(26..30),
+                        ],
+                        join: Join {
+                            op: LeftAnti,
+                            condition: On(
+                                BinaryOp {
+                                    span: [
+                                        Eq(40..41),
+                                    ],
+                                    op: Eq,
+                                    left: ColumnRef {
+                                        span: [
+                                            Ident(36..37),
+                                            Period(37..38),
+                                            Ident(38..39),
+                                        ],
+                                        database: None,
+                                        table: Some(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Ident(36..37),
+                                            },
+                                        ),
+                                        column: Identifier {
+                                            name: "a",
+                                            quote: None,
+                                            span: Ident(38..39),
+                                        },
+                                    },
+                                    right: ColumnRef {
+                                        span: [
+                                            Ident(42..43),
+                                            Period(43..44),
+                                            Ident(44..45),
+                                        ],
+                                        database: None,
+                                        table: Some(
+                                            Identifier {
+                                                name: "b",
+                                                quote: None,
+                                                span: Ident(42..43),
+                                            },
+                                        ),
+                                        column: Identifier {
+                                            name: "a",
+                                            quote: None,
+                                            span: Ident(44..45),
+                                        },
+                                    },
+                                },
+                            ),
+                            left: Table {
+                                span: [
+                                    Ident(14..15),
+                                ],
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Ident(14..15),
+                                },
+                                alias: None,
+                                travel_point: None,
+                            },
+                            right: Table {
+                                span: [
+                                    Ident(31..32),
+                                ],
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "b",
+                                    quote: None,
+                                    span: Ident(31..32),
+                                },
+                                alias: None,
+                                travel_point: None,
+                            },
+                        },
+                    },
+                ],
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        format: None,
+    },
+)
+
+
+---------- Input ----------
+select * from a anti join b on a.a = b.a;
+---------- Output ---------
+SELECT * FROM a LEFT ANTI JOIN b ON a.a = b.a
+---------- AST ------------
+Query(
+    Query {
+        span: [
+            SELECT(0..6),
+            Multiply(7..8),
+            FROM(9..13),
+            Ident(14..15),
+            ANTI(16..20),
+            JOIN(21..25),
+            Ident(26..27),
+            ON(28..30),
+            Ident(31..32),
+            Period(32..33),
+            Ident(33..34),
+            Eq(35..36),
+            Ident(37..38),
+            Period(38..39),
+            Ident(39..40),
+        ],
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: [
+                    SELECT(0..6),
+                    Multiply(7..8),
+                    FROM(9..13),
+                    Ident(14..15),
+                    ANTI(16..20),
+                    JOIN(21..25),
+                    Ident(26..27),
+                    ON(28..30),
+                    Ident(31..32),
+                    Period(32..33),
+                    Ident(33..34),
+                    Eq(35..36),
+                    Ident(37..38),
+                    Period(38..39),
+                    Ident(39..40),
+                ],
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: [
+                    Join {
+                        span: [
+                            ANTI(16..20),
+                            JOIN(21..25),
+                        ],
+                        join: Join {
+                            op: LeftAnti,
+                            condition: On(
+                                BinaryOp {
+                                    span: [
+                                        Eq(35..36),
+                                    ],
+                                    op: Eq,
+                                    left: ColumnRef {
+                                        span: [
+                                            Ident(31..32),
+                                            Period(32..33),
+                                            Ident(33..34),
+                                        ],
+                                        database: None,
+                                        table: Some(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Ident(31..32),
+                                            },
+                                        ),
+                                        column: Identifier {
+                                            name: "a",
+                                            quote: None,
+                                            span: Ident(33..34),
+                                        },
+                                    },
+                                    right: ColumnRef {
+                                        span: [
+                                            Ident(37..38),
+                                            Period(38..39),
+                                            Ident(39..40),
+                                        ],
+                                        database: None,
+                                        table: Some(
+                                            Identifier {
+                                                name: "b",
+                                                quote: None,
+                                                span: Ident(37..38),
+                                            },
+                                        ),
+                                        column: Identifier {
+                                            name: "a",
+                                            quote: None,
+                                            span: Ident(39..40),
+                                        },
+                                    },
+                                },
+                            ),
+                            left: Table {
+                                span: [
+                                    Ident(14..15),
+                                ],
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Ident(14..15),
+                                },
+                                alias: None,
+                                travel_point: None,
+                            },
+                            right: Table {
+                                span: [
+                                    Ident(26..27),
+                                ],
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "b",
+                                    quote: None,
+                                    span: Ident(26..27),
+                                },
+                                alias: None,
+                                travel_point: None,
+                            },
+                        },
+                    },
+                ],
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        format: None,
+    },
+)
+
+
+---------- Input ----------
+select * from a right semi join b on a.a = b.a;
+---------- Output ---------
+SELECT * FROM a RIGHT SEMI JOIN b ON a.a = b.a
+---------- AST ------------
+Query(
+    Query {
+        span: [
+            SELECT(0..6),
+            Multiply(7..8),
+            FROM(9..13),
+            Ident(14..15),
+            RIGHT(16..21),
+            SEMI(22..26),
+            JOIN(27..31),
+            Ident(32..33),
+            ON(34..36),
+            Ident(37..38),
+            Period(38..39),
+            Ident(39..40),
+            Eq(41..42),
+            Ident(43..44),
+            Period(44..45),
+            Ident(45..46),
+        ],
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: [
+                    SELECT(0..6),
+                    Multiply(7..8),
+                    FROM(9..13),
+                    Ident(14..15),
+                    RIGHT(16..21),
+                    SEMI(22..26),
+                    JOIN(27..31),
+                    Ident(32..33),
+                    ON(34..36),
+                    Ident(37..38),
+                    Period(38..39),
+                    Ident(39..40),
+                    Eq(41..42),
+                    Ident(43..44),
+                    Period(44..45),
+                    Ident(45..46),
+                ],
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: [
+                    Join {
+                        span: [
+                            RIGHT(16..21),
+                            SEMI(22..26),
+                            JOIN(27..31),
+                        ],
+                        join: Join {
+                            op: RightSemi,
+                            condition: On(
+                                BinaryOp {
+                                    span: [
+                                        Eq(41..42),
+                                    ],
+                                    op: Eq,
+                                    left: ColumnRef {
+                                        span: [
+                                            Ident(37..38),
+                                            Period(38..39),
+                                            Ident(39..40),
+                                        ],
+                                        database: None,
+                                        table: Some(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Ident(37..38),
+                                            },
+                                        ),
+                                        column: Identifier {
+                                            name: "a",
+                                            quote: None,
+                                            span: Ident(39..40),
+                                        },
+                                    },
+                                    right: ColumnRef {
+                                        span: [
+                                            Ident(43..44),
+                                            Period(44..45),
+                                            Ident(45..46),
+                                        ],
+                                        database: None,
+                                        table: Some(
+                                            Identifier {
+                                                name: "b",
+                                                quote: None,
+                                                span: Ident(43..44),
+                                            },
+                                        ),
+                                        column: Identifier {
+                                            name: "a",
+                                            quote: None,
+                                            span: Ident(45..46),
+                                        },
+                                    },
+                                },
+                            ),
+                            left: Table {
+                                span: [
+                                    Ident(14..15),
+                                ],
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Ident(14..15),
+                                },
+                                alias: None,
+                                travel_point: None,
+                            },
+                            right: Table {
+                                span: [
+                                    Ident(32..33),
+                                ],
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "b",
+                                    quote: None,
+                                    span: Ident(32..33),
+                                },
+                                alias: None,
+                                travel_point: None,
+                            },
+                        },
+                    },
+                ],
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        format: None,
+    },
+)
+
+
+---------- Input ----------
+select * from a right anti join b on a.a = b.a;
+---------- Output ---------
+SELECT * FROM a RIGHT ANTI JOIN b ON a.a = b.a
+---------- AST ------------
+Query(
+    Query {
+        span: [
+            SELECT(0..6),
+            Multiply(7..8),
+            FROM(9..13),
+            Ident(14..15),
+            RIGHT(16..21),
+            ANTI(22..26),
+            JOIN(27..31),
+            Ident(32..33),
+            ON(34..36),
+            Ident(37..38),
+            Period(38..39),
+            Ident(39..40),
+            Eq(41..42),
+            Ident(43..44),
+            Period(44..45),
+            Ident(45..46),
+        ],
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: [
+                    SELECT(0..6),
+                    Multiply(7..8),
+                    FROM(9..13),
+                    Ident(14..15),
+                    RIGHT(16..21),
+                    ANTI(22..26),
+                    JOIN(27..31),
+                    Ident(32..33),
+                    ON(34..36),
+                    Ident(37..38),
+                    Period(38..39),
+                    Ident(39..40),
+                    Eq(41..42),
+                    Ident(43..44),
+                    Period(44..45),
+                    Ident(45..46),
+                ],
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: [
+                    Join {
+                        span: [
+                            RIGHT(16..21),
+                            ANTI(22..26),
+                            JOIN(27..31),
+                        ],
+                        join: Join {
+                            op: RightAnti,
+                            condition: On(
+                                BinaryOp {
+                                    span: [
+                                        Eq(41..42),
+                                    ],
+                                    op: Eq,
+                                    left: ColumnRef {
+                                        span: [
+                                            Ident(37..38),
+                                            Period(38..39),
+                                            Ident(39..40),
+                                        ],
+                                        database: None,
+                                        table: Some(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Ident(37..38),
+                                            },
+                                        ),
+                                        column: Identifier {
+                                            name: "a",
+                                            quote: None,
+                                            span: Ident(39..40),
+                                        },
+                                    },
+                                    right: ColumnRef {
+                                        span: [
+                                            Ident(43..44),
+                                            Period(44..45),
+                                            Ident(45..46),
+                                        ],
+                                        database: None,
+                                        table: Some(
+                                            Identifier {
+                                                name: "b",
+                                                quote: None,
+                                                span: Ident(43..44),
+                                            },
+                                        ),
+                                        column: Identifier {
+                                            name: "a",
+                                            quote: None,
+                                            span: Ident(45..46),
+                                        },
+                                    },
+                                },
+                            ),
+                            left: Table {
+                                span: [
+                                    Ident(14..15),
+                                ],
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Ident(14..15),
+                                },
+                                alias: None,
+                                travel_point: None,
+                            },
+                            right: Table {
+                                span: [
+                                    Ident(32..33),
+                                ],
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "b",
+                                    quote: None,
+                                    span: Ident(32..33),
+                                },
+                                alias: None,
+                                travel_point: None,
+                            },
+                        },
+                    },
+                ],
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        format: None,
+    },
+)
+
+
+---------- Input ----------
 select * from a full outer join b on a.a = b.a;
 ---------- Output ---------
 SELECT * FROM a FULL OUTER JOIN b ON a.a = b.a

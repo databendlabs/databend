@@ -36,13 +36,7 @@ use tonic::transport::channel::Channel;
 use tracing::debug;
 use tracing::info;
 
-use crate::metrics::incr_meta_metrics_fail_connections_to_peer;
-use crate::metrics::incr_meta_metrics_sent_bytes_to_peer;
-use crate::metrics::incr_meta_metrics_sent_failure_to_peer;
-use crate::metrics::incr_meta_metrics_snapshot_send_failures_to_peer;
-use crate::metrics::incr_meta_metrics_snapshot_send_inflights_to_peer;
-use crate::metrics::incr_meta_metrics_snapshot_send_success_to_peer;
-use crate::metrics::sample_meta_metrics_snapshot_sent;
+use crate::metrics::raft_metrics;
 use crate::raft_client::RaftClient;
 use crate::raft_client::RaftClientApi;
 use crate::store::RaftStore;
@@ -97,7 +91,7 @@ impl Network {
                 Ok(client)
             }
             Err(err) => {
-                incr_meta_metrics_fail_connections_to_peer(target, &endpoint.to_string());
+                raft_metrics::network::incr_fail_connections_to_peer(target, &endpoint.to_string());
                 Err(err.into())
             }
         }
@@ -105,7 +99,7 @@ impl Network {
 
     fn incr_meta_metrics_sent_bytes_to_peer(&self, target: &NodeId, message: &RaftRequest) {
         let bytes = message.data.len() as u64;
-        incr_meta_metrics_sent_bytes_to_peer(target, bytes);
+        raft_metrics::network::incr_sent_bytes_to_peer(target, bytes);
     }
 }
 
@@ -133,7 +127,7 @@ impl RaftNetwork<LogEntry> for Network {
         debug!("append_entries resp from: id={}: {:?}", target, resp);
 
         if resp.is_err() {
-            incr_meta_metrics_sent_failure_to_peer(&target);
+            raft_metrics::network::incr_sent_failure_to_peer(&target);
         }
         let resp = resp?;
         let mes = resp.into_inner();
@@ -159,24 +153,24 @@ impl RaftNetwork<LogEntry> for Network {
         let req = common_tracing::inject_span_to_tonic_request(rpc);
 
         self.incr_meta_metrics_sent_bytes_to_peer(&target, req.get_ref());
-        incr_meta_metrics_snapshot_send_inflights_to_peer(&target, 1);
+        raft_metrics::network::incr_snapshot_send_inflights_to_peer(&target, 1);
 
         let resp = client.install_snapshot(req).await;
         info!("install_snapshot resp from: id={}: {:?}", target, resp);
 
         if resp.is_err() {
-            incr_meta_metrics_sent_failure_to_peer(&target);
-            incr_meta_metrics_snapshot_send_failures_to_peer(&target);
+            raft_metrics::network::incr_sent_failure_to_peer(&target);
+            raft_metrics::network::incr_snapshot_send_failures_to_peer(&target);
         } else {
-            incr_meta_metrics_snapshot_send_success_to_peer(&target);
+            raft_metrics::network::incr_snapshot_send_success_to_peer(&target);
         }
-        incr_meta_metrics_snapshot_send_inflights_to_peer(&target, -1);
+        raft_metrics::network::incr_snapshot_send_inflights_to_peer(&target, -1);
 
         let resp = resp?;
         let mes = resp.into_inner();
         let resp = serde_json::from_str(&mes.data)?;
 
-        sample_meta_metrics_snapshot_sent(&target, start.elapsed().as_secs() as f64);
+        raft_metrics::network::sample_snapshot_sent(&target, start.elapsed().as_secs() as f64);
 
         Ok(resp)
     }
@@ -194,7 +188,7 @@ impl RaftNetwork<LogEntry> for Network {
         info!("vote: resp from target={} {:?}", target, resp);
 
         if resp.is_err() {
-            incr_meta_metrics_sent_failure_to_peer(&target);
+            raft_metrics::network::incr_sent_failure_to_peer(&target);
         }
 
         let resp = resp?;

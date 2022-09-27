@@ -1369,6 +1369,7 @@ dependencies = [
  "match-template",
  "num-traits",
  "ordered-float 3.1.0",
+ "regex",
  "rust_decimal",
  "serde",
 ]
@@ -2669,11 +2670,11 @@ dependencies = [
  "env_logger",
  "futures",
  "maplit",
+ "metrics",
  "num",
  "once_cell",
  "poem",
  "pretty_assertions",
- "prometheus",
  "prost",
  "regex",
  "reqwest",
@@ -5227,9 +5228,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.17.3"
+version = "0.17.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7bc1681ab20ebba8923f6387ba210e18dd0915c345c22ad06f0b1f6420587745"
+checksum = "d1ac2fba66b4b574259a4e1c6a1b57b8e649682ed7da167c9cde120c1495f2cd"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -6056,36 +6057,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7bd7356a8122b6c4a24a82b278680c73357984ca2fc79a0f9fa6dea7dced7c58"
 dependencies = [
  "unicode-ident",
-]
-
-[[package]]
-name = "procfs"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0941606b9934e2d98a3677759a971756eb821f75764d0e0d26946d08e74d9104"
-dependencies = [
- "bitflags",
- "byteorder",
- "hex",
- "lazy_static",
- "libc",
-]
-
-[[package]]
-name = "prometheus"
-version = "0.13.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "45c8babc29389186697fe5a2a4859d697825496b83db5d0b65271cdc0488e88c"
-dependencies = [
- "cfg-if",
- "fnv",
- "lazy_static",
- "libc",
- "memchr",
- "parking_lot 0.12.1",
- "procfs",
- "protobuf",
- "thiserror",
 ]
 
 [[package]]
@@ -8070,7 +8041,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.8.5",
+ "rand 0.7.3",
  "static_assertions",
 ]
 

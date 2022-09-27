@@ -29,6 +29,7 @@ use itertools::Itertools;
 
 mod arithmetic;
 mod boolean;
+mod comparison;
 mod control;
 mod datetime;
 mod math;

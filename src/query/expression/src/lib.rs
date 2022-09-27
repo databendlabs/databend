@@ -40,7 +40,7 @@ mod register;
 pub mod type_check;
 pub mod types;
 pub mod util;
-mod values;
+pub mod values;
 
 pub use crate::chunk::*;
 pub use crate::column_from::*;
