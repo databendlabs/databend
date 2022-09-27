@@ -39,6 +39,16 @@ pub struct UriLocation {
     pub connection: BTreeMap<String, String>,
 }
 
+/// secure_omission will fix omitted endpoint url schemes as 'https://'
+#[inline]
+fn secure_omission(endpoint: String) -> String {
+    if !endpoint.starts_with("https://") && !endpoint.starts_with("http://") {
+        format!("https://{}", endpoint)
+    } else {
+        endpoint
+    }
+}
+
 /// parse_uri_location will parse given UriLocation into StorageParams and Path.
 pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
     // Path endswith `/` means it's a directory, otherwise it's a file.
@@ -53,26 +63,25 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
     let protocol = l.protocol.parse::<Scheme>()?;
 
     let sp = match protocol {
-        Scheme::Azblob => StorageParams::Azblob(StorageAzblobConfig {
-            endpoint_url: l
-                .connection
-                .get("endpoint_url")
-                .ok_or_else(|| {
-                    Error::new(
-                        ErrorKind::InvalidInput,
-                        anyhow!("endpoint_url is required for storage azblob"),
-                    )
-                })?
-                .to_string(),
-            container: l.name.to_string(),
-            account_name: l
-                .connection
-                .get("account_name")
-                .cloned()
-                .unwrap_or_default(),
-            account_key: l.connection.get("account_key").cloned().unwrap_or_default(),
-            root: root.to_string(),
-        }),
+        Scheme::Azblob => {
+            let endpoint = l.connection.get("endpoint_url").cloned().ok_or_else(|| {
+                Error::new(
+                    ErrorKind::InvalidInput,
+                    anyhow!("endpoint_url is required for storage azblob"),
+                )
+            })?;
+            StorageParams::Azblob(StorageAzblobConfig {
+                endpoint_url: secure_omission(endpoint),
+                container: l.name.to_string(),
+                account_name: l
+                    .connection
+                    .get("account_name")
+                    .cloned()
+                    .unwrap_or_default(),
+                account_key: l.connection.get("account_key").cloned().unwrap_or_default(),
+                root: root.to_string(),
+            })
+        }
         Scheme::Ftp => StorageParams::Ftp(crate::StorageFtpConfig {
             endpoint: if !l.protocol.is_empty() {
                 format!("{}://{}", l.protocol, l.name)
@@ -84,16 +93,19 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
             username: l.connection.get("username").cloned().unwrap_or_default(),
             password: l.connection.get("password").cloned().unwrap_or_default(),
         }),
-        Scheme::Gcs => StorageParams::Gcs(crate::StorageGcsConfig {
-            endpoint_url: l
+        Scheme::Gcs => {
+            let endpoint = l
                 .connection
                 .get("endpoint_url")
                 .cloned()
-                .unwrap_or_else(|| STORAGE_GCS_DEFAULT_ENDPOINT.to_string()),
-            bucket: l.name.clone(),
-            root: l.path.clone(),
-            credential: l.connection.get("credential").cloned().unwrap_or_default(),
-        }),
+                .unwrap_or_else(|| STORAGE_GCS_DEFAULT_ENDPOINT.to_string());
+            StorageParams::Gcs(crate::StorageGcsConfig {
+                endpoint_url: secure_omission(endpoint),
+                bucket: l.name.clone(),
+                root: l.path.clone(),
+                credential: l.connection.get("credential").cloned().unwrap_or_default(),
+            })
+        }
         #[cfg(feature = "storage-hdfs")]
         Scheme::Hdfs => StorageParams::Hdfs(crate::StorageHdfsConfig {
             name_node: l
@@ -108,56 +120,62 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
                 .to_string(),
             root: root.to_string(),
         }),
-        Scheme::Ipfs => StorageParams::Ipfs(StorageIpfsConfig {
-            endpoint_url: l
+        Scheme::Ipfs => {
+            let endpoint = l
                 .connection
                 .get("endpoint_url")
                 .cloned()
-                .unwrap_or_else(|| STORAGE_IPFS_DEFAULT_ENDPOINT.to_string()),
-            root: "/ipfs/".to_string() + l.name.as_str(),
-        }),
-        Scheme::S3 => StorageParams::S3(StorageS3Config {
-            endpoint_url: l
+                .unwrap_or_else(|| STORAGE_IPFS_DEFAULT_ENDPOINT.to_string());
+            StorageParams::Ipfs(StorageIpfsConfig {
+                endpoint_url: secure_omission(endpoint),
+                root: "/ipfs/".to_string() + l.name.as_str(),
+            })
+        }
+        Scheme::S3 => {
+            let endpoint = l
                 .connection
                 .get("endpoint_url")
                 .cloned()
-                .unwrap_or_else(|| STORAGE_S3_DEFAULT_ENDPOINT.to_string()),
-            region: l.connection.get("region").cloned().unwrap_or_default(),
-            bucket: l.name.to_string(),
-            access_key_id: l
-                .connection
-                .get("access_key_id")
-                .or_else(|| l.connection.get("aws_key_id"))
-                .cloned()
-                .unwrap_or_default(),
-            secret_access_key: l
-                .connection
-                .get("secret_access_key")
-                .or_else(|| l.connection.get("aws_secret_key"))
-                .cloned()
-                .unwrap_or_default(),
-            security_token: l
-                .connection
-                .get("security_token")
-                .or_else(|| l.connection.get("aws_token"))
-                .cloned()
-                .unwrap_or_default(),
-            master_key: l.connection.get("master_key").cloned().unwrap_or_default(),
-            root: root.to_string(),
-            disable_credential_loader: true,
-            enable_virtual_host_style: l
-                .connection
-                .get("enable_virtual_host_style")
-                .cloned()
-                .unwrap_or_else(|| "false".to_string())
-                .parse()
-                .map_err(|err| {
-                    Error::new(
-                        ErrorKind::InvalidInput,
-                        anyhow!("value for enable_virtual_host_style is invalid: {err:?}"),
-                    )
-                })?,
-        }),
+                .unwrap_or_else(|| STORAGE_S3_DEFAULT_ENDPOINT.to_string());
+            StorageParams::S3(StorageS3Config {
+                endpoint_url: secure_omission(endpoint),
+                region: l.connection.get("region").cloned().unwrap_or_default(),
+                bucket: l.name.to_string(),
+                access_key_id: l
+                    .connection
+                    .get("access_key_id")
+                    .or_else(|| l.connection.get("aws_key_id"))
+                    .cloned()
+                    .unwrap_or_default(),
+                secret_access_key: l
+                    .connection
+                    .get("secret_access_key")
+                    .or_else(|| l.connection.get("aws_secret_key"))
+                    .cloned()
+                    .unwrap_or_default(),
+                security_token: l
+                    .connection
+                    .get("security_token")
+                    .or_else(|| l.connection.get("aws_token"))
+                    .cloned()
+                    .unwrap_or_default(),
+                master_key: l.connection.get("master_key").cloned().unwrap_or_default(),
+                root: root.to_string(),
+                disable_credential_loader: true,
+                enable_virtual_host_style: l
+                    .connection
+                    .get("enable_virtual_host_style")
+                    .cloned()
+                    .unwrap_or_else(|| "false".to_string())
+                    .parse()
+                    .map_err(|err| {
+                        Error::new(
+                            ErrorKind::InvalidInput,
+                            anyhow!("value for enable_virtual_host_style is invalid: {err:?}"),
+                        )
+                    })?,
+            })
+        }
         Scheme::Http => {
             // Make sure path has been percent decoded before parse pattern.
             let path = percent_decode_str(&l.path).decode_utf8_lossy();
