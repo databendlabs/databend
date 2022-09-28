@@ -28,7 +28,6 @@ semver = "1.0.14"
 serde = { version = "1.0.145", features = ["derive"] }
 serfig = "0.0.2"
 
-
 [features]
 default = []
 storage-hdfs = ["opendal/services-hdfs", "common-storage/storage-hdfs"]
