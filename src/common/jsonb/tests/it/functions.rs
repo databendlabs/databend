@@ -49,7 +49,7 @@ fn test_build_array() {
 
     let expect_value = Value::Array(expect_array);
     let mut expect_buf: Vec<u8> = Vec::new();
-    expect_value.to_vec(&mut expect_buf).unwrap();
+    expect_value.to_vec(&mut expect_buf);
 
     let mut arr_buf = Vec::new();
     build_array(values, &mut arr_buf).unwrap();
@@ -98,7 +98,7 @@ fn test_build_object() {
 
     let expect_value = Value::Object(expect_object);
     let mut expect_buf: Vec<u8> = Vec::new();
-    expect_value.to_vec(&mut expect_buf).unwrap();
+    expect_value.to_vec(&mut expect_buf);
 
     let mut obj_buf = Vec::new();
     build_object(values, &mut obj_buf).unwrap();
