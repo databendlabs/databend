@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_base::base::tokio::sync::Semaphore;
 use common_base::base::Runtime;
 use common_base::base::TrySpawn;
 use common_catalog::table_context::TableContext;
@@ -106,17 +107,21 @@ impl BlockPruner {
         //
         // B. since limiter is working concurrently, we arrange some checks among the pruning,
         //    to avoid heavy io operation vainly,
-        let pruning_runtime = Runtime::with_worker_threads(
-            ctx.get_settings().get_max_threads()? as usize,
-            Some("pruning-worker".to_owned()),
-        )?;
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let pruning_runtime =
+            Runtime::with_worker_threads(max_threads, Some("pruning-worker".to_owned()))?;
+        let semaphore = Arc::new(Semaphore::new(max_threads));
         let mut join_handlers = Vec::with_capacity(segment_locs.len());
         for (idx, (seg_loc, ver)) in segment_locs.into_iter().enumerate() {
             let ctx = ctx.clone();
             let range_filter_pruner = range_filter_pruner.clone();
             let bloom_filter_pruner = bloom_filter_pruner.clone();
             let limiter = limiter.clone();
+            let semaphore = semaphore.clone();
             let segment_pruning_fut = async move {
+                let _permit = semaphore.acquire().await.map_err(|e| {
+                    ErrorCode::StorageOther(format!("acquire permit failure, {}", e))
+                })?;
                 let segment_reader = MetaReaders::segment_info_reader(ctx.as_ref());
                 if limiter.exceeded() {
                     // before read segment info, check if limit already exceeded
