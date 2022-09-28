@@ -19,7 +19,7 @@ output         : 0
 ast            : CAST(-1 AS VARIANT)
 raw expr       : CAST(minus(1_u8) AS Variant)
 checked expr   : CAST(minus<UInt8>(1_u8) AS Variant)
-optimized expr : 0x2000000020000003030001
+optimized expr : 0x200000002000000240ff
 output type    : Variant
 output domain  : Undefined
 output         : -1
@@ -28,37 +28,37 @@ output         : -1
 ast            : CAST(1.1 AS VARIANT)
 raw expr       : CAST(1.1_f64 AS Variant)
 checked expr   : CAST(1.1_f64 AS Variant)
-optimized expr : 0x2000000020000009021001808714711427
+optimized expr : 0x2000000020000009603ff199999999999a
 output type    : Variant
 output domain  : Undefined
-output         : 1.1000000000000001
+output         : 1.1
 
 
 ast            : CAST(0/0 AS VARIANT)
 raw expr       : CAST(divide(0_u8, 0_u8) AS Variant)
 checked expr   : CAST(divide<UInt8, UInt8>(0_u8, 0_u8) AS Variant)
-optimized expr : 0x2000000000000000
+optimized expr : 0x200000002000000110
 output type    : Variant
 output domain  : Undefined
-output         : null
+output         : NaN
 
 
 ast            : CAST(1/0 AS VARIANT)
 raw expr       : CAST(divide(1_u8, 0_u8) AS Variant)
 checked expr   : CAST(divide<UInt8, UInt8>(1_u8, 0_u8) AS Variant)
-optimized expr : 0x2000000000000000
+optimized expr : 0x200000002000000120
 output type    : Variant
 output domain  : Undefined
-output         : null
+output         : inf
 
 
 ast            : CAST(-1/0 AS VARIANT)
 raw expr       : CAST(minus(divide(1_u8, 0_u8)) AS Variant)
 checked expr   : CAST(minus<Float64>(divide<UInt8, UInt8>(1_u8, 0_u8)) AS Variant)
-optimized expr : 0x2000000000000000
+optimized expr : 0x200000002000000130
 output type    : Variant
 output domain  : Undefined
-output         : null
+output         : -inf
 
 
 ast            : CAST('🍦 が美味しい' AS VARIANT)
@@ -73,7 +73,7 @@ output         : "🍦 が美味しい"
 ast            : CAST([0, 1, 2] AS VARIANT)
 raw expr       : CAST(array(0_u8, 1_u8, 2_u8) AS Variant)
 checked expr   : CAST(array<T0=UInt8><T0, T0, T0>(0_u8, 1_u8, 2_u8) AS Variant)
-optimized expr : 0x80000003200000012000000120000001000102
+optimized expr : 0x800000032000000120000002200000020050015002
 output type    : Variant
 output domain  : Undefined
 output         : [0,1,2]
@@ -91,7 +91,7 @@ output         : [0,"a"]
 ast            : CAST(to_timestamp(1000000) AS VARIANT)
 raw expr       : CAST(to_timestamp(1000000_u32) AS Variant)
 checked expr   : CAST(to_timestamp<Int64>(CAST(1000000_u32 AS Int64)) AS Variant)
-optimized expr : 0x200000002000000702000010a5d4e8
+optimized expr : 0x200000002000000940000000e8d4a51000
 output type    : Variant
 output domain  : Unknown
 output         : 1000000000000
@@ -167,7 +167,7 @@ output         : 0
 ast            : TRY_CAST(-1 AS VARIANT)
 raw expr       : TRY_CAST(minus(1_u8) AS Variant)
 checked expr   : TRY_CAST(minus<UInt8>(1_u8) AS Variant NULL)
-optimized expr : 0x2000000020000003030001
+optimized expr : 0x200000002000000240ff
 output type    : Variant NULL
 output domain  : Undefined
 output         : -1
@@ -176,37 +176,37 @@ output         : -1
 ast            : TRY_CAST(1.1 AS VARIANT)
 raw expr       : TRY_CAST(1.1_f64 AS Variant)
 checked expr   : TRY_CAST(1.1_f64 AS Variant NULL)
-optimized expr : 0x2000000020000009021001808714711427
+optimized expr : 0x2000000020000009603ff199999999999a
 output type    : Variant NULL
 output domain  : Undefined
-output         : 1.1000000000000001
+output         : 1.1
 
 
 ast            : TRY_CAST(0/0 AS VARIANT)
 raw expr       : TRY_CAST(divide(0_u8, 0_u8) AS Variant)
 checked expr   : TRY_CAST(divide<UInt8, UInt8>(0_u8, 0_u8) AS Variant NULL)
-optimized expr : 0x2000000000000000
+optimized expr : 0x200000002000000110
 output type    : Variant NULL
 output domain  : Undefined
-output         : null
+output         : NaN
 
 
 ast            : TRY_CAST(1/0 AS VARIANT)
 raw expr       : TRY_CAST(divide(1_u8, 0_u8) AS Variant)
 checked expr   : TRY_CAST(divide<UInt8, UInt8>(1_u8, 0_u8) AS Variant NULL)
-optimized expr : 0x2000000000000000
+optimized expr : 0x200000002000000120
 output type    : Variant NULL
 output domain  : Undefined
-output         : null
+output         : inf
 
 
 ast            : TRY_CAST(-1/0 AS VARIANT)
 raw expr       : TRY_CAST(minus(divide(1_u8, 0_u8)) AS Variant)
 checked expr   : TRY_CAST(minus<Float64>(divide<UInt8, UInt8>(1_u8, 0_u8)) AS Variant NULL)
-optimized expr : 0x2000000000000000
+optimized expr : 0x200000002000000130
 output type    : Variant NULL
 output domain  : Undefined
-output         : null
+output         : -inf
 
 
 ast            : TRY_CAST('🍦 が美味しい' AS VARIANT)
@@ -221,7 +221,7 @@ output         : "🍦 が美味しい"
 ast            : TRY_CAST([0, 1, 2] AS VARIANT)
 raw expr       : TRY_CAST(array(0_u8, 1_u8, 2_u8) AS Variant)
 checked expr   : TRY_CAST(array<T0=UInt8><T0, T0, T0>(0_u8, 1_u8, 2_u8) AS Variant NULL)
-optimized expr : 0x80000003200000012000000120000001000102
+optimized expr : 0x800000032000000120000002200000020050015002
 output type    : Variant NULL
 output domain  : Undefined
 output         : [0,1,2]
@@ -239,7 +239,7 @@ output         : [0,"a"]
 ast            : TRY_CAST(to_timestamp(1000000) AS VARIANT)
 raw expr       : TRY_CAST(to_timestamp(1000000_u32) AS Variant)
 checked expr   : TRY_CAST(to_timestamp<Int64>(CAST(1000000_u32 AS Int64)) AS Variant NULL)
-optimized expr : 0x200000002000000702000010a5d4e8
+optimized expr : 0x200000002000000940000000e8d4a51000
 output type    : Variant NULL
 output domain  : Unknown
 output         : 1000000000000

@@ -28,10 +28,10 @@ output         : false
 ast            : 1.0=1
 raw expr       : eq(1_f64, 1_u8)
 checked expr   : eq<Variant, Variant>(CAST(1_f64 AS Variant), CAST(1_u8 AS Variant))
-optimized expr : true
+optimized expr : false
 output type    : Boolean
 output domain  : Unknown
-output         : true
+output         : false
 
 
 ast            : true=null
@@ -90,15 +90,15 @@ evaluation:
 | Domain | {0..=10} | {-1..=10} | Unknown |
 | Row 0  | 0        | 0         | true    |
 | Row 1  | 1        | -1        | false   |
-| Row 2  | 2        | 2         | true    |
-| Row 3  | 3        | 3         | true    |
-| Row 4  | 4        | 4         | true    |
-| Row 5  | 5        | 5         | true    |
-| Row 6  | 6        | 6         | true    |
-| Row 7  | 7        | 7         | true    |
-| Row 8  | 8        | 8         | true    |
-| Row 9  | 9        | 9         | true    |
-| Row 10 | 10       | 10        | true    |
+| Row 2  | 2        | 2         | false   |
+| Row 3  | 3        | 3         | false   |
+| Row 4  | 4        | 4         | false   |
+| Row 5  | 5        | 5         | false   |
+| Row 6  | 6        | 6         | false   |
+| Row 7  | 7        | 7         | false   |
+| Row 8  | 8        | 8         | false   |
+| Row 9  | 9        | 9         | false   |
+| Row 10 | 10       | 10        | false   |
 +--------+----------+-----------+---------+
 evaluation (internal):
 +--------+--------------------------------------------+
@@ -106,7 +106,7 @@ evaluation (internal):
 +--------+--------------------------------------------+
 | lhs    | UInt8([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])  |
 | rhs    | Int64([0, -1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) |
-| Output | Boolean([0b11111101, 0b_____111])          |
+| Output | Boolean([0b00000001, 0b_____000])          |
 +--------+--------------------------------------------+
 
 
@@ -449,10 +449,10 @@ output         : true
 ast            : 1.1<=2.1
 raw expr       : lte(1.1_f64, 2.1_f64)
 checked expr   : lte<Variant, Variant>(CAST(1.1_f64 AS Variant), CAST(2.1_f64 AS Variant))
-optimized expr : false
+optimized expr : true
 output type    : Boolean
 output domain  : Unknown
-output         : false
+output         : true
 
 
 ast            : true <= true
@@ -576,10 +576,10 @@ output         : false
 ast            : 1.2>1.1
 raw expr       : gt(1.2_f64, 1.1_f64)
 checked expr   : gt<Variant, Variant>(CAST(1.2_f64 AS Variant), CAST(1.1_f64 AS Variant))
-optimized expr : false
+optimized expr : true
 output type    : Boolean
 output domain  : Unknown
-output         : false
+output         : true
 
 
 ast            : true > true

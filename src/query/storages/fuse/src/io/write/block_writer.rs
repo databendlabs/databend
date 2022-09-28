@@ -24,7 +24,7 @@ use common_fuse_meta::meta::Location;
 use opendal::Operator;
 use uuid::Uuid;
 
-use crate::index::BloomFilter;
+use crate::index::BlockFilter;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::util;
 use crate::statistics::gen_columns_statistics;
@@ -94,13 +94,13 @@ impl<'a> BlockWriter<'a> {
         block: &DataBlock,
         block_id: Uuid,
     ) -> Result<(u64, Location)> {
-        let bloom_index = BloomFilter::try_create(&[block])?;
-        let index_block = bloom_index.bloom_block;
+        let bloom_index = BlockFilter::try_create(&[block])?;
+        let index_block = bloom_index.filter_block;
         let location = self
             .location_generator
             .block_bloom_index_location(&block_id);
         let mut data = Vec::with_capacity(DEFAULT_BLOOM_INDEX_WRITE_BUFFER_SIZE);
-        let index_block_schema = &bloom_index.bloom_schema;
+        let index_block_schema = &bloom_index.filter_schema;
         let (size, _) = serialize_data_blocks_with_compression(
             vec![index_block],
             index_block_schema,

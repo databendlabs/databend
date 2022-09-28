@@ -34,11 +34,8 @@ fn test_cast_to_variant(file: &mut impl Write) {
     run_ast(file, "CAST(0 AS VARIANT)", &[]);
     run_ast(file, "CAST(-1 AS VARIANT)", &[]);
     run_ast(file, "CAST(1.1 AS VARIANT)", &[]);
-    // FIXME(andylokandy): Nan is not supported yet.
     run_ast(file, "CAST(0/0 AS VARIANT)", &[]);
-    // FIXME(andylokandy): Inf is not supported yet.
     run_ast(file, "CAST(1/0 AS VARIANT)", &[]);
-    // FIXME(andylokandy): NegInf is not supported yet.
     run_ast(file, "CAST(-1/0 AS VARIANT)", &[]);
     run_ast(file, "CAST('🍦 が美味しい' AS VARIANT)", &[]);
     run_ast(file, "CAST([0, 1, 2] AS VARIANT)", &[]);

@@ -162,29 +162,20 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, buf: &mut Vec<u8>) {
         ScalarRef::Null => common_jsonb::Value::Null,
         ScalarRef::EmptyArray => common_jsonb::Value::Array(vec![]),
         ScalarRef::Number(n) => match n {
-            NumberScalar::UInt8(n) => common_jsonb::Value::Number(n.into()),
-            NumberScalar::UInt16(n) => common_jsonb::Value::Number(n.into()),
-            NumberScalar::UInt32(n) => common_jsonb::Value::Number(n.into()),
-            NumberScalar::UInt64(n) => common_jsonb::Value::Number(n.into()),
-            NumberScalar::Int8(n) => common_jsonb::Value::Number(n.into()),
-            NumberScalar::Int16(n) => common_jsonb::Value::Number(n.into()),
-            NumberScalar::Int32(n) => common_jsonb::Value::Number(n.into()),
-            NumberScalar::Int64(n) => common_jsonb::Value::Number(n.into()),
-            // TODO(andylokandy): properly cast Nan and Inf.
-            NumberScalar::Float32(n) => {
-                n.0.try_into()
-                    .map(common_jsonb::Value::Number)
-                    .unwrap_or(common_jsonb::Value::Null)
-            }
-            NumberScalar::Float64(n) => {
-                n.0.try_into()
-                    .map(common_jsonb::Value::Number)
-                    .unwrap_or(common_jsonb::Value::Null)
-            }
+            NumberScalar::UInt8(n) => n.into(),
+            NumberScalar::UInt16(n) => n.into(),
+            NumberScalar::UInt32(n) => n.into(),
+            NumberScalar::UInt64(n) => n.into(),
+            NumberScalar::Int8(n) => n.into(),
+            NumberScalar::Int16(n) => n.into(),
+            NumberScalar::Int32(n) => n.into(),
+            NumberScalar::Int64(n) => n.into(),
+            NumberScalar::Float32(n) => n.0.into(),
+            NumberScalar::Float64(n) => n.0.into(),
         },
         ScalarRef::Boolean(b) => common_jsonb::Value::Bool(b),
         ScalarRef::String(s) => common_jsonb::Value::String(String::from_utf8_lossy(s)),
-        ScalarRef::Timestamp(Timestamp { ts, .. }) => common_jsonb::Value::Number(ts.into()),
+        ScalarRef::Timestamp(Timestamp { ts, .. }) => ts.into(),
         ScalarRef::Array(col) => {
             let items = cast_scalars_to_variants(col.iter());
             common_jsonb::build_array(items.iter(), buf).expect("failed to build jsonb array");

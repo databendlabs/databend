@@ -14,14 +14,11 @@
 
 use std::borrow::Cow;
 use std::collections::BTreeMap;
-use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::ops::Neg;
 
-use decimal_rs::Decimal;
-
+use super::number::Number;
 use super::ser::Encoder;
 
 pub type Object<'a> = BTreeMap<String, Value<'a>>;
@@ -32,13 +29,13 @@ pub enum Value<'a> {
     Null,
     Bool(bool),
     String(Cow<'a, str>),
-    Number(Decimal),
+    Number(Number),
     Array(Vec<Value<'a>>),
     Object(Object<'a>),
 }
 
 impl<'a> Debug for Value<'a> {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, formatter: &mut Formatter) -> std::fmt::Result {
         match *self {
             Value::Null => formatter.debug_tuple("Null").finish(),
             Value::Bool(v) => formatter.debug_tuple("Bool").field(&v).finish(),
@@ -155,36 +152,21 @@ impl<'a> Value<'a> {
 
     pub fn as_i64(&self) -> Option<i64> {
         match self {
-            Value::Number(d) => {
-                if d.scale() == 0 {
-                    let (v, _, is_neg) = d.into_parts();
-                    let v = v as i64;
-                    if is_neg { Some(v.neg()) } else { Some(v) }
-                } else {
-                    None
-                }
-            }
+            Value::Number(n) => n.as_i64(),
             _ => None,
         }
     }
 
     pub fn as_u64(&self) -> Option<u64> {
         match self {
-            Value::Number(d) => {
-                if d.scale() == 0 && d.is_sign_positive() {
-                    let (v, _, is_neg) = d.into_parts();
-                    if !is_neg { Some(v as u64) } else { None }
-                } else {
-                    None
-                }
-            }
+            Value::Number(n) => n.as_u64(),
             _ => None,
         }
     }
 
     pub fn as_f64(&self) -> Option<f64> {
         match self {
-            Value::Number(d) => Some(d.into()),
+            Value::Number(n) => n.as_f64(),
             _ => None,
         }
     }
