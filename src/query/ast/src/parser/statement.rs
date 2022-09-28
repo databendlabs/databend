@@ -1425,6 +1425,16 @@ pub fn uri_location(i: Input) -> IResult<UriLocation> {
             conn.extend(credentials_opt.map(|v| v.2).unwrap_or_default());
             conn.extend(encryption_opt.map(|v| v.2).unwrap_or_default());
 
+            // adding an `https` scheme to `endpoint_url`s if their schemes are omitted.
+            //
+            // WARNING: if there is an `endpoint_url` option in your statement to implement, please be awared.
+            if let Some(endpoint) = conn.get("endpoint_url").take() {
+                // cannot parse with `Uri` here, parsing schemeless URIs will lead to an error.
+                if !endpoint.starts_with("http://") && !endpoint.starts_with("https://") {
+                    conn.insert("endpoint_url".to_string(), format!("https://{}", endpoint));
+                }
+            }
+
             Ok(UriLocation {
                 protocol: parsed.scheme().to_string(),
                 name: parsed

@@ -31,25 +31,6 @@ use common_storage::STORAGE_S3_DEFAULT_ENDPOINT;
 fn test_parse_uri_location() -> Result<()> {
     let cases = vec![
         (
-            "secure scheme by default",
-            UriLocation {
-                protocol: "ipfs".to_string(),
-                name: "too-naive".to_string(),
-                path: "/".to_string(),
-                connection: vec![("endpoint_url", "ipfs.filebase.io")]
-                    .into_iter()
-                    .map(|(k, v)| (k.to_string(), v.to_string()))
-                    .collect(),
-            },
-            (
-                StorageParams::Ipfs(StorageIpfsConfig {
-                    endpoint_url: "https://ipfs.filebase.io".to_string(),
-                    root: "/ipfs/too-naive".to_string(),
-                }),
-                "/".to_string(),
-            ),
-        ),
-        (
             "ftps location",
             UriLocation {
                 protocol: "ftps".to_string(),
