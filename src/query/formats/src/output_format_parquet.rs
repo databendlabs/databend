@@ -41,10 +41,17 @@ impl OutputFormat for ParquetOutputFormat {
         Ok(vec![])
     }
 
-    fn finalize(&mut self) -> Result<Vec<u8>> {
-        let mut buf = Vec::with_capacity(100 * 1024 * 1024);
-        let _ = serialize_data_blocks(self.data_blocks.clone(), &self.schema, &mut buf)?;
+    fn buffer_size(&mut self) -> usize {
+        self.data_blocks.iter().map(|b| b.memory_size()).sum()
+    }
 
+    fn finalize(&mut self) -> Result<Vec<u8>> {
+        let blocks = std::mem::take(&mut self.data_blocks);
+        if blocks.is_empty() {
+            return Ok(vec![]);
+        }
+        let mut buf = Vec::with_capacity(100 * 1024 * 1024);
+        let _ = serialize_data_blocks(blocks, &self.schema, &mut buf)?;
         Ok(buf)
     }
 }

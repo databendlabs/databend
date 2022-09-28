@@ -65,9 +65,7 @@ pub async fn upload_to_stage(
         .map_err(InternalServerError)?;
 
     let rename_me_qry_ctx: Arc<dyn TableContext> = context.clone();
-    let op = StageTable::get_op(&rename_me_qry_ctx, &stage)
-        .await
-        .map_err(InternalServerError)?;
+    let op = StageTable::get_op(&rename_me_qry_ctx, &stage).map_err(InternalServerError)?;
 
     let relative_path = req
         .headers()
