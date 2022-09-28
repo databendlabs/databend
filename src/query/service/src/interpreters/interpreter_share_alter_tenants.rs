@@ -61,7 +61,12 @@ impl Interpreter for AlterShareTenantsInterpreter {
             };
             let resp = meta_api.add_share_tenants(req).await?;
 
-            save_share_spec(self.ctx.get_storage_operator()?, resp.spec_vec).await?;
+            save_share_spec(
+                &self.ctx.get_tenant(),
+                self.ctx.get_storage_operator()?,
+                resp.spec_vec,
+            )
+            .await?;
         } else {
             let req = RemoveShareAccountsReq {
                 share_name: ShareNameIdent {
@@ -73,7 +78,12 @@ impl Interpreter for AlterShareTenantsInterpreter {
             };
             let resp = meta_api.remove_share_tenants(req).await?;
 
-            save_share_spec(self.ctx.get_storage_operator()?, resp.spec_vec).await?;
+            save_share_spec(
+                &self.ctx.get_tenant(),
+                self.ctx.get_storage_operator()?,
+                resp.spec_vec,
+            )
+            .await?;
         };
 
         Ok(PipelineBuildResult::create())

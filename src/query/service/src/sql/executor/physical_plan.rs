@@ -251,6 +251,10 @@ impl HashJoin {
             JoinType::LeftSemi | JoinType::LeftAnti => {
                 // Do nothing
             }
+            JoinType::RightSemi | JoinType::RightAnti => {
+                fields.clear();
+                fields = self.build.output_schema()?.fields().clone();
+            }
             JoinType::Mark => {
                 fields.clear();
                 fields = self.build.output_schema()?.fields().clone();

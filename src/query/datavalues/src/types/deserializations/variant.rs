@@ -77,7 +77,9 @@ impl TypeDeserializer for VariantDeserializer {
     }
 
     fn de_json(&mut self, value: &serde_json::Value, _format: &FormatSettings) -> Result<()> {
-        self.builder.append_value(VariantValue::from(value));
+        let val = VariantValue::from(value);
+        self.memory_size += val.calculate_memory_size();
+        self.builder.append_value(val);
         Ok(())
     }
 

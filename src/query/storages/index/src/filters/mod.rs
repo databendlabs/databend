@@ -1,4 +1,4 @@
-//  Copyright 2021 Datafuse Labs.
+//  Copyright 2022 Datafuse Labs.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -12,10 +12,14 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-mod limiter;
-mod pruner;
-mod pruning_executor;
-mod range_pruner;
-mod topn_pruner;
+//! Probabilistic filters
 
-pub use pruning_executor::BlockPruner;
+mod filter;
+mod xor8;
+
+pub use filter::Filter;
+pub use filter::FilterBuilder;
+pub use xor8::Xor8Builder;
+pub use xor8::Xor8BuildingError;
+pub use xor8::Xor8CodecError;
+pub use xor8::Xor8Filter;
