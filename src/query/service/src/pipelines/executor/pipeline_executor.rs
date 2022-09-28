@@ -130,14 +130,6 @@ impl PipelineExecutor {
             let workers_condvar = WorkersCondvar::create(threads_num);
             let global_tasks_queue = ExecutorTasksQueue::create(threads_num);
 
-            let mut init_schedule_queue = graph.init_schedule_queue()?;
-
-            let mut tasks = VecDeque::new();
-            while let Some(task) = init_schedule_queue.pop_task() {
-                tasks.push_back(task);
-            }
-            global_tasks_queue.init_tasks(tasks);
-
             Ok(Arc::new(PipelineExecutor {
                 graph,
                 threads_num,
@@ -164,8 +156,7 @@ impl PipelineExecutor {
     }
 
     pub fn execute(self: &Arc<Self>) -> Result<()> {
-        // TODO: the on init callback cannot be killed.
-        (self.on_init_callback)()?;
+        self.init()?;
 
         self.start_executor_daemon()?;
 
@@ -191,6 +182,24 @@ impl PipelineExecutor {
 
         (self.on_finished_callback)(&None)?;
         Ok(())
+    }
+
+    fn init(self: &Arc<Self>) -> Result<()> {
+        unsafe {
+            // TODO: the on init callback cannot be killed.
+            (self.on_init_callback)()?;
+
+            let mut init_schedule_queue = self.graph.init_schedule_queue()?;
+
+            let mut tasks = VecDeque::new();
+            while let Some(task) = init_schedule_queue.pop_task() {
+                tasks.push_back(task);
+            }
+
+            self.global_tasks_queue.init_tasks(tasks);
+
+            Ok(())
+        }
     }
 
     fn start_executor_daemon(self: &Arc<Self>) -> Result<()> {
