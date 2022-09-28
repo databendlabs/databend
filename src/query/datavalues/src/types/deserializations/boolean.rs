@@ -23,6 +23,10 @@ pub struct BooleanDeserializer {
 }
 
 impl TypeDeserializer for BooleanDeserializer {
+    fn memory_size(&self) -> usize {
+        self.builder.memory_size()
+    }
+
     fn de_binary(&mut self, reader: &mut &[u8], _format: &FormatSettings) -> Result<()> {
         let value: bool = reader.read_scalar()?;
         self.builder.append_value(value);
