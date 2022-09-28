@@ -32,8 +32,7 @@ use opendal::Operator;
 
 use crate::sessions::TableContext;
 
-const MAX_SIZE_PER_FILE: usize = 256 * 1024 * 1024;
-
+#[derive(Debug)]
 enum State {
     None,
     NeedSerialize(DataBlock),
@@ -49,7 +48,6 @@ pub struct StageTableSink {
     output: Option<Arc<OutputPort>>,
 
     table_info: StageTableInfo,
-    single: bool,
     working_buffer: Vec<u8>,
     working_datablocks: Vec<DataBlock>,
     output_format: Box<dyn OutputFormat>,
@@ -58,6 +56,9 @@ pub struct StageTableSink {
     uuid: String,
     group_id: usize,
     batch_id: usize,
+
+    single: bool,
+    max_file_size: usize,
 }
 
 impl StageTableSink {
@@ -66,7 +67,6 @@ impl StageTableSink {
         input: Arc<InputPort>,
         ctx: Arc<dyn TableContext>,
         table_info: StageTableInfo,
-        single: bool,
         data_accessor: Operator,
         output: Option<Arc<OutputPort>>,
 
@@ -91,6 +91,8 @@ impl StageTableSink {
         }
 
         let output_format = fmt.create_format(table_info.schema(), format_settings);
+        let max_file_size = table_info.stage_info.copy_options.max_file_size;
+        let single = table_info.stage_info.copy_options.single;
 
         Ok(ProcessorPtr::create(Box::new(StageTableSink {
             ctx,
@@ -101,13 +103,14 @@ impl StageTableSink {
             output,
             single,
             output_format,
-            working_buffer: Vec::with_capacity((MAX_SIZE_PER_FILE as f64 * 1.2) as usize),
+            working_buffer: Vec::with_capacity((max_file_size as f64 * 1.2) as usize),
             working_datablocks: vec![],
             write_header: false,
 
             uuid,
             group_id,
             batch_id: 0,
+            max_file_size,
         })))
     }
 
@@ -159,21 +162,24 @@ impl Processor for StageTableSink {
 
         if self.input.is_finished() {
             let data = std::mem::take(&mut self.working_buffer);
-            if data.is_empty() {
-                self.state = State::Finished;
-                return Ok(Event::Finished);
+            if data.len() > self.max_file_size {
+                self.state = State::NeedWrite(data, None);
+                self.working_datablocks.clear();
+                return Ok(Event::Async);
             }
-            match &self.output {
-                Some(output) => {
-                    for block in &self.working_datablocks {
-                        output.push_data(Ok(block.clone()));
+
+            match (&self.output, self.working_datablocks.is_empty()) {
+                (Some(output), false) => {
+                    if output.can_push() {
+                        let block = self.working_datablocks.pop().unwrap();
+                        output.push_data(Ok(block));
                     }
-                    self.state = State::Finished;
-                    return Ok(Event::Finished);
+                    return Ok(Event::NeedConsume);
                 }
-                None => {
-                    self.state = State::NeedWrite(data, None);
-                    return Ok(Event::Async);
+                _ => {
+                    self.state = State::Finished;
+                    self.output.as_mut().map(|output| output.finish());
+                    return Ok(Event::Finished);
                 }
             }
         }
@@ -190,32 +196,43 @@ impl Processor for StageTableSink {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
             State::NeedSerialize(datablock) => {
-                let old_pos = self.working_buffer.len();
-
                 if !self.write_header {
                     let prefix = self.output_format.serialize_prefix()?;
                     self.working_buffer.extend_from_slice(&prefix);
                     self.write_header = true;
                 }
 
-                let bs = self.output_format.serialize_block(&datablock)?;
-                self.working_buffer.extend_from_slice(bs.as_slice());
+                if !self.single {
+                    for i in (0..datablock.num_rows()).step_by(1024) {
+                        let end = (i + 1024).min(datablock.num_rows());
+                        let small_block = datablock.slice(i, end - i);
 
-                if !self.single && self.working_buffer.len() > MAX_SIZE_PER_FILE {
-                    let mut data = std::mem::take(&mut self.working_buffer);
-                    if old_pos != 0 {
-                        data.truncate(old_pos);
-                        let final_bytes = self.output_format.finalize()?;
-                        data.extend_from_slice(&final_bytes);
-                        self.state = State::NeedWrite(data, Some(datablock));
-                        return Ok(());
-                    } else {
-                        let final_bytes = self.output_format.finalize()?;
-                        data.extend_from_slice(&final_bytes);
-                        self.state = State::NeedWrite(data, None);
+                        let bs = self.output_format.serialize_block(&small_block)?;
+                        self.working_buffer.extend_from_slice(bs.as_slice());
+
+                        if self.working_buffer.len() + self.output_format.buffer_size()
+                            >= self.max_file_size
+                        {
+                            let bs = self.output_format.finalize()?;
+                            self.working_buffer.extend_from_slice(&bs);
+
+                            let data = std::mem::take(&mut self.working_buffer);
+                            self.working_datablocks.clear();
+                            if end != datablock.num_rows() {
+                                let remain = datablock.slice(end, datablock.num_rows() - end);
+                                self.state = State::NeedWrite(data, Some(remain));
+                            } else {
+                                self.state = State::NeedWrite(data, None);
+                            }
+                            return Ok(());
+                        }
                     }
+                } else {
+                    let bs = self.output_format.serialize_block(&datablock)?;
+                    self.working_buffer.extend_from_slice(bs.as_slice());
                 }
 
+                // hold this datablock
                 if self.output.is_some() {
                     self.working_datablocks.push(datablock);
                 }

@@ -87,6 +87,7 @@ pub(crate) fn test_fs_stage_info() -> mt::UserStageInfo {
             size_limit: 1038,
             purge: true,
             single: false,
+            max_file_size: 256 * 1024 * 1024,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -120,6 +121,7 @@ pub(crate) fn test_s3_stage_info() -> mt::UserStageInfo {
             size_limit: 1038,
             purge: true,
             single: false,
+            max_file_size: 256 * 1024 * 1024,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -151,6 +153,7 @@ pub(crate) fn test_gcs_stage_info() -> mt::UserStageInfo {
             size_limit: 1038,
             purge: true,
             single: false,
+            max_file_size: 256 * 1024 * 1024,
         },
         comment: "test".to_string(),
         ..Default::default()

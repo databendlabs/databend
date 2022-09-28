@@ -27,7 +27,6 @@ use common_meta_app::schema::TableInfo;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
 use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::SinkPipeBuilder;
 use common_pipeline_sources::processors::sources::input_formats::InputContext;
 use common_storage::init_operator;
@@ -145,35 +144,27 @@ impl Table for StageTable {
 
         let uuid = uuid::Uuid::new_v4().to_string();
         let mut group_id = 0;
-        // parallel compact unload, the partial block will flush into next operator
-        if !single {
-            for _ in 0..pipeline.output_len() {
-                let input_port = InputPort::create();
-                let output_port = OutputPort::create();
 
-                sink_pipeline_builder.add_sink(
-                    input_port.clone(),
+        // parallel compact unload, the partial block will flush into next operator
+        if !single && pipeline.output_len() > 1 {
+            for _ in 0..pipeline.output_len() {
+                pipeline.add_transform(|input, output| {
                     StageTableSink::try_create(
-                        input_port,
+                        input,
                         ctx.clone(),
                         self.table_info.clone(),
-                        single,
                         op.clone(),
-                        Some(output_port),
+                        Some(output),
                         uuid.clone(),
                         group_id,
-                    )?,
-                );
-
+                    )
+                })?;
                 group_id += 1;
             }
-            pipeline.add_pipe(sink_pipeline_builder.finalize());
         }
 
         // final compact unload
         pipeline.resize(1)?;
-
-        let mut sink_pipeline_builder = SinkPipeBuilder::create();
         let input_port = InputPort::create();
 
         sink_pipeline_builder.add_sink(
@@ -182,7 +173,6 @@ impl Table for StageTable {
                 input_port,
                 ctx,
                 self.table_info.clone(),
-                single,
                 op,
                 None,
                 uuid,
@@ -190,6 +180,7 @@ impl Table for StageTable {
             )?,
         );
 
+        pipeline.add_pipe(sink_pipeline_builder.finalize());
         Ok(())
     }
 

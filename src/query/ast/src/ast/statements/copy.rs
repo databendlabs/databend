@@ -38,6 +38,8 @@ pub struct CopyStmt<'a> {
     /// TODO(xuanwo): parse into validation_mode directly.
     pub validation_mode: String,
     pub size_limit: usize,
+    pub max_file_size: usize,
+    pub single: bool,
     pub purge: bool,
     pub force: bool,
 }
@@ -74,6 +76,11 @@ impl Display for CopyStmt<'_> {
             write!(f, " SIZE_LIMIT = {}", self.size_limit)?;
         }
 
+        if self.max_file_size != 0 {
+            write!(f, " MAX_FILE_SIZE = {}", self.max_file_size)?;
+        }
+
+        write!(f, " single = {}", self.single)?;
         write!(f, " PURGE = {}", self.purge)?;
         write!(f, " FORCE = {}", self.force)?;
         Ok(())
