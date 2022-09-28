@@ -19,7 +19,7 @@ use common_metrics::counter;
 use tonic::transport::channel::Channel;
 use tracing::debug;
 
-use crate::metrics::incr_meta_metrics_active_peers;
+use crate::metrics::raft_metrics;
 
 /// A metrics reporter of active raft peers.
 pub struct PeerCounter {
@@ -30,7 +30,7 @@ pub struct PeerCounter {
 
 impl counter::Count for PeerCounter {
     fn incr_count(&mut self, n: i64) {
-        incr_meta_metrics_active_peers(&self.target, &self.endpoint_str, n)
+        raft_metrics::network::incr_active_peers(&self.target, &self.endpoint_str, n)
     }
 }
 

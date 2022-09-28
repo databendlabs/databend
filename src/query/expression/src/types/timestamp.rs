@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::ops::Range;
 
 use common_arrow::arrow::buffer::Buffer;
@@ -155,12 +156,24 @@ impl ArgType for TimestampType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Timestamp {
     /// Milliseconds since UNIX epoch.
     pub ts: i64,
     /// Fractional digits to display.
     pub precision: u8,
+}
+
+impl PartialOrd for Timestamp {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.ts.partial_cmp(&other.ts)
+    }
+}
+
+impl Ord for Timestamp {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.ts.cmp(&other.ts)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

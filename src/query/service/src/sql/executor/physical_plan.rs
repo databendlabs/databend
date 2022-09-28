@@ -248,7 +248,7 @@ impl HashJoin {
                     ));
                 }
             }
-            JoinType::Semi | JoinType::Anti => {
+            JoinType::LeftSemi | JoinType::LeftAnti => {
                 // Do nothing
             }
             JoinType::Mark => {

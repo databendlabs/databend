@@ -58,8 +58,8 @@ use tracing::error;
 use tracing::info;
 
 use crate::export::vec_kv_to_json;
-use crate::metrics::incr_meta_metrics_applying_snapshot;
-use crate::metrics::incr_raft_storage_fail;
+use crate::metrics::raft_metrics;
+use crate::metrics::server_metrics;
 use crate::store::ToStorageError;
 use crate::Opened;
 
@@ -304,7 +304,7 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
         {
             Err(err) => {
                 return {
-                    incr_raft_storage_fail("save_hard_state", true);
+                    raft_metrics::storage::incr_raft_storage_fail("save_hard_state", true);
                     Err(err)
                 };
             }
@@ -326,7 +326,7 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
         {
             Ok(entries) => return Ok(entries),
             Err(err) => {
-                incr_raft_storage_fail("try_get_log_entries", false);
+                raft_metrics::storage::incr_raft_storage_fail("try_get_log_entries", false);
                 Err(err)
             }
         }
@@ -344,7 +344,7 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
         {
             Ok(_) => return Ok(()),
             Err(err) => {
-                incr_raft_storage_fail("delete_conflict_logs_since", true);
+                raft_metrics::storage::incr_raft_storage_fail("delete_conflict_logs_since", true);
                 Err(err)
             }
         }
@@ -360,7 +360,7 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
             .await
             .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Write)
         {
-            incr_raft_storage_fail("purge_logs_upto", true);
+            raft_metrics::storage::incr_raft_storage_fail("purge_logs_upto", true);
             return Err(err);
         };
         if let Err(err) = self
@@ -369,7 +369,7 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
             .await
             .map_to_sto_err(ErrorSubject::Log(log_id), ErrorVerb::Delete)
         {
-            incr_raft_storage_fail("purge_logs_upto", true);
+            raft_metrics::storage::incr_raft_storage_fail("purge_logs_upto", true);
             return Err(err);
         }
 
@@ -390,7 +390,7 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
             .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Write)
         {
             Err(err) => {
-                incr_raft_storage_fail("append_to_log", true);
+                raft_metrics::storage::incr_raft_storage_fail("append_to_log", true);
                 Err(err)
             }
             Ok(_) => return Ok(()),
@@ -416,7 +416,7 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
                 .map_to_sto_err(ErrorSubject::Apply(entry.log_id), ErrorVerb::Write)
             {
                 Err(err) => {
-                    incr_raft_storage_fail("apply_to_state_machine", true);
+                    raft_metrics::storage::incr_raft_storage_fail("apply_to_state_machine", true);
                     return Err(err);
                 }
                 Ok(r) => r,
@@ -444,7 +444,7 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
             .map_to_sto_err(ErrorSubject::StateMachine, ErrorVerb::Read)
         {
             Err(err) => {
-                incr_raft_storage_fail("build_snapshot", false);
+                raft_metrics::storage::incr_raft_storage_fail("build_snapshot", false);
                 return Err(err);
             }
             Ok(r) => r,
@@ -482,7 +482,7 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
 
     #[tracing::instrument(level = "debug", skip(self), fields(id=self.id))]
     async fn begin_receiving_snapshot(&self) -> Result<Box<Self::SnapshotData>, StorageError> {
-        incr_meta_metrics_applying_snapshot(1);
+        server_metrics::incr_applying_snapshot(1);
         Ok(Box::new(Cursor::new(Vec::new())))
     }
 
@@ -498,7 +498,7 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
             { snapshot_size = snapshot.get_ref().len() },
             "decoding snapshot for installation"
         );
-        incr_meta_metrics_applying_snapshot(-1);
+        server_metrics::incr_applying_snapshot(-1);
 
         let new_snapshot = Snapshot {
             meta: meta.clone(),
@@ -512,7 +512,7 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
         match res {
             Ok(_) => {}
             Err(e) => {
-                incr_raft_storage_fail("install_snapshot", true);
+                raft_metrics::storage::incr_raft_storage_fail("install_snapshot", true);
                 error!("error: {:?} when install_snapshot", e);
             }
         };
@@ -557,7 +557,7 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
             .map_to_sto_err(ErrorSubject::HardState, ErrorVerb::Read)
         {
             Err(err) => {
-                incr_raft_storage_fail("read_hard_state", false);
+                raft_metrics::storage::incr_raft_storage_fail("read_hard_state", false);
                 return Err(err);
             }
             Ok(hard_state) => return Ok(hard_state),
@@ -571,7 +571,7 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
             .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Read)
         {
             Err(err) => {
-                incr_raft_storage_fail("get_log_state", false);
+                raft_metrics::storage::incr_raft_storage_fail("get_log_state", false);
                 return Err(err);
             }
             Ok(r) => r,
@@ -583,7 +583,7 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
             .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Read)
         {
             Err(err) => {
-                incr_raft_storage_fail("get_log_state", false);
+                raft_metrics::storage::incr_raft_storage_fail("get_log_state", false);
                 return Err(err);
             }
             Ok(r) => r,
@@ -614,7 +614,7 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
             .map_to_sto_err(ErrorSubject::StateMachine, ErrorVerb::Read)
         {
             Err(err) => {
-                incr_raft_storage_fail("last_applied_state", false);
+                raft_metrics::storage::incr_raft_storage_fail("last_applied_state", false);
                 return Err(err);
             }
             Ok(r) => r,
@@ -624,7 +624,7 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
             .map_to_sto_err(ErrorSubject::StateMachine, ErrorVerb::Read)
         {
             Err(err) => {
-                incr_raft_storage_fail("last_applied_state", false);
+                raft_metrics::storage::incr_raft_storage_fail("last_applied_state", false);
                 return Err(err);
             }
             Ok(r) => r,

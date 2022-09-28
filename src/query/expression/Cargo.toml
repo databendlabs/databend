@@ -28,6 +28,7 @@ itertools = "0.10"
 match-template = "0.0.1"
 num-traits = "0.2.15"
 ordered-float = { version = "3.1.0", features = ["serde"] }
+regex = "1.6.0"
 rust_decimal = "1.26"
 serde = "1.0"
 
