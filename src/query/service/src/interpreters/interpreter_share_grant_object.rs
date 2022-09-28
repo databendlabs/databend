@@ -59,7 +59,12 @@ impl Interpreter for GrantShareObjectInterpreter {
         };
         let resp = meta_api.grant_share_object(req).await?;
 
-        save_share_spec(self.ctx.get_storage_operator()?, resp.spec_vec).await?;
+        save_share_spec(
+            &self.ctx.get_tenant(),
+            self.ctx.get_storage_operator()?,
+            resp.spec_vec,
+        )
+        .await?;
 
         Ok(PipelineBuildResult::create())
     }
