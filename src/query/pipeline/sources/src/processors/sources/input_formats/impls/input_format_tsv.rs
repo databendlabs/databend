@@ -34,6 +34,7 @@ use crate::processors::sources::input_formats::input_format_text::RowBatch;
 pub struct InputFormatTSV {}
 
 impl InputFormatTSV {
+    #[allow(clippy::too_many_arguments)]
     fn read_row(
         buf: &[u8],
         deserializers: &mut Vec<common_datavalues::TypeDeserializerImpl>,
