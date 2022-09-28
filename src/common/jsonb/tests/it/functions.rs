@@ -33,7 +33,7 @@ fn test_build_array() {
     let mut buf: Vec<u8> = Vec::new();
     for s in sources {
         let value = parse_value(s.as_bytes()).unwrap();
-        value.to_vec(&mut buf).unwrap();
+        value.to_vec(&mut buf);
         offsets.push(buf.len());
     }
     let mut values = Vec::with_capacity(offsets.len());
@@ -74,7 +74,7 @@ fn test_build_object() {
     let mut buf: Vec<u8> = Vec::new();
     for s in sources {
         let value = parse_value(s.as_bytes()).unwrap();
-        value.to_vec(&mut buf).unwrap();
+        value.to_vec(&mut buf);
         offsets.push(buf.len());
     }
     let mut values = Vec::with_capacity(offsets.len());
@@ -162,9 +162,9 @@ fn test_compare() {
     let mut rbuf: Vec<u8> = Vec::new();
     for (l, r, expected) in sources {
         let lvalue = parse_value(l.as_bytes()).unwrap();
-        lvalue.to_vec(&mut lbuf).unwrap();
+        lvalue.to_vec(&mut lbuf);
         let rvalue = parse_value(r.as_bytes()).unwrap();
-        rvalue.to_vec(&mut rbuf).unwrap();
+        rvalue.to_vec(&mut rbuf);
         let res = compare(&lbuf, &rbuf).unwrap();
         assert_eq!(res, expected);
 

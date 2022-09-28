@@ -63,8 +63,8 @@ pub fn build_array<'a>(
 
 // build `JSONB` object from items
 // Assuming that the input values is valid JSONB data
-pub fn build_object<'a>(
-    items: impl IntoIterator<Item = (&'a str, &'a [u8])>,
+pub fn build_object<'a, K: AsRef<str>>(
+    items: impl IntoIterator<Item = (K, &'a [u8])>,
     buf: &mut Vec<u8>,
 ) -> Result<(), Error> {
     // reserve space for header
@@ -74,6 +74,7 @@ pub fn build_object<'a>(
     let mut val_data = Vec::new();
     let mut val_jentries = VecDeque::new();
     for (key, value) in items.into_iter() {
+        let key = key.as_ref();
         // write key jentry and key data
         let encoded_key_jentry = (STRING_TAG | key.len() as u32).to_be_bytes();
         buf.extend_from_slice(&encoded_key_jentry);

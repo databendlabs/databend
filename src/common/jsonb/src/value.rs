@@ -22,7 +22,6 @@ use std::ops::Neg;
 
 use decimal_rs::Decimal;
 
-use super::error::Error;
 use super::ser::Encoder;
 
 pub type Object<'a> = BTreeMap<String, Value<'a>>;
@@ -213,9 +212,8 @@ impl<'a> Value<'a> {
     }
 
     /// Attempts to serialize the JSONB Value into a byte stream.
-    pub fn to_vec(&self, buf: &mut Vec<u8>) -> Result<(), Error> {
+    pub fn to_vec(&self, buf: &mut Vec<u8>) {
         let mut encoder = Encoder::new(buf);
-        encoder.encode(self)?;
-        Ok(())
+        encoder.encode(self);
     }
 }

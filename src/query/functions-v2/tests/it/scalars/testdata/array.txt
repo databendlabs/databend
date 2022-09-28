@@ -1,0 +1,45 @@
+ast            : []
+raw expr       : array()
+checked expr   : array<>()
+optimized expr : [] :: Array(Nothing)
+output type    : Array(Nothing)
+output domain  : []
+output         : []
+
+
+ast            : [NULL, 8, -10]
+raw expr       : array(NULL, 8_u8, minus(10_u8))
+checked expr   : array<T0=Int32 NULL><T0, T0, T0>(CAST(NULL AS Int32 NULL), CAST(8_u8 AS Int32 NULL), CAST(minus<UInt8>(10_u8) AS Int32 NULL))
+optimized expr : [NULL, 8, -10]
+output type    : Array(Int32 NULL)
+output domain  : [{-10..=8} ∪ {NULL}]
+output         : [NULL, 8, -10]
+
+
+ast            : [['a', 'b'], []]
+raw expr       : array(array("a", "b"), array())
+checked expr   : array<T0=Array(String)><T0, T0>(array<T0=String><T0, T0>("a", "b"), CAST(array<>() AS Array(String)))
+optimized expr : [["a", "b"], []]
+output type    : Array(Array(String))
+output domain  : [[{"a"..="b"}]]
+output         : [["a", "b"], []]
+
+
+ast            : ['a', 1, parse_json('{"foo":"bar"}')]
+raw expr       : array("a", 1_u8, parse_json("{\"foo\":\"bar\"}"))
+checked expr   : array<T0=Variant><T0, T0, T0>(CAST("a" AS Variant), CAST(1_u8 AS Variant), parse_json<String>("{\"foo\":\"bar\"}"))
+optimized expr : ["a", 1, {"foo":"bar"}]
+output type    : Array(Variant)
+output domain  : Unknown
+output         : ["a", 1, {"foo":"bar"}]
+
+
+ast            : [parse_json('[]'), parse_json('{"foo":"bar"}')]
+raw expr       : array(parse_json("[]"), parse_json("{\"foo\":\"bar\"}"))
+checked expr   : array<T0=Variant><T0, T0>(parse_json<String>("[]"), parse_json<String>("{\"foo\":\"bar\"}"))
+optimized expr : [[], {"foo":"bar"}]
+output type    : Array(Variant)
+output domain  : Unknown
+output         : [[], {"foo":"bar"}]
+
+

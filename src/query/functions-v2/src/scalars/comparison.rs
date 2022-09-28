@@ -65,6 +65,7 @@ macro_rules! with_cmp_mapped_type {
 }
 
 pub fn register(registry: &mut FunctionRegistry) {
+    // FIXME(andylokandy): Variant should be registered after all other types.
     for ty in ALL_CMP_TYPES {
         with_cmp_mapped_type!(|DATA_TYPE| match ty {
             DataType::DATA_TYPE => {

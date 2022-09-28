@@ -18,7 +18,7 @@ output         : NULL
 
 ast            : 1=2
 raw expr       : eq(1_u8, 2_u8)
-checked expr   : eq<UInt8, UInt8>(1_u8, 2_u8)
+checked expr   : eq<Variant, Variant>(CAST(1_u8 AS Variant), CAST(2_u8 AS Variant))
 optimized expr : false
 output type    : Boolean
 output domain  : Unknown
@@ -27,7 +27,7 @@ output         : false
 
 ast            : 1.0=1
 raw expr       : eq(1_f64, 1_u8)
-checked expr   : eq<Float64, Float64>(1_f64, CAST(1_u8 AS Float64))
+checked expr   : eq<Variant, Variant>(CAST(1_f64 AS Variant), CAST(1_u8 AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : Unknown
@@ -81,7 +81,7 @@ output         : false
 
 ast            : lhs = rhs
 raw expr       : eq(ColumnRef(0)::UInt8, ColumnRef(1)::Int64)
-checked expr   : eq<Int64, Int64>(CAST(ColumnRef(0) AS Int64), ColumnRef(1))
+checked expr   : eq<Variant, Variant>(CAST(ColumnRef(0) AS Variant), CAST(ColumnRef(1) AS Variant))
 evaluation:
 +--------+----------+-----------+---------+
 |        | lhs      | rhs       | Output  |
@@ -112,7 +112,7 @@ evaluation (internal):
 
 ast            : 1.1=1.1
 raw expr       : eq(1.1_f64, 1.1_f64)
-checked expr   : eq<Float64, Float64>(1.1_f64, 1.1_f64)
+checked expr   : eq<Variant, Variant>(CAST(1.1_f64 AS Variant), CAST(1.1_f64 AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : Unknown
@@ -193,7 +193,7 @@ output         : true
 
 ast            : 1!=2
 raw expr       : noteq(1_u8, 2_u8)
-checked expr   : noteq<UInt8, UInt8>(1_u8, 2_u8)
+checked expr   : noteq<Variant, Variant>(CAST(1_u8 AS Variant), CAST(2_u8 AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : Unknown
@@ -202,7 +202,7 @@ output         : true
 
 ast            : 1.1!=1.1
 raw expr       : noteq(1.1_f64, 1.1_f64)
-checked expr   : noteq<Float64, Float64>(1.1_f64, 1.1_f64)
+checked expr   : noteq<Variant, Variant>(CAST(1.1_f64 AS Variant), CAST(1.1_f64 AS Variant))
 optimized expr : false
 output type    : Boolean
 output domain  : Unknown
@@ -313,7 +313,7 @@ output         : true
 
 ast            : 3<2
 raw expr       : lt(3_u8, 2_u8)
-checked expr   : lt<UInt8, UInt8>(3_u8, 2_u8)
+checked expr   : lt<Variant, Variant>(CAST(3_u8 AS Variant), CAST(2_u8 AS Variant))
 optimized expr : false
 output type    : Boolean
 output domain  : Unknown
@@ -322,7 +322,7 @@ output         : false
 
 ast            : 1.1<1.1
 raw expr       : lt(1.1_f64, 1.1_f64)
-checked expr   : lt<Float64, Float64>(1.1_f64, 1.1_f64)
+checked expr   : lt<Variant, Variant>(CAST(1.1_f64 AS Variant), CAST(1.1_f64 AS Variant))
 optimized expr : false
 output type    : Boolean
 output domain  : Unknown
@@ -439,7 +439,7 @@ output         : false
 
 ast            : 1<=2
 raw expr       : lte(1_u8, 2_u8)
-checked expr   : lte<UInt8, UInt8>(1_u8, 2_u8)
+checked expr   : lte<Variant, Variant>(CAST(1_u8 AS Variant), CAST(2_u8 AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : Unknown
@@ -448,11 +448,11 @@ output         : true
 
 ast            : 1.1<=2.1
 raw expr       : lte(1.1_f64, 2.1_f64)
-checked expr   : lte<Float64, Float64>(1.1_f64, 2.1_f64)
-optimized expr : true
+checked expr   : lte<Variant, Variant>(CAST(1.1_f64 AS Variant), CAST(2.1_f64 AS Variant))
+optimized expr : false
 output type    : Boolean
 output domain  : Unknown
-output         : true
+output         : false
 
 
 ast            : true <= true
@@ -566,7 +566,7 @@ output         : true
 
 ast            : 1>2
 raw expr       : gt(1_u8, 2_u8)
-checked expr   : gt<UInt8, UInt8>(1_u8, 2_u8)
+checked expr   : gt<Variant, Variant>(CAST(1_u8 AS Variant), CAST(2_u8 AS Variant))
 optimized expr : false
 output type    : Boolean
 output domain  : Unknown
@@ -575,11 +575,11 @@ output         : false
 
 ast            : 1.2>1.1
 raw expr       : gt(1.2_f64, 1.1_f64)
-checked expr   : gt<Float64, Float64>(1.2_f64, 1.1_f64)
-optimized expr : true
+checked expr   : gt<Variant, Variant>(CAST(1.2_f64 AS Variant), CAST(1.1_f64 AS Variant))
+optimized expr : false
 output type    : Boolean
 output domain  : Unknown
-output         : true
+output         : false
 
 
 ast            : true > true
@@ -697,7 +697,7 @@ output         : true
 
 ast            : 1>=2
 raw expr       : gte(1_u8, 2_u8)
-checked expr   : gte<UInt8, UInt8>(1_u8, 2_u8)
+checked expr   : gte<Variant, Variant>(CAST(1_u8 AS Variant), CAST(2_u8 AS Variant))
 optimized expr : false
 output type    : Boolean
 output domain  : Unknown
@@ -706,7 +706,7 @@ output         : false
 
 ast            : 1.1>=1.1
 raw expr       : gte(1.1_f64, 1.1_f64)
-checked expr   : gte<Float64, Float64>(1.1_f64, 1.1_f64)
+checked expr   : gte<Variant, Variant>(CAST(1.1_f64 AS Variant), CAST(1.1_f64 AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : Unknown

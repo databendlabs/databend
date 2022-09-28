@@ -96,7 +96,7 @@ impl<'a> Debug for ScalarRef<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             ScalarRef::Null => write!(f, "NULL"),
-            ScalarRef::EmptyArray => write!(f, "[]"),
+            ScalarRef::EmptyArray => write!(f, "[] :: Array(Nothing)"),
             ScalarRef::Number(val) => write!(f, "{val:?}"),
             ScalarRef::Boolean(val) => write!(f, "{val}"),
             ScalarRef::String(s) => write!(f, "{:?}", String::from_utf8_lossy(s)),
@@ -586,7 +586,7 @@ impl Display for Domain {
                 }
                 write!(f, ")")
             }
-            Domain::Undefined => write!(f, "_"),
+            Domain::Undefined => write!(f, "Undefined"),
         }
     }
 }
