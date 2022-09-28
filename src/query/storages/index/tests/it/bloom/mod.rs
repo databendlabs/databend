@@ -13,4 +13,4 @@
 // limitations under the License.
 
 mod bloom_filter;
-mod xor;
+mod xor8;

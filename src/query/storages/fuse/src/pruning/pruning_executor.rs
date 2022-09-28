@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_base::base::tokio::sync::Semaphore;
 use common_base::base::Runtime;
 use common_base::base::TrySpawn;
 use common_catalog::table_context::TableContext;
@@ -44,6 +45,20 @@ const FUTURE_BUFFER_SIZE: usize = 10;
 impl BlockPruner {
     pub fn new(table_snapshot: Arc<TableSnapshot>) -> Self {
         Self { table_snapshot }
+    }
+
+    // Sync version of method `prune`
+    //
+    // Please note that it will take a significant period of time to prune a large table, and
+    // thread that calls this method will be blocked.
+    #[tracing::instrument(level = "debug", skip(self, schema, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    pub fn sync_prune(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        schema: DataSchemaRef,
+        push_down: &Option<Extras>,
+    ) -> Result<Vec<(usize, BlockMeta)>> {
+        futures::executor::block_on(self.prune(ctx, schema, push_down))
     }
 
     // prune blocks by utilizing min_max index and bloom filter, according to the pushdowns
@@ -106,17 +121,21 @@ impl BlockPruner {
         //
         // B. since limiter is working concurrently, we arrange some checks among the pruning,
         //    to avoid heavy io operation vainly,
-        let pruning_runtime = Runtime::with_worker_threads(
-            ctx.get_settings().get_max_threads()? as usize,
-            Some("pruning-worker".to_owned()),
-        )?;
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let pruning_runtime =
+            Runtime::with_worker_threads(max_threads, Some("pruning-worker".to_owned()))?;
+        let semaphore = Arc::new(Semaphore::new(max_threads));
         let mut join_handlers = Vec::with_capacity(segment_locs.len());
         for (idx, (seg_loc, ver)) in segment_locs.into_iter().enumerate() {
             let ctx = ctx.clone();
             let range_filter_pruner = range_filter_pruner.clone();
             let bloom_filter_pruner = bloom_filter_pruner.clone();
             let limiter = limiter.clone();
+            let semaphore = semaphore.clone();
             let segment_pruning_fut = async move {
+                let _permit = semaphore.acquire().await.map_err(|e| {
+                    ErrorCode::StorageOther(format!("acquire permit failure, {}", e))
+                })?;
                 let segment_reader = MetaReaders::segment_info_reader(ctx.as_ref());
                 if limiter.exceeded() {
                     // before read segment info, check if limit already exceeded

@@ -142,6 +142,10 @@ impl MutableColumn for MutableArrayColumn {
             )),
         }
     }
+
+    fn memory_size(&self) -> usize {
+        self.inner_column.memory_size() + self.offsets.len() * std::mem::size_of::<i64>()
+    }
 }
 
 impl ScalarColumnBuilder for MutableArrayColumn {

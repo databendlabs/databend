@@ -354,6 +354,10 @@ impl<T: InputFormatTextBase> BlockBuilder<T> {
 
         Ok(vec![DataBlock::create(self.ctx.schema.clone(), columns)])
     }
+
+    fn memory_size(&self) -> usize {
+        self.mutable_columns.iter().map(|x| x.memory_size()).sum()
+    }
 }
 
 impl<T: InputFormatTextBase> BlockBuilderTrait for BlockBuilder<T> {
@@ -373,7 +377,9 @@ impl<T: InputFormatTextBase> BlockBuilderTrait for BlockBuilder<T> {
         if let Some(b) = batch {
             self.num_rows += b.row_ends.len();
             T::deserialize(self, b)?;
-            if self.num_rows >= self.ctx.rows_per_block {
+            if self.num_rows >= self.ctx.rows_per_block
+                || self.memory_size() > self.ctx.block_memory_size_threshold
+            {
                 self.flush()
             } else {
                 Ok(vec![])

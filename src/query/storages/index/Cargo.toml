@@ -21,10 +21,13 @@ common-fuse-meta = { path = "../fuse-meta" }
 common-legacy-expression = { path = "../../legacy-expression" }
 common-pipeline-transforms = { path = "../../pipeline/transforms" }
 
+xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", features = ["cbordata"] }
+
+anyerror = "=0.1.7"
 cbordata = { version = "0.6.0" }
 serde = { version = "1.0.145", features = ["derive"] }
+thiserror = "1"
 tracing = "0.1.36"
-xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", features = ["cbordata"] }
 
 [dev-dependencies]
 rand = "0.8.5"

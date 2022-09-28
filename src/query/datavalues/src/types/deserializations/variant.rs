@@ -22,6 +22,7 @@ use crate::prelude::*;
 pub struct VariantDeserializer {
     pub buffer: Vec<u8>,
     pub builder: MutableObjectColumn<VariantValue>,
+    pub memory_size: usize,
 }
 
 impl VariantDeserializer {
@@ -29,11 +30,16 @@ impl VariantDeserializer {
         Self {
             buffer: Vec::new(),
             builder: MutableObjectColumn::<VariantValue>::with_capacity(capacity),
+            memory_size: 0,
         }
     }
 }
 
 impl TypeDeserializer for VariantDeserializer {
+    fn memory_size(&self) -> usize {
+        self.memory_size
+    }
+
     #[allow(clippy::uninit_vec)]
     fn de_binary(&mut self, reader: &mut &[u8], _format: &FormatSettings) -> Result<()> {
         let offset: u64 = reader.read_uvarint()?;
@@ -90,6 +96,7 @@ impl TypeDeserializer for VariantDeserializer {
         reader.read_escaped_string_text(&mut self.buffer)?;
         let val = serde_json::from_slice(self.buffer.as_slice())?;
         self.builder.append_value(val);
+        self.memory_size += self.buffer.len();
         Ok(())
     }
 
@@ -104,6 +111,7 @@ impl TypeDeserializer for VariantDeserializer {
         let val = serde_json::from_slice(self.buffer.as_slice())?;
 
         self.builder.append_value(val);
+        self.memory_size += self.buffer.len();
         Ok(())
     }
 
@@ -116,6 +124,7 @@ impl TypeDeserializer for VariantDeserializer {
         reader.read_csv_string(&mut self.buffer, settings)?;
         let val = serde_json::from_slice(self.buffer.as_slice())?;
         self.builder.append_value(val);
+        self.memory_size += self.buffer.len();
         Ok(())
     }
 
