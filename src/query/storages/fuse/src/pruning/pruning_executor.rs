@@ -40,8 +40,6 @@ pub struct BlockPruner {
     table_snapshot: Arc<TableSnapshot>,
 }
 
-const FUTURE_BUFFER_SIZE: usize = 10;
-
 impl BlockPruner {
     pub fn new(table_snapshot: Arc<TableSnapshot>) -> Self {
         Self { table_snapshot }
@@ -68,17 +66,6 @@ impl BlockPruner {
             .and_then(|p| p.limit);
 
         let filter_expressions = push_down.as_ref().map(|extra| extra.filters.as_slice());
-
-        let is_filter_empty = match filter_expressions {
-            None => true,
-            Some(filters) => filters.is_empty(),
-        };
-
-        // shortcut, just returns all the blocks.
-        // we use the original limit (from push_down) here, since order_by alone, can use shortcut
-        if push_down.as_ref().and_then(|p| p.limit).is_none() && is_filter_empty {
-            return Self::all_the_blocks(segment_locs, ctx.as_ref()).await;
-        }
 
         // 1. prepare pruners
 
@@ -216,28 +203,5 @@ impl BlockPruner {
         }
 
         Ok(metas)
-    }
-
-    async fn all_the_blocks(
-        segment_locs: Vec<Location>,
-        ctx: &dyn TableContext,
-    ) -> Result<Vec<(usize, BlockMeta)>> {
-        let segment_num = segment_locs.len();
-        let block_metas = futures::stream::iter(segment_locs.into_iter().enumerate())
-            .map(|(idx, (seg_loc, ver))| async move {
-                let segment_reader = MetaReaders::segment_info_reader(ctx);
-                let segment_info = segment_reader.read(seg_loc, None, ver).await?;
-                Ok::<_, ErrorCode>(
-                    segment_info
-                        .blocks
-                        .clone()
-                        .into_iter()
-                        .map(move |item| (idx, item)),
-                )
-            })
-            .buffered(std::cmp::min(FUTURE_BUFFER_SIZE, segment_num))
-            .try_collect::<Vec<_>>()
-            .await?;
-        Ok(block_metas.into_iter().flatten().collect::<Vec<_>>())
     }
 }
