@@ -18,7 +18,7 @@ for i in "${table_inserts[@]}"; do
 done
 
 ## Select table
-echo "select * from table_external_location;" | $MYSQL_CLIENT_CONNECT
+echo "select * from table_external_location order by a;" | $MYSQL_CLIENT_CONNECT
 
 ## Drop table
 echo "drop table if exists table_external_location;" | $MYSQL_CLIENT_CONNECT
