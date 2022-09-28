@@ -16,11 +16,10 @@ use core::convert::TryInto;
 use std::cmp::Ordering;
 use std::collections::VecDeque;
 
-use decimal_rs::Decimal;
-
 use super::constants::*;
 use super::error::*;
-use crate::jentry::JEntry;
+use super::jentry::JEntry;
+use super::number::Number;
 
 // builtin functions for `JSONB` bytes without decode all Values
 
@@ -199,10 +198,10 @@ fn compare_scalar(
         }
         (NUMBER_TAG, NUMBER_TAG) => {
             let left_offset = left_jentry.length as usize;
-            let left_dec = Decimal::decode(&left[..left_offset]);
+            let left_num = Number::decode(&left[..left_offset]);
             let right_offset = right_jentry.length as usize;
-            let right_dec = Decimal::decode(&right[..right_offset]);
-            Ok(left_dec.partial_cmp(&right_dec).unwrap())
+            let right_num = Number::decode(&right[..right_offset]);
+            Ok(left_num.cmp(&right_num))
         }
         (TRUE_TAG, TRUE_TAG) => Ok(Ordering::Equal),
         (FALSE_TAG, FALSE_TAG) => Ok(Ordering::Equal),

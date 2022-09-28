@@ -28,6 +28,15 @@ pub(crate) const FALSE_TAG: u32 = 0x30000000;
 pub(crate) const TRUE_TAG: u32 = 0x40000000;
 pub(crate) const CONTAINER_TAG: u32 = 0x50000000;
 
+// JSONB number constants
+pub(crate) const NUMBER_ZERO: u8 = 0x00;
+pub(crate) const NUMBER_NAN: u8 = 0x10;
+pub(crate) const NUMBER_INF: u8 = 0x20;
+pub(crate) const NUMBER_NEG_INF: u8 = 0x30;
+pub(crate) const NUMBER_INT: u8 = 0x40;
+pub(crate) const NUMBER_UINT: u8 = 0x50;
+pub(crate) const NUMBER_FLOAT: u8 = 0x60;
+
 // @todo support offset mode
 #[allow(dead_code)]
 pub(crate) const JENTRY_IS_OFF_FLAG: u32 = 0x80000000;
@@ -35,9 +44,6 @@ pub(crate) const JENTRY_TYPE_MASK: u32 = 0x70000000;
 pub(crate) const JENTRY_OFF_LEN_MASK: u32 = 0x0FFFFFFF;
 
 // JSON text constants
-pub(crate) const NULL_LEN: usize = 4;
-pub(crate) const TRUE_LEN: usize = 4;
-pub(crate) const FALSE_LEN: usize = 5;
 pub(crate) const UNICODE_LEN: usize = 4;
 
 // JSON text escape characters constants
