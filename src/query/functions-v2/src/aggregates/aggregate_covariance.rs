@@ -26,7 +26,7 @@ use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberType;
 use common_expression::types::ValueType;
-use common_expression::with_number_mapped_types;
+use common_expression::with_number_data_types;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Scalar;
@@ -170,7 +170,7 @@ where
     ) -> Result<()> {
         let state = place.get::<AggregateCovarianceState>();
         let left = NumberType::<T0>::try_downcast_column(&columns[0]).unwrap();
-        let right = NumberType::<T0>::try_downcast_column(&columns[1]).unwrap();
+        let right = NumberType::<T1>::try_downcast_column(&columns[1]).unwrap();
 
         match validity {
             Some(bitmap) => {
@@ -201,7 +201,7 @@ where
         _input_rows: usize,
     ) -> Result<()> {
         let left = NumberType::<T0>::try_downcast_column(&columns[0]).unwrap();
-        let right = NumberType::<T0>::try_downcast_column(&columns[1]).unwrap();
+        let right = NumberType::<T1>::try_downcast_column(&columns[1]).unwrap();
 
         left.iter().zip(right.iter()).zip(places.iter()).for_each(
             |((left_val, right_val), place)| {
@@ -215,7 +215,7 @@ where
 
     fn accumulate_row(&self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
         let left = NumberType::<T0>::try_downcast_column(&columns[0]).unwrap();
-        let right = NumberType::<T0>::try_downcast_column(&columns[1]).unwrap();
+        let right = NumberType::<T1>::try_downcast_column(&columns[1]).unwrap();
 
         let left_val = unsafe { left.get_unchecked(row) };
         let right_val = unsafe { right.get_unchecked(row) };
@@ -285,10 +285,20 @@ pub fn try_create_aggregate_covariance<R: AggregateCovariance>(
 ) -> Result<AggregateFunctionRef> {
     assert_binary_arguments(display_name, arguments.len())?;
 
-    let data_type0 = &arguments[0];
-    let data_type1 = &arguments[1];
+    let data_type0 = &arguments[0].as_number();
+    let data_type1 = &arguments[1].as_number();
 
-    with_number_mapped_types!(data_type0, data_type1, |$T0, $T1| {
+    if data_type0.is_none() || data_type1.is_none() {
+        return Err(ErrorCode::BadDataValueType(format!(
+            "Expected number data type, but got {:?}",
+            arguments
+        )));
+    }
+
+    let data_type0 = data_type0.unwrap();
+    let data_type1 = data_type1.unwrap();
+
+    with_number_data_types!(data_type0, data_type1, |$T0, $T1| {
         AggregateCovarianceFunction::<$T0, $T1, R>::try_create(display_name, arguments)
     },
     {

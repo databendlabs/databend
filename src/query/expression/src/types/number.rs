@@ -878,10 +878,11 @@ macro_rules! with_number_mapped_type {
 }
 
 #[macro_export]
-macro_rules! with_number_mapped_types {
+macro_rules! with_number_data_types {
     (
     $type0:expr, $type1:expr, | $_a:tt $T0:ident, $_b:tt $T1:ident | $body:tt,  $nbody:tt
 ) => {{
+        use common_expression::types::number::NumberDataType::*;
         use common_expression::types::number::F32;
         use common_expression::types::number::F64;
 
