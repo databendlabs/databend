@@ -12,9 +12,14 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-#[allow(clippy::module_inception)]
-mod bloom;
+//! Probabilistic filters
+
+mod filter;
 mod xor8;
 
-pub use bloom::Bloom;
-pub use xor8::XorBloom;
+pub use filter::Filter;
+pub use filter::FilterBuilder;
+pub use xor8::Xor8Builder;
+pub use xor8::Xor8BuildingError;
+pub use xor8::Xor8CodecError;
+pub use xor8::Xor8Filter;
