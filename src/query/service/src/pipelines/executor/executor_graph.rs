@@ -244,7 +244,7 @@ impl ExecutingGraph {
                 let event = node.processor.event()?;
                 if tracing::enabled!(tracing::Level::TRACE) {
                     tracing::trace!(
-                        "node id:{:?}, name:{:?}, event: {:?}",
+                        "node id: {:?}, name: {:?}, event: {:?}",
                         node.processor.id(),
                         node.processor.name(),
                         event
