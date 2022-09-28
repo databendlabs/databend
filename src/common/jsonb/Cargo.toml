@@ -8,4 +8,5 @@ edition = { workspace = true }
 
 [dependencies]
 byteorder = "1.4.3"
-decimal-rs = "0.1.39"
+fast-float = "0.2.0"
+ordered-float = { version = "3.1.0", features = ["serde"] }

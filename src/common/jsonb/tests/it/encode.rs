@@ -14,33 +14,35 @@
 
 use std::borrow::Cow;
 
-use common_jsonb::from_slice;
+use common_jsonb::Number;
 use common_jsonb::Object;
 use common_jsonb::Value;
 
 #[test]
-fn test_decode_null() {
-    let s = b"\x20\0\0\0\0\0\0\0";
-    let value = from_slice(s).unwrap();
-    assert!(value.is_null());
-    assert_eq!(value.as_null(), Some(()));
+fn test_encode_null() {
+    let v = Value::Null;
+    let mut buf: Vec<u8> = Vec::new();
+    v.to_vec(&mut buf).unwrap();
+    assert_eq!(buf, b"\x20\0\0\0\0\0\0\0");
 }
 
 #[test]
-fn test_decode_boolean() {
+fn test_encode_boolean() {
     let tests = vec![
         (b"\x20\0\0\0\x40\0\0\0".to_vec(), true),
         (b"\x20\0\0\0\x30\0\0\0".to_vec(), false),
     ];
-    for (s, v) in tests {
-        let value = from_slice(s.as_slice()).unwrap();
-        assert!(value.is_boolean());
-        assert_eq!(value.as_bool().unwrap(), v);
+    let mut buf: Vec<u8> = Vec::new();
+    for (b, s) in tests {
+        let v = Value::Bool(s);
+        v.to_vec(&mut buf).unwrap();
+        assert_eq!(buf, b);
+        buf.clear();
     }
 }
 
 #[test]
-fn test_decode_string() {
+fn test_encode_string() {
     let tests = vec![
         (b"\x20\0\0\0\x10\0\0\x03\x61\x73\x64".to_vec(), "asd"),
         (
@@ -49,15 +51,17 @@ fn test_decode_string() {
         ),
         (b"\x20\0\0\0\x10\0\0\x01\x0A".to_vec(), "\n"),
     ];
-    for (s, v) in tests {
-        let value = from_slice(s.as_slice()).unwrap();
-        assert!(value.is_string());
-        assert_eq!(value.as_str().unwrap(), &Cow::from(v));
+    let mut buf: Vec<u8> = Vec::new();
+    for (b, s) in tests {
+        let v = Value::String(Cow::from(s));
+        v.to_vec(&mut buf).unwrap();
+        assert_eq!(buf, b);
+        buf.clear();
     }
 }
 
 #[test]
-fn test_decode_int64() {
+fn test_encode_int64() {
     let tests = vec![
         (b"\x20\0\0\0\x20\0\0\x01\x00".to_vec(), 0i64),
         (b"\x20\0\0\0\x20\0\0\x02\x40\x9C".to_vec(), -100i64),
@@ -88,15 +92,17 @@ fn test_decode_int64() {
             i64::MAX,
         ),
     ];
-    for (s, v) in tests {
-        let value = from_slice(s.as_slice()).unwrap();
-        assert!(value.is_i64());
-        assert_eq!(value.as_i64().unwrap(), v);
+    let mut buf: Vec<u8> = Vec::new();
+    for (b, s) in tests {
+        let v = Value::Number(Number::Int64(s));
+        v.to_vec(&mut buf).unwrap();
+        assert_eq!(buf, b);
+        buf.clear();
     }
 }
 
 #[test]
-fn test_decode_uint64() {
+fn test_encode_uint64() {
     let tests = vec![
         (b"\x20\0\0\0\x20\0\0\x01\x00".to_vec(), 0u64),
         (b"\x20\0\0\0\x20\0\0\x02\x50\x64".to_vec(), 100u64),
@@ -114,15 +120,17 @@ fn test_decode_uint64() {
             u64::MAX,
         ),
     ];
-    for (s, v) in tests {
-        let value = from_slice(s.as_slice()).unwrap();
-        assert!(value.is_u64());
-        assert_eq!(value.as_u64().unwrap(), v);
+    let mut buf: Vec<u8> = Vec::new();
+    for (b, s) in tests {
+        let v = Value::Number(Number::UInt64(s));
+        v.to_vec(&mut buf).unwrap();
+        assert_eq!(buf, b);
+        buf.clear();
     }
 }
 
 #[test]
-fn test_decode_float64() {
+fn test_encode_float64() {
     let tests = vec![
         (b"\x20\0\0\0\x20\0\0\x01\x20".to_vec(), f64::INFINITY),
         (b"\x20\0\0\0\x20\0\0\x01\x30".to_vec(), f64::NEG_INFINITY),
@@ -135,46 +143,43 @@ fn test_decode_float64() {
             1.2e308f64,
         ),
     ];
-    for (s, v) in tests {
-        let value = from_slice(s.as_slice()).unwrap();
-        assert!(value.is_f64());
-        assert_eq!(value.as_f64().unwrap(), v);
+    let mut buf: Vec<u8> = Vec::new();
+    for (b, s) in tests {
+        let v = Value::Number(Number::Float64(s));
+        v.to_vec(&mut buf).unwrap();
+        assert_eq!(buf, b);
+        buf.clear();
     }
 }
 
 #[test]
-fn test_decode_array() {
+fn test_encode_array() {
     let tests = vec![(b"\x80\0\0\x02\x30\0\0\0\x40\0\0\0".to_vec(), vec![
         Value::Bool(false),
         Value::Bool(true),
     ])];
-    for (s, v) in tests {
-        let value = from_slice(s.as_slice()).unwrap();
-        assert!(value.is_array());
-        let arr = value.as_array().unwrap();
-        assert_eq!(arr.len(), v.len());
-        for (l, r) in arr.iter().zip(v.iter()) {
-            assert_eq!(l, r);
-        }
+    let mut buf: Vec<u8> = Vec::new();
+    for (b, s) in tests {
+        let v = Value::Array(s);
+        v.to_vec(&mut buf).unwrap();
+        assert_eq!(buf, b);
+        buf.clear();
     }
 }
 
 #[test]
-fn test_decode_object() {
+fn test_encode_object() {
     let mut obj1 = Object::new();
     obj1.insert("asd".to_string(), Value::String(Cow::from("adf")));
     let tests = vec![(
         b"\x40\0\0\x01\x10\0\0\x03\x10\0\0\x03\x61\x73\x64\x61\x64\x66".to_vec(),
         obj1,
     )];
-    for (s, v) in tests {
-        let value = from_slice(s.as_slice()).unwrap();
-        assert!(value.is_object());
-        let obj = value.as_object().unwrap();
-        assert_eq!(obj.len(), v.len());
-        for ((lk, lv), (rk, rv)) in obj.iter().enumerate().zip(v.iter().enumerate()) {
-            assert_eq!(lk, rk);
-            assert_eq!(lv, rv);
-        }
+    let mut buf: Vec<u8> = Vec::new();
+    for (b, s) in tests {
+        let v = Value::Object(s);
+        v.to_vec(&mut buf).unwrap();
+        assert_eq!(buf, b);
+        buf.clear();
     }
 }
