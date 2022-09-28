@@ -29,6 +29,10 @@ pub struct NullableDeserializer {
 }
 
 impl TypeDeserializer for NullableDeserializer {
+    fn memory_size(&self) -> usize {
+        self.inner.memory_size() + self.bitmap.as_slice().len()
+    }
+
     fn de_binary(&mut self, reader: &mut &[u8], format: &FormatSettings) -> Result<()> {
         let valid: bool = reader.read_scalar()?;
         if valid {
