@@ -253,6 +253,7 @@ build_exceptions! {
     StorageUnavailable(3901),
     StorageUnsupported(3902),
     StorageInsecure(3903),
+    DeprecatedIndexFormat(3904),
     StorageOther(4000),
 }
 

@@ -98,7 +98,7 @@ impl JoinHashTable {
                     None => results.push(merged_block),
                 }
             }
-            JoinType::Semi => {
+            JoinType::LeftSemi => {
                 if self.hash_join_desc.other_predicate.is_none() {
                     let result = self.semi_anti_join::<true, _, _>(
                         hash_table,
@@ -117,7 +117,7 @@ impl JoinHashTable {
                     return Ok(vec![result]);
                 }
             }
-            JoinType::Anti => {
+            JoinType::LeftAnti => {
                 if self.hash_join_desc.other_predicate.is_none() {
                     let result = self.semi_anti_join::<false, _, _>(
                         hash_table,
@@ -174,7 +174,12 @@ impl JoinHashTable {
                 //    equi-condition is subquery's outer columns with subquery's derived columns. (see the above example in correlated ANY subquery)
                 self.mark_join(hash_table, probe_state, keys_iter, input)?;
             }
-            _ => unreachable!(),
+            _ => {
+                return Err(ErrorCode::UnImplement(format!(
+                    "{} is unimplemented",
+                    self.hash_join_desc.join_type
+                )));
+            }
         }
         Ok(results)
     }

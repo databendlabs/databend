@@ -241,7 +241,6 @@ impl ExecutingGraph {
                 if state_guard_cache.is_none() {
                     state_guard_cache = Some(node.state.lock().unwrap());
                 }
-
                 let processor_state = match node.processor.event()? {
                     Event::Finished => State::Finished,
                     Event::NeedData | Event::NeedConsume => State::Idle,

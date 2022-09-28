@@ -277,6 +277,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
                 tracing::debug!("read {} bytes", n);
                 if let Err(e) = batch_tx.send(Ok(batch.into())).await {
                     tracing::warn!("fail to send ReadBatch: {}", e);
+                    break;
                 }
             }
         }

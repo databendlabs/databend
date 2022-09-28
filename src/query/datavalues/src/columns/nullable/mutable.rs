@@ -77,6 +77,10 @@ impl MutableColumn for MutableNullableColumn {
                 if v { value } else { Ok(DataValue::Null) }
             })
     }
+
+    fn memory_size(&self) -> usize {
+        self.inner.memory_size() + self.values.as_slice().len()
+    }
 }
 
 impl MutableNullableColumn {

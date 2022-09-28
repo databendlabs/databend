@@ -182,6 +182,50 @@ impl<'a> Binder {
                 left_child,
                 right_child,
             ),
+            JoinOperator::LeftSemi => {
+                bind_context = left_context;
+                self.bind_join_with_type(
+                    JoinType::LeftSemi,
+                    left_join_conditions,
+                    right_join_conditions,
+                    other_conditions,
+                    left_child,
+                    right_child,
+                )
+            }
+            JoinOperator::RightSemi => {
+                bind_context = right_context;
+                self.bind_join_with_type(
+                    JoinType::RightSemi,
+                    left_join_conditions,
+                    right_join_conditions,
+                    other_conditions,
+                    left_child,
+                    right_child,
+                )
+            }
+            JoinOperator::LeftAnti => {
+                bind_context = left_context;
+                self.bind_join_with_type(
+                    JoinType::LeftAnti,
+                    left_join_conditions,
+                    right_join_conditions,
+                    other_conditions,
+                    left_child,
+                    right_child,
+                )
+            }
+            JoinOperator::RightAnti => {
+                bind_context = right_context;
+                self.bind_join_with_type(
+                    JoinType::RightAnti,
+                    left_join_conditions,
+                    right_join_conditions,
+                    other_conditions,
+                    left_child,
+                    right_child,
+                )
+            }
         }?;
 
         Ok((s_expr, bind_context))
