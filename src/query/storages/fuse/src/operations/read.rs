@@ -104,18 +104,12 @@ impl FuseTable {
                 let push_downs = push_downs.clone();
                 let lazy_init_segments = lazy_init_segments.clone();
 
-                let partitions = Runtime::with_worker_threads(2, None)?.block_on(async move {
-                    let (_statistics, partitions) = FuseTable::prune_snapshot_blocks(
-                        ctx,
-                        push_downs,
-                        table_info,
-                        lazy_init_segments,
-                        0,
-                    )
-                    .await?;
-
-                    Result::<_, ErrorCode>::Ok(partitions)
-                })?;
+                let (_statistics, partitions) = FuseTable::sync_prune_snapshot_blocks(
+                    ctx,
+                    push_downs,
+                    table_info,
+                    lazy_init_segments,
+                )?;
 
                 query_ctx.try_set_partitions(partitions)?;
 
