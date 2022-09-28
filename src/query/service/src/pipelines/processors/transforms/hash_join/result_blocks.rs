@@ -583,16 +583,13 @@ impl JoinHashTable {
         let probe_indexes = &mut probe_state.probe_indexs;
         let valids = &probe_state.valids;
         let mut validity = MutableBitmap::new();
+        let mut build_indexes = self.hash_join_desc.right_join_desc.build_indexes.write();
         for (i, key) in keys_iter.enumerate() {
             let probe_result_ptr = Self::probe_key(hash_table, key, valids, i);
             if let Some(v) = probe_result_ptr {
                 let probe_result_ptrs = v.get_value();
-                {
-                    let mut build_indexes =
-                        self.hash_join_desc.right_join_desc.build_indexes.write();
-                    build_indexes.extend(probe_result_ptrs);
-                    local_build_indexes.extend_from_slice(probe_result_ptrs);
-                }
+                build_indexes.extend(probe_result_ptrs);
+                local_build_indexes.extend_from_slice(probe_result_ptrs);
                 for row_ptr in probe_result_ptrs.iter() {
                     {
                         let mut row_state = self.hash_join_desc.right_join_desc.row_state.write();
