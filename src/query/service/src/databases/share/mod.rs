@@ -11,16 +11,7 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-mod database;
-mod database_context;
-mod database_factory;
-mod default;
-mod information_schema;
-mod share;
-mod system;
 
-pub use database::Database;
-pub use database_context::DatabaseContext;
-pub use database_factory::DatabaseFactory;
-pub use information_schema::InformationSchemaDatabase;
-pub use system::SystemDatabase;
+mod share_database;
+
+pub use share_database::ShareDatabase;

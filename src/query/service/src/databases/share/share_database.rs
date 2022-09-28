@@ -44,15 +44,14 @@ use crate::databases::DatabaseContext;
 use crate::storages::StorageContext;
 
 #[derive(Clone)]
-pub struct DefaultDatabase {
+pub struct ShareDatabase {
     ctx: DatabaseContext,
 
     db_info: DatabaseInfo,
 }
 
-impl DefaultDatabase {
-    pub const NAME: &'static str = "DEFAULT";
-
+impl ShareDatabase {
+    pub const NAME: &'static str = "SHARE";
     pub fn try_create(ctx: DatabaseContext, db_info: DatabaseInfo) -> Result<Box<dyn Database>> {
         Ok(Box::new(Self { ctx, db_info }))
     }
@@ -67,7 +66,7 @@ impl DefaultDatabase {
 }
 
 #[async_trait::async_trait]
-impl Database for DefaultDatabase {
+impl Database for ShareDatabase {
     fn name(&self) -> &str {
         &self.db_info.name_ident.db_name
     }
