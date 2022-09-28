@@ -104,10 +104,12 @@ impl BloomFilterPruner for BloomFilterIndexPruner {
 }
 
 /// try to build the pruner.
+///
 /// if `filter_expr` is none, or is not applicable, e.g. have no point queries
-/// a [NonPruner] will be return, which prunes nothing.
+/// a [NonPruner] will be return, which prunes nothing,
+///
 /// otherwise, a [BloomFilterIndexer] backed pruner will be return
-pub fn new_bloom_filter_pruner(
+pub fn new_pruner(
     ctx: &Arc<dyn TableContext>,
     filter_exprs: Option<&[LegacyExpression]>,
     schema: &DataSchemaRef,

@@ -92,8 +92,7 @@ impl BlockPruner {
 
         // prepare the bloom filter, if filter_expression is none, an dummy pruner will be returned
         let dal = ctx.get_storage_operator()?;
-        let bloom_filter_pruner =
-            bloom_pruner::new_bloom_filter_pruner(ctx, filter_expressions, &schema, dal)?;
+        let bloom_filter_pruner = bloom_pruner::new_pruner(ctx, filter_expressions, &schema, dal)?;
 
         // 2. kick off
         //
