@@ -46,7 +46,12 @@ impl Interpreter for DropShareInterpreter {
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let resp = meta_api.drop_share(self.plan.clone().into()).await?;
 
-        save_share_spec(self.ctx.get_storage_operator()?, resp.spec_vec).await?;
+        save_share_spec(
+            &self.ctx.get_tenant(),
+            self.ctx.get_storage_operator()?,
+            resp.spec_vec,
+        )
+        .await?;
 
         Ok(PipelineBuildResult::create())
     }
