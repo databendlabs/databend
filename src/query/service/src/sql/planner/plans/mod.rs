@@ -33,6 +33,7 @@ mod scalar;
 pub mod share;
 mod sort;
 mod union_all;
+mod update;
 
 use std::fmt::Display;
 use std::sync::Arc;
@@ -113,6 +114,7 @@ pub use share::*;
 pub use sort::Sort;
 pub use sort::SortItem;
 pub use union_all::UnionAll;
+pub use update::Update;
 
 use super::BindContext;
 use crate::sql::optimizer::SExpr;
@@ -169,6 +171,7 @@ pub enum Plan {
     // Insert
     Insert(Box<Insert>),
     Delete(Box<DeletePlan>),
+    Update(Box<Update>),
 
     // Views
     CreateView(Box<CreateViewPlan>),
@@ -284,6 +287,7 @@ impl Display for Plan {
             Plan::DropUDF(_) => write!(f, "DropUDF"),
             Plan::Insert(_) => write!(f, "Insert"),
             Plan::Delete(_) => write!(f, "Delete"),
+            Plan::Update(_) => write!(f, "Update"),
             Plan::Call(_) => write!(f, "Call"),
             Plan::Presign(_) => write!(f, "Presign"),
             Plan::SetVariable(_) => write!(f, "SetVariable"),
@@ -357,6 +361,7 @@ impl Plan {
             Plan::DropUDF(_) => Arc::new(DataSchema::empty()),
             Plan::Insert(plan) => plan.schema(),
             Plan::Delete(_) => Arc::new(DataSchema::empty()),
+            Plan::Update(_) => Arc::new(DataSchema::empty()),
             Plan::Call(_) => Arc::new(DataSchema::empty()),
             Plan::Presign(plan) => plan.schema(),
             Plan::SetVariable(plan) => plan.schema(),

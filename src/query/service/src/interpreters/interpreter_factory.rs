@@ -183,6 +183,8 @@ impl InterpreterFactory {
                 *delete.clone(),
             )?)),
 
+            Plan::Update(_update) => todo!(),
+
             // Roles
             Plan::CreateRole(create_role) => Ok(Arc::new(CreateRoleInterpreter::try_create(
                 ctx,

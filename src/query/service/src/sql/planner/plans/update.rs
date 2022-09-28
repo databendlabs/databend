@@ -12,33 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod aggregate;
-mod bind_context;
-#[allow(clippy::module_inception)]
-mod binder;
-mod copy;
-mod ddl;
-mod delete;
-mod distinct;
-mod having;
-mod insert;
-mod join;
-mod kill;
-mod limit;
-mod presign;
-mod project;
-mod scalar;
-mod scalar_common;
-mod scalar_visitor;
-mod select;
-mod setting;
-mod show;
-mod sort;
-mod table;
-mod update;
+use std::collections::HashMap;
 
-pub use aggregate::AggregateInfo;
-pub use bind_context::*;
-pub use binder::Binder;
-pub use scalar::ScalarBinder;
-pub use scalar_common::*;
+use common_meta_types::MetaId;
+
+use crate::sql::plans::Scalar;
+
+#[derive(Clone, Debug)]
+pub struct Update {
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    pub table_id: MetaId,
+    pub update_list: HashMap<usize, Scalar>,
+    pub selection: Option<Scalar>,
+}
