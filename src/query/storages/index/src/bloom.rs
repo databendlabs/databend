@@ -20,11 +20,13 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_legacy_expression::LegacyExpression;
 
-use crate::bloom::Bloom;
-use crate::bloom::XorBloom;
+use crate::filters::Filter;
+use crate::filters::FilterBuilder;
+use crate::filters::Xor8Builder;
+use crate::filters::Xor8Filter;
 use crate::SupportedType;
 
-/// BloomFilterIndex represents multiple  bloom filters (per column) in data block.
+/// BloomFilter represents multiple  bloom filters (per column) in data block.
 ///
 /// By default we create bloom filter per column for a parquet data file. For columns whose data_type
 /// are not applicable for a bloom filter, we skip the creation.
@@ -43,7 +45,7 @@ use crate::SupportedType;
 ///         |  123456789abcd |  ac2345bcd   |
 ///         +----------------+--------------+
 /// ```
-pub struct BloomFilterIndexer {
+pub struct BloomFilter {
     // The schema of the source table/block, which the bloom filter work for.
     pub source_schema: DataSchemaRef,
 
@@ -67,7 +69,7 @@ pub enum BloomFilterExprEvalResult {
     NotApplicable,
 }
 
-impl BloomFilterIndexer {
+impl BloomFilter {
     /// For every applicable column, we will create a bloom filter.
     /// The bloom filter will be stored with field name 'Bloom(column_name)'
     pub fn to_bloom_column_name(column_name: &str) -> String {
@@ -77,7 +79,7 @@ impl BloomFilterIndexer {
         let mut bloom_fields = vec![];
         let fields = data_schema.fields();
         for field in fields.iter() {
-            if XorBloom::is_supported_type(field.data_type()) {
+            if Xor8Filter::is_supported_type(field.data_type()) {
                 // create field for applicable ones
                 let bloom_column_name = Self::to_bloom_column_name(field.name());
                 let bloom_field = DataField::new(&bloom_column_name, Vu8::to_data_type());
@@ -116,9 +118,9 @@ impl BloomFilterIndexer {
 
         let fields = source_schema.fields();
         for (i, field) in fields.iter().enumerate() {
-            if XorBloom::is_supported_type(field.data_type()) {
+            if Xor8Filter::is_supported_type(field.data_type()) {
                 // create bloom filter per column
-                let mut bloom_filter = XorBloom::create();
+                let mut bloom_filter = Xor8Builder::create();
 
                 // ingest the same column data from all blocks
                 for block in blocks.iter() {
@@ -127,7 +129,7 @@ impl BloomFilterIndexer {
                 }
 
                 // finalize the filter
-                bloom_filter.build()?;
+                let bloom_filter = bloom_filter.build()?;
 
                 // create bloom filter column
                 let serialized_bytes = bloom_filter.to_bytes()?;
@@ -155,7 +157,7 @@ impl BloomFilterIndexer {
     ) -> Result<BloomFilterExprEvalResult> {
         let bloom_column = Self::to_bloom_column_name(column_name);
         if !self.bloom_block.schema().has_field(&bloom_column)
-            || !XorBloom::is_supported_type(typ)
+            || !Xor8Filter::is_supported_type(typ)
             || target.is_null()
         {
             // The column doesn't have bloom filter bitmap
@@ -163,7 +165,7 @@ impl BloomFilterIndexer {
         }
 
         let bloom_bytes = self.bloom_block.first(&bloom_column)?.as_string()?;
-        let (bloom_filter, _size) = XorBloom::from_bytes(&bloom_bytes)?;
+        let (bloom_filter, _size) = Xor8Filter::from_bytes(&bloom_bytes)?;
         if bloom_filter.contains(&target) {
             Ok(BloomFilterExprEvalResult::Unknown)
         } else {
@@ -284,11 +286,11 @@ impl BloomFilterIndexer {
     }
 
     /// Find and returns the bloom filter by name
-    pub fn try_get_bloom(&self, column_name: &str) -> Result<XorBloom> {
+    pub fn try_get_bloom(&self, column_name: &str) -> Result<Xor8Filter> {
         let bloom_column = Self::to_bloom_column_name(column_name);
         let val = self.bloom_block.first(&bloom_column)?;
         let bloom_bytes = val.as_string()?;
-        let (bloom_filter, _size) = XorBloom::from_bytes(bloom_bytes.as_ref())?;
+        let (bloom_filter, _size) = Xor8Filter::from_bytes(bloom_bytes.as_ref())?;
         Ok(bloom_filter)
     }
 }

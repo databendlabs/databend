@@ -19,8 +19,10 @@ use common_datavalues::DataSchemaRefExt;
 use common_datavalues::Series;
 use common_datavalues::SeriesFrom;
 use common_exception::Result;
-use common_storages_index::bloom::Bloom;
-use common_storages_index::bloom::XorBloom;
+use common_storages_index::filters::Filter;
+use common_storages_index::filters::FilterBuilder;
+use common_storages_index::filters::Xor8Builder;
+use common_storages_index::filters::Xor8Filter;
 use rand::prelude::random;
 use rand::rngs::StdRng;
 use rand::Rng;
@@ -35,16 +37,16 @@ fn test_xor_bitmap_u64() -> Result<()> {
     let mut rng = StdRng::seed_from_u64(seed);
     let keys: Vec<u64> = (0..numbers).map(|_| rng.gen::<u64>()).collect();
 
-    let mut filter = XorBloom::create();
-    filter.add_keys(&keys);
-    filter.build()?;
+    let mut builder = Xor8Builder::create();
+    builder.add_keys(&keys);
+    let filter = builder.build()?;
 
     for key in keys.iter() {
         assert!(filter.contains(key), "key {} not present", key);
     }
 
     let val = filter.to_bytes()?;
-    let (_, n) = XorBloom::from_bytes(&val)?;
+    let (_, n) = Xor8Filter::from_bytes(&val)?;
     assert_eq!(n, val.len(), "{} {}", n, val.len());
 
     // Lock the size.
@@ -70,18 +72,16 @@ fn test_xor_bitmap_bool() -> Result<()> {
     let mut rng = StdRng::seed_from_u64(seed);
     let keys: Vec<bool> = (0..numbers).map(|_| rng.gen::<u64>() % 2 == 0).collect();
 
-    let mut filter = XorBloom::create();
-    for key in keys.clone().into_iter() {
-        filter.add_key(&key);
-    }
-    filter.build()?;
+    let mut builder = Xor8Builder::create();
+    builder.add_keys(&keys);
+    let filter = builder.build()?;
 
     for key in keys.iter() {
         assert!(filter.contains(key), "key {} not present", key);
     }
 
     let val = filter.to_bytes()?;
-    let (_, n) = XorBloom::from_bytes(&val)?;
+    let (_, n) = Xor8Filter::from_bytes(&val)?;
     assert_eq!(n, val.len(), "{} {}", n, val.len());
 
     // Lock the size.
@@ -121,16 +121,16 @@ fn test_xor_bitmap_string() -> Result<()> {
         })
         .collect();
 
-    let mut filter = XorBloom::create();
-    filter.add_keys(&keys);
-    filter.build()?;
+    let mut builder = Xor8Builder::create();
+    builder.add_keys(&keys);
+    let filter = builder.build()?;
 
     for key in keys.iter() {
         assert!(filter.contains(key), "key {} not present", key);
     }
 
     let val = filter.to_bytes()?;
-    let (_, n) = XorBloom::from_bytes(&val)?;
+    let (_, n) = Xor8Filter::from_bytes(&val)?;
     assert_eq!(n, val.len(), "{} {}", n, val.len());
 
     // Lock the size.
@@ -157,16 +157,14 @@ fn test_xor_bitmap_duplicate_string() -> Result<()> {
 
     let keys: Vec<String> = (0..numbers).map(|_| key.to_string()).collect();
 
-    let mut filter = XorBloom::create();
-    for key in keys.clone().into_iter() {
-        filter.add_key(&key);
-    }
-    filter.build()?;
+    let mut builder = Xor8Builder::create();
+    builder.add_keys(&keys);
+    let filter = builder.build()?;
 
     assert!(filter.contains(&keys[0]), "key {} not present", key);
 
     let val = filter.to_bytes()?;
-    let (_, n) = XorBloom::from_bytes(&val)?;
+    let (_, n) = Xor8Filter::from_bytes(&val)?;
     assert_eq!(n, val.len(), "{} {}", n, val.len());
 
     // Lock the size.
@@ -196,16 +194,16 @@ fn test_xor_bitmap_data_block() -> Result<()> {
     let block = DataBlock::create(schema, vec![Series::from_data(keys)]);
     let column = block.try_column_by_name("a")?;
 
-    let mut filter = XorBloom::create();
-    filter.add_keys(&column.to_values());
-    filter.build()?;
+    let mut builder = Xor8Builder::create();
+    builder.add_keys(&column.to_values());
+    let filter = builder.build()?;
 
     for key in column.to_values() {
         assert!(filter.contains(&key), "key {} not present", key);
     }
 
     let val = filter.to_bytes()?;
-    let (_, n) = XorBloom::from_bytes(&val)?;
+    let (_, n) = Xor8Filter::from_bytes(&val)?;
     assert_eq!(n, val.len(), "{} {}", n, val.len());
 
     // data block enc:1230069, raw:8000000, ratio:0.15375863

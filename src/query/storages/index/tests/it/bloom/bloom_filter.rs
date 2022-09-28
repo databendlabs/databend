@@ -26,8 +26,8 @@ use common_datavalues::SeriesFrom;
 use common_datavalues::StringType;
 use common_datavalues::ToDataType;
 use common_exception::Result;
+use common_storages_index::BloomFilter;
 use common_storages_index::BloomFilterExprEvalResult;
-use common_storages_index::BloomFilterIndexer;
 
 #[test]
 fn test_column_type_support() -> Result<()> {
@@ -47,7 +47,7 @@ fn test_column_type_support() -> Result<()> {
         Series::from_data(strs),
     ]);
 
-    let index = BloomFilterIndexer::try_create(&[&block])?;
+    let index = BloomFilter::try_create(&[&block])?;
 
     // only one index column should be generated
     assert_eq!(1, index.bloom_block.columns().len());
@@ -56,7 +56,7 @@ fn test_column_type_support() -> Result<()> {
 
     // check index columns
     schema.fields().iter().for_each(|field| {
-        let col_name = BloomFilterIndexer::to_bloom_column_name(field.name());
+        let col_name = BloomFilter::to_bloom_column_name(field.name());
         let maybe_index_col = index.bloom_block.try_column_by_name(&col_name);
         if supported_types.contains(field.data_type()) {
             assert!(maybe_index_col.is_ok(), "check field {}", field.name())
