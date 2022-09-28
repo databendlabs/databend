@@ -22,9 +22,9 @@ hive-it = []
 # Workspace dependencies
 
 # Github dependencies
+thrift = { git = "https://github.com/datafuse-extras/thrift", tag = "v0.17.0" }
 
 # Crates.io dependencies
-thrift = "0.16.0"
 
 [build-dependencies]
 which = "4.3.0"

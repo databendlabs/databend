@@ -47,6 +47,20 @@ impl BlockPruner {
         Self { table_snapshot }
     }
 
+    // Sync version of method `prune`
+    //
+    // Please note that it will take a significant period of time to prune a large table, and
+    // thread that calls this method will be blocked.
+    #[tracing::instrument(level = "debug", skip(self, schema, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    pub fn sync_prune(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        schema: DataSchemaRef,
+        push_down: &Option<Extras>,
+    ) -> Result<Vec<(usize, BlockMeta)>> {
+        futures::executor::block_on(self.prune(ctx, schema, push_down))
+    }
+
     // prune blocks by utilizing min_max index and bloom filter, according to the pushdowns
     #[tracing::instrument(level = "debug", skip(self, schema, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     pub async fn prune(
