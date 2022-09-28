@@ -13,13 +13,11 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::str::FromStr;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_formats::output_format::OutputFormatType;
 use common_legacy_planners::Extras;
 use common_legacy_planners::Partitions;
 use common_legacy_planners::ReadDataSourcePlan;
@@ -39,7 +37,6 @@ use parking_lot::Mutex;
 use tracing::info;
 
 use super::stage_table_sink::StageTableSink;
-use crate::pipelines::processors::ContextSink;
 use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::Pipeline;
 use crate::sessions::TableContext;
@@ -71,39 +68,13 @@ impl StageTable {
     }
 
     /// Get operator with correctly prefix.
-    pub async fn get_op(ctx: &Arc<dyn TableContext>, stage: &UserStageInfo) -> Result<Operator> {
+    pub fn get_op(ctx: &Arc<dyn TableContext>, stage: &UserStageInfo) -> Result<Operator> {
         if stage.stage_type == StageType::Internal {
             let prefix = format!("/stage/{}/", stage.stage_name);
             ctx.get_storage_operator()
                 .map(|op| op.layer(SubdirLayer::new(&prefix)))
         } else {
             Ok(init_operator(&stage.stage_params.storage)?)
-        }
-    }
-
-    pub fn unload_path(&self, uuid: &str, group_id: usize, idx: usize) -> String {
-        let format_name = format!(
-            "{:?}",
-            self.table_info.stage_info.file_format_options.format
-        );
-        if self.table_info.path.ends_with("data_") {
-            format!(
-                "{}{}_{}_{}.{}",
-                self.table_info.path,
-                uuid,
-                group_id,
-                idx,
-                format_name.to_ascii_lowercase()
-            )
-        } else {
-            format!(
-                "{}/data_{}_{}_{}.{}",
-                self.table_info.path,
-                uuid,
-                group_id,
-                idx,
-                format_name.to_ascii_lowercase()
-            )
         }
     }
 }
@@ -124,7 +95,7 @@ impl Table for StageTable {
         ctx: Arc<dyn TableContext>,
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
-        let operator = StageTable::get_op(&ctx, &self.table_info.stage_info).await?;
+        let operator = StageTable::get_op(&ctx, &self.table_info.stage_info)?;
         let input_ctx = Arc::new(
             InputContext::try_create_from_copy(
                 operator,
@@ -170,7 +141,10 @@ impl Table for StageTable {
     fn append2(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline, _: bool) -> Result<()> {
         let mut sink_pipeline_builder = SinkPipeBuilder::create();
         let single = self.table_info.stage_info.copy_options.single;
+        let op = StageTable::get_op(&ctx, &self.table_info.stage_info)?;
 
+        let uuid = uuid::Uuid::new_v4().to_string();
+        let mut group_id = 0;
         // parallel compact unload, the partial block will flush into next operator
         if !single {
             for _ in 0..pipeline.output_len() {
@@ -186,8 +160,12 @@ impl Table for StageTable {
                         single,
                         op.clone(),
                         Some(output_port),
+                        uuid.clone(),
+                        group_id,
                     )?,
                 );
+
+                group_id += 1;
             }
             pipeline.add_pipe(sink_pipeline_builder.finalize());
         }
@@ -197,17 +175,18 @@ impl Table for StageTable {
 
         let mut sink_pipeline_builder = SinkPipeBuilder::create();
         let input_port = InputPort::create();
-        let output_port = OutputPort::create();
 
         sink_pipeline_builder.add_sink(
             input_port.clone(),
             StageTableSink::try_create(
                 input_port,
-                ctx.clone(),
+                ctx,
                 self.table_info.clone(),
                 single,
-                op.clone(),
+                op,
                 None,
+                uuid,
+                group_id,
             )?,
         );
 
@@ -217,9 +196,9 @@ impl Table for StageTable {
     // TODO use tmp file_name & rename to have atomic commit
     async fn commit_insertion(
         &self,
-        ctx: Arc<dyn TableContext>,
-        operations: Vec<DataBlock>,
-        overwrite: bool,
+        _ctx: Arc<dyn TableContext>,
+        _operations: Vec<DataBlock>,
+        _overwrite: bool,
     ) -> Result<()> {
         Ok(())
     }

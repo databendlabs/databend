@@ -83,6 +83,7 @@ fn test_user_stage_s3_v9() -> anyhow::Result<()> {
             on_error: mt::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             purge: true,
+            single: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -123,6 +124,7 @@ fn test_user_stage_fs_v6() -> anyhow::Result<()> {
             on_error: mt::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             purge: true,
+            single: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -173,6 +175,7 @@ fn test_user_stage_s3_v6() -> anyhow::Result<()> {
             on_error: mt::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             purge: true,
+            single: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -219,6 +222,7 @@ fn test_user_stage_gcs_v6() -> anyhow::Result<()> {
             on_error: mt::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             purge: true,
+            single: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -258,6 +262,7 @@ fn test_user_stage_fs_v4() -> anyhow::Result<()> {
             on_error: mt::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             purge: false,
+            single: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -308,6 +313,7 @@ fn test_user_stage_s3_v4() -> anyhow::Result<()> {
             on_error: mt::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             purge: false,
+            single: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -353,6 +359,7 @@ fn test_user_stage_gcs_v4() -> anyhow::Result<()> {
             on_error: mt::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             purge: false,
+            single: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -400,6 +407,7 @@ fn test_user_stage_s3_v1() -> anyhow::Result<()> {
             on_error: mt::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             purge: false,
+            single: false,
         },
         comment: "test".to_string(),
         ..Default::default()

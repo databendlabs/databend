@@ -13,53 +13,24 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::f32::consts::E;
 use std::str::FromStr;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use common_arrow::parquet::compression::CompressionOptions;
-use common_arrow::parquet::metadata::ThriftFileMetaData;
-use common_cache::Cache;
-use common_catalog::table_context::TableContext;
-use common_datablocks::serialize_data_blocks;
-use common_datablocks::serialize_data_blocks_with_compression;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_formats::output_format::OutputFormat;
 use common_formats::output_format::OutputFormatType;
-use common_fuse_meta::caches::CacheManager;
-use common_fuse_meta::meta::Location;
-use common_fuse_meta::meta::SegmentInfo;
-use common_fuse_meta::meta::Statistics;
-use common_legacy_planners::Extras;
-use common_legacy_planners::Partitions;
-use common_legacy_planners::ReadDataSourcePlan;
 use common_legacy_planners::StageTableInfo;
-use common_legacy_planners::Statistics;
-use common_meta_app::schema::TableInfo;
-use common_meta_types::StageType;
-use common_meta_types::UserStageInfo;
-use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
-use common_pipeline_core::SinkPipeBuilder;
 use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_sinks::processors::sinks::AsyncSink;
-use common_pipeline_sources::processors::sources::input_formats::InputContext;
-use common_storage::init_operator;
-use common_storages_index::*;
+use common_pipeline_core::processors::Processor;
 use opendal::Operator;
-use parking_lot::Mutex;
-use tracing::info;
 
-use crate::pipelines::processors::ContextSink;
-use crate::pipelines::processors::TransformLimit;
-use crate::pipelines::Pipeline;
 use crate::sessions::TableContext;
-use crate::storages::Table;
 
 const MAX_SIZE_PER_FILE: usize = 256 * 1024 * 1024;
 
@@ -83,24 +54,32 @@ pub struct StageTableSink {
     working_datablocks: Vec<DataBlock>,
     output_format: Box<dyn OutputFormat>,
     write_header: bool,
+
+    uuid: String,
+    group_id: usize,
+    batch_id: usize,
 }
 
 impl StageTableSink {
+    #[allow(clippy::too_many_arguments)]
     pub fn try_create(
         input: Arc<InputPort>,
         ctx: Arc<dyn TableContext>,
         table_info: StageTableInfo,
         single: bool,
         data_accessor: Operator,
-        output: Option<OutputPort>,
+        output: Option<Arc<OutputPort>>,
+
+        uuid: String,
+        group_id: usize,
     ) -> Result<ProcessorPtr> {
         let format_name = format!("{:?}", table_info.stage_info.file_format_options.format);
+
         let fmt = OutputFormatType::from_str(format_name.as_str())?;
         let mut format_settings = ctx.get_format_settings()?;
 
         let format_options = &table_info.stage_info.file_format_options;
         {
-            format_settings.skip_header = format_options.skip_header;
             if !format_options.field_delimiter.is_empty() {
                 format_settings.field_delimiter =
                     format_options.field_delimiter.as_bytes().to_vec();
@@ -111,7 +90,7 @@ impl StageTableSink {
             }
         }
 
-        let mut output_format = fmt.create_format(table_info.schema(), format_settings);
+        let output_format = fmt.create_format(table_info.schema(), format_settings);
 
         Ok(ProcessorPtr::create(Box::new(StageTableSink {
             ctx,
@@ -122,10 +101,40 @@ impl StageTableSink {
             output,
             single,
             output_format,
-            working_buffer: Vec::with_capacity(MAX_SIZE_PER_FILE * 1.2),
+            working_buffer: Vec::with_capacity((MAX_SIZE_PER_FILE as f64 * 1.2) as usize),
             working_datablocks: vec![],
             write_header: false,
+
+            uuid,
+            group_id,
+            batch_id: 0,
         })))
+    }
+
+    pub fn unload_path(&self) -> String {
+        let format_name = format!(
+            "{:?}",
+            self.table_info.stage_info.file_format_options.format
+        );
+        if self.table_info.path.ends_with("data_") {
+            format!(
+                "{}{}_{}_{}.{}",
+                self.table_info.path,
+                self.uuid,
+                self.group_id,
+                self.batch_id,
+                format_name.to_ascii_lowercase()
+            )
+        } else {
+            format!(
+                "{}/data_{}_{}_{}.{}",
+                self.table_info.path,
+                self.uuid,
+                self.group_id,
+                self.batch_id,
+                format_name.to_ascii_lowercase()
+            )
+        }
     }
 }
 
@@ -149,15 +158,15 @@ impl Processor for StageTableSink {
         }
 
         if self.input.is_finished() {
-            let data = std::mem::replace(&mut self.working_buffer, vec![]);
+            let data = std::mem::take(&mut self.working_buffer);
             if data.is_empty() {
                 self.state = State::Finished;
                 return Ok(Event::Finished);
             }
-            match self.output {
+            match &self.output {
                 Some(output) => {
-                    for block in self.working_datablocks {
-                        output.push_data(Ok(block))?;
+                    for block in &self.working_datablocks {
+                        output.push_data(Ok(block.clone()));
                     }
                     self.state = State::Finished;
                     return Ok(Event::Finished);
@@ -193,7 +202,7 @@ impl Processor for StageTableSink {
                 self.working_buffer.extend_from_slice(bs.as_slice());
 
                 if !self.single && self.working_buffer.len() > MAX_SIZE_PER_FILE {
-                    let data = std::mem::replace(&mut self.working_buffer, vec![]);
+                    let mut data = std::mem::take(&mut self.working_buffer);
                     if old_pos != 0 {
                         data.truncate(old_pos);
                         let final_bytes = self.output_format.finalize()?;
@@ -223,7 +232,7 @@ impl Processor for StageTableSink {
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
             State::NeedWrite(bytes, remainng_block) => {
-                let path = "";
+                let path = self.unload_path();
                 self.ctx
                     .get_dal_context()
                     .get_metrics()
@@ -236,6 +245,7 @@ impl Processor for StageTableSink {
                     Some(block) => self.state = State::NeedSerialize(block),
                     None => self.state = State::None,
                 }
+                self.batch_id += 1;
                 Ok(())
             }
             _state => {
