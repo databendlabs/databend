@@ -14,7 +14,7 @@ explain select * from t_nullable_prune;
 TableScan
 ├── table: default.default.t_nullable_prune
 ├── read rows: 6
-├── read bytes: 26
+├── read bytes: 376
 ├── partitions total: 2
 ├── partitions scanned: 2
 └── push downs: [filters: [], limit: NONE]
@@ -26,7 +26,7 @@ explain select * from t_nullable_prune where a is not null;
 TableScan
 ├── table: default.default.t_nullable_prune
 ├── read rows: 6
-├── read bytes: 26
+├── read bytes: 376
 ├── partitions total: 2
 ├── partitions scanned: 2
 └── push downs: [filters: [is_not_null(a)], limit: NONE]
@@ -38,7 +38,7 @@ explain select * from t_nullable_prune where a is null;
 TableScan
 ├── table: default.default.t_nullable_prune
 ├── read rows: 6
-├── read bytes: 26
+├── read bytes: 376
 ├── partitions total: 2
 ├── partitions scanned: 2
 └── push downs: [filters: [not(is_not_null(a))], limit: NONE]
