@@ -22,7 +22,7 @@ use common_fuse_meta::meta::Location;
 use common_legacy_expression::ExpressionVisitor;
 use common_legacy_expression::LegacyExpression;
 use common_legacy_expression::Recursion;
-use common_storages_index::BloomFilterIndexer;
+use common_storages_index::BloomFilter;
 use opendal::Operator;
 
 use crate::io::BlockBloomFilterIndexReader;
@@ -131,7 +131,7 @@ pub fn new_bloom_filter_pruner(
             // convert to bloom filter block's column names
             let filter_block_cols = point_query_cols
                 .into_iter()
-                .map(|n| BloomFilterIndexer::to_bloom_column_name(&n))
+                .map(|n| BloomFilter::to_bloom_column_name(&n))
                 .collect();
             return Ok(Arc::new(BloomFilterIndexPruner::new(
                 ctx.clone(),
@@ -168,11 +168,10 @@ mod util {
 
         match maybe_bloom_filter_index {
             // figure it out
-            Ok(bloom_filter_index) => BloomFilterIndexer::from_bloom_block(
-                schema.clone(),
-                bloom_filter_index.into_data(),
-            )?
-            .maybe_true(filter_expr),
+            Ok(bloom_filter_index) => {
+                BloomFilter::from_bloom_block(schema.clone(), bloom_filter_index.into_data())?
+                    .maybe_true(filter_expr)
+            }
             Err(e) if e.code() == ErrorCode::deprecated_index_format_code() => {
                 // In case that the index is no longer supported, just return ture to indicate
                 // that the block being pruned should be kept. (Although the caller of this method

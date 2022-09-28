@@ -192,6 +192,13 @@ impl<'a> Binder {
             .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_catalog());
         let database = normalize_identifier(database, &self.name_resolution_ctx).name;
+
+        // change the database engine to share if create from share
+        let engine = if from_share.is_some() {
+            &Some(DatabaseEngine::Share)
+        } else {
+            engine
+        };
         let meta = self.database_meta(engine, options, from_share)?;
 
         Ok(Plan::CreateDatabase(Box::new(CreateDatabasePlan {
@@ -217,6 +224,7 @@ impl<'a> Binder {
         let database_engine = engine.as_ref().unwrap_or(&DatabaseEngine::Default);
         let (engine, engine_options) = match database_engine {
             DatabaseEngine::Default => ("default", BTreeMap::default()),
+            DatabaseEngine::Share => ("share", BTreeMap::default()),
         };
 
         Ok(DatabaseMeta {

@@ -181,7 +181,7 @@ where
             }
 
             // V::ScalarRef dosen't dervie Default, so take the first value as default.
-            let mut v = T::index_column(column, 0).unwrap();
+            let mut v = unsafe { T::index_column_unchecked(column, 0) };
             let mut has_v = validity.get_bit(0);
 
             for (data, valid) in column_iter.skip(1).zip(validity.iter().skip(1)) {

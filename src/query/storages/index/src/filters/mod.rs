@@ -1,4 +1,4 @@
-//  Copyright 2021 Datafuse Labs.
+//  Copyright 2022 Datafuse Labs.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -11,16 +11,15 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-mod database;
-mod database_context;
-mod database_factory;
-mod default;
-mod information_schema;
-mod share;
-mod system;
 
-pub use database::Database;
-pub use database_context::DatabaseContext;
-pub use database_factory::DatabaseFactory;
-pub use information_schema::InformationSchemaDatabase;
-pub use system::SystemDatabase;
+//! Probabilistic filters
+
+mod filter;
+mod xor8;
+
+pub use filter::Filter;
+pub use filter::FilterBuilder;
+pub use xor8::Xor8Builder;
+pub use xor8::Xor8BuildingError;
+pub use xor8::Xor8CodecError;
+pub use xor8::Xor8Filter;

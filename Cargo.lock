@@ -2050,6 +2050,7 @@ dependencies = [
 name = "common-storages-index"
 version = "0.1.0"
 dependencies = [
+ "anyerror",
  "cbordata",
  "common-catalog",
  "common-datablocks",
@@ -2061,6 +2062,7 @@ dependencies = [
  "common-pipeline-transforms",
  "rand 0.8.5",
  "serde",
+ "thiserror",
  "tracing",
  "xorfilter-rs",
 ]
