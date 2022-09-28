@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod pool;
+mod pool_retry;
 mod progress;
 mod range_key_test;
 mod range_map_test;
