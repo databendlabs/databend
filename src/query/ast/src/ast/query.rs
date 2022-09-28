@@ -194,6 +194,10 @@ pub enum JoinOperator {
     LeftOuter,
     RightOuter,
     FullOuter,
+    LeftSemi,
+    LeftAnti,
+    RightSemi,
+    RightAnti,
     // CrossJoin can only work with `JoinCondition::None`
     CrossJoin,
 }
@@ -307,6 +311,18 @@ impl<'a> Display for TableReference<'a> {
                     }
                     JoinOperator::FullOuter => {
                         write!(f, " FULL OUTER JOIN")?;
+                    }
+                    JoinOperator::LeftSemi => {
+                        write!(f, " LEFT SEMI JOIN")?;
+                    }
+                    JoinOperator::RightSemi => {
+                        write!(f, " RIGHT SEMI JOIN")?;
+                    }
+                    JoinOperator::LeftAnti => {
+                        write!(f, " LEFT ANTI JOIN")?;
+                    }
+                    JoinOperator::RightAnti => {
+                        write!(f, " RIGHT ANTI JOIN")?;
                     }
                     JoinOperator::CrossJoin => {
                         write!(f, " CROSS JOIN")?;

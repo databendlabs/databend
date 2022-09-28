@@ -136,6 +136,10 @@ impl MutableColumn for MutableStructColumn {
         }
         Ok(DataValue::Struct(values))
     }
+
+    fn memory_size(&self) -> usize {
+        self.inner_columns.iter().map(|v| v.memory_size()).sum()
+    }
 }
 
 impl ScalarColumnBuilder for MutableStructColumn {

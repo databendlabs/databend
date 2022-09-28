@@ -38,4 +38,6 @@ pub trait MutableColumn: Send + Sync {
     }
 
     fn shrink_to_fit(&mut self);
+
+    fn memory_size(&self) -> usize;
 }

@@ -19,15 +19,19 @@ use std::sync::Arc;
 
 use bytes::BytesMut;
 use common_arrow::arrow::bitmap::Bitmap;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::AnyType;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
+use common_expression::types::EmptyArrayType;
+use common_expression::types::NullType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberType;
 use common_expression::types::StringType;
 use common_expression::types::TimestampType;
 use common_expression::types::ValueType;
+use common_expression::types::VariantType;
 use common_expression::with_number_mapped_type;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
@@ -41,13 +45,14 @@ use super::aggregate_scalar_state::CmpMax;
 use super::aggregate_scalar_state::CmpMin;
 use super::aggregate_scalar_state::ScalarState;
 use super::aggregate_scalar_state::ScalarStateFunc;
+use super::aggregate_scalar_state::TYPE_ANY;
+use super::aggregate_scalar_state::TYPE_MAX;
+use super::aggregate_scalar_state::TYPE_MIN;
 use super::StateAddr;
 use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::AggregateFunction;
-
-const TYPE_ANY: u8 = 0;
-const TYPE_MIN: u8 = 1;
-const TYPE_MAX: u8 = 2;
+use crate::with_compare_mapped_type;
+use crate::with_simple_no_number_mapped_type;
 
 #[derive(Clone)]
 pub struct AggregateMinMaxAnyFunction<T, C, State> {
@@ -179,21 +184,7 @@ where
     }
 }
 
-#[macro_export]
-macro_rules! with_basic_no_number_mapped_type {
-    (| $t:tt | $($tail:tt)*) => {
-        match_template::match_template! {
-            $t = [
-                String => StringType,
-                Boolean => BooleanType,
-                Timestamp => TimestampType,
-            ],
-            $($tail)*
-        }
-    }
-}
-
-pub fn try_create_aggregate_min_max_any_function<const TYPE: u8>(
+pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
     display_name: &str,
     _params: Vec<Scalar>,
     argument_types: Vec<DataType>,
@@ -202,83 +193,43 @@ pub fn try_create_aggregate_min_max_any_function<const TYPE: u8>(
     let data_type = argument_types[0].clone();
     let need_drop = need_manual_drop_state(&data_type);
 
-    with_basic_no_number_mapped_type!(|T| match data_type {
-        DataType::T => {
-            if TYPE == TYPE_MIN {
-                type State = ScalarState<T, CmpMin>;
-                AggregateMinMaxAnyFunction::<T, CmpMin, State>::try_create(
-                    display_name,
-                    data_type,
-                    need_drop,
-                )
-            } else if TYPE == TYPE_MAX {
-                type State = ScalarState<T, CmpMax>;
-                AggregateMinMaxAnyFunction::<T, CmpMax, State>::try_create(
-                    display_name,
-                    data_type,
-                    need_drop,
-                )
-            } else {
-                type State = ScalarState<T, CmpAny>;
-                AggregateMinMaxAnyFunction::<T, CmpAny, State>::try_create(
-                    display_name,
-                    data_type,
-                    need_drop,
-                )
-            }
-        }
-        DataType::Number(num_type) => {
-            with_number_mapped_type!(|NUM| match num_type {
-                NumberDataType::NUM => {
-                    if TYPE == TYPE_MIN {
-                        type State = ScalarState<NumberType<NUM>, CmpMin>;
-                        AggregateMinMaxAnyFunction::<NumberType<NUM>, CmpMin, State>::try_create(
-                            display_name,
-                            data_type,
-                            need_drop,
-                        )
-                    } else if TYPE == TYPE_MAX {
-                        type State = ScalarState<NumberType<NUM>, CmpMax>;
-                        AggregateMinMaxAnyFunction::<NumberType<NUM>, CmpMax, State>::try_create(
-                            display_name,
-                            data_type,
-                            need_drop,
-                        )
-                    } else {
-                        type State = ScalarState<NumberType<NUM>, CmpAny>;
-                        AggregateMinMaxAnyFunction::<NumberType<NUM>, CmpAny, State>::try_create(
-                            display_name,
-                            data_type,
-                            need_drop,
-                        )
-                    }
+    with_compare_mapped_type!(|CMP| match CMP_TYPE {
+        CMP => {
+            with_simple_no_number_mapped_type!(|T| match data_type {
+                DataType::T => {
+                    type State = ScalarState<T, CMP>;
+                    AggregateMinMaxAnyFunction::<T, CMP, State>::try_create(
+                        display_name,
+                        data_type,
+                        need_drop,
+                    )
+                }
+                DataType::Number(num_type) => {
+                    with_number_mapped_type!(|NUM| match num_type {
+                        NumberDataType::NUM => {
+                            type State = ScalarState<NumberType<NUM>, CMP>;
+                            AggregateMinMaxAnyFunction::<NumberType<NUM>, CMP, State>::try_create(
+                                display_name,
+                                data_type,
+                                need_drop,
+                            )
+                        }
+                    })
+                }
+                _ => {
+                    type State = ScalarState<AnyType, CMP>;
+                    AggregateMinMaxAnyFunction::<AnyType, CMP, State>::try_create(
+                        display_name,
+                        data_type,
+                        need_drop,
+                    )
                 }
             })
         }
-        _ => {
-            if TYPE == TYPE_MIN {
-                type State = ScalarState<AnyType, CmpMin>;
-                AggregateMinMaxAnyFunction::<AnyType, CmpMin, State>::try_create(
-                    display_name,
-                    data_type,
-                    need_drop,
-                )
-            } else if TYPE == TYPE_MAX {
-                type State = ScalarState<AnyType, CmpMax>;
-                AggregateMinMaxAnyFunction::<AnyType, CmpMax, State>::try_create(
-                    display_name,
-                    data_type,
-                    need_drop,
-                )
-            } else {
-                type State = ScalarState<AnyType, CmpAny>;
-                AggregateMinMaxAnyFunction::<AnyType, CmpAny, State>::try_create(
-                    display_name,
-                    data_type,
-                    need_drop,
-                )
-            }
-        }
+        _ => Err(ErrorCode::BadDataValueType(format!(
+            "Unsupported compare type for aggregate function {} (type number: {})",
+            display_name, CMP_TYPE
+        ))),
     })
 }
 

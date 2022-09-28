@@ -29,9 +29,7 @@ use crate::sql::plans::ScalarExpr;
 impl Evaluator {
     pub fn eval_scalar(scalar: &Scalar) -> Result<EvalNode> {
         match scalar {
-            Scalar::BoundColumnRef(column_ref) => Ok(EvalNode::Variable {
-                name: column_ref.column.index.to_string(),
-            }),
+            Scalar::BoundColumnRef(_) => Err(ErrorCode::Ok("Cannot evaluate Scalar with variable")),
             Scalar::ConstantExpr(constant) => Ok(EvalNode::Constant {
                 value: constant.value.clone(),
                 data_type: *constant.data_type.clone(),

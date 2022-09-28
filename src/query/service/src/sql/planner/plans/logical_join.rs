@@ -33,8 +33,10 @@ pub enum JoinType {
     Left,
     Right,
     Full,
-    Semi,
-    Anti,
+    LeftSemi,
+    RightSemi,
+    LeftAnti,
+    RightAnti,
     Cross,
     /// Mark Join is a special case of join that is used to process Any subquery and correlated Exists subquery.
     Mark,
@@ -57,11 +59,17 @@ impl Display for JoinType {
             JoinType::Full => {
                 write!(f, "FULL OUTER")
             }
-            JoinType::Semi => {
-                write!(f, "SEMI")
+            JoinType::LeftSemi => {
+                write!(f, "LEFT SEMI")
             }
-            JoinType::Anti => {
-                write!(f, "ANTI")
+            JoinType::LeftAnti => {
+                write!(f, "LEFT ANTI")
+            }
+            JoinType::RightSemi => {
+                write!(f, "RIGHT SEMI")
+            }
+            JoinType::RightAnti => {
+                write!(f, "RIGHT ANTI")
             }
             JoinType::Cross => {
                 write!(f, "CROSS")
@@ -163,9 +171,11 @@ impl LogicalOperator for LogicalInnerJoin {
             | JoinType::Full
             | JoinType::Cross => left_prop.cardinality * right_prop.cardinality,
 
-            JoinType::Semi | JoinType::Anti | JoinType::Mark | JoinType::Single => {
+            JoinType::LeftSemi | JoinType::LeftAnti | JoinType::Mark | JoinType::Single => {
                 left_prop.cardinality
             }
+
+            JoinType::RightSemi | JoinType::RightAnti => right_prop.cardinality,
         };
 
         Ok(RelationalProperty {

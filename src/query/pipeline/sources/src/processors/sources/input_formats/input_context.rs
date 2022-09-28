@@ -43,6 +43,7 @@ use crate::processors::sources::input_formats::input_split::SplitInfo;
 use crate::processors::sources::input_formats::InputFormat;
 
 const MIN_ROW_PER_BLOCK: usize = 800 * 1000;
+const DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD: usize = 100 * 1024 * 1024;
 
 #[derive(Debug)]
 pub enum InputPlan {
@@ -120,6 +121,7 @@ pub struct InputContext {
 
     pub read_batch_size: usize,
     pub rows_per_block: usize,
+    pub block_memory_size_threshold: usize,
 
     pub scan_progress: Arc<Progress>,
 }
@@ -205,6 +207,7 @@ impl InputContext {
             scan_progress,
             source: InputSource::Operator(operator),
             plan: InputPlan::CopyInto(plan),
+            block_memory_size_threshold: DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD,
         })
     }
 
@@ -259,6 +262,7 @@ impl InputContext {
             source: InputSource::Stream(Mutex::new(Some(stream_receiver))),
             plan: InputPlan::StreamingLoad(plan),
             splits: vec![],
+            block_memory_size_threshold: DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD,
         })
     }
 
