@@ -39,9 +39,10 @@ pub struct UriLocation {
     pub connection: BTreeMap<String, String>,
 }
 
-/// secure_omission will fix omitted endpoint url schemes as 'https://'
+/// secure_omission will fix omitted endpoint url schemes into 'https://'
 #[inline]
 fn secure_omission(endpoint: String) -> String {
+    // checking with starts_with() should be enough here
     if !endpoint.starts_with("https://") && !endpoint.starts_with("http://") {
         format!("https://{}", endpoint)
     } else {
