@@ -91,7 +91,11 @@ impl StageTableSink {
         }
 
         let output_format = fmt.create_format(table_info.schema(), format_settings);
-        let max_file_size = table_info.stage_info.copy_options.max_file_size;
+        let mut max_file_size = table_info.stage_info.copy_options.max_file_size;
+        if max_file_size == 0 {
+            max_file_size = usize::MAX;
+        }
+
         let single = table_info.stage_info.copy_options.single;
 
         Ok(ProcessorPtr::create(Box::new(StageTableSink {
@@ -103,7 +107,9 @@ impl StageTableSink {
             output,
             single,
             output_format,
-            working_buffer: Vec::with_capacity((max_file_size as f64 * 1.2) as usize),
+            working_buffer: Vec::with_capacity(
+                (max_file_size.min(256 * 1024) as f64 * 1.2) as usize,
+            ),
             working_datablocks: vec![],
             write_header: false,
 
@@ -161,8 +167,12 @@ impl Processor for StageTableSink {
         }
 
         if self.input.is_finished() {
+            if self.output_format.buffer_size() > 0 {
+                let bs = self.output_format.finalize()?;
+                self.working_buffer.extend_from_slice(&bs);
+            }
             let data = std::mem::take(&mut self.working_buffer);
-            if data.len() > self.max_file_size {
+            if data.len() >= self.max_file_size || (!data.is_empty() && self.output.is_none()) {
                 self.state = State::NeedWrite(data, None);
                 self.working_datablocks.clear();
                 return Ok(Event::Async);

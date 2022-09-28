@@ -20,7 +20,6 @@ mod clusters;
 mod configs;
 mod context_function;
 mod evaluator;
-mod interpreters;
 mod metrics;
 mod pipelines;
 mod servers;
