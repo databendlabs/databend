@@ -93,7 +93,8 @@ impl StageTableSink {
         let output_format = fmt.create_format(table_info.schema(), format_settings);
         let mut max_file_size = table_info.stage_info.copy_options.max_file_size;
         if max_file_size == 0 {
-            max_file_size = usize::MAX;
+            // 5G per file by default
+            max_file_size = 5 * 1024 * 1024 * 1024;
         }
 
         let single = table_info.stage_info.copy_options.single;
@@ -188,7 +189,9 @@ impl Processor for StageTableSink {
                 }
                 _ => {
                     self.state = State::Finished;
-                    self.output.as_mut().map(|output| output.finish());
+                    if let Some(output) = self.output.as_mut() {
+                        output.finish()
+                    }
                     return Ok(Event::Finished);
                 }
             }

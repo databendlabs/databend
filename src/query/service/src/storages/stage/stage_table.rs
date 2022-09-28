@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
@@ -143,30 +144,29 @@ impl Table for StageTable {
         let op = StageTable::get_op(&ctx, &self.table_info.stage_info)?;
 
         let uuid = uuid::Uuid::new_v4().to_string();
-        let mut group_id = 0;
+        let group_id = AtomicUsize::new(0);
 
         // parallel compact unload, the partial block will flush into next operator
         if !single && pipeline.output_len() > 1 {
-            for _ in 0..pipeline.output_len() {
-                pipeline.add_transform(|input, output| {
-                    StageTableSink::try_create(
-                        input,
-                        ctx.clone(),
-                        self.table_info.clone(),
-                        op.clone(),
-                        Some(output),
-                        uuid.clone(),
-                        group_id,
-                    )
-                })?;
-                group_id += 1;
-            }
+            pipeline.add_transform(|input, output| {
+                let gid = group_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                StageTableSink::try_create(
+                    input,
+                    ctx.clone(),
+                    self.table_info.clone(),
+                    op.clone(),
+                    Some(output),
+                    uuid.clone(),
+                    gid,
+                )
+            })?;
         }
 
         // final compact unload
         pipeline.resize(1)?;
         let input_port = InputPort::create();
 
+        let gid = group_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         sink_pipeline_builder.add_sink(
             input_port.clone(),
             StageTableSink::try_create(
@@ -176,7 +176,7 @@ impl Table for StageTable {
                 op,
                 None,
                 uuid,
-                group_id,
+                gid,
             )?,
         );
 
