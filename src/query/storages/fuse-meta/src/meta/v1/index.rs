@@ -14,15 +14,15 @@
 
 use common_datablocks::DataBlock;
 
-// index data of Block, which itself is also a DataBlock.
-//
-// depends on the query conditions, columns of index data will be loaded on demand.
-pub struct BlockBloomFilterIndex {
+/// Filter data of a Block, which itself is also a DataBlock.
+///
+/// Depending on the query conditions, columns of index data will be loaded on demand.
+pub struct BlockFilter {
     // Before index mod is extracted from databend-query, we just keep the DataBlock here
     data: DataBlock,
 }
 
-impl BlockBloomFilterIndex {
+impl BlockFilter {
     pub fn new(data: DataBlock) -> Self {
         Self { data }
     }

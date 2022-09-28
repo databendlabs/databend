@@ -22,8 +22,8 @@ pub mod filters;
 pub mod index_min_max;
 pub mod range_filter;
 
-pub use bloom::BloomFilter;
-pub use bloom::BloomFilterExprEvalResult;
+pub use bloom::BlockFilter;
+pub use bloom::FilterEvalResult;
 pub use index_min_max::*;
 pub use range_filter::*;
 
