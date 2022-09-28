@@ -60,11 +60,10 @@ impl FuseTable {
                         segments.push(FuseLazyPartInfo::create(segment_location.clone()))
                     }
 
-                    println!("elapsed {:?}", instant.elapsed());
                     return Ok((
                         Statistics::new_estimated(
                             snapshot.summary.row_count as usize,
-                            snapshot.summary.uncompressed_byte_size as usize,
+                            snapshot.summary.compressed_byte_size as usize,
                             snapshot.segments.len(),
                             snapshot.segments.len(),
                         ),
