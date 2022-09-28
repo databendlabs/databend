@@ -1519,7 +1519,7 @@ dependencies = [
 name = "common-hive-meta-store"
 version = "0.1.0"
 dependencies = [
- "thrift 0.16.0",
+ "thrift 0.17.0",
  "which",
 ]
 
@@ -2041,7 +2041,7 @@ dependencies = [
  "futures",
  "opendal",
  "serde",
- "thrift 0.16.0",
+ "thrift 0.17.0",
  "tracing",
  "typetag",
 ]
@@ -2111,7 +2111,7 @@ dependencies = [
  "serde_repr",
  "serfig",
  "snailquote",
- "thrift 0.16.0",
+ "thrift 0.17.0",
  "time 0.3.14",
  "tracing",
  "typetag",
