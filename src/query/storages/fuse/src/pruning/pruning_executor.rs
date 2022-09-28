@@ -124,8 +124,8 @@ impl BlockPruner {
                     ErrorCode::StorageOther(format!("acquire permit failure, {}", e))
                 })?;
                 let segment_reader = MetaReaders::segment_info_reader(ctx.as_ref());
+                // before read segment info, check if limit already exceeded
                 if limiter.exceeded() {
-                    // before read segment info, check if limit already exceeded
                     return Ok(vec![]);
                 }
                 let segment_info = segment_reader.read(seg_loc, None, ver).await?;
@@ -179,11 +179,12 @@ impl BlockPruner {
                 }
                 Ok::<_, ErrorCode>(result)
             }
-            .instrument(tracing::debug_span!("filter_segment_with_storage_rt"));
+            .instrument(tracing::debug_span!("filter_segment_with_storage_runtime"));
             join_handlers.push(rt_ref.try_spawn(segment_pruning_fut)?);
         }
 
         let joint = future::try_join_all(join_handlers)
+            .instrument(tracing::debug_span!("join_all_filter_segment"))
             .await
             .map_err(|e| ErrorCode::StorageOther(format!("block pruning failure, {}", e)))?;
 

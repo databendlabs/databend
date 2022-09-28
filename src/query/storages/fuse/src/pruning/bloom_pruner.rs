@@ -24,6 +24,7 @@ use common_legacy_expression::LegacyExpression;
 use common_legacy_expression::Recursion;
 use common_storages_index::BloomFilterIndexer;
 use opendal::Operator;
+use tracing::debug;
 
 use crate::io::BlockBloomFilterIndexReader;
 
@@ -39,6 +40,7 @@ pub(crate) struct NonPruner;
 #[async_trait::async_trait]
 impl BloomFilterPruner for NonPruner {
     async fn should_keep(&self, _: &Option<Location>, _index_length: u64) -> bool {
+        debug!("using NonPruner");
         true
     }
 }
