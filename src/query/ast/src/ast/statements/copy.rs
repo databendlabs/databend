@@ -80,7 +80,7 @@ impl Display for CopyStmt<'_> {
             write!(f, " MAX_FILE_SIZE = {}", self.max_file_size)?;
         }
 
-        write!(f, " single = {}", self.single)?;
+        write!(f, " SINGLE = {}", self.single)?;
         write!(f, " PURGE = {}", self.purge)?;
         write!(f, " FORCE = {}", self.force)?;
         Ok(())
