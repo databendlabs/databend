@@ -158,7 +158,7 @@ Jun 10 16:40:36.168 DEBUG ThreadId(309) databend_query::pipelines::transforms::t
 ### Start Databend
 
 ```
-DATABEND_JAEGER_AGENT_ENDPOINT=localhost:6831 ./databend-query
+RUST_LOG=DEBUG, DATABEND_JAEGER_AGENT_ENDPOINT=localhost:6831 ./databend-query
 ```
 
 ### Start jaeger
