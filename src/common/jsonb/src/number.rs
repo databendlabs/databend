@@ -23,7 +23,7 @@ use ordered_float::OrderedFloat;
 use super::constants::*;
 use super::error::Error;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Number {
     Int64(i64),
     UInt64(u64),
@@ -237,16 +237,6 @@ impl Ord for Number {
                 let r = OrderedFloat(other.as_f64().unwrap());
                 l.cmp(&r)
             }
-        }
-    }
-}
-
-impl Debug for Number {
-    fn fmt(&self, formatter: &mut Formatter) -> std::fmt::Result {
-        match self {
-            Number::Int64(v) => formatter.debug_tuple("Int64").field(&v).finish(),
-            Number::UInt64(v) => formatter.debug_tuple("UInt64").field(&v).finish(),
-            Number::Float64(v) => formatter.debug_tuple("Float64").field(&v).finish(),
         }
     }
 }
