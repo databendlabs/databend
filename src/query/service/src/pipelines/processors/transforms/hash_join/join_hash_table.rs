@@ -815,12 +815,18 @@ impl HashJoinState for JoinHashTable {
         let input_block = DataBlock::concat_blocks(blocks)?;
         let probe_fields_len = self.probe_schema.fields().len();
         let build_columns = input_block.columns()[probe_fields_len..].to_vec();
-        let build_blocks = DataBlock::create(self.row_space.data_schema.clone(), build_columns);
+        let build_block = DataBlock::create(self.row_space.data_schema.clone(), build_columns);
+
         // Fast path for right semi join with non-equi conditions
         if self.hash_join_desc.other_predicate.is_none()
             && self.hash_join_desc.join_type == JoinType::RightSemi
         {
-            return Ok(vec![build_blocks]);
+            let mut bm = MutableBitmap::new();
+            bm.extend_constant(build_block.num_rows(), true);
+            let build_indexes = self.hash_join_desc.right_join_desc.build_indexes.read();
+            let filtered_block =
+                self.filter_rows_for_right_semi_join(&mut bm, &build_indexes, build_block)?;
+            return Ok(vec![filtered_block]);
         }
 
         // Right anti/semi join with non-equi conditions
@@ -832,7 +838,12 @@ impl HashJoinState for JoinHashTable {
         // Fast path for all non-equi conditions are true
         if all_true {
             return if self.hash_join_desc.join_type == JoinType::RightSemi {
-                Ok(vec![build_blocks])
+                let mut bm = MutableBitmap::new();
+                bm.extend_constant(build_block.num_rows(), true);
+                let build_indexes = self.hash_join_desc.right_join_desc.build_indexes.read();
+                let filtered_block =
+                    self.filter_rows_for_right_semi_join(&mut bm, &build_indexes, build_block)?;
+                return Ok(vec![filtered_block]);
             } else {
                 let unmatched_build_indexes = self.find_unmatched_build_indexes()?;
                 let unmatched_build_block = self.row_space.gather(&unmatched_build_indexes)?;
@@ -851,34 +862,29 @@ impl HashJoinState for JoinHashTable {
             };
         }
 
-        let bm = bm.as_ref().unwrap().clone().into_mut().right().unwrap();
-        let mut build_indexes = self.hash_join_desc.right_join_desc.build_indexes.write();
-        assert_eq!(bm.len(), build_indexes.len());
+        let mut bm = bm.unwrap().into_mut().right().unwrap();
 
-        let mut filtered_build_indexes: Vec<RowPtr> = Vec::with_capacity(build_indexes.len());
-        for (idx, row_ptr) in build_indexes.iter().enumerate() {
-            if bm.get(idx) {
-                filtered_build_indexes.push(*row_ptr)
-            }
-        }
-        *build_indexes = filtered_build_indexes;
-
+        // Right semi join with non-equi conditions
         if self.hash_join_desc.join_type == JoinType::RightSemi {
-            let mut indices = Vec::with_capacity(build_indexes.len());
-            for row_ptr in build_indexes.iter() {
-                indices.push((
-                    row_ptr.chunk_index as usize,
-                    row_ptr.row_index as usize,
-                    1usize,
-                ))
-            }
-            let result =
-                DataBlock::block_take_by_chunk_indices(&[build_blocks], indices.as_slice())?;
-            Ok(vec![result])
-        } else {
-            let unmatched_build_indexes = self.find_unmatched_build_indexes()?;
-            let unmatched_build_block = self.row_space.gather(&unmatched_build_indexes)?;
-            Ok(vec![unmatched_build_block])
+            let build_indexes = self.hash_join_desc.right_join_desc.build_indexes.read();
+            let filtered_block =
+                self.filter_rows_for_right_semi_join(&mut bm, &build_indexes, build_block)?;
+            return Ok(vec![filtered_block]);
         }
+
+        // Right anti join with non-equi conditions
+        let mut filtered_build_indexes: Vec<RowPtr> = vec![];
+        {
+            let mut build_indexes = self.hash_join_desc.right_join_desc.build_indexes.write();
+            for (idx, row_ptr) in build_indexes.iter().enumerate() {
+                if bm.get(idx) {
+                    filtered_build_indexes.push(*row_ptr)
+                }
+            }
+            *build_indexes = filtered_build_indexes;
+        }
+        let unmatched_build_indexes = self.find_unmatched_build_indexes()?;
+        let unmatched_build_block = self.row_space.gather(&unmatched_build_indexes)?;
+        Ok(vec![unmatched_build_block])
     }
 }

@@ -1059,6 +1059,75 @@ SELECT * FROM onecolumn AS a(x) RIGHT JOIN twocolumn ON true where false order b
 statement ok
 SELECT * FROM onecolumn AS a(x) LEFT JOIN twocolumn ON true where twocolumn.x > 50 order by y;
 
+statement ok
+insert into onecolumn values(42);
+
+statement query II
+select * from onecolumn as a right semi join twocolumn as b on a.x = b.x order by b.x;
+
+----
+42 53
+44 51
+
+statement query II
+select * from onecolumn as a right anti join twocolumn as b on a.x = b.x order by b.x;
+
+----
+45 45
+NULL 52
+
+statement query II
+select * from onecolumn as a right semi join twocolumn as b on a.x = b.x and a.x > 42 order by b.x;
+
+----
+44 51
+
+statement query II
+select * from onecolumn as a right anti join twocolumn as b on a.x = b.x and a.x > 42 order by b.x;
+
+----
+42 53
+45 45
+NULL 52
+
+statement query II
+select * from onecolumn as a right semi join twocolumn as b on a.x = b.x and b.x > 42 order by b.x;
+
+----
+44 51
+
+statement query II
+select * from onecolumn as a right anti join twocolumn as b on a.x = b.x and b.x > 42 order by b.x;
+
+----
+42 53
+45 45
+NULL 52
+
+statement query II
+select * from onecolumn as a right semi join twocolumn as b on true order by b.x;
+
+----
+42 53
+44 51
+45 45
+NULL 52
+
+statement ok
+select * from onecolumn as a right anti join twocolumn as b on true order by b.x;
+
+statement ok
+select * from onecolumn as a right semi join twocolumn as b on false order by b.x;
+
+statement query II
+select * from onecolumn as a right anti join twocolumn as b on false order by b.x;
+
+----
+42 53
+44 51
+45 45
+NULL 52
+
 -- statement query
 -- SELECT column1, column1+1FROM  (SELECT * FROM    (VALUES (NULL, NULL)) AS t      NATURAL FULL OUTER JOIN    (VALUES (1, 1)) AS u);
 

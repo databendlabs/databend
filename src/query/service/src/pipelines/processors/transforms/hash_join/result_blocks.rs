@@ -720,6 +720,23 @@ impl JoinHashTable {
         }
     }
 
+    pub(crate) fn filter_rows_for_right_semi_join(
+        &self,
+        bm: &mut MutableBitmap,
+        build_indexes: &[RowPtr],
+        input: DataBlock,
+    ) -> Result<DataBlock> {
+        let mut row_state = self.hash_join_desc.right_join_desc.row_state.write();
+        for (index, row) in build_indexes.iter().enumerate() {
+            if row_state[row] > 1 && bm.get(index) {
+                bm.set(index, false);
+                row_state.entry(*row).and_modify(|e| *e -= 1);
+            }
+        }
+        let predicate = BooleanColumn::from_arrow_data(bm.clone().into()).arc();
+        DataBlock::filter_block(input, &predicate)
+    }
+
     // return an (option bitmap, all_true, all_false)
     pub(crate) fn get_other_filters(
         &self,
