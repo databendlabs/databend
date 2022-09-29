@@ -493,6 +493,8 @@ pub enum TokenKind {
     LIST,
     #[token("MAP", ignore(ascii_case))]
     MAP,
+    #[token("MAX_FILE_SIZE", ignore(ascii_case))]
+    MAX_FILE_SIZE,
     #[token("MASTER_KEY", ignore(ascii_case))]
     MASTER_KEY,
     #[token("MEMORY", ignore(ascii_case))]
@@ -609,6 +611,8 @@ pub enum TokenKind {
     SHOW,
     #[token("SIGNED", ignore(ascii_case))]
     SIGNED,
+    #[token("SINGLE", ignore(ascii_case))]
+    SINGLE,
     #[token("SIZE_LIMIT", ignore(ascii_case))]
     SIZE_LIMIT,
     #[token("SKIP_HEADER", ignore(ascii_case))]

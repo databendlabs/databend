@@ -13,5 +13,6 @@
 //  limitations under the License.
 
 mod stage_table;
+mod stage_table_sink;
 
 pub use stage_table::StageTable;
