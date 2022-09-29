@@ -114,6 +114,7 @@ fn test_parse_uri_location() -> Result<()> {
                 connection: vec![
                     ("access_key_id", "access_key_id"),
                     ("secret_access_key", "secret_access_key"),
+                    ("session_token", "session_token"),
                 ]
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -126,7 +127,7 @@ fn test_parse_uri_location() -> Result<()> {
                     bucket: "test".to_string(),
                     access_key_id: "access_key_id".to_string(),
                     secret_access_key: "secret_access_key".to_string(),
-                    security_token: "".to_string(),
+                    security_token: "session_token".to_string(),
                     master_key: "".to_string(),
                     root: "/tmp/".to_string(),
                     disable_credential_loader: true,
@@ -144,7 +145,7 @@ fn test_parse_uri_location() -> Result<()> {
                 connection: vec![
                     ("aws_key_id", "access_key_id"),
                     ("aws_secret_key", "secret_access_key"),
-                    ("security_token", "security_token"),
+                    ("session_token", "security_token"),
                 ]
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -167,7 +168,7 @@ fn test_parse_uri_location() -> Result<()> {
             ),
         ),
         (
-            "s3_with_aws_security_token",
+            "s3_with_aws_token",
             UriLocation {
                 protocol: "s3".to_string(),
                 name: "test".to_string(),
