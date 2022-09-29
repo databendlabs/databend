@@ -300,6 +300,7 @@ pub fn walk_statement_mut<'a, V: VisitorMut>(visitor: &mut V, statement: &mut St
             selection,
             ..
         } => visitor.visit_delete(table_reference, selection),
+        Statement::Update(update) => visitor.visit_update(update),
         Statement::Copy(stmt) => visitor.visit_copy(stmt),
         Statement::ShowSettings { like } => visitor.visit_show_settings(like),
         Statement::ShowProcessList => visitor.visit_show_process_list(),

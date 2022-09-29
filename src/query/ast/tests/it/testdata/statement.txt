@@ -7394,3 +7394,114 @@ ShowGrantsOfShare(
 )
 
 
+---------- Input ----------
+UPDATE db1.tb1 set a = a + 1, b = 2 WHERE c > 3;
+---------- Output ---------
+UPDATE db1.tb1 SET a = a + 1, b = 2 WHERE c > 3
+---------- AST ------------
+Update(
+    UpdateStmt {
+        table: Table {
+            span: [
+                Ident(7..10),
+                Period(10..11),
+                Ident(11..14),
+            ],
+            catalog: None,
+            database: Some(
+                Identifier {
+                    name: "db1",
+                    quote: None,
+                    span: Ident(7..10),
+                },
+            ),
+            table: Identifier {
+                name: "tb1",
+                quote: None,
+                span: Ident(11..14),
+            },
+            alias: None,
+            travel_point: None,
+        },
+        update_list: [
+            UpdateExpr {
+                name: Identifier {
+                    name: "a",
+                    quote: None,
+                    span: Ident(19..20),
+                },
+                expr: BinaryOp {
+                    span: [
+                        Plus(25..26),
+                    ],
+                    op: Plus,
+                    left: ColumnRef {
+                        span: [
+                            Ident(23..24),
+                        ],
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Ident(23..24),
+                        },
+                    },
+                    right: Literal {
+                        span: [
+                            LiteralInteger(27..28),
+                        ],
+                        lit: Integer(
+                            1,
+                        ),
+                    },
+                },
+            },
+            UpdateExpr {
+                name: Identifier {
+                    name: "b",
+                    quote: None,
+                    span: Ident(30..31),
+                },
+                expr: Literal {
+                    span: [
+                        LiteralInteger(34..35),
+                    ],
+                    lit: Integer(
+                        2,
+                    ),
+                },
+            },
+        ],
+        selection: Some(
+            BinaryOp {
+                span: [
+                    Gt(44..45),
+                ],
+                op: Gt,
+                left: ColumnRef {
+                    span: [
+                        Ident(42..43),
+                    ],
+                    database: None,
+                    table: None,
+                    column: Identifier {
+                        name: "c",
+                        quote: None,
+                        span: Ident(42..43),
+                    },
+                },
+                right: Literal {
+                    span: [
+                        LiteralInteger(46..47),
+                    ],
+                    lit: Integer(
+                        3,
+                    ),
+                },
+            },
+        ),
+    },
+)
+
+
