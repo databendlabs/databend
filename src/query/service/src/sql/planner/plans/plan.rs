@@ -78,6 +78,7 @@ use crate::sql::plans::share::RevokeShareObjectPlan;
 use crate::sql::plans::share::ShowGrantTenantsOfSharePlan;
 use crate::sql::plans::share::ShowObjectGrantPrivilegesPlan;
 use crate::sql::plans::share::ShowSharesPlan;
+use crate::sql::plans::UpdatePlan;
 use crate::sql::BindContext;
 
 #[derive(Clone, Debug)]
@@ -132,6 +133,7 @@ pub enum Plan {
     // Insert
     Insert(Box<Insert>),
     Delete(Box<DeletePlan>),
+    Update(Box<UpdatePlan>),
 
     // Views
     CreateView(Box<CreateViewPlan>),
@@ -247,6 +249,7 @@ impl Display for Plan {
             Plan::DropUDF(_) => write!(f, "DropUDF"),
             Plan::Insert(_) => write!(f, "Insert"),
             Plan::Delete(_) => write!(f, "Delete"),
+            Plan::Update(_) => write!(f, "Update"),
             Plan::Call(_) => write!(f, "Call"),
             Plan::Presign(_) => write!(f, "Presign"),
             Plan::SetVariable(_) => write!(f, "SetVariable"),
@@ -320,6 +323,7 @@ impl Plan {
             Plan::DropUDF(_) => Arc::new(DataSchema::empty()),
             Plan::Insert(plan) => plan.schema(),
             Plan::Delete(_) => Arc::new(DataSchema::empty()),
+            Plan::Update(_) => Arc::new(DataSchema::empty()),
             Plan::Call(_) => Arc::new(DataSchema::empty()),
             Plan::Presign(plan) => plan.schema(),
             Plan::SetVariable(plan) => plan.schema(),

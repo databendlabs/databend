@@ -34,6 +34,7 @@ mod scalar;
 pub mod share;
 mod sort;
 mod union_all;
+mod update;
 
 pub use aggregate::*;
 pub use copy_v2::*;
@@ -59,3 +60,4 @@ pub use scalar::*;
 pub use share::*;
 pub use sort::*;
 pub use union_all::UnionAll;
+pub use update::UpdatePlan;
