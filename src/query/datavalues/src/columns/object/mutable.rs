@@ -80,6 +80,10 @@ where T: ObjectType
         let data_value = DataValue::try_from(t)?;
         Ok(data_value)
     }
+
+    fn memory_size(&self) -> usize {
+        self.values.iter().map(|v| v.memory_size()).sum()
+    }
 }
 
 impl<T> Default for MutableObjectColumn<T>

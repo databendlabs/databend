@@ -27,6 +27,42 @@ use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
 
+// These types can downcast their builders successfully.
+#[macro_export]
+macro_rules! with_simple_no_number_mapped_type {
+    (| $t:tt | $($tail:tt)*) => {
+        match_template::match_template! {
+            $t = [
+                String => StringType,
+                Boolean => BooleanType,
+                Timestamp => TimestampType,
+                Variant => VariantType,
+                Null => NullType,
+                EmptyArray => EmptyArrayType,
+            ],
+            $($tail)*
+        }
+    }
+}
+
+pub const TYPE_ANY: u8 = 0;
+pub const TYPE_MIN: u8 = 1;
+pub const TYPE_MAX: u8 = 2;
+
+#[macro_export]
+macro_rules! with_compare_mapped_type {
+    (| $t:tt | $($tail:tt)*) => {
+        match_template::match_template! {
+            $t = [
+                TYPE_ANY => CmpAny,
+                TYPE_MIN => CmpMin,
+                TYPE_MAX => CmpMax,
+            ],
+            $($tail)*
+        }
+    }
+}
+
 pub trait ChangeIf<T: ValueType>: Send + Sync + 'static {
     fn change_if(l: T::ScalarRef<'_>, r: T::ScalarRef<'_>) -> bool;
 }
@@ -145,7 +181,7 @@ where
             }
 
             // V::ScalarRef dosen't dervie Default, so take the first value as default.
-            let mut v = T::index_column(column, 0).unwrap();
+            let mut v = unsafe { T::index_column_unchecked(column, 0) };
             let mut has_v = validity.get_bit(0);
 
             for (data, valid) in column_iter.skip(1).zip(validity.iter().skip(1)) {

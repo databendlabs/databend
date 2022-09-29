@@ -49,6 +49,10 @@ pub trait OutputFormat: Send {
         Ok(vec![])
     }
 
+    fn buffer_size(&mut self) -> usize {
+        0
+    }
+
     fn finalize(&mut self) -> Result<Vec<u8>>;
 }
 

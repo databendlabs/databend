@@ -215,12 +215,14 @@ impl FromStr for OnErrorMode {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug, Eq, PartialEq)]
 #[serde(default)]
 pub struct CopyOptions {
     pub on_error: OnErrorMode,
     pub size_limit: usize,
     pub purge: bool,
+    pub single: bool,
+    pub max_file_size: usize,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]

@@ -24,17 +24,23 @@ pub const SHARE_CONFIG_PREFIX: &str = "_share_config";
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct ShareSpecVec {
-    share_specs: BTreeMap<u64, ext::ShareSpecExt>,
+    share_specs: BTreeMap<String, ext::ShareSpecExt>,
 }
 
-pub async fn save_share_spec(operator: Operator, spec_vec: Option<Vec<ShareSpec>>) -> Result<()> {
+pub async fn save_share_spec(
+    tenant: &String,
+    operator: Operator,
+    spec_vec: Option<Vec<ShareSpec>>,
+) -> Result<()> {
     if let Some(spec_vec) = spec_vec {
-        let location = format!("{}/share_specs.json", SHARE_CONFIG_PREFIX);
+        let location = format!("{}/{}/share_specs.json", tenant, SHARE_CONFIG_PREFIX);
         let mut share_spec_vec = ShareSpecVec::default();
         for spec in spec_vec {
-            let share_id = spec.share_id;
+            let share_name = spec.name.clone();
             let share_spec_ext = ext::ShareSpecExt::from_share_spec(spec, &operator);
-            share_spec_vec.share_specs.insert(share_id, share_spec_ext);
+            share_spec_vec
+                .share_specs
+                .insert(share_name, share_spec_ext);
         }
         operator
             .object(&location)

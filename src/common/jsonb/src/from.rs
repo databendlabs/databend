@@ -15,17 +15,28 @@
 use core::iter::FromIterator;
 use std::borrow::Cow;
 
-use decimal_rs::Decimal;
-
+use super::number::Number;
 use super::value::Object;
 use super::value::Value;
 
-macro_rules! from_integer {
+macro_rules! from_signed_integer {
     ($($ty:ident)*) => {
         $(
             impl<'a> From<$ty> for Value<'a> {
                 fn from(n: $ty) -> Self {
-                    Value::Number(n.into())
+                    Value::Number(Number::Int64(n as i64))
+                }
+            }
+        )*
+    };
+}
+
+macro_rules! from_unsigned_integer {
+    ($($ty:ident)*) => {
+        $(
+            impl<'a> From<$ty> for Value<'a> {
+                fn from(n: $ty) -> Self {
+                    Value::Number(Number::UInt64(n as u64))
                 }
             }
         )*
@@ -37,15 +48,18 @@ macro_rules! from_float {
         $(
             impl<'a> From<$ty> for Value<'a> {
                 fn from(n: $ty) -> Self {
-                    Value::Number(n.try_into().unwrap())
+                    Value::Number(Number::Float64(n as f64))
                 }
             }
         )*
     };
 }
 
-from_integer! {
+from_signed_integer! {
     i8 i16 i32 i64 isize
+}
+
+from_unsigned_integer! {
     u8 u16 u32 u64 usize
 }
 
@@ -74,12 +88,6 @@ impl<'a> From<&'a str> for Value<'a> {
 impl<'a> From<Cow<'a, str>> for Value<'a> {
     fn from(f: Cow<'a, str>) -> Self {
         Value::String(f)
-    }
-}
-
-impl<'a> From<Decimal> for Value<'a> {
-    fn from(d: Decimal) -> Self {
-        Value::Number(d)
     }
 }
 
