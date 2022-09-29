@@ -27,12 +27,12 @@ mod aggregate_covariance;
 mod aggregate_distinct_state;
 mod aggregate_min_max_any;
 mod aggregate_null_result;
+mod aggregate_retention;
 mod aggregate_scalar_state;
 mod aggregate_sum;
 mod aggregator;
 mod aggregator_common;
 
-// mod aggregate_retention;
 // mod aggregate_stddev_pop;
 // mod aggregate_window_funnel;
 
@@ -51,10 +51,10 @@ pub use aggregate_function_state::StateAddr;
 pub use aggregate_function_state::StateAddrs;
 pub use aggregate_min_max_any::AggregateMinMaxAnyFunction;
 pub use aggregate_null_result::AggregateNullResultFunction;
+pub use aggregate_retention::AggregateRetentionFunction;
 pub use aggregate_sum::AggregateSumFunction;
 pub use aggregator::Aggregators;
 pub use aggregator_common::*;
 
-// pub use aggregate_retention::AggregateRetentionFunction;
 // pub use aggregate_stddev_pop::AggregateStddevPopFunction;
 // pub use aggregate_window_funnel::AggregateWindowFunnelFunction;
