@@ -24,6 +24,7 @@ use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
 use common_meta_types::MatchSeq;
+use common_storage::StorageParams;
 use maplit::hashmap;
 
 use crate::schema::database::DatabaseNameIdent;
@@ -174,6 +175,7 @@ pub struct TableMeta {
     pub catalog: String,
     pub engine: String,
     pub engine_options: BTreeMap<String, String>,
+    pub storage_params: Option<StorageParams>,
     pub options: BTreeMap<String, String>,
     // The default cluster key.
     pub default_cluster_key: Option<String>,
@@ -252,6 +254,7 @@ impl Default for TableMeta {
             catalog: "default".to_string(),
             engine: "".to_string(),
             engine_options: BTreeMap::new(),
+            storage_params: None,
             options: BTreeMap::new(),
             default_cluster_key: None,
             cluster_keys: vec![],

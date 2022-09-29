@@ -26,7 +26,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::UserInfo;
 use common_storage::StorageOperator;
-use opendal::Operator;
+use common_storage::StorageParams;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use uuid::Uuid;
@@ -77,7 +77,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) auth_manager: Arc<AuthMgr>,
     pub(in crate::sessions) affect: Arc<Mutex<Option<QueryAffect>>>,
     pub(in crate::sessions) catalog_manager: Arc<CatalogManager>,
-    pub(in crate::sessions) storage_operator: Operator,
+    pub(in crate::sessions) storage_operator: StorageOperator,
     pub(in crate::sessions) executor: Arc<RwLock<Weak<PipelineExecutor>>>,
 }
 
@@ -157,6 +157,10 @@ impl QueryContextShared {
 
     pub fn set_current_tenant(&self, tenant: String) {
         self.session.set_current_tenant(tenant);
+    }
+
+    pub fn get_storage_params(&self) -> StorageParams {
+        self.storage_operator.get_storage_params()
     }
 
     pub fn get_tenant(&self) -> String {

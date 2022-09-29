@@ -289,6 +289,7 @@ CreateTable(
             ),
         ),
         engine: None,
+        uri_location: None,
         cluster_by: [],
         table_options: {},
         as_query: None,
@@ -354,6 +355,7 @@ CreateTable(
             ),
         ),
         engine: None,
+        uri_location: None,
         cluster_by: [],
         table_options: {},
         as_query: Some(
@@ -478,6 +480,7 @@ CreateTable(
             ),
         ),
         engine: None,
+        uri_location: None,
         cluster_by: [],
         table_options: {},
         as_query: None,
@@ -525,6 +528,7 @@ CreateTable(
             },
         ),
         engine: None,
+        uri_location: None,
         cluster_by: [],
         table_options: {},
         as_query: None,
@@ -561,6 +565,65 @@ CreateTable(
         ),
         engine: Some(
             Memory,
+        ),
+        uri_location: None,
+        cluster_by: [],
+        table_options: {},
+        as_query: None,
+        transient: false,
+    },
+)
+
+
+---------- Input ----------
+create table if not exists a.b (a int) 's3://testbucket/admin/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');
+---------- Output ---------
+CREATE TABLE IF NOT EXISTS a.b (a Int32 NOT NULL)
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        if_not_exists: true,
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "a",
+                quote: None,
+                span: Ident(27..28),
+            },
+        ),
+        table: Identifier {
+            name: "b",
+            quote: None,
+            span: Ident(29..30),
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Ident(32..33),
+                        },
+                        data_type: Int32,
+                        default_expr: None,
+                        comment: None,
+                    },
+                ],
+            ),
+        ),
+        engine: None,
+        uri_location: Some(
+            UriLocation {
+                protocol: "s3",
+                name: "testbucket",
+                path: "/admin/data/",
+                connection: {
+                    "aws_key_id": "minioadmin",
+                    "aws_secret_key": "minioadmin",
+                    "endpoint_url": "http://127.0.0.1:9900",
+                },
+            },
         ),
         cluster_by: [],
         table_options: {},
@@ -871,6 +934,7 @@ CreateTable(
             ),
         ),
         engine: None,
+        uri_location: None,
         cluster_by: [],
         table_options: {},
         as_query: None,
@@ -1323,6 +1387,7 @@ CreateTable(
             ),
         ),
         engine: None,
+        uri_location: None,
         cluster_by: [],
         table_options: {},
         as_query: None,
@@ -1383,6 +1448,7 @@ CreateTable(
             ),
         ),
         engine: None,
+        uri_location: None,
         cluster_by: [],
         table_options: {},
         as_query: None,
@@ -1432,6 +1498,7 @@ CreateTable(
             ),
         ),
         engine: None,
+        uri_location: None,
         cluster_by: [],
         table_options: {},
         as_query: None,
@@ -5843,6 +5910,7 @@ CreateTable(
             ),
         ),
         engine: None,
+        uri_location: None,
         cluster_by: [],
         table_options: {
             "comment": "table comment",
@@ -6434,7 +6502,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 PURGE = false FORCE = false
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -6465,6 +6533,8 @@ Copy(
         },
         validation_mode: "",
         size_limit: 10,
+        max_file_size: 0,
+        single: false,
         purge: false,
         force: false,
     },
@@ -6486,7 +6556,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url='http://127.0.0.1:9900' ) FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 PURGE = false FORCE = false
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -6519,6 +6589,8 @@ Copy(
         },
         validation_mode: "",
         size_limit: 10,
+        max_file_size: 0,
+        single: false,
         purge: false,
         force: false,
     },
@@ -6529,7 +6601,7 @@ Copy(
 COPY INTO mytable
                 FROM 'https://127.0.0.1:9900';
 ---------- Output ---------
-COPY INTO mytable FROM 'https://127.0.0.1:9900/' PURGE = false FORCE = false
+COPY INTO mytable FROM 'https://127.0.0.1:9900/' SINGLE = false PURGE = false FORCE = false
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -6555,6 +6627,8 @@ Copy(
         file_format: {},
         validation_mode: "",
         size_limit: 0,
+        max_file_size: 0,
+        single: false,
         purge: false,
         force: false,
     },
@@ -6565,7 +6639,7 @@ Copy(
 COPY INTO mytable
                 FROM 'https://127.0.0.1:';
 ---------- Output ---------
-COPY INTO mytable FROM 'https://127.0.0.1/' PURGE = false FORCE = false
+COPY INTO mytable FROM 'https://127.0.0.1/' SINGLE = false PURGE = false FORCE = false
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -6591,6 +6665,8 @@ Copy(
         file_format: {},
         validation_mode: "",
         size_limit: 0,
+        max_file_size: 0,
+        single: false,
         purge: false,
         force: false,
     },
@@ -6609,7 +6685,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM @my_stage/ FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 PURGE = false FORCE = false
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -6636,6 +6712,8 @@ Copy(
         },
         validation_mode: "",
         size_limit: 10,
+        max_file_size: 0,
+        single: false,
         purge: false,
         force: false,
     },
@@ -6654,7 +6732,7 @@ COPY INTO 's3://mybucket/data.csv'
                 size_limit=10;
 ---------- Output ---------
 COPY INTO 's3://mybucket/data.csv' FROM mytable FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 PURGE = false FORCE = false
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -6685,6 +6763,8 @@ Copy(
         },
         validation_mode: "",
         size_limit: 10,
+        max_file_size: 0,
+        single: false,
         purge: false,
         force: false,
     },
@@ -6703,7 +6783,7 @@ COPY INTO @my_stage
                 size_limit=10;
 ---------- Output ---------
 COPY INTO @my_stage/ FROM mytable FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 PURGE = false FORCE = false
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -6730,6 +6810,8 @@ Copy(
         },
         validation_mode: "",
         size_limit: 10,
+        max_file_size: 0,
+        single: false,
         purge: false,
         force: false,
     },
@@ -6755,7 +6837,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( aws_key_id='access_key' aws_secret_key='secret_key' master_key='master_key' ) FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 PURGE = false FORCE = false
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -6790,6 +6872,8 @@ Copy(
         },
         validation_mode: "",
         size_limit: 10,
+        max_file_size: 0,
+        single: false,
         purge: false,
         force: false,
     },
@@ -6808,7 +6892,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM @external_stage/path/to/file.csv FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 PURGE = false FORCE = false
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -6835,6 +6919,8 @@ Copy(
         },
         validation_mode: "",
         size_limit: 10,
+        max_file_size: 0,
+        single: false,
         purge: false,
         force: false,
     },
@@ -6853,7 +6939,7 @@ COPY INTO mytable
                 force=true;
 ---------- Output ---------
 COPY INTO mytable FROM @external_stage/path/to/file.csv FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) PURGE = false FORCE = true
+' skip_header = '1' type = 'CSV' ) SINGLE = false PURGE = false FORCE = true
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -6880,6 +6966,8 @@ Copy(
         },
         validation_mode: "",
         size_limit: 0,
+        max_file_size: 0,
+        single: false,
         purge: false,
         force: true,
     },

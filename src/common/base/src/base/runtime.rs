@@ -103,10 +103,9 @@ impl Runtime {
             let _ = runtime.block_on(recv_stop);
             let instant = Instant::now();
             // We wait up to 3 seconds to complete the runtime shutdown.
-            // runtime.shutdown_timeout(Duration::from_secs(3));
+            runtime.shutdown_timeout(Duration::from_secs(3));
 
-            false
-            // instant.elapsed() >= Duration::from_secs(3)
+            instant.elapsed() >= Duration::from_secs(3)
         });
 
         Ok(Runtime {

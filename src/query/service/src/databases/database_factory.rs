@@ -21,6 +21,7 @@ use common_meta_app::schema::DatabaseInfo;
 use parking_lot::RwLock;
 
 use crate::databases::default::DefaultDatabase;
+use crate::databases::share::ShareDatabase;
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
 use crate::Config;
@@ -47,7 +48,14 @@ pub struct DatabaseFactory {
 impl DatabaseFactory {
     pub fn create(_: Config) -> Self {
         let mut creators: HashMap<String, Arc<dyn DatabaseCreator>> = Default::default();
-        creators.insert("DEFAULT".to_string(), Arc::new(DefaultDatabase::try_create));
+        creators.insert(
+            DefaultDatabase::NAME.to_string(),
+            Arc::new(DefaultDatabase::try_create),
+        );
+        creators.insert(
+            ShareDatabase::NAME.to_string(),
+            Arc::new(ShareDatabase::try_create),
+        );
 
         DatabaseFactory {
             creators: RwLock::new(creators),

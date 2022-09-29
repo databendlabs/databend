@@ -312,6 +312,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             ~ #peroid_separated_idents_1_to_3
             ~ #create_table_source?
             ~ ( #engine )?
+            ~ ( #uri_location )?
             ~ ( CLUSTER ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" )?
             ~ ( #table_option )?
             ~ ( AS ~ ^#query )?
@@ -324,6 +325,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             (catalog, database, table),
             source,
             engine,
+            uri_location,
             opt_cluster_by,
             opt_table_options,
             opt_as_query,
@@ -335,6 +337,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 table,
                 source,
                 engine,
+                uri_location,
                 cluster_by: opt_cluster_by
                     .map(|(_, _, _, exprs, _)| exprs)
                     .unwrap_or_default(),
@@ -741,6 +744,8 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             ~ ( FILE_FORMAT ~ "=" ~ #options)?
             ~ ( VALIDATION_MODE ~ "=" ~ #literal_string)?
             ~ ( SIZE_LIMIT ~ "=" ~ #literal_u64)?
+            ~ ( MAX_FILE_SIZE ~ "=" ~ #literal_u64)?
+            ~ ( SINGLE ~ "=" ~ #literal_bool)?
             ~ ( PURGE ~ "=" ~ #literal_bool)?
             ~ ( FORCE ~ "=" ~ #literal_bool)?
         },
@@ -755,6 +760,8 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             file_format,
             validation_mode,
             size_limit,
+            max_file_size,
+            single,
             purge,
             force,
         )| {
@@ -766,6 +773,8 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 file_format: file_format.map(|v| v.2).unwrap_or_default(),
                 validation_mode: validation_mode.map(|v| v.2).unwrap_or_default(),
                 size_limit: size_limit.map(|v| v.2).unwrap_or_default() as usize,
+                max_file_size: max_file_size.map(|v| v.2).unwrap_or_default() as usize,
+                single: single.map(|v| v.2).unwrap_or_default(),
                 purge: purge.map(|v| v.2).unwrap_or_default(),
                 force: force.map(|v| v.2).unwrap_or_default(),
             })

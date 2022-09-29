@@ -150,12 +150,14 @@ pub enum AlterDatabaseAction<'a> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DatabaseEngine {
     Default,
+    Share,
 }
 
 impl Display for DatabaseEngine {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             DatabaseEngine::Default => write!(f, "DEFAULT"),
+            DatabaseEngine::Share => write!(f, "SHARE"),
         }
     }
 }

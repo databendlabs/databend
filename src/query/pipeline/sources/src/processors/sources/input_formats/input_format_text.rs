@@ -103,7 +103,6 @@ impl<T: InputFormatTextBase> InputFormat for InputFormatText<T> {
     }
 
     fn exec_copy(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {
-        tracing::info!("exe text");
         InputFormatTextPipe::<T>::execute_copy_with_aligner(ctx, pipeline)
     }
 
@@ -377,8 +376,14 @@ impl<T: InputFormatTextBase> BlockBuilderTrait for BlockBuilder<T> {
         if let Some(b) = batch {
             self.num_rows += b.row_ends.len();
             T::deserialize(self, b)?;
+            let mem = self.memory_size();
+            tracing::debug!(
+                "block builder added new batch: row {} size {}",
+                self.num_rows,
+                mem
+            );
             if self.num_rows >= self.ctx.rows_per_block
-                || self.memory_size() > self.ctx.block_memory_size_threshold
+                || mem > self.ctx.block_memory_size_threshold
             {
                 self.flush()
             } else {

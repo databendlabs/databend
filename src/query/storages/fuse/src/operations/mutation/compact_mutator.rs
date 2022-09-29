@@ -60,13 +60,12 @@ impl CompactMutator {
         location_generator: TableMetaLocationGenerator,
         block_per_seg: usize,
         is_cluster: bool,
+        operator: Operator,
     ) -> Result<Self> {
-        let data_accessor = ctx.get_storage_operator()?;
-
         Ok(Self {
             ctx,
             base_snapshot,
-            data_accessor,
+            data_accessor: operator,
             block_compactor,
             location_generator,
             selected_blocks: Vec::new(),
@@ -182,6 +181,7 @@ impl TableMutator for CompactMutator {
             table_info,
             &self.location_generator,
             new_snapshot,
+            &self.data_accessor,
         )
         .await
     }
