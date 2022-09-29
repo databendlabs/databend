@@ -192,7 +192,7 @@ impl DataBlock {
                     &blocks[blocks.len() / 2..blocks.len()],
                     sort_columns_descriptions,
                     limit,
-                    aborting,
+                    aborting.clone(),
                 )?;
 
                 if aborting() {
