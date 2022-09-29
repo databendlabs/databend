@@ -35,6 +35,7 @@ use common_legacy_planners::ReadDataSourcePlan;
 use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
 use common_storage::init_operator;
+use common_storage::StorageOperator;
 use common_storages_util::storage_context::StorageContext;
 use common_storages_util::table_storage_prefix::table_storage_prefix;
 use opendal::Operator;
@@ -81,8 +82,14 @@ impl FuseTable {
         if let Some((_, order)) = &cluster_key_meta {
             cluster_keys = ExpressionParser::parse_exprs(order)?;
         }
-        let sp = table_info.meta.storage_params.clone();
-        let operator = init_operator(&sp.storage)?;
+        let storage_params = table_info.meta.storage_params.clone();
+        let operator = match storage_params {
+            Some(sp) => init_operator(&sp)?,
+            None => {
+                let op = &*(StorageOperator::instance());
+                op.clone()
+            }
+        };
 
         Ok(Box::new(FuseTable {
             table_info,

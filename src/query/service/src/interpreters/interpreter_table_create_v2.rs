@@ -21,7 +21,6 @@ use common_exception::Result;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
-use common_meta_app::schema::TableStorageParams;
 use common_users::UserApiProvider;
 
 use crate::interpreters::InsertInterpreterV2;
@@ -181,9 +180,7 @@ impl CreateTableInterpreterV2 {
         let mut table_meta = TableMeta {
             schema,
             engine: self.plan.engine.to_string(),
-            storage_params: TableStorageParams {
-                storage: self.plan.storage_params.clone(),
-            },
+            storage_params: self.plan.storage_params.clone(),
             storage_path: self.plan.path.clone(),
             options: self.plan.options.clone(),
             default_cluster_key: None,

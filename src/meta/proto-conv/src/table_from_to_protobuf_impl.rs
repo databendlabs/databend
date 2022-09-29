@@ -21,7 +21,6 @@ use common_datavalues as dv;
 use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Utc;
 use common_meta_app::schema as mt;
-use common_meta_app::schema::TableStorageParams;
 use common_protos::pb;
 use common_storage::StorageParams;
 
@@ -177,11 +176,10 @@ impl FromToProto for mt::TableMeta {
             catalog,
             engine: p.engine,
             engine_options: p.engine_options,
-            storage_params: TableStorageParams::from_pb(p.storage_params.ok_or_else(|| {
-                Incompatible {
-                    reason: "UserStageInfo.stage_params cannot be None".to_string(),
-                }
-            })?)?,
+            storage_params: match p.storage_params {
+                Some(sp) => Some(StorageParams::from_pb(sp)?),
+                None => None,
+            },
             storage_path: p.storage_path,
             options: p.options,
             default_cluster_key: p.default_cluster_key,
@@ -212,7 +210,10 @@ impl FromToProto for mt::TableMeta {
             schema: Some(self.schema.to_pb()?),
             engine: self.engine.clone(),
             engine_options: self.engine_options.clone(),
-            storage_params: Some(mt::TableStorageParams::to_pb(&self.storage_params)?),
+            storage_params: match self.storage_params.clone() {
+                Some(sp) => Some(sp.to_pb()?),
+                None => None,
+            },
             storage_path: self.storage_path.clone(),
             options: self.options.clone(),
             default_cluster_key: self.default_cluster_key.clone(),
@@ -276,23 +277,5 @@ impl FromToProto for mt::TableIdList {
             ids: self.id_list.clone(),
         };
         Ok(p)
-    }
-}
-
-impl FromToProto for mt::TableStorageParams {
-    type PB = pb::TableStorageParams;
-
-    fn from_pb(p: pb::TableStorageParams) -> Result<Self, Incompatible> {
-        Ok(Self {
-            storage: StorageParams::from_pb(p.storage.ok_or_else(|| Incompatible {
-                reason: "pb::user_stage_info::StageParams.storage cannot be None".to_string(),
-            })?)?,
-        })
-    }
-
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        Ok(pb::TableStorageParams {
-            storage: Some(StorageParams::to_pb(&self.storage)?),
-        })
     }
 }

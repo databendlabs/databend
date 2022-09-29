@@ -166,12 +166,6 @@ pub struct TableStatistics {
     pub index_data_bytes: u64,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]
-#[serde(default)]
-pub struct TableStorageParams {
-    pub storage: StorageParams,
-}
-
 /// The essential state that defines what a table is.
 ///
 /// It is what a meta store just needs to save.
@@ -181,8 +175,8 @@ pub struct TableMeta {
     pub catalog: String,
     pub engine: String,
     pub engine_options: BTreeMap<String, String>,
-    pub storage_params: TableStorageParams,
-    pub storage_path: String,
+    pub storage_params: Option<StorageParams>,
+    pub storage_path: Option<String>,
     pub options: BTreeMap<String, String>,
     // The default cluster key.
     pub default_cluster_key: Option<String>,
@@ -261,8 +255,8 @@ impl Default for TableMeta {
             catalog: "default".to_string(),
             engine: "".to_string(),
             engine_options: BTreeMap::new(),
-            storage_params: Default::default(),
-            storage_path: "/".to_string(),
+            storage_params: None,
+            storage_path: None,
             options: BTreeMap::new(),
             default_cluster_key: None,
             cluster_keys: vec![],

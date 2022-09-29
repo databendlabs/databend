@@ -20,7 +20,6 @@ use common_datavalues as dv;
 use common_datavalues::chrono::TimeZone;
 use common_datavalues::chrono::Utc;
 use common_meta_app::schema as mt;
-use common_meta_app::schema::TableStorageParams;
 use common_meta_app::share;
 use common_proto_conv::FromToProto;
 use common_proto_conv::Incompatible;
@@ -195,8 +194,8 @@ fn new_table_meta() -> mt::TableMeta {
         )),
         catalog: "default".to_string(),
         engine: "44".to_string(),
-        storage_params: TableStorageParams::default(),
-        storage_path: "/".to_string(),
+        storage_params: None,
+        storage_path: None,
         engine_options: btreemap! {s("abc") => s("def")},
         options: btreemap! {s("xyz") => s("foo")},
         default_cluster_key: Some("(a + 2, b)".to_string()),
@@ -263,8 +262,8 @@ fn new_table_meta_v10() -> mt::TableMeta {
         catalog: "never-gonna-give-you-up".to_string(),
         engine: "44".to_string(),
         engine_options: btreemap! {s("abc") => s("def")},
-        storage_params: TableStorageParams::default(),
-        storage_path: "/".to_string(),
+        storage_params: None,
+        storage_path: None,
         options: btreemap! {s("xyz") => s("foo")},
         default_cluster_key: Some("(a + 2, b)".to_string()),
         cluster_keys: vec!["(a + 2, b)".to_string()],

@@ -58,9 +58,6 @@ message TableIdent {
   uint64 seq = 2;
 }
 
-// TableStorageParams for store table storage location.
-message TableStorageParams { UserStageInfo.StageStorage storage = 1; }
-
 // TableMeta is a container of all non-identity information.
 message TableMeta {
   uint64 ver = 100;
@@ -109,10 +106,10 @@ message TableMeta {
   repeated string field_comments = 25;
 
   // Table storage location connection info.
-  optional TableStorageParams storage_params = 26;
+  optional UserStageInfo.StageStorage storage_params = 26;
 
   // Table storage path prefix
-  string storage_path = 27;
+  optional string storage_path = 27;
 }
 
 // Save table name id list history.

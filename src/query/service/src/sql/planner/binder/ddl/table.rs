@@ -374,18 +374,10 @@ impl<'a> Binder {
                     path: uri.path.clone(),
                     connection: uri.connection.clone(),
                 };
-                parse_uri_location(&uri)?
+                let (sp, p) = parse_uri_location(&uri)?;
+                (Some(sp), Some(p))
             }
-            None => {
-                let sp = self.ctx.get_storage_params();
-                let p = self
-                    .ctx
-                    .get_storage_operator()?
-                    .metadata()
-                    .root()
-                    .to_string();
-                (sp, p)
-            }
+            None => (None, None),
         };
 
         // If table is TRANSIENT, set a flag in table option

@@ -300,8 +300,8 @@ async fn test_fuse_alter_table_cluster_key() -> Result<()> {
         table: fixture.default_table_name(),
         schema: TestFixture::default_schema(),
         engine: Engine::Fuse,
-        storage_params: ctx.get_storage_params(),
-        path: ctx.get_storage_operator()?.metadata().root().to_string(),
+        storage_params: None,
+        path: None,
         options: [
             // database id is required for FUSE
             (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
