@@ -282,12 +282,6 @@ impl FuseTable {
                 cache.pop(x.as_str());
             }
 
-            if aborting.load(Ordering::Relaxed) {
-                return Err(ErrorCode::AbortedQuery(
-                    "Aborted query, because the server is shutting down or the query was killed.",
-                ));
-            }
-
             self.remove_location(&self.operator, x.as_str()).await?;
         }
 
@@ -304,12 +298,6 @@ impl FuseTable {
             if let Some(c) = CacheManager::instance().get_table_snapshot_cache() {
                 let cache = &mut *c.write();
                 cache.pop(loc.as_str());
-            }
-
-            if aborting.load(Ordering::Relaxed) {
-                return Err(ErrorCode::AbortedQuery(
-                    "Aborted query, because the server is shutting down or the query was killed.",
-                ));
             }
 
             self.remove_location(&self.operator, loc.as_str()).await?;
