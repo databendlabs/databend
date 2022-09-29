@@ -220,7 +220,7 @@ impl InputContext {
         is_multi_part: bool,
     ) -> Result<Self> {
         let (format_name, rows_to_skip) = remove_clickhouse_format_suffix(format_name);
-        let rows_to_skip = std::cmp::max(settings.get_skip_header()? as usize, rows_to_skip);
+        let rows_to_skip = std::cmp::max(settings.get_format_skip_header()? as usize, rows_to_skip);
 
         let format_type =
             StageFileFormatType::from_str(format_name).map_err(ErrorCode::UnknownFormat)?;
@@ -228,7 +228,7 @@ impl InputContext {
         let format_settings = format.get_format_settings(&settings)?;
         let read_batch_size = settings.get_input_read_buffer_size()? as usize;
         let rows_per_block = MIN_ROW_PER_BLOCK;
-        let field_delimiter = settings.get_field_delimiter()?;
+        let field_delimiter = settings.get_format_field_delimiter()?;
         let field_delimiter = {
             if field_delimiter.is_empty() {
                 format.default_field_delimiter()
@@ -236,8 +236,9 @@ impl InputContext {
                 field_delimiter.as_bytes()[0]
             }
         };
-        let record_delimiter = RecordDelimiter::try_from(&settings.get_record_delimiter()?[..])?;
-        let compression = settings.get_compression()?;
+        let record_delimiter =
+            RecordDelimiter::try_from(&settings.get_format_record_delimiter()?[..])?;
+        let compression = settings.get_format_compression()?;
         let compression = if !compression.is_empty() {
             StageFileCompression::from_str(&compression).map_err(ErrorCode::BadArguments)?
         } else {

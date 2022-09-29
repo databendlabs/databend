@@ -184,7 +184,7 @@ impl Settings {
             SettingValue {
                 default_value: UserSettingValue::String("\n".to_owned()),
                 user_setting: UserSetting::create(
-                    "record_delimiter",
+                    "format_record_delimiter",
                     UserSettingValue::String("\n".to_owned()),
                 ),
                 level: ScopeLevel::Session,
@@ -194,7 +194,7 @@ impl Settings {
             SettingValue {
                 default_value: UserSettingValue::String(",".to_owned()),
                 user_setting: UserSetting::create(
-                    "field_delimiter",
+                    "format_field_delimiter",
                     UserSettingValue::String(",".to_owned()),
                 ),
                 level: ScopeLevel::Session,
@@ -203,14 +203,20 @@ impl Settings {
             },
             SettingValue {
                 default_value: UserSettingValue::UInt64(1),
-                user_setting: UserSetting::create("empty_as_default", UserSettingValue::UInt64(1)),
+                user_setting: UserSetting::create(
+                    "format_empty_as_default",
+                    UserSettingValue::UInt64(1),
+                ),
                 level: ScopeLevel::Session,
                 desc: "Format empty_as_default, default value: 1",
                 possible_values: None,
             },
             SettingValue {
                 default_value: UserSettingValue::UInt64(0),
-                user_setting: UserSetting::create("skip_header", UserSettingValue::UInt64(0)),
+                user_setting: UserSetting::create(
+                    "format_skip_header",
+                    UserSettingValue::UInt64(0),
+                ),
                 level: ScopeLevel::Session,
                 desc: "Whether to skip the input header, default value: 0",
                 possible_values: None,
@@ -218,11 +224,21 @@ impl Settings {
             SettingValue {
                 default_value: UserSettingValue::String("None".to_owned()),
                 user_setting: UserSetting::create(
-                    "compression",
+                    "format_compression",
                     UserSettingValue::String("None".to_owned()),
                 ),
                 level: ScopeLevel::Session,
                 desc: "Format compression, default value: None",
+                possible_values: None,
+            },
+            SettingValue {
+                default_value: UserSettingValue::String("\"".to_owned()),
+                user_setting: UserSetting::create(
+                    "format_quote_char",
+                    UserSettingValue::String("\"".to_owned()),
+                ),
+                level: ScopeLevel::Session,
+                desc: "The quote char for CSV. default value: '\"'.",
                 possible_values: None,
             },
             SettingValue {
@@ -320,16 +336,6 @@ impl Settings {
                 desc: "The maximum query execution time. it means no limit if the value is zero. default value: 0",
                 possible_values: None,
             },
-            SettingValue {
-                default_value: UserSettingValue::String("\"".to_owned()),
-                user_setting: UserSetting::create(
-                    "quote_char",
-                    UserSettingValue::String("\"".to_owned()),
-                ),
-                level: ScopeLevel::Session,
-                desc: "The quote char for CSV. default value: '\"'.",
-                possible_values: None,
-            },
         ];
 
         let settings: Arc<RwLock<HashMap<String, SettingValue>>> =
@@ -405,37 +411,37 @@ impl Settings {
         self.try_get_u64(KEY)
     }
 
-    pub fn get_field_delimiter(&self) -> Result<String> {
-        let key = "field_delimiter";
+    pub fn get_format_field_delimiter(&self) -> Result<String> {
+        let key = "format_field_delimiter";
         self.check_and_get_setting_value(key)
             .and_then(|v| v.user_setting.value.as_string())
     }
 
-    pub fn get_record_delimiter(&self) -> Result<String> {
-        let key = "record_delimiter";
+    pub fn get_format_record_delimiter(&self) -> Result<String> {
+        let key = "format_record_delimiter";
         self.check_and_get_setting_value(key)
             .and_then(|v| v.user_setting.value.as_string())
     }
 
-    pub fn get_quote_char(&self) -> Result<String> {
-        let key = "quote_char";
+    pub fn get_format_quote_char(&self) -> Result<String> {
+        let key = "format_quote_char";
         self.check_and_get_setting_value(key)
             .and_then(|v| v.user_setting.value.as_string())
     }
 
-    pub fn get_compression(&self) -> Result<String> {
-        let key = "compression";
+    pub fn get_format_compression(&self) -> Result<String> {
+        let key = "format_compression";
         self.check_and_get_setting_value(key)
             .and_then(|v| v.user_setting.value.as_string())
     }
 
-    pub fn get_empty_as_default(&self) -> Result<u64> {
-        let key = "empty_as_default";
+    pub fn get_format_empty_as_default(&self) -> Result<u64> {
+        let key = "format_empty_as_default";
         self.try_get_u64(key)
     }
 
-    pub fn get_skip_header(&self) -> Result<u64> {
-        let key = "skip_header";
+    pub fn get_format_skip_header(&self) -> Result<u64> {
+        let key = "format_skip_header";
         self.try_get_u64(key)
     }
 

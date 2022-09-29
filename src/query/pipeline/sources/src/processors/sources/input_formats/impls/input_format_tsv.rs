@@ -128,9 +128,9 @@ impl InputFormatTextBase for InputFormatTSV {
     fn get_format_settings(settings: &Arc<Settings>) -> Result<FormatSettings> {
         let timezone = get_time_zone(settings)?;
         Ok(FormatSettings {
-            record_delimiter: settings.get_record_delimiter()?.into_bytes(),
-            field_delimiter: settings.get_field_delimiter()?.into_bytes(),
-            empty_as_default: settings.get_empty_as_default()? > 0,
+            record_delimiter: settings.get_format_record_delimiter()?.into_bytes(),
+            field_delimiter: settings.get_format_field_delimiter()?.into_bytes(),
+            empty_as_default: settings.get_format_empty_as_default()? > 0,
             null_bytes: vec![b'\\', b'N'],
             timezone,
             ..Default::default()
