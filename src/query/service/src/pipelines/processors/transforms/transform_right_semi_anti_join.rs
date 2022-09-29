@@ -39,7 +39,8 @@ impl Compactor for RightSemiAntiJoinCompactor {
 
     // `compact_final` is called when all the blocks are pushed
     fn compact_final(&self, blocks: &[DataBlock], aborting: Aborting) -> Result<Vec<DataBlock>> {
-        self.hash_join_state.right_anti_semi_join_blocks(blocks, aborting)
+        self.hash_join_state
+            .right_anti_semi_join_blocks(blocks, aborting)
     }
 }
 

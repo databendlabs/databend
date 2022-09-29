@@ -804,7 +804,11 @@ impl HashJoinState for JoinHashTable {
         Ok(vec![merged_block])
     }
 
-    fn right_anti_semi_join_blocks(&self, blocks: &[DataBlock], _flag: Aborting) -> Result<Vec<DataBlock>> {
+    fn right_anti_semi_join_blocks(
+        &self,
+        blocks: &[DataBlock],
+        _flag: Aborting,
+    ) -> Result<Vec<DataBlock>> {
         // Fast path for right anti join with non-equi conditions
         if self.hash_join_desc.other_predicate.is_none()
             && self.hash_join_desc.join_type == JoinType::RightAnti
