@@ -63,8 +63,8 @@ impl<T: 'static + SyncSource> SyncSourcer<T> {
 
 #[async_trait::async_trait]
 impl<T: 'static + SyncSource> Processor for SyncSourcer<T> {
-    fn name(&self) -> &'static str {
-        T::NAME
+    fn name(&self) -> String {
+        T::NAME.to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
