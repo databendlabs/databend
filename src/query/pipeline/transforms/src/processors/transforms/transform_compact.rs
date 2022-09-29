@@ -115,8 +115,8 @@ impl<T: Compactor + Send + 'static> TransformCompact<T> {
 
 #[async_trait::async_trait]
 impl<T: Compactor + Send + 'static> Processor for TransformCompact<T> {
-    fn name(&self) -> &'static str {
-        T::name()
+    fn name(&self) -> String {
+        T::name().to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

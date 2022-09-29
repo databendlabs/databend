@@ -70,8 +70,8 @@ impl ExchangePublisherSink {
 
 #[async_trait::async_trait]
 impl Processor for ExchangePublisherSink {
-    fn name(&self) -> &'static str {
-        "ExchangeShuffleSink"
+    fn name(&self) -> String {
+        "ExchangeShuffleSink".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

@@ -78,8 +78,8 @@ impl TransformMergeBlock {
 
 #[async_trait::async_trait]
 impl Processor for TransformMergeBlock {
-    fn name(&self) -> &'static str {
-        "TransformMergeBlock"
+    fn name(&self) -> String {
+        "TransformMergeBlock".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

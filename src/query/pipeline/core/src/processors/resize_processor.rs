@@ -141,8 +141,8 @@ impl ResizeProcessor {
 
 #[async_trait::async_trait]
 impl Processor for ResizeProcessor {
-    fn name(&self) -> &'static str {
-        "Resize"
+    fn name(&self) -> String {
+        "Resize".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

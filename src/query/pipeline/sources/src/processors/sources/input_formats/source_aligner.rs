@@ -74,8 +74,8 @@ impl<I: InputFormatPipe> Aligner<I> {
 
 #[async_trait::async_trait]
 impl<I: InputFormatPipe> Processor for Aligner<I> {
-    fn name(&self) -> &'static str {
-        "Aligner"
+    fn name(&self) -> String {
+        "Aligner".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

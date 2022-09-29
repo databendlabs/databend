@@ -38,8 +38,8 @@ impl OneBlockSource {
 
 #[async_trait::async_trait]
 impl Processor for OneBlockSource {
-    fn name(&self) -> &'static str {
-        "BlockSource"
+    fn name(&self) -> String {
+        "BlockSource".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
