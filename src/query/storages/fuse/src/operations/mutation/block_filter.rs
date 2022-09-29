@@ -59,7 +59,7 @@ pub async fn delete_from_block(
     };
 
     // read the cols that we are going to filtering on
-    let reader = table.create_block_reader(ctx, proj)?;
+    let reader = table.create_block_reader(proj)?;
     let data_block = reader.read_with_block_meta(block_meta).await?;
 
     let schema = table.table_info.schema();
@@ -102,7 +102,7 @@ pub async fn delete_from_block(
     } else {
         let all_col_ids = all_the_columns_ids(table);
         let whole_table_proj = Projection::Columns(all_col_ids);
-        let whole_block_reader = table.create_block_reader(ctx, whole_table_proj)?;
+        let whole_block_reader = table.create_block_reader(whole_table_proj)?;
         whole_block_reader.read_with_block_meta(block_meta).await?
     };
 

@@ -25,6 +25,7 @@ use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::ast::TableReference;
 use crate::ast::TypeName;
+use crate::ast::UriLocation;
 
 #[derive(Debug, Clone, PartialEq)] // Tables
 pub struct ShowTablesStmt<'a> {
@@ -103,6 +104,7 @@ pub struct CreateTableStmt<'a> {
     pub table: Identifier<'a>,
     pub source: Option<CreateTableSource<'a>>,
     pub engine: Option<Engine>,
+    pub uri_location: Option<UriLocation>,
     pub cluster_by: Vec<Expr<'a>>,
     pub table_options: BTreeMap<String, String>,
     pub as_query: Option<Box<Query<'a>>>,

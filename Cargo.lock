@@ -1252,6 +1252,7 @@ dependencies = [
  "common-meta-types",
  "common-pipeline-core",
  "common-settings",
+ "common-storage",
  "dyn-clone",
  "opendal",
 ]
@@ -1664,6 +1665,7 @@ dependencies = [
  "common-building",
  "common-datavalues",
  "common-meta-types",
+ "common-storage",
  "enumflags2",
  "maplit",
  "num-derive",
@@ -2004,6 +2006,7 @@ dependencies = [
  "common-pipeline-core",
  "common-pipeline-sources",
  "common-pipeline-transforms",
+ "common-storage",
  "common-storages-index",
  "common-storages-util",
  "common-streams",

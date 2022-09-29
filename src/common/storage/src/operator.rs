@@ -14,6 +14,7 @@
 
 use std::env;
 use std::io::Result;
+use std::ops::Deref;
 
 use backon::ExponentialBackoff;
 use common_base::base::GlobalIORuntime;
@@ -245,14 +246,26 @@ fn init_obs_operator(cfg: &StorageObsConfig) -> Result<Operator> {
     Ok(Operator::new(builder.build()?))
 }
 
-pub struct StorageOperator;
+#[derive(Clone, Debug)]
+pub struct StorageOperator {
+    operator: Operator,
+    params: StorageParams,
+}
 
-static STORAGE_OPERATOR: OnceCell<Singleton<Operator>> = OnceCell::new();
+impl Deref for StorageOperator {
+    type Target = Operator;
+
+    fn deref(&self) -> &Self::Target {
+        &self.operator
+    }
+}
+
+static STORAGE_OPERATOR: OnceCell<Singleton<StorageOperator>> = OnceCell::new();
 
 impl StorageOperator {
     pub async fn init(
         conf: &StorageConfig,
-        v: Singleton<Operator>,
+        v: Singleton<StorageOperator>,
     ) -> common_exception::Result<()> {
         v.init(Self::try_create(conf).await?)?;
 
@@ -260,7 +273,7 @@ impl StorageOperator {
         Ok(())
     }
 
-    pub async fn try_create(conf: &StorageConfig) -> common_exception::Result<Operator> {
+    pub async fn try_create(conf: &StorageConfig) -> common_exception::Result<StorageOperator> {
         let operator = init_operator(&conf.params)?;
 
         // OpenDAL will send a real request to underlying storage to check whether it works or not.
@@ -272,13 +285,20 @@ impl StorageOperator {
             )));
         }
 
-        Ok(operator)
+        Ok(StorageOperator {
+            operator,
+            params: conf.params.clone(),
+        })
     }
 
-    pub fn instance() -> Operator {
+    pub fn instance() -> StorageOperator {
         match STORAGE_OPERATOR.get() {
             None => panic!("StorageOperator is not init"),
             Some(storage_operator) => storage_operator.get(),
         }
+    }
+
+    pub fn get_storage_params(&self) -> StorageParams {
+        self.params.clone()
     }
 }

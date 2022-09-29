@@ -16,6 +16,7 @@ syntax = "proto3";
 
 package databend_proto;
 
+import "user.proto";
 import "metadata.proto";
 
 message DbIdTableName {
@@ -103,6 +104,9 @@ message TableMeta {
 
   // Comments of each field.
   repeated string field_comments = 25;
+
+  // Table storage location connection info.
+  optional UserStageInfo.StageStorage storage_params = 26;
 }
 
 // Save table name id list history.
