@@ -30,7 +30,7 @@ use futures::StreamExt;
 use futures::TryStreamExt;
 use tracing::Instrument;
 
-use super::bloom_pruner;
+use super::pruner;
 use crate::io::MetaReaders;
 use crate::pruning::limiter;
 use crate::pruning::range_pruner;
@@ -61,7 +61,7 @@ impl BlockPruner {
         futures::executor::block_on(self.prune(ctx, schema, push_down))
     }
 
-    // prune blocks by utilizing min_max index and bloom filter, according to the pushdowns
+    // prune blocks by utilizing min_max index and filter, according to the pushdowns
     #[tracing::instrument(level = "debug", skip(self, schema, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     pub async fn prune(
         &self,
@@ -104,10 +104,9 @@ impl BlockPruner {
         let range_filter_pruner =
             range_pruner::new_range_filter_pruner(ctx, filter_expressions, &schema)?;
 
-        // prepare the bloom filter, if filter_expression is none, an dummy pruner will be returned
+        // prepare the filter, if filter_expression is none, an dummy pruner will be returned
         let dal = ctx.get_storage_operator()?;
-        let bloom_filter_pruner =
-            bloom_pruner::new_bloom_filter_pruner(ctx, filter_expressions, &schema, dal)?;
+        let filter_pruner = pruner::new_filter_pruner(ctx, filter_expressions, &schema, dal)?;
 
         // 2. kick off
         //
@@ -129,7 +128,7 @@ impl BlockPruner {
         for (idx, (seg_loc, ver)) in segment_locs.into_iter().enumerate() {
             let ctx = ctx.clone();
             let range_filter_pruner = range_filter_pruner.clone();
-            let bloom_filter_pruner = bloom_filter_pruner.clone();
+            let filter_pruner = filter_pruner.clone();
             let limiter = limiter.clone();
             let semaphore = semaphore.clone();
             let segment_pruning_fut = async move {
@@ -150,14 +149,14 @@ impl BlockPruner {
                     for block_meta in &segment_info.blocks {
                         // prune block using range filter
                         if limiter.exceeded() {
-                            // before using bloom index to prune, check if limit already exceeded
+                            // before using filter to prune, check if limit already exceeded
                             return Ok(result);
                         }
                         if range_filter_pruner
                             .should_keep(&block_meta.col_stats, block_meta.row_count)
                         {
-                            // prune block using bloom filter
-                            if bloom_filter_pruner
+                            // prune block using filter
+                            if filter_pruner
                                 .should_keep(
                                     &block_meta.bloom_filter_index_location,
                                     block_meta.bloom_filter_index_size,

@@ -167,11 +167,11 @@ impl Processor for FuseTableSink {
 
                 let bloom_index_state = {
                     // write index
-                    let bloom_index = BloomFilter::try_create(&[&block])?;
-                    let index_block = bloom_index.bloom_block;
+                    let bloom_index = BlockFilter::try_create(&[&block])?;
+                    let index_block = bloom_index.filter_block;
                     let location = self.meta_locations.block_bloom_index_location(&block_id);
                     let mut data = Vec::with_capacity(100 * 1024);
-                    let index_block_schema = &bloom_index.bloom_schema;
+                    let index_block_schema = &bloom_index.filter_schema;
                     let (size, _) = serialize_data_blocks_with_compression(
                         vec![index_block],
                         index_block_schema,

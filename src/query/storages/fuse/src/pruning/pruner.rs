@@ -22,13 +22,13 @@ use common_fuse_meta::meta::Location;
 use common_legacy_expression::ExpressionVisitor;
 use common_legacy_expression::LegacyExpression;
 use common_legacy_expression::Recursion;
-use common_storages_index::BloomFilter;
+use common_storages_index::BlockFilter;
 use opendal::Operator;
 
-use crate::io::BlockBloomFilterIndexReader;
+use crate::io::BlockFilterReader;
 
 #[async_trait::async_trait]
-pub trait BloomFilterPruner {
+pub trait Pruner {
     // returns ture, if target should NOT be pruned (false positive allowed)
     async fn should_keep(&self, index_location: &Option<Location>, index_length: u64) -> bool;
 }
@@ -37,25 +37,29 @@ pub trait BloomFilterPruner {
 pub(crate) struct NonPruner;
 
 #[async_trait::async_trait]
-impl BloomFilterPruner for NonPruner {
+impl Pruner for NonPruner {
     async fn should_keep(&self, _: &Option<Location>, _index_length: u64) -> bool {
         true
     }
 }
 
-struct BloomFilterIndexPruner {
+struct FilterPruner {
     ctx: Arc<dyn TableContext>,
-    // columns that should be loaded from bloom filter block
+
+    /// columns that should be loaded from filter block
     index_columns: Vec<String>,
-    // the expression that would be evaluate
+
+    /// the expression that would be evaluate
     filter_expression: LegacyExpression,
-    // the data accessor
+
+    /// the data accessor
     dal: Operator,
-    // the schema of data being indexed
+
+    /// the schema of data being indexed
     data_schema: DataSchemaRef,
 }
 
-impl BloomFilterIndexPruner {
+impl FilterPruner {
     pub fn new(
         ctx: Arc<dyn TableContext>,
         index_columns: Vec<String>,
@@ -75,11 +79,11 @@ impl BloomFilterIndexPruner {
 
 use self::util::*;
 #[async_trait::async_trait]
-impl BloomFilterPruner for BloomFilterIndexPruner {
+impl Pruner for FilterPruner {
     async fn should_keep(&self, index_location: &Option<Location>, index_length: u64) -> bool {
         if let Some(loc) = index_location {
-            // load bloom filter index, and try pruning according to filter expression
-            match should_keep_by_bloom_filter(
+            // load filter, and try pruning according to filter expression
+            match should_keep_by_filter(
                 self.ctx.clone(),
                 self.dal.clone(),
                 &self.data_schema,
@@ -93,7 +97,7 @@ impl BloomFilterPruner for BloomFilterIndexPruner {
                 Ok(v) => v,
                 Err(e) => {
                     // swallow exceptions intentionally, corrupted index should not prevent execution
-                    tracing::warn!("failed to apply bloom filter, returning ture. {}", e);
+                    tracing::warn!("failed to apply filter, returning ture. {}", e);
                     true
                 }
             }
@@ -103,16 +107,17 @@ impl BloomFilterPruner for BloomFilterIndexPruner {
     }
 }
 
-/// try to build the pruner.
-/// if `filter_expr` is none, or is not applicable, e.g. have no point queries
+/// Try to build a pruner.
+///
+/// if `filter_expr` is empty, or is not applicable, e.g. have no point queries
 /// a [NonPruner] will be return, which prunes nothing.
-/// otherwise, a [BloomFilterIndexer] backed pruner will be return
-pub fn new_bloom_filter_pruner(
+/// otherwise, a [Filter] backed pruner will be return
+pub fn new_filter_pruner(
     ctx: &Arc<dyn TableContext>,
     filter_exprs: Option<&[LegacyExpression]>,
     schema: &DataSchemaRef,
     dal: Operator,
-) -> Result<Arc<dyn BloomFilterPruner + Send + Sync>> {
+) -> Result<Arc<dyn Pruner + Send + Sync>> {
     if let Some(exprs) = filter_exprs {
         if exprs.is_empty() {
             return Ok(Arc::new(NonPruner));
@@ -128,12 +133,13 @@ pub fn new_bloom_filter_pruner(
 
         let point_query_cols = columns_names_of_eq_expressions(&expr)?;
         if !point_query_cols.is_empty() {
-            // convert to bloom filter block's column names
+            // convert to filter column names
             let filter_block_cols = point_query_cols
                 .into_iter()
-                .map(|n| BloomFilter::to_bloom_column_name(&n))
+                .map(|n| BlockFilter::build_filter_column_name(&n))
                 .collect();
-            return Ok(Arc::new(BloomFilterIndexPruner::new(
+
+            return Ok(Arc::new(FilterPruner::new(
                 ctx.clone(),
                 filter_block_cols,
                 expr,
@@ -152,30 +158,28 @@ mod util {
 
     use super::*;
     #[tracing::instrument(level = "debug", skip_all)]
-    pub async fn should_keep_by_bloom_filter(
+    pub async fn should_keep_by_filter(
         ctx: Arc<dyn TableContext>,
         dal: Operator,
         schema: &DataSchemaRef,
         filter_expr: &LegacyExpression,
-        bloom_index_col_names: &[String],
+        filter_col_names: &[String],
         index_location: &Location,
         index_length: u64,
     ) -> Result<bool> {
         // load the relevant index columns
-        let maybe_bloom_filter_index = index_location
-            .read_bloom_filter_index(ctx.clone(), dal, bloom_index_col_names, index_length)
+        let maybe_filter = index_location
+            .read_filter(ctx.clone(), dal, filter_col_names, index_length)
             .await;
 
-        match maybe_bloom_filter_index {
+        match maybe_filter {
             // figure it out
-            Ok(bloom_filter_index) => {
-                BloomFilter::from_bloom_block(schema.clone(), bloom_filter_index.into_data())?
-                    .maybe_true(filter_expr)
-            }
+            Ok(filter) => BlockFilter::from_filter_block(schema.clone(), filter.into_data())?
+                .maybe_true(filter_expr),
             Err(e) if e.code() == ErrorCode::deprecated_index_format_code() => {
                 // In case that the index is no longer supported, just return ture to indicate
                 // that the block being pruned should be kept. (Although the caller of this method
-                // "BloomFilterIndexPruner::should_keep",  will ignore any exceptions returned)
+                // "FilterPruner::should_keep",  will ignore any exceptions returned)
                 Ok(true)
             }
             Err(e) => Err(e),
@@ -191,7 +195,7 @@ mod util {
         fn pre_visit(mut self, expr: &LegacyExpression) -> Result<Recursion<Self>> {
             // TODO
             // 1. only binary op "=" is considered, which is NOT enough
-            // 2. should combine this logic with BloomFilterIndexer
+            // 2. should combine this logic with Filter
             match expr {
                 LegacyExpression::BinaryExpression { left, op, right } if op.as_str() == "=" => {
                     match (left.as_ref(), right.as_ref()) {

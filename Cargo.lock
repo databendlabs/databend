@@ -1559,7 +1559,8 @@ name = "common-jsonb"
 version = "0.1.0"
 dependencies = [
  "byteorder",
- "decimal-rs",
+ "fast-float",
+ "ordered-float 3.1.0",
 ]
 
 [[package]]
@@ -2860,18 +2861,6 @@ checksum = "bef552e6f588e446098f6ba40d89ac146c8c7b64aade83c051ee00bb5d2bc18d"
 dependencies = [
  "serde",
  "uuid",
-]
-
-[[package]]
-name = "decimal-rs"
-version = "0.1.39"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2492291a982ad198a2c3b84b091b48348372ffe8a9f7194cc90a2d8b901762c"
-dependencies = [
- "ethnum",
- "fast-float",
- "stack-buf",
- "thiserror",
 ]
 
 [[package]]
@@ -7308,12 +7297,6 @@ name = "stable_deref_trait"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
-
-[[package]]
-name = "stack-buf"
-version = "0.1.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7386b49cb287f6fafbfd3bd604914bccb99fb8d53483f40e1ecfda5d45f3370"
 
 [[package]]
 name = "static_assertions"

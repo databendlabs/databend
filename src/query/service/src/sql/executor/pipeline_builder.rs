@@ -49,9 +49,11 @@ use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::transforms::ChunkOperator;
 use crate::pipelines::processors::transforms::CompoundChunkOperator;
 use crate::pipelines::processors::transforms::HashJoinDesc;
+use crate::pipelines::processors::transforms::RightSemiAntiJoinCompactor;
 use crate::pipelines::processors::transforms::TransformMarkJoin;
 use crate::pipelines::processors::transforms::TransformMergeBlock;
 use crate::pipelines::processors::transforms::TransformRightJoin;
+use crate::pipelines::processors::transforms::TransformRightSemiAntiJoin;
 use crate::pipelines::processors::AggregatorParams;
 use crate::pipelines::processors::AggregatorTransformParams;
 use crate::pipelines::processors::JoinHashTable;
@@ -509,6 +511,17 @@ impl PipelineBuilder {
                     input,
                     output,
                     RightJoinCompactor::create(state.clone()),
+                )
+            })?;
+        }
+
+        if join.join_type == JoinType::RightAnti || join.join_type == JoinType::RightSemi {
+            self.main_pipeline.resize(1)?;
+            self.main_pipeline.add_transform(|input, output| {
+                TransformRightSemiAntiJoin::try_create(
+                    input,
+                    output,
+                    RightSemiAntiJoinCompactor::create(state.clone()),
                 )
             })?;
         }

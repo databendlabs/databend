@@ -159,7 +159,7 @@ impl CopyInterpreterV2 {
             SourceInfo::StageSource(table_info) => {
                 if table_info.stage_info.copy_options.purge {
                     let rename_me: Arc<dyn TableContext> = ctx.clone();
-                    let op = StageTable::get_op(&rename_me, &table_info.stage_info).await?;
+                    let op = StageTable::get_op(&rename_me, &table_info.stage_info)?;
                     for f in files {
                         if let Err(e) = op.object(f).delete().await {
                             tracing::error!("Failed to delete file: {}, error: {}", f, e);

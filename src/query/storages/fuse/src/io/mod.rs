@@ -18,7 +18,7 @@ mod write;
 
 pub use locations::TableMetaLocationGenerator;
 pub use read::load_bloom_filter_by_columns;
-pub use read::BlockBloomFilterIndexReader;
+pub use read::BlockFilterReader;
 pub use read::BlockReader;
 pub use read::MetaReaders;
 pub use read::SegmentInfoReader;

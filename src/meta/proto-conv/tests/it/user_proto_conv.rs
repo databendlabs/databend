@@ -86,6 +86,8 @@ pub(crate) fn test_fs_stage_info() -> mt::UserStageInfo {
             on_error: mt::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             purge: true,
+            single: false,
+            max_file_size: 0,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -118,6 +120,8 @@ pub(crate) fn test_s3_stage_info() -> mt::UserStageInfo {
             on_error: mt::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             purge: true,
+            single: false,
+            max_file_size: 0,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -148,6 +152,8 @@ pub(crate) fn test_gcs_stage_info() -> mt::UserStageInfo {
             on_error: mt::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             purge: true,
+            single: false,
+            max_file_size: 0,
         },
         comment: "test".to_string(),
         ..Default::default()
