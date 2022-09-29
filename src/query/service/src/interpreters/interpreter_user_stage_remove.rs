@@ -49,7 +49,7 @@ impl Interpreter for RemoveUserStageInterpreter {
         let plan = self.plan.clone();
 
         let table_ctx: Arc<dyn TableContext> = self.ctx.clone();
-        let op = StageTable::get_op(&table_ctx, &self.plan.stage).await?;
+        let op = StageTable::get_op(&table_ctx, &self.plan.stage)?;
 
         let files = list_files(&self.ctx, &plan.stage, &plan.path).await?;
 

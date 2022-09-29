@@ -51,6 +51,8 @@ pub struct DefaultDatabase {
 }
 
 impl DefaultDatabase {
+    pub const NAME: &'static str = "DEFAULT";
+
     pub fn try_create(ctx: DatabaseContext, db_info: DatabaseInfo) -> Result<Box<dyn Database>> {
         Ok(Box::new(Self { ctx, db_info }))
     }

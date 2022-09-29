@@ -58,7 +58,7 @@ impl Interpreter for DropUserStageInterpreter {
         if let Ok(stage) = stage {
             if matches!(&stage.stage_type, StageType::Internal) {
                 let rename_me_qry_ctx: Arc<dyn TableContext> = self.ctx.clone();
-                let op = StageTable::get_op(&rename_me_qry_ctx, &stage).await?;
+                let op = StageTable::get_op(&rename_me_qry_ctx, &stage)?;
                 op.batch().remove_all("/").await?;
                 info!(
                     "drop stage {:?} with all objects removed in stage",

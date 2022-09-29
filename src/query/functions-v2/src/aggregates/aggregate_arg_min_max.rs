@@ -137,10 +137,10 @@ where
                 return Ok(());
             }
             // V::ScalarRef dosen't dervie Default, so take the first value as default.
-            let mut v = V::index_column(val_col, 0).unwrap();
+            let mut v = unsafe { V::index_column_unchecked(val_col, 0) };
             let mut has_v = bit.get_bit(0);
             let mut data_value = if has_v {
-                let arg = A::index_column(arg_col, 0).unwrap();
+                let arg = unsafe { A::index_column_unchecked(arg_col, 0) };
                 A::upcast_scalar(A::to_owned_scalar(arg))
             } else {
                 Scalar::Null
@@ -153,11 +153,11 @@ where
                 if !has_v {
                     has_v = true;
                     v = val.clone();
-                    let arg = A::index_column(arg_col, row).unwrap();
+                    let arg = unsafe { A::index_column_unchecked(arg_col, row) };
                     data_value = A::upcast_scalar(A::to_owned_scalar(arg));
                 } else if C::change_if(v.clone(), val.clone()) {
                     v = val.clone();
-                    let arg = A::index_column(arg_col, row).unwrap();
+                    let arg = unsafe { A::index_column_unchecked(arg_col, row) };
                     data_value = A::upcast_scalar(A::to_owned_scalar(arg));
                 }
             }
@@ -175,7 +175,7 @@ where
             });
 
             if let Some((row, val)) = v {
-                let arg = A::index_column(arg_col, row).unwrap();
+                let arg = unsafe { A::index_column_unchecked(arg_col, row) };
                 self.add(val, A::upcast_scalar(A::to_owned_scalar(arg)));
             }
         };
@@ -292,8 +292,8 @@ where
         let val_col = V::try_downcast_column(&columns[1]).unwrap();
         let state = place.get::<State>();
 
-        let arg = A::index_column(&arg_col, row).unwrap();
-        let val = V::index_column(&val_col, row).unwrap();
+        let arg = unsafe { A::index_column_unchecked(&arg_col, row) };
+        let val = unsafe { V::index_column_unchecked(&val_col, row) };
         state.add(val, A::upcast_scalar(A::to_owned_scalar(arg.clone())));
         Ok(())
     }

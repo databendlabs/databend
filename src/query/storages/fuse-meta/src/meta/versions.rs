@@ -19,7 +19,7 @@ use common_exception::ErrorCode;
 
 use crate::meta::v0;
 use crate::meta::v1;
-use crate::meta::v1::BlockBloomFilterIndex;
+use crate::meta::v1::BlockFilter;
 use crate::meta::Versioned;
 
 // Here versions of meta are tagged with numeric values
@@ -65,10 +65,10 @@ impl SnapshotVersion {
 
 impl Versioned<0> for DataBlock {}
 
-impl Versioned<2> for BlockBloomFilterIndex {}
+impl Versioned<2> for BlockFilter {}
 
 pub enum BlockBloomFilterIndexVersion {
-    V2(PhantomData<v1::BlockBloomFilterIndex>),
+    V2(PhantomData<v1::BlockFilter>),
 }
 
 mod converters {

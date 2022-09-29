@@ -77,6 +77,7 @@ common-users = { path = "../users" }
 
 # Github dependencies
 sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "7f246e3" }
+thrift = { git = "https://github.com/datafuse-extras/thrift", tag = "v0.17.0", optional = true }
 
 # Crates.io dependencies
 ahash = "0.8.0"
@@ -138,7 +139,6 @@ strum_macros = "0.24.3"
 tempfile = { version = "3.3.0", optional = true }
 thiserror = "1"
 threadpool = "1.8.1"
-thrift = { version = "0.16.0", optional = true }
 time = "0.3.14"
 tokio-rustls = "0.23.4"
 tokio-stream = { version = "0.1.10", features = ["net"] }

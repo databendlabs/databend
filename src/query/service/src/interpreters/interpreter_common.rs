@@ -161,7 +161,7 @@ pub async fn stat_file(
     path: &str,
 ) -> Result<StageFile> {
     let table_ctx: Arc<dyn TableContext> = ctx.clone();
-    let op = StageTable::get_op(&table_ctx, stage).await?;
+    let op = StageTable::get_op(&table_ctx, stage)?;
     let meta = op.object(path).metadata().await?;
     Ok(StageFile {
         path: path.to_owned(),
@@ -188,7 +188,7 @@ pub async fn list_files(
     path: &str,
 ) -> Result<Vec<StageFile>> {
     let table_ctx: Arc<dyn TableContext> = ctx.clone();
-    let op = StageTable::get_op(&table_ctx, stage).await?;
+    let op = StageTable::get_op(&table_ctx, stage)?;
     let mut files = Vec::new();
 
     // - If the path itself is a dir, return directly.
