@@ -28,7 +28,7 @@ use databend_query::interpreters::DropTableClusterKeyInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::TableContext;
-use databend_query::sql::plans::CreateTablePlanV2;
+use databend_query::sql::plans::create_table_v2::CreateTablePlanV2;
 use databend_query::sql::Planner;
 use databend_query::sql::OPT_KEY_DATABASE_ID;
 use databend_query::sql::OPT_KEY_SNAPSHOT_LOCATION;
