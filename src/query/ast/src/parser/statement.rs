@@ -111,6 +111,21 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
+    let update = map(
+        rule! {
+            UPDATE ~ #table_reference_only
+            ~ SET ~ ^#comma_separated_list1(update_expr)
+            ~ ( WHERE ~ ^#expr )?
+        },
+        |(_, table, _, update_list, opt_selection)| {
+            Statement::Update(UpdateStmt {
+                table,
+                update_list,
+                selection: opt_selection.map(|(_, selection)| selection),
+            })
+        },
+    );
+
     let show_settings = map(
         rule! {
             SHOW ~ SETTINGS ~ (LIKE ~ #literal_string)?
@@ -893,6 +908,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
             | #insert : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
             | #delete : "`DELETE FROM <table> [WHERE ...]`"
+            | #update : "`UPDATE <table> SET <column> = <expr> [, <column> = <expr> , ... ] [WHERE ...]`"
             | #show_settings : "`SHOW SETTINGS [<show_limit>]`"
             | #show_stages : "`SHOW STAGES`"
             | #show_engines : "`SHOW ENGINES`"
@@ -1655,4 +1671,10 @@ pub fn table_reference_only(i: Input) -> IResult<TableReference> {
             travel_point: None,
         },
     )(i)
+}
+
+pub fn update_expr(i: Input) -> IResult<UpdateExpr> {
+    map(rule! { ( #ident ~ "=" ~ ^#expr ) }, |(name, _, expr)| {
+        UpdateExpr { name, expr }
+    })(i)
 }

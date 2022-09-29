@@ -15,6 +15,7 @@
 use std::collections::VecDeque;
 use std::future::Future;
 use std::net::SocketAddr;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -267,6 +268,11 @@ impl TableContext for QueryContext {
     fn get_current_catalog(&self) -> String {
         self.shared.get_current_catalog()
     }
+
+    fn get_aborting(&self) -> Arc<AtomicBool> {
+        self.shared.get_aborting()
+    }
+
     fn get_current_database(&self) -> String {
         self.shared.get_current_database()
     }

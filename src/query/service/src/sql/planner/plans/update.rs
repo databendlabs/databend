@@ -12,6 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod transforms;
-pub use transforms::Aborting;
-pub use transforms::ExpressionExecutor;
+use std::collections::HashMap;
+
+use common_meta_types::MetaId;
+
+use crate::sql::plans::Scalar;
+
+#[derive(Clone, Debug)]
+pub struct UpdatePlan {
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    pub table_id: MetaId,
+    pub update_list: HashMap<usize, Scalar>,
+    pub selection: Option<Scalar>,
+}

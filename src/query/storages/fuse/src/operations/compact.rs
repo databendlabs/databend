@@ -93,6 +93,7 @@ impl FuseTable {
 
         pipeline.add_transform(|transform_input_port, transform_output_port| {
             TransformCompact::try_create(
+                ctx.clone(),
                 transform_input_port,
                 transform_output_port,
                 block_compactor.to_compactor(false),

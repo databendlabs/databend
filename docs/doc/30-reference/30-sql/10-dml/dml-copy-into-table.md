@@ -52,7 +52,7 @@ externalLocation ::=
         ENDPOINT_URL = 'https://<endpoint-URL>'
         ACCESS_KEY_ID = '<your-access-key-ID>'
         SECRET_ACCESS_KEY = '<your-secret-access-key>'
-        SECURITY_TOKEN = '<your-security-token>'
+        SESSION_TOKEN = '<your-session-token>'
         REGION = '<region-name>'
         ENABLE_VIRTUAL_HOST_STYLE = true|false
   )
@@ -64,7 +64,7 @@ externalLocation ::=
 | ENDPOINT_URL              | The bucket endpoint URL starting with "https://". To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`. | Optional |
 | ACCESS_KEY_ID             | Your access key ID for connecting the AWS S3 compatible object storage. If not provided, Databend will access the bucket anonymously.                                                 | Optional |
 | SECRET_ACCESS_KEY         | Your secret access key for connecting the AWS S3 compatible object storage.                                                                                                           | Optional |
-| SECURITY_TOKEN            | Your temporary credential for connecting the AWS S3 service                                                                                                                           | Optional |
+| SESSION_TOKEN             | Your temporary credential for connecting the AWS S3 service                                                                                                                           | Optional |
 | REGION                    | AWS region name. For example, us-east-1.                                                                                                                                              | Optional |
 | ENABLE_VIRTUAL_HOST_STYLE | If you use virtual hosting to address the bucket, set it to "true".                                                                                                                   | Optional |
 
@@ -332,4 +332,3 @@ COPY INTO mytable
     FROM 'ipfs://<your-ipfs-hash>' connection = (endpoint_url = 'https://<your-ipfs-gateway>')
     FILE_FORMAT = (type = 'CSV' field_delimiter = ',' record_delimiter = '\n' skip_header = 1);
 ```
-

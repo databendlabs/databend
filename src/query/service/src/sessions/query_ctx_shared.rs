@@ -14,6 +14,8 @@
 
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Weak;
 
@@ -69,6 +71,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) running_query: Arc<RwLock<Option<String>>>,
     pub(in crate::sessions) running_query_kind: Arc<RwLock<Option<String>>>,
     pub(in crate::sessions) http_query: Arc<RwLock<Option<HttpQueryHandle>>>,
+    pub(in crate::sessions) aborting: Arc<AtomicBool>,
     pub(in crate::sessions) tables_refs: Arc<Mutex<HashMap<DatabaseAndTable, Arc<dyn Table>>>>,
     pub(in crate::sessions) dal_ctx: Arc<DalContext>,
     pub(in crate::sessions) auth_manager: Arc<AuthMgr>,
@@ -99,6 +102,7 @@ impl QueryContextShared {
             running_query: Arc::new(RwLock::new(None)),
             running_query_kind: Arc::new(RwLock::new(None)),
             http_query: Arc::new(RwLock::new(None)),
+            aborting: Arc::new(AtomicBool::new(false)),
             tables_refs: Arc::new(Mutex::new(HashMap::new())),
             dal_ctx: Arc::new(Default::default()),
             auth_manager: AuthMgr::create(config).await?,
@@ -114,6 +118,7 @@ impl QueryContextShared {
 
     pub fn kill(&self, cause: ErrorCode) {
         self.set_error(cause.clone());
+        self.aborting.store(true, Ordering::Release);
 
         if let Some(executor) = self.executor.read().upgrade() {
             executor.finish(Some(cause));
@@ -128,6 +133,10 @@ impl QueryContextShared {
 
     pub fn get_current_catalog(&self) -> String {
         self.session.get_current_catalog()
+    }
+
+    pub fn get_aborting(&self) -> Arc<AtomicBool> {
+        self.aborting.clone()
     }
 
     pub fn get_current_database(&self) -> String {
