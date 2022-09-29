@@ -42,12 +42,16 @@ impl Compactor for SortMergeCompactor {
         "SortMergeTransform"
     }
 
-    fn compact_final(&self, blocks: &[DataBlock], _aborting: Aborting) -> Result<Vec<DataBlock>> {
+    fn compact_final(&self, blocks: &[DataBlock], aborting: Aborting) -> Result<Vec<DataBlock>> {
         if blocks.is_empty() {
             Ok(vec![])
         } else {
-            let block =
-                DataBlock::merge_sort_blocks(blocks, &self.sort_columns_descriptions, self.limit)?;
+            let block = DataBlock::merge_sort_blocks(
+                blocks,
+                &self.sort_columns_descriptions,
+                self.limit,
+                aborting,
+            )?;
             Ok(vec![block])
         }
     }
