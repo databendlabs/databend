@@ -22,6 +22,7 @@ use common_fuse_meta::meta::ColumnStatistics;
 use common_fuse_meta::meta::StatisticsOfColumns;
 use common_storages_index::MinMaxIndex;
 use common_storages_index::SupportedType;
+use tracing::debug;
 
 pub fn gen_columns_statistics(data_block: &DataBlock) -> Result<StatisticsOfColumns> {
     let mut statistics = StatisticsOfColumns::new();
@@ -46,11 +47,21 @@ pub fn gen_columns_statistics(data_block: &DataBlock) -> Result<StatisticsOfColu
         let maxs = eval_aggr("max", vec![], &[column_field], rows)?;
 
         if mins.len() > 0 {
-            min = mins.get(0);
+            min = if let Some(v) = mins.get(0).trim_min() {
+                v
+            } else {
+                continue;
+            }
         }
+
         if maxs.len() > 0 {
-            max = maxs.get(0);
+            max = if let Some(v) = maxs.get(0).trim_max() {
+                v
+            } else {
+                continue;
+            }
         }
+
         let (is_all_null, bitmap) = col.validity();
         let unset_bits = match (is_all_null, bitmap) {
             (true, _) => rows,
@@ -102,5 +113,105 @@ pub mod traverse {
             }
         }
         Ok(())
+    }
+}
+
+// order-preserving prefix trim
+trait Trim: Sized {
+    fn trim_min(self) -> Option<Self>;
+    fn trim_max(self) -> Option<Self>;
+}
+
+const REPLACEMENT_CHAR: char = '\u{FFFD}';
+const STRING_PREFIX_LEN: usize = 32;
+
+impl Trim for DataValue {
+    fn trim_min(self) -> Option<Self> {
+        match self {
+            DataValue::String(bytes) => match String::from_utf8(bytes) {
+                Ok(mut v) => {
+                    if v.len() <= STRING_PREFIX_LEN {
+                        Some(DataValue::String(v.into_bytes()))
+                    } else {
+                        // find the character boundary to prevent String::truncate from panic
+                        let vs = v.as_str();
+                        let slice = match vs.char_indices().nth(STRING_PREFIX_LEN) {
+                            None => vs,
+                            Some((idx, _)) => &vs[..idx],
+                        };
+
+                        // do truncate
+                        Some(DataValue::String({
+                            v.truncate(slice.len());
+                            v.into_bytes()
+                        }))
+                    }
+                }
+                Err(_) => {
+                    debug!("Invalid utf8 string detected while collecting min statistics");
+                    None
+                }
+            },
+            v => Some(v),
+        }
+    }
+
+    fn trim_max(self) -> Option<Self> {
+        match self {
+            DataValue::String(bytes) => match String::from_utf8(bytes) {
+                Ok(mut v) => {
+                    if v.len() <= STRING_PREFIX_LEN {
+                        Some(DataValue::String(v.into_bytes()))
+                    } else {
+                        // slice the input (by character)
+                        let vs = v.get_mut(..).unwrap();
+                        let sliced = match vs.char_indices().nth(STRING_PREFIX_LEN) {
+                            None => vs,
+                            Some((idx, _)) => &vs[..idx],
+                        };
+
+                        // find the position to be replaced
+                        // in reversed order, break at the first one we met
+                        let mut idx = None;
+                        for (i, c) in sliced.char_indices().rev() {
+                            if c < REPLACEMENT_CHAR {
+                                idx = Some(i);
+                                break;
+                            }
+                        }
+
+                        // check the position to be replaced
+                        let replacement_point = if let Some(v) = idx {
+                            v
+                        } else {
+                            // if all the character is larger than the REPLACEMENT_CHAR
+                            // just ignore it
+                            debug!(
+                                "failed to to max character replacement, all the prefix characters are larger than �"
+                            );
+                            return None;
+                        };
+
+                        // rebuild the string (since the len of result string is rather small)
+                        let mut r = String::with_capacity(STRING_PREFIX_LEN);
+                        for (i, c) in sliced.char_indices() {
+                            if i < replacement_point {
+                                r.push(c)
+                            } else {
+                                r.push(REPLACEMENT_CHAR);
+                                break;
+                            }
+                        }
+
+                        Some(DataValue::String(r.into_bytes()))
+                    }
+                }
+                Err(_) => {
+                    debug!("Invalid utf8 string detected while collecting max statistics");
+                    None
+                }
+            },
+            v => Some(v),
+        }
     }
 }
