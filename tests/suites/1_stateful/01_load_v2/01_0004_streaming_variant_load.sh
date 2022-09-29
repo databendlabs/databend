@@ -12,24 +12,24 @@ aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/json_
 aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/json_sample2.csv /tmp/json_sample2.csv > /dev/null 2>&1
 aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/json_sample.ndjson /tmp/json_sample.ndjson > /dev/null 2>&1
 
-## do the Data integrity check
-#echo "c52505462ec69689af22b855987ae84ffcfacdc484cdb4de7938c2e65bd3aa09 /tmp/json_sample1.csv" | sha256sum --check > /dev/null 2>&1
-#if [ $? -ne 0 ]; then
-#	echo "The downloaded dataset has been corrupted, please remove and fetch it again."
-#	exit 1
-#fi
-#
-#echo "6f592b994e31049df1ea4339ab761201567418a2bd43abfcc5154abce846234b /tmp/json_sample2.csv" | sha256sum --check > /dev/null 2>&1
-#if [ $? -ne 0 ]; then
-#	echo "The downloaded dataset has been corrupted, please remove and fetch it again."
-#	exit 1
-#fi
+# do the Data integrity check
+echo "c52505462ec69689af22b855987ae84ffcfacdc484cdb4de7938c2e65bd3aa09 /tmp/json_sample1.csv" | sha256sum --check > /dev/null 2>&1
+if [ $? -ne 0 ]; then
+	echo "The downloaded dataset has been corrupted, please remove and fetch it again."
+	exit 1
+fi
 
-#echo "ff2f75d3107759cc09d79687143831fce9f38455de001c3e170c83f449492ec6 /tmp/json_sample.ndjson" | sha256sum --check > /dev/null 2>&1
-#if [ $? -ne 0 ]; then
-#	echo "The downloaded dataset has been corrupted, please remove and fetch it again."
-#	exit 1
-#fi
+echo "6f592b994e31049df1ea4339ab761201567418a2bd43abfcc5154abce846234b /tmp/json_sample2.csv" | sha256sum --check > /dev/null 2>&1
+if [ $? -ne 0 ]; then
+	echo "The downloaded dataset has been corrupted, please remove and fetch it again."
+	exit 1
+fi
+
+echo "ff2f75d3107759cc09d79687143831fce9f38455de001c3e170c83f449492ec6 /tmp/json_sample.ndjson" | sha256sum --check > /dev/null 2>&1
+if [ $? -ne 0 ]; then
+	echo "The downloaded dataset has been corrupted, please remove and fetch it again."
+	exit 1
+fi
 
 # load csv
 curl -H "insert_sql:insert into variant_test format Csv" -H "format_skip_header:0" -H 'format_field_delimiter: ,' -H 'format_record_delimiter: \n' -H "format_quote_char: \'" -F "upload=@/tmp/json_sample1.csv" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
