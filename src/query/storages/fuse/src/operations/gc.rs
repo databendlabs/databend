@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 use std::collections::HashSet;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_cache::Cache;
@@ -73,7 +74,7 @@ impl FuseTable {
                 let segments = HashSet::from_iter(last_snapshot.segments.clone());
                 self.purge_blocks(ctx.as_ref(), segments.iter(), &HashSet::new())
                     .await?;
-                self.collect(segments, snapshots).await
+                self.collect(ctx.as_ref(), segments, snapshots).await
             };
         };
 
@@ -130,8 +131,12 @@ impl FuseTable {
         )
         .await?;
 
-        self.collect(segments_to_be_deleted, snapshots_to_be_deleted)
-            .await
+        self.collect(
+            ctx.as_ref(),
+            segments_to_be_deleted,
+            snapshots_to_be_deleted,
+        )
+        .await
     }
 
     async fn blocks_of(
@@ -174,20 +179,47 @@ impl FuseTable {
     ) -> Result<()> {
         let reader = MetaReaders::segment_info_reader(ctx);
         let accessor = &self.operator;
+        let aborting = ctx.get_aborting();
         for l in segments {
+            if aborting.load(Ordering::Relaxed) {
+                return Err(ErrorCode::AbortedQuery(
+                    "Aborted query, because the server is shutting down or the query was killed.",
+                ));
+            }
             let (x, ver) = l;
             let res = reader.read(x, None, *ver).await?;
+
+            if aborting.load(Ordering::Relaxed) {
+                return Err(ErrorCode::AbortedQuery(
+                    "Aborted query, because the server is shutting down or the query was killed.",
+                ));
+            }
+
             for block_meta in &res.blocks {
                 if !root.contains(block_meta.location.0.as_str()) {
+                    if aborting.load(Ordering::Relaxed) {
+                        return Err(ErrorCode::AbortedQuery(
+                            "Aborted query, because the server is shutting down or the query was killed.",
+                        ));
+                    }
+
                     if let Some(bloom_index_location) = &block_meta.bloom_filter_index_location {
                         let path = &bloom_index_location.0;
                         if let Some(c) = CacheManager::instance().get_bloom_index_meta_cache() {
                             let cache = &mut *c.write();
                             cache.pop(path);
                         }
+
                         self.remove_location(accessor, bloom_index_location.0.as_str())
                             .await?;
                     }
+
+                    if aborting.load(Ordering::Relaxed) {
+                        return Err(ErrorCode::AbortedQuery(
+                            "Aborted query, because the server is shutting down or the query was killed.",
+                        ));
+                    }
+
                     self.remove_location(accessor, block_meta.location.0.as_str())
                         .await?;
                 }
@@ -228,29 +260,46 @@ impl FuseTable {
     // collect in the sense of GC
     async fn collect(
         &self,
+        ctx: &dyn TableContext,
         segments_to_be_deleted: HashSet<Location>,
         snapshots_to_be_deleted: Vec<(SnapshotId, u64)>,
     ) -> Result<()> {
         // order matters, should always remove the blocks first, segment 2nd, snapshot last,
         // so that if something goes wrong, e.g. process crashed, gc task can be "picked up" and continued
 
+        let aborting = ctx.get_aborting();
+
         // 1. remove the segments
         for (x, _v) in segments_to_be_deleted {
+            if aborting.load(Ordering::Relaxed) {
+                return Err(ErrorCode::AbortedQuery(
+                    "Aborted query, because the server is shutting down or the query was killed.",
+                ));
+            }
+
             if let Some(c) = CacheManager::instance().get_table_segment_cache() {
                 let cache = &mut *c.write();
                 cache.pop(x.as_str());
             }
+
             self.remove_location(&self.operator, x.as_str()).await?;
         }
 
         let locs = self.meta_location_generator();
         // 2. remove the snapshots
         for (id, ver) in snapshots_to_be_deleted.iter().rev() {
+            if aborting.load(Ordering::Relaxed) {
+                return Err(ErrorCode::AbortedQuery(
+                    "Aborted query, because the server is shutting down or the query was killed.",
+                ));
+            }
+
             let loc = locs.snapshot_location_from_uuid(id, *ver)?;
             if let Some(c) = CacheManager::instance().get_table_snapshot_cache() {
                 let cache = &mut *c.write();
                 cache.pop(loc.as_str());
             }
+
             self.remove_location(&self.operator, loc.as_str()).await?;
         }
 
