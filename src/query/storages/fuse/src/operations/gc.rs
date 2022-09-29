@@ -210,12 +210,6 @@ impl FuseTable {
                             cache.pop(path);
                         }
 
-                        if aborting.load(Ordering::Relaxed) {
-                            return Err(ErrorCode::AbortedQuery(
-                                "Aborted query, because the server is shutting down or the query was killed.",
-                            ));
-                        }
-
                         self.remove_location(accessor, bloom_index_location.0.as_str())
                             .await?;
                     }
