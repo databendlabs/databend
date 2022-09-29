@@ -115,7 +115,7 @@ fn test_unsized_hash_map() {
         if let Some(x) = standard.get_mut(&s[..]) {
             *x += 1;
         } else {
-            standard.insert(&s, 1);
+            standard.insert(s, 1);
         }
     }
     let mut hashtable = UnsizedHashMap::<[u8], U64>::new();
@@ -133,7 +133,7 @@ fn test_unsized_hash_map() {
     let mut check = std::collections::HashSet::new();
     for (key, value) in hashtable.iter() {
         assert!(check.insert(key));
-        assert_eq!(standard.get(key.as_ref()).copied().unwrap(), value.0);
+        assert_eq!(standard.get(key).copied().unwrap(), value.0);
     }
     drop(hashtable);
     assert_eq!(COUNT.load(Ordering::Relaxed), 0);

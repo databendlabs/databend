@@ -25,7 +25,6 @@ mod traits;
 mod twolevel_hashtable;
 mod unsized_hashtable;
 
-mod allocator;
 mod container;
 mod table0;
 mod table1;

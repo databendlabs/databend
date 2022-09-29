@@ -16,6 +16,9 @@ use std::alloc::Allocator;
 use std::intrinsics::unlikely;
 use std::mem::MaybeUninit;
 
+use common_base::mem_allocator::GlobalAllocator;
+use common_base::mem_allocator::MmapAllocator;
+
 use super::container::StackContainer;
 use super::table0::Entry;
 use super::table0::Table0;
@@ -26,7 +29,7 @@ use super::table0::Table0IterPtr;
 use super::traits::Keyable;
 use super::utils::ZeroEntry;
 
-pub struct StackHashtable<K, V, const N: usize = 16, A = super::allocator::Default>
+pub struct StackHashtable<K, V, const N: usize = 16, A = MmapAllocator<GlobalAllocator>>
 where
     K: Keyable,
     A: Allocator + Clone,
@@ -114,6 +117,9 @@ where
     pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
         unsafe { self.entry_mut(key).map(|e| e.val.assume_init_mut()) }
     }
+    /// # Safety
+    ///
+    /// The uninitialized value of returned entry should be written immediately.
     #[inline(always)]
     pub unsafe fn insert_and_entry(
         &mut self,
@@ -140,6 +146,9 @@ where
         }
         self.table.insert(key)
     }
+    /// # Safety
+    ///
+    /// The returned uninitialized value should be written immediately.
     #[inline(always)]
     pub unsafe fn insert(&mut self, key: K) -> Result<&mut MaybeUninit<V>, &mut V> {
         match self.insert_and_entry(key) {
@@ -157,7 +166,7 @@ where
             inner: self.zero.iter_mut().chain(self.table.iter_mut()),
         }
     }
-    pub fn iter_ptr(&self) -> StackHashtableIterPtr<K, V> {
+    pub unsafe fn iter_ptr(&self) -> StackHashtableIterPtr<K, V> {
         StackHashtableIterPtr {
             inner: self
                 .zero
@@ -167,7 +176,7 @@ where
                 .chain(self.table.iter_ptr()),
         }
     }
-    pub fn iter_mut_ptr(&self) -> StackHashtableIterMutPtr<K, V> {
+    pub unsafe fn iter_mut_ptr(&self) -> StackHashtableIterMutPtr<K, V> {
         StackHashtableIterMutPtr {
             inner: self
                 .zero

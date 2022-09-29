@@ -83,13 +83,13 @@ impl<V, A: Allocator + Clone> Table1<V, A> {
             i: 0,
         }
     }
-    pub fn iter_ptr(&self) -> Table1IterPtr<V> {
+    pub unsafe fn iter_ptr(&self) -> Table1IterPtr<V> {
         Table1IterPtr {
             slice: self.data.as_ref(),
             i: 0,
         }
     }
-    pub fn iter_mut_ptr(&self) -> Table1IterMutPtr<V> {
+    pub unsafe fn iter_mut_ptr(&self) -> Table1IterMutPtr<V> {
         Table1IterMutPtr {
             slice: self.data.as_ref() as *const _ as *mut _,
             i: 0,

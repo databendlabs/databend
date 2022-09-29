@@ -17,7 +17,7 @@ use std::alloc::Layout;
 use std::intrinsics::likely;
 
 use bumpalo::Bump;
-use common_base::mem_allocator::ALLOC;
+use common_base::mem_allocator::GlobalAllocator;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
 use common_datablocks::HashMethodSerializer;
@@ -118,7 +118,7 @@ impl<T: ShortFixedKeyable> ShortFixedKeysAggregatorState<T> {
             let entity_align = std::mem::align_of::<ShortFixedKeysStateEntity<T>>();
             let entity_layout = Layout::from_size_align_unchecked(size, entity_align);
 
-            let raw_ptr = ALLOC.alloc_zeroed(entity_layout);
+            let raw_ptr = GlobalAllocator.alloc_zeroed(entity_layout);
 
             ShortFixedKeysAggregatorState::<T> {
                 area: Default::default(),
@@ -137,7 +137,7 @@ impl<T: ShortFixedKeyable> Drop for ShortFixedKeysAggregatorState<T> {
             let size = self.max_size * std::mem::size_of::<ShortFixedKeysStateEntity<T>>();
             let entity_align = std::mem::align_of::<ShortFixedKeysStateEntity<T>>();
             let layout = Layout::from_size_align_unchecked(size, entity_align);
-            ALLOC.dealloc(self.data as *mut u8, layout);
+            GlobalAllocator.dealloc(self.data as *mut u8, layout);
         }
     }
 }
@@ -248,7 +248,7 @@ where
 
     #[inline(always)]
     fn iter(&self) -> Self::Iterator {
-        self.data.iter_mut_ptr()
+        unsafe { self.data.iter_mut_ptr() }
     }
 
     #[inline(always)]
@@ -314,7 +314,7 @@ impl AggregatorState<HashMethodSerializer> for SerializedKeysAggregatorState {
         self.data_state_map.len()
     }
     fn iter(&self) -> Self::Iterator {
-        self.data_state_map.iter_mut_ptr()
+        unsafe { self.data_state_map.iter_mut_ptr() }
     }
 
     #[inline(always)]

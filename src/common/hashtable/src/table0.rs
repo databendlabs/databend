@@ -197,13 +197,13 @@ where
             i: 0,
         }
     }
-    pub fn iter_ptr(&self) -> Table0IterPtr<K, V> {
+    pub unsafe fn iter_ptr(&self) -> Table0IterPtr<K, V> {
         Table0IterPtr {
             slice: self.entries.as_ref() as *const _,
             i: 0,
         }
     }
-    pub fn iter_mut_ptr(&self) -> Table0IterMutPtr<K, V> {
+    pub unsafe fn iter_mut_ptr(&self) -> Table0IterMutPtr<K, V> {
         Table0IterMutPtr {
             slice: self.entries.as_ref() as *const _ as *mut _,
             i: 0,

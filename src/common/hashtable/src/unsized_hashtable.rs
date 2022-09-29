@@ -20,6 +20,8 @@ use std::num::NonZeroU64;
 use std::ptr::NonNull;
 
 use bumpalo::Bump;
+use common_base::mem_allocator::GlobalAllocator;
+use common_base::mem_allocator::MmapAllocator;
 
 use super::container::HeapContainer;
 use super::table0::Entry;
@@ -38,7 +40,7 @@ use crate::table1::Table1IterMut;
 use crate::table1::Table1IterMutPtr;
 use crate::table1::Table1IterPtr;
 
-pub struct UnsizedHashtable<K, V, A = super::allocator::Default>
+pub struct UnsizedHashtable<K, V, A = MmapAllocator<GlobalAllocator>>
 where
     K: UnsizedKeyable + ?Sized,
     A: Allocator + Clone,
@@ -205,6 +207,9 @@ where
             },
         }
     }
+    /// # Safety
+    ///
+    /// The uninitialized value of returned entry should be written immediately.
     #[inline(always)]
     pub unsafe fn insert_and_entry(
         &mut self,
@@ -281,6 +286,10 @@ where
             }
         }
     }
+    /// # Safety
+    ///
+    /// * The uninitialized value of returned entry should be written immediately.
+    /// * The lifetime of key lives longer than the hashtable.
     #[inline(always)]
     pub unsafe fn insert_and_entry_borrowing(
         &mut self,
@@ -355,6 +364,9 @@ where
             }
         }
     }
+    /// # Safety
+    ///
+    /// The returned uninitialized value should be written immediately.
     #[inline(always)]
     pub unsafe fn insert(&mut self, key: &K) -> Result<&mut MaybeUninit<V>, &mut V> {
         let key = key.as_bytes();
@@ -452,6 +464,10 @@ where
             }
         }
     }
+    /// # Safety
+    ///
+    /// * The returned uninitialized value should be written immediately.
+    /// * The lifetime of key lives longer than the hashtable.
     #[inline(always)]
     pub unsafe fn insert_borrowing(&mut self, key: &K) -> Result<&mut MaybeUninit<V>, &mut V> {
         let key = key.as_bytes();
@@ -568,7 +584,7 @@ where
             _phantom: PhantomData,
         }
     }
-    pub fn iter_ptr(&self) -> UnsizedHashtableIterPtr<K, V> {
+    pub unsafe fn iter_ptr(&self) -> UnsizedHashtableIterPtr<K, V> {
         UnsizedHashtableIterPtr {
             it_0: Some(self.table0.iter_ptr()),
             it_1: Some(self.table1.iter_ptr()),
@@ -578,7 +594,7 @@ where
             _phantom: PhantomData,
         }
     }
-    pub fn iter_mut_ptr(&self) -> UnsizedHashtableIterMutPtr<K, V> {
+    pub unsafe fn iter_mut_ptr(&self) -> UnsizedHashtableIterMutPtr<K, V> {
         UnsizedHashtableIterMutPtr {
             it_0: Some(self.table0.iter_mut_ptr()),
             it_1: Some(self.table1.iter_mut_ptr()),

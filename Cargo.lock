@@ -1351,6 +1351,7 @@ dependencies = [
  "ordered-float 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "primitive-types",
  "rand 0.8.5",
+ "semver",
 ]
 
 [[package]]

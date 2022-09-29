@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(allocator_api)]
 #![feature(backtrace)]
 #![feature(thread_local)]
+#![feature(ptr_metadata)]
 #![allow(incomplete_features)]
 #![feature(generic_const_exprs)]
 #![feature(const_maybe_uninit_as_mut_ptr)]

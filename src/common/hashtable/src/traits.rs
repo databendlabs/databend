@@ -19,6 +19,9 @@ use ordered_float::OrderedFloat;
 use primitive_types::U256;
 use primitive_types::U512;
 
+/// # Safety
+///
+/// All functions must be implemented correctly.
 pub unsafe trait Keyable: Sized + Copy + Eq {
     fn is_zero(this: &MaybeUninit<Self>) -> bool;
 
