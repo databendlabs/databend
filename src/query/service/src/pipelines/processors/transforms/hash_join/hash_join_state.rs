@@ -14,6 +14,7 @@
 
 use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_pipeline_transforms::processors::transforms::Aborting;
 
 use super::ProbeState;
 
@@ -43,8 +44,8 @@ pub trait HashJoinState: Send + Sync {
     async fn wait_finish(&self) -> Result<()>;
 
     /// Get mark join results
-    fn mark_join_blocks(&self) -> Result<Vec<DataBlock>>;
+    fn mark_join_blocks(&self, flag: Aborting) -> Result<Vec<DataBlock>>;
 
     /// Get right join results
-    fn right_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>>;
+    fn right_join_blocks(&self, blocks: &[DataBlock], flag: Aborting) -> Result<Vec<DataBlock>>;
 }

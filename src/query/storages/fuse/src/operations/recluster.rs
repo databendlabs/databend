@@ -155,6 +155,7 @@ impl FuseTable {
         })?;
         pipeline.add_transform(|transform_input_port, transform_output_port| {
             TransformSortMerge::try_create(
+                ctx.clone(),
                 transform_input_port,
                 transform_output_port,
                 SortMergeCompactor::new(None, sort_descs.clone()),
@@ -163,6 +164,7 @@ impl FuseTable {
         pipeline.resize(1)?;
         pipeline.add_transform(|transform_input_port, transform_output_port| {
             TransformSortMerge::try_create(
+                ctx.clone(),
                 transform_input_port,
                 transform_output_port,
                 SortMergeCompactor::new(None, sort_descs.clone()),
@@ -171,6 +173,7 @@ impl FuseTable {
 
         pipeline.add_transform(|transform_input_port, transform_output_port| {
             TransformCompact::try_create(
+                ctx.clone(),
                 transform_input_port,
                 transform_output_port,
                 block_compactor.to_compactor(true),

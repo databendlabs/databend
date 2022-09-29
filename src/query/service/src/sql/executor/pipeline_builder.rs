@@ -451,6 +451,7 @@ impl PipelineBuilder {
         // Merge
         self.main_pipeline.add_transform(|input, output| {
             TransformSortMerge::try_create(
+                self.ctx.clone(),
                 input,
                 output,
                 SortMergeCompactor::new(sort.limit, sort_desc.clone()),
@@ -462,6 +463,7 @@ impl PipelineBuilder {
         // Concat merge in single thread
         self.main_pipeline.add_transform(|input, output| {
             TransformSortMerge::try_create(
+                self.ctx.clone(),
                 input,
                 output,
                 SortMergeCompactor::new(sort.limit, sort_desc.clone()),
@@ -495,6 +497,7 @@ impl PipelineBuilder {
             self.main_pipeline.resize(1)?;
             self.main_pipeline.add_transform(|input, output| {
                 TransformMarkJoin::try_create(
+                    self.ctx.clone(),
                     input,
                     output,
                     MarkJoinCompactor::create(state.clone()),
@@ -506,6 +509,7 @@ impl PipelineBuilder {
             self.main_pipeline.resize(1)?;
             self.main_pipeline.add_transform(|input, output| {
                 TransformRightJoin::try_create(
+                    self.ctx.clone(),
                     input,
                     output,
                     RightJoinCompactor::create(state.clone()),

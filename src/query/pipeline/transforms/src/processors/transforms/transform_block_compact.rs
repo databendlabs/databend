@@ -13,10 +13,12 @@
 // limitations under the License.
 
 use common_datablocks::DataBlock;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use super::Compactor;
 use super::TransformCompact;
+use crate::processors::transforms::Aborting;
 
 pub struct BlockCompactor {
     max_rows_per_block: usize,
@@ -106,12 +108,18 @@ impl Compactor for BlockCompactor {
         Ok(res)
     }
 
-    fn compact_final(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
+    fn compact_final(&self, blocks: &[DataBlock], aborting: Aborting) -> Result<Vec<DataBlock>> {
         let mut res = Vec::with_capacity(blocks.len());
         let mut temp_blocks = vec![];
         let mut accumulated_rows = 0;
 
         for block in blocks.iter() {
+            if aborting() {
+                return Err(ErrorCode::AbortedQuery(
+                    "Aborted query, because the server is shutting down or the query was killed.",
+                ));
+            }
+
             // Perfect block, no need to compact
             if block.num_rows() <= self.max_rows_per_block
                 && (block.num_rows() >= self.min_rows_per_block
@@ -134,6 +142,12 @@ impl Compactor for BlockCompactor {
                 temp_blocks.push(block);
 
                 while accumulated_rows >= self.max_rows_per_block {
+                    if aborting() {
+                        return Err(ErrorCode::AbortedQuery(
+                            "Aborted query, because the server is shutting down or the query was killed.",
+                        ));
+                    }
+
                     let block = DataBlock::concat_blocks(&temp_blocks)?;
                     res.push(block.slice(0, self.max_rows_per_block));
                     accumulated_rows -= self.max_rows_per_block;
@@ -150,6 +164,12 @@ impl Compactor for BlockCompactor {
         }
 
         if accumulated_rows != 0 {
+            if aborting() {
+                return Err(ErrorCode::AbortedQuery(
+                    "Aborted query, because the server is shutting down or the query was killed.",
+                ));
+            }
+
             let block = DataBlock::concat_blocks(&temp_blocks)?;
             res.push(block);
         }

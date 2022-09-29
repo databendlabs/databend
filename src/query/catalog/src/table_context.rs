@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 use std::net::SocketAddr;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use common_base::base::Progress;
@@ -72,6 +73,7 @@ pub trait TableContext: Send + Sync {
     fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>>;
     fn get_id(&self) -> String;
     fn get_current_catalog(&self) -> String;
+    fn get_aborting(&self) -> Arc<AtomicBool>;
     fn get_current_database(&self) -> String;
     fn get_config(&self) -> Config;
     fn get_current_user(&self) -> Result<UserInfo>;
