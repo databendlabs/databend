@@ -297,10 +297,6 @@ fn test_statement() {
         r#"SHOW GRANTS OF SHARE t;"#,
     ];
 
-    // let cases = &[
-    //     r#"create table if not exists a.b (a int) 's3://testbucket/admin/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');"#,
-    // ];
-
     for case in cases {
         let tokens = tokenize_sql(case).unwrap();
         let backtrace = Backtrace::new();
