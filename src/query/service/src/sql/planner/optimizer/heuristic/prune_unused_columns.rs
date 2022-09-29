@@ -60,12 +60,20 @@ impl UnusedColumnPruner {
                         "prewhere columns should be a subset of scan columns"
                     );
                     // `used` is the columns which prewhere scan needs to output for its upper operator.
-                    let prewhere_columns = pw.prewhere_columns.iter().copied().collect::<Vec<_>>();
-                    if used.is_empty() && !prewhere_columns.is_empty() {
-                        let smallest_index = self
-                            .metadata
-                            .read()
-                            .find_smallest_column(prewhere_columns.as_slice());
+                    if used.is_empty() {
+                        let smallest_index = if pw.prewhere_columns.is_empty() {
+                            self.metadata
+                                .read()
+                                .find_smallest_column_by_table_index(p.table_index)
+                        } else {
+                            self.metadata.read().find_smallest_column(
+                                pw.prewhere_columns
+                                    .iter()
+                                    .copied()
+                                    .collect::<Vec<_>>()
+                                    .as_slice(),
+                            )
+                        };
                         used.insert(smallest_index);
                     }
                     pw.output_columns = used.clone();
