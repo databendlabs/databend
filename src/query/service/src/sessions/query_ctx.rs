@@ -15,6 +15,7 @@
 use std::collections::VecDeque;
 use std::future::Future;
 use std::net::SocketAddr;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -40,6 +41,7 @@ use common_legacy_planners::SourceInfo;
 use common_legacy_planners::StageTableInfo;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::UserInfo;
+use common_storage::StorageParams;
 use opendal::Operator;
 use parking_lot::RwLock;
 use tracing::debug;
@@ -266,6 +268,11 @@ impl TableContext for QueryContext {
     fn get_current_catalog(&self) -> String {
         self.shared.get_current_catalog()
     }
+
+    fn get_aborting(&self) -> Arc<AtomicBool> {
+        self.shared.get_aborting()
+    }
+
     fn get_current_database(&self) -> String {
         self.shared.get_current_database()
     }
@@ -309,9 +316,13 @@ impl TableContext for QueryContext {
 
     // Get the storage data accessor operator from the session manager.
     fn get_storage_operator(&self) -> Result<Operator> {
-        let operator = self.shared.storage_operator.clone();
+        // deref from `StorageOperator` to `opendal::Operator` first.
+        let operator = (*self.shared.storage_operator).clone();
 
         Ok(operator.layer(self.shared.dal_ctx.as_ref().clone()))
+    }
+    fn get_storage_params(&self) -> StorageParams {
+        self.shared.get_storage_params()
     }
     fn get_dal_context(&self) -> &DalContext {
         self.shared.dal_ctx.as_ref()

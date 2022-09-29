@@ -78,6 +78,7 @@ async fn test_block_pruner() -> Result<()> {
         table: test_tbl_name.to_string(),
         schema: test_schema.clone(),
         engine: Engine::Fuse,
+        storage_params: None,
         options: [
             (FUSE_OPT_KEY_ROW_PER_BLOCK.to_owned(), num_blocks_opt),
             (FUSE_OPT_KEY_BLOCK_PER_SEGMENT.to_owned(), "1".to_owned()),
@@ -223,6 +224,7 @@ async fn test_block_pruner_monotonic() -> Result<()> {
         table: test_tbl_name.to_string(),
         schema: test_schema.clone(),
         engine: Engine::Fuse,
+        storage_params: None,
         options: [
             (FUSE_OPT_KEY_ROW_PER_BLOCK.to_owned(), num_blocks_opt),
             // for the convenience of testing, let one seegment contains one block

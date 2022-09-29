@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 use std::net::SocketAddr;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use common_base::base::Progress;
@@ -28,6 +29,7 @@ use common_legacy_planners::Partitions;
 use common_legacy_planners::ReadDataSourcePlan;
 use common_meta_types::UserInfo;
 use common_settings::Settings;
+use common_storage::StorageParams;
 use opendal::Operator;
 
 use crate::catalog::Catalog;
@@ -72,6 +74,7 @@ pub trait TableContext: Send + Sync {
     fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>>;
     fn get_id(&self) -> String;
     fn get_current_catalog(&self) -> String;
+    fn get_aborting(&self) -> Arc<AtomicBool>;
     fn get_current_database(&self) -> String;
     fn get_config(&self) -> Config;
     fn get_current_user(&self) -> Result<UserInfo>;
@@ -89,6 +92,7 @@ pub trait TableContext: Send + Sync {
     fn get_query_kind(&self) -> String;
     // Get the storage data accessor operator from the session manager.
     fn get_storage_operator(&self) -> Result<Operator>;
+    fn get_storage_params(&self) -> StorageParams;
     fn get_dal_context(&self) -> &DalContext;
     fn push_precommit_block(&self, block: DataBlock);
     fn consume_precommit_blocks(&self) -> Vec<DataBlock>;

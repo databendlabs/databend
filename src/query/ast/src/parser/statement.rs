@@ -312,6 +312,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             ~ #peroid_separated_idents_1_to_3
             ~ #create_table_source?
             ~ ( #engine )?
+            ~ ( #uri_location )?
             ~ ( CLUSTER ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" )?
             ~ ( #table_option )?
             ~ ( AS ~ ^#query )?
@@ -324,6 +325,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             (catalog, database, table),
             source,
             engine,
+            uri_location,
             opt_cluster_by,
             opt_table_options,
             opt_as_query,
@@ -335,6 +337,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 table,
                 source,
                 engine,
+                uri_location,
                 cluster_by: opt_cluster_by
                     .map(|(_, _, _, exprs, _)| exprs)
                     .unwrap_or_default(),
