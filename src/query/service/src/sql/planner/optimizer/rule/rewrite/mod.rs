@@ -14,6 +14,7 @@
 
 mod rule_eliminate_eval_scalar;
 mod rule_eliminate_filter;
+mod rule_eliminate_outer_join;
 mod rule_fold_count_aggregate;
 mod rule_merge_eval_scalar;
 mod rule_merge_filter;
@@ -26,11 +27,11 @@ mod rule_push_down_limit_join;
 mod rule_push_down_limit_scan;
 mod rule_push_down_limit_sort;
 mod rule_push_down_sort_scan;
-mod rule_reduce_outer_join;
 mod rule_split_aggregate;
 
 pub use rule_eliminate_eval_scalar::RuleEliminateEvalScalar;
 pub use rule_eliminate_filter::RuleEliminateFilter;
+pub use rule_eliminate_outer_join::RuleEliminateOuterJoin;
 pub use rule_fold_count_aggregate::RuleFoldCountAggregate;
 pub use rule_merge_eval_scalar::RuleMergeEvalScalar;
 pub use rule_merge_filter::RuleMergeFilter;
@@ -43,5 +44,4 @@ pub use rule_push_down_limit_join::RulePushDownLimitOuterJoin;
 pub use rule_push_down_limit_scan::RulePushDownLimitScan;
 pub use rule_push_down_limit_sort::RulePushDownLimitSort;
 pub use rule_push_down_sort_scan::RulePushDownSortScan;
-pub use rule_reduce_outer_join::RuleReduceOuterJoin;
 pub use rule_split_aggregate::RuleSplitAggregate;

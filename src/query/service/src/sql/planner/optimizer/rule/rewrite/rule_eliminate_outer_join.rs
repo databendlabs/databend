@@ -28,15 +28,15 @@ use crate::sql::plans::PatternPlan;
 use crate::sql::plans::RelOp;
 use crate::sql::plans::Scalar;
 
-pub struct RuleReduceOuterJoin {
+pub struct RuleEliminateOuterJoin {
     id: RuleID,
     pattern: SExpr,
 }
 
-impl RuleReduceOuterJoin {
+impl RuleEliminateOuterJoin {
     pub fn new() -> Self {
         Self {
-            id: RuleID::ReduceOuterJoin,
+            id: RuleID::EliminateOuterJoin,
             // Filter
             // \
             // Inner Join
@@ -142,7 +142,7 @@ impl RuleReduceOuterJoin {
     }
 }
 
-impl Rule for RuleReduceOuterJoin {
+impl Rule for RuleEliminateOuterJoin {
     fn id(&self) -> RuleID {
         self.id
     }
