@@ -34,8 +34,11 @@ use common_legacy_planners::Partitions;
 use common_legacy_planners::ReadDataSourcePlan;
 use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
+use common_storage::init_operator;
+use common_storage::StorageOperator;
 use common_storages_util::storage_context::StorageContext;
 use common_storages_util::table_storage_prefix::table_storage_prefix;
+use opendal::Operator;
 use uuid::Uuid;
 
 use crate::io::BlockCompactor;
@@ -62,6 +65,8 @@ pub struct FuseTable {
     pub(crate) cluster_keys: Vec<LegacyExpression>,
     pub(crate) cluster_key_meta: Option<ClusterKey>,
     pub(crate) read_only: bool,
+
+    pub(crate) operator: Operator,
 }
 
 impl FuseTable {
@@ -77,6 +82,14 @@ impl FuseTable {
         if let Some((_, order)) = &cluster_key_meta {
             cluster_keys = ExpressionParser::parse_exprs(order)?;
         }
+        let storage_params = table_info.meta.storage_params.clone();
+        let operator = match storage_params {
+            Some(sp) => init_operator(&sp)?,
+            None => {
+                let op = &*(StorageOperator::instance());
+                op.clone()
+            }
+        };
 
         Ok(Box::new(FuseTable {
             table_info,
@@ -84,6 +97,7 @@ impl FuseTable {
             cluster_key_meta,
             meta_location_generator: TableMetaLocationGenerator::with_prefix(storage_prefix),
             read_only,
+            operator,
         }))
     }
 
@@ -251,6 +265,7 @@ impl Table for FuseTable {
             &table_info,
             &self.meta_location_generator,
             new_snapshot,
+            &self.operator,
         )
         .await
     }
@@ -294,6 +309,7 @@ impl Table for FuseTable {
             &table_info,
             &self.meta_location_generator,
             new_snapshot,
+            &self.operator,
         )
         .await
     }

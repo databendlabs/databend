@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 
 use common_ast::ast::Engine;
 use common_datavalues::DataSchemaRef;
+use common_storage::StorageParams;
 
 use crate::sql::plans::Plan;
 use crate::sql::plans::Scalar;
@@ -32,6 +33,7 @@ pub struct CreateTablePlanV2 {
 
     pub schema: DataSchemaRef,
     pub engine: Engine,
+    pub storage_params: Option<StorageParams>,
     pub options: TableOptions,
     pub field_default_exprs: Vec<Option<Scalar>>,
     pub field_comments: Vec<String>,

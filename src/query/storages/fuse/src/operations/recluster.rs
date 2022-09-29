@@ -98,6 +98,7 @@ impl FuseTable {
             threshold,
             block_compactor.clone(),
             blocks_map,
+            self.operator.clone(),
         )?;
 
         let need_recluster = mutator.blocks_select().await?;

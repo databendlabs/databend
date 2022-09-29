@@ -211,6 +211,7 @@ impl FuseTable {
             &self.table_info,
             &self.meta_location_generator,
             new_snapshot,
+            &self.operator,
         )
         .await
     }
@@ -256,13 +257,13 @@ impl FuseTable {
         table_info: &TableInfo,
         location_generator: &TableMetaLocationGenerator,
         snapshot: TableSnapshot,
+        operator: &Operator,
     ) -> Result<()> {
         let snapshot_location = location_generator
             .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot.format_version())?;
 
         // 1. write down snapshot
-        let operator = ctx.get_storage_operator()?;
-        write_meta(&operator, &snapshot_location, &snapshot).await?;
+        write_meta(operator, &snapshot_location, &snapshot).await?;
 
         // 2. prepare table meta
         let mut new_table_meta = table_info.meta.clone();
@@ -306,7 +307,7 @@ impl FuseTable {
                     cache.put(snapshot_location.clone(), Arc::new(snapshot));
                 }
                 // try keep a hit file of last snapshot
-                Self::write_last_snapshot_hint(&operator, location_generator, snapshot_location)
+                Self::write_last_snapshot_hint(operator, location_generator, snapshot_location)
                     .await;
                 Ok(())
             }
