@@ -31,7 +31,7 @@ use databend_query::interpreters::CreateTableInterpreterV2;
 use databend_query::interpreters::Interpreter;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
-use databend_query::sql::plans::CreateTablePlanV2;
+use databend_query::sql::plans::create_table_v2::CreateTablePlanV2;
 use databend_query::sql::OPT_KEY_DATABASE_ID;
 use databend_query::sql::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_query::storages::fuse::io::MetaReaders;
