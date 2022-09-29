@@ -996,7 +996,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
 
     fn visit_update(&mut self, update: &'ast UpdateStmt<'ast>) {
         let mut children = Vec::new();
-        self.visit_table_ref(&update.catalog, &update.database, &update.table);
+        self.visit_table_reference(&update.table);
         children.push(self.children.pop().unwrap());
 
         for update_expr in update.update_list.iter() {

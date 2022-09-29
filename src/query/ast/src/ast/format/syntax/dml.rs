@@ -113,18 +113,9 @@ pub(crate) fn pretty_delete<'a>(
 pub(crate) fn pretty_update(update_stmt: UpdateStmt) -> RcDoc {
     RcDoc::text("UPDATE")
         .append(
-            RcDoc::space()
-                .append(if let Some(catalog) = update_stmt.catalog {
-                    RcDoc::text(catalog.to_string()).append(RcDoc::text("."))
-                } else {
-                    RcDoc::nil()
-                })
-                .append(if let Some(database) = update_stmt.database {
-                    RcDoc::text(database.to_string()).append(RcDoc::text("."))
-                } else {
-                    RcDoc::nil()
-                })
-                .append(RcDoc::text(update_stmt.table.to_string())),
+            RcDoc::line()
+                .nest(NEST_FACTOR)
+                .append(pretty_table(update_stmt.table)),
         )
         .append(RcDoc::line().append(RcDoc::text("SET")))
         .append(pretty_update_list(update_stmt.update_list))

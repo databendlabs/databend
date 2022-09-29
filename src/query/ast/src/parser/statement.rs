@@ -113,14 +113,12 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let update = map(
         rule! {
-            UPDATE ~ #peroid_separated_idents_1_to_3
+            UPDATE ~ #table_reference_only
             ~ SET ~ ^#comma_separated_list1(update_expr)
             ~ ( WHERE ~ ^#expr )?
         },
-        |(_, (catalog, database, table), _, update_list, opt_selection)| {
+        |(_, table, _, update_list, opt_selection)| {
             Statement::Update(UpdateStmt {
-                catalog,
-                database,
                 table,
                 update_list,
                 selection: opt_selection.map(|(_, selection)| selection),

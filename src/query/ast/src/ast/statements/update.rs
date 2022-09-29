@@ -16,15 +16,13 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use crate::ast::write_comma_separated_list;
-use crate::ast::write_period_separated_list;
 use crate::ast::Expr;
 use crate::ast::Identifier;
+use crate::ast::TableReference;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UpdateStmt<'a> {
-    pub catalog: Option<Identifier<'a>>,
-    pub database: Option<Identifier<'a>>,
-    pub table: Identifier<'a>,
+    pub table: TableReference<'a>,
     pub update_list: Vec<UpdateExpr<'a>>,
     pub selection: Option<Expr<'a>>,
 }
@@ -37,15 +35,7 @@ pub struct UpdateExpr<'a> {
 
 impl Display for UpdateStmt<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "UPDATE ")?;
-        write_period_separated_list(
-            f,
-            self.catalog
-                .iter()
-                .chain(&self.database)
-                .chain(Some(&self.table)),
-        )?;
-        write!(f, " SET ")?;
+        write!(f, "UPDATE {} SET ", self.table)?;
         write_comma_separated_list(f, &self.update_list)?;
         if let Some(conditions) = &self.selection {
             write!(f, " WHERE {conditions}")?;

@@ -7401,18 +7401,27 @@ UPDATE db1.tb1 SET a = a + 1, b = 2 WHERE c > 3
 ---------- AST ------------
 Update(
     UpdateStmt {
-        catalog: None,
-        database: Some(
-            Identifier {
-                name: "db1",
+        table: Table {
+            span: [
+                Ident(7..10),
+                Period(10..11),
+                Ident(11..14),
+            ],
+            catalog: None,
+            database: Some(
+                Identifier {
+                    name: "db1",
+                    quote: None,
+                    span: Ident(7..10),
+                },
+            ),
+            table: Identifier {
+                name: "tb1",
                 quote: None,
-                span: Ident(7..10),
+                span: Ident(11..14),
             },
-        ),
-        table: Identifier {
-            name: "tb1",
-            quote: None,
-            span: Ident(11..14),
+            alias: None,
+            travel_point: None,
         },
         update_list: [
             UpdateExpr {

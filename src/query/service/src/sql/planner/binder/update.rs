@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 
+use common_ast::ast::TableReference;
 use common_ast::ast::UpdateStmt;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -32,21 +33,35 @@ impl<'a> Binder {
         stmt: &UpdateStmt<'a>,
     ) -> Result<Plan> {
         let UpdateStmt {
-            catalog,
-            database,
             table,
             update_list,
             selection,
         } = stmt;
-        let catalog_name = catalog.as_ref().map_or_else(
-            || self.ctx.get_current_catalog(),
-            |ident| normalize_identifier(ident, &self.name_resolution_ctx).name,
-        );
-        let database_name = database.as_ref().map_or_else(
-            || self.ctx.get_current_database(),
-            |ident| normalize_identifier(ident, &self.name_resolution_ctx).name,
-        );
-        let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
+
+        let (catalog_name, database_name, table_name) = if let TableReference::Table {
+            catalog,
+            database,
+            table,
+            ..
+        } = table
+        {
+            (
+                catalog
+                    .as_ref()
+                    .map_or_else(|| self.ctx.get_current_catalog(), |i| i.name.clone()),
+                database
+                    .as_ref()
+                    .map_or_else(|| self.ctx.get_current_database(), |i| i.name.clone()),
+                table.name.clone(),
+            )
+        } else {
+            // we do not support USING clause yet
+            return Err(ErrorCode::LogicalError(
+                "should not happen, parser should have report error already",
+            ));
+        };
+
+        let (_, context) = self.bind_table_reference(bind_context, table).await?;
 
         let table = self
             .ctx
@@ -55,7 +70,7 @@ impl<'a> Binder {
         let table_id = table.get_id();
 
         let mut scalar_binder = ScalarBinder::new(
-            bind_context,
+            &context,
             self.ctx.clone(),
             &self.name_resolution_ctx,
             self.metadata.clone(),
