@@ -22,7 +22,7 @@ use crate::sql::binder::Binder;
 use crate::sql::binder::ScalarBinder;
 use crate::sql::normalize_identifier;
 use crate::sql::plans::Plan;
-use crate::sql::plans::Update;
+use crate::sql::plans::UpdatePlan;
 use crate::sql::BindContext;
 
 impl<'a> Binder {
@@ -84,7 +84,7 @@ impl<'a> Binder {
             None
         };
 
-        let plan = Update {
+        let plan = UpdatePlan {
             catalog: catalog_name,
             database: database_name,
             table: table_name,

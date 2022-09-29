@@ -19,7 +19,7 @@ use common_meta_types::MetaId;
 use crate::sql::plans::Scalar;
 
 #[derive(Clone, Debug)]
-pub struct Update {
+pub struct UpdatePlan {
     pub catalog: String,
     pub database: String,
     pub table: String,

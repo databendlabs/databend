@@ -114,7 +114,7 @@ pub use share::*;
 pub use sort::Sort;
 pub use sort::SortItem;
 pub use union_all::UnionAll;
-pub use update::Update;
+pub use update::UpdatePlan;
 
 use super::BindContext;
 use crate::sql::optimizer::SExpr;
@@ -171,7 +171,7 @@ pub enum Plan {
     // Insert
     Insert(Box<Insert>),
     Delete(Box<DeletePlan>),
-    Update(Box<Update>),
+    Update(Box<UpdatePlan>),
 
     // Views
     CreateView(Box<CreateViewPlan>),
