@@ -72,13 +72,13 @@ async fn test_fuse_table_normal_case() -> Result<()> {
         let (stats, parts) = table.read_partitions(ctx.clone(), None).await?;
         assert_eq!(stats.read_rows, num_blocks * rows_per_block);
 
-        ctx.try_set_partitions(parts)?;
+        ctx.try_set_partitions(parts.clone())?;
         let stream = table
             .read(ctx.clone(), &ReadDataSourcePlan {
                 catalog: "default".to_owned(),
                 source_info: SourceInfo::TableSource(Default::default()),
                 scan_fields: None,
-                parts: Default::default(),
+                parts,
                 statistics: Default::default(),
                 description: "".to_string(),
                 tbl_args: None,
@@ -131,14 +131,14 @@ async fn test_fuse_table_normal_case() -> Result<()> {
         assert_eq!(stats.read_rows, num_blocks * rows_per_block);
 
         // inject partitions to current ctx
-        ctx.try_set_partitions(parts)?;
+        ctx.try_set_partitions(parts.clone())?;
 
         let stream = table
             .read(ctx.clone(), &ReadDataSourcePlan {
                 catalog: "default".to_owned(),
                 source_info: SourceInfo::TableSource(Default::default()),
                 scan_fields: None,
-                parts: Default::default(),
+                parts,
                 statistics: Default::default(),
                 description: "".to_string(),
                 tbl_args: None,

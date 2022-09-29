@@ -18,7 +18,6 @@ use std::sync::Arc;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_base::base::Runtime;
-use common_base::base::TrySpawn;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datavalues::ColumnRef;
@@ -249,7 +248,7 @@ impl FuseTableSource {
 
     fn generate_one_empty_block(&mut self) -> Result<()> {
         let schema = self.output_reader.schema();
-        let mut new_part = self.ctx.try_get_part();
+        let new_part = self.ctx.try_get_part();
         self.state = Generated(new_part, DataBlock::empty_with_schema(schema));
         Ok(())
     }

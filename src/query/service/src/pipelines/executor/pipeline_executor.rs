@@ -126,23 +126,21 @@ impl PipelineExecutor {
         on_finished_callback: FinishedCallback,
         settings: ExecutorSettings,
     ) -> Result<Arc<PipelineExecutor>> {
-        unsafe {
-            let workers_condvar = WorkersCondvar::create(threads_num);
-            let global_tasks_queue = ExecutorTasksQueue::create(threads_num);
+        let workers_condvar = WorkersCondvar::create(threads_num);
+        let global_tasks_queue = ExecutorTasksQueue::create(threads_num);
 
-            Ok(Arc::new(PipelineExecutor {
-                graph,
-                threads_num,
-                workers_condvar,
-                global_tasks_queue,
-                on_init_callback,
-                on_finished_callback,
-                async_runtime: GlobalIORuntime::instance(),
-                settings,
-                finished_notify: Notify::new(),
-                finished_error: Mutex::new(None),
-            }))
-        }
+        Ok(Arc::new(PipelineExecutor {
+            graph,
+            threads_num,
+            workers_condvar,
+            global_tasks_queue,
+            on_init_callback,
+            on_finished_callback,
+            async_runtime: GlobalIORuntime::instance(),
+            settings,
+            finished_notify: Notify::new(),
+            finished_error: Mutex::new(None),
+        }))
     }
 
     pub fn finish(&self, cause: Option<ErrorCode>) {

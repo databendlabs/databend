@@ -117,7 +117,7 @@ impl Processor for ResultTableSource {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::Deserialize(part, chunks) => {
                 let data_block = self.block_reader.deserialize(part, chunks)?;
-                let mut new_part = self.ctx.try_get_part();
+                let new_part = self.ctx.try_get_part();
 
                 let progress_values = ProgressValues {
                     rows: data_block.num_rows(),

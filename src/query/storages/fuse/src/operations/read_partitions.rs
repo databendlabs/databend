@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Instant;
 
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
@@ -43,7 +42,6 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
-        let instant = Instant::now();
         let snapshot = self.read_table_snapshot(ctx.clone()).await?;
         match snapshot {
             Some(snapshot) => {
