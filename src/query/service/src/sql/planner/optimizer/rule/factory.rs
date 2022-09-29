@@ -31,6 +31,7 @@ use crate::sql::optimizer::rule::rewrite::RulePushDownLimitOuterJoin;
 use crate::sql::optimizer::rule::rewrite::RulePushDownLimitScan;
 use crate::sql::optimizer::rule::rewrite::RulePushDownLimitSort;
 use crate::sql::optimizer::rule::rewrite::RulePushDownSortScan;
+use crate::sql::optimizer::rule::rewrite::RuleReduceOuterJoin;
 use crate::sql::optimizer::rule::rewrite::RuleSplitAggregate;
 use crate::sql::optimizer::rule::rule_implement_get::RuleImplementGet;
 use crate::sql::optimizer::rule::rule_implement_hash_join::RuleImplementHashJoin;
@@ -68,6 +69,7 @@ impl RuleFactory {
             RuleID::CommuteJoin => Ok(Box::new(RuleCommuteJoin::new())),
             RuleID::LeftAssociateJoin => Ok(Box::new(RuleLeftAssociateJoin::new())),
             RuleID::RightAssociateJoin => Ok(Box::new(RuleRightAssociateJoin::new())),
+            RuleID::ReduceOuterJoin => Ok(Box::new(RuleReduceOuterJoin::new())),
         }
     }
 }

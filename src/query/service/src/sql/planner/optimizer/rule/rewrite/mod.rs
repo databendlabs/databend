@@ -26,6 +26,7 @@ mod rule_push_down_limit_join;
 mod rule_push_down_limit_scan;
 mod rule_push_down_limit_sort;
 mod rule_push_down_sort_scan;
+mod rule_reduce_outer_join;
 mod rule_split_aggregate;
 
 pub use rule_eliminate_eval_scalar::RuleEliminateEvalScalar;
@@ -42,4 +43,5 @@ pub use rule_push_down_limit_join::RulePushDownLimitOuterJoin;
 pub use rule_push_down_limit_scan::RulePushDownLimitScan;
 pub use rule_push_down_limit_sort::RulePushDownLimitSort;
 pub use rule_push_down_sort_scan::RulePushDownSortScan;
+pub use rule_reduce_outer_join::RuleReduceOuterJoin;
 pub use rule_split_aggregate::RuleSplitAggregate;
