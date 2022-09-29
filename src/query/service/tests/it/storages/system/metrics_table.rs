@@ -40,7 +40,6 @@ async fn test_metrics_table() -> Result<()> {
     let output = pretty_format_blocks(result.as_slice())?;
     assert!(output.contains("test_test_metrics_table_count"));
     assert!(output.contains("test_test_metrics_table_histogram"));
-    assert!(output.contains("[{\"quantile\":0.0,\"count\":1.0},{\"quantile\":0.5,\"count\":1.0},{\"quantile\":0.9,\"count\":1.0},{\"quantile\":0.95,\"count\":1.0},{\"quantile\":0.99,\"count\":1.0},{\"quantile\":0.999,\"count\":1.0},{\"quantile\":1.0,\"count\":1.0}]"));
 
     Ok(())
 }

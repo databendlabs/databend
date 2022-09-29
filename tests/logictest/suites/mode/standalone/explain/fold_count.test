@@ -8,13 +8,11 @@ statement query T
 explain select count(*) from t;
 
 ----
-Project
-├── columns: [count(*) (#1)]
+EvalScalar
+├── expressions: [COUNT(*) (#2)]
 └── EvalScalar
-    ├── expressions: [COUNT(*) (#2)]
-    └── EvalScalar
-        ├── expressions: [1000]
-        └── DummyTableScan
+    ├── expressions: [1000]
+    └── DummyTableScan
 
 statement ok
 insert into t values(1);
@@ -23,35 +21,31 @@ statement query T
 explain select count(*) from t;
 
 ----
-Project
-├── columns: [count(*) (#1)]
+EvalScalar
+├── expressions: [COUNT(*) (#2)]
 └── EvalScalar
-    ├── expressions: [COUNT(*) (#2)]
-    └── EvalScalar
-        ├── expressions: [1001]
-        └── DummyTableScan
+    ├── expressions: [1001]
+    └── DummyTableScan
 
 statement query T
 explain select count(*) from t where number > 10;
 
 ----
-Project
-├── columns: [count(*) (#1)]
-└── EvalScalar
-    ├── expressions: [COUNT(*) (#2)]
-    └── AggregateFinal
+EvalScalar
+├── expressions: [COUNT(*) (#2)]
+└── AggregateFinal
+    ├── group by: []
+    ├── aggregate functions: [count()]
+    └── AggregatePartial
         ├── group by: []
         ├── aggregate functions: [count()]
-        └── AggregatePartial
-            ├── group by: []
-            ├── aggregate functions: [count()]
-            └── TableScan
-                ├── table: default.default.t
-                ├── read rows: 1000
-                ├── read bytes: 4028
-                ├── partitions total: 2
-                ├── partitions scanned: 1
-                └── push downs: [filters: [(number > 10)], limit: NONE]
+        └── TableScan
+            ├── table: default.default.t
+            ├── read rows: 1000
+            ├── read bytes: 4028
+            ├── partitions total: 2
+            ├── partitions scanned: 1
+            └── push downs: [filters: [(number > 10)], limit: NONE]
 
 statement ok
 drop table t;

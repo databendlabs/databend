@@ -41,7 +41,7 @@ pub type PartialSingleStateAggregator = SingleStateAggregator<false>;
 /// SELECT COUNT | SUM FROM table;
 pub struct SingleStateAggregator<const FINAL: bool> {
     funcs: Vec<AggregateFunctionRef>,
-    arg_names: Vec<Vec<String>>,
+    arg_indices: Vec<Vec<usize>>,
     schema: DataSchemaRef,
     _arena: Bump,
     places: Vec<StateAddr>,
@@ -78,8 +78,8 @@ impl<const FINAL: bool> SingleStateAggregator<FINAL> {
             _arena: arena,
             places,
             funcs: params.aggregate_functions.clone(),
-            arg_names: params.aggregate_functions_arguments_name.clone(),
-            schema: params.schema.clone(),
+            arg_indices: params.aggregate_functions_arguments.clone(),
+            schema: params.output_schema.clone(),
             temp_places,
             is_finished: false,
             states_dropped: false,
@@ -162,8 +162,8 @@ impl Aggregator for SingleStateAggregator<false> {
         let rows = block.num_rows();
         for (idx, func) in self.funcs.iter().enumerate() {
             let mut arg_columns = vec![];
-            for name in self.arg_names[idx].iter() {
-                arg_columns.push(block.try_column_by_name(name)?.clone());
+            for index in self.arg_indices[idx].iter() {
+                arg_columns.push(block.column(*index).clone());
             }
             let place = self.places[idx];
             func.accumulate(place, &arg_columns, None, rows)?;

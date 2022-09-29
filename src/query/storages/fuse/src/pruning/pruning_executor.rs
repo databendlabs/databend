@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_base::base::tokio::sync::Semaphore;
 use common_base::base::Runtime;
 use common_base::base::TrySpawn;
 use common_catalog::table_context::TableContext;
@@ -29,7 +30,7 @@ use futures::StreamExt;
 use futures::TryStreamExt;
 use tracing::Instrument;
 
-use super::bloom_pruner;
+use super::pruner;
 use crate::io::MetaReaders;
 use crate::pruning::limiter;
 use crate::pruning::range_pruner;
@@ -46,7 +47,21 @@ impl BlockPruner {
         Self { table_snapshot }
     }
 
-    // prune blocks by utilizing min_max index and bloom filter, according to the pushdowns
+    // Sync version of method `prune`
+    //
+    // Please note that it will take a significant period of time to prune a large table, and
+    // thread that calls this method will be blocked.
+    #[tracing::instrument(level = "debug", skip(self, schema, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    pub fn sync_prune(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        schema: DataSchemaRef,
+        push_down: &Option<Extras>,
+    ) -> Result<Vec<(usize, BlockMeta)>> {
+        futures::executor::block_on(self.prune(ctx, schema, push_down))
+    }
+
+    // prune blocks by utilizing min_max index and filter, according to the pushdowns
     #[tracing::instrument(level = "debug", skip(self, schema, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     pub async fn prune(
         &self,
@@ -68,8 +83,14 @@ impl BlockPruner {
 
         let filter_expressions = push_down.as_ref().map(|extra| extra.filters.as_slice());
 
-        // shortcut, just returns all the blocks
-        if limit.is_none() && filter_expressions.is_none() {
+        let is_filter_empty = match filter_expressions {
+            None => true,
+            Some(filters) => filters.is_empty(),
+        };
+
+        // shortcut, just returns all the blocks.
+        // we use the original limit (from push_down) here, since order_by alone, can use shortcut
+        if push_down.as_ref().and_then(|p| p.limit).is_none() && is_filter_empty {
             return Self::all_the_blocks(segment_locs, ctx.as_ref()).await;
         }
 
@@ -83,10 +104,9 @@ impl BlockPruner {
         let range_filter_pruner =
             range_pruner::new_range_filter_pruner(ctx, filter_expressions, &schema)?;
 
-        // prepare the bloom filter, if filter_expression is none, an dummy pruner will be returned
+        // prepare the filter, if filter_expression is none, an dummy pruner will be returned
         let dal = ctx.get_storage_operator()?;
-        let bloom_filter_pruner =
-            bloom_pruner::new_bloom_filter_pruner(ctx, filter_expressions, &schema, dal)?;
+        let filter_pruner = pruner::new_filter_pruner(ctx, filter_expressions, &schema, dal)?;
 
         // 2. kick off
         //
@@ -100,17 +120,21 @@ impl BlockPruner {
         //
         // B. since limiter is working concurrently, we arrange some checks among the pruning,
         //    to avoid heavy io operation vainly,
-        let pruning_runtime = Runtime::with_worker_threads(
-            ctx.get_settings().get_max_threads()? as usize,
-            Some("pruning-worker".to_owned()),
-        )?;
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let pruning_runtime =
+            Runtime::with_worker_threads(max_threads, Some("pruning-worker".to_owned()))?;
+        let semaphore = Arc::new(Semaphore::new(max_threads));
         let mut join_handlers = Vec::with_capacity(segment_locs.len());
         for (idx, (seg_loc, ver)) in segment_locs.into_iter().enumerate() {
             let ctx = ctx.clone();
             let range_filter_pruner = range_filter_pruner.clone();
-            let bloom_filter_pruner = bloom_filter_pruner.clone();
+            let filter_pruner = filter_pruner.clone();
             let limiter = limiter.clone();
+            let semaphore = semaphore.clone();
             let segment_pruning_fut = async move {
+                let _permit = semaphore.acquire().await.map_err(|e| {
+                    ErrorCode::StorageOther(format!("acquire permit failure, {}", e))
+                })?;
                 let segment_reader = MetaReaders::segment_info_reader(ctx.as_ref());
                 if limiter.exceeded() {
                     // before read segment info, check if limit already exceeded
@@ -125,14 +149,14 @@ impl BlockPruner {
                     for block_meta in &segment_info.blocks {
                         // prune block using range filter
                         if limiter.exceeded() {
-                            // before using bloom index to prune, check if limit already exceeded
+                            // before using filter to prune, check if limit already exceeded
                             return Ok(result);
                         }
                         if range_filter_pruner
                             .should_keep(&block_meta.col_stats, block_meta.row_count)
                         {
-                            // prune block using bloom filter
-                            if bloom_filter_pruner
+                            // prune block using filter
+                            if filter_pruner
                                 .should_keep(
                                     &block_meta.bloom_filter_index_location,
                                     block_meta.bloom_filter_index_size,

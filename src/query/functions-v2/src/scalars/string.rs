@@ -21,13 +21,13 @@ use common_expression::types::number::UInt64Type;
 use common_expression::types::string::StringColumn;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::string::StringDomain;
-use common_expression::types::GenericMap;
 use common_expression::types::NumberType;
 use common_expression::types::StringType;
 use common_expression::vectorize_with_builder_1_arg;
 use common_expression::vectorize_with_builder_2_arg;
 use common_expression::vectorize_with_builder_3_arg;
 use common_expression::vectorize_with_builder_4_arg;
+use common_expression::FunctionContext;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::Value;
@@ -47,20 +47,20 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_| None,
         vectorize_string_to_string(
             |col| col.data.len(),
-            |val, writer| {
+            |val, output, _| {
                 for (start, end, ch) in val.char_indices() {
                     if ch == '\u{FFFD}' {
                         // If char is invalid, just copy it.
-                        writer.put_slice(&val.as_bytes()[start..end]);
+                        output.put_slice(&val.as_bytes()[start..end]);
                     } else if ch.is_ascii() {
-                        writer.put_u8(ch.to_ascii_uppercase() as u8);
+                        output.put_u8(ch.to_ascii_uppercase() as u8);
                     } else {
                         for x in ch.to_uppercase() {
-                            writer.put_char(x);
+                            output.put_char(x);
                         }
                     }
                 }
-                writer.commit_row();
+                output.commit_row();
                 Ok(())
             },
         ),
@@ -72,20 +72,20 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_| None,
         vectorize_string_to_string(
             |col| col.data.len(),
-            |val, writer| {
+            |val, output, _| {
                 for (start, end, ch) in val.char_indices() {
                     if ch == '\u{FFFD}' {
                         // If char is invalid, just copy it.
-                        writer.put_slice(&val.as_bytes()[start..end]);
+                        output.put_slice(&val.as_bytes()[start..end]);
                     } else if ch.is_ascii() {
-                        writer.put_u8(ch.to_ascii_lowercase() as u8);
+                        output.put_u8(ch.to_ascii_lowercase() as u8);
                     } else {
                         for x in ch.to_lowercase() {
-                            writer.put_char(x);
+                            output.put_char(x);
                         }
                     }
                 }
-                writer.commit_row();
+                output.commit_row();
                 Ok(())
             },
         ),
@@ -95,21 +95,21 @@ pub fn register(registry: &mut FunctionRegistry) {
         "bit_length",
         FunctionProperty::default(),
         |_| None,
-        |val| 8 * val.len() as u64,
+        |val, _| 8 * val.len() as u64,
     );
 
     registry.register_1_arg::<StringType, NumberType<u64>, _, _>(
         "octet_length",
         FunctionProperty::default(),
         |_| None,
-        |val| val.len() as u64,
+        |val, _| val.len() as u64,
     );
 
     registry.register_1_arg::<StringType, NumberType<u64>, _, _>(
         "char_length",
         FunctionProperty::default(),
         |_| None,
-        |val| match std::str::from_utf8(val) {
+        |val, _| match std::str::from_utf8(val) {
             Ok(s) => s.chars().count() as u64,
             Err(_) => val.len() as u64,
         },
@@ -120,7 +120,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_, _, _| None,
         vectorize_with_builder_3_arg::<StringType, NumberType<u64>, StringType, StringType>(
-            |s, pad_len, pad, output| {
+            |s, pad_len, pad, output, _| {
                 let pad_len = pad_len as usize;
                 if pad_len <= s.len() {
                     output.put_slice(&s[..pad_len])
@@ -148,7 +148,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_, _, _, _| None,
         vectorize_with_builder_4_arg::<StringType, NumberType<i64>, NumberType<i64>, StringType, StringType>(
-            |srcstr, pos, len, substr, output| {
+            |srcstr, pos, len, substr, output, _| {
                 let pos = pos as usize;
                 let len = len as usize;
                 if pos < 1 || pos > srcstr.len() {
@@ -171,7 +171,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_, _, _| None,
         vectorize_with_builder_3_arg::<StringType, NumberType<u64>, StringType, StringType>(
-        |s: &[u8], pad_len: u64, pad: &[u8], output| {
+        |s: &[u8], pad_len: u64, pad: &[u8], output, _| {
             let pad_len = pad_len as usize;
             if pad_len <= s.len() {
                 output.put_slice(&s[..pad_len])
@@ -198,7 +198,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_, _, _| None,
         vectorize_with_builder_3_arg::<StringType, StringType, StringType, StringType>(
-            |str, from, to, output| {
+            |str, from, to, output, _| {
             if from.is_empty() || from == to {
                 output.put_slice(str);
                 output.commit_row();
@@ -226,7 +226,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "strcmp",
         FunctionProperty::default(),
         |_, _| None,
-        |s1, s2| {
+        |s1, s2, _| {
             let res = match s1.len().cmp(&s2.len()) {
                 Ordering::Equal => {
                     let mut res = Ordering::Equal;
@@ -270,28 +270,28 @@ pub fn register(registry: &mut FunctionRegistry) {
         "instr",
         FunctionProperty::default(),
         |_, _| None,
-        move |str: &[u8], substr: &[u8]| find_at(str, substr, 1),
+        move |str: &[u8], substr: &[u8], _| find_at(str, substr, 1),
     );
 
     registry.register_2_arg::<StringType, StringType, NumberType<u64>, _, _>(
         "position",
         FunctionProperty::default(),
         |_, _| None,
-        move |substr: &[u8], str: &[u8]| find_at(str, substr, 1),
+        move |substr: &[u8], str: &[u8], _| find_at(str, substr, 1),
     );
 
     registry.register_2_arg::<StringType, StringType, NumberType<u64>, _, _>(
         "locate",
         FunctionProperty::default(),
         |_, _| None,
-        move |substr: &[u8], str: &[u8]| find_at(str, substr, 1),
+        move |substr: &[u8], str: &[u8], _| find_at(str, substr, 1),
     );
 
     registry.register_3_arg::<StringType, StringType, NumberType<u64>, NumberType<u64>, _, _>(
         "locate",
         FunctionProperty::default(),
         |_, _, _| None,
-        move |substr: &[u8], str: &[u8], pos: u64| find_at(str, substr, pos),
+        move |substr: &[u8], str: &[u8], pos: u64, _| find_at(str, substr, pos),
     );
 
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
@@ -300,11 +300,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_| None,
         vectorize_string_to_string(
             |col| col.data.len() * 4 / 3 + col.len() * 4,
-            |val, writer| {
-                base64::write::EncoderWriter::new(&mut writer.data, base64::STANDARD)
+            |val, output, _| {
+                base64::write::EncoderWriter::new(&mut output.data, base64::STANDARD)
                     .write_all(val)
                     .unwrap();
-                writer.commit_row();
+                output.commit_row();
                 Ok(())
             },
         ),
@@ -316,9 +316,9 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_| None,
         vectorize_string_to_string(
             |col| col.data.len() * 4 / 3 + col.len() * 4,
-            |val, writer| {
-                base64::decode_config_buf(val, base64::STANDARD, &mut writer.data).unwrap();
-                writer.commit_row();
+            |val, output, _| {
+                base64::decode_config_buf(val, base64::STANDARD, &mut output.data).unwrap();
+                output.commit_row();
                 Ok(())
             },
         ),
@@ -330,21 +330,21 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_| None,
         vectorize_string_to_string(
             |col| col.data.len() * 2,
-            |val, writer| {
+            |val, output, _| {
                 for ch in val {
                     match ch {
-                        0 => writer.put_slice(&[b'\\', b'0']),
-                        b'\'' => writer.put_slice(&[b'\\', b'\'']),
-                        b'\"' => writer.put_slice(&[b'\\', b'\"']),
-                        8 => writer.put_slice(&[b'\\', b'b']),
-                        b'\n' => writer.put_slice(&[b'\\', b'n']),
-                        b'\r' => writer.put_slice(&[b'\\', b'r']),
-                        b'\t' => writer.put_slice(&[b'\\', b't']),
-                        b'\\' => writer.put_slice(&[b'\\', b'\\']),
-                        c => writer.put_u8(*c),
+                        0 => output.put_slice(&[b'\\', b'0']),
+                        b'\'' => output.put_slice(&[b'\\', b'\'']),
+                        b'\"' => output.put_slice(&[b'\\', b'\"']),
+                        8 => output.put_slice(&[b'\\', b'b']),
+                        b'\n' => output.put_slice(&[b'\\', b'n']),
+                        b'\r' => output.put_slice(&[b'\\', b'r']),
+                        b'\t' => output.put_slice(&[b'\\', b't']),
+                        b'\\' => output.put_slice(&[b'\\', b'\\']),
+                        c => output.put_u8(*c),
                     }
                 }
-                writer.commit_row();
+                output.commit_row();
                 Ok(())
             },
         ),
@@ -356,12 +356,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_| None,
         vectorize_string_to_string(
             |col| col.data.len(),
-            |val, writer| {
-                let start = writer.data.len();
-                writer.put_slice(val);
-                let buf = &mut writer.data[start..];
+            |val, output, _| {
+                let start = output.data.len();
+                output.put_slice(val);
+                let buf = &mut output.data[start..];
                 buf.reverse();
-                writer.commit_row();
+                output.commit_row();
                 Ok(())
             },
         ),
@@ -379,7 +379,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     .map_or(u8::MAX, |v| v.first().cloned().unwrap_or_default()),
             })
         },
-        |val| val.first().cloned().unwrap_or_default(),
+        |val, _| val.first().cloned().unwrap_or_default(),
     );
 
     // Trim functions
@@ -389,12 +389,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_| None,
         vectorize_string_to_string(
             |col| col.data.len(),
-            |val, writer| {
+            |val, output, _| {
                 let pos = val.iter().position(|ch| *ch != b' ' && *ch != b'\t');
                 if let Some(idx) = pos {
-                    writer.put_slice(&val.as_bytes()[idx..]);
+                    output.put_slice(&val.as_bytes()[idx..]);
                 }
-                writer.commit_row();
+                output.commit_row();
                 Ok(())
             },
         ),
@@ -406,12 +406,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_| None,
         vectorize_string_to_string(
             |col| col.data.len(),
-            |val, writer| {
+            |val, output, _| {
                 let pos = val.iter().rev().position(|ch| *ch != b' ' && *ch != b'\t');
                 if let Some(idx) = pos {
-                    writer.put_slice(&val.as_bytes()[..val.len() - idx]);
+                    output.put_slice(&val.as_bytes()[..val.len() - idx]);
                 }
-                writer.commit_row();
+                output.commit_row();
                 Ok(())
             },
         ),
@@ -423,13 +423,13 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_| None,
         vectorize_string_to_string(
             |col| col.data.len(),
-            |val, writer| {
+            |val, output, _| {
                 let start_pos = val.iter().position(|ch| *ch != b' ' && *ch != b'\t');
                 let end_pos = val.iter().rev().position(|ch| *ch != b' ' && *ch != b'\t');
                 if let (Some(start_idx), Some(end_idx)) = (start_pos, end_pos) {
-                    writer.put_slice(&val.as_bytes()[start_idx..val.len() - end_idx]);
+                    output.put_slice(&val.as_bytes()[start_idx..val.len() - end_idx]);
                 }
-                writer.commit_row();
+                output.commit_row();
                 Ok(())
             },
         ),
@@ -441,13 +441,13 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| None,
         vectorize_string_to_string_2_arg(
             |col, _| col.data.len(),
-            |val, trim_str, writer| {
+            |val, trim_str, output, _| {
                 let chunk_size = trim_str.len();
                 let pos = val.chunks(chunk_size).position(|chunk| chunk != trim_str);
                 if let Some(idx) = pos {
-                    writer.put_slice(&val.as_bytes()[idx * chunk_size..]);
+                    output.put_slice(&val.as_bytes()[idx * chunk_size..]);
                 }
-                writer.commit_row();
+                output.commit_row();
                 Ok(())
             },
         ),
@@ -459,13 +459,13 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| None,
         vectorize_string_to_string_2_arg(
             |col, _| col.data.len(),
-            |val, trim_str, writer| {
+            |val, trim_str, output, _| {
                 let chunk_size = trim_str.len();
                 let pos = val.rchunks(chunk_size).position(|chunk| chunk != trim_str);
                 if let Some(idx) = pos {
-                    writer.put_slice(&val.as_bytes()[..val.len() - idx * chunk_size]);
+                    output.put_slice(&val.as_bytes()[..val.len() - idx * chunk_size]);
                 }
-                writer.commit_row();
+                output.commit_row();
                 Ok(())
             },
         ),
@@ -477,25 +477,25 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| None,
         vectorize_string_to_string_2_arg(
             |col, _| col.data.len(),
-            |val, trim_str, writer| {
+            |val, trim_str, output, _| {
                 let chunk_size = trim_str.len();
                 let start_pos = val.chunks(chunk_size).position(|chunk| chunk != trim_str);
 
                 // Trim all
                 if start_pos.is_none() {
-                    writer.commit_row();
+                    output.commit_row();
                     return Ok(());
                 }
 
                 let end_pos = val.rchunks(chunk_size).position(|chunk| chunk != trim_str);
 
                 if let (Some(start_idx), Some(end_idx)) = (start_pos, end_pos) {
-                    writer.put_slice(
+                    output.put_slice(
                         &val.as_bytes()[start_idx * chunk_size..val.len() - end_idx * chunk_size],
                     );
                 }
 
-                writer.commit_row();
+                output.commit_row();
                 Ok(())
             },
         ),
@@ -507,7 +507,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "bin",
         FunctionProperty::default(),
         |_| None,
-        vectorize_with_builder_1_arg::<NumberType<i64>, StringType>(|val, output| {
+        vectorize_with_builder_1_arg::<NumberType<i64>, StringType>(|val, output, _| {
             output.write_row(|data| write!(data, "{val:b}")).unwrap();
             Ok(())
         }),
@@ -516,7 +516,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "oct",
         FunctionProperty::default(),
         |_| None,
-        vectorize_with_builder_1_arg::<NumberType<i64>, StringType>(|val, output| {
+        vectorize_with_builder_1_arg::<NumberType<i64>, StringType>(|val, output, _| {
             output.write_row(|data| write!(data, "{val:o}")).unwrap();
             Ok(())
         }),
@@ -525,7 +525,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "hex",
         FunctionProperty::default(),
         |_| None,
-        vectorize_with_builder_1_arg::<NumberType<i64>, StringType>(|val, output| {
+        vectorize_with_builder_1_arg::<NumberType<i64>, StringType>(|val, output, _| {
             output.write_row(|data| write!(data, "{val:x}")).unwrap();
             Ok(())
         }),
@@ -537,7 +537,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_| None,
         vectorize_string_to_string(
             |col| col.data.len() * 2,
-            |val, output| {
+            |val, output, _| {
                 let old_len = output.data.len();
                 let extra_len = val.len() * 2;
                 output.data.resize(old_len + extra_len, 0);
@@ -554,15 +554,15 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_, _| None,
         vectorize_with_builder_2_arg::<StringType, NumberType<u64>, StringType>(
-            |a, times, builder| {
+            |a, times, output, _| {
                 if times > MAX_REPEAT_TIMES {
                     return Err(format!(
                         "Too many times to repeat: ({}), maximum is: {}",
                         times, MAX_REPEAT_TIMES
                     ));
                 }
-                (0..times).for_each(|_| builder.put_slice(a));
-                builder.commit_row();
+                (0..times).for_each(|_| output.put_slice(a));
+                output.commit_row();
                 Ok(())
             },
         ),
@@ -574,13 +574,13 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_| None,
         vectorize_string_to_string(
             |col| col.data.len() / 2,
-            |val, writer| {
-                let old_len = writer.data.len();
+            |val, output, _| {
+                let old_len = output.data.len();
                 let extra_len = val.len() / 2;
-                writer.data.resize(old_len + extra_len, 0);
-                match hex::decode_to_slice(val, &mut writer.data[old_len..]) {
+                output.data.resize(old_len + extra_len, 0);
+                match hex::decode_to_slice(val, &mut output.data[old_len..]) {
                     Ok(()) => {
-                        writer.commit_row();
+                        output.commit_row();
                         Ok(())
                     }
                     Err(err) => Err(format!(
@@ -597,7 +597,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "ord",
         FunctionProperty::default(),
         |_| None,
-        |str: &[u8]| {
+        |str: &[u8], _| {
             let mut res: u64 = 0;
             if !str.is_empty() {
                 if str[0].is_ascii() {
@@ -624,7 +624,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_| None,
         vectorize_string_to_string(
             |col| usize::max(col.data.len(), 4 * col.len()),
-            |val, writer| {
+            |val, output, _| {
                 let mut last = None;
                 let mut count = 0;
 
@@ -635,7 +635,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                             continue;
                         }
                         last = score;
-                        writer.put_char(ch.to_ascii_uppercase());
+                        output.put_char(ch.to_ascii_uppercase());
                     } else {
                         if !ch.is_ascii_alphabetic()
                             || soundex::is_drop(ch)
@@ -645,17 +645,17 @@ pub fn register(registry: &mut FunctionRegistry) {
                             continue;
                         }
                         last = score;
-                        writer.put_char(score.unwrap() as char);
+                        output.put_char(score.unwrap() as char);
                     }
 
                     count += 1;
                 }
                 // add '0'
                 for _ in count..4 {
-                    writer.put_char('0');
+                    output.put_char('0');
                 }
 
-                writer.commit_row();
+                output.commit_row();
                 Ok(())
             },
         ),
@@ -695,32 +695,36 @@ pub fn register(registry: &mut FunctionRegistry) {
         "left",
         FunctionProperty::default(),
         |_, _| None,
-        vectorize_with_builder_2_arg::<StringType, NumberType<u64>, StringType>(|s, n, output| {
-            let n = n as usize;
-            if n < s.len() {
-                output.put_slice(&s[0..n]);
-            } else {
-                output.put_slice(s);
-            }
-            output.commit_row();
-            Ok(())
-        }),
+        vectorize_with_builder_2_arg::<StringType, NumberType<u64>, StringType>(
+            |s, n, output, _| {
+                let n = n as usize;
+                if n < s.len() {
+                    output.put_slice(&s[0..n]);
+                } else {
+                    output.put_slice(s);
+                }
+                output.commit_row();
+                Ok(())
+            },
+        ),
     );
 
     registry.register_passthrough_nullable_2_arg::<StringType, NumberType<u64>, StringType, _, _>(
         "right",
         FunctionProperty::default(),
         |_, _| None,
-        vectorize_with_builder_2_arg::<StringType, NumberType<u64>, StringType>(|s, n, output| {
-            let n = n as usize;
-            if n < s.len() {
-                output.put_slice(&s[s.len() - n..]);
-            } else {
-                output.put_slice(s);
-            }
-            output.commit_row();
-            Ok(())
-        }),
+        vectorize_with_builder_2_arg::<StringType, NumberType<u64>, StringType>(
+            |s, n, output, _| {
+                let n = n as usize;
+                if n < s.len() {
+                    output.put_slice(&s[s.len() - n..]);
+                } else {
+                    output.put_slice(s);
+                }
+                output.commit_row();
+                Ok(())
+            },
+        ),
     );
 
     registry.register_passthrough_nullable_2_arg::<StringType, NumberType<i64>, StringType, _, _>(
@@ -728,7 +732,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_, _| None,
         vectorize_with_builder_2_arg::<StringType, NumberType<i64>, StringType>(
-            |s, pos, output| {
+            |s, pos, output, _| {
                 output.put_slice(substr(s, pos, s.len() as u64));
                 output.commit_row();
                 Ok(())
@@ -740,7 +744,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "substr",
         FunctionProperty::default(),
         |_, _, _| None,
-        vectorize_with_builder_3_arg::<StringType, NumberType<i64>, NumberType<u64>, StringType>(|s, pos, len, output| {
+        vectorize_with_builder_3_arg::<StringType, NumberType<i64>, NumberType<u64>, StringType>(|s, pos, len, output, _| {
             output.put_slice(substr(s, pos, len));
             output.commit_row();
             Ok(())
@@ -803,19 +807,19 @@ fn substr(str: &[u8], pos: i64, len: u64) -> &[u8] {
 /// String to String scalar function with estimiated ouput column capacity.
 fn vectorize_string_to_string(
     estimate_bytes: impl Fn(&StringColumn) -> usize + Copy,
-    func: impl Fn(&[u8], &mut StringColumnBuilder) -> Result<(), String> + Copy,
-) -> impl Fn(ValueRef<StringType>, &GenericMap) -> Result<Value<StringType>, String> + Copy {
-    move |arg1, _| match arg1 {
+    func: impl Fn(&[u8], &mut StringColumnBuilder, FunctionContext) -> Result<(), String> + Copy,
+) -> impl Fn(ValueRef<StringType>, FunctionContext) -> Result<Value<StringType>, String> + Copy {
+    move |arg1, ctx| match arg1 {
         ValueRef::Scalar(val) => {
             let mut builder = StringColumnBuilder::with_capacity(1, 0);
-            func(val, &mut builder)?;
+            func(val, &mut builder, ctx)?;
             Ok(Value::Scalar(builder.build_scalar()))
         }
         ValueRef::Column(col) => {
             let data_capacity = estimate_bytes(&col);
             let mut builder = StringColumnBuilder::with_capacity(col.len(), data_capacity);
             for val in col.iter() {
-                func(val, &mut builder)?;
+                func(val, &mut builder, ctx)?;
             }
 
             Ok(Value::Column(builder.build()))
@@ -826,17 +830,17 @@ fn vectorize_string_to_string(
 /// (String, String) to String scalar function with estimiated ouput column capacity.
 fn vectorize_string_to_string_2_arg(
     estimate_bytes: impl Fn(&StringColumn, &StringColumn) -> usize + Copy,
-    func: impl Fn(&[u8], &[u8], &mut StringColumnBuilder) -> Result<(), String> + Copy,
+    func: impl Fn(&[u8], &[u8], &mut StringColumnBuilder, FunctionContext) -> Result<(), String> + Copy,
 ) -> impl Fn(
     ValueRef<StringType>,
     ValueRef<StringType>,
-    &GenericMap,
+    FunctionContext,
 ) -> Result<Value<StringType>, String>
 + Copy {
-    move |arg1, arg2, _| match (arg1, arg2) {
+    move |arg1, arg2, ctx| match (arg1, arg2) {
         (ValueRef::Scalar(arg1), ValueRef::Scalar(arg2)) => {
             let mut builder = StringColumnBuilder::with_capacity(1, 0);
-            func(arg1, arg2, &mut builder)?;
+            func(arg1, arg2, &mut builder, ctx)?;
             Ok(Value::Scalar(builder.build_scalar()))
         }
         (ValueRef::Scalar(arg1), ValueRef::Column(arg2)) => {
@@ -844,7 +848,7 @@ fn vectorize_string_to_string_2_arg(
                 estimate_bytes(&StringColumnBuilder::repeat(arg1, 1).build(), &arg2);
             let mut builder = StringColumnBuilder::with_capacity(arg2.len(), data_capacity);
             for val in arg2.iter() {
-                func(arg1, val, &mut builder)?;
+                func(arg1, val, &mut builder, ctx)?;
             }
             Ok(Value::Column(builder.build()))
         }
@@ -853,7 +857,7 @@ fn vectorize_string_to_string_2_arg(
                 estimate_bytes(&arg1, &StringColumnBuilder::repeat(arg2, 1).build());
             let mut builder = StringColumnBuilder::with_capacity(arg1.len(), data_capacity);
             for val in arg1.iter() {
-                func(val, arg2, &mut builder)?;
+                func(val, arg2, &mut builder, ctx)?;
             }
             Ok(Value::Column(builder.build()))
         }
@@ -862,7 +866,7 @@ fn vectorize_string_to_string_2_arg(
             let mut builder = StringColumnBuilder::with_capacity(arg1.len(), data_capacity);
             let iter = arg1.iter().zip(arg2.iter());
             for (val1, val2) in iter {
-                func(val1, val2, &mut builder)?;
+                func(val1, val2, &mut builder, ctx)?;
             }
             Ok(Value::Column(builder.build()))
         }

@@ -421,7 +421,7 @@ impl Display for ExistsTableStmt<'_> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Engine {
     Null,
     Memory,

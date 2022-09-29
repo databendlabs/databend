@@ -81,6 +81,19 @@ impl<'a> Binder {
                     bind_context.add_column_binding(column.clone());
                 }
             }
+            JoinOperator::FullOuter => {
+                for column in left_context.all_column_bindings() {
+                    let mut nullable_column = column.clone();
+                    nullable_column.data_type = Box::new(wrap_nullable(&column.data_type));
+                    bind_context.add_column_binding(nullable_column);
+                }
+
+                for column in right_context.all_column_bindings().iter() {
+                    let mut nullable_column = column.clone();
+                    nullable_column.data_type = Box::new(wrap_nullable(&column.data_type));
+                    bind_context.add_column_binding(nullable_column);
+                }
+            }
             _ => {
                 for column in left_context.all_column_bindings() {
                     bind_context.add_column_binding(column.clone());
@@ -169,6 +182,50 @@ impl<'a> Binder {
                 left_child,
                 right_child,
             ),
+            JoinOperator::LeftSemi => {
+                bind_context = left_context;
+                self.bind_join_with_type(
+                    JoinType::LeftSemi,
+                    left_join_conditions,
+                    right_join_conditions,
+                    other_conditions,
+                    left_child,
+                    right_child,
+                )
+            }
+            JoinOperator::RightSemi => {
+                bind_context = right_context;
+                self.bind_join_with_type(
+                    JoinType::RightSemi,
+                    left_join_conditions,
+                    right_join_conditions,
+                    other_conditions,
+                    left_child,
+                    right_child,
+                )
+            }
+            JoinOperator::LeftAnti => {
+                bind_context = left_context;
+                self.bind_join_with_type(
+                    JoinType::LeftAnti,
+                    left_join_conditions,
+                    right_join_conditions,
+                    other_conditions,
+                    left_child,
+                    right_child,
+                )
+            }
+            JoinOperator::RightAnti => {
+                bind_context = right_context;
+                self.bind_join_with_type(
+                    JoinType::RightAnti,
+                    left_join_conditions,
+                    right_join_conditions,
+                    other_conditions,
+                    left_child,
+                    right_child,
+                )
+            }
         }?;
 
         Ok((s_expr, bind_context))

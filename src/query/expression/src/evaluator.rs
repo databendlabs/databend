@@ -15,6 +15,7 @@
 #[cfg(debug_assertions)]
 use std::sync::Mutex;
 
+use chrono_tz::Tz;
 use common_arrow::arrow::bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use itertools::Itertools;
@@ -45,16 +46,12 @@ use crate::ScalarRef;
 
 pub struct Evaluator<'a> {
     input_columns: &'a Chunk,
-    #[allow(dead_code)]
-    context: FunctionContext,
+    tz: Tz,
 }
 
 impl<'a> Evaluator<'a> {
-    pub fn new(input_columns: &'a Chunk, context: FunctionContext) -> Self {
-        Evaluator {
-            input_columns,
-            context,
-        }
+    pub fn new(input_columns: &'a Chunk, tz: Tz) -> Self {
+        Evaluator { input_columns, tz }
     }
 
     pub fn run(&self, expr: &Expr) -> Result<Value<AnyType>> {
@@ -81,7 +78,12 @@ impl<'a> Evaluator<'a> {
                         .all_equal()
                 );
                 let cols_ref = cols.iter().map(Value::as_ref).collect::<Vec<_>>();
-                (function.eval)(cols_ref.as_slice(), generics).map_err(|msg| (span.clone(), msg))
+                let ctx = FunctionContext {
+                    generics,
+                    num_rows: self.input_columns.num_rows(),
+                    tz: self.tz,
+                };
+                (function.eval)(cols_ref.as_slice(), ctx).map_err(|msg| (span.clone(), msg))
             }
             Expr::Cast {
                 span,
@@ -129,7 +131,7 @@ impl<'a> Evaluator<'a> {
             if !*RECURSING.lock().unwrap() {
                 *RECURSING.lock().unwrap() = true;
                 assert_eq!(
-                    ConstantFolder::new(&self.input_columns.domains(), FunctionContext::default())
+                    ConstantFolder::new(&self.input_columns.domains(), self.tz)
                         .fold(expr)
                         .1,
                     None,
@@ -438,15 +440,12 @@ impl<'a> Evaluator<'a> {
 
 pub struct ConstantFolder<'a> {
     input_domains: &'a [Domain],
-    context: FunctionContext,
+    tz: Tz,
 }
 
 impl<'a> ConstantFolder<'a> {
-    pub fn new(input_domains: &'a [Domain], context: FunctionContext) -> Self {
-        ConstantFolder {
-            input_domains,
-            context,
-        }
+    pub fn new(input_domains: &'a [Domain], tz: Tz) -> Self {
+        ConstantFolder { input_domains, tz }
     }
 
     pub fn fold(&self, expr: &Expr) -> (Expr, Option<Domain>) {
@@ -526,8 +525,7 @@ impl<'a> ConstantFolder<'a> {
                     });
                 }
 
-                let func_domain =
-                    args_domain.and_then(|domains| (function.calc_domain)(&domains, generics));
+                let func_domain = args_domain.and_then(|domains| (function.calc_domain)(&domains));
                 let all_args_is_scalar = args_expr.iter().all(|arg| arg.as_constant().is_some());
 
                 let func_expr = Expr::FunctionCall {
@@ -550,7 +548,7 @@ impl<'a> ConstantFolder<'a> {
 
                 if all_args_is_scalar {
                     let chunk = Chunk::empty();
-                    let evaluator = Evaluator::new(&chunk, self.context.clone());
+                    let evaluator = Evaluator::new(&chunk, self.tz);
                     if let Ok(Value::Scalar(scalar)) = evaluator.run(&func_expr) {
                         return (
                             Expr::Constant {

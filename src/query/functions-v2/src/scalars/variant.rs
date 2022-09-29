@@ -26,7 +26,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "parse_json",
         FunctionProperty::default(),
         |_| None,
-        vectorize_with_builder_1_arg::<StringType, VariantType>(|s, output| {
+        vectorize_with_builder_1_arg::<StringType, VariantType>(|s, output, _| {
             if s.trim().is_empty() {
                 output.put_slice(DEFAULT_JSONB);
                 output.commit_row();

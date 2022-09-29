@@ -13,17 +13,15 @@
 //  limitations under the License.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use common_base::base::tokio;
-use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_fuse_meta::meta::ClusterStatistics;
 use common_fuse_meta::meta::ColumnStatistics;
-use common_legacy_planners::add;
-use common_legacy_planners::col;
-use common_legacy_planners::lit;
+use common_legacy_expression::add;
+use common_legacy_expression::col;
+use common_legacy_expression::lit;
 use common_pipeline_transforms::processors::ExpressionExecutor;
 use databend_query::storages::fuse::io::BlockCompactor;
 use databend_query::storages::fuse::io::BlockWriter;
@@ -143,18 +141,15 @@ fn test_reduce_block_statistics_in_memory_size() -> common_exception::Result<()>
 #[tokio::test]
 async fn test_accumulator() -> common_exception::Result<()> {
     let blocks = TestFixture::gen_sample_blocks(10, 1);
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
     let mut stats_acc = StatisticsAccumulator::new();
 
     let operator = Operator::new(opendal::services::memory::Builder::default().build()?);
-    let table_ctx: Arc<dyn TableContext> = ctx;
     let loc_generator = TableMetaLocationGenerator::with_prefix("/".to_owned());
 
     for item in blocks {
         let block = item?;
         let block_statistics = BlockStatistics::from(&block, "does_not_matter".to_owned(), None)?;
-        let block_writer = BlockWriter::new(&table_ctx, &operator, &loc_generator);
+        let block_writer = BlockWriter::new(&operator, &loc_generator);
         let block_meta = block_writer.write(block, None).await?;
         stats_acc.add_with_block_meta(block_meta, block_statistics)?;
     }

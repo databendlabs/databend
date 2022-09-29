@@ -20,18 +20,14 @@ use super::rewrite::RuleNormalizeDisjunctiveFilter;
 use super::rewrite::RuleNormalizeScalarFilter;
 use super::rewrite::RulePushDownFilterEvalScalar;
 use super::rewrite::RulePushDownFilterJoin;
-use super::rewrite::RulePushDownFilterProject;
 use super::transform::RuleCommuteJoin;
 use super::transform::RuleLeftAssociateJoin;
 use super::transform::RuleRightAssociateJoin;
 use crate::sql::optimizer::rule::rewrite::RuleEliminateFilter;
-use crate::sql::optimizer::rule::rewrite::RuleEliminateProject;
 use crate::sql::optimizer::rule::rewrite::RuleMergeEvalScalar;
 use crate::sql::optimizer::rule::rewrite::RuleMergeFilter;
-use crate::sql::optimizer::rule::rewrite::RuleMergeProject;
 use crate::sql::optimizer::rule::rewrite::RulePushDownFilterScan;
 use crate::sql::optimizer::rule::rewrite::RulePushDownLimitOuterJoin;
-use crate::sql::optimizer::rule::rewrite::RulePushDownLimitProject;
 use crate::sql::optimizer::rule::rewrite::RulePushDownLimitScan;
 use crate::sql::optimizer::rule::rewrite::RulePushDownLimitSort;
 use crate::sql::optimizer::rule::rewrite::RulePushDownSortScan;
@@ -53,18 +49,14 @@ impl RuleFactory {
             RuleID::ImplementGet => Ok(Box::new(RuleImplementGet::new())),
             RuleID::ImplementHashJoin => Ok(Box::new(RuleImplementHashJoin::new())),
             RuleID::EliminateEvalScalar => Ok(Box::new(RuleEliminateEvalScalar::new())),
-            RuleID::PushDownFilterProject => Ok(Box::new(RulePushDownFilterProject::new())),
             RuleID::PushDownFilterEvalScalar => Ok(Box::new(RulePushDownFilterEvalScalar::new())),
             RuleID::PushDownFilterJoin => Ok(Box::new(RulePushDownFilterJoin::new())),
             RuleID::PushDownFilterScan => Ok(Box::new(RulePushDownFilterScan::new())),
-            RuleID::PushDownLimitProject => Ok(Box::new(RulePushDownLimitProject::new())),
             RuleID::PushDownLimitScan => Ok(Box::new(RulePushDownLimitScan::new())),
             RuleID::PushDownSortScan => Ok(Box::new(RulePushDownSortScan::new())),
             RuleID::PushDownLimitOuterJoin => Ok(Box::new(RulePushDownLimitOuterJoin::new())),
             RuleID::PushDownLimitSort => Ok(Box::new(RulePushDownLimitSort::new())),
             RuleID::EliminateFilter => Ok(Box::new(RuleEliminateFilter::new())),
-            RuleID::EliminateProject => Ok(Box::new(RuleEliminateProject::new())),
-            RuleID::MergeProject => Ok(Box::new(RuleMergeProject::new())),
             RuleID::MergeEvalScalar => Ok(Box::new(RuleMergeEvalScalar::new())),
             RuleID::MergeFilter => Ok(Box::new(RuleMergeFilter::new())),
             RuleID::NormalizeScalarFilter => Ok(Box::new(RuleNormalizeScalarFilter::new())),

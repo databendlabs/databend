@@ -35,7 +35,6 @@ use crate::sql::plans::LogicalGet;
 use crate::sql::plans::LogicalInnerJoin;
 use crate::sql::plans::PhysicalHashJoin;
 use crate::sql::plans::PhysicalScan;
-use crate::sql::plans::Project;
 use crate::sql::plans::RelOperator;
 use crate::sql::plans::Scalar;
 use crate::sql::plans::Sort;
@@ -73,7 +72,6 @@ impl Display for FormatContext {
                 RelOperator::LogicalInnerJoin(op) => format_logical_inner_join(f, metadata, op),
                 RelOperator::PhysicalScan(_) => write!(f, "PhysicalScan"),
                 RelOperator::PhysicalHashJoin(op) => format_hash_join(f, metadata, op),
-                RelOperator::Project(_) => write!(f, "Project"),
                 RelOperator::EvalScalar(_) => write!(f, "EvalScalar"),
                 RelOperator::Filter(_) => write!(f, "Filter"),
                 RelOperator::Aggregate(op) => format_aggregate(f, metadata, op),
@@ -213,7 +211,6 @@ fn to_format_tree(
             physical_hash_join_to_format_tree(op, metadata, children)
         }
         RelOperator::LogicalGet(op) => logical_get_to_format_tree(op, metadata, children),
-        RelOperator::Project(op) => project_to_format_tree(op, metadata, children),
         RelOperator::EvalScalar(op) => eval_scalar_to_format_tree(op, metadata, children),
         RelOperator::Filter(op) => filter_to_format_tree(op, metadata, children),
         RelOperator::Aggregate(op) => aggregate_to_format_tree(op, metadata, children),
@@ -544,41 +541,6 @@ fn eval_scalar_to_format_tree(
             vec![FormatTreeNode::new(FormatContext::Text(format!(
                 "scalars: [{}]",
                 scalars
-            )))],
-            children,
-        ]
-        .concat(),
-    )
-}
-
-fn project_to_format_tree(
-    op: &Project,
-    metadata: MetadataRef,
-    children: Vec<FormatTreeNode<FormatContext>>,
-) -> FormatTreeNode<FormatContext> {
-    let column_names = metadata
-        .read()
-        .columns()
-        .iter()
-        .map(|entry| format!("{} (#{})", entry.name(), entry.index()))
-        .collect::<Vec<String>>();
-    // Sorted by column index to make display of Project stable
-    let project_columns = op
-        .columns
-        .iter()
-        .sorted()
-        .map(|idx| column_names[*idx].clone())
-        .collect::<Vec<String>>()
-        .join(",");
-    FormatTreeNode::with_children(
-        FormatContext::RelOp {
-            metadata,
-            rel_operator: Box::new(op.clone().into()),
-        },
-        vec![
-            vec![FormatTreeNode::new(FormatContext::Text(format!(
-                "projections: [{}]",
-                project_columns
             )))],
             children,
         ]

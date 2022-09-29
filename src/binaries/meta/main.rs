@@ -23,12 +23,13 @@ use common_grpc::RpcClientConf;
 use common_macros::databend_main;
 use common_meta_sled_store::init_sled_db;
 use common_meta_store::MetaStoreProvider;
+use common_metrics::init_default_metrics_recorder;
 use common_tracing::init_logging;
+use common_tracing::set_panic_hook;
 use databend_meta::api::GrpcServer;
 use databend_meta::api::HttpService;
 use databend_meta::configs::Config;
 use databend_meta::meta_service::MetaNode;
-use databend_meta::metrics::init_meta_metrics_recorder;
 use databend_meta::version::METASRV_COMMIT_VERSION;
 use databend_meta::version::METASRV_SEMVER;
 use databend_meta::version::MIN_METACLI_SEMVER;
@@ -63,6 +64,8 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         })));
     }
 
+    set_panic_hook();
+
     let _guards = init_logging("databend-meta", &conf.log);
 
     info!("Databend Meta version: {}", METASRV_COMMIT_VERSION.as_str());
@@ -81,7 +84,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     }
 
     init_sled_db(conf.raft_config.raft_dir.clone());
-    init_meta_metrics_recorder();
+    init_default_metrics_recorder();
 
     info!(
         "Starting MetaNode single: {} with config: {:?}",

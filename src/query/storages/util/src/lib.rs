@@ -14,7 +14,6 @@
 
 pub mod cached_reader;
 pub mod file_meta_data_reader;
-pub mod retry;
 pub mod storage_context;
 pub mod table_option_keys;
 pub mod table_storage_prefix;

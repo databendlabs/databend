@@ -174,6 +174,7 @@ pub trait PhysicalPlanReplacer {
             left: Box::new(left),
             right: Box::new(right),
             schema: plan.schema.clone(),
+            pairs: plan.pairs.clone(),
         }))
     }
 

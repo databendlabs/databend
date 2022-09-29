@@ -1,3 +1,10 @@
+[workspace.package]
+version = "0.1.0"
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
 [workspace]
 members = [
     # Binaries
@@ -35,6 +42,7 @@ members = [
     "src/query/pipeline/sinks",
     "src/query/pipeline/sources",
     "src/query/pipeline/transforms",
+    "src/query/legacy-expression",
     "src/query/legacy-planners",
     "src/query/settings",
     "src/query/storages/fuse",
@@ -105,7 +113,7 @@ object = { opt-level = 3 }
 rustc-demangle = { opt-level = 3 }
 
 [patch.crates-io]
-# http-types doesn't play well with the new errors api.
-# This fork address this problem, and should be removed once we upgrade to
-# new toolchain.
-http-types = { git = "https://github.com/Xuanwo/http-types", rev = "106fc6d" }
+# If there are dependencies that need patching, they can be listed below.
+# For example:
+# arrow-format = { git = "https://github.com/datafuse-extras/arrow-format", rev = "78dacc1" }
+arrow-format = { git = "https://github.com/datafuse-extras/arrow-format", rev = "78dacc1" }

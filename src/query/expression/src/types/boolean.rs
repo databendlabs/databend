@@ -25,6 +25,7 @@ use crate::types::ValueType;
 use crate::util::bitmap_into_mut;
 use crate::values::Column;
 use crate::values::Scalar;
+use crate::ColumnBuilder;
 use crate::ScalarRef;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,6 +38,11 @@ impl ValueType for BooleanType {
     type Domain = BooleanDomain;
     type ColumnIterator<'a> = common_arrow::arrow::bitmap::utils::BitmapIter<'a>;
     type ColumnBuilder = MutableBitmap;
+
+    #[inline]
+    fn upcast_gat<'short, 'long: 'short>(long: bool) -> bool {
+        long
+    }
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
         scalar
@@ -56,6 +62,15 @@ impl ValueType for BooleanType {
     fn try_downcast_column<'a>(col: &'a Column) -> Option<Self::Column> {
         match col {
             Column::Boolean(column) => Some(column.clone()),
+            _ => None,
+        }
+    }
+
+    fn try_downcast_builder<'a>(
+        builder: &'a mut ColumnBuilder,
+    ) -> Option<&'a mut Self::ColumnBuilder> {
+        match builder {
+            crate::ColumnBuilder::Boolean(builder) => Some(builder),
             _ => None,
         }
     }

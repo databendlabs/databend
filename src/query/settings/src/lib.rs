@@ -320,6 +320,16 @@ impl Settings {
                 desc: "The maximum query execution time. it means no limit if the value is zero. default value: 0",
                 possible_values: None,
             },
+            SettingValue {
+                default_value: UserSettingValue::String("\"".to_owned()),
+                user_setting: UserSetting::create(
+                    "quote_char",
+                    UserSettingValue::String("\"".to_owned()),
+                ),
+                level: ScopeLevel::Session,
+                desc: "The quote char for CSV. default value: '\"'.",
+                possible_values: None,
+            },
         ];
 
         let settings: Arc<RwLock<HashMap<String, SettingValue>>> =
@@ -403,6 +413,12 @@ impl Settings {
 
     pub fn get_record_delimiter(&self) -> Result<String> {
         let key = "record_delimiter";
+        self.check_and_get_setting_value(key)
+            .and_then(|v| v.user_setting.value.as_string())
+    }
+
+    pub fn get_quote_char(&self) -> Result<String> {
+        let key = "quote_char";
         self.check_and_get_setting_value(key)
             .and_then(|v| v.user_setting.value.as_string())
     }

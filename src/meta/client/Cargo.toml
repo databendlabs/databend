@@ -1,11 +1,11 @@
 [package]
 name = "common-meta-client"
-version = "0.1.0"
 description = "common meta grpc"
-authors = ["Databend Authors <opensource@datafuselabs.com>"]
-license = "Apache-2.0"
-publish = false
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -27,17 +27,17 @@ common-protos = { path = "../protos" }
 common-tracing = { path = "../../common/tracing" }
 
 derive_more = "0.99.17"
-futures = "0.3.21"
-once_cell = "1.12.0"
+futures = "0.3.24"
+once_cell = "1.15.0"
 parking_lot = "0.12.1"
-prost = "0.10.4"
+prost = "0.11.0"
 rand = "0.8.5"
-semver = "1.0.10"
-serde = { version = "1.0.137", features = ["derive"] }
-serde_json = "1.0.81"
+semver = "1.0.14"
+serde = { version = "1.0.145", features = ["derive"] }
+serde_json = "1.0.85"
 thiserror = "1"
-tonic = { version = "0.7.2", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
-tracing = "0.1.35"
+tonic = { version = "0.8.1", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
+tracing = "0.1.36"
 
 [dev-dependencies]
 

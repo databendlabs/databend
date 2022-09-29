@@ -328,12 +328,13 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
             None => {
                 info!("Normal query: {}", query);
                 let context = self.session.create_query_context().await?;
-                context.attach_query_str(query);
 
                 let mut planner = Planner::new(context.clone());
-                let plan = planner.plan_sql(query).await?;
-                let interpreter = InterpreterFactory::get(context.clone(), &plan.0).await;
-                let has_result_set = has_result_set_by_plan(&plan.0);
+                let (plan, _, _) = planner.plan_sql(query).await?;
+
+                context.attach_query_str(plan.to_string(), query);
+                let interpreter = InterpreterFactory::get(context.clone(), &plan).await;
+                let has_result_set = has_result_set_by_plan(&plan);
 
                 match interpreter {
                     Ok(interpreter) => {
@@ -348,7 +349,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
                         ))
                     }
                     Err(e) => {
-                        InterpreterQueryLog::fail_to_start(context, e.clone()).await;
+                        InterpreterQueryLog::fail_to_start(context, e.clone());
                         Err(e)
                     }
                 }
@@ -369,11 +370,6 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
         let query_result = context.try_spawn({
             let ctx = context.clone();
             async move {
-                // Write start query log.
-                let _ = interpreter
-                    .start()
-                    .await
-                    .map_err(|e| error!("interpreter.start.error: {:?}", e));
                 let mut data_stream = interpreter.execute(ctx.clone()).await?;
                 histogram!(
                     super::mysql_metrics::METRIC_INTERPRETER_USEDTIME,
@@ -386,12 +382,6 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
                     while let Some(item) = data_stream.next().await {
                         yield item
                     };
-
-                    // Write finish query log.
-                    if let Err(e) = interpreter.finish().await {
-                        // Errors will only be traced, but not propagated
-                        tracing::warn!("interpreter.finish.error: {:?}", e);
-                    }
                 };
 
                 Ok::<_, ErrorCode>(intercepted_stream.boxed())

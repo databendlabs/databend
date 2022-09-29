@@ -33,7 +33,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "to_timestamp",
         FunctionProperty::default(),
         |_| None,
-        vectorize_with_builder_1_arg::<Int64Type, TimestampType>(|val, output| {
+        vectorize_with_builder_1_arg::<Int64Type, TimestampType>(|val, output, _| {
             if (-31536000000..=31536000000).contains(&val) {
                 output.push(Timestamp {
                     ts: val * MICROS_IN_A_SEC,

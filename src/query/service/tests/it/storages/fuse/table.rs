@@ -14,12 +14,12 @@
 
 use std::default::Default;
 
+use common_ast::ast::Engine;
 use common_base::base::tokio;
 use common_exception::Result;
 use common_legacy_planners::ReadDataSourcePlan;
 use common_legacy_planners::SourceInfo;
 use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
 use common_planner::plans::AlterTableClusterKeyPlan;
 use common_planner::plans::DropTableClusterKeyPlan;
 use databend_query::interpreters::AlterTableClusterKeyInterpreter;
@@ -180,9 +180,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
 
     // 1. truncate empty table
     let prev_version = table.get_table_info().ident.seq;
-    let r = table
-        .truncate(ctx.clone(), &fixture.default_catalog_name(), false)
-        .await;
+    let r = table.truncate(ctx.clone(), false).await;
     let table = fixture.latest_default_table().await?;
     // no side effects
     assert_eq!(prev_version, table.get_table_info().ident.seq);
@@ -214,9 +212,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
     assert_eq!(stats.read_rows, (num_blocks * rows_per_block) as usize);
 
     // truncate
-    let r = table
-        .truncate(ctx.clone(), &fixture.default_catalog_name(), false)
-        .await;
+    let r = table.truncate(ctx.clone(), false).await;
     assert!(r.is_ok());
 
     // get the latest tbl
@@ -302,20 +298,17 @@ async fn test_fuse_alter_table_cluster_key() -> Result<()> {
         catalog: fixture.default_catalog_name(),
         database: fixture.default_db_name(),
         table: fixture.default_table_name(),
-        table_meta: TableMeta {
-            schema: TestFixture::default_schema(),
-            engine: "FUSE".to_string(),
-            options: [
-                // database id is required for FUSE
-                (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
-            ]
-            .into(),
-            cluster_keys: vec![],
-            default_cluster_key_id: None,
-            ..Default::default()
-        },
+        schema: TestFixture::default_schema(),
+        engine: Engine::Fuse,
+        options: [
+            // database id is required for FUSE
+            (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
+        ]
+        .into(),
+        field_default_exprs: vec![],
+        field_comments: vec![],
         as_select: None,
-        cluster_keys: vec![],
+        cluster_key: None,
     };
 
     // create test table

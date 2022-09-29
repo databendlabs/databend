@@ -45,8 +45,7 @@ impl Interpreter for TruncateTableInterpreter {
         let tbl_name = self.plan.table.as_str();
 
         let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
-        tbl.truncate(self.ctx.clone(), catalog_name, self.plan.purge)
-            .await?;
+        tbl.truncate(self.ctx.clone(), self.plan.purge).await?;
         Ok(PipelineBuildResult::create())
     }
 }

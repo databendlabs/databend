@@ -30,14 +30,11 @@ use crate::HashMethodKeysU256;
 use crate::HashMethodKeysU512;
 
 impl DataBlock {
-    pub fn choose_hash_method(
-        block: &DataBlock,
-        column_names: &[String],
-    ) -> Result<HashMethodKind> {
-        let hash_key_types = column_names
+    pub fn choose_hash_method(block: &DataBlock, indices: &[usize]) -> Result<HashMethodKind> {
+        let hash_key_types = indices
             .iter()
-            .map(|c| {
-                let col = block.try_column_by_name(c)?;
+            .map(|&c| {
+                let col = block.column(c);
                 Ok(col.data_type())
             })
             .collect::<Result<Vec<_>>>();
@@ -79,12 +76,12 @@ impl DataBlock {
         }
     }
 
-    pub fn group_by_blocks(block: &DataBlock, column_names: &[String]) -> Result<Vec<DataBlock>> {
-        let method = Self::choose_hash_method(block, column_names)?;
+    pub fn group_by_blocks(block: &DataBlock, indices: &[usize]) -> Result<Vec<DataBlock>> {
+        let method = Self::choose_hash_method(block, indices)?;
         Ok(match method {
             HashMethodKind::Serializer(s) => {
                 let blocks = s
-                    .group_by(block, column_names)?
+                    .group_by(block, indices)?
                     .iter()
                     .map(|(_, _, b)| b.clone())
                     .collect();
@@ -93,7 +90,7 @@ impl DataBlock {
 
             HashMethodKind::KeysU8(s) => {
                 let blocks = s
-                    .group_by(block, column_names)?
+                    .group_by(block, indices)?
                     .iter()
                     .map(|(_, _, b)| b.clone())
                     .collect();
@@ -101,7 +98,7 @@ impl DataBlock {
             }
             HashMethodKind::KeysU16(s) => {
                 let blocks = s
-                    .group_by(block, column_names)?
+                    .group_by(block, indices)?
                     .iter()
                     .map(|(_, _, b)| b.clone())
                     .collect();
@@ -109,7 +106,7 @@ impl DataBlock {
             }
             HashMethodKind::KeysU32(s) => {
                 let blocks = s
-                    .group_by(block, column_names)?
+                    .group_by(block, indices)?
                     .iter()
                     .map(|(_, _, b)| b.clone())
                     .collect();
@@ -117,7 +114,7 @@ impl DataBlock {
             }
             HashMethodKind::KeysU64(s) => {
                 let blocks = s
-                    .group_by(block, column_names)?
+                    .group_by(block, indices)?
                     .iter()
                     .map(|(_, _, b)| b.clone())
                     .collect();
@@ -126,7 +123,7 @@ impl DataBlock {
 
             HashMethodKind::KeysU128(s) => {
                 let blocks = s
-                    .group_by(block, column_names)?
+                    .group_by(block, indices)?
                     .iter()
                     .map(|(_, _, b)| b.clone())
                     .collect();
@@ -134,7 +131,7 @@ impl DataBlock {
             }
             HashMethodKind::KeysU256(s) => {
                 let blocks = s
-                    .group_by(block, column_names)?
+                    .group_by(block, indices)?
                     .iter()
                     .map(|(_, _, b)| b.clone())
                     .collect();
@@ -142,7 +139,7 @@ impl DataBlock {
             }
             HashMethodKind::KeysU512(s) => {
                 let blocks = s
-                    .group_by(block, column_names)?
+                    .group_by(block, indices)?
                     .iter()
                     .map(|(_, _, b)| b.clone())
                     .collect();

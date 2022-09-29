@@ -31,12 +31,9 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_storages_util::file_meta_data_reader::FileMetaDataReader;
-use common_storages_util::retry;
-use common_storages_util::retry::Retryable;
 use futures::AsyncReadExt;
 use opendal::Object;
 use opendal::Operator;
-use tracing::warn;
 
 use crate::hive_partition::HivePartInfo;
 use crate::hive_partition_filler::HivePartitionFiller;
@@ -185,25 +182,11 @@ impl HiveParquetBlockReader {
         semaphore: Arc<Semaphore>,
     ) -> Result<Vec<u8>> {
         let handler = common_base::base::tokio::spawn(async move {
-            let op = || async {
-                let mut chunk = vec![0; length as usize];
-                let mut r = o
-                    .range_reader(offset..offset + length)
-                    .await
-                    .map_err(retry::from_io_error)?;
-                r.read_exact(&mut chunk).await?;
-                Ok(chunk)
-            };
-
-            let notify = |e: std::io::Error, duration| {
-                warn!(
-                    "transient error encountered while reading column, at duration {:?} : {}",
-                    duration, e,
-                )
-            };
+            let mut chunk = vec![0; length as usize];
+            let mut r = o.range_reader(offset..offset + length).await?;
+            r.read_exact(&mut chunk).await?;
 
             let _semaphore_permit = semaphore.acquire().await.unwrap();
-            let chunk = op.retry_with_notify(notify).await?;
             Ok(chunk)
         });
 

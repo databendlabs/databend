@@ -114,6 +114,12 @@ fn test_statement() {
         r#"select * from a join b on a.a = b.a;"#,
         r#"select * from a left outer join b on a.a = b.a;"#,
         r#"select * from a right outer join b on a.a = b.a;"#,
+        r#"select * from a left semi join b on a.a = b.a;"#,
+        r#"select * from a semi join b on a.a = b.a;"#,
+        r#"select * from a left anti join b on a.a = b.a;"#,
+        r#"select * from a anti join b on a.a = b.a;"#,
+        r#"select * from a right semi join b on a.a = b.a;"#,
+        r#"select * from a right anti join b on a.a = b.a;"#,
         r#"select * from a full outer join b on a.a = b.a;"#,
         r#"select * from a inner join b on a.a = b.a;"#,
         r#"select * from a left outer join b using(a);"#,
@@ -190,6 +196,10 @@ fn test_statement() {
                     skip_header = 1
                 )
                 size_limit=10;"#,
+        r#"COPY INTO mytable
+                FROM 'https://127.0.0.1:9900';"#,
+        r#"COPY INTO mytable
+                FROM 'https://127.0.0.1:';"#,
         r#"COPY INTO mytable
                 FROM @my_stage
                 FILE_FORMAT = (

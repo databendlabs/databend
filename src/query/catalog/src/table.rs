@@ -23,8 +23,8 @@ use common_datavalues::chrono;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_legacy_expression::LegacyExpression;
 use common_legacy_planners::DeletePlan;
-use common_legacy_planners::Expression;
 use common_legacy_planners::Extras;
 use common_legacy_planners::Partitions;
 use common_legacy_planners::ReadDataSourcePlan;
@@ -80,7 +80,7 @@ pub trait Table: Sync + Send {
         false
     }
 
-    fn cluster_keys(&self) -> Vec<Expression> {
+    fn cluster_keys(&self) -> Vec<LegacyExpression> {
         vec![]
     }
 
@@ -92,21 +92,20 @@ pub trait Table: Sync + Send {
 
     async fn alter_table_cluster_keys(
         &self,
-        _ctx: Arc<dyn TableContext>,
-        _catalog_name: &str,
-        _cluster_key_str: String,
+        ctx: Arc<dyn TableContext>,
+        cluster_key: String,
     ) -> Result<()> {
+        let (_, _) = (ctx, cluster_key);
+
         Err(ErrorCode::UnsupportedEngineParams(format!(
             "Unsupported clustering keys for engine: {}",
             self.engine()
         )))
     }
 
-    async fn drop_table_cluster_keys(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _catalog_name: &str,
-    ) -> Result<()> {
+    async fn drop_table_cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
+        let _ = ctx;
+
         Err(ErrorCode::UnsupportedEngineParams(format!(
             "Unsupported clustering keys for engine: {}",
             self.engine()
@@ -116,22 +115,26 @@ pub trait Table: Sync + Send {
     // defaults to generate one single part and empty statistics
     async fn read_partitions(
         &self,
-        _ctx: Arc<dyn TableContext>,
-        _push_downs: Option<Extras>,
+        ctx: Arc<dyn TableContext>,
+        push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
+        let (_, _) = (ctx, push_downs);
+
         unimplemented!()
     }
 
-    fn table_args(&self) -> Option<Vec<Expression>> {
+    fn table_args(&self) -> Option<Vec<LegacyExpression>> {
         None
     }
 
     fn read2(
         &self,
-        _: Arc<dyn TableContext>,
-        _: &ReadDataSourcePlan,
-        _: &mut Pipeline,
+        ctx: Arc<dyn TableContext>,
+        plan: &ReadDataSourcePlan,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
+        let (_, _, _) = (ctx, plan, pipeline);
+
         Err(ErrorCode::UnImplement(format!(
             "read2 operation for table {} is not implemented, table engine is {}",
             self.name(),
@@ -141,10 +144,12 @@ pub trait Table: Sync + Send {
 
     fn append2(
         &self,
-        _: Arc<dyn TableContext>,
-        _: &mut Pipeline,
-        _need_output: bool,
+        ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+        need_output: bool,
     ) -> Result<()> {
+        let (_, _, _) = (ctx, pipeline, need_output);
+
         Err(ErrorCode::UnImplement(format!(
             "append2 operation for table {} is not implemented, table engine is {}",
             self.name(),
@@ -154,39 +159,43 @@ pub trait Table: Sync + Send {
 
     async fn commit_insertion(
         &self,
-        _ctx: Arc<dyn TableContext>,
-        _catalog_name: &str,
-        _operations: Vec<DataBlock>,
-        _overwrite: bool,
+        ctx: Arc<dyn TableContext>,
+        operations: Vec<DataBlock>,
+        overwrite: bool,
     ) -> Result<()> {
+        let (_, _, _) = (ctx, operations, overwrite);
+
         Ok(())
     }
 
-    async fn truncate(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _catalog_name: &str,
-        _purge: bool,
-    ) -> Result<()> {
+    async fn truncate(&self, ctx: Arc<dyn TableContext>, purge: bool) -> Result<()> {
+        let (_, _) = (ctx, purge);
+
         Err(ErrorCode::UnImplement(format!(
             "truncate for table {} is not implemented",
             self.name()
         )))
     }
 
-    async fn optimize(&self, _ctx: Arc<dyn TableContext>, _keep_last_snapshot: bool) -> Result<()> {
+    async fn optimize(&self, ctx: Arc<dyn TableContext>, keep_last_snapshot: bool) -> Result<()> {
+        let (_, _) = (ctx, keep_last_snapshot);
+
         Ok(())
     }
 
-    async fn statistics(&self, _ctx: Arc<dyn TableContext>) -> Result<Option<TableStatistics>> {
+    async fn statistics(&self, ctx: Arc<dyn TableContext>) -> Result<Option<TableStatistics>> {
+        let _ = ctx;
+
         Ok(None)
     }
 
     async fn navigate_to(
         &self,
-        _ctx: Arc<dyn TableContext>,
-        _instant: &NavigationPoint,
+        ctx: Arc<dyn TableContext>,
+        instant: &NavigationPoint,
     ) -> Result<Arc<dyn Table>> {
+        let (_, _) = (ctx, instant);
+
         Err(ErrorCode::UnImplement(format!(
             "table {},  of engine type {}, does not support time travel",
             self.name(),
@@ -194,7 +203,9 @@ pub trait Table: Sync + Send {
         )))
     }
 
-    async fn delete(&self, _ctx: Arc<dyn TableContext>, _delete_plan: DeletePlan) -> Result<()> {
+    async fn delete(&self, ctx: Arc<dyn TableContext>, delete_plan: DeletePlan) -> Result<()> {
+        let (_, _) = (ctx, delete_plan);
+
         Err(ErrorCode::UnImplement(format!(
             "table {},  of engine type {}, does not support DELETE FROM",
             self.name(),
@@ -204,10 +215,11 @@ pub trait Table: Sync + Send {
 
     async fn compact(
         &self,
-        _ctx: Arc<dyn TableContext>,
-        _catalog: String,
-        _pipeline: &mut Pipeline,
+        ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
     ) -> Result<Option<Arc<dyn TableMutator>>> {
+        let (_, _) = (ctx, pipeline);
+
         Err(ErrorCode::UnImplement(format!(
             "table {},  of engine type {}, does not support compact",
             self.name(),
@@ -217,11 +229,12 @@ pub trait Table: Sync + Send {
 
     async fn recluster(
         &self,
-        _ctx: Arc<dyn TableContext>,
-        _catalog: String,
-        _pipeline: &mut Pipeline,
-        _push_downs: Option<Extras>,
+        ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+        push_downs: Option<Extras>,
     ) -> Result<Option<Arc<dyn TableMutator>>> {
+        let (_, _, _) = (ctx, pipeline, push_downs);
+
         Err(ErrorCode::UnImplement(format!(
             "table {},  of engine type {}, does not support recluster",
             self.name(),

@@ -14,15 +14,17 @@
 
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planner::plans::RemoveStagePlan;
+use common_storages_fuse::TableContext;
+use regex::Regex;
 
 use crate::interpreters::interpreter_common::list_files;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
-use crate::storages::stage::StageSourceHelper;
+use crate::storages::stage::StageTable;
 
 #[derive(Debug)]
 pub struct RemoveUserStageInterpreter {
@@ -45,14 +47,30 @@ impl Interpreter for RemoveUserStageInterpreter {
     #[tracing::instrument(level = "info", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = self.plan.clone();
-        let prefix = plan.stage.get_prefix();
 
-        let files = list_files(&self.ctx, &plan.stage, &plan.path, &plan.pattern).await?;
         let table_ctx: Arc<dyn TableContext> = self.ctx.clone();
-        let op = StageSourceHelper::get_op(&table_ctx, &self.plan.stage).await?;
+        let op = StageTable::get_op(&table_ctx, &self.plan.stage)?;
+
+        let files = list_files(&self.ctx, &plan.stage, &plan.path).await?;
+
+        let files = if plan.pattern.is_empty() {
+            files
+        } else {
+            let regex = Regex::new(&plan.pattern).map_err(|e| {
+                ErrorCode::SyntaxException(format!(
+                    "Pattern format invalid, got:{}, error:{:?}",
+                    &plan.pattern, e
+                ))
+            })?;
+
+            files
+                .into_iter()
+                .filter(|file| regex.is_match(&file.path))
+                .collect()
+        };
 
         for name in files.iter().map(|f| f.path.as_str()) {
-            op.object(&format!("{prefix}{name}")).delete().await?;
+            op.object(name).delete().await?;
         }
 
         Ok(PipelineBuildResult::create())

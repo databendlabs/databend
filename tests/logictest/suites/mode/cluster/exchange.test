@@ -6,11 +6,11 @@ Exchange
 ├── exchange type: Merge
 └── HashJoin
     ├── join type: INNER
-    ├── build keys: [numbers.number (#1)]
-    ├── probe keys: [numbers.number (#0)]
+    ├── build keys: [t1.number (#1)]
+    ├── probe keys: [t.number (#0)]
     ├── filters: []
     ├── Exchange(Build)
-    │   ├── exchange type: Hash(numbers.number (#1))
+    │   ├── exchange type: Hash(t1.number (#1))
     │   └── TableScan
     │       ├── table: default.system.numbers
     │       ├── read rows: 2
@@ -19,7 +19,7 @@ Exchange
     │       ├── partitions scanned: 1
     │       └── push downs: [filters: [], limit: NONE]
     └── Exchange(Probe)
-        ├── exchange type: Hash(numbers.number (#0))
+        ├── exchange type: Hash(t.number (#0))
         └── TableScan
             ├── table: default.system.numbers
             ├── read rows: 1
@@ -36,11 +36,11 @@ Exchange
 ├── exchange type: Merge
 └── HashJoin
     ├── join type: INNER
-    ├── build keys: [numbers.number (#2)]
-    ├── probe keys: [numbers.number (#0)]
+    ├── build keys: [t2.number (#2)]
+    ├── probe keys: [t.number (#0)]
     ├── filters: []
     ├── Exchange(Build)
-    │   ├── exchange type: Hash(numbers.number (#2))
+    │   ├── exchange type: Hash(t2.number (#2))
     │   └── TableScan
     │       ├── table: default.system.numbers
     │       ├── read rows: 3
@@ -50,11 +50,11 @@ Exchange
     │       └── push downs: [filters: [], limit: NONE]
     └── HashJoin(Probe)
         ├── join type: INNER
-        ├── build keys: [numbers.number (#1)]
-        ├── probe keys: [numbers.number (#0)]
+        ├── build keys: [t1.number (#1)]
+        ├── probe keys: [t.number (#0)]
         ├── filters: []
         ├── Exchange(Build)
-        │   ├── exchange type: Hash(numbers.number (#1))
+        │   ├── exchange type: Hash(t1.number (#1))
         │   └── TableScan
         │       ├── table: default.system.numbers
         │       ├── read rows: 2
@@ -63,7 +63,7 @@ Exchange
         │       ├── partitions scanned: 1
         │       └── push downs: [filters: [], limit: NONE]
         └── Exchange(Probe)
-            ├── exchange type: Hash(numbers.number (#0))
+            ├── exchange type: Hash(t.number (#0))
             └── TableScan
                 ├── table: default.system.numbers
                 ├── read rows: 1
@@ -80,11 +80,11 @@ Exchange
 ├── exchange type: Merge
 └── HashJoin
     ├── join type: INNER
-    ├── build keys: [numbers.number (#4)]
-    ├── probe keys: [b (#1)]
+    ├── build keys: [t2.number (#4)]
+    ├── probe keys: [t.b (#1)]
     ├── filters: []
     ├── Exchange(Build)
-    │   ├── exchange type: Hash(numbers.number (#4))
+    │   ├── exchange type: Hash(t2.number (#4))
     │   └── TableScan
     │       ├── table: default.system.numbers
     │       ├── read rows: 3
@@ -93,14 +93,14 @@ Exchange
     │       ├── partitions scanned: 1
     │       └── push downs: [filters: [], limit: NONE]
     └── Exchange(Probe)
-        ├── exchange type: Hash(b (#1))
+        ├── exchange type: Hash(t.b (#1))
         └── HashJoin
             ├── join type: INNER
-            ├── build keys: [numbers.number (#3)]
-            ├── probe keys: [numbers.number (#0)]
+            ├── build keys: [t1.number (#3)]
+            ├── probe keys: [t.a (#0)]
             ├── filters: []
             ├── Exchange(Build)
-            │   ├── exchange type: Hash(numbers.number (#3))
+            │   ├── exchange type: Hash(t1.number (#3))
             │   └── TableScan
             │       ├── table: default.system.numbers
             │       ├── read rows: 2
@@ -109,7 +109,7 @@ Exchange
             │       ├── partitions scanned: 1
             │       └── push downs: [filters: [], limit: NONE]
             └── Exchange(Probe)
-                ├── exchange type: Hash(numbers.number (#0))
+                ├── exchange type: Hash(t.a (#0))
                 └── EvalScalar
                     ├── expressions: [+(numbers.number (#0), 1)]
                     └── TableScan
@@ -128,11 +128,11 @@ Exchange
 ├── exchange type: Merge
 └── HashJoin
     ├── join type: INNER
-    ├── build keys: [CAST(numbers.number (#4) AS BIGINT UNSIGNED NULL)]
-    ├── probe keys: [CAST(number (#1) AS BIGINT UNSIGNED NULL)]
+    ├── build keys: [CAST(t1.number (#4) AS BIGINT UNSIGNED NULL)]
+    ├── probe keys: [CAST(t.number (#1) AS BIGINT UNSIGNED NULL)]
     ├── filters: []
     ├── Exchange(Build)
-    │   ├── exchange type: Hash(CAST(numbers.number (#4) AS BIGINT UNSIGNED NULL))
+    │   ├── exchange type: Hash(CAST(t1.number (#4) AS BIGINT UNSIGNED NULL))
     │   └── TableScan
     │       ├── table: default.system.numbers
     │       ├── read rows: 2
@@ -141,23 +141,22 @@ Exchange
     │       ├── partitions scanned: 1
     │       └── push downs: [filters: [], limit: NONE]
     └── Exchange(Probe)
-        ├── exchange type: Hash(CAST(number (#1) AS BIGINT UNSIGNED NULL))
-        └── Project
-            ├── columns: [number (#1)]
-            └── EvalScalar
-                ├── expressions: [sum(number) (#3)]
-                └── AggregateFinal
-                    ├── group by: [number]
-                    ├── aggregate functions: [sum(number)]
-                    └── Exchange
-                        ├── exchange type: Hash(_group_by_key)
-                        └── AggregatePartial
-                            ├── group by: [number]
-                            ├── aggregate functions: [sum(number)]
-                            └── TableScan
-                                ├── table: default.system.numbers
-                                ├── read rows: 1
-                                ├── read bytes: 8
-                                ├── partitions total: 1
-                                ├── partitions scanned: 1
-                                └── push downs: [filters: [], limit: NONE]
+        ├── exchange type: Hash(CAST(t.number (#1) AS BIGINT UNSIGNED NULL))
+        └── EvalScalar
+            ├── expressions: [sum(number) (#3)]
+            └── AggregateFinal
+                ├── group by: [number]
+                ├── aggregate functions: [sum(number)]
+                └── Exchange
+                    ├── exchange type: Hash(_group_by_key)
+                    └── AggregatePartial
+                        ├── group by: [number]
+                        ├── aggregate functions: [sum(number)]
+                        └── TableScan
+                            ├── table: default.system.numbers
+                            ├── read rows: 1
+                            ├── read bytes: 8
+                            ├── partitions total: 1
+                            ├── partitions scanned: 1
+                            └── push downs: [filters: [], limit: NONE]
+

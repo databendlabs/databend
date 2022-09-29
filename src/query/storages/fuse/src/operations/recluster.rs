@@ -45,7 +45,6 @@ impl FuseTable {
     pub(crate) async fn do_recluster(
         &self,
         ctx: Arc<dyn TableContext>,
-        catalog: String,
         pipeline: &mut Pipeline,
         push_downs: Option<Extras>,
     ) -> Result<Option<Arc<dyn TableMutator>>> {
@@ -116,7 +115,7 @@ impl FuseTable {
         let table_info = self.get_table_info();
         let description = statistics.get_description(table_info);
         let plan = ReadDataSourcePlan {
-            catalog,
+            catalog: table_info.catalog().to_string(),
             source_info: SourceInfo::TableSource(table_info.clone()),
             scan_fields: None,
             parts,
@@ -174,7 +173,7 @@ impl FuseTable {
             TransformCompact::try_create(
                 transform_input_port,
                 transform_output_port,
-                block_compactor.to_compactor(),
+                block_compactor.to_compactor(true),
             )
         })?;
 

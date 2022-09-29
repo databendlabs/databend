@@ -53,7 +53,7 @@ async fn test_null_table() -> Result<()> {
 
     // truncate.
     {
-        table.truncate(ctx, "default", false).await?;
+        table.truncate(ctx, false).await?;
     }
 
     Ok(())

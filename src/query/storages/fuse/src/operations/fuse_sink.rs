@@ -18,12 +18,14 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use common_arrow::parquet::compression::CompressionOptions;
 use common_arrow::parquet::metadata::ThriftFileMetaData;
+use common_cache::Cache;
 use common_catalog::table_context::TableContext;
 use common_datablocks::serialize_data_blocks;
 use common_datablocks::serialize_data_blocks_with_compression;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::caches::CacheManager;
 use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::Statistics;
@@ -61,6 +63,10 @@ enum State {
     GenerateSegment,
     SerializedSegment {
         data: Vec<u8>,
+        location: String,
+        segment: Arc<SegmentInfo>,
+    },
+    PreCommitSegment {
         location: String,
         segment: Arc<SegmentInfo>,
     },
@@ -118,7 +124,7 @@ impl Processor for FuseTableSink {
     fn event(&mut self) -> Result<Event> {
         if matches!(
             &self.state,
-            State::NeedSerialize(_) | State::GenerateSegment
+            State::NeedSerialize(_) | State::GenerateSegment | State::PreCommitSegment { .. }
         ) {
             return Ok(Event::Sync);
         }
@@ -161,11 +167,11 @@ impl Processor for FuseTableSink {
 
                 let bloom_index_state = {
                     // write index
-                    let bloom_index = BloomFilterIndexer::try_create(self.ctx.clone(), &[&block])?;
-                    let index_block = bloom_index.bloom_block;
+                    let bloom_index = BlockFilter::try_create(&[&block])?;
+                    let index_block = bloom_index.filter_block;
                     let location = self.meta_locations.block_bloom_index_location(&block_id);
                     let mut data = Vec::with_capacity(100 * 1024);
-                    let index_block_schema = &bloom_index.bloom_schema;
+                    let index_block_schema = &bloom_index.filter_schema;
                     let (size, _) = serialize_data_blocks_with_compression(
                         vec![index_block],
                         index_block_schema,
@@ -212,6 +218,17 @@ impl Processor for FuseTableSink {
                     location: self.meta_locations.gen_segment_info_location(),
                     segment: Arc::new(segment_info),
                 }
+            }
+            State::PreCommitSegment { location, segment } => {
+                if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
+                    let cache = &mut segment_cache.write();
+                    cache.put(location.clone(), segment.clone());
+                }
+
+                // TODO: dyn operation for table trait
+                let log_entry = AppendOperationLogEntry::new(location, segment);
+                let data_block = DataBlock::try_from(log_entry)?;
+                self.ctx.push_precommit_block(data_block);
             }
             _state => {
                 return Err(ErrorCode::LogicalError("Unknown state for fuse table sink"));
@@ -266,10 +283,7 @@ impl Processor for FuseTableSink {
             } => {
                 self.data_accessor.object(&location).write(data).await?;
 
-                // TODO: dyn operation for table trait
-                let log_entry = AppendOperationLogEntry::new(location, segment);
-                let data_block = DataBlock::try_from(log_entry)?;
-                self.ctx.push_precommit_block(data_block);
+                self.state = State::PreCommitSegment { location, segment };
             }
             _state => {
                 return Err(ErrorCode::LogicalError(

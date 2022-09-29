@@ -49,7 +49,7 @@ impl<'a> SegmentWriter<'a> {
         write_meta(self.data_accessor, segment_location.0.as_str(), &segment).await?;
 
         if let Some(ref cache) = self.cache {
-            let cache = &mut cache.write().await;
+            let cache = &mut cache.write();
             cache.put(segment_location.0.clone(), Arc::new(segment));
         }
         Ok(segment_location)

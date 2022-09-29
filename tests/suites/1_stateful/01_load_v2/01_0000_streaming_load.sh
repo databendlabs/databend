@@ -82,7 +82,7 @@ echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime_less;" | $MYSQL_CL
 
 # load parquet with mismatch schema
 cat $CURDIR/../ddl/ontime.sql | sed 's/ontime/ontime_test_mismatch/g' | sed 's/DATE/VARCHAR/g' | $MYSQL_CLIENT_CONNECT
-curl -s -H "insert_sql:insert into ontime_test_mismatch format Parquet" -H "skip_header:1" -F "upload=@/tmp/ontime_200.parquet" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | grep -c 'Code: 1024'
+curl -s -H "insert_sql:insert into ontime_test_mismatch format Parquet" -H "skip_header:1" -F "upload=@/tmp/ontime_200.parquet" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | grep -c 'parquet schema mismatch'
 
 
 echo "drop table ontime_streaming_load;" | $MYSQL_CLIENT_CONNECT

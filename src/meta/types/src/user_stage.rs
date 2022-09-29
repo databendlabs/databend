@@ -135,17 +135,16 @@ impl FromStr for StageFileFormatType {
     fn from_str(s: &str) -> std::result::Result<Self, String> {
         match s.to_uppercase().as_str() {
             "CSV" => Ok(StageFileFormatType::Csv),
-            "TSV" => Ok(StageFileFormatType::Tsv),
+            "TSV" | "TABSEPARATED" => Ok(StageFileFormatType::Tsv),
             "JSON" => Ok(StageFileFormatType::Json),
-            "NDJSON" => Ok(StageFileFormatType::NdJson),
+            "NDJSON" | "JSONEACHROW" => Ok(StageFileFormatType::NdJson),
             "AVRO" => Ok(StageFileFormatType::Avro),
             "ORC" => Ok(StageFileFormatType::Orc),
             "PARQUET" => Ok(StageFileFormatType::Parquet),
             "XML" => Ok(StageFileFormatType::Xml),
-            _ => Err(
-                "Unknown file format type, must one of { CSV | JSON | AVRO | ORC | PARQUET | XML }"
-                    .to_string(),
-            ),
+            _ => Err(format!(
+                "Unknown file format type '{s}', must one of ( CSV | TSV | JSON | AVRO | ORC | PARQUET | XML)"
+            )),
         }
     }
 }
@@ -216,12 +215,14 @@ impl FromStr for OnErrorMode {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug, Eq, PartialEq)]
 #[serde(default)]
 pub struct CopyOptions {
     pub on_error: OnErrorMode,
     pub size_limit: usize,
     pub purge: bool,
+    pub single: bool,
+    pub max_file_size: usize,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]
@@ -244,16 +245,6 @@ impl UserStageInfo {
             stage_type: StageType::External,
             stage_params: StageParams { storage },
             ..Default::default()
-        }
-    }
-
-    pub fn get_prefix(&self) -> String {
-        match self.stage_type {
-            StageType::External => "/".to_string(),
-            StageType::Internal => {
-                // It's internal, so we should prefix with stage name.
-                format!("/stage/{}/", self.stage_name)
-            }
         }
     }
 }

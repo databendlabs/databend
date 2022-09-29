@@ -16,7 +16,7 @@ use std::ops::Rem;
 
 use common_expression::types::number::*;
 use common_expression::types::ArgType;
-use common_expression::types::GenericMap;
+use common_expression::FunctionContext;
 use common_expression::Value;
 use common_expression::ValueRef;
 use num_traits::AsPrimitive;
@@ -28,7 +28,7 @@ use strength_reduce::StrengthReducedU8;
 pub(crate) fn vectorize_modulo<L, R, M, O>() -> impl Fn(
     ValueRef<NumberType<L>>,
     ValueRef<NumberType<R>>,
-    &GenericMap,
+    FunctionContext,
 ) -> Result<Value<NumberType<O>>, String>
 + Copy
 where

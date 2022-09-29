@@ -63,9 +63,7 @@ impl Interpreter for OptimizeTableInterpreter {
 
         if do_compact {
             let mut pipeline = Pipeline::create();
-            let mutator = table
-                .compact(ctx.clone(), plan.catalog.clone(), &mut pipeline)
-                .await?;
+            let mutator = table.compact(ctx.clone(), &mut pipeline).await?;
 
             if let Some(mutator) = mutator {
                 let settings = ctx.get_settings();
@@ -77,10 +75,7 @@ impl Interpreter for OptimizeTableInterpreter {
                 executor.execute()?;
                 drop(executor);
 
-                let catalog_name = ctx.get_current_catalog();
-                mutator
-                    .try_commit(&catalog_name, table.get_table_info())
-                    .await?;
+                mutator.try_commit(table.get_table_info()).await?;
             }
 
             if do_purge {

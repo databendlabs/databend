@@ -16,6 +16,8 @@ use std::borrow::Cow;
 
 use super::constants::*;
 use super::error::Error;
+use super::error::ParseErrorCode;
+use super::number::Number;
 use super::util::parse_escaped_string;
 use super::value::Object;
 use super::value::Value;
@@ -28,29 +30,30 @@ pub fn parse_value(buf: &[u8]) -> Result<Value<'_>, Error> {
     parser.parse()
 }
 
-#[repr(transparent)]
 struct Parser<'a> {
     buf: &'a [u8],
+    idx: usize,
 }
 
 impl<'a> Parser<'a> {
     fn new(buf: &'a [u8]) -> Parser<'a> {
-        Self { buf }
+        Self { buf, idx: 0 }
     }
 
     fn parse(&mut self) -> Result<Value<'a>, Error> {
         let val = self.parse_json_value()?;
         self.skip_unused();
-        if !self.buf.is_empty() {
-            return Err(Error::UnexpectedTrailingCharacters);
+        if self.idx < self.buf.len() {
+            self.step();
+            return Err(self.error(ParseErrorCode::UnexpectedTrailingCharacters));
         }
         Ok(val)
     }
 
     fn parse_json_value(&mut self) -> Result<Value<'a>, Error> {
         self.skip_unused();
-        let byte = self.buf.first().ok_or(Error::InvalidEOF)?;
-        match byte {
+        let c = self.next()?;
+        match c {
             b'n' => self.parse_json_null(),
             b't' => self.parse_json_true(),
             b'f' => self.parse_json_false(),
@@ -58,147 +61,234 @@ impl<'a> Parser<'a> {
             b'"' => self.parse_json_string(),
             b'[' => self.parse_json_array(),
             b'{' => self.parse_json_object(),
-            _ => Err(Error::InvalidValue),
+            _ => {
+                self.step();
+                Err(self.error(ParseErrorCode::ExpectedSomeValue))
+            }
         }
+    }
+
+    fn next(&mut self) -> Result<&u8, Error> {
+        match self.buf.get(self.idx) {
+            Some(c) => Ok(c),
+            None => Err(self.error(ParseErrorCode::InvalidEOF)),
+        }
+    }
+
+    fn must_is(&mut self, c: u8) -> Result<(), Error> {
+        match self.buf.get(self.idx) {
+            Some(v) => {
+                self.step();
+                if v == &c {
+                    Ok(())
+                } else {
+                    Err(self.error(ParseErrorCode::ExpectedSomeIdent))
+                }
+            }
+            None => Err(self.error(ParseErrorCode::InvalidEOF)),
+        }
+    }
+
+    fn check_next(&mut self, c: u8) -> bool {
+        if self.idx < self.buf.len() {
+            let v = self.buf.get(self.idx).unwrap();
+            if v == &c {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn check_next_either(&mut self, c1: u8, c2: u8) -> bool {
+        if self.idx < self.buf.len() {
+            let v = self.buf.get(self.idx).unwrap();
+            if v == &c1 || v == &c2 {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn check_digit(&mut self) -> bool {
+        if self.idx < self.buf.len() {
+            let v = self.buf.get(self.idx).unwrap();
+            if v.is_ascii_digit() {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn step_digits(&mut self) -> Result<usize, Error> {
+        if self.idx == self.buf.len() {
+            return Err(self.error(ParseErrorCode::InvalidEOF));
+        }
+        let mut len = 0;
+        while self.idx < self.buf.len() {
+            let c = self.buf.get(self.idx).unwrap();
+            if !c.is_ascii_digit() {
+                break;
+            }
+            len += 1;
+            self.step();
+        }
+        Ok(len)
+    }
+
+    #[inline]
+    fn step(&mut self) {
+        self.idx += 1;
+    }
+
+    #[inline]
+    fn step_by(&mut self, n: usize) {
+        self.idx += n;
+    }
+
+    fn error(&self, code: ParseErrorCode) -> Error {
+        let pos = self.idx;
+        Error::Syntax(code, pos)
     }
 
     fn skip_unused(&mut self) {
-        let mut idx = 0;
-        while let Some(byte) = self.buf.get(idx) {
-            if !matches!(byte, b'\n' | b' ' | b'\r' | b'\t') {
+        while self.idx < self.buf.len() {
+            let c = self.buf.get(self.idx).unwrap();
+            if !matches!(c, b'\n' | b' ' | b'\r' | b'\t') {
                 break;
-            } else {
-                idx += 1;
             }
+            self.step();
         }
-        self.buf = &self.buf[idx..]
     }
 
     fn parse_json_null(&mut self) -> Result<Value<'a>, Error> {
-        let data: [u8; NULL_LEN] = self
-            .buf
-            .get(..NULL_LEN)
-            .ok_or(Error::InvalidEOF)?
-            .try_into()
-            .unwrap();
-        self.buf = &self.buf[NULL_LEN..];
-        if data != [b'n', b'u', b'l', b'l'] {
-            return Err(Error::InvalidNullValue);
+        let data = [b'n', b'u', b'l', b'l'];
+        for v in data.into_iter() {
+            self.must_is(v)?;
         }
         Ok(Value::Null)
     }
 
     fn parse_json_true(&mut self) -> Result<Value<'a>, Error> {
-        let data: [u8; TRUE_LEN] = self
-            .buf
-            .get(..TRUE_LEN)
-            .ok_or(Error::InvalidEOF)?
-            .try_into()
-            .unwrap();
-        self.buf = &self.buf[TRUE_LEN..];
-        if data != [b't', b'r', b'u', b'e'] {
-            return Err(Error::InvalidTrueValue);
+        let data = [b't', b'r', b'u', b'e'];
+        for v in data.into_iter() {
+            self.must_is(v)?;
         }
         Ok(Value::Bool(true))
     }
 
     fn parse_json_false(&mut self) -> Result<Value<'a>, Error> {
-        let data: [u8; FALSE_LEN] = self
-            .buf
-            .get(..FALSE_LEN)
-            .ok_or(Error::InvalidEOF)?
-            .try_into()
-            .unwrap();
-        self.buf = &self.buf[FALSE_LEN..];
-        if data != [b'f', b'a', b'l', b's', b'e'] {
-            return Err(Error::InvalidFalseValue);
+        let data = [b'f', b'a', b'l', b's', b'e'];
+        for v in data.into_iter() {
+            self.must_is(v)?;
         }
         Ok(Value::Bool(false))
     }
 
     fn parse_json_number(&mut self) -> Result<Value<'a>, Error> {
-        let mut idx = 0;
-        let mut has_point = false;
-        let mut has_exponential = false;
+        let start_idx = self.idx;
 
-        while let Some(byte) = self.buf.get(idx) {
-            if idx == 0 && *byte == b'-' {
-                idx += 1;
-                continue;
-            }
-            match byte {
-                b'0'..=b'9' => {}
-                b'.' => {
-                    if has_point || has_exponential {
-                        return Err(Error::InvalidNumberValue);
-                    }
-                    has_point = true;
-                }
-                b'e' | b'E' => {
-                    if has_exponential {
-                        return Err(Error::InvalidNumberValue);
-                    }
-                    has_exponential = true;
-                    if let Some(next_byte) = self.buf.get(idx + 1) {
-                        if *next_byte == b'+' || *next_byte == b'-' {
-                            idx += 1;
-                        }
-                    }
-                }
-                _ => break,
-            }
-            idx += 1
-        }
-        if idx == 0 {
-            return Err(Error::InvalidNumberValue);
-        }
-        let data = &self.buf[..idx];
-        self.buf = &self.buf[idx..];
+        let mut has_fraction = false;
+        let mut has_exponent = false;
+        let mut negative: bool = false;
 
-        let s = std::str::from_utf8(data).unwrap();
-        match s.parse() {
-            Ok(dec) => Ok(Value::Number(dec)),
-            Err(_) => Err(Error::InvalidNumberValue),
+        if self.check_next(b'-') {
+            negative = true;
+            self.step();
+        }
+        if self.check_next(b'0') {
+            self.step();
+            if self.check_digit() {
+                self.step();
+                return Err(self.error(ParseErrorCode::InvalidNumberValue));
+            }
+        } else {
+            let len = self.step_digits()?;
+            if len == 0 {
+                self.step();
+                return Err(self.error(ParseErrorCode::InvalidNumberValue));
+            }
+        }
+        if self.check_next(b'.') {
+            has_fraction = true;
+            self.step();
+            let len = self.step_digits()?;
+            if len == 0 {
+                self.step();
+                return Err(self.error(ParseErrorCode::InvalidNumberValue));
+            }
+        }
+        if self.check_next_either(b'E', b'e') {
+            has_exponent = true;
+            self.step();
+            if self.check_next_either(b'+', b'-') {
+                self.step();
+            }
+            let len = self.step_digits()?;
+            if len == 0 {
+                self.step();
+                return Err(self.error(ParseErrorCode::InvalidNumberValue));
+            }
+        }
+        let s = std::str::from_utf8(&self.buf[start_idx..self.idx]).unwrap();
+
+        if !has_fraction && !has_exponent {
+            if !negative {
+                if let Ok(v) = s.parse::<u64>() {
+                    return Ok(Value::Number(Number::UInt64(v)));
+                }
+            } else if let Ok(v) = s.parse::<i64>() {
+                return Ok(Value::Number(Number::Int64(v)));
+            }
+        }
+
+        match fast_float::parse(s) {
+            Ok(v) => Ok(Value::Number(Number::Float64(v))),
+            Err(_) => Err(self.error(ParseErrorCode::InvalidNumberValue)),
         }
     }
 
     fn parse_json_string(&mut self) -> Result<Value<'a>, Error> {
-        let byte = self.buf.first().ok_or(Error::InvalidEOF)?;
-        if *byte != b'"' {
-            return Err(Error::InvalidStringValue);
-        }
+        self.must_is(b'"')?;
 
-        let mut idx = 1;
+        let start_idx = self.idx;
         let mut escapes = 0;
         loop {
-            let byte = self.buf.get(idx).ok_or(Error::InvalidEOF)?;
-            idx += 1;
-            match byte {
+            let c = self.next()?;
+            if c.is_ascii_control() {
+                return Err(self.error(ParseErrorCode::ControlCharacterWhileParsingString));
+            }
+            match c {
                 b'\\' => {
+                    self.step();
                     escapes += 1;
-                    let next_byte = self.buf.get(idx).ok_or(Error::InvalidEOF)?;
-                    if *next_byte == b'u' {
-                        idx += UNICODE_LEN + 1;
+                    let next_c = self.next()?;
+                    if *next_c == b'u' {
+                        self.step_by(UNICODE_LEN + 1);
                     } else {
-                        idx += 1;
+                        self.step();
                     }
+                    continue;
                 }
                 b'"' => {
+                    self.step();
                     break;
                 }
                 _ => {}
             }
+            self.step();
         }
 
-        let mut data = &self.buf[1..idx - 1];
-        self.buf = &self.buf[idx..];
+        let mut data = &self.buf[start_idx..self.idx - 1];
         let val = if escapes > 0 {
-            let mut str_buf = String::with_capacity(idx - 2 - escapes);
+            let len = self.idx - 1 - start_idx - escapes;
+            let mut idx = start_idx + 1;
+            let mut str_buf = String::with_capacity(len);
             while !data.is_empty() {
+                idx += 1;
                 let byte = data[0];
                 if byte == b'\\' {
                     data = &data[1..];
-                    data = parse_escaped_string(data, &mut str_buf)?;
+                    data = parse_escaped_string(data, &mut idx, &mut str_buf)?;
                 } else {
                     str_buf.push(byte as char);
                     data = &data[1..];
@@ -208,31 +298,28 @@ impl<'a> Parser<'a> {
         } else {
             std::str::from_utf8(data)
                 .map(Cow::Borrowed)
-                .map_err(|_| Error::InvalidStringValue)?
+                .map_err(|_| self.error(ParseErrorCode::InvalidStringValue))?
         };
         Ok(Value::String(val))
     }
 
     fn parse_json_array(&mut self) -> Result<Value<'a>, Error> {
-        let byte = self.buf.first().ok_or(Error::InvalidEOF)?;
-        if *byte != b'[' {
-            return Err(Error::InvalidArrayValue);
-        }
-        self.buf = &self.buf[1..];
+        self.must_is(b'[')?;
+
         let mut first = true;
         let mut values = Vec::new();
         loop {
             self.skip_unused();
-            let byte = self.buf.first().ok_or(Error::InvalidEOF)?;
-            if *byte == b']' {
-                self.buf = &self.buf[1..];
+            let c = self.next()?;
+            if *c == b']' {
+                self.step();
                 break;
             }
             if !first {
-                if *byte != b',' {
-                    return Err(Error::InvalidArrayValue);
+                if *c != b',' {
+                    return Err(self.error(ParseErrorCode::ExpectedArrayCommaOrEnd));
                 }
-                self.buf = &self.buf[1..];
+                self.step();
             }
             first = false;
             let value = self.parse_json_value()?;
@@ -242,35 +329,34 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_json_object(&mut self) -> Result<Value<'a>, Error> {
-        let byte = self.buf.first().ok_or(Error::InvalidEOF)?;
-        if *byte != b'{' {
-            return Err(Error::InvalidObjectValue);
-        }
-        self.buf = &self.buf[1..];
+        self.must_is(b'{')?;
+
         let mut first = true;
         let mut obj = Object::new();
         loop {
             self.skip_unused();
-            let byte = self.buf.first().ok_or(Error::InvalidEOF)?;
-            if *byte == b'}' {
-                self.buf = &self.buf[1..];
+            let c = self.next()?;
+            if *c == b'}' {
+                self.step();
                 break;
             }
             if !first {
-                if *byte != b',' {
-                    return Err(Error::InvalidObjectValue);
+                if *c != b',' {
+                    return Err(self.error(ParseErrorCode::ExpectedObjectCommaOrEnd));
                 }
-                self.buf = &self.buf[1..];
+                self.step();
             }
             first = false;
-            self.skip_unused();
-            let key = self.parse_json_string()?;
-            self.skip_unused();
-            let byte = self.buf.first().ok_or(Error::InvalidEOF)?;
-            if *byte != b':' {
-                return Err(Error::InvalidObjectValue);
+            let key = self.parse_json_value()?;
+            if !key.is_string() {
+                return Err(self.error(ParseErrorCode::KeyMustBeAString));
             }
-            self.buf = &self.buf[1..];
+            self.skip_unused();
+            let c = self.next()?;
+            if *c != b':' {
+                return Err(self.error(ParseErrorCode::ExpectedColon));
+            }
+            self.step();
             let value = self.parse_json_value()?;
 
             let k = key.as_str().unwrap();

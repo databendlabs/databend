@@ -125,8 +125,15 @@ impl AggregatePartial {
             fields.push(DataField::new(agg.column_id.as_str(), Vu8::to_data_type()));
         }
         if !self.group_by.is_empty() {
-            let sample_block = DataBlock::empty_with_schema(input_schema);
-            let method = DataBlock::choose_hash_method(&sample_block, &self.group_by)?;
+            let sample_block = DataBlock::empty_with_schema(input_schema.clone());
+            let method = DataBlock::choose_hash_method(
+                &sample_block,
+                &self
+                    .group_by
+                    .iter()
+                    .map(|name| input_schema.index_of(name))
+                    .collect::<Result<Vec<_>>>()?,
+            )?;
             fields.push(DataField::new("_group_by_key", method.data_type()));
         }
         Ok(DataSchemaRefExt::create(fields))
@@ -203,7 +210,7 @@ impl HashJoin {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let mut fields = self.probe.output_schema()?.fields().clone();
         match self.join_type {
-            JoinType::Left => {
+            JoinType::Left | JoinType::Single => {
                 for field in self.build.output_schema()?.fields() {
                     fields.push(DataField::new(
                         field.name().as_str(),
@@ -211,7 +218,6 @@ impl HashJoin {
                     ));
                 }
             }
-
             JoinType::Right => {
                 fields.clear();
                 for field in self.probe.output_schema()?.fields() {
@@ -227,11 +233,28 @@ impl HashJoin {
                     ));
                 }
             }
-
-            JoinType::Semi | JoinType::Anti => {
+            JoinType::Full => {
+                fields.clear();
+                for field in self.probe.output_schema()?.fields() {
+                    fields.push(DataField::new(
+                        field.name().as_str(),
+                        wrap_nullable(field.data_type()),
+                    ));
+                }
+                for field in self.build.output_schema()?.fields() {
+                    fields.push(DataField::new(
+                        field.name().as_str(),
+                        wrap_nullable(field.data_type()),
+                    ));
+                }
+            }
+            JoinType::LeftSemi | JoinType::LeftAnti => {
                 // Do nothing
             }
-
+            JoinType::RightSemi | JoinType::RightAnti => {
+                fields.clear();
+                fields = self.build.output_schema()?.fields().clone();
+            }
             JoinType::Mark => {
                 fields.clear();
                 fields = self.build.output_schema()?.fields().clone();
@@ -313,6 +336,7 @@ impl ExchangeSink {
 pub struct UnionAll {
     pub left: Box<PhysicalPlan>,
     pub right: Box<PhysicalPlan>,
+    pub pairs: Vec<(String, String)>,
     pub schema: DataSchemaRef,
 }
 

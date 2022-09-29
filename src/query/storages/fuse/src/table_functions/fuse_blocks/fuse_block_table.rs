@@ -18,7 +18,7 @@ use std::sync::Arc;
 use common_catalog::catalog::CATALOG_DEFAULT;
 use common_datablocks::DataBlock;
 use common_exception::Result;
-use common_legacy_planners::Expression;
+use common_legacy_expression::LegacyExpression;
 use common_legacy_planners::Extras;
 use common_legacy_planners::Partitions;
 use common_legacy_planners::ReadDataSourcePlan;
@@ -101,7 +101,7 @@ impl Table for FuseBlockTable {
         Ok((Statistics::default(), vec![]))
     }
 
-    fn table_args(&self) -> Option<Vec<Expression>> {
+    fn table_args(&self) -> Option<Vec<LegacyExpression>> {
         let mut args = Vec::new();
         args.push(string_literal(self.arg_database_name.as_str()));
         args.push(string_literal(self.arg_table_name.as_str()));

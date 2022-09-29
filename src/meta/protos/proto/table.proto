@@ -26,30 +26,6 @@ message DbIdTableName {
   string table_name = 2;
 }
 
-// Complete table info.
-message TableInfo {
-  uint64 ver = 100;
-  uint64 min_compatible = 101;
-
-  TableIdent ident = 1;
-
-  /// For a table it is `db_name.table_name`.
-  /// For a table function, it is `table_name(args)`
-  string desc = 2;
-
-  /// `name` is meant to be used with table-function.
-  /// Table-function is identified by `name`.
-  /// A table in the contrast, can only be identified by table-id.
-  string name = 3;
-
-  /// The essential information about a table definition.
-  ///
-  /// It is about what a table actually is.
-  /// `name`, `id` or `version` is not included in the table structure
-  /// definition.
-  TableMeta meta = 4;
-}
-
 // The identifier of a table by name. Names can be changed.
 // There is no guarantee that two get-table request by name will return the same
 // instance.
@@ -88,6 +64,9 @@ message TableMeta {
 
   // Table schema, i.e., columns definition.
   DataSchema schema = 1;
+
+  // Table catalog.
+  string catalog = 10;
 
   // Table engine.
   string engine = 6;

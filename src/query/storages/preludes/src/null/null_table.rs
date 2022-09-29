@@ -101,7 +101,7 @@ impl Table for NullTable {
         Ok(())
     }
 
-    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: &str, _: bool) -> Result<()> {
+    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: bool) -> Result<()> {
         Ok(())
     }
 }

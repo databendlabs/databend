@@ -35,8 +35,8 @@ impl BlockCompactor {
     }
 
     pub fn check_perfect_block(&self, row_count: usize, block_size: usize) -> bool {
-        if (row_count >= self.min_rows_per_block && row_count <= self.max_rows_per_block)
-            || block_size >= self.max_bytes_per_block
+        if row_count <= self.max_rows_per_block
+            && (row_count >= self.min_rows_per_block || block_size >= self.max_bytes_per_block)
         {
             return true;
         }
@@ -50,11 +50,12 @@ impl BlockCompactor {
         false
     }
 
-    pub fn to_compactor(&self) -> Compactor {
+    pub fn to_compactor(&self, is_recluster: bool) -> Compactor {
         Compactor::new(
             self.max_rows_per_block,
             self.min_rows_per_block,
             self.max_bytes_per_block,
+            is_recluster,
         )
     }
 }

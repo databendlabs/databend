@@ -22,7 +22,7 @@ use common_datavalues::DataSchemaRefExt;
 use common_datavalues::Series;
 use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
-use common_legacy_planners::Expression;
+use common_legacy_expression::LegacyExpression;
 use common_legacy_planners::Projection;
 
 use crate::operations::mutation::deletion_mutator::Deletion;
@@ -34,7 +34,7 @@ pub async fn delete_from_block(
     block_meta: &BlockMeta,
     ctx: &Arc<dyn TableContext>,
     filter_column_proj: Projection,
-    filter_expr: &Expression,
+    filter_expr: &LegacyExpression,
 ) -> Result<Deletion> {
     let mut filtering_whole_block = false;
 

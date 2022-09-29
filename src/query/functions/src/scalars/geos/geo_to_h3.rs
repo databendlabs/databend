@@ -114,7 +114,7 @@ impl Function for GeoToH3Function {
             // x must be Longitude and y must be Latitude
             // `h3ron` will transform `Coordinate{x, y}` to `GeoCoord{lat:y, lon:x}` internally.
             let coord = Coordinate { x: lon, y: lat };
-            let h3_cell = H3Cell::from_coordinate_unchecked(&coord, res);
+            let h3_cell = H3Cell::from_coordinate(coord, res).unwrap();
             builder.append(h3_cell.h3index());
         }
 

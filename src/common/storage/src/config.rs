@@ -35,10 +35,12 @@ pub struct StorageConfig {
 pub enum StorageParams {
     Azblob(StorageAzblobConfig),
     Fs(StorageFsConfig),
+    Ftp(StorageFtpConfig),
     Gcs(StorageGcsConfig),
     #[cfg(feature = "storage-hdfs")]
     Hdfs(StorageHdfsConfig),
     Http(StorageHttpConfig),
+    Ipfs(StorageIpfsConfig),
     Memory,
     Obs(StorageObsConfig),
     S3(StorageS3Config),
@@ -60,6 +62,9 @@ impl Display for StorageParams {
                 v.container, v.root, v.endpoint_url
             ),
             StorageParams::Fs(v) => write!(f, "fs://root={}", v.root),
+            StorageParams::Ftp(v) => {
+                write!(f, "ftp://root={},endpoint={}", v.root, v.endpoint)
+            }
             StorageParams::Gcs(v) => write!(
                 f,
                 "gcs://bucket={},root={},endpoint={}",
@@ -71,6 +76,9 @@ impl Display for StorageParams {
             }
             StorageParams::Http(v) => {
                 write!(f, "http://endpoint={},paths={:?}", v.endpoint_url, v.paths)
+            }
+            StorageParams::Ipfs(c) => {
+                write!(f, "ipfs://endpoint={},root={}", c.endpoint_url, c.root)
             }
             StorageParams::Memory => write!(f, "memory://"),
             StorageParams::Obs(v) => write!(
@@ -97,9 +105,11 @@ impl StorageParams {
         match self {
             StorageParams::Azblob(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Fs(_) => false,
+            StorageParams::Ftp(v) => v.endpoint.starts_with("ftps://"),
             #[cfg(feature = "storage-hdfs")]
             StorageParams::Hdfs(_) => false,
             StorageParams::Http(v) => v.endpoint_url.starts_with("https://"),
+            StorageParams::Ipfs(c) => c.endpoint_url.starts_with("https://"),
             StorageParams::Memory => false,
             StorageParams::Obs(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::S3(v) => v.endpoint_url.starts_with("https://"),
@@ -141,6 +151,38 @@ impl Default for StorageFsConfig {
         Self {
             root: "_data".to_string(),
         }
+    }
+}
+
+pub const STORAGE_FTP_DEFAULT_ENDPOINT: &str = "ftps://127.0.0.1";
+/// Config for FTP and FTPS data source
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StorageFtpConfig {
+    pub endpoint: String,
+    pub root: String,
+    pub username: String,
+    pub password: String,
+}
+
+impl Default for StorageFtpConfig {
+    fn default() -> Self {
+        Self {
+            endpoint: STORAGE_FTP_DEFAULT_ENDPOINT.to_string(),
+            username: "".to_string(),
+            password: "".to_string(),
+            root: "/".to_string(),
+        }
+    }
+}
+
+impl Debug for StorageFtpConfig {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StorageFtpConfig")
+            .field("endpoint", &self.endpoint)
+            .field("root", &self.root)
+            .field("username", &self.username)
+            .field("password", &mask_string(self.password.as_str(), 3))
+            .finish()
     }
 }
 
@@ -261,6 +303,14 @@ impl Debug for StorageS3Config {
 pub struct StorageHttpConfig {
     pub endpoint_url: String,
     pub paths: Vec<String>,
+}
+
+pub const STORAGE_IPFS_DEFAULT_ENDPOINT: &str = "https://ipfs.io";
+/// Config for IPFS storage backend
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StorageIpfsConfig {
+    pub endpoint_url: String,
+    pub root: String,
 }
 
 /// Config for storage backend obs.

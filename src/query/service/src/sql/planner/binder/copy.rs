@@ -500,6 +500,12 @@ impl<'a> Binder {
             if stmt.size_limit != 0 {
                 stage.copy_options.size_limit = stmt.size_limit;
             }
+            // max_file_size.
+            if stmt.max_file_size != 0 {
+                stage.copy_options.max_file_size = stmt.max_file_size;
+            }
+
+            stage.copy_options.single = stmt.single;
             stage.copy_options.purge = stmt.purge;
         }
 
@@ -544,11 +550,8 @@ pub async fn parse_stage_location(
 
     let path = names.get(1).unwrap_or(&"").trim_start_matches('/');
 
-    let prefix = stage.get_prefix();
-    let relative_path = format!("{prefix}{path}");
-
-    debug!("parsed stage: {stage:?}, path: {relative_path}");
-    Ok((stage, relative_path))
+    debug!("parsed stage: {stage:?}, path: {path}");
+    Ok((stage, path.to_string()))
 }
 
 /// parse_stage_location_v2 work similar to parse_stage_location.
@@ -565,11 +568,8 @@ pub async fn parse_stage_location_v2(
         .get_stage(&ctx.get_tenant(), name)
         .await?;
 
-    let prefix = stage.get_prefix();
-    debug_assert!(prefix.ends_with('/'), "prefix should ends with '/'");
-
     // prefix must be endswith `/`, so we should trim path here.
-    let relative_path = format!("{prefix}{}", path.trim_start_matches('/'));
+    let relative_path = path.trim_start_matches('/').to_string();
 
     debug!("parsed stage: {stage:?}, path: {relative_path}");
     Ok((stage, relative_path))
