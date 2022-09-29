@@ -14,8 +14,6 @@
 
 // use super::aggregate_stddev_pop::aggregate_stddev_pop_function_desc;
 // use super::aggregate_window_funnel::aggregate_window_funnel_function_desc;
-// use super::AggregateIfCombinator;
-// use crate::aggregates::aggregate_retention::aggregate_retention_function_desc;
 
 use super::aggregate_arg_min_max::aggregate_arg_max_function_desc;
 use super::aggregate_arg_min_max::aggregate_arg_min_function_desc;
@@ -30,6 +28,7 @@ use super::aggregate_min_max_any::aggregate_min_function_desc;
 use super::AggregateCountFunction;
 use super::AggregateFunctionFactory;
 use super::AggregateIfCombinator;
+use crate::aggregates::aggregate_retention::aggregate_retention_function_desc;
 use crate::aggregates::aggregate_sum::aggregate_sum_function_desc;
 
 pub struct Aggregators;
@@ -56,8 +55,8 @@ impl Aggregators {
         factory.register("covar_pop", aggregate_covariance_population_desc());
 
         //     factory.register("window_funnel", aggregate_window_funnel_function_desc());
-        //
-        //     factory.register("retention", aggregate_retention_function_desc());
+
+        factory.register("retention", aggregate_retention_function_desc());
     }
 
     pub fn register_combinator(factory: &mut AggregateFunctionFactory) {

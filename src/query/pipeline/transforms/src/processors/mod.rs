@@ -13,4 +13,5 @@
 // limitations under the License.
 
 pub mod transforms;
+pub use transforms::Aborting;
 pub use transforms::ExpressionExecutor;

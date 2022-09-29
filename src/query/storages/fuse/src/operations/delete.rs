@@ -136,6 +136,7 @@ impl FuseTable {
             self.get_table_info(),
             &self.meta_location_generator,
             new_snapshot,
+            &self.operator,
         )
         .await?;
         // TODO check if error is recoverable, and try to resolve the conflict

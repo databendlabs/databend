@@ -180,6 +180,7 @@ impl CreateTableInterpreterV2 {
         let mut table_meta = TableMeta {
             schema,
             engine: self.plan.engine.to_string(),
+            storage_params: self.plan.storage_params.clone(),
             options: self.plan.options.clone(),
             default_cluster_key: None,
             field_comments: self.plan.field_comments.clone(),

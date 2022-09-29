@@ -18,6 +18,7 @@ use common_exception::Result;
 
 use super::Compactor;
 use super::TransformCompact;
+use crate::processors::transforms::Aborting;
 
 pub struct SortMergeCompactor {
     limit: Option<usize>,
@@ -41,12 +42,16 @@ impl Compactor for SortMergeCompactor {
         "SortMergeTransform"
     }
 
-    fn compact_final(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
+    fn compact_final(&self, blocks: &[DataBlock], aborting: Aborting) -> Result<Vec<DataBlock>> {
         if blocks.is_empty() {
             Ok(vec![])
         } else {
-            let block =
-                DataBlock::merge_sort_blocks(blocks, &self.sort_columns_descriptions, self.limit)?;
+            let block = DataBlock::merge_sort_blocks(
+                blocks,
+                &self.sort_columns_descriptions,
+                self.limit,
+                aborting,
+            )?;
             Ok(vec![block])
         }
     }
