@@ -72,7 +72,7 @@ CREATE TABLE books
 <TabItem value="csv" label="CSV">
 
 ```shell title='Request'
-curl -XPUT 'http://root:@127.0.0.1:8081/v1/streaming_load' -H 'insert_sql: insert into book_db.books format CSV' -H 'skip_header: 0' -H 'field_delimiter: ,' -H 'record_delimiter: \n' -F 'upload=@"./books.csv"'
+curl -XPUT 'http://root:@127.0.0.1:8081/v1/streaming_load' -H 'insert_sql: insert into book_db.books format CSV' -H 'format_skip_header: 0' -H 'format_field_delimiter: ,' -H 'format_record_delimiter: \n' -F 'upload=@"./books.csv"'
 ```
 
 ```json title='Response'
@@ -93,9 +93,9 @@ curl -XPUT 'http://root:@127.0.0.1:8081/v1/streaming_load' -H 'insert_sql: inser
   * `127.0.0.1` is `http_handler_host` value in your *databend-query.toml*
   * `8081` is `http_handler_port` value in your *databend-query.toml*
 
-* skip_header: Number of lines at the start of the file to skip
-* field_delimiter: One character that separate fields
-* record_delimiter: One character that separate records
+* format_skip_header: Number of lines at the start of the file to skip
+* format_field_delimiter: One character that separate fields
+* format_record_delimiter: One character that separate records
 * -F  \"upload=@./books.csv\"
   * Your books.csv file location
 :::
