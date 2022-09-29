@@ -181,7 +181,6 @@ impl CreateTableInterpreterV2 {
             schema,
             engine: self.plan.engine.to_string(),
             storage_params: self.plan.storage_params.clone(),
-            storage_path: self.plan.path.clone(),
             options: self.plan.options.clone(),
             default_cluster_key: None,
             field_comments: self.plan.field_comments.clone(),

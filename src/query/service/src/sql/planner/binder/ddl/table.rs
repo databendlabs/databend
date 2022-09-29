@@ -366,7 +366,7 @@ impl<'a> Binder {
             )?;
         }
 
-        let (storage_params, path) = match uri_location {
+        let storage_params = match uri_location {
             Some(uri) => {
                 let uri = UriLocation {
                     protocol: uri.protocol.clone(),
@@ -374,10 +374,10 @@ impl<'a> Binder {
                     path: uri.path.clone(),
                     connection: uri.connection.clone(),
                 };
-                let (sp, p) = parse_uri_location(&uri)?;
-                (Some(sp), Some(p))
+                let (sp, _) = parse_uri_location(&uri)?;
+                Some(sp)
             }
-            None => (None, None),
+            None => None,
         };
 
         // If table is TRANSIENT, set a flag in table option
@@ -473,7 +473,6 @@ impl<'a> Binder {
             schema,
             engine,
             storage_params,
-            path,
             options,
             field_default_exprs,
             field_comments,

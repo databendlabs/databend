@@ -176,7 +176,6 @@ pub struct TableMeta {
     pub engine: String,
     pub engine_options: BTreeMap<String, String>,
     pub storage_params: Option<StorageParams>,
-    pub storage_path: Option<String>,
     pub options: BTreeMap<String, String>,
     // The default cluster key.
     pub default_cluster_key: Option<String>,
@@ -256,7 +255,6 @@ impl Default for TableMeta {
             engine: "".to_string(),
             engine_options: BTreeMap::new(),
             storage_params: None,
-            storage_path: None,
             options: BTreeMap::new(),
             default_cluster_key: None,
             cluster_keys: vec![],
