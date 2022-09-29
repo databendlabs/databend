@@ -73,7 +73,7 @@ impl FuseTable {
                 let segments = HashSet::from_iter(last_snapshot.segments.clone());
                 self.purge_blocks(ctx.as_ref(), segments.iter(), &HashSet::new())
                     .await?;
-                self.collect(ctx.as_ref(), segments, snapshots).await
+                self.collect(segments, snapshots).await
             };
         };
 
@@ -130,12 +130,8 @@ impl FuseTable {
         )
         .await?;
 
-        self.collect(
-            ctx.as_ref(),
-            segments_to_be_deleted,
-            snapshots_to_be_deleted,
-        )
-        .await
+        self.collect(segments_to_be_deleted, snapshots_to_be_deleted)
+            .await
     }
 
     async fn blocks_of(
@@ -177,7 +173,7 @@ impl FuseTable {
         root: &HashSet<String>,
     ) -> Result<()> {
         let reader = MetaReaders::segment_info_reader(ctx);
-        let accessor = ctx.get_storage_operator()?;
+        let accessor = &self.operator;
         for l in segments {
             let (x, ver) = l;
             let res = reader.read(x, None, *ver).await?;
@@ -189,10 +185,10 @@ impl FuseTable {
                             let cache = &mut *c.write();
                             cache.pop(path);
                         }
-                        self.remove_location(&accessor, bloom_index_location.0.as_str())
+                        self.remove_location(accessor, bloom_index_location.0.as_str())
                             .await?;
                     }
-                    self.remove_location(&accessor, block_meta.location.0.as_str())
+                    self.remove_location(accessor, block_meta.location.0.as_str())
                         .await?;
                 }
             }
@@ -232,12 +228,9 @@ impl FuseTable {
     // collect in the sense of GC
     async fn collect(
         &self,
-        ctx: &dyn TableContext,
         segments_to_be_deleted: HashSet<Location>,
         snapshots_to_be_deleted: Vec<(SnapshotId, u64)>,
     ) -> Result<()> {
-        let accessor = ctx.get_storage_operator()?;
-
         // order matters, should always remove the blocks first, segment 2nd, snapshot last,
         // so that if something goes wrong, e.g. process crashed, gc task can be "picked up" and continued
 
@@ -247,7 +240,7 @@ impl FuseTable {
                 let cache = &mut *c.write();
                 cache.pop(x.as_str());
             }
-            self.remove_location(&accessor, x.as_str()).await?;
+            self.remove_location(&self.operator, x.as_str()).await?;
         }
 
         let locs = self.meta_location_generator();
@@ -258,7 +251,7 @@ impl FuseTable {
                 let cache = &mut *c.write();
                 cache.pop(loc.as_str());
             }
-            self.remove_location(&accessor, loc.as_str()).await?;
+            self.remove_location(&self.operator, loc.as_str()).await?;
         }
 
         Ok(())

@@ -78,14 +78,13 @@ impl FuseTable {
             })?;
         }
 
-        let da = ctx.get_storage_operator()?;
         if need_output {
             pipeline.add_transform(|transform_input_port, transform_output_port| {
                 FuseTableSink::try_create(
                     transform_input_port,
                     ctx.clone(),
                     block_per_seg,
-                    da.clone(),
+                    self.operator.clone(),
                     self.meta_location_generator().clone(),
                     cluster_stats_gen.clone(),
                     Some(transform_output_port),
@@ -101,7 +100,7 @@ impl FuseTable {
                         input_port,
                         ctx.clone(),
                         block_per_seg,
-                        da.clone(),
+                        self.operator.clone(),
                         self.meta_location_generator().clone(),
                         cluster_stats_gen.clone(),
                         None,
