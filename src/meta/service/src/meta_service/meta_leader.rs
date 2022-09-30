@@ -24,7 +24,7 @@ use common_meta_types::Node;
 use common_meta_types::RaftChangeMembershipError;
 use common_meta_types::RaftWriteError;
 use common_meta_types::SeqV;
-use common_metrics::counter::WithCount;
+use common_metrics::counter::Count;
 use tracing::debug;
 use tracing::info;
 
@@ -182,7 +182,7 @@ impl<'a> MetaLeader<'a> {
         entry.time_ms = Some(SeqV::<()>::now_ms());
 
         // report metrics
-        let _guard = WithCount::new((), ProposalPending);
+        let _guard = ProposalPending::guard();
 
         info!("write LogEntry: {}", entry);
         let write_res = self.meta_node.raft.client_write(entry).await;
