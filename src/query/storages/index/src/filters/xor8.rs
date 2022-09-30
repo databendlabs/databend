@@ -119,10 +119,21 @@ impl Filter for Xor8Filter {
 
 impl SupportedType for Xor8Filter {
     fn is_supported_type(data_type: &DataTypeImpl) -> bool {
-        // Bloom index only enabled for String and Boolean types for now
+        // Bloom index only enabled for String and Integral types for now
         let inner_type = remove_nullable(data_type);
         let data_type_id = inner_type.data_type_id();
-        matches!(data_type_id, TypeID::String)
+        matches!(
+            data_type_id,
+            TypeID::String
+                | TypeID::UInt8
+                | TypeID::UInt16
+                | TypeID::UInt32
+                | TypeID::UInt64
+                | TypeID::Int8
+                | TypeID::Int16
+                | TypeID::Int32
+                | TypeID::Int64
+        )
     }
 }
 
