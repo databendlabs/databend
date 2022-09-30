@@ -57,7 +57,6 @@ where for<'a> T::ScalarRef<'a>: PartialOrd + PartialEq {
         "noteq",
         FunctionProperty::default(),
         |_, _| None,
-        // |lhs, rhs, _| lhs != rhs,
         |lhs, rhs, _| T::upcast_gat(lhs) != T::upcast_gat(rhs),
     );
     registry.register_2_arg::<T, T, BooleanType, _, _>(
