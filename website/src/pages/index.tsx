@@ -18,7 +18,7 @@ function HomepageHeader() {
             <Link
               className={clsx("button button--secondary button--lg", styles.link)}
               to="/doc/cloud">
-                Try Databend Cloud Free
+                Databend Cloud
             </Link>
 
               <Link
@@ -37,8 +37,8 @@ export default function Home(): JSX.Element {
     const {siteConfig} = useDocusaurusContext();
     return (
       <Layout
-        title={`Databend - Activate your Object Storage for real-time analytics`}
-        description={`A modern Elasticity and Performance Cloud Data Warehouse, activate your Object Storage(S3, Azure Blob, or MinIO) for real-time analytics`}>
+        title={`Databend - The modern cloud data warehouse that empowers your object storage for real-time analytics.`}
+        description={`The modern cloud data warehouse that empowers your object storage(S3, Azure Blob, or MinIO) for real-time analytics`}>
         <HomepageHeader/>
       </Layout>
     );
