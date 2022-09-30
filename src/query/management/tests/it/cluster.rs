@@ -151,6 +151,7 @@ fn create_test_node_info() -> NodeInfo {
         cpu_nums: 0,
         version: 0,
         flight_address: String::from("ip:port"),
+        binary_version: "binary_version".to_string(),
     }
 }
 
