@@ -423,11 +423,8 @@ impl MetaNode {
         Ok(joined)
     }
 
-    // spawn a monitor to watch raft state changes such as leader changes,
-    // and manually add non-voter to cluster so that non-voter receives raft logs.
+    /// Spawn a monitor to watch raft state changes and report metrics changes.
     pub async fn subscribe_metrics(mn: Arc<Self>, mut metrics_rx: watch::Receiver<RaftMetrics>) {
-        // TODO(luhuanbing): every state change triggers add_non_voter is not very reasonable
-
         let meta_node = mn.clone();
 
         let fut = async move {
@@ -444,20 +441,7 @@ impl MetaNode {
 
                 let mm = metrics_rx.borrow().clone();
 
-                if let Some(cur) = mm.current_leader {
-                    if cur == meta_node.sto.id {
-                        let res = meta_node.add_configured_non_voters().await;
-
-                        if let Err(err) = res {
-                            warn!(
-                                "fail to add non-voter: my id={}, err:{:?}",
-                                meta_node.sto.id, err
-                            );
-                        }
-                    }
-                }
-
-                // metrics about server state and role.
+                // Report metrics about server state and role.
 
                 server_metrics::set_node_is_health(
                     mm.state == State::Follower || mm.state == State::Leader,
@@ -708,25 +692,6 @@ impl MetaNode {
                 source: AnyError::new(&e),
             })?;
 
-        Ok(())
-    }
-
-    /// When a leader is established, it is the leader's responsibility to setup replication from itself to non-voters, AKA learners.
-    /// openraft does not persist the node set of non-voters, thus we need to do it manually.
-    /// This fn should be called once a node found it becomes leader.
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn add_configured_non_voters(&self) -> MetaResult<()> {
-        let node_ids = self.sto.list_non_voters().await;
-        for i in node_ids.iter() {
-            let x = self.raft.add_learner(*i, true).await;
-
-            info!("add_non_voter result: {:?}", x);
-            if x.is_ok() {
-                info!("non-voter is added: {}", i);
-            } else {
-                info!("non-voter already exist: {}", i);
-            }
-        }
         Ok(())
     }
 
