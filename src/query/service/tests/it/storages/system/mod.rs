@@ -12,17 +12,61 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod clusters_table;
-mod columns_table;
-mod configs_table;
-mod contributors_table;
-mod credits_table;
-mod databases_table;
-mod engines_table;
-mod functions_table;
-mod metrics_table;
-mod roles_table;
-mod settings_table;
-mod tables_table;
-mod tracing_table;
-mod users_table;
+use std::io::Write;
+use std::sync::Arc;
+
+use common_base::base::tokio;
+use common_datablocks::pretty_format_blocks;
+use common_exception::Result;
+use common_catalog::table::Table;
+use databend_query::sessions::QueryContext;
+use databend_query::sessions::TableContext;
+use databend_query::storages::system::ClustersTable;
+use databend_query::storages::system::SettingsTable;
+use databend_query::storages::TableStreamReadWrap;
+use databend_query::storages::ToReadDataSourcePlan;
+use futures::TryStreamExt;
+use goldenfile::Mint;
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_tables() -> Result<()>{
+    let mut mint = Mint::new("tests/it/storages/system/testdata");
+    let file = &mut mint.new_goldenfile("tables.txt").unwrap();
+
+    test_clusters_table(file).await.unwrap();
+    test_settings_table(file).await.unwrap();
+    Ok(())
+}
+
+async fn run_table_tests(file: &mut impl Write, ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<()> {
+    let table_info = table.get_table_info();
+    writeln!(file, "---------- TABLE INFO ------------").unwrap();
+    write!(file, "{table_info}\n").unwrap();
+    let source_plan = table.read_plan(ctx.clone(), None).await?;
+
+    let stream = table.read(ctx, &source_plan).await?;
+    let blocks = stream.try_collect::<Vec<_>>().await?;
+    let formatted = pretty_format_blocks(&blocks).unwrap();
+    writeln!(file, "-------- TABLE CONTENTS ----------").unwrap();
+    write!(file, "{formatted}").unwrap();
+    write!(file, "\n\n").unwrap();
+    Ok(())
+}
+
+async fn test_clusters_table(file: &mut impl Write) -> Result<()> {
+    let (_guard, ctx) = crate::tests::create_query_context().await?;
+    let table = ClustersTable::create(1);
+
+    run_table_tests(file, ctx, table).await?;
+    Ok(())
+}
+
+async fn test_settings_table(file: &mut impl Write) -> Result<()> {
+    let (_guard, ctx) = crate::tests::create_query_context().await?;
+    ctx.get_settings().set_max_threads(2)?;
+
+    let table = SettingsTable::create(1);
+
+    run_table_tests(file, ctx, table).await?;
+    Ok(())
+}
