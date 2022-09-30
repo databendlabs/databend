@@ -21,8 +21,6 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
-use common_datavalues::Series;
-use common_datavalues::SeriesFrom;
 use common_datavalues::StringType;
 use common_datavalues::ToDataType;
 use common_exception::Result;
@@ -31,28 +29,46 @@ use common_storages_index::FilterEvalResult;
 
 #[test]
 fn test_column_type_support() -> Result<()> {
-    let numbers: Vec<i64> = vec![1, 2, 3];
-    let bools = vec![true, true, false];
-    let strs = vec!["a".to_owned(), "b".to_owned(), "c".to_owned()];
-
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("i", i64::to_data_type()),
+        DataField::new("u", u8::to_data_type()),
+        DataField::new("u16", u16::to_data_type()),
+        DataField::new("u32", u32::to_data_type()),
+        DataField::new("u64", u64::to_data_type()),
+        DataField::new("i", i8::to_data_type()),
+        DataField::new("i16", i16::to_data_type()),
+        DataField::new("i32", i32::to_data_type()),
+        DataField::new("i64", i64::to_data_type()),
         DataField::new("b", BooleanType::new_impl()),
         DataField::new("s", StringType::new_impl()),
     ]);
 
-    let block = DataBlock::create(schema.clone(), vec![
-        Series::from_data(numbers),
-        Series::from_data(bools),
-        Series::from_data(strs),
-    ]);
+    let cols = schema
+        .fields()
+        .iter()
+        .map(|f| {
+            f.data_type()
+                .create_constant_column(&f.data_type().default_value(), 1)
+        })
+        .collect::<Result<Vec<_>>>()?;
 
+    use common_datavalues::DataType;
+    let block = DataBlock::create(schema.clone(), cols);
+
+    let supported_types: HashSet<DataTypeImpl> = HashSet::from_iter(vec![
+        StringType::new_impl(),
+        u8::to_data_type(),
+        i8::to_data_type(),
+        u16::to_data_type(),
+        i16::to_data_type(),
+        u32::to_data_type(),
+        i32::to_data_type(),
+        u64::to_data_type(),
+        i64::to_data_type(),
+    ]);
     let index = BlockFilter::try_create(&[&block])?;
 
-    // only one index column should be generated
-    assert_eq!(1, index.filter_block.columns().len());
-
-    let supported_types: HashSet<DataTypeImpl> = HashSet::from_iter(vec![StringType::new_impl()]);
+    // String type and 8 integral types are supported
+    assert_eq!(supported_types.len(), index.filter_block.columns().len());
 
     // check index columns
     schema.fields().iter().for_each(|field| {
