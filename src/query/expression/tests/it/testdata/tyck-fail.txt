@@ -37,24 +37,16 @@ has tried possible overloads:
 
 
 error: 
-  --> SQL:1:1
+  --> SQL:1:5
   |
-1 | create_array('a', 1)
-  | ^^^^^^^^^^^^^^^^^^^^ no overload satisfies `create_array(String, UInt8)`
+1 | 'a' and 1
+  |     ^^^ no overload satisfies `and(String, UInt8)`
 
 has tried possible overloads:
-  create_array(T0, T0) :: Array(T0)  : unable to find a common super type for `String` and `UInt8`
-
-
-
-error: 
-  --> SQL:1:1
-  |
-1 | create_array('a', null, 'b', true)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `create_array(String, NULL, String, Boolean)`
-
-has tried possible overloads:
-  create_array(T0, T0, T0, T0) :: Array(T0)  : unable to find a common super type for `String NULL` and `Boolean`
+  and(NULL, Boolean NULL) :: NULL                  : unable to unify `String` with `NULL`
+  and(Boolean NULL, NULL) :: NULL                  : unable to unify `String` with `Boolean`
+  and(Boolean, Boolean) :: Boolean                 : unable to unify `String` with `Boolean`
+  and(Boolean NULL, Boolean NULL) :: Boolean NULL  : unable to unify `String` with `Boolean`
 
 
 
