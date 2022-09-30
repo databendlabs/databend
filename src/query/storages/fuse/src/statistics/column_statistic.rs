@@ -116,26 +116,29 @@ pub mod traverse {
     }
 }
 
-// order-preserving prefix trim
-trait Trim: Sized {
+// Impls of this trait should preserves the property of min/max statistics:
+//
+// the trimmed max should be larger than the non-trimmed one (if possible).
+// and the trimmed min should be lesser than the non-trimmed one (if possible).
+pub trait Trim: Sized {
     fn trim_min(self) -> Option<Self>;
     fn trim_max(self) -> Option<Self>;
 }
 
-const REPLACEMENT_CHAR: char = '\u{FFFD}';
-const STRING_PREFIX_LEN: usize = 32;
+pub const STATS_REPLACEMENT_CHAR: char = '\u{FFFD}';
+pub const STATS_STRING_PREFIX_LEN: usize = 32;
 
 impl Trim for DataValue {
     fn trim_min(self) -> Option<Self> {
         match self {
             DataValue::String(bytes) => match String::from_utf8(bytes) {
                 Ok(mut v) => {
-                    if v.len() <= STRING_PREFIX_LEN {
+                    if v.len() <= STATS_STRING_PREFIX_LEN {
                         Some(DataValue::String(v.into_bytes()))
                     } else {
                         // find the character boundary to prevent String::truncate from panic
                         let vs = v.as_str();
-                        let slice = match vs.char_indices().nth(STRING_PREFIX_LEN) {
+                        let slice = match vs.char_indices().nth(STATS_STRING_PREFIX_LEN) {
                             None => vs,
                             Some((idx, _)) => &vs[..idx],
                         };
@@ -159,22 +162,29 @@ impl Trim for DataValue {
     fn trim_max(self) -> Option<Self> {
         match self {
             DataValue::String(bytes) => match String::from_utf8(bytes) {
-                Ok(mut v) => {
-                    if v.len() <= STRING_PREFIX_LEN {
+                Ok(v) => {
+                    if v.len() <= STATS_STRING_PREFIX_LEN {
+                        // if number of bytes is lesser, just return
                         Some(DataValue::String(v.into_bytes()))
                     } else {
-                        // slice the input (by character)
-                        let vs = v.get_mut(..).unwrap();
-                        let sliced = match vs.char_indices().nth(STRING_PREFIX_LEN) {
+                        // no need to trim, less than STRING_RREFIX_LEN chars
+                        let number_of_chars = v.as_str().chars().count();
+                        if number_of_chars <= STATS_STRING_PREFIX_LEN {
+                            return Some(DataValue::String(v.into_bytes()));
+                        }
+
+                        // slice the input (at the boundary of chars), takes at most STRING_PREFIX_LEN chars
+                        let vs = v.as_str();
+                        let sliced = match vs.char_indices().nth(STATS_STRING_PREFIX_LEN) {
                             None => vs,
                             Some((idx, _)) => &vs[..idx],
                         };
 
-                        // find the position to be replaced
+                        // find the position to replace the char with REPLACEMENT_CHAR
                         // in reversed order, break at the first one we met
                         let mut idx = None;
                         for (i, c) in sliced.char_indices().rev() {
-                            if c < REPLACEMENT_CHAR {
+                            if c < STATS_REPLACEMENT_CHAR {
                                 idx = Some(i);
                                 break;
                             }
@@ -187,19 +197,18 @@ impl Trim for DataValue {
                             // if all the character is larger than the REPLACEMENT_CHAR
                             // just ignore it
                             debug!(
-                                "failed to to max character replacement, all the prefix characters are larger than �"
+                                "failed to replace a char with REPLACEMENT_CHAR, all the prefix characters are larger than �"
                             );
                             return None;
                         };
 
                         // rebuild the string (since the len of result string is rather small)
-                        let mut r = String::with_capacity(STRING_PREFIX_LEN);
+                        let mut r = String::with_capacity(STATS_STRING_PREFIX_LEN);
                         for (i, c) in sliced.char_indices() {
                             if i < replacement_point {
                                 r.push(c)
                             } else {
-                                r.push(REPLACEMENT_CHAR);
-                                break;
+                                r.push(STATS_REPLACEMENT_CHAR);
                             }
                         }
 
