@@ -56,13 +56,6 @@ async fn test_range_filter() -> Result<()> {
         in_memory_size: 0,
     });
 
-    struct Test {
-        name: &'static str,
-        expr: LegacyExpression,
-        expect: bool,
-        error: &'static str,
-    }
-
     let tests: Vec<Test> = vec![
         Test {
             name: "a < 1 and b > 3",
@@ -422,4 +415,11 @@ fn test_bound_for_like_pattern() -> Result<()> {
     }
 
     Ok(())
+}
+
+struct Test {
+    name: &'static str,
+    expr: LegacyExpression,
+    expect: bool,
+    error: &'static str,
 }

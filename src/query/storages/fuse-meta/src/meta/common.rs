@@ -27,7 +27,7 @@ pub type ClusterKey = (u32, String);
 
 pub type StatisticsOfColumns = HashMap<u32, ColumnStatistics>;
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ColumnStatistics {
     pub min: DataValue,
     pub max: DataValue,
@@ -58,7 +58,7 @@ fn default_level() -> i32 {
     0
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 pub struct Statistics {
     pub row_count: u64,
     pub block_count: u64,

@@ -463,8 +463,7 @@ pub fn test_tyck_fail() {
         DataType::Boolean,
         Column::from_data(vec![false; 3]),
     )]);
-    run_ast(&mut file, "create_array('a', 1)", &[]);
-    run_ast(&mut file, "create_array('a', null, 'b', true)", &[]);
+    run_ast(&mut file, "'a' and 1", &[]);
     run_ast(&mut file, "get(create_array(1, 2), 'a')", &[]);
     run_ast(&mut file, "get_tuple(1)(create_tuple(true))", &[]);
 }
