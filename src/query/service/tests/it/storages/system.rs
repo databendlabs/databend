@@ -88,7 +88,7 @@ async fn run_table_tests(
 ) -> Result<()> {
     let table_info = table.get_table_info();
     writeln!(file, "---------- TABLE INFO ------------").unwrap();
-    write!(file, "{table_info}\n").unwrap();
+    writeln!(file, "{table_info}").unwrap();
     let source_plan = table.read_plan(ctx.clone(), None).await?;
 
     let stream = table.read(ctx, &source_plan).await?;
