@@ -119,7 +119,7 @@ impl Settings {
                     UserSettingValue::UInt64(10000),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Maximum block size for reading",
+                desc: "Maximum block size for reading, default value: 10000.",
                 possible_values: None,
             },
             // max_threads
@@ -138,7 +138,7 @@ impl Settings {
                     UserSettingValue::UInt64(60),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Max duration the flight client request is allowed to take in seconds. By default, it is 60 seconds",
+                desc: "Max duration the flight client request is allowed to take in seconds. By default, it is 60 seconds.",
                 possible_values: None,
             },
             // storage_read_buffer_size
@@ -170,7 +170,7 @@ impl Settings {
                     UserSettingValue::UInt64(1),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Enable new processor framework if value != 0, default value: 1",
+                desc: "Enable new processor framework if value != 0, default value: 1.",
                 possible_values: None,
             },
             // enable_planner_v2
@@ -178,7 +178,7 @@ impl Settings {
                 default_value: UserSettingValue::UInt64(1),
                 user_setting: UserSetting::create("enable_planner_v2", UserSettingValue::UInt64(1)),
                 level: ScopeLevel::Session,
-                desc: "Enable planner v2 by setting this variable to 1, default value: 1",
+                desc: "Enable planner v2 by setting this variable to 1, default value: 1.",
                 possible_values: None,
             },
             SettingValue {
@@ -188,7 +188,7 @@ impl Settings {
                     UserSettingValue::String("\n".to_owned()),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Format record_delimiter, default value: \"\\n\"",
+                desc: "Format record_delimiter, default value: \"\\n\".",
                 possible_values: None,
             },
             SettingValue {
@@ -198,7 +198,7 @@ impl Settings {
                     UserSettingValue::String(",".to_owned()),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Format field delimiter, default value: ,",
+                desc: "Format field delimiter, default value: \",\".",
                 possible_values: None,
             },
             SettingValue {
@@ -208,7 +208,7 @@ impl Settings {
                     UserSettingValue::UInt64(1),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Format empty_as_default, default value: 1",
+                desc: "Format empty_as_default, default value: 1.",
                 possible_values: None,
             },
             SettingValue {
@@ -218,7 +218,7 @@ impl Settings {
                     UserSettingValue::UInt64(0),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Whether to skip the input header, default value: 0",
+                desc: "Whether to skip the input header, default value: 0.",
                 possible_values: None,
             },
             SettingValue {
@@ -228,7 +228,7 @@ impl Settings {
                     UserSettingValue::String("None".to_owned()),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Format compression, default value: None",
+                desc: "Format compression, default value: \"None\".",
                 possible_values: None,
             },
             SettingValue {
@@ -248,7 +248,7 @@ impl Settings {
                     UserSettingValue::String("UTC".to_owned()),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Timezone, default value: UTC,",
+                desc: "Timezone, default value: \"UTC\".",
                 possible_values: None,
             },
             SettingValue {
@@ -258,7 +258,7 @@ impl Settings {
                     UserSettingValue::UInt64(10000),
                 ),
                 level: ScopeLevel::Session,
-                desc: "The threshold of keys to open two-level aggregation, default value: 10000",
+                desc: "The threshold of keys to open two-level aggregation, default value: 10000.",
                 possible_values: None,
             },
             SettingValue {
@@ -268,7 +268,7 @@ impl Settings {
                     UserSettingValue::UInt64(0),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Whether the client open async insert mode, default value: 0",
+                desc: "Whether the client open async insert mode, default value: 0.",
                 possible_values: None,
             },
             SettingValue {
@@ -278,7 +278,7 @@ impl Settings {
                     UserSettingValue::UInt64(1),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Whether the client wait for the reply of async insert, default value: 1",
+                desc: "Whether the client wait for the reply of async insert, default value: 1.",
                 possible_values: None,
             },
             SettingValue {
@@ -288,7 +288,7 @@ impl Settings {
                     UserSettingValue::UInt64(100),
                 ),
                 level: ScopeLevel::Session,
-                desc: "The timeout in seconds for waiting for processing of async insert, default value: 100",
+                desc: "The timeout in seconds for waiting for processing of async insert, default value: 100.",
                 possible_values: None,
             },
             SettingValue {
@@ -298,7 +298,7 @@ impl Settings {
                     UserSettingValue::UInt64(0),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Case sensitivity of unquoted identifiers, default value: 0 (aka case-insensitive)",
+                desc: "Case sensitivity of unquoted identifiers, default value: 0 (aka case-insensitive).",
                 possible_values: None,
             },
             SettingValue {
@@ -308,7 +308,7 @@ impl Settings {
                     UserSettingValue::UInt64(1),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Case sensitivity of quoted identifiers, default value: 1 (aka case-sensitive)",
+                desc: "Case sensitivity of quoted identifiers, default value: 1 (aka case-sensitive).",
                 possible_values: None,
             },
             SettingValue {
@@ -318,14 +318,14 @@ impl Settings {
                     UserSettingValue::String("PostgreSQL".to_owned()),
                 ),
                 level: ScopeLevel::Session,
-                desc: "SQL dialect, support \"PostgreSQL\" and \"MySQL\", default value: \"PostgreSQL\"",
+                desc: "SQL dialect, support \"PostgreSQL\" and \"MySQL\", default value: \"PostgreSQL\".",
                 possible_values: Some(vec!["PostgreSQL", "MySQL"]),
             },
             SettingValue {
                 default_value: UserSettingValue::UInt64(1),
                 user_setting: UserSetting::create("enable_cbo", UserSettingValue::UInt64(1)),
                 level: ScopeLevel::Session,
-                desc: "If enable cost based optimization, default value: 1",
+                desc: "If enable cost based optimization, default value: 1.",
                 possible_values: None,
             },
             // max_execute_time
@@ -333,7 +333,7 @@ impl Settings {
                 default_value: UserSettingValue::UInt64(0),
                 user_setting: UserSetting::create("max_execute_time", UserSettingValue::UInt64(0)),
                 level: ScopeLevel::Session,
-                desc: "The maximum query execution time. it means no limit if the value is zero. default value: 0",
+                desc: "The maximum query execution time. it means no limit if the value is zero. default value: 0.",
                 possible_values: None,
             },
         ];
