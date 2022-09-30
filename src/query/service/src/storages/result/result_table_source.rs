@@ -64,8 +64,8 @@ impl ResultTableSource {
 
 #[async_trait::async_trait]
 impl Processor for ResultTableSource {
-    fn name(&self) -> &'static str {
-        "ResultTableSource"
+    fn name(&self) -> String {
+        "ResultTableSource".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

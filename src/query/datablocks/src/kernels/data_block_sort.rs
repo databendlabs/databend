@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::iter::once;
+use std::sync::Arc;
 
 use common_arrow::arrow::array::ord as arrow_ord;
 use common_arrow::arrow::array::ord::DynComparator;
@@ -28,6 +29,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::DataBlock;
+
+pub type Aborting = Arc<Box<dyn Fn() -> bool + Send + Sync + 'static>>;
 
 #[derive(Clone)]
 pub struct SortColumnDescription {
@@ -146,27 +149,58 @@ impl DataBlock {
         blocks: &[DataBlock],
         sort_columns_descriptions: &[SortColumnDescription],
         limit: Option<usize>,
+        aborting: Aborting,
     ) -> Result<DataBlock> {
         match blocks.len() {
             0 => Result::Err(ErrorCode::EmptyData("Can't merge empty blocks")),
             1 => Ok(blocks[0].clone()),
-            2 => DataBlock::merge_sort_block(
-                &blocks[0],
-                &blocks[1],
-                sort_columns_descriptions,
-                limit,
-            ),
+            2 => {
+                if aborting() {
+                    return Err(ErrorCode::AbortedQuery(
+                        "Aborted query, because the server is shutting down or the query was killed.",
+                    ));
+                }
+
+                DataBlock::merge_sort_block(
+                    &blocks[0],
+                    &blocks[1],
+                    sort_columns_descriptions,
+                    limit,
+                )
+            }
             _ => {
+                if aborting() {
+                    return Err(ErrorCode::AbortedQuery(
+                        "Aborted query, because the server is shutting down or the query was killed.",
+                    ));
+                }
+
                 let left = DataBlock::merge_sort_blocks(
                     &blocks[0..blocks.len() / 2],
                     sort_columns_descriptions,
                     limit,
+                    aborting.clone(),
                 )?;
+
+                if aborting() {
+                    return Err(ErrorCode::AbortedQuery(
+                        "Aborted query, because the server is shutting down or the query was killed.",
+                    ));
+                }
+
                 let right = DataBlock::merge_sort_blocks(
                     &blocks[blocks.len() / 2..blocks.len()],
                     sort_columns_descriptions,
                     limit,
+                    aborting.clone(),
                 )?;
+
+                if aborting() {
+                    return Err(ErrorCode::AbortedQuery(
+                        "Aborted query, because the server is shutting down or the query was killed.",
+                    ));
+                }
+
                 DataBlock::merge_sort_block(&left, &right, sort_columns_descriptions, limit)
             }
         }

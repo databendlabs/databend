@@ -35,6 +35,7 @@ pub fn pretty_statement(stmt: Statement, max_width: usize) -> Result<String> {
             selection,
         } => pretty_delete(table_reference, selection),
         Statement::Copy(copy_stmt) => pretty_copy(copy_stmt),
+        Statement::Update(update_stmt) => pretty_update(update_stmt),
         Statement::CreateTable(create_table_stmt) => pretty_create_table(create_table_stmt),
         Statement::AlterTable(alter_table_stmt) => pretty_alter_table(alter_table_stmt),
         Statement::CreateView(create_view_stmt) => pretty_create_view(create_view_stmt),

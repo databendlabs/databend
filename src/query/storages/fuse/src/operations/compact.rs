@@ -61,6 +61,7 @@ impl FuseTable {
             self.meta_location_generator().clone(),
             block_per_seg,
             self.cluster_key_meta.is_some(),
+            self.operator.clone(),
         )?;
         let need_compact = mutator.blocks_select().await?;
         if !need_compact {
@@ -93,6 +94,7 @@ impl FuseTable {
 
         pipeline.add_transform(|transform_input_port, transform_output_port| {
             TransformCompact::try_create(
+                ctx.clone(),
                 transform_input_port,
                 transform_output_port,
                 block_compactor.to_compactor(false),

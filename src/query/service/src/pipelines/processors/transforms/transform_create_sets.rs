@@ -79,8 +79,8 @@ impl TransformCreateSets {
 
 #[async_trait::async_trait]
 impl Processor for TransformCreateSets {
-    fn name(&self) -> &'static str {
-        "TransformCreateSets"
+    fn name(&self) -> String {
+        "TransformCreateSets".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

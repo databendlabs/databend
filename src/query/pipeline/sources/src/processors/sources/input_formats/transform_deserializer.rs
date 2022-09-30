@@ -83,8 +83,8 @@ impl<I: InputFormatPipe> DeserializeTransformer<I> {
 
 #[async_trait::async_trait]
 impl<I: InputFormatPipe> Processor for DeserializeTransformer<I> {
-    fn name(&self) -> &'static str {
-        "DeserializeTransformer"
+    fn name(&self) -> String {
+        "DeserializeTransformer".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

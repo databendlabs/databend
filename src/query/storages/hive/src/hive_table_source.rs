@@ -94,8 +94,8 @@ impl HiveTableSource {
 
 #[async_trait::async_trait]
 impl Processor for HiveTableSource {
-    fn name(&self) -> &'static str {
-        "HiveEngineSource"
+    fn name(&self) -> String {
+        "HiveEngineSource".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

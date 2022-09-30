@@ -43,14 +43,9 @@ use crate::operations::read::State::Generated;
 use crate::FuseTable;
 
 impl FuseTable {
-    pub fn create_block_reader(
-        &self,
-        ctx: &Arc<dyn TableContext>,
-        projection: Projection,
-    ) -> Result<Arc<BlockReader>> {
-        let operator = ctx.get_storage_operator()?;
+    pub fn create_block_reader(&self, projection: Projection) -> Result<Arc<BlockReader>> {
         let table_schema = self.table_info.schema();
-        BlockReader::create(operator, table_schema, projection)
+        BlockReader::create(self.operator.clone(), table_schema, projection)
     }
 
     pub fn projection_of_push_downs(&self, push_downs: &Option<Extras>) -> Projection {
@@ -124,7 +119,7 @@ impl FuseTable {
 
         let table_schema = self.table_info.schema();
         let projection = self.projection_of_push_downs(&plan.push_downs);
-        let output_reader = self.create_block_reader(&ctx, projection)?; // for deserialize output blocks
+        let output_reader = self.create_block_reader(projection)?; // for deserialize output blocks
 
         let (output_reader, prewhere_reader, prewhere_filter, remain_reader) =
             if let Some(prewhere) = self.prewhere_of_push_downs(&plan.push_downs) {
@@ -141,14 +136,13 @@ impl FuseTable {
                     vec![prewhere.filter.clone()],
                     false,
                 )?;
-                let output_reader =
-                    self.create_block_reader(&ctx, prewhere.output_columns.clone())?;
+                let output_reader = self.create_block_reader(prewhere.output_columns.clone())?;
                 let prewhere_reader =
-                    self.create_block_reader(&ctx, prewhere.prewhere_columns.clone())?;
+                    self.create_block_reader(prewhere.prewhere_columns.clone())?;
                 let remain_reader = if prewhere.remain_columns.is_empty() {
                     None
                 } else {
-                    Some((*self.create_block_reader(&ctx, prewhere.remain_columns)?).clone())
+                    Some((*self.create_block_reader(prewhere.remain_columns)?).clone())
                 };
 
                 (
@@ -256,8 +250,8 @@ impl FuseTableSource {
 
 #[async_trait::async_trait]
 impl Processor for FuseTableSource {
-    fn name(&self) -> &'static str {
-        "FuseEngineSource"
+    fn name(&self) -> String {
+        "FuseEngineSource".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

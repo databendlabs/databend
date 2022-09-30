@@ -66,6 +66,9 @@ pub enum Statement<'a> {
         table_reference: TableReference<'a>,
         selection: Option<Expr<'a>>,
     },
+
+    Update(UpdateStmt<'a>),
+
     // Databases
     ShowDatabases(ShowDatabasesStmt<'a>),
     ShowCreateDatabase(ShowCreateDatabaseStmt<'a>),
@@ -205,6 +208,7 @@ impl<'a> Display for Statement<'a> {
                     write!(f, "WHERE {conditions} ")?;
                 }
             }
+            Statement::Update(update) => write!(f, "{update}")?,
             Statement::Copy(stmt) => write!(f, "{stmt}")?,
             Statement::ShowSettings { like } => {
                 write!(f, "SHOW SETTINGS")?;

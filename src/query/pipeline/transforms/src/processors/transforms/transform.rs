@@ -29,6 +29,10 @@ pub trait Transform: Send {
     const SKIP_EMPTY_DATA_BLOCK: bool = false;
 
     fn transform(&mut self, data: DataBlock) -> Result<DataBlock>;
+
+    fn name(&self) -> String {
+        Self::NAME.to_string()
+    }
 }
 
 pub struct Transformer<T: Transform + 'static> {
@@ -54,8 +58,8 @@ impl<T: Transform + 'static> Transformer<T> {
 
 #[async_trait::async_trait]
 impl<T: Transform + 'static> Processor for Transformer<T> {
-    fn name(&self) -> &'static str {
-        T::NAME
+    fn name(&self) -> String {
+        Transform::name(&self.transform)
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

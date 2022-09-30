@@ -61,15 +61,22 @@ pub struct NodeInfo {
     pub cpu_nums: u64,
     pub version: u32,
     pub flight_address: String,
+    pub binary_version: String,
 }
 
 impl NodeInfo {
-    pub fn create(id: String, cpu_nums: u64, flight_address: String) -> NodeInfo {
+    pub fn create(
+        id: String,
+        cpu_nums: u64,
+        flight_address: String,
+        binary_version: String,
+    ) -> NodeInfo {
         NodeInfo {
             id,
             cpu_nums,
             version: 0,
             flight_address,
+            binary_version,
         }
     }
 
