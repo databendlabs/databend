@@ -159,13 +159,20 @@ impl HiveCatalog {
         table_name: String,
     ) -> Result<Arc<dyn Table>> {
         let mut client = client;
-        // let table_meta = client .get_table(db_name.clone(), table_name.clone()) .map_err(from_thrift_error)?;
         let table = client.get_table(db_name.clone(), table_name.clone());
         let table_meta = match table {
             Ok(table_meta) => table_meta,
             Err(e) => {
-                println!("{:?}", e);
-                return Err(e);
+                if let thrift::Error::User(err) = &e {
+                    if let Some(e) =
+                        err.downcast_ref::<common_hive_meta_store::NoSuchObjectException>()
+                    {
+                        return Err(ErrorCode::TableInfoError(
+                            e.message.clone().unwrap_or_default(),
+                        ));
+                    }
+                }
+                return Err(from_thrift_error(e));
             }
         };
 
