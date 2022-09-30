@@ -43,6 +43,8 @@ pub use variant::*;
 
 #[enum_dispatch]
 pub trait TypeDeserializer: Send + Sync {
+    fn memory_size(&self) -> usize;
+
     fn de_binary(&mut self, reader: &mut &[u8], format: &FormatSettings) -> Result<()>;
 
     fn de_default(&mut self, format: &FormatSettings);

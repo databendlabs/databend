@@ -194,6 +194,8 @@ message UserStageInfo {
     OnErrorMode on_error = 1;
     uint64 size_limit = 2;
     bool purge = 3;
+    bool single = 4;
+    uint64 max_file_size = 5;
   }
 
   string stage_name = 1;

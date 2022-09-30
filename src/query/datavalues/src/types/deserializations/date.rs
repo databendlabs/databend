@@ -34,6 +34,10 @@ where
     T: PrimitiveType,
     T: Unmarshal<T> + StatBuffer + FromLexical,
 {
+    fn memory_size(&self) -> usize {
+        self.builder.memory_size()
+    }
+
     fn de_binary(&mut self, reader: &mut &[u8], _format: &FormatSettings) -> Result<()> {
         let value: T = reader.read_scalar()?;
         check_date(value.as_i32())?;

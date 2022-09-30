@@ -15,6 +15,7 @@
 use std::mem;
 use std::sync::Arc;
 
+use common_datavalues::DataSchemaRef;
 use common_datavalues::TypeDeserializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -40,6 +41,7 @@ impl InputFormatCSV {
     fn read_row(
         buf: &[u8],
         deserializers: &mut [common_datavalues::TypeDeserializerImpl],
+        schema: &DataSchemaRef,
         field_ends: &[usize],
         format_settings: &FormatSettings,
         path: &str,
@@ -56,12 +58,12 @@ impl InputFormatCSV {
             } else {
                 // todo(youngsofun): do not need escape, already done in csv-core
                 if let Err(e) = deserializer.de_text(&mut reader, format_settings) {
-                    let err_msg = format_column_error(c, col_data, &e.message());
+                    let err_msg = format_column_error(schema, c, col_data, &e.message());
                     return Err(csv_error(&err_msg, path, row_index));
                 };
                 reader.ignore_white_spaces().expect("must success");
                 if reader.must_eof().is_err() {
-                    let err_msg = format_column_error(c, col_data, "bad field end");
+                    let err_msg = format_column_error(schema, c, col_data, "bad field end");
                     return Err(csv_error(&err_msg, path, row_index));
                 }
             }
@@ -78,16 +80,16 @@ impl InputFormatTextBase for InputFormatCSV {
 
     fn get_format_settings(settings: &Arc<Settings>) -> Result<FormatSettings> {
         let timezone = get_time_zone(settings)?;
-        let quote_char = settings.get_quote_char()?.into_bytes();
+        let quote_char = settings.get_format_quote_char()?.into_bytes();
         if quote_char.len() != 1 {
             return Err(ErrorCode::InvalidArgument(
                 "quote_char can only contain one char",
             ));
         }
         Ok(FormatSettings {
-            record_delimiter: settings.get_record_delimiter()?.into_bytes(),
-            field_delimiter: settings.get_field_delimiter()?.into_bytes(),
-            empty_as_default: settings.get_empty_as_default()? > 0,
+            record_delimiter: settings.get_format_record_delimiter()?.into_bytes(),
+            field_delimiter: settings.get_format_field_delimiter()?.into_bytes(),
+            empty_as_default: settings.get_format_empty_as_default()? > 0,
             quote_char: quote_char[0],
             null_bytes: vec![b'\\', b'N'],
             timezone,
@@ -110,6 +112,7 @@ impl InputFormatTextBase for InputFormatCSV {
             Self::read_row(
                 buf,
                 columns,
+                &builder.ctx.schema,
                 &batch.field_ends[field_end_idx..field_end_idx + n_column],
                 &builder.ctx.format_settings,
                 &batch.path,

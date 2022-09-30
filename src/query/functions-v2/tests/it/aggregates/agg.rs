@@ -41,6 +41,9 @@ fn test_agg() {
     test_agg_any(file, eval_aggr);
     test_agg_arg_min(file, eval_aggr);
     test_agg_arg_max(file, eval_aggr);
+    test_agg_covar_samp(file, eval_aggr);
+    test_agg_covar_pop(file, eval_aggr);
+    test_agg_retention(file, eval_aggr);
 }
 
 #[test]
@@ -59,6 +62,9 @@ fn test_agg_group_by() {
     test_agg_any(file, simulate_two_groups_group_by);
     test_agg_arg_min(file, simulate_two_groups_group_by);
     test_agg_arg_max(file, simulate_two_groups_group_by);
+    test_agg_covar_samp(file, simulate_two_groups_group_by);
+    test_agg_covar_pop(file, simulate_two_groups_group_by);
+    test_agg_retention(file, simulate_two_groups_group_by);
 }
 
 fn get_example() -> Vec<(&'static str, DataType, Column)> {
@@ -244,6 +250,64 @@ fn test_agg_arg_max(file: &mut impl Write, simulator: impl AggregationSimulator)
     run_agg_ast(
         file,
         "arg_max(a, all_null)",
+        get_example().as_slice(),
+        simulator,
+    );
+}
+
+fn test_agg_covar_samp(file: &mut impl Write, simulator: impl AggregationSimulator) {
+    run_agg_ast(
+        file,
+        "covar_samp(a, b)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "covar_samp(a, x_null)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "covar_samp(a, all_null)",
+        get_example().as_slice(),
+        simulator,
+    );
+}
+
+fn test_agg_covar_pop(file: &mut impl Write, simulator: impl AggregationSimulator) {
+    run_agg_ast(file, "covar_pop(a, b)", get_example().as_slice(), simulator);
+    run_agg_ast(
+        file,
+        "covar_pop(a, x_null)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "covar_pop(a, all_null)",
+        get_example().as_slice(),
+        simulator,
+    );
+}
+
+fn test_agg_retention(file: &mut impl Write, simulator: impl AggregationSimulator) {
+    run_agg_ast(
+        file,
+        "retention(a > 1, b > 1)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "retention(a > 1, b > 1, x_null > 1)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "retention(a > 1, b > 1, x_null > 1, all_null > 1)",
         get_example().as_slice(),
         simulator,
     );

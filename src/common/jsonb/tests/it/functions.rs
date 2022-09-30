@@ -19,6 +19,8 @@ use common_jsonb::build_object;
 use common_jsonb::compare;
 use common_jsonb::from_slice;
 use common_jsonb::parse_value;
+use common_jsonb::Object;
+use common_jsonb::Value;
 
 #[test]
 fn test_build_array() {
@@ -29,10 +31,12 @@ fn test_build_array() {
         r#"[1,2,3]"#,
         r#"{"k":"v"}"#,
     ];
+    let mut expect_array = Vec::with_capacity(sources.len());
     let mut offsets = Vec::with_capacity(sources.len());
     let mut buf: Vec<u8> = Vec::new();
     for s in sources {
         let value = parse_value(s.as_bytes()).unwrap();
+        expect_array.push(value.clone());
         value.to_vec(&mut buf).unwrap();
         offsets.push(buf.len());
     }
@@ -43,9 +47,13 @@ fn test_build_array() {
         last_offset = offset;
     }
 
+    let expect_value = Value::Array(expect_array);
+    let mut expect_buf: Vec<u8> = Vec::new();
+    expect_value.to_vec(&mut expect_buf).unwrap();
+
     let mut arr_buf = Vec::new();
     build_array(values, &mut arr_buf).unwrap();
-    assert_eq!(arr_buf, b"\x80\0\0\x05\x40\0\0\0\x20\0\0\x04\x10\0\0\x03\x50\0\0\x13\x50\0\0\x0e\x02\x02\x39\x30\x61\x62\x63\x80\0\0\x03\x20\0\0\x01\x20\0\0\x01\x20\0\0\x01\x01\x02\x03\x40\0\0\x01\x10\0\0\x01\x10\0\0\x01\x6b\x76");
+    assert_eq!(arr_buf, expect_buf);
 
     let value = from_slice(&arr_buf).unwrap();
     assert!(value.is_array());
@@ -70,23 +78,31 @@ fn test_build_object() {
         "k5".to_string(),
     ];
 
-    let mut offsets = Vec::with_capacity(sources.len());
     let mut buf: Vec<u8> = Vec::new();
-    for s in sources {
+    let mut offsets = Vec::with_capacity(sources.len());
+    let mut expect_object = Object::new();
+    for (key, s) in keys.iter().zip(sources.iter()) {
         let value = parse_value(s.as_bytes()).unwrap();
+        expect_object.insert(key.clone(), value.clone());
+
         value.to_vec(&mut buf).unwrap();
         offsets.push(buf.len());
     }
+
     let mut values = Vec::with_capacity(offsets.len());
     let mut last_offset = 0;
-
     for (key, offset) in keys.iter().zip(offsets.iter()) {
         values.push((key.as_str(), &buf[last_offset..*offset]));
         last_offset = *offset;
     }
+
+    let expect_value = Value::Object(expect_object);
+    let mut expect_buf: Vec<u8> = Vec::new();
+    expect_value.to_vec(&mut expect_buf).unwrap();
+
     let mut obj_buf = Vec::new();
     build_object(values, &mut obj_buf).unwrap();
-    assert_eq!(obj_buf, b"\x40\0\0\x05\x10\0\0\x02\x10\0\0\x02\x10\0\0\x02\x10\0\0\x02\x10\0\0\x02\x40\0\0\0\x20\0\0\x04\x10\0\0\x03\x50\0\0\x13\x50\0\0\x0e\x6b\x31\x6b\x32\x6b\x33\x6b\x34\x6b\x35\x02\x02\x39\x30\x61\x62\x63\x80\0\0\x03\x20\0\0\x01\x20\0\0\x01\x20\0\0\x01\x01\x02\x03\x40\0\0\x01\x10\0\0\x01\x10\0\0\x01\x6b\x76");
+    assert_eq!(obj_buf, expect_buf);
 
     let value = from_slice(&obj_buf).unwrap();
     assert!(value.is_object());
@@ -160,13 +176,14 @@ fn test_compare() {
 
     let mut lbuf: Vec<u8> = Vec::new();
     let mut rbuf: Vec<u8> = Vec::new();
-    for (l, r, expected) in sources {
+    for (l, r, expect) in sources {
         let lvalue = parse_value(l.as_bytes()).unwrap();
         lvalue.to_vec(&mut lbuf).unwrap();
         let rvalue = parse_value(r.as_bytes()).unwrap();
         rvalue.to_vec(&mut rbuf).unwrap();
+
         let res = compare(&lbuf, &rbuf).unwrap();
-        assert_eq!(res, expected);
+        assert_eq!(res, expect);
 
         lbuf.clear();
         rbuf.clear();

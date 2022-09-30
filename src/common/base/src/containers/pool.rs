@@ -66,6 +66,8 @@ where Mgr: ItemManager
     manager: Mgr,
 
     err_type: PhantomData<Mgr::Error>,
+
+    n_retries: u32,
 }
 
 impl<Mgr> Pool<Mgr>
@@ -81,7 +83,13 @@ where
             items: Default::default(),
             manager,
             err_type: Default::default(),
+            n_retries: 3,
         }
+    }
+
+    pub fn with_retries(mut self, retries: u32) -> Self {
+        self.n_retries = retries;
+        self
     }
 
     pub fn item_manager(&self) -> &Mgr {
@@ -128,9 +136,7 @@ where
 
         let mut interval = self.initial_retry_interval;
 
-        let n_retry = 3;
-
-        for i in 0..n_retry {
+        for i in 0..self.n_retries {
             debug!("build new item of key: {:?}", key);
 
             let new_item = self.manager.build(key).await;
@@ -143,7 +149,7 @@ where
                     return Ok(x);
                 }
                 Err(err) => {
-                    if i == n_retry - 1 {
+                    if i == self.n_retries - 1 {
                         return Err(err);
                     }
                 }

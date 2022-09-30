@@ -500,6 +500,12 @@ impl<'a> Binder {
             if stmt.size_limit != 0 {
                 stage.copy_options.size_limit = stmt.size_limit;
             }
+            // max_file_size.
+            if stmt.max_file_size != 0 {
+                stage.copy_options.max_file_size = stmt.max_file_size;
+            }
+
+            stage.copy_options.single = stmt.single;
             stage.copy_options.purge = stmt.purge;
         }
 

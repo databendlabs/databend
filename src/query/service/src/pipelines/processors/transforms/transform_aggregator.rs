@@ -288,8 +288,8 @@ impl<TAggregator: Aggregator + 'static> AggregatorTransform<TAggregator> {
 }
 
 impl<TAggregator: Aggregator + 'static> Processor for AggregatorTransform<TAggregator> {
-    fn name(&self) -> &'static str {
-        TAggregator::NAME
+    fn name(&self) -> String {
+        TAggregator::NAME.to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

@@ -35,7 +35,6 @@ use databend_query::servers::http::v1::HttpQueryManager;
 use databend_query::sessions::SessionManager;
 use databend_query::Config;
 use once_cell::sync::OnceCell;
-use opendal::Operator;
 use parking_lot::Mutex;
 use time::Instant;
 
@@ -67,7 +66,7 @@ pub struct TestGlobalServices {
     global_runtime: Mutex<HashMap<String, Arc<Runtime>>>,
     query_logger: Mutex<HashMap<String, Arc<QueryLogger>>>,
     cluster_discovery: Mutex<HashMap<String, Arc<ClusterDiscovery>>>,
-    storage_operator: Mutex<HashMap<String, Operator>>,
+    storage_operator: Mutex<HashMap<String, StorageOperator>>,
     cache_manager: Mutex<HashMap<String, Arc<CacheManager>>>,
     catalog_manager: Mutex<HashMap<String, Arc<CatalogManager>>>,
     http_query_manager: Mutex<HashMap<String, Arc<HttpQueryManager>>>,
@@ -281,8 +280,8 @@ impl SingletonImpl<Arc<ClusterDiscovery>> for TestGlobalServices {
     }
 }
 
-impl SingletonImpl<Operator> for TestGlobalServices {
-    fn get(&self) -> Operator {
+impl SingletonImpl<StorageOperator> for TestGlobalServices {
+    fn get(&self) -> StorageOperator {
         match std::thread::current().name() {
             None => panic!("Operator is not init"),
             Some(name) => match self.storage_operator.lock().get(name) {
@@ -292,7 +291,7 @@ impl SingletonImpl<Operator> for TestGlobalServices {
         }
     }
 
-    fn init(&self, value: Operator) -> Result<()> {
+    fn init(&self, value: StorageOperator) -> Result<()> {
         match std::thread::current().name() {
             None => panic!("thread name is none"),
             Some(name) => match self.storage_operator.lock().entry(name.to_string()) {

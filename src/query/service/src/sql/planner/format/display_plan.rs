@@ -68,6 +68,7 @@ impl Plan {
             // Insert
             Plan::Insert(insert) => Ok(format!("{:?}", insert)),
             Plan::Delete(delete) => Ok(format!("{:?}", delete)),
+            Plan::Update(update) => Ok(format!("{:?}", update)),
 
             // Stages
             Plan::ListStage(s) => Ok(format!("{:?}", s)),

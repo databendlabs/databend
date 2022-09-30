@@ -151,6 +151,10 @@ impl MutableColumn for MutableStringColumn {
             ErrorCode::BadDataArrayLength("String column array is empty when pop data value")
         })
     }
+
+    fn memory_size(&self) -> usize {
+        self.values.len() + self.offsets.len() * std::mem::size_of::<i64>()
+    }
 }
 
 impl ScalarColumnBuilder for MutableStringColumn {

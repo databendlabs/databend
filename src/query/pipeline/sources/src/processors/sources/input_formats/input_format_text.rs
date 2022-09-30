@@ -103,7 +103,6 @@ impl<T: InputFormatTextBase> InputFormat for InputFormatText<T> {
     }
 
     fn exec_copy(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {
-        tracing::info!("exe text");
         InputFormatTextPipe::<T>::execute_copy_with_aligner(ctx, pipeline)
     }
 
@@ -354,6 +353,10 @@ impl<T: InputFormatTextBase> BlockBuilder<T> {
 
         Ok(vec![DataBlock::create(self.ctx.schema.clone(), columns)])
     }
+
+    fn memory_size(&self) -> usize {
+        self.mutable_columns.iter().map(|x| x.memory_size()).sum()
+    }
 }
 
 impl<T: InputFormatTextBase> BlockBuilderTrait for BlockBuilder<T> {
@@ -373,7 +376,15 @@ impl<T: InputFormatTextBase> BlockBuilderTrait for BlockBuilder<T> {
         if let Some(b) = batch {
             self.num_rows += b.row_ends.len();
             T::deserialize(self, b)?;
-            if self.num_rows >= self.ctx.rows_per_block {
+            let mem = self.memory_size();
+            tracing::debug!(
+                "block builder added new batch: row {} size {}",
+                self.num_rows,
+                mem
+            );
+            if self.num_rows >= self.ctx.rows_per_block
+                || mem > self.ctx.block_memory_size_threshold
+            {
                 self.flush()
             } else {
                 Ok(vec![])

@@ -100,7 +100,7 @@ impl JoinHashTable {
             }
             JoinType::LeftSemi => {
                 if self.hash_join_desc.other_predicate.is_none() {
-                    let result = self.semi_anti_join::<true, _, _>(
+                    let result = self.left_semi_anti_join::<true, _, _>(
                         hash_table,
                         probe_state,
                         keys_iter,
@@ -108,7 +108,7 @@ impl JoinHashTable {
                     )?;
                     return Ok(vec![result]);
                 } else {
-                    let result = self.semi_anti_join_with_other_conjunct::<true, _, _>(
+                    let result = self.left_semi_anti_join_with_other_conjunct::<true, _, _>(
                         hash_table,
                         probe_state,
                         keys_iter,
@@ -119,7 +119,7 @@ impl JoinHashTable {
             }
             JoinType::LeftAnti => {
                 if self.hash_join_desc.other_predicate.is_none() {
-                    let result = self.semi_anti_join::<false, _, _>(
+                    let result = self.left_semi_anti_join::<false, _, _>(
                         hash_table,
                         probe_state,
                         keys_iter,
@@ -127,7 +127,7 @@ impl JoinHashTable {
                     )?;
                     return Ok(vec![result]);
                 } else {
-                    let result = self.semi_anti_join_with_other_conjunct::<false, _, _>(
+                    let result = self.left_semi_anti_join_with_other_conjunct::<false, _, _>(
                         hash_table,
                         probe_state,
                         keys_iter,
@@ -135,6 +135,10 @@ impl JoinHashTable {
                     )?;
                     return Ok(vec![result]);
                 }
+            }
+            JoinType::RightSemi | JoinType::RightAnti => {
+                let result = self.right_join::<_, _>(hash_table, probe_state, keys_iter, input)?;
+                return Ok(vec![result]);
             }
             // Single join is similar to left join, but the result is a single row.
             JoinType::Left | JoinType::Single | JoinType::Full => {
@@ -266,7 +270,7 @@ impl JoinHashTable {
         Ok(())
     }
 
-    fn semi_anti_join<const SEMI: bool, Key, IT>(
+    fn left_semi_anti_join<const SEMI: bool, Key, IT>(
         &self,
         hash_table: &HashMap<Key, Vec<RowPtr>>,
         probe_state: &mut ProbeState,
@@ -297,7 +301,7 @@ impl JoinHashTable {
         DataBlock::block_take_by_indices(input, probe_indexs)
     }
 
-    fn semi_anti_join_with_other_conjunct<const SEMI: bool, Key, IT>(
+    fn left_semi_anti_join_with_other_conjunct<const SEMI: bool, Key, IT>(
         &self,
         hash_table: &HashMap<Key, Vec<RowPtr>>,
         probe_state: &mut ProbeState,
@@ -579,16 +583,13 @@ impl JoinHashTable {
         let probe_indexes = &mut probe_state.probe_indexs;
         let valids = &probe_state.valids;
         let mut validity = MutableBitmap::new();
+        let mut build_indexes = self.hash_join_desc.right_join_desc.build_indexes.write();
         for (i, key) in keys_iter.enumerate() {
             let probe_result_ptr = Self::probe_key(hash_table, key, valids, i);
             if let Some(v) = probe_result_ptr {
                 let probe_result_ptrs = v.get_value();
-                {
-                    let mut build_indexes =
-                        self.hash_join_desc.right_join_desc.build_indexes.write();
-                    build_indexes.extend(probe_result_ptrs);
-                    local_build_indexes.extend_from_slice(probe_result_ptrs);
-                }
+                build_indexes.extend(probe_result_ptrs);
+                local_build_indexes.extend_from_slice(probe_result_ptrs);
                 for row_ptr in probe_result_ptrs.iter() {
                     {
                         let mut row_state = self.hash_join_desc.right_join_desc.row_state.write();
@@ -604,16 +605,20 @@ impl JoinHashTable {
         }
 
         let build_block = self.row_space.gather(local_build_indexes)?;
-        let probe_block = DataBlock::block_take_by_indices(input, probe_indexes)?;
-        let validity: Bitmap = validity.into();
-        let nullable_columns = probe_block
-            .columns()
-            .iter()
-            .map(|c| Self::set_validity(c, &validity))
-            .collect::<Result<Vec<_>>>()?;
-        let nullable_probe_block = DataBlock::create(self.probe_schema.clone(), nullable_columns);
+        let mut probe_block = DataBlock::block_take_by_indices(input, probe_indexes)?;
+        // If join type is right join, need to wrap nullable for probe side
+        // If join type is semi/anti right join, directly merge `build_block` and `probe_block`
+        if self.hash_join_desc.join_type == JoinType::Right {
+            let validity: Bitmap = validity.into();
+            let nullable_columns = probe_block
+                .columns()
+                .iter()
+                .map(|c| Self::set_validity(c, &validity))
+                .collect::<Result<Vec<_>>>()?;
+            probe_block = DataBlock::create(self.probe_schema.clone(), nullable_columns);
+        }
 
-        self.merge_eq_block(&build_block, &nullable_probe_block)
+        self.merge_eq_block(&build_block, &probe_block)
     }
 
     // modify the bm by the value row_state
@@ -710,6 +715,23 @@ impl JoinHashTable {
                 row_state.entry(*row).and_modify(|e| *e -= 1);
             }
         }
+    }
+
+    pub(crate) fn filter_rows_for_right_semi_join(
+        &self,
+        bm: &mut MutableBitmap,
+        build_indexes: &[RowPtr],
+        input: DataBlock,
+    ) -> Result<DataBlock> {
+        let mut row_state = self.hash_join_desc.right_join_desc.row_state.write();
+        for (index, row) in build_indexes.iter().enumerate() {
+            if row_state[row] > 1 && bm.get(index) {
+                bm.set(index, false);
+                row_state.entry(*row).and_modify(|e| *e -= 1);
+            }
+        }
+        let predicate = BooleanColumn::from_arrow_data(bm.clone().into()).arc();
+        DataBlock::filter_block(input, &predicate)
     }
 
     // return an (option bitmap, all_true, all_false)

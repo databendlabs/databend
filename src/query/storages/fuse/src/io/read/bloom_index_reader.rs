@@ -32,8 +32,8 @@ use common_datavalues::ToDataType;
 use common_datavalues::Vu8;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_fuse_meta::meta::BlockBloomFilterIndex;
 use common_fuse_meta::meta::BlockBloomFilterIndexVersion;
+use common_fuse_meta::meta::BlockFilter;
 use common_fuse_meta::meta::Location;
 use futures_util::future::try_join_all;
 use opendal::Operator;
@@ -41,31 +41,31 @@ use tracing::Instrument;
 pub use util_v1::load_bloom_filter_by_columns;
 
 #[async_trait::async_trait]
-pub trait BlockBloomFilterIndexReader {
-    async fn read_bloom_filter_index(
+pub trait BlockFilterReader {
+    async fn read_filter(
         &self,
         ctx: Arc<dyn TableContext>,
         dal: Operator,
         columns: &[String],
         index_length: u64,
-    ) -> Result<BlockBloomFilterIndex>;
+    ) -> Result<BlockFilter>;
 }
 
 #[async_trait::async_trait]
-impl BlockBloomFilterIndexReader for Location {
-    async fn read_bloom_filter_index(
+impl BlockFilterReader for Location {
+    async fn read_filter(
         &self,
         ctx: Arc<dyn TableContext>,
         dal: Operator,
         columns: &[String],
         index_length: u64,
-    ) -> Result<BlockBloomFilterIndex> {
+    ) -> Result<BlockFilter> {
         let index_version = BlockBloomFilterIndexVersion::try_from(self.1)?;
         match index_version {
             BlockBloomFilterIndexVersion::V2(_) => {
                 let block =
                     load_bloom_filter_by_columns(ctx, dal, columns, &self.0, index_length).await?;
-                Ok(BlockBloomFilterIndex::new(block))
+                Ok(BlockFilter::new(block))
             }
         }
     }

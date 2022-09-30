@@ -13,5 +13,6 @@
 // limitations under the License.
 
 mod decode;
+mod encode;
 mod functions;
 mod parser;

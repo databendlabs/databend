@@ -22,15 +22,12 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
-use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::TableSnapshot;
 use common_legacy_planners::Extras;
 use futures::future;
-use futures::StreamExt;
-use futures::TryStreamExt;
 use tracing::Instrument;
 
-use super::bloom_pruner;
+use super::pruner;
 use crate::io::MetaReaders;
 use crate::pruning::limiter;
 use crate::pruning::range_pruner;
@@ -45,7 +42,21 @@ impl BlockPruner {
         Self { table_snapshot }
     }
 
-    // prune blocks by utilizing min_max index and bloom filter, according to the pushdowns
+    // Sync version of method `prune`
+    //
+    // Please note that it will take a significant period of time to prune a large table, and
+    // thread that calls this method will be blocked.
+    #[tracing::instrument(level = "debug", skip(self, schema, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    pub fn sync_prune(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        schema: DataSchemaRef,
+        push_down: &Option<Extras>,
+    ) -> Result<Vec<(usize, BlockMeta)>> {
+        futures::executor::block_on(self.prune(ctx, schema, push_down))
+    }
+
+    // prune blocks by utilizing min_max index and filter, according to the pushdowns
     #[tracing::instrument(level = "debug", skip(self, schema, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     pub async fn prune(
         &self,
@@ -77,9 +88,9 @@ impl BlockPruner {
         let range_filter_pruner =
             range_pruner::new_range_filter_pruner(ctx, filter_expressions, &schema)?;
 
-        // prepare the bloom filter, if filter_expression is none, an dummy pruner will be returned
+        // prepare the filter, if filter_expression is none, an dummy pruner will be returned
         let dal = ctx.get_storage_operator()?;
-        let bloom_filter_pruner = bloom_pruner::new_pruner(ctx, filter_expressions, &schema, dal)?;
+        let filter_pruner = pruner::new_filter_pruner(ctx, filter_expressions, &schema, dal)?;
 
         // 2. kick off
         //
@@ -102,7 +113,7 @@ impl BlockPruner {
         for (segment_idx, (seg_loc, ver)) in segment_locs.into_iter().enumerate() {
             let ctx = ctx.clone();
             let range_filter_pruner = range_filter_pruner.clone();
-            let bloom_filter_pruner = bloom_filter_pruner.clone();
+            let filter_pruner = filter_pruner.clone();
             let limiter = limiter.clone();
             let semaphore = semaphore.clone();
             let rt = rt_ref.clone();
@@ -125,7 +136,7 @@ impl BlockPruner {
                     for (block_idx, block_meta) in segment_info.blocks.iter().enumerate() {
                         // prune block using range filter
                         if limiter.exceeded() {
-                            // before using bloom index to prune, check if limit already exceeded
+                            // before using filter to prune, check if limit already exceeded
                             return Ok(result);
                         }
                         if range_filter_pruner
@@ -133,7 +144,7 @@ impl BlockPruner {
                         {
                             // prune block using bloom filter
                             // different from min max
-                            let bloom_filter_pruner = bloom_filter_pruner.clone();
+                            let filter_pruner = filter_pruner.clone();
                             let limiter = limiter.clone();
                             let row_count = block_meta.row_count;
                             let index_location = block_meta.bloom_filter_index_location.clone();
@@ -141,7 +152,7 @@ impl BlockPruner {
                             let h = rt.spawn(
                                 async move {
                                     if limiter.within_limit(row_count)
-                                        && bloom_filter_pruner
+                                        && filter_pruner
                                             .should_keep(&index_location, index_size)
                                             .await
                                     {

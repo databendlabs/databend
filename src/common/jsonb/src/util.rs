@@ -16,6 +16,7 @@ use std::io::Read;
 
 use super::constants::*;
 use super::error::Error;
+use super::error::ParseErrorCode;
 
 #[allow(clippy::zero_prefixed_literal)]
 static HEX: [u8; 256] = {
@@ -43,9 +44,11 @@ static HEX: [u8; 256] = {
 
 pub fn parse_escaped_string<'a>(
     mut data: &'a [u8],
+    idx: &mut usize,
     str_buf: &mut String,
 ) -> Result<&'a [u8], Error> {
     let byte = data[0];
+    *idx += 1;
     data = &data[1..];
     match byte {
         b'\\' => str_buf.push(BS),
@@ -59,11 +62,15 @@ pub fn parse_escaped_string<'a>(
         b'u' => {
             let mut numbers = vec![0; UNICODE_LEN];
             data.read_exact(numbers.as_mut_slice())?;
-            let hex = decode_hex_escape(numbers)?;
+            *idx += 4;
+            let hex = decode_hex_escape(numbers, idx)?;
 
             let c = match hex {
                 n @ 0xDC00..=0xDFFF => {
-                    return Err(Error::InvalidLoneLeadingSurrogateInHexEscape(n));
+                    return Err(Error::Syntax(
+                        ParseErrorCode::InvalidLoneLeadingSurrogateInHexEscape(n),
+                        *idx,
+                    ));
                 }
 
                 // Non-BMP characters are encoded as a sequence of two hex
@@ -71,23 +78,38 @@ pub fn parse_escaped_string<'a>(
                 // utf-8 string the surrogates are required to be paired,
                 // whereas deserializing a byte string accepts lone surrogates.
                 n1 @ 0xD800..=0xDBFF => {
-                    let next_byte = data.first().ok_or(Error::InvalidEOF)?;
-                    if *next_byte == b'\\' {
-                        data = &data[1..];
-                    } else {
-                        return Err(Error::UnexpectedEndOfHexEscape);
+                    if data.len() < 2 {
+                        return Err(Error::Syntax(
+                            ParseErrorCode::UnexpectedEndOfHexEscape,
+                            *idx,
+                        ));
                     }
-                    let next_byte = data.first().ok_or(Error::InvalidEOF)?;
-                    if *next_byte == b'u' {
+                    let next_byte = data[0];
+                    if next_byte == b'\\' {
+                        *idx += 1;
                         data = &data[1..];
                     } else {
-                        return parse_escaped_string(data, str_buf);
+                        return Err(Error::Syntax(
+                            ParseErrorCode::UnexpectedEndOfHexEscape,
+                            *idx,
+                        ));
+                    }
+                    let next_byte = data[0];
+                    if next_byte == b'u' {
+                        *idx += 1;
+                        data = &data[1..];
+                    } else {
+                        return parse_escaped_string(data, idx, str_buf);
                     }
                     let mut numbers = vec![0; UNICODE_LEN];
                     data.read_exact(numbers.as_mut_slice())?;
-                    let n2 = decode_hex_escape(numbers)?;
+                    *idx += 4;
+                    let n2 = decode_hex_escape(numbers, idx)?;
                     if !(0xDC00..=0xDFFF).contains(&n2) {
-                        return Err(Error::InvalidSurrogateInHexEscape(n2));
+                        return Err(Error::Syntax(
+                            ParseErrorCode::InvalidSurrogateInHexEscape(n2),
+                            *idx,
+                        ));
                     }
 
                     let n = (((n1 - 0xD800) as u32) << 10 | (n2 - 0xDC00) as u32) + 0x1_0000;
@@ -100,7 +122,7 @@ pub fn parse_escaped_string<'a>(
             };
             str_buf.push(c);
         }
-        other => return Err(Error::InvalidEscaped(other)),
+        other => return Err(Error::Syntax(ParseErrorCode::InvalidEscaped(other), *idx)),
     }
     Ok(data)
 }
@@ -112,11 +134,14 @@ fn decode_hex_val(val: u8) -> Option<u16> {
 }
 
 #[inline]
-fn decode_hex_escape(numbers: Vec<u8>) -> Result<u16, Error> {
+fn decode_hex_escape(numbers: Vec<u8>, idx: &usize) -> Result<u16, Error> {
     let mut n = 0;
     for number in numbers {
-        let hex = decode_hex_val(number).ok_or(Error::InvalidHex(number))?;
-        n = (n << 4) + hex;
+        if let Some(hex) = decode_hex_val(number) {
+            n = (n << 4) + hex;
+        } else {
+            return Err(Error::Syntax(ParseErrorCode::InvalidHex(number), *idx));
+        }
     }
     Ok(n)
 }

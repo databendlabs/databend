@@ -14,8 +14,10 @@
 
 use std::any::Any;
 use std::collections::VecDeque;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -28,7 +30,10 @@ use common_pipeline_core::processors::Processor;
 pub struct TransformCompact<T: Compactor + Send + 'static> {
     state: ProcessorState,
     compactor: T,
+    aborting: Aborting,
 }
+
+pub type Aborting = Arc<Box<dyn Fn() -> bool + Send + Sync + 'static>>;
 
 /// Compactor is a trait that defines how to compact blocks.
 pub trait Compactor {
@@ -45,15 +50,17 @@ pub trait Compactor {
     }
 
     /// `compact_final` is called when all the blocks are pushed to finish the compaction
-    fn compact_final(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>>;
+    fn compact_final(&self, blocks: &[DataBlock], aborting: Aborting) -> Result<Vec<DataBlock>>;
 }
 
 impl<T: Compactor + Send + 'static> TransformCompact<T> {
     pub fn try_create(
+        ctx: Arc<dyn TableContext>,
         input_port: Arc<InputPort>,
         output_port: Arc<OutputPort>,
         compactor: T,
     ) -> Result<ProcessorPtr> {
+        let aborting = ctx.get_aborting();
         let state = ProcessorState::Consume(ConsumeState {
             input_port,
             output_port,
@@ -61,7 +68,11 @@ impl<T: Compactor + Send + 'static> TransformCompact<T> {
             output_data_blocks: VecDeque::new(),
         });
 
-        Ok(ProcessorPtr::create(Box::new(Self { state, compactor })))
+        Ok(ProcessorPtr::create(Box::new(Self {
+            state,
+            compactor,
+            aborting: Arc::new(Box::new(move || aborting.load(Ordering::Relaxed))),
+        })))
     }
 
     #[inline(always)]
@@ -104,8 +115,8 @@ impl<T: Compactor + Send + 'static> TransformCompact<T> {
 
 #[async_trait::async_trait]
 impl<T: Compactor + Send + 'static> Processor for TransformCompact<T> {
-    fn name(&self) -> &'static str {
-        T::name()
+    fn name(&self) -> String {
+        T::name().to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -154,7 +165,8 @@ impl<T: Compactor + Send + 'static> Processor for TransformCompact<T> {
                 Ok(())
             }
             ProcessorState::Compacting(state) => {
-                let compacted_blocks = self.compactor.compact_final(&state.blocks)?;
+                let aborting = self.aborting.clone();
+                let compacted_blocks = self.compactor.compact_final(&state.blocks, aborting)?;
 
                 let mut temp_state = ProcessorState::Finished;
                 std::mem::swap(&mut self.state, &mut temp_state);

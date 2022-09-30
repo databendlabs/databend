@@ -43,6 +43,7 @@ use crate::processors::sources::input_formats::input_split::SplitInfo;
 use crate::processors::sources::input_formats::InputFormat;
 
 const MIN_ROW_PER_BLOCK: usize = 800 * 1000;
+const DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD: usize = 100 * 1024 * 1024;
 
 #[derive(Debug)]
 pub enum InputPlan {
@@ -120,6 +121,7 @@ pub struct InputContext {
 
     pub read_batch_size: usize,
     pub rows_per_block: usize,
+    pub block_memory_size_threshold: usize,
 
     pub scan_progress: Arc<Progress>,
 }
@@ -205,6 +207,7 @@ impl InputContext {
             scan_progress,
             source: InputSource::Operator(operator),
             plan: InputPlan::CopyInto(plan),
+            block_memory_size_threshold: DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD,
         })
     }
 
@@ -217,7 +220,7 @@ impl InputContext {
         is_multi_part: bool,
     ) -> Result<Self> {
         let (format_name, rows_to_skip) = remove_clickhouse_format_suffix(format_name);
-        let rows_to_skip = std::cmp::max(settings.get_skip_header()? as usize, rows_to_skip);
+        let rows_to_skip = std::cmp::max(settings.get_format_skip_header()? as usize, rows_to_skip);
 
         let format_type =
             StageFileFormatType::from_str(format_name).map_err(ErrorCode::UnknownFormat)?;
@@ -225,7 +228,7 @@ impl InputContext {
         let format_settings = format.get_format_settings(&settings)?;
         let read_batch_size = settings.get_input_read_buffer_size()? as usize;
         let rows_per_block = MIN_ROW_PER_BLOCK;
-        let field_delimiter = settings.get_field_delimiter()?;
+        let field_delimiter = settings.get_format_field_delimiter()?;
         let field_delimiter = {
             if field_delimiter.is_empty() {
                 format.default_field_delimiter()
@@ -233,8 +236,9 @@ impl InputContext {
                 field_delimiter.as_bytes()[0]
             }
         };
-        let record_delimiter = RecordDelimiter::try_from(&settings.get_record_delimiter()?[..])?;
-        let compression = settings.get_compression()?;
+        let record_delimiter =
+            RecordDelimiter::try_from(&settings.get_format_record_delimiter()?[..])?;
+        let compression = settings.get_format_compression()?;
         let compression = if !compression.is_empty() {
             StageFileCompression::from_str(&compression).map_err(ErrorCode::BadArguments)?
         } else {
@@ -259,6 +263,7 @@ impl InputContext {
             source: InputSource::Stream(Mutex::new(Some(stream_receiver))),
             plan: InputPlan::StreamingLoad(plan),
             splits: vec![],
+            block_memory_size_threshold: DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD,
         })
     }
 
