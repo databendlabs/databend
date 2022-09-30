@@ -37,7 +37,7 @@ use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
-use common_metrics::counter::WithCount;
+use common_metrics::counter::Count;
 use futures::StreamExt;
 use prost::Message;
 use tokio_stream;
@@ -167,7 +167,7 @@ impl MetaService for MetaServiceImpl {
     }
 
     async fn kv_api(&self, r: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
-        let _guard = WithCount::new((), RequestInFlight);
+        let _guard = RequestInFlight::guard();
 
         self.check_token(r.metadata())?;
         common_tracing::extract_remote_span_as_parent(&r);
@@ -213,7 +213,7 @@ impl MetaService for MetaServiceImpl {
         &self,
         _request: Request<common_meta_types::protobuf::Empty>,
     ) -> Result<Response<Self::ExportStream>, Status> {
-        let _guard = WithCount::new((), RequestInFlight);
+        let _guard = RequestInFlight::guard();
 
         let meta_node = &self.meta_node;
         let res = meta_node.sto.export().await?;
@@ -247,7 +247,7 @@ impl MetaService for MetaServiceImpl {
     ) -> Result<Response<TxnReply>, Status> {
         self.check_token(request.metadata())?;
         network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
-        let _guard = WithCount::new((), RequestInFlight);
+        let _guard = RequestInFlight::guard();
 
         common_tracing::extract_remote_span_as_parent(&request);
 
@@ -266,7 +266,7 @@ impl MetaService for MetaServiceImpl {
         request: Request<MemberListRequest>,
     ) -> Result<Response<MemberListReply>, Status> {
         self.check_token(request.metadata())?;
-        let _guard = WithCount::new((), RequestInFlight);
+        let _guard = RequestInFlight::guard();
 
         let meta_node = &self.meta_node;
         let members = meta_node.get_meta_addrs().await.map_err(|e| {
@@ -283,7 +283,7 @@ impl MetaService for MetaServiceImpl {
         &self,
         request: Request<Empty>,
     ) -> Result<Response<ClientInfo>, Status> {
-        let _guard = WithCount::new((), RequestInFlight);
+        let _guard = RequestInFlight::guard();
 
         let r = request.remote_addr();
         if let Some(addr) = r {

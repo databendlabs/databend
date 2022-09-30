@@ -24,6 +24,8 @@
 //! - meta_network: for metrics about meta-service grpc api.
 //! The `field` is arbitrary string.
 
+use std::time::Instant;
+
 use common_metrics::counter;
 use tracing::error;
 
@@ -198,13 +200,20 @@ pub mod raft_metrics {
 }
 
 pub mod network_metrics {
+    use std::time::Duration;
+
     use metrics::counter;
+    use metrics::histogram;
     use metrics::increment_gauge;
 
     macro_rules! key {
         ($key: literal) => {
             concat!("metasrv_meta_network_", $key)
         };
+    }
+
+    pub fn sample_rpc_delay_seconds(d: Duration) {
+        histogram!(key!("rpc_delay_seconds"), d);
     }
 
     pub fn incr_sent_bytes(bytes: u64) {
@@ -228,16 +237,29 @@ pub mod network_metrics {
     }
 }
 
-/// RAII metrics counter of in-flight requests
-pub(crate) struct RequestInFlight;
+/// RAII metrics counter of in-flight requests count and delay.
+#[derive(Default)]
+pub(crate) struct RequestInFlight {
+    start: Option<Instant>,
+}
 
 impl counter::Count for RequestInFlight {
     fn incr_count(&mut self, n: i64) {
         network_metrics::incr_request_inflights(n);
+
+        #[allow(clippy::comparison_chain)]
+        if n > 0 {
+            self.start = Some(Instant::now());
+        } else if n < 0 {
+            if let Some(s) = self.start {
+                network_metrics::sample_rpc_delay_seconds(s.elapsed())
+            }
+        }
     }
 }
 
 /// RAII metrics counter of pending raft proposals
+#[derive(Default)]
 pub(crate) struct ProposalPending;
 
 impl counter::Count for ProposalPending {
