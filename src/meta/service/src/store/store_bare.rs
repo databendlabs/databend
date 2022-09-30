@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::fmt::Debug;
 use std::io::Cursor;
 use std::io::ErrorKind;
@@ -696,37 +695,5 @@ impl RaftStoreBare {
             .ok_or_else(|| MetaNetworkError::GetNodeAddrError(format!("node id: {}", node_id)))?;
 
         Ok(endpoint)
-    }
-
-    /// A non-voter is a node stored in raft store, but is not configured as a voter in the raft group.
-    pub async fn list_non_voters(&self) -> HashSet<NodeId> {
-        // TODO(xp): consistency
-        let mut rst = HashSet::new();
-
-        let membership = {
-            let sm = self.state_machine.read().await;
-            sm.get_membership().expect("fail to load membership")
-        };
-
-        let membership = match membership {
-            None => {
-                return HashSet::new();
-            }
-            Some(x) => x,
-        };
-
-        let node_ids = {
-            let sm = self.state_machine.read().await;
-            let sm_nodes = sm.nodes();
-            sm_nodes.range_keys(..).expect("fail to list nodes")
-        };
-
-        for node_id in node_ids {
-            // it has been added into this cluster and is not a voter.
-            if !membership.membership.contains(&node_id) {
-                rst.insert(node_id);
-            }
-        }
-        rst
     }
 }
