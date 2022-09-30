@@ -12,16 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Write;
+
 use common_base::base::tokio;
+use common_datablocks::pretty_format_blocks;
 use common_exception::Result;
 use databend_query::sessions::TableContext;
 use databend_query::storages::system::SettingsTable;
 use databend_query::storages::TableStreamReadWrap;
 use databend_query::storages::ToReadDataSourcePlan;
 use futures::TryStreamExt;
+use goldenfile::Mint;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_settings_table() -> Result<()> {
+    let mut mint = Mint::new("tests/it/storages/system/testdata");
+    let file = &mut mint.new_goldenfile("settings.txt").unwrap();
+
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     ctx.get_settings().set_max_threads(2)?;
 
@@ -29,37 +36,8 @@ async fn test_settings_table() -> Result<()> {
     let source_plan = table.read_plan(ctx.clone(), None).await?;
 
     let stream = table.read(ctx, &source_plan).await?;
-    let result = stream.try_collect::<Vec<_>>().await?;
-    let expected = vec![
-        "+--------------------------------+------------+------------+---------+----------------------------------------------------------------------------------------------------+--------+",
-        "| name                           | value      | default    | level   | description                                                                                        | type   |",
-        "+--------------------------------+------------+------------+---------+----------------------------------------------------------------------------------------------------+--------+",
-        "| enable_async_insert            | 0          | 0          | SESSION | Whether the client open async insert mode, default value: 0                                        | UInt64 |",
-        "| enable_cbo                     | 1          | 1          | SESSION | If enable cost based optimization, default value: 1                                                | UInt64 |",
-        "| enable_new_processor_framework | 1          | 1          | SESSION | Enable new processor framework if value != 0, default value: 1                                     | UInt64 |",
-        "| enable_planner_v2              | 1          | 1          | SESSION | Enable planner v2 by setting this variable to 1, default value: 1                                  | UInt64 |",
-        "| format_compression             | None       | None       | SESSION | Format compression, default value: None                                                            | String |",
-        "| format_empty_as_default        | 1          | 1          | SESSION | Format empty_as_default, default value: 1                                                          | UInt64 |",
-        "| format_field_delimiter         | ,          | ,          | SESSION | Format field delimiter, default value: ,                                                           | String |",
-        "| format_quote_char              | '\"'        | '\"'        | SESSION | The quote char for CSV. default value: '\"'.                                                        | String |",
-        "| format_record_delimiter        | \"\\n\"       | \"\\n\"       | SESSION | Format record_delimiter, default value: \"\\n\"                                                       | String |",
-        "| format_skip_header             | 0          | 0          | SESSION | Whether to skip the input header, default value: 0                                                 | UInt64 |",
-        "| flight_client_timeout          | 60         | 60         | SESSION | Max duration the flight client request is allowed to take in seconds. By default, it is 60 seconds | UInt64 |",
-        "| input_read_buffer_size         | 1048576    | 1048576    | SESSION | The size of buffer in bytes for input with format. By default, it is 1MB.                          | UInt64 |",
-        "| group_by_two_level_threshold   | 10000      | 10000      | SESSION | The threshold of keys to open two-level aggregation, default value: 10000                          | UInt64 |",
-        "| max_block_size                 | 10000      | 10000      | SESSION | Maximum block size for reading                                                                     | UInt64 |",
-        "| max_execute_time               | 0          | 0          | SESSION | The maximum query execution time. it means no limit if the value is zero. default value: 0         | UInt64 |",
-        "| max_threads                    | 2          | 16         | SESSION | The maximum number of threads to execute the request. By default, it is determined automatically.  | UInt64 |",
-        "| quoted_ident_case_sensitive    | 1          | 1          | SESSION | Case sensitivity of quoted identifiers, default value: 1 (aka case-sensitive)                      | UInt64 |",
-        "| sql_dialect                    | PostgreSQL | PostgreSQL | SESSION | SQL dialect, support \"PostgreSQL\" and \"MySQL\", default value: \"PostgreSQL\"                         | String |",
-        "| storage_read_buffer_size       | 1048576    | 1048576    | SESSION | The size of buffer in bytes for buffered reader of dal. By default, it is 1MB.                     | UInt64 |",
-        "| timezone                       | UTC        | UTC        | SESSION | Timezone, default value: UTC,                                                                      | String |",
-        "| unquoted_ident_case_sensitive  | 0          | 0          | SESSION | Case sensitivity of unquoted identifiers, default value: 0 (aka case-insensitive)                  | UInt64 |",
-        "| wait_for_async_insert          | 1          | 1          | SESSION | Whether the client wait for the reply of async insert, default value: 1                            | UInt64 |",
-        "| wait_for_async_insert_timeout  | 100        | 100        | SESSION | The timeout in seconds for waiting for processing of async insert, default value: 100              | UInt64 |",
-        "+--------------------------------+------------+------------+---------+----------------------------------------------------------------------------------------------------+--------+",
-    ];
-    common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
-
+    let blocks = stream.try_collect::<Vec<_>>().await?;
+    let formatted = pretty_format_blocks(&blocks).unwrap();
+    write!(file, "{formatted}").unwrap();
     Ok(())
 }
