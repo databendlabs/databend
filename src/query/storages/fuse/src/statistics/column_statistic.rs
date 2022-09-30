@@ -126,7 +126,7 @@ pub trait Trim: Sized {
 }
 
 pub const STATS_REPLACEMENT_CHAR: char = '\u{FFFD}';
-pub const STATS_STRING_PREFIX_LEN: usize = 32;
+pub const STATS_STRING_PREFIX_LEN: usize = 16;
 
 impl Trim for DataValue {
     fn trim_min(self) -> Option<Self> {
