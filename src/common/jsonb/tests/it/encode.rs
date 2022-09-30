@@ -22,7 +22,7 @@ use common_jsonb::Value;
 fn test_encode_null() {
     let v = Value::Null;
     let mut buf: Vec<u8> = Vec::new();
-    v.to_vec(&mut buf).unwrap();
+    v.to_vec(&mut buf);
     assert_eq!(buf, b"\x20\0\0\0\0\0\0\0");
 }
 
@@ -35,7 +35,7 @@ fn test_encode_boolean() {
     let mut buf: Vec<u8> = Vec::new();
     for (b, s) in tests {
         let v = Value::Bool(s);
-        v.to_vec(&mut buf).unwrap();
+        v.to_vec(&mut buf);
         assert_eq!(buf, b);
         buf.clear();
     }
@@ -54,7 +54,7 @@ fn test_encode_string() {
     let mut buf: Vec<u8> = Vec::new();
     for (b, s) in tests {
         let v = Value::String(Cow::from(s));
-        v.to_vec(&mut buf).unwrap();
+        v.to_vec(&mut buf);
         assert_eq!(buf, b);
         buf.clear();
     }
@@ -95,7 +95,7 @@ fn test_encode_int64() {
     let mut buf: Vec<u8> = Vec::new();
     for (b, s) in tests {
         let v = Value::Number(Number::Int64(s));
-        v.to_vec(&mut buf).unwrap();
+        v.to_vec(&mut buf);
         assert_eq!(buf, b);
         buf.clear();
     }
@@ -123,7 +123,7 @@ fn test_encode_uint64() {
     let mut buf: Vec<u8> = Vec::new();
     for (b, s) in tests {
         let v = Value::Number(Number::UInt64(s));
-        v.to_vec(&mut buf).unwrap();
+        v.to_vec(&mut buf);
         assert_eq!(buf, b);
         buf.clear();
     }
@@ -146,7 +146,7 @@ fn test_encode_float64() {
     let mut buf: Vec<u8> = Vec::new();
     for (b, s) in tests {
         let v = Value::Number(Number::Float64(s));
-        v.to_vec(&mut buf).unwrap();
+        v.to_vec(&mut buf);
         assert_eq!(buf, b);
         buf.clear();
     }
@@ -161,7 +161,7 @@ fn test_encode_array() {
     let mut buf: Vec<u8> = Vec::new();
     for (b, s) in tests {
         let v = Value::Array(s);
-        v.to_vec(&mut buf).unwrap();
+        v.to_vec(&mut buf);
         assert_eq!(buf, b);
         buf.clear();
     }
@@ -178,7 +178,7 @@ fn test_encode_object() {
     let mut buf: Vec<u8> = Vec::new();
     for (b, s) in tests {
         let v = Value::Object(s);
-        v.to_vec(&mut buf).unwrap();
+        v.to_vec(&mut buf);
         assert_eq!(buf, b);
         buf.clear();
     }
