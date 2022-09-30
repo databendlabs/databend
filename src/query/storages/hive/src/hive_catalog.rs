@@ -174,6 +174,12 @@ impl HiveCatalog {
             }
         }
 
+        if let Some(t) = table_meta.table_type.as_ref() {
+            if t == "VIRTUAL_VIEW" {
+                return Err(ErrorCode::UnImplement("not support view table"));
+            }
+        }
+
         let fields = client
             .get_schema(db_name, table_name)
             .map_err(from_thrift_error)?;
