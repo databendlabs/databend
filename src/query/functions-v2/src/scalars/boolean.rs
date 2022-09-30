@@ -145,9 +145,11 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             None
         },
-        // value = lhs | rhs,  valid = (lhs_v & rhs_v) | (lhs | rhs))
+        // value = lhs | rhs,  valid = (lhs_v & rhs_v) | (lhs_v & lhs) | (rhs_v & rhs)
         vectorize_2_arg::<NullableType<BooleanType>, NullableType<BooleanType>, NullableType<BooleanType>>(|lhs, rhs, _| {
-            let valid = (lhs.is_some() & rhs.is_some()) | (lhs.unwrap_or_default() | rhs.unwrap_or_default());
+            let lhs_v = lhs.is_some();
+            let rhs_v = rhs.is_some();
+            let valid = (lhs_v & rhs_v) | (lhs_v & lhs.unwrap_or_default()) | (rhs_v & rhs.unwrap_or_default());
             if valid {
                 Some(lhs.unwrap_or_default() | rhs.unwrap_or_default())
             } else {

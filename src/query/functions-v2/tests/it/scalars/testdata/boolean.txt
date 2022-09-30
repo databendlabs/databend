@@ -52,6 +52,258 @@ output domain  : {FALSE}
 output         : false
 
 
+ast            : (a < 1) AND (a < 1)
+raw expr       : and(lt(ColumnRef(0)::UInt8 NULL, 1_u8), lt(ColumnRef(0)::UInt8 NULL, 1_u8))
+checked expr   : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), CAST(1_u8 AS UInt8 NULL)), lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), CAST(1_u8 AS UInt8 NULL)))
+optimized expr : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), 1_u8), lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), 1_u8))
+evaluation:
++--------+------------------+--------------+
+|        | a                | Output       |
++--------+------------------+--------------+
+| Type   | UInt8 NULL       | Boolean NULL |
+| Domain | {0..=0} ∪ {NULL} | Unknown      |
+| Row 0  | NULL             | NULL         |
++--------+------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| a      | NullableColumn { column: UInt8([0]), validity: [0b_______0] }            |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______0] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : (a > 1) AND (a < 1)
+raw expr       : and(gt(ColumnRef(0)::UInt8 NULL, 1_u8), lt(ColumnRef(0)::UInt8 NULL, 1_u8))
+checked expr   : and<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), CAST(1_u8 AS UInt8 NULL)), lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), CAST(1_u8 AS UInt8 NULL)))
+optimized expr : and<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), 1_u8), lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), 1_u8))
+evaluation:
++--------+------------------+--------------+
+|        | a                | Output       |
++--------+------------------+--------------+
+| Type   | UInt8 NULL       | Boolean NULL |
+| Domain | {0..=0} ∪ {NULL} | Unknown      |
+| Row 0  | NULL             | NULL         |
++--------+------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| a      | NullableColumn { column: UInt8([0]), validity: [0b_______0] }            |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______0] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : (a < 1) AND (a > 1)
+raw expr       : and(lt(ColumnRef(0)::UInt8 NULL, 1_u8), gt(ColumnRef(0)::UInt8 NULL, 1_u8))
+checked expr   : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), CAST(1_u8 AS UInt8 NULL)), gt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), CAST(1_u8 AS UInt8 NULL)))
+optimized expr : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), 1_u8), gt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), 1_u8))
+evaluation:
++--------+------------------+--------------+
+|        | a                | Output       |
++--------+------------------+--------------+
+| Type   | UInt8 NULL       | Boolean NULL |
+| Domain | {0..=0} ∪ {NULL} | Unknown      |
+| Row 0  | NULL             | NULL         |
++--------+------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| a      | NullableColumn { column: UInt8([0]), validity: [0b_______0] }            |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______0] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : (a < 1) AND (a < 1)
+raw expr       : and(lt(ColumnRef(0)::UInt8 NULL, 1_u8), lt(ColumnRef(0)::UInt8 NULL, 1_u8))
+checked expr   : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), CAST(1_u8 AS UInt8 NULL)), lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), CAST(1_u8 AS UInt8 NULL)))
+optimized expr : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), 1_u8), lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), 1_u8))
+evaluation:
++--------+------------------+--------------+
+|        | a                | Output       |
++--------+------------------+--------------+
+| Type   | UInt8 NULL       | Boolean NULL |
+| Domain | {0..=0} ∪ {NULL} | Unknown      |
+| Row 0  | NULL             | NULL         |
++--------+------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| a      | NullableColumn { column: UInt8([0]), validity: [0b_______0] }            |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______0] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : (a > 1) AND (0 > 1)
+raw expr       : and(gt(ColumnRef(0)::UInt8 NULL, 1_u8), gt(0_u8, 1_u8))
+checked expr   : and<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), CAST(1_u8 AS UInt8 NULL)), CAST(gt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL))
+optimized expr : and<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), 1_u8), CAST(false AS Boolean NULL))
+evaluation:
++--------+------------------+--------------+
+|        | a                | Output       |
++--------+------------------+--------------+
+| Type   | UInt8 NULL       | Boolean NULL |
+| Domain | {0..=0} ∪ {NULL} | Unknown      |
+| Row 0  | NULL             | false        |
++--------+------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| a      | NullableColumn { column: UInt8([0]), validity: [0b_______0] }            |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : (a > 1) AND (0 < 1)
+raw expr       : and(gt(ColumnRef(0)::UInt8 NULL, 1_u8), lt(0_u8, 1_u8))
+checked expr   : and<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), CAST(1_u8 AS UInt8 NULL)), CAST(lt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL))
+optimized expr : and<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), 1_u8), CAST(true AS Boolean NULL))
+evaluation:
++--------+------------------+--------------+
+|        | a                | Output       |
++--------+------------------+--------------+
+| Type   | UInt8 NULL       | Boolean NULL |
+| Domain | {0..=0} ∪ {NULL} | Unknown      |
+| Row 0  | NULL             | NULL         |
++--------+------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| a      | NullableColumn { column: UInt8([0]), validity: [0b_______0] }            |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______0] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : (a < 1) AND (0 > 1)
+raw expr       : and(lt(ColumnRef(0)::UInt8 NULL, 1_u8), gt(0_u8, 1_u8))
+checked expr   : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), CAST(1_u8 AS UInt8 NULL)), CAST(gt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL))
+optimized expr : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), 1_u8), CAST(false AS Boolean NULL))
+evaluation:
++--------+------------------+--------------+
+|        | a                | Output       |
++--------+------------------+--------------+
+| Type   | UInt8 NULL       | Boolean NULL |
+| Domain | {0..=0} ∪ {NULL} | Unknown      |
+| Row 0  | NULL             | false        |
++--------+------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| a      | NullableColumn { column: UInt8([0]), validity: [0b_______0] }            |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : (a < 1) AND (0 < 1)
+raw expr       : and(lt(ColumnRef(0)::UInt8 NULL, 1_u8), lt(0_u8, 1_u8))
+checked expr   : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), CAST(1_u8 AS UInt8 NULL)), CAST(lt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL))
+optimized expr : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), 1_u8), CAST(true AS Boolean NULL))
+evaluation:
++--------+------------------+--------------+
+|        | a                | Output       |
++--------+------------------+--------------+
+| Type   | UInt8 NULL       | Boolean NULL |
+| Domain | {0..=0} ∪ {NULL} | Unknown      |
+| Row 0  | NULL             | NULL         |
++--------+------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| a      | NullableColumn { column: UInt8([0]), validity: [0b_______0] }            |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______0] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : (0 > 1) AND (a > 1)
+raw expr       : and(gt(0_u8, 1_u8), gt(ColumnRef(0)::UInt8 NULL, 1_u8))
+checked expr   : and<Boolean NULL, Boolean NULL>(CAST(gt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL), gt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), CAST(1_u8 AS UInt8 NULL)))
+optimized expr : and<Boolean NULL, Boolean NULL>(CAST(false AS Boolean NULL), gt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), 1_u8))
+evaluation:
++--------+------------------+--------------+
+|        | a                | Output       |
++--------+------------------+--------------+
+| Type   | UInt8 NULL       | Boolean NULL |
+| Domain | {0..=0} ∪ {NULL} | Unknown      |
+| Row 0  | NULL             | false        |
++--------+------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| a      | NullableColumn { column: UInt8([0]), validity: [0b_______0] }            |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : (0 > 1) AND (a < 1)
+raw expr       : and(gt(0_u8, 1_u8), lt(ColumnRef(0)::UInt8 NULL, 1_u8))
+checked expr   : and<Boolean NULL, Boolean NULL>(CAST(gt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL), lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), CAST(1_u8 AS UInt8 NULL)))
+optimized expr : and<Boolean NULL, Boolean NULL>(CAST(false AS Boolean NULL), lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), 1_u8))
+evaluation:
++--------+------------------+--------------+
+|        | a                | Output       |
++--------+------------------+--------------+
+| Type   | UInt8 NULL       | Boolean NULL |
+| Domain | {0..=0} ∪ {NULL} | Unknown      |
+| Row 0  | NULL             | false        |
++--------+------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| a      | NullableColumn { column: UInt8([0]), validity: [0b_______0] }            |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : (0 < 1) AND (a > 1)
+raw expr       : and(lt(0_u8, 1_u8), gt(ColumnRef(0)::UInt8 NULL, 1_u8))
+checked expr   : and<Boolean NULL, Boolean NULL>(CAST(lt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL), gt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), CAST(1_u8 AS UInt8 NULL)))
+optimized expr : and<Boolean NULL, Boolean NULL>(CAST(true AS Boolean NULL), gt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), 1_u8))
+evaluation:
++--------+------------------+--------------+
+|        | a                | Output       |
++--------+------------------+--------------+
+| Type   | UInt8 NULL       | Boolean NULL |
+| Domain | {0..=0} ∪ {NULL} | Unknown      |
+| Row 0  | NULL             | NULL         |
++--------+------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| a      | NullableColumn { column: UInt8([0]), validity: [0b_______0] }            |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______0] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : (0 < 1) AND (a < 1)
+raw expr       : and(lt(0_u8, 1_u8), lt(ColumnRef(0)::UInt8 NULL, 1_u8))
+checked expr   : and<Boolean NULL, Boolean NULL>(CAST(lt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL), lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), CAST(1_u8 AS UInt8 NULL)))
+optimized expr : and<Boolean NULL, Boolean NULL>(CAST(true AS Boolean NULL), lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), 1_u8))
+evaluation:
++--------+------------------+--------------+
+|        | a                | Output       |
++--------+------------------+--------------+
+| Type   | UInt8 NULL       | Boolean NULL |
+| Domain | {0..=0} ∪ {NULL} | Unknown      |
+| Row 0  | NULL             | NULL         |
++--------+------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| a      | NullableColumn { column: UInt8([0]), validity: [0b_______0] }            |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______0] } |
++--------+--------------------------------------------------------------------------+
+
+
 ast            : NOT a
 raw expr       : not(ColumnRef(0)::NULL)
 checked expr   : not<NULL>(ColumnRef(0))
@@ -143,6 +395,258 @@ optimized expr : NULL
 output type    : Boolean NULL
 output domain  : Unknown
 output         : NULL
+
+
+ast            : (a < 1) OR (a < 1)
+raw expr       : or(lt(ColumnRef(0)::UInt8 NULL, 1_u8), lt(ColumnRef(0)::UInt8 NULL, 1_u8))
+checked expr   : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), CAST(1_u8 AS UInt8 NULL)), lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), CAST(1_u8 AS UInt8 NULL)))
+optimized expr : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), 1_u8), lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), 1_u8))
+evaluation:
++--------+------------------+--------------+
+|        | a                | Output       |
++--------+------------------+--------------+
+| Type   | UInt8 NULL       | Boolean NULL |
+| Domain | {0..=0} ∪ {NULL} | Unknown      |
+| Row 0  | NULL             | NULL         |
++--------+------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| a      | NullableColumn { column: UInt8([0]), validity: [0b_______0] }            |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______0] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : (a > 1) OR (a < 1)
+raw expr       : or(gt(ColumnRef(0)::UInt8 NULL, 1_u8), lt(ColumnRef(0)::UInt8 NULL, 1_u8))
+checked expr   : or<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), CAST(1_u8 AS UInt8 NULL)), lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), CAST(1_u8 AS UInt8 NULL)))
+optimized expr : or<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), 1_u8), lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), 1_u8))
+evaluation:
++--------+------------------+--------------+
+|        | a                | Output       |
++--------+------------------+--------------+
+| Type   | UInt8 NULL       | Boolean NULL |
+| Domain | {0..=0} ∪ {NULL} | Unknown      |
+| Row 0  | NULL             | NULL         |
++--------+------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| a      | NullableColumn { column: UInt8([0]), validity: [0b_______0] }            |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______0] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : (a < 1) OR (a > 1)
+raw expr       : or(lt(ColumnRef(0)::UInt8 NULL, 1_u8), gt(ColumnRef(0)::UInt8 NULL, 1_u8))
+checked expr   : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), CAST(1_u8 AS UInt8 NULL)), gt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), CAST(1_u8 AS UInt8 NULL)))
+optimized expr : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), 1_u8), gt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), 1_u8))
+evaluation:
++--------+------------------+--------------+
+|        | a                | Output       |
++--------+------------------+--------------+
+| Type   | UInt8 NULL       | Boolean NULL |
+| Domain | {0..=0} ∪ {NULL} | Unknown      |
+| Row 0  | NULL             | NULL         |
++--------+------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| a      | NullableColumn { column: UInt8([0]), validity: [0b_______0] }            |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______0] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : (a < 1) OR (a < 1)
+raw expr       : or(lt(ColumnRef(0)::UInt8 NULL, 1_u8), lt(ColumnRef(0)::UInt8 NULL, 1_u8))
+checked expr   : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), CAST(1_u8 AS UInt8 NULL)), lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), CAST(1_u8 AS UInt8 NULL)))
+optimized expr : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), 1_u8), lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), 1_u8))
+evaluation:
++--------+------------------+--------------+
+|        | a                | Output       |
++--------+------------------+--------------+
+| Type   | UInt8 NULL       | Boolean NULL |
+| Domain | {0..=0} ∪ {NULL} | Unknown      |
+| Row 0  | NULL             | NULL         |
++--------+------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| a      | NullableColumn { column: UInt8([0]), validity: [0b_______0] }            |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______0] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : (a > 1) OR (0 > 1)
+raw expr       : or(gt(ColumnRef(0)::UInt8 NULL, 1_u8), gt(0_u8, 1_u8))
+checked expr   : or<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), CAST(1_u8 AS UInt8 NULL)), CAST(gt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL))
+optimized expr : or<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), 1_u8), CAST(false AS Boolean NULL))
+evaluation:
++--------+------------------+--------------+
+|        | a                | Output       |
++--------+------------------+--------------+
+| Type   | UInt8 NULL       | Boolean NULL |
+| Domain | {0..=0} ∪ {NULL} | Unknown      |
+| Row 0  | NULL             | NULL         |
++--------+------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| a      | NullableColumn { column: UInt8([0]), validity: [0b_______0] }            |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______0] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : (a > 1) OR (0 < 1)
+raw expr       : or(gt(ColumnRef(0)::UInt8 NULL, 1_u8), lt(0_u8, 1_u8))
+checked expr   : or<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), CAST(1_u8 AS UInt8 NULL)), CAST(lt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL))
+optimized expr : or<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), 1_u8), CAST(true AS Boolean NULL))
+evaluation:
++--------+------------------+--------------+
+|        | a                | Output       |
++--------+------------------+--------------+
+| Type   | UInt8 NULL       | Boolean NULL |
+| Domain | {0..=0} ∪ {NULL} | Unknown      |
+| Row 0  | NULL             | true         |
++--------+------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| a      | NullableColumn { column: UInt8([0]), validity: [0b_______0] }            |
+| Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : (a < 1) OR (0 > 1)
+raw expr       : or(lt(ColumnRef(0)::UInt8 NULL, 1_u8), gt(0_u8, 1_u8))
+checked expr   : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), CAST(1_u8 AS UInt8 NULL)), CAST(gt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL))
+optimized expr : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), 1_u8), CAST(false AS Boolean NULL))
+evaluation:
++--------+------------------+--------------+
+|        | a                | Output       |
++--------+------------------+--------------+
+| Type   | UInt8 NULL       | Boolean NULL |
+| Domain | {0..=0} ∪ {NULL} | Unknown      |
+| Row 0  | NULL             | NULL         |
++--------+------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| a      | NullableColumn { column: UInt8([0]), validity: [0b_______0] }            |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______0] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : (a < 1) OR (0 < 1)
+raw expr       : or(lt(ColumnRef(0)::UInt8 NULL, 1_u8), lt(0_u8, 1_u8))
+checked expr   : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), CAST(1_u8 AS UInt8 NULL)), CAST(lt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL))
+optimized expr : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), 1_u8), CAST(true AS Boolean NULL))
+evaluation:
++--------+------------------+--------------+
+|        | a                | Output       |
++--------+------------------+--------------+
+| Type   | UInt8 NULL       | Boolean NULL |
+| Domain | {0..=0} ∪ {NULL} | Unknown      |
+| Row 0  | NULL             | true         |
++--------+------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| a      | NullableColumn { column: UInt8([0]), validity: [0b_______0] }            |
+| Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : (0 > 1) OR (a > 1)
+raw expr       : or(gt(0_u8, 1_u8), gt(ColumnRef(0)::UInt8 NULL, 1_u8))
+checked expr   : or<Boolean NULL, Boolean NULL>(CAST(gt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL), gt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), CAST(1_u8 AS UInt8 NULL)))
+optimized expr : or<Boolean NULL, Boolean NULL>(CAST(false AS Boolean NULL), gt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), 1_u8))
+evaluation:
++--------+------------------+--------------+
+|        | a                | Output       |
++--------+------------------+--------------+
+| Type   | UInt8 NULL       | Boolean NULL |
+| Domain | {0..=0} ∪ {NULL} | Unknown      |
+| Row 0  | NULL             | NULL         |
++--------+------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| a      | NullableColumn { column: UInt8([0]), validity: [0b_______0] }            |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______0] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : (0 > 1) OR (a < 1)
+raw expr       : or(gt(0_u8, 1_u8), lt(ColumnRef(0)::UInt8 NULL, 1_u8))
+checked expr   : or<Boolean NULL, Boolean NULL>(CAST(gt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL), lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), CAST(1_u8 AS UInt8 NULL)))
+optimized expr : or<Boolean NULL, Boolean NULL>(CAST(false AS Boolean NULL), lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), 1_u8))
+evaluation:
++--------+------------------+--------------+
+|        | a                | Output       |
++--------+------------------+--------------+
+| Type   | UInt8 NULL       | Boolean NULL |
+| Domain | {0..=0} ∪ {NULL} | Unknown      |
+| Row 0  | NULL             | NULL         |
++--------+------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| a      | NullableColumn { column: UInt8([0]), validity: [0b_______0] }            |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______0] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : (0 < 1) OR (a > 1)
+raw expr       : or(lt(0_u8, 1_u8), gt(ColumnRef(0)::UInt8 NULL, 1_u8))
+checked expr   : or<Boolean NULL, Boolean NULL>(CAST(lt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL), gt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), CAST(1_u8 AS UInt8 NULL)))
+optimized expr : or<Boolean NULL, Boolean NULL>(CAST(true AS Boolean NULL), gt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), 1_u8))
+evaluation:
++--------+------------------+--------------+
+|        | a                | Output       |
++--------+------------------+--------------+
+| Type   | UInt8 NULL       | Boolean NULL |
+| Domain | {0..=0} ∪ {NULL} | Unknown      |
+| Row 0  | NULL             | true         |
++--------+------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| a      | NullableColumn { column: UInt8([0]), validity: [0b_______0] }            |
+| Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : (0 < 1) OR (a < 1)
+raw expr       : or(lt(0_u8, 1_u8), lt(ColumnRef(0)::UInt8 NULL, 1_u8))
+checked expr   : or<Boolean NULL, Boolean NULL>(CAST(lt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL), lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), CAST(1_u8 AS UInt8 NULL)))
+optimized expr : or<Boolean NULL, Boolean NULL>(CAST(true AS Boolean NULL), lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), 1_u8))
+evaluation:
++--------+------------------+--------------+
+|        | a                | Output       |
++--------+------------------+--------------+
+| Type   | UInt8 NULL       | Boolean NULL |
+| Domain | {0..=0} ∪ {NULL} | Unknown      |
+| Row 0  | NULL             | true         |
++--------+------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| a      | NullableColumn { column: UInt8([0]), validity: [0b_______0] }            |
+| Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
 
 
 ast            : true XOR false
