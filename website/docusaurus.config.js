@@ -11,7 +11,7 @@ const darkCodeTheme = require('prism-react-renderer/themes/dracula');
 const config = {
     title: 'Databend',
     staticDirectories: ['static', '../docs/public'],
-    tagline: 'The modern Cloud Data Warehouse, activate your object storage(S3, Azure Blob, or MinIO) for real-time analytics.',
+    tagline: 'Build a data warehouse with Databend for real-time analytics on your data from object storage.',
     url: 'https://databend.rs',
     baseUrl: '/',
     onBrokenLinks: 'throw',
