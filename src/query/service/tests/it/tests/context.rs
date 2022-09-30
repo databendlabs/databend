@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_config::DATABEND_COMMIT_VERSION;
 use common_exception::Result;
 use common_meta_embedded::MetaEmbedded;
 use common_meta_types::AuthInfo;
@@ -126,7 +127,12 @@ impl ClusterDescriptor {
 
     pub fn with_node(self, id: impl Into<String>, addr: impl Into<String>) -> ClusterDescriptor {
         let mut new_nodes = self.cluster_nodes_list.clone();
-        new_nodes.push(Arc::new(NodeInfo::create(id.into(), 0, addr.into())));
+        new_nodes.push(Arc::new(NodeInfo::create(
+            id.into(),
+            0,
+            addr.into(),
+            DATABEND_COMMIT_VERSION.to_string(),
+        )));
         ClusterDescriptor {
             cluster_nodes_list: new_nodes,
             local_node_id: self.local_node_id,

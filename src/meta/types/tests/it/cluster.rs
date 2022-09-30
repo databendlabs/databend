@@ -22,11 +22,13 @@ fn test_node_info_ip_port() -> Result<()> {
         cpu_nums: 1,
         version: 1,
         flight_address: "1.2.3.4:123".to_string(),
+        binary_version: "v0.8-binary-version".to_string(),
     };
 
     let (ip, port) = n.ip_port()?;
     assert_eq!("1.2.3.4".to_string(), ip);
     assert_eq!(123, port);
+    assert_eq!("v0.8-binary-version".to_string(), n.binary_version);
 
     Ok(())
 }
