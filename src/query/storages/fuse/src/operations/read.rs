@@ -74,7 +74,7 @@ impl FuseTable {
     #[inline]
     pub fn do_read2(
         &self,
-        ctx: Arc<dyn TableContext>,
+        mut ctx: Arc<dyn TableContext>,
         plan: &ReadDataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
@@ -87,6 +87,8 @@ impl FuseTable {
         }
 
         if !lazy_init_segments.is_empty() {
+            ctx = ctx.clone_inner();
+
             let table_info = self.table_info.clone();
             let push_downs = plan.push_downs.clone();
             let query_ctx = ctx.clone();

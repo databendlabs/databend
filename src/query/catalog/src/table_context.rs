@@ -108,4 +108,6 @@ pub trait TableContext: Send + Sync {
     -> Result<Arc<dyn Table>>;
     fn get_processes_info(&self) -> Vec<ProcessInfo>;
     fn get_runtime(&self) -> Result<Arc<Runtime>>;
+
+    fn clone_inner(&self) -> Arc<dyn TableContext>;
 }

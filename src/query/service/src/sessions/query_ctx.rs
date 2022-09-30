@@ -386,6 +386,10 @@ impl TableContext for QueryContext {
     fn get_runtime(&self) -> Result<Arc<Runtime>> {
         self.shared.try_get_runtime()
     }
+
+    fn clone_inner(&self) -> Arc<dyn TableContext> {
+        QueryContext::create_from_shared(self.shared.clone())
+    }
 }
 
 impl TrySpawn for QueryContext {
