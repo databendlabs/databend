@@ -159,9 +159,15 @@ impl HiveCatalog {
         table_name: String,
     ) -> Result<Arc<dyn Table>> {
         let mut client = client;
-        let table_meta = client
-            .get_table(db_name.clone(), table_name.clone())
-            .map_err(from_thrift_error)?;
+        // let table_meta = client .get_table(db_name.clone(), table_name.clone()) .map_err(from_thrift_error)?;
+        let table = client.get_table(db_name.clone(), table_name.clone());
+        let table_meta = match table {
+            Ok(table_meta) => table_meta,
+            Err(e) => {
+                println!("{:?}", e);
+                return Err(e);
+            }
+        };
 
         if let Some(sd) = table_meta.sd.as_ref() {
             if let Some(input_format) = sd.input_format.as_ref() {
