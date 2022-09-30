@@ -24,7 +24,6 @@ use super::transform::RuleCommuteJoin;
 use super::transform::RuleLeftAssociateJoin;
 use super::transform::RuleRightAssociateJoin;
 use crate::sql::optimizer::rule::rewrite::RuleEliminateFilter;
-use crate::sql::optimizer::rule::rewrite::RuleEliminateOuterJoin;
 use crate::sql::optimizer::rule::rewrite::RuleMergeEvalScalar;
 use crate::sql::optimizer::rule::rewrite::RuleMergeFilter;
 use crate::sql::optimizer::rule::rewrite::RulePushDownFilterScan;
@@ -69,7 +68,6 @@ impl RuleFactory {
             RuleID::CommuteJoin => Ok(Box::new(RuleCommuteJoin::new())),
             RuleID::LeftAssociateJoin => Ok(Box::new(RuleLeftAssociateJoin::new())),
             RuleID::RightAssociateJoin => Ok(Box::new(RuleRightAssociateJoin::new())),
-            RuleID::EliminateOuterJoin => Ok(Box::new(RuleEliminateOuterJoin::new())),
         }
     }
 }
