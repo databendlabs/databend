@@ -240,7 +240,7 @@ impl TableContext for QueryContext {
     }
 
     fn try_get_part(&self) -> Option<PartInfoPtr> {
-        self.partition_queue.write().pop_back()
+        self.partition_queue.write().pop_front()
     }
 
     // Update the context partition pool from the pipeline builder.

@@ -90,9 +90,9 @@ pub struct PipelineBuilder {
 impl PipelineBuilder {
     pub fn create(ctx: Arc<QueryContext>) -> PipelineBuilder {
         PipelineBuilder {
-            ctx,
             pipelines: vec![],
             main_pipeline: Pipeline::create(),
+            ctx: QueryContext::create_from(ctx),
         }
     }
 
