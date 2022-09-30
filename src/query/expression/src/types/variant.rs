@@ -14,6 +14,8 @@
 
 use std::ops::Range;
 
+use super::number::NumberScalar;
+use super::timestamp::Timestamp;
 use crate::property::Domain;
 use crate::types::string::StringColumn;
 use crate::types::string::StringColumnBuilder;
@@ -28,7 +30,7 @@ use crate::values::ScalarRef;
 use crate::ColumnBuilder;
 
 /// JSONB bytes representation of `null`.
-pub const DEFAULT_JSONB: &[u8] = &[0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+pub const JSONB_NULL: &[u8] = &[0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VariantType;
@@ -128,7 +130,7 @@ impl ValueType for VariantType {
     }
 
     fn push_default(builder: &mut Self::ColumnBuilder) {
-        builder.put_slice(DEFAULT_JSONB);
+        builder.put_slice(JSONB_NULL);
         builder.commit_row();
     }
 
@@ -153,4 +155,58 @@ impl ArgType for VariantType {
     fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
         StringColumnBuilder::with_capacity(capacity, 0)
     }
+}
+
+pub fn cast_scalar_to_variant(scalar: ScalarRef, buf: &mut Vec<u8>) {
+    let value = match scalar {
+        ScalarRef::Null => common_jsonb::Value::Null,
+        ScalarRef::EmptyArray => common_jsonb::Value::Array(vec![]),
+        ScalarRef::Number(n) => match n {
+            NumberScalar::UInt8(n) => n.into(),
+            NumberScalar::UInt16(n) => n.into(),
+            NumberScalar::UInt32(n) => n.into(),
+            NumberScalar::UInt64(n) => n.into(),
+            NumberScalar::Int8(n) => n.into(),
+            NumberScalar::Int16(n) => n.into(),
+            NumberScalar::Int32(n) => n.into(),
+            NumberScalar::Int64(n) => n.into(),
+            NumberScalar::Float32(n) => n.0.into(),
+            NumberScalar::Float64(n) => n.0.into(),
+        },
+        ScalarRef::Boolean(b) => common_jsonb::Value::Bool(b),
+        ScalarRef::String(s) => common_jsonb::Value::String(String::from_utf8_lossy(s)),
+        ScalarRef::Timestamp(Timestamp { ts, .. }) => ts.into(),
+        ScalarRef::Array(col) => {
+            let items = cast_scalars_to_variants(col.iter());
+            common_jsonb::build_array(items.iter(), buf).expect("failed to build jsonb array");
+            return;
+        }
+        ScalarRef::Tuple(fields) => {
+            let values = cast_scalars_to_variants(fields);
+            common_jsonb::build_object(
+                values
+                    .iter()
+                    .enumerate()
+                    .map(|(i, bytes)| (format!("{i}"), bytes)),
+                buf,
+            )
+            .expect("failed to build jsonb object");
+            return;
+        }
+        ScalarRef::Variant(bytes) => {
+            buf.extend_from_slice(bytes);
+            return;
+        }
+    };
+    value.to_vec(buf);
+}
+
+pub fn cast_scalars_to_variants(scalars: impl IntoIterator<Item = ScalarRef>) -> StringColumn {
+    let iter = scalars.into_iter();
+    let mut builder = StringColumnBuilder::with_capacity(iter.size_hint().0, 0);
+    for scalar in iter {
+        cast_scalar_to_variant(scalar, &mut builder.data);
+        builder.commit_row();
+    }
+    builder.build()
 }

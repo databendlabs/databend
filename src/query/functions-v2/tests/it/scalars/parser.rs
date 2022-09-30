@@ -230,6 +230,15 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
                 args,
             }
         }
+        common_ast::ast::Expr::Array { span, exprs } => RawExpr::FunctionCall {
+            span: transform_span(span),
+            name: "array".to_string(),
+            params: vec![],
+            args: exprs
+                .into_iter()
+                .map(|expr| transform_expr(expr, columns))
+                .collect(),
+        },
         common_ast::ast::Expr::IsNull { span, expr, not } => {
             let expr = transform_expr(*expr, columns);
             let result = RawExpr::FunctionCall {
@@ -286,6 +295,7 @@ fn transform_data_type(target_type: common_ast::ast::TypeName) -> DataType {
         common_ast::ast::TypeName::Nullable(inner_type) => {
             DataType::Nullable(Box::new(transform_data_type(*inner_type)))
         }
+        common_ast::ast::TypeName::Variant => DataType::Variant,
         _ => unimplemented!(),
     }
 }

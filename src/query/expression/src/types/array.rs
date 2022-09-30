@@ -271,6 +271,14 @@ impl<T: ValueType> ArrayColumnBuilder<T> {
         self.offsets.reserve(additional);
     }
 
+    pub fn put_item(&mut self, item: T::ScalarRef<'_>) {
+        T::push_item(&mut self.builder, item);
+    }
+
+    pub fn commit_row(&mut self) {
+        self.offsets.push(T::builder_len(&self.builder) as u64);
+    }
+
     pub fn push(&mut self, item: T::Column) {
         let other_col = T::column_to_builder(item);
         T::append_builder(&mut self.builder, &other_col);

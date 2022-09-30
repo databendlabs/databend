@@ -35,6 +35,8 @@ use crate::types::number::NumberColumn;
 use crate::types::number::NumberDataType;
 use crate::types::number::NumberDomain;
 use crate::types::number::NumberScalar;
+use crate::types::variant::cast_scalar_to_variant;
+use crate::types::variant::cast_scalars_to_variants;
 use crate::types::DataType;
 use crate::util::constant_bitmap;
 use crate::values::Column;
@@ -169,6 +171,11 @@ impl<'a> Evaluator<'a> {
                     .collect::<Result<Vec<_>>>()?;
                 Ok(Scalar::Tuple(new_fields))
             }
+            (scalar, DataType::Variant) => {
+                let mut buf = Vec::new();
+                cast_scalar_to_variant(scalar.as_ref(), &mut buf);
+                Ok(Scalar::Variant(buf))
+            }
 
             (Scalar::Number(num), DataType::Number(dest_ty)) => {
                 let new_number = with_number_type!(|SRC_TYPE| match num {
@@ -264,6 +271,10 @@ impl<'a> Evaluator<'a> {
                     fields: new_fields,
                     len,
                 })
+            }
+            (col, DataType::Variant) => {
+                let new_col = Column::Variant(cast_scalars_to_variants(col.iter()));
+                Ok(new_col)
             }
 
             (Column::Number(col), DataType::Number(dest_ty)) => {
@@ -375,6 +386,13 @@ impl<'a> Evaluator<'a> {
                     column: new_col,
                 }))
             }
+            (col, DataType::Variant) => {
+                let new_col = Column::Variant(cast_scalars_to_variants(col.iter()));
+                Column::Nullable(Box::new(NullableColumn {
+                    validity: constant_bitmap(true, new_col.len()).into(),
+                    column: new_col,
+                }))
+            }
 
             (Column::Number(col), DataType::Number(dest_ty)) => {
                 with_number_type!(|SRC_TYPE| match &col {
@@ -471,19 +489,38 @@ impl<'a> ConstantFolder<'a> {
                 let cast_domain = inner_domain.and_then(|inner_domain| {
                     self.calculate_cast(span.clone(), &inner_domain, dest_type)
                 });
-                let cast_expr = cast_domain
-                    .as_ref()
-                    .and_then(Domain::as_singleton)
-                    .map(|scalar| Expr::Constant {
-                        span: span.clone(),
-                        scalar,
-                    })
-                    .unwrap_or_else(|| Expr::Cast {
-                        span: span.clone(),
-                        expr: Box::new(inner_expr),
-                        dest_type: dest_type.clone(),
-                    });
-                (cast_expr, cast_domain)
+
+                let cast_expr = Expr::Cast {
+                    span: span.clone(),
+                    expr: Box::new(inner_expr.clone()),
+                    dest_type: dest_type.clone(),
+                };
+
+                if inner_expr.as_constant().is_some() {
+                    let chunk = Chunk::empty();
+                    let evaluator = Evaluator::new(&chunk, self.tz);
+                    if let Ok(Value::Scalar(scalar)) = evaluator.run(&cast_expr) {
+                        return (
+                            Expr::Constant {
+                                span: span.clone(),
+                                scalar,
+                            },
+                            cast_domain,
+                        );
+                    }
+                }
+
+                (
+                    cast_domain
+                        .as_ref()
+                        .and_then(Domain::as_singleton)
+                        .map(|scalar| Expr::Constant {
+                            span: span.clone(),
+                            scalar,
+                        })
+                        .unwrap_or(cast_expr),
+                    cast_domain,
+                )
             }
             Expr::TryCast {
                 span,
@@ -494,19 +531,38 @@ impl<'a> ConstantFolder<'a> {
                 let try_cast_domain = inner_domain.map(|inner_domain| {
                     self.calculate_try_cast(span.clone(), &inner_domain, dest_type)
                 });
-                let try_cast_expr = try_cast_domain
-                    .as_ref()
-                    .and_then(Domain::as_singleton)
-                    .map(|scalar| Expr::Constant {
-                        span: span.clone(),
-                        scalar,
-                    })
-                    .unwrap_or_else(|| Expr::TryCast {
-                        span: span.clone(),
-                        expr: Box::new(inner_expr),
-                        dest_type: dest_type.clone(),
-                    });
-                (try_cast_expr, try_cast_domain)
+
+                let try_cast_expr = Expr::TryCast {
+                    span: span.clone(),
+                    expr: Box::new(inner_expr.clone()),
+                    dest_type: dest_type.clone(),
+                };
+
+                if inner_expr.as_constant().is_some() {
+                    let chunk = Chunk::empty();
+                    let evaluator = Evaluator::new(&chunk, self.tz);
+                    if let Ok(Value::Scalar(scalar)) = evaluator.run(&try_cast_expr) {
+                        return (
+                            Expr::Constant {
+                                span: span.clone(),
+                                scalar,
+                            },
+                            try_cast_domain,
+                        );
+                    }
+                }
+
+                (
+                    try_cast_domain
+                        .as_ref()
+                        .and_then(Domain::as_singleton)
+                        .map(|scalar| Expr::Constant {
+                            span: span.clone(),
+                            scalar,
+                        })
+                        .unwrap_or(try_cast_expr),
+                    try_cast_domain,
+                )
             }
             Expr::FunctionCall {
                 span,
@@ -528,14 +584,6 @@ impl<'a> ConstantFolder<'a> {
                 let func_domain = args_domain.and_then(|domains| (function.calc_domain)(&domains));
                 let all_args_is_scalar = args_expr.iter().all(|arg| arg.as_constant().is_some());
 
-                let func_expr = Expr::FunctionCall {
-                    span: span.clone(),
-                    id: id.clone(),
-                    function: function.clone(),
-                    generics: generics.clone(),
-                    args: args_expr,
-                };
-
                 if let Some(scalar) = func_domain.as_ref().and_then(Domain::as_singleton) {
                     return (
                         Expr::Constant {
@@ -545,6 +593,14 @@ impl<'a> ConstantFolder<'a> {
                         func_domain,
                     );
                 }
+
+                let func_expr = Expr::FunctionCall {
+                    span: span.clone(),
+                    id: id.clone(),
+                    function: function.clone(),
+                    generics: generics.clone(),
+                    args: args_expr,
+                };
 
                 if all_args_is_scalar {
                     let chunk = Chunk::empty();
@@ -604,6 +660,7 @@ impl<'a> ConstantFolder<'a> {
                     .map(|(field, ty)| self.calculate_cast(span.clone(), field, ty))
                     .collect::<Option<Vec<_>>>()?,
             )),
+            (_, DataType::Variant) => Some(Domain::Undefined),
 
             (Domain::Number(domain), DataType::Number(dest_ty)) => {
                 with_number_type!(|SRC_TYPE| match domain {
@@ -679,6 +736,10 @@ impl<'a> ConstantFolder<'a> {
                     value: Some(Box::new(Domain::Tuple(new_fields))),
                 })
             }
+            (_, DataType::Variant) => Domain::Nullable(NullableDomain {
+                has_null: false,
+                value: Some(Box::new(Domain::Undefined)),
+            }),
 
             (Domain::Number(domain), DataType::Number(dest_ty)) => {
                 with_number_type!(|SRC_TYPE| match domain {

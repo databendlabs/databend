@@ -12,10 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(box_patterns)]
-#![feature(try_blocks)]
+use std::io::Write;
 
-// TODO(andylokandy): migrate to crate funciton-v2
-mod expression;
-mod kernel;
-mod parser;
+use goldenfile::Mint;
+
+use super::run_ast;
+
+#[test]
+fn test_array() {
+    let mut mint = Mint::new("tests/it/scalars/testdata");
+    let file = &mut mint.new_goldenfile("array.txt").unwrap();
+
+    test_create(file);
+}
+
+fn test_create(file: &mut impl Write) {
+    run_ast(file, "[]", &[]);
+    run_ast(file, "[NULL, 8, -10]", &[]);
+    run_ast(file, "[['a', 'b'], []]", &[]);
+    run_ast(file, r#"['a', 1, parse_json('{"foo":"bar"}')]"#, &[]);
+    run_ast(
+        file,
+        r#"[parse_json('[]'), parse_json('{"foo":"bar"}')]"#,
+        &[],
+    );
+}
