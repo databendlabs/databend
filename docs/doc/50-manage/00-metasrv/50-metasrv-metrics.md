@@ -18,10 +18,10 @@ All the metrics is under `metasrv` prefix.
 These metrics describe the status of the `metasrv`. All these metrics are prefixed with `metasrv_server_`.
 
 | Name              | Description                                       | Type    |
-| ----------------- | ------------------------------------------------- | ------- |
-| current_leader_id | Current leader id of cluster, 0 means no leader.  | IntGauge   |
+|-------------------|---------------------------------------------------|---------|
+| current_leader_id | Current leader id of cluster, 0 means no leader.  | Gauge   |
 | is_leader         | Whether or not this node is current leader.       | Gauge   |
-| node_is_health    | Whether or not this node is health.               | IntGauge |
+| node_is_health    | Whether or not this node is health.               | Gauge   |
 | leader_changes    | Number of leader changes seen.                    | Counter |
 | applying_snapshot | Whether or not statemachine is applying snapshot. | Gauge   |
 | proposals_applied | Total number of consensus proposals applied.      | Gauge   |
@@ -51,21 +51,21 @@ If and only if the node state is `Follower` or `Leader` , `node_is_health` is 1,
 
 These metrics describe the network status of raft nodes in the `metasrv`. All these metrics are prefixed with `metasrv_raft_network_`.
 
-| Name                    | Description                                       | Labels                            | Type          |
-| ----------------------- | ------------------------------------------------- | --------------------------------- | ------------- |
-| active_peers            | Current number of active connections to peers.    | id(node id),address(peer address) | GaugeVec      |
-| fail_connect_to_peer    | Total number of fail connections to peers.        | id(node id),address(peer address) | CounterVec    |
-| sent_bytes              | Total number of sent bytes to peers.              | to(node id)                       | CounterVec    |
-| recv_bytes              | Total number of received bytes from peers.        | from(remote address)              | CounterVec    |
-| sent_failures           | Total number of send failures to peers.           | to(node id)                       | CounterVec    |
-| snapshot_send_success   | Total number of successful snapshot sends.        | to(node id)                       | IntCounterVec |
-| snapshot_send_failures  | Total number of snapshot send failures.           | to(node id)                       | IntCounterVec |
-| snapshot_send_inflights | Total number of inflight snapshot sends.          | to(node id)                       | IntGaugeVec   |
-| snapshot_sent_seconds   | Total latency distributions of snapshot sends.    | to(node id)                       | HistogramVec  |
-| snapshot_recv_success   | Total number of successful receive snapshot.      | from(remote address)              | IntCounterVec |
-| snapshot_recv_failures  | Total number of snapshot receive failures.        | from(remote address)              | IntCounterVec |
-| snapshot_recv_inflights | Total number of inflight snapshot receives.       | from(remote address)              | IntGaugeVec   |
-| snapshot_recv_seconds   | Total latency distributions of snapshot receives. | from(remote address)              | HistogramVec  |
+| Name                    | Description                                       | Labels                            | Type      |
+|-------------------------|---------------------------------------------------|-----------------------------------|-----------|
+| active_peers            | Current number of active connections to peers.    | id(node id),address(peer address) | Gauge     |
+| fail_connect_to_peer    | Total number of fail connections to peers.        | id(node id),address(peer address) | Counter   |
+| sent_bytes              | Total number of sent bytes to peers.              | to(node id)                       | Counter   |
+| recv_bytes              | Total number of received bytes from peers.        | from(remote address)              | Counter   |
+| sent_failures           | Total number of send failures to peers.           | to(node id)                       | Counter   |
+| snapshot_send_success   | Total number of successful snapshot sends.        | to(node id)                       | Counter   |
+| snapshot_send_failures  | Total number of snapshot send failures.           | to(node id)                       | Counter   |
+| snapshot_send_inflights | Total number of inflight snapshot sends.          | to(node id)                       | Gauge     |
+| snapshot_sent_seconds   | Total latency distributions of snapshot sends.    | to(node id)                       | Histogram |
+| snapshot_recv_success   | Total number of successful receive snapshot.      | from(remote address)              | Counter   |
+| snapshot_recv_failures  | Total number of snapshot receive failures.        | from(remote address)              | Counter   |
+| snapshot_recv_inflights | Total number of inflight snapshot receives.       | from(remote address)              | Gauge     |
+| snapshot_recv_seconds   | Total latency distributions of snapshot receives. | from(remote address)              | Histogram |
 
 `active_peers` indicates how many active connection between cluster members, `fail_connect_to_peer` indicates the number of fail connections to peers. Each has the labels: id(node id) and address (peer address).
 
@@ -83,10 +83,10 @@ These metrics describe the network status of raft nodes in the `metasrv`. All th
 
 These metrics describe the storage status of raft nodes in the `metasrv`. All these metrics are prefixed with `metasrv_raft_storage_`.
 
-| Name                    | Description                                       | Labels                            | Type          |
-| ----------------------- | ------------------------------------------------- | --------------------------------- | ------------- |
-| raft_store_write_failed            | Total number of raft store write failures.    | func(function name) | CounterVec      |
-| raft_store_read_failed            | Total number of raft store read failures.    | func(function name) | CounterVec      |
+| Name                    | Description                                | Labels              | Type    |
+|-------------------------|--------------------------------------------|---------------------|---------|
+| raft_store_write_failed | Total number of raft store write failures. | func(function name) | Counter |
+| raft_store_read_failed  | Total number of raft store read failures.  | func(function name) | Counter |
 
 `raft_store_write_failed` and `raft_store_read_failed` indicate the total number of raft store write and read failures.
 
@@ -94,10 +94,11 @@ These metrics describe the storage status of raft nodes in the `metasrv`. All th
 
 These metrics describe the network status of meta service in the `metasrv`. All these metrics are prefixed with `metasrv_meta_network_`.
 
-| Name             | Description                                            | Type       |
-| ---------------- | ------------------------------------------------------ | ---------- |
-| meta_sent_bytes  | Total number of sent bytes to meta grpc client.        | IntCounter |
-| meta_recv_bytes  | Total number of recv bytes from meta grpc client.      | IntCounter |
-| meta_inflights   | Total number of inflight meta grpc requests.           | IntGauge   |
-| meta_req_success | Total number of success request from meta grpc client. | IntCounter |
-| meta_req_failed  | Total number of fail request from meta grpc client.    | IntCounter |
+| Name              | Description                                            | Type      |
+|-------------------|--------------------------------------------------------|-----------|
+| sent_bytes        | Total number of sent bytes to meta grpc client.        | Counter   |
+| recv_bytes        | Total number of recv bytes from meta grpc client.      | Counter   |
+| inflights         | Total number of inflight meta grpc requests.           | Gauge     |
+| req_success       | Total number of success request from meta grpc client. | Counter   |
+| req_failed        | Total number of fail request from meta grpc client.    | Counter   |
+| rpc_delay_seconds | Latency distribution of meta-service API in second.    | Histogram |

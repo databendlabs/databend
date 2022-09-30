@@ -235,8 +235,8 @@ impl FuseTableSource {
 
 #[async_trait::async_trait]
 impl Processor for FuseTableSource {
-    fn name(&self) -> &'static str {
-        "FuseEngineSource"
+    fn name(&self) -> String {
+        "FuseEngineSource".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

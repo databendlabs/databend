@@ -56,6 +56,14 @@ async fn test_metrics() -> anyhow::Result<()> {
 
     // Sample output:
     // metasrv_server_leader_changes 3
+    // metasrv_meta_network_rpc_delay_seconds_sum 0.015056999000000001
+    // metasrv_meta_network_rpc_delay_seconds{quantile="0"} 0.003751958
+    // metasrv_meta_network_rpc_delay_seconds{quantile="0.5"} 0.005509397423424308
+    // metasrv_meta_network_rpc_delay_seconds{quantile="0.9"} 0.005509397423424308
+    // metasrv_meta_network_rpc_delay_seconds{quantile="0.95"} 0.005509397423424308
+    // metasrv_meta_network_rpc_delay_seconds{quantile="0.99"} 0.005509397423424308
+    // metasrv_meta_network_rpc_delay_seconds{quantile="0.999"} 0.005509397423424308
+    // metasrv_meta_network_rpc_delay_seconds{quantile="1"} 0.005795875
     // metasrv_raft_network_recv_bytes{from="127.0.0.1:62268"} 1752
     // metasrv_raft_network_recv_bytes{from="127.0.0.1:62270"} 1535
     // metasrv_raft_network_sent_bytes{to="1"} 1752
@@ -91,6 +99,16 @@ async fn test_metrics() -> anyhow::Result<()> {
             let key = segments.next().unwrap();
             metric_keys.insert(key);
             info!("found response metric key: {:?}", key);
+
+            // strip labels `foo{label=1, label=2}`
+            let mut key_and_labels = key.split('{');
+            if let Some(striped) = key_and_labels.next() {
+                metric_keys.insert(striped);
+                info!(
+                    "found response metric key with label striped: {:?}",
+                    striped
+                );
+            }
         }
         metric_keys
     };
@@ -100,6 +118,8 @@ async fn test_metrics() -> anyhow::Result<()> {
     assert!(metric_keys.contains("metasrv_server_leader_changes"));
     assert!(metric_keys.contains("metasrv_server_last_log_index"));
     assert!(metric_keys.contains("metasrv_server_proposals_pending"));
+    assert!(metric_keys.contains("metasrv_raft_network_active_peers"));
+    assert!(metric_keys.contains("metasrv_raft_network_recv_bytes"));
     assert!(metric_keys.contains("metasrv_server_is_leader"));
     assert!(metric_keys.contains("metasrv_server_node_is_health"));
     assert!(metric_keys.contains("metasrv_server_last_seq"));

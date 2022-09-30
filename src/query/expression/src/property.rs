@@ -20,6 +20,7 @@ use crate::types::number::NumberDomain;
 use crate::types::number::NumberScalar;
 use crate::types::number::SimpleDomain;
 use crate::types::string::StringDomain;
+use crate::types::timestamp::Timestamp;
 use crate::types::timestamp::TimestampDomain;
 use crate::types::AnyType;
 use crate::with_number_type;
@@ -74,6 +75,13 @@ impl Domain {
                     .zip(other.max.as_ref())
                     .map(|(self_max, other_max)| self_max.max(other_max).to_vec()),
             }),
+            (Domain::Timestamp(this), Domain::Timestamp(other)) => {
+                Domain::Timestamp(TimestampDomain {
+                    min: this.min.min(other.min),
+                    max: this.max.max(other.max),
+                    precision: this.precision.max(other.precision),
+                })
+            }
             (
                 Domain::Nullable(NullableDomain {
                     has_null: true,
@@ -139,6 +147,7 @@ impl Domain {
                     .map(|(self_tup, other_tup)| self_tup.merge(other_tup))
                     .collect(),
             ),
+            (Domain::Undefined, Domain::Undefined) => Domain::Undefined,
             (this, other) => unreachable!("unable to merge {this:?} with {other:?}"),
         }
     }
@@ -186,6 +195,14 @@ impl Domain {
             Domain::String(StringDomain { min, max }) if Some(min) == max.as_ref() => {
                 Some(Scalar::String(min.clone()))
             }
+            Domain::Timestamp(TimestampDomain {
+                min,
+                max,
+                precision,
+            }) if min == max => Some(Scalar::Timestamp(Timestamp {
+                ts: *min,
+                precision: *precision,
+            })),
             Domain::Nullable(NullableDomain {
                 has_null: true,
                 value: None,
@@ -194,7 +211,6 @@ impl Domain {
                 has_null: false,
                 value: Some(value),
             }) => value.as_singleton(),
-            Domain::Array(None) => Some(Scalar::EmptyArray),
             Domain::Tuple(fields) => Some(Scalar::Tuple(
                 fields
                     .iter()

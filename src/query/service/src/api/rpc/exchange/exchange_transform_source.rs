@@ -69,8 +69,8 @@ impl ExchangeSourceTransform {
 
 #[async_trait::async_trait]
 impl Processor for ExchangeSourceTransform {
-    fn name(&self) -> &'static str {
-        "ExchangeSourceTransform"
+    fn name(&self) -> String {
+        "ExchangeSourceTransform".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

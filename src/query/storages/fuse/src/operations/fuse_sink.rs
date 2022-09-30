@@ -113,8 +113,8 @@ impl FuseTableSink {
 
 #[async_trait]
 impl Processor for FuseTableSink {
-    fn name(&self) -> &'static str {
-        "FuseSink"
+    fn name(&self) -> String {
+        "FuseSink".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

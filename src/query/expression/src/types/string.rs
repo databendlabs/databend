@@ -316,6 +316,18 @@ impl StringColumnBuilder {
     }
 }
 
+impl<'a> FromIterator<&'a [u8]> for StringColumnBuilder {
+    fn from_iter<T: IntoIterator<Item = &'a [u8]>>(iter: T) -> Self {
+        let iter = iter.into_iter();
+        let mut builder = StringColumnBuilder::with_capacity(iter.size_hint().0, 0);
+        for item in iter {
+            builder.put_slice(item);
+            builder.commit_row();
+        }
+        builder
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StringDomain {
     pub min: Vec<u8>,
