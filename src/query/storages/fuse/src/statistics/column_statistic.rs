@@ -22,7 +22,6 @@ use common_fuse_meta::meta::ColumnStatistics;
 use common_fuse_meta::meta::StatisticsOfColumns;
 use common_storages_index::MinMaxIndex;
 use common_storages_index::SupportedType;
-use tracing::debug;
 
 pub fn gen_columns_statistics(data_block: &DataBlock) -> Result<StatisticsOfColumns> {
     let mut statistics = StatisticsOfColumns::new();
@@ -151,7 +150,7 @@ impl Trim for DataValue {
                     }
                 }
                 Err(_) => {
-                    debug!("Invalid utf8 string detected while collecting min statistics");
+                    // if failed to convert the bytes into (utf-8)string, just ignore it.
                     None
                 }
             },
@@ -190,17 +189,8 @@ impl Trim for DataValue {
                             }
                         }
 
-                        // check the position to be replaced
-                        let replacement_point = if let Some(v) = idx {
-                            v
-                        } else {
-                            // if all the character is larger than the REPLACEMENT_CHAR
-                            // just ignore it
-                            debug!(
-                                "failed to replace a char with REPLACEMENT_CHAR, all the prefix characters are larger than �"
-                            );
-                            return None;
-                        };
+                        // grab the replacement_point
+                        let replacement_point = idx?;
 
                         // rebuild the string (since the len of result string is rather small)
                         let mut r = String::with_capacity(STATS_STRING_PREFIX_LEN);
@@ -216,7 +206,7 @@ impl Trim for DataValue {
                     }
                 }
                 Err(_) => {
-                    debug!("Invalid utf8 string detected while collecting max statistics");
+                    // if failed to convert the bytes into (utf-8)string, just ignore it.
                     None
                 }
             },
