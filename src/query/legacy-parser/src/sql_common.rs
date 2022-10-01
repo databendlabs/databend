@@ -18,6 +18,7 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use sqlparser::ast::DataType as SQLDataType;
+use unicode_segmentation::UnicodeSegmentation;
 
 pub struct SQLCommon;
 
@@ -126,7 +127,17 @@ impl SQLCommon {
     pub fn short_sql(query: &str) -> String {
         let query = query.trim_start();
         if query.len() >= 64 && query[..6].eq_ignore_ascii_case("INSERT") {
-            format!("{}...", &query[..64])
+            // keep first 64 graphemes
+            String::from_utf8(
+                query
+                    .graphemes(true)
+                    .take(64)
+                    .flat_map(|g| g.as_bytes().iter())
+                    .copied() // copied converts &u8 into u8
+                    .chain(b"...".iter().copied())
+                    .collect::<Vec<u8>>(),
+            )
+            .unwrap() // by construction, this cannot panic as we extracted unicode grapheme
         } else {
             query.to_string()
         }
