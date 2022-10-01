@@ -533,18 +533,6 @@ dependencies = [
 
 [[package]]
 name = "backon"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a62fde477410f4e8a92e2fd4b8536b16ad98270478211d1516cded50bad7208e"
-dependencies = [
- "futures",
- "pin-project",
- "rand 0.8.5",
- "tokio",
-]
-
-[[package]]
-name = "backon"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6cd1a59bc091e593ee9ed62df4e4a07115e00a0e0a52fd7e0e04540773939b80"
@@ -1971,7 +1959,7 @@ name = "common-storage"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "backon 0.2.0",
+ "backon",
  "common-base",
  "common-contexts",
  "common-exception",
@@ -2659,7 +2647,7 @@ dependencies = [
  "anyhow",
  "async-entry",
  "async-trait",
- "backon 0.2.0",
+ "backon",
  "clap",
  "common-arrow",
  "common-base",
@@ -2712,7 +2700,7 @@ dependencies = [
  "async-stream",
  "async-trait-fn",
  "backoff",
- "backon 0.2.0",
+ "backon",
  "base64",
  "bincode",
  "bumpalo",
@@ -5223,15 +5211,15 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.17.4"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d1ac2fba66b4b574259a4e1c6a1b57b8e649682ed7da167c9cde120c1495f2cd"
+checksum = "91002ebcc0d6620b40f633bb3429ee28ff16d74b027356c57d644df63487030c"
 dependencies = [
  "anyhow",
  "async-compat",
  "async-compression-issue-150-workaround",
  "async-trait",
- "backon 0.2.0",
+ "backon",
  "base64",
  "bytes",
  "flagset",
@@ -6390,12 +6378,12 @@ dependencies = [
 
 [[package]]
 name = "reqsign"
-version = "0.4.3"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6e28b79573bf9e503b514799a5533935fa63bec22d582d4d11cab1eab7a040d"
+checksum = "c338306df4ba0010b78f1c4469bf034313ad46b2c43020ec448432e5e07fab26"
 dependencies = [
  "anyhow",
- "backon 0.1.0",
+ "backon",
  "base64",
  "bytes",
  "dirs",
@@ -8051,7 +8039,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.7.3",
+ "rand 0.8.5",
  "static_assertions",
 ]
 
