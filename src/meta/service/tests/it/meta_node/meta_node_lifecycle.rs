@@ -375,6 +375,7 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
         .wait(timeout())
         .state(State::Learner, "learner restart")
         .await?;
+    mn0.raft.add_learner(1, false).await?;
     mn1.raft
         .wait(timeout())
         .current_leader(0, "node-1 has leader")
