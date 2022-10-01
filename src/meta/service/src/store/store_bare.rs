@@ -32,15 +32,14 @@ use common_meta_sled_store::openraft::storage::LogState;
 use common_meta_sled_store::openraft::EffectiveMembership;
 use common_meta_sled_store::openraft::ErrorSubject;
 use common_meta_sled_store::openraft::ErrorVerb;
+use common_meta_sled_store::openraft::Membership;
 use common_meta_sled_store::openraft::StateMachineChanges;
-use common_meta_sled_store::openraft::StorageHelper;
 use common_meta_types::error_context::WithContext;
 use common_meta_types::AppliedState;
 use common_meta_types::Endpoint;
 use common_meta_types::LogEntry;
 use common_meta_types::MetaError;
 use common_meta_types::MetaNetworkError;
-use common_meta_types::MetaResult;
 use common_meta_types::MetaStartupError;
 use common_meta_types::MetaStorageError;
 use common_meta_types::Node;
@@ -639,52 +638,35 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
 }
 
 impl RaftStoreBare {
-    pub async fn get_node(&self, node_id: &NodeId) -> MetaResult<Option<Node>> {
+    pub async fn get_node(&self, node_id: &NodeId) -> Result<Option<Node>, MetaError> {
         let sm = self.state_machine.read().await;
 
-        sm.get_node(node_id)
+        let n = sm.get_node(node_id)?;
+        Ok(n)
     }
 
-    pub async fn get_voters(&self) -> MetaResult<Vec<Node>> {
+    /// Return a list of nodes for which the `predicate` returns true.
+    pub async fn get_nodes(
+        &self,
+        predicate: impl Fn(&Membership, &NodeId) -> bool,
+    ) -> Result<Vec<Node>, MetaStorageError> {
         let sm = self.state_machine.read().await;
-        let ms = StorageHelper::new(self)
-            .get_membership()
-            .await
-            .expect("get membership config");
+        let ms = sm.get_membership()?;
 
-        match ms {
-            Some(membership) => {
-                let nodes = sm.nodes().range_kvs(..).expect("get nodes failed");
-                let voters = nodes
-                    .into_iter()
-                    .filter(|(node_id, _)| membership.membership.contains(node_id))
-                    .map(|(_, node)| node)
-                    .collect();
-                Ok(voters)
-            }
-            None => Ok(vec![]),
-        }
-    }
+        let membership = match ms {
+            Some(membership) => membership.membership,
+            None => return Ok(vec![]),
+        };
 
-    pub async fn get_non_voters(&self) -> MetaResult<Vec<Node>> {
-        let sm = self.state_machine.read().await;
-        let ms = StorageHelper::new(self)
-            .get_membership()
-            .await
-            .expect("get membership config");
+        let nodes = sm.nodes().range_kvs(..)?;
 
-        match ms {
-            Some(membership) => {
-                let nodes = sm.nodes().range_kvs(..).expect("get nodes failed");
-                let non_voters = nodes
-                    .into_iter()
-                    .filter(|(node_id, _)| !membership.membership.contains(node_id))
-                    .map(|(_, node)| node)
-                    .collect();
-                Ok(non_voters)
-            }
-            None => Ok(vec![]),
-        }
+        let ns = nodes
+            .into_iter()
+            .filter(|(node_id, _)| predicate(&membership, node_id))
+            .map(|(_, node)| node)
+            .collect();
+
+        Ok(ns)
     }
 
     pub async fn get_node_endpoint(&self, node_id: &NodeId) -> Result<Endpoint, MetaError> {
