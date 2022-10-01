@@ -170,6 +170,63 @@ impl RaftStoreBare {
         self.state_machine.write().await
     }
 
+    #[tracing::instrument(level = "debug", skip_all, fields(id=self.id))]
+    async fn do_build_snapshot(
+        &self,
+    ) -> Result<
+        openraft::storage::Snapshot<
+            <RaftStoreBare as RaftStorage<LogEntry, AppliedState>>::SnapshotData,
+        >,
+        StorageError,
+    > {
+        // NOTE: building snapshot is guaranteed to be serialized called by RaftCore.
+
+        // 1. Take a serialized snapshot
+
+        let (snap, last_applied_log, snapshot_id) = match self
+            .state_machine
+            .write()
+            .await
+            .build_snapshot()
+            .map_to_sto_err(ErrorSubject::StateMachine, ErrorVerb::Read)
+        {
+            Err(err) => {
+                raft_metrics::storage::incr_raft_storage_fail("build_snapshot", false);
+                return Err(err);
+            }
+            Ok(r) => r,
+        };
+
+        let data = serde_json::to_vec(&snap)
+            .map_err(MetaStorageError::from)
+            .map_to_sto_err(ErrorSubject::StateMachine, ErrorVerb::Read)?;
+
+        let snapshot_size = data.len();
+
+        let snap_meta = SnapshotMeta {
+            last_log_id: last_applied_log,
+            snapshot_id,
+        };
+
+        let snapshot = Snapshot {
+            meta: snap_meta.clone(),
+            data: data.clone(),
+        };
+
+        // Update the snapshot first.
+        {
+            let mut current_snapshot = self.current_snapshot.write().await;
+            *current_snapshot = Some(snapshot);
+        }
+
+        info!(snapshot_size = snapshot_size, "log compaction complete");
+
+        Ok(openraft::storage::Snapshot {
+            meta: snap_meta,
+            snapshot: Box::new(Cursor::new(data)),
+        })
+    }
+
     /// Install a snapshot to build a state machine from it and replace the old state machine with the new one.
     #[tracing::instrument(level = "debug", skip(self, data))]
     pub async fn install_snapshot(&self, data: &[u8]) -> Result<(), MetaStorageError> {
@@ -428,54 +485,7 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
     async fn build_snapshot(
         &self,
     ) -> Result<openraft::storage::Snapshot<Self::SnapshotData>, StorageError> {
-        // NOTE: do_log_compaction is guaranteed to be serialized called by RaftCore.
-
-        // TODO(xp): add test of small chunk snapshot transfer and installation
-
-        // 1. Take a serialized snapshot
-
-        let (snap, last_applied_log, snapshot_id) = match self
-            .state_machine
-            .write()
-            .await
-            .build_snapshot()
-            .map_to_sto_err(ErrorSubject::StateMachine, ErrorVerb::Read)
-        {
-            Err(err) => {
-                raft_metrics::storage::incr_raft_storage_fail("build_snapshot", false);
-                return Err(err);
-            }
-            Ok(r) => r,
-        };
-
-        let data = serde_json::to_vec(&snap)
-            .map_err(MetaStorageError::from)
-            .map_to_sto_err(ErrorSubject::StateMachine, ErrorVerb::Read)?;
-
-        let snapshot_size = data.len();
-
-        let snap_meta = SnapshotMeta {
-            last_log_id: last_applied_log,
-            snapshot_id,
-        };
-
-        let snapshot = Snapshot {
-            meta: snap_meta.clone(),
-            data: data.clone(),
-        };
-
-        // Update the snapshot first.
-        {
-            let mut current_snapshot = self.current_snapshot.write().await;
-            *current_snapshot = Some(snapshot);
-        }
-
-        info!(snapshot_size = snapshot_size, "log compaction complete");
-
-        Ok(openraft::storage::Snapshot {
-            meta: snap_meta,
-            snapshot: Box::new(Cursor::new(data)),
-        })
+        self.do_build_snapshot().await
     }
 
     #[tracing::instrument(level = "debug", skip(self), fields(id=self.id))]
