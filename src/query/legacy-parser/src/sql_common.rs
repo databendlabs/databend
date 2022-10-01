@@ -143,3 +143,48 @@ impl SQLCommon {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::sql_common::SQLCommon;
+
+    const LONG_INSERT_WITH_UNICODE_AT_TRUNCATION_POINT: &str =
+        "INSERT INTO `test` VALUES ('abcd', 'def'),('abcd', 'def'),('abcé', 'def');";
+
+    #[test]
+    #[should_panic]
+    fn test_invalid_string_truncation() {
+        // This test checks the INSERT statement did panic with byte truncated string.
+        // We need to do this to validate that the code of short_sql has fixed this panic!
+        format!("{}...", &LONG_INSERT_WITH_UNICODE_AT_TRUNCATION_POINT[..64]);
+    }
+
+    #[test]
+    fn test_short_sql_truncation_on_unicode() {
+        assert_eq!(
+            SQLCommon::short_sql("CREATE TABLE `test` (.....)"),
+            "CREATE TABLE `test` (.....)"
+        );
+        // short insert into statements are not truncated
+        assert_eq!(
+            SQLCommon::short_sql("INSERT INTO `test` VALUES('abcd', 'def');"),
+            "INSERT INTO `test` VALUES('abcd', 'def');"
+        );
+        // long one are at 64th char
+        let long_without_unicode =
+            "INSERT INTO `test` VALUES ('abcd', 'def'),('abcd', 'def'),('abcd', 'def');";
+        let shortned = SQLCommon::short_sql(long_without_unicode);
+        assert_eq!(shortned.len(), 67); // 64 chars + ...
+        assert_eq!(
+            shortned,
+            "INSERT INTO `test` VALUES ('abcd', 'def'),('abcd', 'def'),('abcd..."
+        );
+
+        let shortned = SQLCommon::short_sql(LONG_INSERT_WITH_UNICODE_AT_TRUNCATION_POINT);
+        assert_eq!(shortned.len(), 68); // 64 chars with a multibyte one (é) + ...
+        assert_eq!(
+            shortned,
+            "INSERT INTO `test` VALUES ('abcd', 'def'),('abcd', 'def'),('abcé..."
+        );
+    }
+}
