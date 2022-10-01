@@ -55,7 +55,6 @@ use common_meta_types::MetaError;
 use common_meta_types::MetaManagementError;
 use common_meta_types::MetaNetworkError;
 use common_meta_types::MetaOperationError;
-use common_meta_types::MetaResult;
 use common_meta_types::MetaStartupError;
 use common_meta_types::MetaStorageError;
 use common_meta_types::Node;
@@ -381,7 +380,7 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn stop(&self) -> MetaResult<i32> {
+    pub async fn stop(&self) -> Result<i32, MetaError> {
         let mut rx = self.raft.metrics();
 
         let res = self.raft.shutdown().await;
@@ -698,33 +697,26 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_node(&self, node_id: &NodeId) -> MetaResult<Option<Node>> {
+    pub async fn get_node(&self, node_id: &NodeId) -> Result<Option<Node>, MetaStorageError> {
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
-        sm.get_node(node_id)
+        let n = sm.get_node(node_id)?;
+        Ok(n)
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_nodes(&self) -> MetaResult<Vec<Node>> {
+    pub async fn get_nodes(&self) -> Result<Vec<Node>, MetaStorageError> {
         // inconsistent get: from local state machine
-        let sm = self.sto.state_machine.read().await;
-        sm.get_nodes()
-    }
 
-    fn get_state_string(state: openraft::State) -> String {
-        match state {
-            openraft::State::Learner => "Learner".to_string(),
-            openraft::State::Follower => "Follower".to_string(),
-            openraft::State::Candidate => "Candidate".to_string(),
-            openraft::State::Leader => "Leader".to_string(),
-            openraft::State::Shutdown => "Shutdown".to_string(),
-        }
+        let sm = self.sto.state_machine.read().await;
+        let ns = sm.get_nodes()?;
+        Ok(ns)
     }
 
     pub async fn get_status(&self) -> Result<MetaNodeStatus, MetaError> {
-        let voters = self.get_voters().await?;
-        let non_voters = self.get_non_voters().await?;
+        let voters = self.sto.get_nodes(|ms, nid| ms.contains(nid)).await?;
+        let non_voters = self.sto.get_nodes(|ms, nid| !ms.contains(nid)).await?;
 
         let endpoint = self.sto.get_node_endpoint(&self.sto.id).await?;
 
@@ -747,7 +739,7 @@ impl MetaNode {
             id: self.sto.id,
             endpoint: endpoint.to_string(),
             db_size,
-            state: MetaNode::get_state_string(metrics.state),
+            state: format!("{:?}", metrics.state),
             is_leader: metrics.state == openraft::State::Leader,
             current_term: metrics.current_term,
             last_log_index: metrics.last_log_index.unwrap_or(0),
@@ -770,22 +762,14 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_voters(&self) -> MetaResult<Vec<Node>> {
+    pub async fn get_meta_addrs(&self) -> Result<Vec<String>, MetaStorageError> {
         // inconsistent get: from local state machine
-        self.sto.get_voters().await
-    }
 
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_non_voters(&self) -> MetaResult<Vec<Node>> {
-        // inconsistent get: from local state machine
-        self.sto.get_non_voters().await
-    }
+        let nodes = {
+            let sm = self.sto.state_machine.read().await;
+            sm.get_nodes()?
+        };
 
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_meta_addrs(&self) -> MetaResult<Vec<String>> {
-        // inconsistent get: from local state machine
-        let sm = self.sto.state_machine.read().await;
-        let nodes = sm.get_nodes()?;
         let endpoints: Vec<String> = nodes
             .iter()
             .map(|n| {
