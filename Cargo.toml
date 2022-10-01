@@ -30,6 +30,7 @@ members = [
     "src/query/config",
     "src/query/catalog",
     "src/query/datablocks",
+    "src/query/sharing",
     "src/query/datavalues",
     "src/query/expression",
     "src/query/formats",
@@ -117,3 +118,4 @@ rustc-demangle = { opt-level = 3 }
 # For example:
 # arrow-format = { git = "https://github.com/datafuse-extras/arrow-format", rev = "78dacc1" }
 arrow-format = { git = "https://github.com/datafuse-extras/arrow-format", rev = "78dacc1" }
+opendal = { path = "../opendal" }
