@@ -214,7 +214,7 @@ pub async fn list_files(
                 while let Some(de) = ds.try_next().await? {
                     if de.mode().is_file() {
                         let path = de.path().to_string();
-                        let meta = de.metadata().await?;
+                        let meta = de.metadata().await;
                         files.push((path, meta));
                     }
                 }
