@@ -55,6 +55,7 @@ pub struct SledTree {
     pub tree: sled::Tree,
 }
 
+#[allow(clippy::type_complexity)]
 impl SledTree {
     /// Open SledTree
     pub fn open<N: AsRef<[u8]> + Display>(
@@ -624,6 +625,7 @@ impl<'a, KV: SledKeySpace> Deref for AsTxnKeySpace<'a, KV> {
     }
 }
 
+#[allow(clippy::type_complexity)]
 impl<'a, KV: SledKeySpace> AsKeySpace<'a, KV> {
     pub fn contains_key(&self, key: &KV::K) -> Result<bool, MetaStorageError> {
         self.inner.contains_key::<KV>(key)

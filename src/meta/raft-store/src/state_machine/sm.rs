@@ -923,18 +923,12 @@ impl StateMachine {
 
     pub fn get_node(&self, node_id: &NodeId) -> Result<Option<Node>, MetaStorageError> {
         let sm_nodes = self.nodes();
-        match sm_nodes.get(node_id) {
-            Ok(e) => Ok(e),
-            Err(e) => Err(e.into()),
-        }
+        sm_nodes.get(node_id)
     }
 
     pub fn get_nodes(&self) -> Result<Vec<Node>, MetaStorageError> {
         let sm_nodes = self.nodes();
-        match sm_nodes.range_values(..) {
-            Ok(e) => Ok(e),
-            Err(e) => Err(e.into()),
-        }
+        sm_nodes.range_values(..)
     }
 
     pub fn unexpired_opt<V: Debug>(
