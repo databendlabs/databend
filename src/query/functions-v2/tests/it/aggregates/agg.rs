@@ -44,6 +44,7 @@ fn test_agg() {
     test_agg_covar_samp(file, eval_aggr);
     test_agg_covar_pop(file, eval_aggr);
     test_agg_retention(file, eval_aggr);
+    test_agg_stddev_pop(file, eval_aggr);
 }
 
 #[test]
@@ -311,4 +312,10 @@ fn test_agg_retention(file: &mut impl Write, simulator: impl AggregationSimulato
         get_example().as_slice(),
         simulator,
     );
+}
+
+fn test_agg_stddev_pop(file: &mut impl Write, simulator: impl AggregationSimulator) {
+    run_agg_ast(file, "stddev_pop(a)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "stddev(x_null)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "std(1.0)", get_example().as_slice(), simulator);
 }
