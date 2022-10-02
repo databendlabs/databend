@@ -1183,7 +1183,6 @@ dependencies = [
  "common-exception",
  "ctrlc",
  "futures",
- "lazy_static",
  "libc",
  "num_cpus",
  "once_cell",

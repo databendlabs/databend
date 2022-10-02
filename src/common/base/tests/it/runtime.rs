@@ -19,7 +19,7 @@ use std::time::Instant;
 
 use common_base::base::*;
 use common_exception::Result;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use rand::distributions::Distribution;
 use rand::distributions::Uniform;
 use tokio::time::sleep;
@@ -82,10 +82,7 @@ async fn test_shutdown_long_run_runtime() -> Result<()> {
     Ok(())
 }
 
-lazy_static! {
-    static ref START_TIME: Instant = Instant::now();
-}
-
+static START_TIME: Lazy<Instant> = Lazy::new(Instant::now);
 // println can more clearly know if they are parallel
 async fn mock_get_page(i: usize) -> Vec<usize> {
     let millis = Uniform::from(0..10).sample(&mut rand::thread_rng());
