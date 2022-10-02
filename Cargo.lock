@@ -1573,6 +1573,7 @@ dependencies = [
  "common-functions",
  "common-legacy-expression",
  "sqlparser",
+ "unicode-segmentation",
 ]
 
 [[package]]
