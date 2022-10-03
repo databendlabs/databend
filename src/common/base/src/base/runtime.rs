@@ -195,24 +195,24 @@ impl Runtime {
     // The comparison of them please see https://github.com/BohuTANG/joint
     pub fn try_spawn_batch<F>(
         &self,
-        max_concurrent: usize,
-        futures: Vec<F>,
+        semaphore: Arc<Semaphore>,
+        futures: impl IntoIterator<Item = F>,
     ) -> Result<Vec<JoinHandle<F::Output>>>
     where
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        let semaphore = Arc::new(Semaphore::new(max_concurrent));
-        let mut join_handlers = Vec::with_capacity(futures.len());
-        for future in futures {
-            let semaphore = semaphore.clone();
-            let h = self.try_spawn(async move {
-                let _segment_prune_permit = semaphore.acquire().await;
-                future.await
-            });
-            join_handlers.push(h?);
-        }
-        Ok(join_handlers)
+        futures
+            .into_iter()
+            .map(|future| {
+                let semaphore = semaphore.clone();
+                self.try_spawn(async move {
+                    // TODO handle error returns by acquire
+                    let _ = semaphore.acquire().await;
+                    future.await
+                })
+            })
+            .collect::<Result<Vec<_>>>()
     }
 }
 
