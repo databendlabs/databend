@@ -24,6 +24,7 @@ use common_exception::Result;
 use tokio::runtime::Builder;
 use tokio::runtime::Handle;
 use tokio::sync::oneshot;
+use tokio::sync::AcquireError;
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 
@@ -193,11 +194,11 @@ impl Runtime {
     // `buffer_unordered` should wait the whole batch finished and start the new batch.
     // `try_spawn_batch` should wait one future finished and start new one.
     // The comparison of them please see https://github.com/BohuTANG/joint
-    pub fn try_spawn_batch<F>(
+    pub fn spawn_batch<F>(
         &self,
         semaphore: Arc<Semaphore>,
         futures: impl IntoIterator<Item = F>,
-    ) -> Result<Vec<JoinHandle<F::Output>>>
+    ) -> Vec<JoinHandle<std::result::Result<F::Output, AcquireError>>>
     where
         F: Future + Send + 'static,
         F::Output: Send + 'static,
@@ -206,13 +207,12 @@ impl Runtime {
             .into_iter()
             .map(|future| {
                 let semaphore = semaphore.clone();
-                self.try_spawn(async move {
-                    // TODO handle error returns by acquire
-                    let _ = semaphore.acquire().await;
-                    future.await
+                self.handle.spawn(async move {
+                    let _ = semaphore.acquire().await?;
+                    Ok::<_, AcquireError>(future.await)
                 })
             })
-            .collect::<Result<Vec<_>>>()
+            .collect::<Vec<JoinHandle<std::result::Result<_, AcquireError>>>>()
     }
 }
 

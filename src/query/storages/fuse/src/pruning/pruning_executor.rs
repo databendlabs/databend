@@ -150,7 +150,6 @@ impl BlockPruner {
                 };
                 // build the segment pruning future
                 Self::prune_segment(pruning_ctx)
-                    .instrument(tracing::debug_span!("filter_segment_with_storage_runtime"))
             };
 
             join_handlers.push(pruning_runtime.try_spawn(segment_pruning_fut)?);
