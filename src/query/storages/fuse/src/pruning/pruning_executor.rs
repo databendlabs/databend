@@ -43,6 +43,7 @@ pub struct BlockPruner {
     table_snapshot: Arc<TableSnapshot>,
 }
 pub type SegmentIndex = usize;
+pub type BlockIndex = usize;
 
 impl BlockPruner {
     pub fn new(table_snapshot: Arc<TableSnapshot>) -> Self {
@@ -239,13 +240,6 @@ impl BlockPruner {
                     return Ok(result);
                 }
 
-                let _segment_prune_permit = semaphore.acquire().await.map_err(|e| {
-                    ErrorCode::UnexpectedError(format!(
-                        "semaphore closed, acquire (filter future) permit failure, {}",
-                        e
-                    ))
-                })?;
-
                 if range_filter_pruner.should_keep(&block_meta.col_stats, block_meta.row_count) {
                     // prune block using bloom filter
                     // different from min max
@@ -255,22 +249,23 @@ impl BlockPruner {
                     let index_location = block_meta.bloom_filter_index_location.clone();
                     let index_size = block_meta.bloom_filter_index_size;
 
-                    let semaphore = semaphore.clone();
+                    let permit_prune_block =
+                        semaphore.clone().acquire_owned().await.map_err(|e| {
+                            ErrorCode::UnexpectedError(format!(
+                                "semaphore closed, acquire (filter future) permit failure, {}",
+                                e
+                            ))
+                        })?;
                     let h = rt.spawn(
-                        async move {
-                            let _filter_prune_permit = semaphore.acquire().await.map_err(|e| {
-                                ErrorCode::UnexpectedError(format!(
-                                    "acquire (filter) permit failure, {}",
-                                    e
-                                ))
-                            })?;
-                            if limiter.within_limit(row_count)
-                                && filter_pruner.should_keep(&index_location, index_size).await
-                            {
-                                return Ok::<_, ErrorCode>((block_idx, true));
-                            }
-                            Ok::<_, ErrorCode>((block_idx, false))
-                        }
+                        Self::prune_blocks(
+                            index_location,
+                            index_size,
+                            limiter,
+                            filter_pruner,
+                            block_idx,
+                            permit_prune_block,
+                            row_count,
+                        )
                         .instrument(tracing::debug_span!("filter_using_bloom_index")),
                     );
                     bloom_pruners.push(h);
@@ -288,5 +283,22 @@ impl BlockPruner {
             }
         }
         Ok::<_, ErrorCode>(result)
+    }
+    async fn prune_blocks(
+        index_location: Option<Location>,
+        index_size: u64,
+        limiter: LimiterPruner,
+        filter_pruner: Arc<dyn Pruner + Send + Sync>,
+        block_idx: BlockIndex,
+        permit: OwnedSemaphorePermit,
+        row_count: u64,
+    ) -> Result<(BlockIndex, bool)> {
+        let _ = permit;
+        if limiter.within_limit(row_count)
+            && filter_pruner.should_keep(&index_location, index_size).await
+        {
+            return Ok::<_, ErrorCode>((block_idx, true));
+        }
+        Ok::<_, ErrorCode>((block_idx, false))
     }
 }
