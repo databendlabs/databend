@@ -494,7 +494,7 @@ evaluation (internal):
 ast            : create_array()
 raw expr       : create_array()
 checked expr   : create_array<>()
-optimized expr : []
+optimized expr : [] :: Array(Nothing)
 output type    : Array(Nothing)
 output domain  : []
 output         : []

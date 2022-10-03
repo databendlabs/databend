@@ -12,19 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::collections::HashMap;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::Result;
+use common_expression::types::ArgType;
 use common_expression::types::BooleanType;
-use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
-use common_expression::types::NumberDataType::*;
 use common_expression::types::NumberType;
 use common_expression::types::StringType;
 use common_expression::types::TimestampType;
 use common_expression::types::ValueType;
 use common_expression::types::VariantType;
+use common_expression::types::ALL_NUMERICS_TYPES;
 use common_expression::values::Value;
 use common_expression::with_number_mapped_type;
 use common_expression::FunctionContext;
@@ -35,165 +36,200 @@ use regex::bytes::Regex;
 
 use crate::scalars::string_multi_args::regexp;
 
-pub const ALL_CMP_TYPES: &[DataType; 14] = &[
-    DataType::String,
-    DataType::Boolean,
-    DataType::Timestamp,
-    DataType::Variant,
-    DataType::Number(UInt8),
-    DataType::Number(UInt16),
-    DataType::Number(UInt32),
-    DataType::Number(UInt64),
-    DataType::Number(Int8),
-    DataType::Number(Int16),
-    DataType::Number(Int32),
-    DataType::Number(Int64),
-    DataType::Number(Float32),
-    DataType::Number(Float64),
-];
+pub fn register(registry: &mut FunctionRegistry) {
+    register_simple_cmp::<StringType>(registry);
+    register_simple_cmp::<TimestampType>(registry);
+    register_boolean_cmp(registry);
+    register_number_cmp(registry);
+    register_variant_cmp(registry);
+    register_like(registry);
+}
 
-#[macro_export]
-macro_rules! with_cmp_mapped_type {
-    (| $t:tt | $($tail:tt)*) => {
-        match_template::match_template! {
-            $t = [
-                String => StringType, Timestamp => TimestampType, Variant => VariantType
-            ],
-            $($tail)*
-        }
+fn register_simple_cmp<T: ArgType>(registry: &mut FunctionRegistry)
+where for<'a> T::ScalarRef<'a>: PartialOrd + PartialEq {
+    registry.register_2_arg::<T, T, BooleanType, _, _>(
+        "eq",
+        FunctionProperty::default(),
+        |_, _| None,
+        |lhs, rhs, _| T::upcast_gat(lhs) == T::upcast_gat(rhs),
+    );
+    registry.register_2_arg::<T, T, BooleanType, _, _>(
+        "noteq",
+        FunctionProperty::default(),
+        |_, _| None,
+        |lhs, rhs, _| T::upcast_gat(lhs) != T::upcast_gat(rhs),
+    );
+    registry.register_2_arg::<T, T, BooleanType, _, _>(
+        "gt",
+        FunctionProperty::default(),
+        |_, _| None,
+        |lhs, rhs, _| T::upcast_gat(lhs) > T::upcast_gat(rhs),
+    );
+    registry.register_2_arg::<T, T, BooleanType, _, _>(
+        "gte",
+        FunctionProperty::default(),
+        |_, _| None,
+        |lhs, rhs, _| T::upcast_gat(lhs) >= T::upcast_gat(rhs),
+    );
+    registry.register_2_arg::<T, T, BooleanType, _, _>(
+        "lt",
+        FunctionProperty::default(),
+        |_, _| None,
+        |lhs, rhs, _| T::upcast_gat(lhs) < T::upcast_gat(rhs),
+    );
+    registry.register_2_arg::<T, T, BooleanType, _, _>(
+        "lte",
+        FunctionProperty::default(),
+        |_, _| None,
+        |lhs, rhs, _| T::upcast_gat(lhs) <= T::upcast_gat(rhs),
+    );
+}
+
+fn register_boolean_cmp(registry: &mut FunctionRegistry) {
+    registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
+        "eq",
+        FunctionProperty::default(),
+        |_, _| None,
+        |lhs, rhs, _| lhs == rhs,
+    );
+    registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
+        "noteq",
+        FunctionProperty::default(),
+        |_, _| None,
+        |lhs, rhs, _| lhs != rhs,
+    );
+    registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
+        "gt",
+        FunctionProperty::default(),
+        |_, _| None,
+        |lhs, rhs, _| lhs & !rhs,
+    );
+    registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
+        "gte",
+        FunctionProperty::default(),
+        |_, _| None,
+        |lhs, rhs, _| (lhs & !rhs) || (lhs & rhs),
+    );
+    registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
+        "lt",
+        FunctionProperty::default(),
+        |_, _| None,
+        |lhs, rhs, _| !lhs & rhs,
+    );
+    registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
+        "lte",
+        FunctionProperty::default(),
+        |_, _| None,
+        |lhs, rhs, _| (!lhs & rhs) || (lhs & rhs),
+    );
+}
+
+fn register_number_cmp(registry: &mut FunctionRegistry) {
+    for ty in ALL_NUMERICS_TYPES {
+        with_number_mapped_type!(|NUM_TYPE| match ty {
+            NumberDataType::NUM_TYPE => {
+                registry
+                    .register_2_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, BooleanType, _, _>(
+                        "eq",
+                        FunctionProperty::default(),
+                        |_, _| None,
+                        |lhs, rhs, _| lhs == rhs,
+                    );
+                registry
+                    .register_2_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, BooleanType, _, _>(
+                        "noteq",
+                        FunctionProperty::default(),
+                        |_, _| None,
+                        |lhs, rhs, _| lhs != rhs,
+                    );
+                registry
+                    .register_2_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, BooleanType, _, _>(
+                        "gt",
+                        FunctionProperty::default(),
+                        |_, _| None,
+                        |lhs, rhs, _| lhs > rhs,
+                    );
+                registry
+                    .register_2_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, BooleanType, _, _>(
+                        "gte",
+                        FunctionProperty::default(),
+                        |_, _| None,
+                        |lhs, rhs, _| lhs >= rhs,
+                    );
+                registry
+                    .register_2_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, BooleanType, _, _>(
+                        "lt",
+                        FunctionProperty::default(),
+                        |_, _| None,
+                        |lhs, rhs, _| lhs < rhs,
+                    );
+                registry
+                    .register_2_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, BooleanType, _, _>(
+                        "lte",
+                        FunctionProperty::default(),
+                        |_, _| None,
+                        |lhs, rhs, _| lhs <= rhs,
+                    );
+            }
+        });
     }
 }
 
-pub fn register(registry: &mut FunctionRegistry) {
-    for ty in ALL_CMP_TYPES {
-        with_cmp_mapped_type!(|DATA_TYPE| match ty {
-            DataType::DATA_TYPE => {
-                registry.register_2_arg::<DATA_TYPE, DATA_TYPE, BooleanType, _, _>(
-                    "eq",
-                    FunctionProperty::default(),
-                    |_, _| None,
-                    |lhs, rhs, _| lhs == rhs,
-                );
-                registry.register_2_arg::<DATA_TYPE, DATA_TYPE, BooleanType, _, _>(
-                    "noteq",
-                    FunctionProperty::default(),
-                    |_, _| None,
-                    |lhs, rhs, _| lhs != rhs,
-                );
-                registry.register_2_arg::<DATA_TYPE, DATA_TYPE, BooleanType, _, _>(
-                    "gt",
-                    FunctionProperty::default(),
-                    |_, _| None,
-                    |lhs, rhs, _| lhs > rhs,
-                );
-                registry.register_2_arg::<DATA_TYPE, DATA_TYPE, BooleanType, _, _>(
-                    "gte",
-                    FunctionProperty::default(),
-                    |_, _| None,
-                    |lhs, rhs, _| lhs >= rhs,
-                );
-                registry.register_2_arg::<DATA_TYPE, DATA_TYPE, BooleanType, _, _>(
-                    "lt",
-                    FunctionProperty::default(),
-                    |_, _| None,
-                    |lhs, rhs, _| lhs < rhs,
-                );
-                registry.register_2_arg::<DATA_TYPE, DATA_TYPE, BooleanType, _, _>(
-                    "lte",
-                    FunctionProperty::default(),
-                    |_, _| None,
-                    |lhs, rhs, _| lhs <= rhs,
-                );
-            }
-            DataType::Boolean => {
-                registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
-                    "eq",
-                    FunctionProperty::default(),
-                    |_, _| None,
-                    |lhs, rhs, _| lhs == rhs,
-                );
-                registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
-                    "noteq",
-                    FunctionProperty::default(),
-                    |_, _| None,
-                    |lhs, rhs, _| lhs != rhs,
-                );
-                registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
-                    "gt",
-                    FunctionProperty::default(),
-                    |_, _| None,
-                    |lhs, rhs, _| lhs & !rhs,
-                );
-                registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
-                    "gte",
-                    FunctionProperty::default(),
-                    |_, _| None,
-                    |lhs, rhs, _| (lhs & !rhs) || (lhs & rhs),
-                );
-                registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
-                    "lt",
-                    FunctionProperty::default(),
-                    |_, _| None,
-                    |lhs, rhs, _| !lhs & rhs,
-                );
-                registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
-                    "lte",
-                    FunctionProperty::default(),
-                    |_, _| None,
-                    |lhs, rhs, _| (!lhs & rhs) || (lhs & rhs),
-                );
-            }
-            DataType::Number(u) => {
-                with_number_mapped_type!(|NUM_TYPE| match u {
-                    NumberDataType::NUM_TYPE => {
-                        registry
-                            .register_2_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, BooleanType, _, _>(
-                                "eq",
-                                FunctionProperty::default(),
-                                |_, _| None,
-                                |lhs, rhs, _| lhs == rhs,
-                            );
-                        registry
-                            .register_2_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, BooleanType, _, _>(
-                                "noteq",
-                                FunctionProperty::default(),
-                                |_, _| None,
-                                |lhs, rhs, _| lhs != rhs,
-                            );
-                        registry
-                            .register_2_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, BooleanType, _, _>(
-                                "gt",
-                                FunctionProperty::default(),
-                                |_, _| None,
-                                |lhs, rhs, _| lhs > rhs,
-                            );
-                        registry
-                            .register_2_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, BooleanType, _, _>(
-                                "gte",
-                                FunctionProperty::default(),
-                                |_, _| None,
-                                |lhs, rhs, _| lhs >= rhs,
-                            );
-                        registry
-                            .register_2_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, BooleanType, _, _>(
-                                "lt",
-                                FunctionProperty::default(),
-                                |_, _| None,
-                                |lhs, rhs, _| lhs < rhs,
-                            );
-                        registry
-                            .register_2_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, BooleanType, _, _>(
-                                "lte",
-                                FunctionProperty::default(),
-                                |_, _| None,
-                                |lhs, rhs, _| lhs <= rhs,
-                            );
-                    }
-                });
-            }
-            _ => todo!(),
-        });
-    }
+fn register_variant_cmp(registry: &mut FunctionRegistry) {
+    registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
+        "eq",
+        FunctionProperty::default(),
+        |_, _| None,
+        |lhs, rhs, _| {
+            common_jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") == Ordering::Equal
+        },
+    );
+    registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
+        "noteq",
+        FunctionProperty::default(),
+        |_, _| None,
+        |lhs, rhs, _| {
+            common_jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") != Ordering::Equal
+        },
+    );
+    registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
+        "gt",
+        FunctionProperty::default(),
+        |_, _| None,
+        |lhs, rhs, _| {
+            common_jsonb::compare(lhs, rhs).expect("unable to parse jsonb value")
+                == Ordering::Greater
+        },
+    );
+    registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
+        "gte",
+        FunctionProperty::default(),
+        |_, _| None,
+        |lhs, rhs, _| {
+            common_jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") != Ordering::Less
+        },
+    );
+    registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
+        "lt",
+        FunctionProperty::default(),
+        |_, _| None,
+        |lhs, rhs, _| {
+            common_jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") == Ordering::Less
+        },
+    );
+    registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
+        "lte",
+        FunctionProperty::default(),
+        |_, _| None,
+        |lhs, rhs, _| {
+            common_jsonb::compare(lhs, rhs).expect("unable to parse jsonb value")
+                != Ordering::Greater
+        },
+    );
+}
+
+fn register_like(registry: &mut FunctionRegistry) {
+    registry.register_aliases("regexp", &["rlike"]);
 
     registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
         "like",
@@ -231,7 +267,6 @@ pub fn register(registry: &mut FunctionRegistry) {
             Ok(pattern.is_match(str))
         }),
     );
-    registry.register_aliases("regexp", &["rlike"]);
 }
 
 fn vectorize_regexp(

@@ -28,7 +28,9 @@ use common_functions_v2::scalars::builtin_functions;
 use itertools::Itertools;
 
 mod arithmetic;
+mod array;
 mod boolean;
+mod cast;
 mod comparison;
 mod control;
 mod datetime;
