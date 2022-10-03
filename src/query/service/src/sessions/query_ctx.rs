@@ -25,7 +25,6 @@ use chrono_tz::Tz;
 use common_base::base::tokio::task::JoinHandle;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
-use common_base::base::Runtime;
 use common_base::base::TrySpawn;
 use common_contexts::DalContext;
 use common_contexts::DalMetrics;
@@ -69,7 +68,6 @@ pub struct QueryContext {
     version: String,
     partition_queue: Arc<RwLock<VecDeque<PartInfoPtr>>>,
     shared: Arc<QueryContextShared>,
-    precommit_blocks: Arc<RwLock<Vec<DataBlock>>>,
     fragment_id: Arc<AtomicUsize>,
 }
 
@@ -85,7 +83,6 @@ impl QueryContext {
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
             version: format!("DatabendQuery {}", *crate::version::DATABEND_COMMIT_VERSION),
             shared,
-            precommit_blocks: Arc::new(RwLock::new(Vec::new())),
             fragment_id: Arc::new(AtomicUsize::new(0)),
         })
     }
@@ -226,20 +223,6 @@ impl TableContext for QueryContext {
     fn get_result_progress_value(&self) -> ProgressValues {
         self.shared.result_progress.as_ref().get_values()
     }
-    // Steal n partitions from the partition pool by the pipeline worker.
-    // This also can steal the partitions from distributed node.
-    fn try_get_partitions(&self, num: u64) -> Result<Partitions> {
-        let mut partitions = vec![];
-        for _ in 0..num {
-            match self.partition_queue.write().pop_back() {
-                None => break,
-                Some(partition) => {
-                    partitions.push(partition);
-                }
-            }
-        }
-        Ok(partitions)
-    }
 
     fn try_get_part(&self) -> Option<PartInfoPtr> {
         self.partition_queue.write().pop_front()
@@ -334,15 +317,10 @@ impl TableContext for QueryContext {
         self.shared.dal_ctx.as_ref()
     }
     fn push_precommit_block(&self, block: DataBlock) {
-        let mut blocks = self.precommit_blocks.write();
-        blocks.push(block);
+        self.shared.push_precommit_block(block)
     }
     fn consume_precommit_blocks(&self) -> Vec<DataBlock> {
-        let mut blocks = self.precommit_blocks.write();
-
-        let mut swaped_precommit_blocks = vec![];
-        std::mem::swap(&mut *blocks, &mut swaped_precommit_blocks);
-        swaped_precommit_blocks
+        self.shared.consume_precommit_blocks()
     }
     fn try_get_function_context(&self) -> Result<FunctionContext> {
         let tz = self.get_settings().get_timezone()?;
@@ -381,14 +359,6 @@ impl TableContext for QueryContext {
     // Get all the processes list info.
     fn get_processes_info(&self) -> Vec<ProcessInfo> {
         SessionManager::instance().processes_info()
-    }
-
-    fn get_runtime(&self) -> Result<Arc<Runtime>> {
-        self.shared.try_get_runtime()
-    }
-
-    fn clone_inner(&self) -> Arc<dyn TableContext> {
-        QueryContext::create_from_shared(self.shared.clone())
     }
 }
 

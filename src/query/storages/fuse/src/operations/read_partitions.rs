@@ -85,20 +85,6 @@ impl FuseTable {
         }
     }
 
-    pub fn sync_prune_snapshot_blocks(
-        ctx: Arc<dyn TableContext>,
-        push_downs: Option<Extras>,
-        table_info: TableInfo,
-        segments_location: Vec<Location>,
-    ) -> Result<(Statistics, Partitions)> {
-        let block_metas =
-            BlockPruner::sync_prune(&ctx, table_info.schema(), &push_downs, segments_location)?
-                .into_iter()
-                .map(|(_, v)| v)
-                .collect::<Vec<_>>();
-        Self::read_partitions_with_metas(ctx, table_info.schema(), push_downs, block_metas, 0)
-    }
-
     pub async fn prune_snapshot_blocks(
         ctx: Arc<dyn TableContext>,
         push_downs: Option<Extras>,

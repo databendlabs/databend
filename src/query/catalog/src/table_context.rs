@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
-use common_base::base::Runtime;
 use common_config::Config;
 use common_contexts::DalContext;
 use common_contexts::DalMetrics;
@@ -66,10 +65,6 @@ pub trait TableContext: Send + Sync {
     fn get_write_progress_value(&self) -> ProgressValues;
     fn get_result_progress(&self) -> Arc<Progress>;
     fn get_result_progress_value(&self) -> ProgressValues;
-    // Steal n partitions from the partition pool by the pipeline worker.
-    // This also can steal the partitions from distributed node.
-    fn try_get_partitions(&self, num: u64) -> Result<Partitions>;
-
     fn try_get_part(&self) -> Option<PartInfoPtr>;
     // Update the context partition pool from the pipeline builder.
     fn try_set_partitions(&self, partitions: Partitions) -> Result<()>;
@@ -107,7 +102,4 @@ pub trait TableContext: Send + Sync {
     async fn get_table(&self, catalog: &str, database: &str, table: &str)
     -> Result<Arc<dyn Table>>;
     fn get_processes_info(&self) -> Vec<ProcessInfo>;
-    fn get_runtime(&self) -> Result<Arc<Runtime>>;
-
-    fn clone_inner(&self) -> Arc<dyn TableContext>;
 }
