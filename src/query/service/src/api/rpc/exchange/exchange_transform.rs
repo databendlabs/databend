@@ -135,8 +135,8 @@ impl ExchangeTransform {
 
 #[async_trait::async_trait]
 impl Processor for ExchangeTransform {
-    fn name(&self) -> &'static str {
-        "ExchangeTransform"
+    fn name(&self) -> String {
+        "ExchangeTransform".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

@@ -23,7 +23,8 @@ common-meta-app = { path = "../../meta/app" }
 common-meta-types = { path = "../../meta/types" }
 common-pipeline-core = { path = "../pipeline/core" }
 common-settings = { path = "../settings" }
+common-storage = { path = "../../common/storage" }
 
 async-trait = "0.1.57"
 dyn-clone = "1.0.9"
-opendal = { version = "0.17", features = ["layers-retry"] }
+opendal = { version = "0.18", features = ["layers-retry"] }

@@ -32,8 +32,8 @@ impl EmptySource {
 }
 
 impl Processor for EmptySource {
-    fn name(&self) -> &'static str {
-        "EmptySource"
+    fn name(&self) -> String {
+        "EmptySource".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

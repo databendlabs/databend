@@ -1,0 +1,296 @@
+ast            : CAST(NULL AS VARIANT)
+raw expr       : CAST(NULL AS Variant)
+checked expr   : CAST(NULL AS Variant)
+optimized expr : 0x2000000000000000
+output type    : Variant
+output domain  : Undefined
+output         : null
+
+
+ast            : CAST(0 AS VARIANT)
+raw expr       : CAST(0_u8 AS Variant)
+checked expr   : CAST(0_u8 AS Variant)
+optimized expr : 0x200000002000000100
+output type    : Variant
+output domain  : Undefined
+output         : 0
+
+
+ast            : CAST(-1 AS VARIANT)
+raw expr       : CAST(minus(1_u8) AS Variant)
+checked expr   : CAST(minus<UInt8>(1_u8) AS Variant)
+optimized expr : 0x200000002000000240ff
+output type    : Variant
+output domain  : Undefined
+output         : -1
+
+
+ast            : CAST(1.1 AS VARIANT)
+raw expr       : CAST(1.1_f64 AS Variant)
+checked expr   : CAST(1.1_f64 AS Variant)
+optimized expr : 0x2000000020000009603ff199999999999a
+output type    : Variant
+output domain  : Undefined
+output         : 1.1
+
+
+ast            : CAST(0/0 AS VARIANT)
+raw expr       : CAST(divide(0_u8, 0_u8) AS Variant)
+checked expr   : CAST(divide<UInt8, UInt8>(0_u8, 0_u8) AS Variant)
+optimized expr : 0x200000002000000110
+output type    : Variant
+output domain  : Undefined
+output         : NaN
+
+
+ast            : CAST(1/0 AS VARIANT)
+raw expr       : CAST(divide(1_u8, 0_u8) AS Variant)
+checked expr   : CAST(divide<UInt8, UInt8>(1_u8, 0_u8) AS Variant)
+optimized expr : 0x200000002000000120
+output type    : Variant
+output domain  : Undefined
+output         : inf
+
+
+ast            : CAST(-1/0 AS VARIANT)
+raw expr       : CAST(minus(divide(1_u8, 0_u8)) AS Variant)
+checked expr   : CAST(minus<Float64>(divide<UInt8, UInt8>(1_u8, 0_u8)) AS Variant)
+optimized expr : 0x200000002000000130
+output type    : Variant
+output domain  : Undefined
+output         : -inf
+
+
+ast            : CAST('🍦 が美味しい' AS VARIANT)
+raw expr       : CAST("🍦 が美味しい" AS Variant)
+checked expr   : CAST("🍦 が美味しい" AS Variant)
+optimized expr : 0x2000000010000014f09f8da620e3818ce7be8ee591b3e38197e38184
+output type    : Variant
+output domain  : Undefined
+output         : "🍦 が美味しい"
+
+
+ast            : CAST([0, 1, 2] AS VARIANT)
+raw expr       : CAST(array(0_u8, 1_u8, 2_u8) AS Variant)
+checked expr   : CAST(array<T0=UInt8><T0, T0, T0>(0_u8, 1_u8, 2_u8) AS Variant)
+optimized expr : 0x800000032000000120000002200000020050015002
+output type    : Variant
+output domain  : Undefined
+output         : [0,1,2]
+
+
+ast            : CAST([0, 'a'] AS VARIANT)
+raw expr       : CAST(array(0_u8, "a") AS Variant)
+checked expr   : CAST(array<T0=Variant><T0, T0>(CAST(0_u8 AS Variant), CAST("a" AS Variant)) AS Variant)
+optimized expr : 0x8000000220000001100000010061
+output type    : Variant
+output domain  : Undefined
+output         : [0,"a"]
+
+
+ast            : CAST(to_timestamp(1000000) AS VARIANT)
+raw expr       : CAST(to_timestamp(1000000_u32) AS Variant)
+checked expr   : CAST(to_timestamp<Int64>(CAST(1000000_u32 AS Int64)) AS Variant)
+optimized expr : 0x200000002000000940000000e8d4a51000
+output type    : Variant
+output domain  : Unknown
+output         : 1000000000000
+
+
+ast            : CAST(false AS VARIANT)
+raw expr       : CAST(false AS Variant)
+checked expr   : CAST(false AS Variant)
+optimized expr : 0x2000000030000000
+output type    : Variant
+output domain  : Undefined
+output         : false
+
+
+ast            : CAST(true AS VARIANT)
+raw expr       : CAST(true AS Variant)
+checked expr   : CAST(true AS Variant)
+optimized expr : 0x2000000040000000
+output type    : Variant
+output domain  : Undefined
+output         : true
+
+
+ast            : CAST(CAST('🍦 が美味しい' AS VARIANT) AS VARIANT)
+raw expr       : CAST(CAST("🍦 が美味しい" AS Variant) AS Variant)
+checked expr   : CAST(CAST("🍦 が美味しい" AS Variant) AS Variant)
+optimized expr : 0x2000000010000014f09f8da620e3818ce7be8ee591b3e38197e38184
+output type    : Variant
+output domain  : Undefined
+output         : "🍦 が美味しい"
+
+
+ast            : CAST(a AS VARIANT)
+raw expr       : CAST(ColumnRef(0)::String NULL AS Variant)
+checked expr   : CAST(ColumnRef(0) AS Variant)
+evaluation:
++--------+------------------------+-----------+
+|        | a                      | Output    |
++--------+------------------------+-----------+
+| Type   | String NULL            | Variant   |
+| Domain | {"a"..="def"} ∪ {NULL} | Undefined |
+| Row 0  | "a"                    | "a"       |
+| Row 1  | NULL                   | null      |
+| Row 2  | "def"                  | "def"     |
++--------+------------------------+-----------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                            |
++--------+-----------------------------------------------------------------------------------------------------------------+
+| a      | NullableColumn { column: StringColumn { data: 0x616263646566, offsets: [0, 1, 3, 6] }, validity: [0b_____101] } |
+| Output | StringColumn { data: 0x20000000100000016120000000000000002000000010000003646566, offsets: [0, 9, 17, 28] }      |
++--------+-----------------------------------------------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(NULL AS VARIANT)
+raw expr       : TRY_CAST(NULL AS Variant)
+checked expr   : TRY_CAST(NULL AS Variant NULL)
+optimized expr : 0x2000000000000000
+output type    : Variant NULL
+output domain  : Undefined
+output         : null
+
+
+ast            : TRY_CAST(0 AS VARIANT)
+raw expr       : TRY_CAST(0_u8 AS Variant)
+checked expr   : TRY_CAST(0_u8 AS Variant NULL)
+optimized expr : 0x200000002000000100
+output type    : Variant NULL
+output domain  : Undefined
+output         : 0
+
+
+ast            : TRY_CAST(-1 AS VARIANT)
+raw expr       : TRY_CAST(minus(1_u8) AS Variant)
+checked expr   : TRY_CAST(minus<UInt8>(1_u8) AS Variant NULL)
+optimized expr : 0x200000002000000240ff
+output type    : Variant NULL
+output domain  : Undefined
+output         : -1
+
+
+ast            : TRY_CAST(1.1 AS VARIANT)
+raw expr       : TRY_CAST(1.1_f64 AS Variant)
+checked expr   : TRY_CAST(1.1_f64 AS Variant NULL)
+optimized expr : 0x2000000020000009603ff199999999999a
+output type    : Variant NULL
+output domain  : Undefined
+output         : 1.1
+
+
+ast            : TRY_CAST(0/0 AS VARIANT)
+raw expr       : TRY_CAST(divide(0_u8, 0_u8) AS Variant)
+checked expr   : TRY_CAST(divide<UInt8, UInt8>(0_u8, 0_u8) AS Variant NULL)
+optimized expr : 0x200000002000000110
+output type    : Variant NULL
+output domain  : Undefined
+output         : NaN
+
+
+ast            : TRY_CAST(1/0 AS VARIANT)
+raw expr       : TRY_CAST(divide(1_u8, 0_u8) AS Variant)
+checked expr   : TRY_CAST(divide<UInt8, UInt8>(1_u8, 0_u8) AS Variant NULL)
+optimized expr : 0x200000002000000120
+output type    : Variant NULL
+output domain  : Undefined
+output         : inf
+
+
+ast            : TRY_CAST(-1/0 AS VARIANT)
+raw expr       : TRY_CAST(minus(divide(1_u8, 0_u8)) AS Variant)
+checked expr   : TRY_CAST(minus<Float64>(divide<UInt8, UInt8>(1_u8, 0_u8)) AS Variant NULL)
+optimized expr : 0x200000002000000130
+output type    : Variant NULL
+output domain  : Undefined
+output         : -inf
+
+
+ast            : TRY_CAST('🍦 が美味しい' AS VARIANT)
+raw expr       : TRY_CAST("🍦 が美味しい" AS Variant)
+checked expr   : TRY_CAST("🍦 が美味しい" AS Variant NULL)
+optimized expr : 0x2000000010000014f09f8da620e3818ce7be8ee591b3e38197e38184
+output type    : Variant NULL
+output domain  : Undefined
+output         : "🍦 が美味しい"
+
+
+ast            : TRY_CAST([0, 1, 2] AS VARIANT)
+raw expr       : TRY_CAST(array(0_u8, 1_u8, 2_u8) AS Variant)
+checked expr   : TRY_CAST(array<T0=UInt8><T0, T0, T0>(0_u8, 1_u8, 2_u8) AS Variant NULL)
+optimized expr : 0x800000032000000120000002200000020050015002
+output type    : Variant NULL
+output domain  : Undefined
+output         : [0,1,2]
+
+
+ast            : TRY_CAST([0, 'a'] AS VARIANT)
+raw expr       : TRY_CAST(array(0_u8, "a") AS Variant)
+checked expr   : TRY_CAST(array<T0=Variant><T0, T0>(CAST(0_u8 AS Variant), CAST("a" AS Variant)) AS Variant NULL)
+optimized expr : 0x8000000220000001100000010061
+output type    : Variant NULL
+output domain  : Undefined
+output         : [0,"a"]
+
+
+ast            : TRY_CAST(to_timestamp(1000000) AS VARIANT)
+raw expr       : TRY_CAST(to_timestamp(1000000_u32) AS Variant)
+checked expr   : TRY_CAST(to_timestamp<Int64>(CAST(1000000_u32 AS Int64)) AS Variant NULL)
+optimized expr : 0x200000002000000940000000e8d4a51000
+output type    : Variant NULL
+output domain  : Unknown
+output         : 1000000000000
+
+
+ast            : TRY_CAST(false AS VARIANT)
+raw expr       : TRY_CAST(false AS Variant)
+checked expr   : TRY_CAST(false AS Variant NULL)
+optimized expr : 0x2000000030000000
+output type    : Variant NULL
+output domain  : Undefined
+output         : false
+
+
+ast            : TRY_CAST(true AS VARIANT)
+raw expr       : TRY_CAST(true AS Variant)
+checked expr   : TRY_CAST(true AS Variant NULL)
+optimized expr : 0x2000000040000000
+output type    : Variant NULL
+output domain  : Undefined
+output         : true
+
+
+ast            : TRY_CAST(TRY_CAST('🍦 が美味しい' AS VARIANT) AS VARIANT)
+raw expr       : TRY_CAST(TRY_CAST("🍦 が美味しい" AS Variant) AS Variant)
+checked expr   : TRY_CAST(TRY_CAST("🍦 が美味しい" AS Variant NULL) AS Variant NULL)
+optimized expr : 0x2000000010000014f09f8da620e3818ce7be8ee591b3e38197e38184
+output type    : Variant NULL
+output domain  : Undefined
+output         : "🍦 が美味しい"
+
+
+ast            : TRY_CAST(a AS VARIANT)
+raw expr       : TRY_CAST(ColumnRef(0)::String NULL AS Variant)
+checked expr   : TRY_CAST(ColumnRef(0) AS Variant NULL)
+evaluation:
++--------+------------------------+--------------------+
+|        | a                      | Output             |
++--------+------------------------+--------------------+
+| Type   | String NULL            | Variant NULL       |
+| Domain | {"a"..="def"} ∪ {NULL} | Undefined ∪ {NULL} |
+| Row 0  | "a"                    | "a"                |
+| Row 1  | NULL                   | "bc"               |
+| Row 2  | "def"                  | "def"              |
++--------+------------------------+--------------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                              |
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| a      | NullableColumn { column: StringColumn { data: 0x616263646566, offsets: [0, 1, 3, 6] }, validity: [0b_____101] }                                                   |
+| Output | NullableColumn { column: StringColumn { data: 0x200000001000000161200000001000000262632000000010000003646566, offsets: [0, 9, 19, 30] }, validity: [0b_____111] } |
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+

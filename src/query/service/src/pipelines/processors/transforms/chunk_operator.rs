@@ -124,4 +124,24 @@ impl Transform for CompoundChunkOperator {
             .iter()
             .try_fold(data, |input, op| op.execute(&self.ctx, input))
     }
+
+    fn name(&self) -> String {
+        format!(
+            "{}({})",
+            Self::NAME,
+            self.operators
+                .iter()
+                .map(|op| {
+                    match op {
+                        ChunkOperator::Map { .. } => "Map",
+                        ChunkOperator::Filter { .. } => "Filter",
+                        ChunkOperator::Project { .. } => "Project",
+                        ChunkOperator::Rename { .. } => "Rename",
+                    }
+                    .to_string()
+                })
+                .collect::<Vec<String>>()
+                .join("->")
+        )
+    }
 }

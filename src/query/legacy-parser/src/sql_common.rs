@@ -18,6 +18,7 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use sqlparser::ast::DataType as SQLDataType;
+use unicode_segmentation::UnicodeSegmentation;
 
 pub struct SQLCommon;
 
@@ -126,9 +127,51 @@ impl SQLCommon {
     pub fn short_sql(query: &str) -> String {
         let query = query.trim_start();
         if query.len() >= 64 && query[..6].eq_ignore_ascii_case("INSERT") {
-            format!("{}...", &query[..64])
+            // keep first 64 graphemes
+            String::from_utf8(
+                query
+                    .graphemes(true)
+                    .take(64)
+                    .flat_map(|g| g.as_bytes().iter())
+                    .copied() // copied converts &u8 into u8
+                    .chain(b"...".iter().copied())
+                    .collect::<Vec<u8>>(),
+            )
+            .unwrap() // by construction, this cannot panic as we extracted unicode grapheme
         } else {
             query.to_string()
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::sql_common::SQLCommon;
+
+    const LONG_INSERT_WITH_UNICODE_AT_TRUNCATION_POINT: &str =
+        "INSERT INTO `test` VALUES ('abcd', 'def'),('abcd', 'def'),('abcé', 'def');";
+
+    #[test]
+    #[should_panic]
+    fn test_invalid_string_truncation() {
+        // This test checks the INSERT statement did panic with byte truncated string.
+        // We need to do this to validate that the code of short_sql has fixed this panic!
+        format!("{}...", &LONG_INSERT_WITH_UNICODE_AT_TRUNCATION_POINT[..64]);
+    }
+
+    #[test]
+    fn test_short_sql_truncation_on_unicode() {
+        // short insert into statements are not truncated
+        assert_eq!(
+            SQLCommon::short_sql("INSERT INTO `test` VALUES('abcd', 'def');"),
+            "INSERT INTO `test` VALUES('abcd', 'def');"
+        );
+        // long one are at 64th char...
+        let shortned = SQLCommon::short_sql(LONG_INSERT_WITH_UNICODE_AT_TRUNCATION_POINT);
+        assert_eq!(shortned.len(), 68); // 64 chars with a multibyte one (é) + ...
+        assert_eq!(
+            shortned,
+            "INSERT INTO `test` VALUES ('abcd', 'def'),('abcd', 'def'),('abcé..."
+        );
     }
 }

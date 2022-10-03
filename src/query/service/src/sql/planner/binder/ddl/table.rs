@@ -45,6 +45,8 @@ use common_planner::plans::RenameTablePlan;
 use common_planner::plans::ShowCreateTablePlan;
 use common_planner::plans::TruncateTablePlan;
 use common_planner::plans::UndropTablePlan;
+use common_storage::parse_uri_location;
+use common_storage::UriLocation;
 use tracing::debug;
 
 use crate::sql::binder::scalar::ScalarBinder;
@@ -340,6 +342,7 @@ impl<'a> Binder {
             as_query,
             transient,
             engine,
+            uri_location,
         } = stmt;
 
         let catalog = catalog
@@ -362,6 +365,20 @@ impl<'a> Binder {
                 table_option.1.to_string(),
             )?;
         }
+
+        let storage_params = match uri_location {
+            Some(uri) => {
+                let uri = UriLocation {
+                    protocol: uri.protocol.clone(),
+                    name: uri.name.clone(),
+                    path: uri.path.clone(),
+                    connection: uri.connection.clone(),
+                };
+                let (sp, _) = parse_uri_location(&uri)?;
+                Some(sp)
+            }
+            None => None,
+        };
 
         // If table is TRANSIENT, set a flag in table option
         if *transient {
@@ -455,6 +472,7 @@ impl<'a> Binder {
             table,
             schema,
             engine,
+            storage_params,
             options,
             field_default_exprs,
             field_comments,

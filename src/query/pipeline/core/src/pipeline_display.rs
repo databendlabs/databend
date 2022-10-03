@@ -29,7 +29,7 @@ struct PipelineIndentDisplayWrapper<'a> {
 }
 
 impl<'a> PipelineIndentDisplayWrapper<'a> {
-    fn pipe_name(pipe: &Pipe) -> &'static str {
+    fn pipe_name(pipe: &Pipe) -> String {
         unsafe {
             match pipe {
                 Pipe::SimplePipe { processors, .. } => processors[0].name(),

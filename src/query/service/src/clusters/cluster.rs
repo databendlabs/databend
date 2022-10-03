@@ -375,7 +375,12 @@ impl ClusterDiscovery {
             }
         }
 
-        let node_info = NodeInfo::create(self.local_id.clone(), cpus, address);
+        let node_info = NodeInfo::create(
+            self.local_id.clone(),
+            cpus,
+            address,
+            crate::version::DATABEND_COMMIT_VERSION.to_string(),
+        );
 
         self.drop_invalid_nodes(&node_info).await?;
         match self.api_provider.add_node(node_info.clone()).await {

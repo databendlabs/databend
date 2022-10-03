@@ -143,8 +143,8 @@ impl ResultTableSink {
 
 #[async_trait]
 impl Processor for ResultTableSink {
-    fn name(&self) -> &'static str {
-        "ResultTableSink"
+    fn name(&self) -> String {
+        "ResultTableSink".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

@@ -28,7 +28,7 @@ use databend_query::interpreters::DropTableClusterKeyInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::TableContext;
-use databend_query::sql::plans::CreateTablePlanV2;
+use databend_query::sql::plans::create_table_v2::CreateTablePlanV2;
 use databend_query::sql::Planner;
 use databend_query::sql::OPT_KEY_DATABASE_ID;
 use databend_query::sql::OPT_KEY_SNAPSHOT_LOCATION;
@@ -300,6 +300,7 @@ async fn test_fuse_alter_table_cluster_key() -> Result<()> {
         table: fixture.default_table_name(),
         schema: TestFixture::default_schema(),
         engine: Engine::Fuse,
+        storage_params: None,
         options: [
             // database id is required for FUSE
             (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),

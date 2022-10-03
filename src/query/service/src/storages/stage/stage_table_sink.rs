@@ -150,8 +150,8 @@ impl StageTableSink {
 
 #[async_trait]
 impl Processor for StageTableSink {
-    fn name(&self) -> &'static str {
-        "StageSink"
+    fn name(&self) -> String {
+        "StageSink".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

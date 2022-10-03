@@ -23,5 +23,8 @@ pub use block_statistics::BlockStatistics;
 pub use cluster_statistics::ClusterStatsGenerator;
 pub use column_statistic::gen_columns_statistics;
 pub use column_statistic::traverse;
+pub use column_statistic::Trim;
+pub use column_statistic::STATS_REPLACEMENT_CHAR;
+pub use column_statistic::STATS_STRING_PREFIX_LEN;
 pub use reducers::merge_statistics;
 pub use reducers::reduce_block_statistics;

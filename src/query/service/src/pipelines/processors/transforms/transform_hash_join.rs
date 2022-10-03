@@ -100,8 +100,8 @@ impl TransformHashJoinProbe {
 
 #[async_trait::async_trait]
 impl Processor for TransformHashJoinProbe {
-    fn name(&self) -> &'static str {
-        "HashJoin"
+    fn name(&self) -> String {
+        "HashJoin".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

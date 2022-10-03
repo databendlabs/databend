@@ -21,6 +21,7 @@
 #![allow(clippy::len_without_is_empty)]
 #![allow(clippy::needless_lifetimes)]
 #![feature(const_maybe_uninit_as_mut_ptr)]
+#![feature(anonymous_lifetime_in_impl_trait)]
 #![feature(const_mut_refs)]
 #![feature(generic_const_exprs)]
 #![allow(incomplete_features)]

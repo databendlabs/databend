@@ -533,18 +533,6 @@ dependencies = [
 
 [[package]]
 name = "backon"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a62fde477410f4e8a92e2fd4b8536b16ad98270478211d1516cded50bad7208e"
-dependencies = [
- "futures",
- "pin-project",
- "rand 0.8.5",
- "tokio",
-]
-
-[[package]]
-name = "backon"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6cd1a59bc091e593ee9ed62df4e4a07115e00a0e0a52fd7e0e04540773939b80"
@@ -1252,6 +1240,7 @@ dependencies = [
  "common-meta-types",
  "common-pipeline-core",
  "common-settings",
+ "common-storage",
  "dyn-clone",
  "opendal",
 ]
@@ -1588,6 +1577,7 @@ dependencies = [
  "common-functions",
  "common-legacy-expression",
  "sqlparser",
+ "unicode-segmentation",
 ]
 
 [[package]]
@@ -1668,6 +1658,7 @@ dependencies = [
  "common-building",
  "common-datavalues",
  "common-meta-types",
+ "common-storage",
  "enumflags2",
  "maplit",
  "num-derive",
@@ -1973,7 +1964,7 @@ name = "common-storage"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "backon 0.2.0",
+ "backon",
  "common-base",
  "common-contexts",
  "common-exception",
@@ -2008,6 +1999,7 @@ dependencies = [
  "common-pipeline-core",
  "common-pipeline-sources",
  "common-pipeline-transforms",
+ "common-storage",
  "common-storages-index",
  "common-storages-util",
  "common-streams",
@@ -2660,7 +2652,7 @@ dependencies = [
  "anyhow",
  "async-entry",
  "async-trait",
- "backon 0.2.0",
+ "backon",
  "clap",
  "common-arrow",
  "common-base",
@@ -2713,7 +2705,7 @@ dependencies = [
  "async-stream",
  "async-trait-fn",
  "backoff",
- "backon 0.2.0",
+ "backon",
  "base64",
  "bincode",
  "bumpalo",
@@ -5224,15 +5216,15 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.17.4"
+version = "0.18.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d1ac2fba66b4b574259a4e1c6a1b57b8e649682ed7da167c9cde120c1495f2cd"
+checksum = "c0afeab09d50984cc6b89281271548fa008f7224410c392ea441186708bbd930"
 dependencies = [
  "anyhow",
  "async-compat",
  "async-compression-issue-150-workaround",
  "async-trait",
- "backon 0.2.0",
+ "backon",
  "base64",
  "bytes",
  "flagset",
@@ -5263,7 +5255,7 @@ dependencies = [
 [[package]]
 name = "openraft"
 version = "0.7.3"
-source = "git+https://github.com/datafuselabs/openraft?tag=v0.7.3#2c06dc4d1e2973e4a91a9fb4a3345d1ce9055fc2"
+source = "git+https://github.com/drmingdrmer/openraft?tag=v0.7.4-alpha.2#2896b98e34825a8623ec4650da405c79827ecbee"
 dependencies = [
  "anyerror",
  "anyhow",
@@ -6391,12 +6383,12 @@ dependencies = [
 
 [[package]]
 name = "reqsign"
-version = "0.4.3"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6e28b79573bf9e503b514799a5533935fa63bec22d582d4d11cab1eab7a040d"
+checksum = "c338306df4ba0010b78f1c4469bf034313ad46b2c43020ec448432e5e07fab26"
 dependencies = [
  "anyhow",
- "backon 0.1.0",
+ "backon",
  "base64",
  "bytes",
  "dirs",

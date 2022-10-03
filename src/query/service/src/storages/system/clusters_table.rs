@@ -44,6 +44,7 @@ impl SyncSystemTable for ClustersTable {
         let mut names = MutableStringColumn::with_capacity(cluster_nodes.len());
         let mut addresses = MutableStringColumn::with_capacity(cluster_nodes.len());
         let mut addresses_port = MutablePrimitiveColumn::<u16>::with_capacity(cluster_nodes.len());
+        let mut versions = MutableStringColumn::with_capacity(cluster_nodes.len());
 
         for cluster_node in &cluster_nodes {
             let (ip, port) = cluster_node.ip_port()?;
@@ -51,12 +52,14 @@ impl SyncSystemTable for ClustersTable {
             names.append_value(cluster_node.id.as_bytes());
             addresses.append_value(ip.as_bytes());
             addresses_port.append_value(port);
+            versions.append_value(cluster_node.binary_version.as_bytes());
         }
 
         Ok(DataBlock::create(self.table_info.schema(), vec![
             names.finish().arc(),
             addresses.finish().arc(),
             addresses_port.finish().arc(),
+            versions.finish().arc(),
         ]))
     }
 }
@@ -67,6 +70,7 @@ impl ClustersTable {
             DataField::new("name", Vu8::to_data_type()),
             DataField::new("host", Vu8::to_data_type()),
             DataField::new("port", u16::to_data_type()),
+            DataField::new("version", Vu8::to_data_type()),
         ]);
 
         let table_info = TableInfo {

@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_ast::ast::ExplainKind;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use tracing::error;
 
@@ -182,6 +183,10 @@ impl InterpreterFactory {
                 ctx,
                 *delete.clone(),
             )?)),
+
+            Plan::Update(_update) => {
+                Err(ErrorCode::UnImplement("Unimplement for update".to_string()))
+            }
 
             // Roles
             Plan::CreateRole(create_role) => Ok(Arc::new(CreateRoleInterpreter::try_create(

@@ -18,7 +18,6 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use super::error::Error;
 use super::number::Number;
 use super::ser::Encoder;
 
@@ -195,9 +194,8 @@ impl<'a> Value<'a> {
     }
 
     /// Attempts to serialize the JSONB Value into a byte stream.
-    pub fn to_vec(&self, buf: &mut Vec<u8>) -> Result<(), Error> {
+    pub fn to_vec(&self, buf: &mut Vec<u8>) {
         let mut encoder = Encoder::new(buf);
-        encoder.encode(self)?;
-        Ok(())
+        encoder.encode(self);
     }
 }
