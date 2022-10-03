@@ -668,8 +668,8 @@ impl FragmentCoordinator {
 
             match &self.payload {
                 FragmentPayload::PlanV2(plan) => {
-                    let new_ctx = QueryContext::create_from(ctx);
-                    let pipeline_builder = PipelineBuilderV2::create(new_ctx);
+                    let pipeline_ctx = QueryContext::create_from(ctx);
+                    let pipeline_builder = PipelineBuilderV2::create(pipeline_ctx);
                     self.pipeline_build_res = Some(pipeline_builder.finalize(plan)?);
                 }
             };
