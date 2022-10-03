@@ -24,6 +24,7 @@ use common_exception::Result;
 use tokio::runtime::Builder;
 use tokio::runtime::Handle;
 use tokio::sync::oneshot;
+use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 
 use super::runtime_tracker::RuntimeTracker;
@@ -185,6 +186,33 @@ impl Runtime {
 
     pub fn block_on<F: Future>(&self, future: F) -> F::Output {
         self.handle.block_on(future)
+    }
+
+    // This function make the futures always run fits the max_concurrent with a Semaphore latch.
+    // This is not same as: `futures::stream::iter(futures).buffer_unordered(max_concurrent)`:
+    // `buffer_unordered` should wait the whole batch finished and start the new batch.
+    // `try_spawn_batch` should wait one future finished and start new one.
+    // The comparison of them please see https://github.com/BohuTANG/joint
+    pub fn try_spawn_batch<F>(
+        &self,
+        max_concurrent: usize,
+        futures: Vec<F>,
+    ) -> Result<Vec<JoinHandle<F::Output>>>
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        let semaphore = Arc::new(Semaphore::new(max_concurrent));
+        let mut join_handlers = Vec::with_capacity(futures.len());
+        for future in futures {
+            let semaphore = semaphore.clone();
+            let h = self.try_spawn(async move {
+                let _segment_prune_permit = semaphore.acquire().await;
+                future.await
+            });
+            join_handlers.push(h?);
+        }
+        Ok(join_handlers)
     }
 }
 
