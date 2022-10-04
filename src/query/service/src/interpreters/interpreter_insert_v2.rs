@@ -164,7 +164,6 @@ impl Interpreter for InsertInterpreterV2 {
                         _ => unreachable!(),
                     };
 
-                    table1.get_table_info();
                     let catalog = self.plan.catalog.clone();
                     let is_distributed_plan = select_plan.is_distributed_plan();
 

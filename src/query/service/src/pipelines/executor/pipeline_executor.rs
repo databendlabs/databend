@@ -36,6 +36,8 @@ use crate::pipelines::executor::executor_worker_context::ExecutorWorkerContext;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::pipeline::Pipeline;
 
+pub type InitCallback = Arc<Box<dyn Fn() -> Result<()> + Send + Sync + 'static>>;
+
 pub type FinishedCallback =
     Arc<Box<dyn Fn(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>>;
 
@@ -45,6 +47,7 @@ pub struct PipelineExecutor {
     workers_condvar: Arc<WorkersCondvar>,
     pub async_runtime: Arc<Runtime>,
     pub global_tasks_queue: Arc<ExecutorTasksQueue>,
+    on_init_callback: InitCallback,
     on_finished_callback: FinishedCallback,
     settings: ExecutorSettings,
     finished_notify: Notify,
@@ -57,12 +60,14 @@ impl PipelineExecutor {
         settings: ExecutorSettings,
     ) -> Result<Arc<PipelineExecutor>> {
         let threads_num = pipeline.get_max_threads();
+        let on_init_callback = pipeline.take_on_init();
         let on_finished_callback = pipeline.take_on_finished();
 
         assert_ne!(threads_num, 0, "Pipeline max threads cannot equals zero.");
         Self::try_create(
             RunningGraph::create(pipeline)?,
             threads_num,
+            on_init_callback,
             on_finished_callback,
             settings,
         )
@@ -82,6 +87,11 @@ impl PipelineExecutor {
             .max()
             .unwrap_or(0);
 
+        let on_init_callbacks = pipelines
+            .iter_mut()
+            .map(|x| x.take_on_init())
+            .collect::<Vec<_>>();
+
         let on_finished_callbacks = pipelines
             .iter_mut()
             .map(|x| x.take_on_finished())
@@ -91,6 +101,13 @@ impl PipelineExecutor {
         Self::try_create(
             RunningGraph::from_pipelines(pipelines)?,
             threads_num,
+            Arc::new(Box::new(move || {
+                for on_init_callback in &on_init_callbacks {
+                    on_init_callback()?;
+                }
+
+                Ok(())
+            })),
             Arc::new(Box::new(move |may_error| {
                 for on_finished_callback in &on_finished_callbacks {
                     on_finished_callback(may_error)?;
@@ -105,33 +122,25 @@ impl PipelineExecutor {
     fn try_create(
         graph: RunningGraph,
         threads_num: usize,
+        on_init_callback: InitCallback,
         on_finished_callback: FinishedCallback,
         settings: ExecutorSettings,
     ) -> Result<Arc<PipelineExecutor>> {
-        unsafe {
-            let workers_condvar = WorkersCondvar::create(threads_num);
-            let global_tasks_queue = ExecutorTasksQueue::create(threads_num);
+        let workers_condvar = WorkersCondvar::create(threads_num);
+        let global_tasks_queue = ExecutorTasksQueue::create(threads_num);
 
-            let mut init_schedule_queue = graph.init_schedule_queue()?;
-
-            let mut tasks = VecDeque::new();
-            while let Some(task) = init_schedule_queue.pop_task() {
-                tasks.push_back(task);
-            }
-            global_tasks_queue.init_tasks(tasks);
-
-            Ok(Arc::new(PipelineExecutor {
-                graph,
-                threads_num,
-                workers_condvar,
-                global_tasks_queue,
-                on_finished_callback,
-                async_runtime: GlobalIORuntime::instance(),
-                settings,
-                finished_notify: Notify::new(),
-                finished_error: Mutex::new(None),
-            }))
-        }
+        Ok(Arc::new(PipelineExecutor {
+            graph,
+            threads_num,
+            workers_condvar,
+            global_tasks_queue,
+            on_init_callback,
+            on_finished_callback,
+            async_runtime: GlobalIORuntime::instance(),
+            settings,
+            finished_notify: Notify::new(),
+            finished_error: Mutex::new(None),
+        }))
     }
 
     pub fn finish(&self, cause: Option<ErrorCode>) {
@@ -145,6 +154,8 @@ impl PipelineExecutor {
     }
 
     pub fn execute(self: &Arc<Self>) -> Result<()> {
+        self.init()?;
+
         self.start_executor_daemon()?;
 
         let mut thread_join_handles = self.execute_threads(self.threads_num);
@@ -169,6 +180,24 @@ impl PipelineExecutor {
 
         (self.on_finished_callback)(&None)?;
         Ok(())
+    }
+
+    fn init(self: &Arc<Self>) -> Result<()> {
+        unsafe {
+            // TODO: the on init callback cannot be killed.
+            (self.on_init_callback)()?;
+
+            let mut init_schedule_queue = self.graph.init_schedule_queue()?;
+
+            let mut tasks = VecDeque::new();
+            while let Some(task) = init_schedule_queue.pop_task() {
+                tasks.push_back(task);
+            }
+
+            self.global_tasks_queue.init_tasks(tasks);
+
+            Ok(())
+        }
     }
 
     fn start_executor_daemon(self: &Arc<Self>) -> Result<()> {

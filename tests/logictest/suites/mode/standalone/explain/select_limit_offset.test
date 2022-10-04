@@ -150,7 +150,7 @@ Limit
     │   └── TableScan
     │       ├── table: default.default.t1
     │       ├── read rows: 2
-    │       ├── read bytes: 31
+    │       ├── read bytes: 188
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
     │       └── push downs: [filters: [], limit: 3]
@@ -160,7 +160,7 @@ Limit
         └── TableScan
             ├── table: default.default.t
             ├── read rows: 1
-            ├── read bytes: 27
+            ├── read bytes: 184
             ├── partitions total: 1
             ├── partitions scanned: 1
             └── push downs: [filters: [], limit: 3]

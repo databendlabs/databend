@@ -31,7 +31,7 @@ use crate::storages::fuse::io::BlockReader;
 use crate::storages::result::result_table_source::State::Generated;
 
 enum State {
-    ReadData(PartInfoPtr),
+    ReadData(Option<PartInfoPtr>),
     Deserialize(PartInfoPtr, Vec<(usize, Vec<u8>)>),
     Generated(Option<PartInfoPtr>, DataBlock),
     Finish,
@@ -52,23 +52,13 @@ impl ResultTableSource {
         block_reader: Arc<BlockReader>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
-        let mut partitions = ctx.try_get_partitions(1)?;
-        match partitions.is_empty() {
-            true => Ok(ProcessorPtr::create(Box::new(ResultTableSource {
-                ctx,
-                output,
-                block_reader,
-                scan_progress,
-                state: State::Finish,
-            }))),
-            false => Ok(ProcessorPtr::create(Box::new(ResultTableSource {
-                ctx,
-                output,
-                block_reader,
-                scan_progress,
-                state: State::ReadData(partitions.remove(0)),
-            }))),
-        }
+        Ok(ProcessorPtr::create(Box::new(ResultTableSource {
+            ctx,
+            output,
+            block_reader,
+            scan_progress,
+            state: State::ReadData(None),
+        })))
     }
 }
 
@@ -83,6 +73,13 @@ impl Processor for ResultTableSource {
     }
 
     fn event(&mut self) -> Result<Event> {
+        if matches!(self.state, State::ReadData(None)) {
+            self.state = match self.ctx.try_get_part() {
+                None => State::Finish,
+                Some(part) => State::ReadData(Some(part)),
+            }
+        }
+
         if matches!(self.state, State::Finish) {
             self.output.finish();
             return Ok(Event::Finished);
@@ -100,7 +97,7 @@ impl Processor for ResultTableSource {
             if let Generated(part, data_block) = std::mem::replace(&mut self.state, State::Finish) {
                 self.state = match part {
                     None => State::Finish,
-                    Some(part) => State::ReadData(part),
+                    Some(part) => State::ReadData(Some(part)),
                 };
 
                 self.output.push_data(Ok(data_block));
@@ -120,7 +117,7 @@ impl Processor for ResultTableSource {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::Deserialize(part, chunks) => {
                 let data_block = self.block_reader.deserialize(part, chunks)?;
-                let mut partitions = self.ctx.try_get_partitions(1)?;
+                let new_part = self.ctx.try_get_part();
 
                 let progress_values = ProgressValues {
                     rows: data_block.num_rows(),
@@ -128,10 +125,7 @@ impl Processor for ResultTableSource {
                 };
                 self.scan_progress.incr(&progress_values);
 
-                self.state = match partitions.is_empty() {
-                    true => State::Generated(None, data_block),
-                    false => State::Generated(Some(partitions.remove(0)), data_block),
-                };
+                self.state = State::Generated(new_part, data_block);
                 Ok(())
             }
             _ => Err(ErrorCode::LogicalError("It's a bug.")),
@@ -140,7 +134,7 @@ impl Processor for ResultTableSource {
 
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
-            State::ReadData(part) => {
+            State::ReadData(Some(part)) => {
                 let chunks = self.block_reader.read_columns_data(part.clone()).await?;
                 self.state = State::Deserialize(part, chunks);
                 Ok(())
