@@ -40,20 +40,6 @@ pub struct BlockPruner;
 const FUTURE_BUFFER_SIZE: usize = 10;
 
 impl BlockPruner {
-    // Sync version of method `prune`
-    //
-    // Please note that it will take a significant period of time to prune a large table, and
-    // thread that calls this method will be blocked.
-    #[tracing::instrument(level = "debug", skip(schema, ctx), fields(ctx.id = ctx.get_id().as_str()))]
-    pub fn sync_prune(
-        ctx: &Arc<dyn TableContext>,
-        schema: DataSchemaRef,
-        push_down: &Option<Extras>,
-        segment_locs: Vec<Location>,
-    ) -> Result<Vec<(usize, BlockMeta)>> {
-        futures::executor::block_on(Self::prune(ctx, schema, push_down, segment_locs))
-    }
-
     // prune blocks by utilizing min_max index and filter, according to the pushdowns
     #[tracing::instrument(level = "debug", skip(schema, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     pub async fn prune(
