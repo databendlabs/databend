@@ -25,6 +25,7 @@
 #![feature(const_mut_refs)]
 #![feature(generic_const_exprs)]
 #![allow(incomplete_features)]
+#![feature(iter_order_by)]
 
 #[allow(dead_code)]
 mod chunk;

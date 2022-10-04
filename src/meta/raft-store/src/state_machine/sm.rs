@@ -42,9 +42,7 @@ use common_meta_types::KVMeta;
 use common_meta_types::LogEntry;
 use common_meta_types::LogId;
 use common_meta_types::MatchSeqExt;
-use common_meta_types::MetaResult;
 use common_meta_types::MetaStorageError;
-use common_meta_types::MetaStorageResult;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::Operation;
@@ -81,6 +79,7 @@ use crate::sled_key_spaces::Nodes;
 use crate::sled_key_spaces::Sequences;
 use crate::sled_key_spaces::StateMachineMeta;
 use crate::state_machine::ClientLastRespValue;
+use crate::state_machine::Snapshot;
 use crate::state_machine::StateMachineMetaKey;
 use crate::state_machine::StateMachineMetaKey::Initialized;
 use crate::state_machine::StateMachineMetaKey::LastApplied;
@@ -203,11 +202,7 @@ impl StateMachine {
             .unwrap()
             .as_secs();
 
-        let snapshot_id = if let Some(last) = last_applied {
-            format!("{}-{}-{}", last.term, last.index, snapshot_idx)
-        } else {
-            format!("--{}", snapshot_idx)
-        };
+        let snapshot_id = Snapshot::format_snapshot_id(last_applied, snapshot_idx);
 
         let view = self.sm_tree.tree.iter();
 
@@ -354,7 +349,7 @@ impl StateMachine {
         &self,
         key: &str,
         txn_tree: &TransactionSledTree,
-    ) -> MetaStorageResult<AppliedState> {
+    ) -> Result<AppliedState, MetaStorageError> {
         let r = self.txn_incr_seq(key, txn_tree)?;
 
         Ok(r.into())
@@ -366,7 +361,7 @@ impl StateMachine {
         node_id: &u64,
         node: &Node,
         txn_tree: &TransactionSledTree,
-    ) -> MetaStorageResult<AppliedState> {
+    ) -> Result<AppliedState, MetaStorageError> {
         let sm_nodes = txn_tree.key_space::<Nodes>();
 
         let prev = sm_nodes.get(node_id)?;
@@ -385,7 +380,7 @@ impl StateMachine {
         &self,
         node_id: &u64,
         txn_tree: &TransactionSledTree,
-    ) -> MetaStorageResult<AppliedState> {
+    ) -> Result<AppliedState, MetaStorageError> {
         let sm_nodes = txn_tree.key_space::<Nodes>();
 
         let prev = sm_nodes.get(node_id)?;
@@ -403,7 +398,7 @@ impl StateMachine {
         upsert_kv: &UpsertKV,
         txn_tree: &TransactionSledTree,
         log_time_ms: u64,
-    ) -> MetaStorageResult<AppliedState> {
+    ) -> Result<AppliedState, MetaStorageError> {
         debug!(upsert_kv = debug(upsert_kv), "apply_update_kv_cmd");
 
         let sub_tree = txn_tree.key_space::<GenericKV>();
@@ -457,7 +452,7 @@ impl StateMachine {
         &self,
         txn_tree: &TransactionSledTree,
         cond: &TxnCondition,
-    ) -> MetaStorageResult<bool> {
+    ) -> Result<bool, MetaStorageError> {
         debug!(cond = display(cond), "txn_execute_one_condition");
 
         let key = cond.key.clone();
@@ -499,7 +494,7 @@ impl StateMachine {
         &self,
         txn_tree: &TransactionSledTree,
         condition: &Vec<TxnCondition>,
-    ) -> MetaStorageResult<bool> {
+    ) -> Result<bool, MetaStorageError> {
         for cond in condition {
             debug!(condition = display(cond), "txn_execute_condition");
 
@@ -516,7 +511,7 @@ impl StateMachine {
         txn_tree: &TransactionSledTree,
         get: &TxnGetRequest,
         resp: &mut TxnReply,
-    ) -> MetaStorageResult<()> {
+    ) -> Result<(), MetaStorageError> {
         let sub_tree = txn_tree.key_space::<GenericKV>();
         let sv = sub_tree.get(&get.key)?;
         let value = sv.map(PbSeqV::from);
@@ -539,7 +534,7 @@ impl StateMachine {
         resp: &mut TxnReply,
         events: &mut Option<Vec<NotifyKVEvent>>,
         log_time_ms: u64,
-    ) -> MetaStorageResult<()> {
+    ) -> Result<(), MetaStorageError> {
         let sub_tree = txn_tree.key_space::<GenericKV>();
 
         let (prev, result) = match put.expire_at {
@@ -584,7 +579,7 @@ impl StateMachine {
         resp: &mut TxnReply,
         events: &mut Option<Vec<NotifyKVEvent>>,
         log_time_ms: u64,
-    ) -> MetaStorageResult<()> {
+    ) -> Result<(), MetaStorageError> {
         let sub_tree = txn_tree.key_space::<GenericKV>();
 
         let (prev, result) =
@@ -619,7 +614,7 @@ impl StateMachine {
         resp: &mut TxnReply,
         events: &mut Option<Vec<NotifyKVEvent>>,
         log_time_ms: u64,
-    ) -> MetaStorageResult<()> {
+    ) -> Result<(), MetaStorageError> {
         let mut count: u32 = 0;
         if let Some(kv_pairs) = kv_pairs {
             if let Some(kv_pairs) = kv_pairs.get(delete_by_prefix) {
@@ -660,7 +655,7 @@ impl StateMachine {
         resp: &mut TxnReply,
         events: &mut Option<Vec<NotifyKVEvent>>,
         log_time_ms: u64,
-    ) -> MetaStorageResult<()> {
+    ) -> Result<(), MetaStorageError> {
         debug!(op = display(op), "txn execute TxnOp");
         match &op.request {
             Some(txn_op::Request::Get(get)) => {
@@ -695,7 +690,7 @@ impl StateMachine {
         txn_tree: &TransactionSledTree,
         kv_pairs: Option<&(DeleteByPrefixKeyMap, DeleteByPrefixKeyMap)>,
         log_time_ms: u64,
-    ) -> MetaStorageResult<AppliedState> {
+    ) -> Result<AppliedState, MetaStorageError> {
         debug!(txn = display(req), "apply txn cmd");
 
         let condition = &req.condition;
@@ -793,7 +788,11 @@ impl StateMachine {
         res
     }
 
-    fn txn_incr_seq(&self, key: &str, txn_tree: &TransactionSledTree) -> MetaStorageResult<u64> {
+    fn txn_incr_seq(
+        &self,
+        key: &str,
+        txn_tree: &TransactionSledTree,
+    ) -> Result<u64, MetaStorageError> {
         let seq_sub_tree = txn_tree.key_space::<Sequences>();
 
         let key = key.to_string();
@@ -811,7 +810,7 @@ impl StateMachine {
         sub_tree: &AsTxnKeySpace<'s, KS>,
         upsert_kv: &UpsertKV,
         log_time_ms: u64,
-    ) -> MetaStorageResult<(Option<SeqV>, Option<SeqV>)>
+    ) -> Result<(Option<SeqV>, Option<SeqV>), MetaStorageError>
     where
         KS: SledKeySpace<K = String, V = SeqV>,
     {
@@ -850,7 +849,7 @@ impl StateMachine {
         key: &str,
         value: (u64, AppliedState),
         txn_tree: &TransactionSledTree,
-    ) -> MetaStorageResult<AppliedState> {
+    ) -> Result<AppliedState, MetaStorageError> {
         let v = ClientLastRespValue {
             req_serial_num: value.0,
             res: value.1.clone(),
@@ -861,7 +860,7 @@ impl StateMachine {
         Ok(value.1)
     }
 
-    pub fn get_membership(&self) -> MetaStorageResult<Option<EffectiveMembership>> {
+    pub fn get_membership(&self) -> Result<Option<EffectiveMembership>, MetaStorageError> {
         let sm_meta = self.sm_meta();
         let mem = sm_meta
             .get(&StateMachineMetaKey::LastMembership)?
@@ -870,7 +869,7 @@ impl StateMachine {
         Ok(mem)
     }
 
-    pub fn get_last_applied(&self) -> MetaStorageResult<Option<LogId>> {
+    pub fn get_last_applied(&self) -> Result<Option<LogId>, MetaStorageError> {
         let sm_meta = self.sm_meta();
         let last_applied = sm_meta
             .get(&LastApplied)?
@@ -879,13 +878,16 @@ impl StateMachine {
         Ok(last_applied)
     }
 
-    pub async fn add_node(&self, node_id: u64, node: &Node) -> MetaStorageResult<()> {
+    pub async fn add_node(&self, node_id: u64, node: &Node) -> Result<(), MetaStorageError> {
         let sm_nodes = self.nodes();
         sm_nodes.insert(&node_id, node).await?;
         Ok(())
     }
 
-    pub fn get_client_last_resp(&self, key: &str) -> MetaResult<Option<(u64, AppliedState)>> {
+    pub fn get_client_last_resp(
+        &self,
+        key: &str,
+    ) -> Result<Option<(u64, AppliedState)>, MetaStorageError> {
         let client_last_resps = self.client_last_resps();
         let v: Option<ClientLastRespValue> = client_last_resps.get(&key.to_string())?;
 
@@ -900,7 +902,7 @@ impl StateMachine {
         &self,
         key: &str,
         txn_tree: &TransactionSledTree,
-    ) -> MetaStorageResult<(u64, AppliedState)> {
+    ) -> Result<(u64, AppliedState), MetaStorageError> {
         let client_last_resps = txn_tree.key_space::<ClientLastResps>();
         let v = client_last_resps.get(&key.to_string())?;
 
@@ -916,20 +918,14 @@ impl StateMachine {
         sm_nodes.range_keys(..).expect("fail to list nodes")
     }
 
-    pub fn get_node(&self, node_id: &NodeId) -> MetaResult<Option<Node>> {
+    pub fn get_node(&self, node_id: &NodeId) -> Result<Option<Node>, MetaStorageError> {
         let sm_nodes = self.nodes();
-        match sm_nodes.get(node_id) {
-            Ok(e) => Ok(e),
-            Err(e) => Err(e.into()),
-        }
+        sm_nodes.get(node_id)
     }
 
-    pub fn get_nodes(&self) -> MetaResult<Vec<Node>> {
+    pub fn get_nodes(&self) -> Result<Vec<Node>, MetaStorageError> {
         let sm_nodes = self.nodes();
-        match sm_nodes.range_values(..) {
-            Ok(e) => Ok(e),
-            Err(e) => Err(e.into()),
-        }
+        sm_nodes.range_values(..)
     }
 
     pub fn unexpired_opt<V: Debug>(

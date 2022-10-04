@@ -49,18 +49,19 @@ impl MemoryTableStream {
 
     fn try_get_one_block(&mut self) -> Result<Option<DataBlock>> {
         if (self.block_index as usize) == self.block_ranges.len() {
-            let partitions = self.ctx.try_get_partitions(1)?;
-            if partitions.is_empty() {
+            let part_info = self.ctx.try_get_part();
+            if part_info.is_none() {
                 return Ok(None);
             }
 
-            let mut block_ranges = Vec::with_capacity(partitions.len());
+            let mut block_ranges = vec![];
 
-            for part in partitions {
+            if let Some(part) = part_info {
                 let memory_part = MemoryPartInfo::from_part(&part)?;
                 let s: Vec<usize> = (memory_part.part_start..memory_part.part_end).collect();
                 block_ranges.extend_from_slice(&s);
             }
+
             self.block_ranges = block_ranges;
             self.block_index = 0;
         }

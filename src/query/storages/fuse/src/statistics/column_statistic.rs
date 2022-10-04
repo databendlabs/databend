@@ -46,11 +46,21 @@ pub fn gen_columns_statistics(data_block: &DataBlock) -> Result<StatisticsOfColu
         let maxs = eval_aggr("max", vec![], &[column_field], rows)?;
 
         if mins.len() > 0 {
-            min = mins.get(0);
+            min = if let Some(v) = mins.get(0).trim_min() {
+                v
+            } else {
+                continue;
+            }
         }
+
         if maxs.len() > 0 {
-            max = maxs.get(0);
+            max = if let Some(v) = maxs.get(0).trim_max() {
+                v
+            } else {
+                continue;
+            }
         }
+
         let (is_all_null, bitmap) = col.validity();
         let unset_bits = match (is_all_null, bitmap) {
             (true, _) => rows,
@@ -102,5 +112,105 @@ pub mod traverse {
             }
         }
         Ok(())
+    }
+}
+
+// Impls of this trait should preserves the property of min/max statistics:
+//
+// the trimmed max should be larger than the non-trimmed one (if possible).
+// and the trimmed min should be lesser than the non-trimmed one (if possible).
+pub trait Trim: Sized {
+    fn trim_min(self) -> Option<Self>;
+    fn trim_max(self) -> Option<Self>;
+}
+
+pub const STATS_REPLACEMENT_CHAR: char = '\u{FFFD}';
+pub const STATS_STRING_PREFIX_LEN: usize = 16;
+
+impl Trim for DataValue {
+    fn trim_min(self) -> Option<Self> {
+        match self {
+            DataValue::String(bytes) => match String::from_utf8(bytes) {
+                Ok(mut v) => {
+                    if v.len() <= STATS_STRING_PREFIX_LEN {
+                        Some(DataValue::String(v.into_bytes()))
+                    } else {
+                        // find the character boundary to prevent String::truncate from panic
+                        let vs = v.as_str();
+                        let slice = match vs.char_indices().nth(STATS_STRING_PREFIX_LEN) {
+                            None => vs,
+                            Some((idx, _)) => &vs[..idx],
+                        };
+
+                        // do truncate
+                        Some(DataValue::String({
+                            v.truncate(slice.len());
+                            v.into_bytes()
+                        }))
+                    }
+                }
+                Err(_) => {
+                    // if failed to convert the bytes into (utf-8)string, just ignore it.
+                    None
+                }
+            },
+            v => Some(v),
+        }
+    }
+
+    fn trim_max(self) -> Option<Self> {
+        match self {
+            DataValue::String(bytes) => match String::from_utf8(bytes) {
+                Ok(v) => {
+                    if v.len() <= STATS_STRING_PREFIX_LEN {
+                        // if number of bytes is lesser, just return
+                        Some(DataValue::String(v.into_bytes()))
+                    } else {
+                        // no need to trim, less than STRING_RREFIX_LEN chars
+                        let number_of_chars = v.as_str().chars().count();
+                        if number_of_chars <= STATS_STRING_PREFIX_LEN {
+                            return Some(DataValue::String(v.into_bytes()));
+                        }
+
+                        // slice the input (at the boundary of chars), takes at most STRING_PREFIX_LEN chars
+                        let vs = v.as_str();
+                        let sliced = match vs.char_indices().nth(STATS_STRING_PREFIX_LEN) {
+                            None => vs,
+                            Some((idx, _)) => &vs[..idx],
+                        };
+
+                        // find the position to replace the char with REPLACEMENT_CHAR
+                        // in reversed order, break at the first one we met
+                        let mut idx = None;
+                        for (i, c) in sliced.char_indices().rev() {
+                            if c < STATS_REPLACEMENT_CHAR {
+                                idx = Some(i);
+                                break;
+                            }
+                        }
+
+                        // grab the replacement_point
+                        let replacement_point = idx?;
+
+                        // rebuild the string (since the len of result string is rather small)
+                        let mut r = String::with_capacity(STATS_STRING_PREFIX_LEN);
+                        for (i, c) in sliced.char_indices() {
+                            if i < replacement_point {
+                                r.push(c)
+                            } else {
+                                r.push(STATS_REPLACEMENT_CHAR);
+                            }
+                        }
+
+                        Some(DataValue::String(r.into_bytes()))
+                    }
+                }
+                Err(_) => {
+                    // if failed to convert the bytes into (utf-8)string, just ignore it.
+                    None
+                }
+            },
+            v => Some(v),
+        }
     }
 }

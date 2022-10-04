@@ -30,7 +30,7 @@ crossbeam-channel = "0.5.6"
 csv-core = "0.1.10"
 futures = "0.3.24"
 futures-util = "0.3.24"
-opendal = { version = "0.17", features = ["layers-retry", "compress"] }
+opendal = { version = "0.18", features = ["layers-retry", "compress"] }
 parking_lot = "0.12.1"
 serde_json = "1.0.85"
 similar-asserts = "1.4.2"
