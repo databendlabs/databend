@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_base::base::Thread;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -67,7 +68,13 @@ impl PipelineCompleteExecutor {
     }
 
     pub fn execute(&self) -> Result<()> {
-        self.executor.execute()
+        let executor = self.executor.clone();
+        let execute_thread =
+            Thread::named_spawn(Some(String::from("CompleteExecutor")), move || {
+                executor.execute()
+            });
+
+        execute_thread.join().flatten()
     }
 }
 
