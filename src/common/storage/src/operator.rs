@@ -274,20 +274,26 @@ impl StorageOperator {
     }
 
     pub async fn try_create(conf: &StorageConfig) -> common_exception::Result<StorageOperator> {
-        let operator = init_operator(&conf.params)?;
+        Self::try_create_with_storage_params(&conf.params).await
+    }
+
+    pub async fn try_create_with_storage_params(
+        sp: &StorageParams,
+    ) -> common_exception::Result<StorageOperator> {
+        let operator = init_operator(sp)?;
 
         // OpenDAL will send a real request to underlying storage to check whether it works or not.
         // If this check failed, it's highly possible that the users have configured it wrongly.
         if let Err(cause) = operator.check().await {
             return Err(ErrorCode::StorageUnavailable(format!(
                 "current configured storage is not available: config: {:?}, cause: {cause}",
-                conf
+                sp
             )));
         }
 
         Ok(StorageOperator {
             operator,
-            params: conf.params.clone(),
+            params: sp.clone(),
         })
     }
 
