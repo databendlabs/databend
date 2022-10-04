@@ -115,14 +115,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
         // value = lhs & rhs,  valid = (lhs_v & rhs_v) | (!lhs & lhs_v) | (!rhs & rhs_v))
         vectorize_2_arg::<NullableType<BooleanType>, NullableType<BooleanType>, NullableType<BooleanType>>(|lhs, rhs, _| {
-            let lhs_v = lhs.is_some();
-            let rhs_v = rhs.is_some();
-            let valid = (lhs_v & rhs_v) | (lhs == Some(false)) | (rhs == Some(false));
-            if valid {
-                Some(lhs.unwrap_or_default() & rhs.unwrap_or_default())
-            } else {
-                None
-            }
+            match (lhs, rhs) {
+                (Some(false), _) => Some(false),
+                (_, Some(false))  => Some(false),
+                (Some(true), Some(true)) => Some(true),
+                _ => None
+             }
         }),
     );
 
@@ -145,14 +143,14 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             None
         },
-        // value = lhs | rhs,  valid = (lhs_v & rhs_v) | (lhs | rhs))
+        // value = lhs | rhs,  valid = (lhs_v & rhs_v) | (lhs_v & lhs) | (rhs_v & rhs)
         vectorize_2_arg::<NullableType<BooleanType>, NullableType<BooleanType>, NullableType<BooleanType>>(|lhs, rhs, _| {
-            let valid = (lhs.is_some() & rhs.is_some()) | (lhs.unwrap_or_default() | rhs.unwrap_or_default());
-            if valid {
-                Some(lhs.unwrap_or_default() | rhs.unwrap_or_default())
-            } else {
-                None
-            }
+            match (lhs, rhs) {
+                (Some(true), _) => Some(true),
+                (_, Some(true))  => Some(true),
+                (Some(false), Some(false)) => Some(false),
+                _ => None
+             }
         }),
     );
 
