@@ -27,7 +27,7 @@ echo "copy into @s2 from test_table FILE_FORMAT = (type = 'CSV') MAX_FILE_SIZE =
 
 lines=`echo "list @s2;" | $MYSQL_CLIENT_CONNECT`
 
-if [ $lines -ge 2 ];do
+if [ $lines -eq 1 ];then
     echo "More than one line"
 done
 
