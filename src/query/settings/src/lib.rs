@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![deny(unused_crate_dependencies)]
-
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -23,7 +21,6 @@ use std::sync::Arc;
 
 use common_ast::Dialect;
 use common_base::base::GlobalIORuntime;
-use common_base::base::TrySpawn;
 use common_config::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -609,13 +606,12 @@ impl Settings {
         if is_global {
             let tenant = self.tenant.clone();
             let user_setting = setting.user_setting.clone();
-            let set_handle = GlobalIORuntime::instance().spawn(async move {
+            let _ = GlobalIORuntime::instance().block_on(async move {
                 UserApiProvider::instance()
                     .get_setting_api_client(&tenant)?
                     .set_setting(user_setting)
                     .await
-            });
-            let _ = futures::executor::block_on(set_handle).unwrap()?;
+            })?;
             setting.level = ScopeLevel::Global;
         }
 
@@ -632,13 +628,12 @@ impl Settings {
         if is_global {
             let tenant = self.tenant.clone();
             let user_setting = setting.user_setting.clone();
-            let set_handle = GlobalIORuntime::instance().spawn(async move {
+            let _ = GlobalIORuntime::instance().block_on(async move {
                 UserApiProvider::instance()
                     .get_setting_api_client(&tenant)?
                     .set_setting(user_setting)
                     .await
-            });
-            let _ = futures::executor::block_on(set_handle).unwrap()?;
+            })?;
             setting.level = ScopeLevel::Global;
         }
 
