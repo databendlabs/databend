@@ -106,6 +106,7 @@ pub struct LogicalInnerJoin {
     pub join_type: JoinType,
     // marker_index is for MarkJoin only.
     pub marker_index: Option<IndexType>,
+    pub subquery_as_build_side: bool,
     pub from_correlated_subquery: bool,
 }
 
@@ -117,6 +118,7 @@ impl Default for LogicalInnerJoin {
             other_conditions: Default::default(),
             join_type: JoinType::Cross,
             marker_index: Default::default(),
+            subquery_as_build_side: false,
             from_correlated_subquery: Default::default(),
         }
     }

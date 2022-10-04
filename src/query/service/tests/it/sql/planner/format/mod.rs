@@ -119,6 +119,7 @@ fn test_format() {
             other_conditions: vec![],
             join_type: JoinType::Inner,
             marker_index: None,
+            subquery_as_build_side: false,
             from_correlated_subquery: false,
         }
         .into(),

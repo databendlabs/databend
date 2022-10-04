@@ -364,6 +364,7 @@ impl SubqueryRewriter {
                     other_conditions: vec![],
                     join_type: JoinType::Single,
                     marker_index: None,
+                    subquery_as_build_side: false,
                     from_correlated_subquery: false,
                 }
                 .into();
@@ -454,6 +455,7 @@ impl SubqueryRewriter {
                     other_conditions: vec![],
                     join_type: JoinType::Cross,
                     marker_index: None,
+                    subquery_as_build_side: false,
                     from_correlated_subquery: false,
                 }
                 .into();
@@ -514,6 +516,7 @@ impl SubqueryRewriter {
                     other_conditions,
                     join_type: JoinType::Mark,
                     marker_index: Some(marker_index),
+                    subquery_as_build_side: false,
                     from_correlated_subquery: false,
                 }
                 .into();

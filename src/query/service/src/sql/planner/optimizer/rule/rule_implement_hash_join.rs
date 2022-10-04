@@ -70,6 +70,7 @@ impl Rule for RuleImplementHashJoin {
                 other_conditions: logical_join.other_conditions,
                 join_type: logical_join.join_type,
                 marker_index: logical_join.marker_index,
+                subquery_as_build_side: logical_join.subquery_as_build_side,
                 from_correlated_subquery: logical_join.from_correlated_subquery,
             }
             .into(),

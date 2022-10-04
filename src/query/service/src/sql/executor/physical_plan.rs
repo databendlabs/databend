@@ -203,6 +203,7 @@ pub struct HashJoin {
     pub other_conditions: Vec<PhysicalScalar>,
     pub join_type: JoinType,
     pub marker_index: Option<IndexType>,
+    pub subquery_as_build_side: bool,
     pub from_correlated_subquery: bool,
 }
 
@@ -257,7 +258,12 @@ impl HashJoin {
             }
             JoinType::Mark => {
                 fields.clear();
-                fields = self.build.output_schema()?.fields().clone();
+                let outer_table = if self.subquery_as_build_side {
+                    &self.probe
+                } else {
+                    &self.build
+                };
+                fields = outer_table.output_schema()?.fields().clone();
                 let name = if let Some(idx) = self.marker_index {
                     idx.to_string()
                 } else {

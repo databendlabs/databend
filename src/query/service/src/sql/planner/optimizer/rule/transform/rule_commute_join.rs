@@ -72,11 +72,14 @@ impl Rule for RuleCommuteJoin {
             | JoinType::LeftSemi
             | JoinType::RightSemi
             | JoinType::LeftAnti
+            | JoinType::Mark
             | JoinType::RightAnti => {
                 // Swap the join conditions side
                 (join.left_conditions, join.right_conditions) =
                     (join.right_conditions, join.left_conditions);
-                join.join_type = join.join_type.opposite();
+                if join.join_type == JoinType::Mark {
+                    join.subquery_as_build_side = true;
+                }
                 let result =
                     SExpr::create_binary(join.into(), right_child.clone(), left_child.clone());
                 state.add_result(result);

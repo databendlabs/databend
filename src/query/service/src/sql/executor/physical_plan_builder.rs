@@ -212,6 +212,7 @@ impl PhysicalPlanBuilder {
                         })
                         .collect::<Result<_>>()?,
                     marker_index: join.marker_index,
+                    subquery_as_build_side: join.subquery_as_build_side,
                     from_correlated_subquery: join.from_correlated_subquery,
                 }))
             }

@@ -253,6 +253,7 @@ impl<'a> Binder {
             other_conditions,
             join_type,
             marker_index: None,
+            subquery_as_build_side: false,
             from_correlated_subquery: false,
         };
         Ok(SExpr::create_binary(
