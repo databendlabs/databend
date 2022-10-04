@@ -26,7 +26,7 @@ fn random_type() -> DataTypeImpl {
             11 => f32::to_data_type(),
             12 => f64::to_data_type(),
 
-            // 13 => DataTypeImpl::Date(DateType {}),
+            13 => DataTypeImpl::Date(DateType {}),
             14 => DataTypeImpl::Timestamp(TimestampType::create(3)),
             15 => DataTypeImpl::String(StringType {}),
             16 => DataTypeImpl::Struct(StructType::create(None, vec![
@@ -43,7 +43,6 @@ fn random_type() -> DataTypeImpl {
             return datatype;
         }
     }
-    unreachable!()
 }
 
 fn random_schema(num_cols: usize) -> DataSchemaRef {
@@ -76,6 +75,11 @@ fn test_convert() {
             }
         })
         .collect();
+
+    // todo(remove me): scalar column is skipped for now
+    if columns.iter().any(|c| c.is_const()) {
+        return;
+    }
 
     let block = DataBlock::create(schema.clone(), columns);
 

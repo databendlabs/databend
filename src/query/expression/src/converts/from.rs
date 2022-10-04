@@ -31,7 +31,7 @@ use crate::Scalar;
 use crate::Value;
 
 pub fn can_convert(datatype: &DataTypeImpl) -> bool {
-    !matches!(datatype, DataTypeImpl::Date(_) | DataTypeImpl::Interval(_))
+    !matches!(datatype, DataTypeImpl::Date(_) | DataTypeImpl::Interval(_) | DataTypeImpl::VariantArray(_) | DataTypeImpl::VariantObject(_))
 }
 
 pub fn from_type(datatype: &DataTypeImpl) -> DataType {
