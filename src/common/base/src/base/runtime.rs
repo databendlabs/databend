@@ -27,6 +27,7 @@ use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
 use super::runtime_tracker::RuntimeTracker;
+use crate::base::catch_unwind::CatchUnwindFuture;
 
 /// Methods to spawn tasks.
 pub trait TrySpawn {
@@ -183,8 +184,10 @@ impl Runtime {
         self.handle.clone()
     }
 
-    pub fn block_on<F: Future>(&self, future: F) -> F::Output {
-        self.handle.block_on(future)
+    pub fn block_on<T, F>(&self, future: F) -> F::Output
+    where F: Future<Output = Result<T>> + Send + 'static {
+        let future = CatchUnwindFuture::create(future);
+        self.handle.block_on(future).flatten()
     }
 }
 
