@@ -29,7 +29,7 @@ lines=`echo "list @s2;" | $MYSQL_CLIENT_CONNECT`
 
 if [ $lines -eq 1 ];then
     echo "More than one line"
-done
+fi
 
 echo "drop STAGE s2;" | $MYSQL_CLIENT_CONNECT
 echo "drop table test_table;" | $MYSQL_CLIENT_CONNECT
