@@ -31,6 +31,7 @@ mod aggregate_retention;
 mod aggregate_scalar_state;
 mod aggregate_stddev_pop;
 mod aggregate_sum;
+mod aggregate_window_funnel;
 mod aggregator;
 mod aggregator_common;
 

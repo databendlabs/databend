@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// use super::aggregate_window_funnel::aggregate_window_funnel_function_desc;
-
 use super::aggregate_arg_min_max::aggregate_arg_max_function_desc;
 use super::aggregate_arg_min_max::aggregate_arg_min_function_desc;
 use super::aggregate_avg::aggregate_avg_function_desc;
@@ -25,6 +23,7 @@ use super::aggregate_min_max_any::aggregate_any_function_desc;
 use super::aggregate_min_max_any::aggregate_max_function_desc;
 use super::aggregate_min_max_any::aggregate_min_function_desc;
 use super::aggregate_stddev_pop::aggregate_stddev_pop_function_desc;
+use super::aggregate_window_funnel::aggregate_window_funnel_function_desc;
 use super::AggregateCountFunction;
 use super::AggregateFunctionFactory;
 use super::AggregateIfCombinator;
@@ -52,7 +51,7 @@ impl Aggregators {
         factory.register("stddev", aggregate_stddev_pop_function_desc());
         factory.register("stddev_pop", aggregate_stddev_pop_function_desc());
         factory.register("std", aggregate_stddev_pop_function_desc());
-        //     factory.register("window_funnel", aggregate_window_funnel_function_desc());
+        factory.register("window_funnel", aggregate_window_funnel_function_desc());
 
         factory.register("retention", aggregate_retention_function_desc());
     }
