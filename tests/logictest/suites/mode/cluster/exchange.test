@@ -6,24 +6,24 @@ Exchange
 ├── exchange type: Merge
 └── HashJoin
     ├── join type: INNER
-    ├── build keys: [t1.number (#1)]
-    ├── probe keys: [t.number (#0)]
+    ├── build keys: [t.number (#0)]
+    ├── probe keys: [t1.number (#1)]
     ├── filters: []
     ├── Exchange(Build)
-    │   ├── exchange type: Hash(t1.number (#1))
+    │   ├── exchange type: Hash(t.number (#0))
     │   └── TableScan
     │       ├── table: default.system.numbers
-    │       ├── read rows: 2
-    │       ├── read bytes: 16
+    │       ├── read rows: 1
+    │       ├── read bytes: 8
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
     │       └── push downs: [filters: [], limit: NONE]
     └── Exchange(Probe)
-        ├── exchange type: Hash(t.number (#0))
+        ├── exchange type: Hash(t1.number (#1))
         └── TableScan
             ├── table: default.system.numbers
-            ├── read rows: 1
-            ├── read bytes: 8
+            ├── read rows: 2
+            ├── read bytes: 16
             ├── partitions total: 1
             ├── partitions scanned: 1
             └── push downs: [filters: [], limit: NONE]
