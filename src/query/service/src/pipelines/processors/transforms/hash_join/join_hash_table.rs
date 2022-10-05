@@ -124,6 +124,7 @@ pub enum MarkerKind {
 
 pub struct MarkJoinDesc {
     pub(crate) marker_index: Option<IndexType>,
+    pub(crate) subquery_as_build_side: bool,
     pub(crate) has_null: RwLock<bool>,
 }
 
