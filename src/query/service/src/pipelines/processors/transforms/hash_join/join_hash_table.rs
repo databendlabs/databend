@@ -543,10 +543,21 @@ impl HashJoinState for JoinHashTable {
         }
 
         let mut chunks = self.row_space.chunks.write().unwrap();
+        let mut has_null = false;
         for chunk_index in 0..chunks.len() {
             let chunk = &mut chunks[chunk_index];
             let mut columns = Vec::with_capacity(chunk.cols.len());
             let markers = if self.hash_join_desc.join_type == Mark {
+                if self.hash_join_desc.marker_join_desc.subquery_as_build_side && !has_null {
+                    if let Some(validity) = chunk.cols[0].validity().1 {
+                        if validity.unset_bits() > 0 {
+                            has_null = true;
+                            let mut has_null_ref =
+                                self.hash_join_desc.marker_join_desc.has_null.write();
+                            *has_null_ref = true;
+                        }
+                    }
+                }
                 let mut markers = vec![Some(MarkerKind::False); chunk.num_rows()];
                 // Only all columns' values are NULL, we set the marker to Null.
                 if chunk.cols.iter().any(|c| c.is_nullable() || c.is_null()) {

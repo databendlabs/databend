@@ -329,8 +329,10 @@ impl JoinHashTable {
         Key: HashTableKeyable + Clone + 'static,
         IT: Iterator<Item = Key> + TrustedLen,
     {
-        // todo(youngsofun): calc it when building build_side
-        let has_null = false;
+        let has_null = {
+            let has_null_ref = self.hash_join_desc.marker_join_desc.has_null.read();
+            *has_null_ref
+        };
 
         let mut markers = vec![MarkerKind::False; input.num_rows()];
         let valids = &probe_state.valids;
@@ -358,7 +360,6 @@ impl JoinHashTable {
                 if let Some(v) = probe_result_ptr {
                     let probe_result_ptrs = v.get_value();
                     build_indexes.extend_from_slice(probe_result_ptrs);
-                    markers[i] = MarkerKind::True;
                     probe_indexes.extend(std::iter::repeat(i as u32).take(probe_result_ptrs.len()));
                 }
             }
