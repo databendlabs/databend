@@ -19,13 +19,18 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_datablocks::DataBlock;
 use common_datavalues::wrap_nullable;
 use common_datavalues::BooleanColumn;
+use common_datavalues::BooleanType;
 use common_datavalues::BooleanViewer;
 use common_datavalues::Column;
 use common_datavalues::ColumnRef;
 use common_datavalues::ConstColumn;
+use common_datavalues::DataField;
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_datavalues::NullableColumn;
+use common_datavalues::NullableType;
 use common_datavalues::ScalarViewer;
 use common_datavalues::Series;
 use common_exception::ErrorCode;
@@ -165,7 +170,6 @@ impl JoinHashTable {
                 return Ok(vec![result]);
             }
             Mark => {
-                results.push(DataBlock::empty());
                 // Three cases will produce Mark join:
                 // 1. uncorrelated ANY subquery: only have one kind of join condition, equi-condition or non-equi-condition.
                 // 2. correlated ANY subquery: must have two kinds of join condition, one is equi-condition and the other is non-equi-condition.
@@ -176,7 +180,14 @@ impl JoinHashTable {
                 //    so equi-condition is t1.b = subquery_5, and non-equi-condition is t1.a = t2.a.
                 // 3. Correlated Exists subquery： only have one kind of join condition, equi-condition.
                 //    equi-condition is subquery's outer columns with subquery's derived columns. (see the above example in correlated ANY subquery)
-                self.mark_join(hash_table, probe_state, keys_iter, input)?;
+                if self.hash_join_desc.marker_join_desc.subquery_as_build_side {
+                    let result =
+                        self.mark_join_probe_subquery(hash_table, probe_state, keys_iter, input)?;
+                    return Ok(vec![result]);
+                } else {
+                    results.push(DataBlock::empty());
+                    self.mark_join(hash_table, probe_state, keys_iter, input)?;
+                }
             }
             _ => {
                 return Err(ErrorCode::UnImplement(format!(
@@ -268,6 +279,117 @@ impl JoinHashTable {
             }
         }
         Ok(())
+    }
+
+    fn create_marker_block(&self, has_null: bool, markers: Vec<MarkerKind>) -> Result<DataBlock> {
+        let mut validity = MutableBitmap::with_capacity(markers.len());
+        let mut boolean_bit_map = MutableBitmap::with_capacity(markers.len());
+
+        for m in markers {
+            let marker = if m == MarkerKind::False && has_null {
+                MarkerKind::Null
+            } else {
+                m
+            };
+            if marker == MarkerKind::Null {
+                validity.push(false);
+            } else {
+                validity.push(true);
+            }
+            if marker == MarkerKind::True {
+                boolean_bit_map.push(true);
+            } else {
+                boolean_bit_map.push(false);
+            }
+        }
+        let boolean_column = BooleanColumn::from_arrow_data(boolean_bit_map.into());
+        let marker_column = Self::set_validity(&boolean_column.arc(), &validity.into())?;
+        let marker_schema = DataSchema::new(vec![DataField::new(
+            &self
+                .hash_join_desc
+                .marker_join_desc
+                .marker_index
+                .ok_or_else(|| ErrorCode::LogicalError("Invalid mark join"))?
+                .to_string(),
+            NullableType::new_impl(BooleanType::new_impl()),
+        )]);
+        Ok(DataBlock::create(DataSchemaRef::from(marker_schema), vec![
+            marker_column,
+        ]))
+    }
+
+    fn mark_join_probe_subquery<Key, IT>(
+        &self,
+        hash_table: &HashMap<Key, Vec<RowPtr>>,
+        probe_state: &mut ProbeState,
+        keys_iter: IT,
+        input: &DataBlock,
+    ) -> Result<DataBlock>
+    where
+        Key: HashTableKeyable + Clone + 'static,
+        IT: Iterator<Item = Key> + TrustedLen,
+    {
+        // todo(youngsofun): calc it when building build_side
+        let has_null = false;
+
+        let mut markers = vec![MarkerKind::False; input.num_rows()];
+        let valids = &probe_state.valids;
+        if self.hash_join_desc.other_predicate.is_none() {
+            // todo(youngsofun): can be optimized as semi-join?
+            for (i, key) in keys_iter.enumerate() {
+                let probe_result_ptr = if self.hash_join_desc.from_correlated_subquery {
+                    hash_table.find_key(&key)
+                } else {
+                    Self::probe_key(hash_table, key, valids, i)
+                };
+                if probe_result_ptr.is_some() {
+                    markers[i] = MarkerKind::True;
+                }
+            }
+        } else {
+            let mut probe_indexes = vec![];
+            let mut build_indexes = vec![];
+            for (i, key) in keys_iter.enumerate() {
+                let probe_result_ptr = if self.hash_join_desc.from_correlated_subquery {
+                    hash_table.find_key(&key)
+                } else {
+                    Self::probe_key(hash_table, key, valids, i)
+                };
+                if let Some(v) = probe_result_ptr {
+                    let probe_result_ptrs = v.get_value();
+                    build_indexes.extend_from_slice(probe_result_ptrs);
+                    markers[i] = MarkerKind::True;
+                    probe_indexes.extend(std::iter::repeat(i as u32).take(probe_result_ptrs.len()));
+                }
+            }
+
+            let probe_block = DataBlock::block_take_by_indices(input, &probe_indexes)?;
+            let build_block = self.row_space.gather(&build_indexes)?;
+            let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
+            let func_ctx = self.ctx.try_get_function_context()?;
+            let type_vector = self
+                .hash_join_desc
+                .other_predicate
+                .as_ref()
+                .unwrap()
+                .eval(&func_ctx, &merged_block)?;
+            let filter_column = type_vector.vector();
+            let boolean_viewer = BooleanViewer::try_create(filter_column)?;
+            for idx in 0..boolean_viewer.len() {
+                let marker = &mut markers[probe_indexes[idx] as usize];
+                if !boolean_viewer.valid_at(idx) {
+                    if *marker == MarkerKind::False {
+                        *marker = MarkerKind::Null;
+                    }
+                } else if boolean_viewer.value_at(idx) {
+                    *marker = MarkerKind::True;
+                }
+            }
+        }
+
+        let marker_block = self.create_marker_block(has_null, markers)?;
+        let merged_block = self.merge_eq_block(&marker_block, input)?;
+        Ok(merged_block)
     }
 
     fn left_semi_anti_join<const SEMI: bool, Key, IT>(
