@@ -145,12 +145,12 @@ Limit
 └── Sort
     ├── sort keys: [c1 ASC NULLS LAST]
     └── HashJoin
-        ├── join type: LEFT OUTER
-        ├── build keys: [CAST(t4.c (#5) AS BIGINT UNSIGNED NULL)]
-        ├── probe keys: [CAST(t3.c1 (#1) AS BIGINT UNSIGNED NULL)]
+        ├── join type: RIGHT OUTER
+        ├── build keys: [CAST(t3.c1 (#1) AS BIGINT UNSIGNED NULL)]
+        ├── probe keys: [CAST(t4.c (#5) AS BIGINT UNSIGNED NULL)]
         ├── filters: []
         ├── EvalScalar(Build)
-        │   ├── expressions: [count(t.number) (#7)]
+        │   ├── expressions: [count(t1.number) (#3)]
         │   └── AggregateFinal
         │       ├── group by: [number]
         │       ├── aggregate functions: [count(number)]
@@ -159,13 +159,13 @@ Limit
         │           ├── aggregate functions: [count(number)]
         │           └── TableScan
         │               ├── table: default.system.numbers
-        │               ├── read rows: 2
-        │               ├── read bytes: 16
+        │               ├── read rows: 1
+        │               ├── read bytes: 8
         │               ├── partitions total: 1
         │               ├── partitions scanned: 1
         │               └── push downs: [filters: [], limit: NONE]
         └── EvalScalar(Probe)
-            ├── expressions: [count(t1.number) (#3)]
+            ├── expressions: [count(t.number) (#7)]
             └── AggregateFinal
                 ├── group by: [number]
                 ├── aggregate functions: [count(number)]
@@ -174,8 +174,8 @@ Limit
                     ├── aggregate functions: [count(number)]
                     └── TableScan
                         ├── table: default.system.numbers
-                        ├── read rows: 1
-                        ├── read bytes: 8
+                        ├── read rows: 2
+                        ├── read bytes: 16
                         ├── partitions total: 1
                         ├── partitions scanned: 1
                         └── push downs: [filters: [], limit: NONE]
