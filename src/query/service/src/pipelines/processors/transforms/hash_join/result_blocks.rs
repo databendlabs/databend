@@ -46,7 +46,7 @@ use crate::pipelines::processors::transforms::hash_join::join_hash_table::Marker
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::sessions::TableContext;
 use crate::sql::planner::plans::JoinType;
-use crate::sql::plans::JoinType::Mark;
+use crate::sql::plans::JoinType::LeftMark;
 
 impl JoinHashTable {
     pub(crate) fn result_blocks<Key, IT>(
@@ -169,7 +169,7 @@ impl JoinHashTable {
                 let result = self.right_join::<_, _>(hash_table, probe_state, keys_iter, input)?;
                 return Ok(vec![result]);
             }
-            Mark => {
+            LeftMark => {
                 // Three cases will produce Mark join:
                 // 1. uncorrelated ANY subquery: only have one kind of join condition, equi-condition or non-equi-condition.
                 // 2. correlated ANY subquery: must have two kinds of join condition, one is equi-condition and the other is non-equi-condition.

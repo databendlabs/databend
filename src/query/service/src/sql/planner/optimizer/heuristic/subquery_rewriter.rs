@@ -514,7 +514,7 @@ impl SubqueryRewriter {
                     left_conditions,
                     right_conditions,
                     other_conditions,
-                    join_type: JoinType::Mark,
+                    join_type: JoinType::LeftMark,
                     marker_index: Some(marker_index),
                     subquery_as_build_side: false,
                     from_correlated_subquery: false,

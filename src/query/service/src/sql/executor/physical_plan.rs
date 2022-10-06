@@ -256,7 +256,7 @@ impl HashJoin {
                 fields.clear();
                 fields = self.build.output_schema()?.fields().clone();
             }
-            JoinType::Mark => {
+            JoinType::LeftMark => {
                 fields.clear();
                 let outer_table = if self.subquery_as_build_side {
                     &self.probe

@@ -39,7 +39,7 @@ pub enum JoinType {
     RightAnti,
     Cross,
     /// Mark Join is a special case of join that is used to process Any subquery and correlated Exists subquery.
-    Mark,
+    LeftMark,
     /// Single Join is a special kind of join that is used to process correlated scalar subquery.
     Single,
 }
@@ -88,7 +88,7 @@ impl Display for JoinType {
             JoinType::Cross => {
                 write!(f, "CROSS")
             }
-            JoinType::Mark => {
+            JoinType::LeftMark => {
                 write!(f, "MARK")
             }
             JoinType::Single => {
@@ -187,7 +187,7 @@ impl LogicalOperator for LogicalInnerJoin {
             | JoinType::Full
             | JoinType::Cross => left_prop.cardinality * right_prop.cardinality,
 
-            JoinType::LeftSemi | JoinType::LeftAnti | JoinType::Mark | JoinType::Single => {
+            JoinType::LeftSemi | JoinType::LeftAnti | JoinType::LeftMark | JoinType::Single => {
                 left_prop.cardinality
             }
 

@@ -495,7 +495,7 @@ impl PipelineBuilder {
             ))
         })?;
 
-        if join.join_type == JoinType::Mark && !join.subquery_as_build_side {
+        if join.join_type == JoinType::LeftMark && !join.subquery_as_build_side {
             self.main_pipeline.resize(1)?;
             self.main_pipeline.add_transform(|input, output| {
                 TransformMarkJoin::try_create(

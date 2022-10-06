@@ -62,7 +62,7 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::executor::PhysicalScalar;
 use crate::sql::planner::plans::JoinType;
-use crate::sql::plans::JoinType::Mark;
+use crate::sql::plans::JoinType::LeftMark;
 
 pub struct SerializerHashTable {
     pub(crate) hash_table: HashMap<KeysRef, Vec<RowPtr>>,
@@ -483,7 +483,7 @@ impl HashJoinState for JoinHashTable {
             | JoinType::RightSemi
             | JoinType::RightAnti
             | JoinType::Left
-            | Mark
+            | LeftMark
             | JoinType::Single
             | JoinType::Right
             | JoinType::Full => self.probe_join(input, probe_state),
@@ -547,7 +547,7 @@ impl HashJoinState for JoinHashTable {
         for chunk_index in 0..chunks.len() {
             let chunk = &mut chunks[chunk_index];
             let mut columns = Vec::with_capacity(chunk.cols.len());
-            let markers = if self.hash_join_desc.join_type == Mark {
+            let markers = if self.hash_join_desc.join_type == LeftMark {
                 if self.hash_join_desc.marker_join_desc.subquery_as_build_side && !has_null {
                     if let Some(validity) = chunk.cols[0].validity().1 {
                         if validity.unset_bits() > 0 {

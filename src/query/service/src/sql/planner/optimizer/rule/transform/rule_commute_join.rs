@@ -72,12 +72,12 @@ impl Rule for RuleCommuteJoin {
             | JoinType::LeftSemi
             | JoinType::RightSemi
             | JoinType::LeftAnti
-            | JoinType::Mark
+            | JoinType::LeftMark
             | JoinType::RightAnti => {
                 // Swap the join conditions side
                 (join.left_conditions, join.right_conditions) =
                     (join.right_conditions, join.left_conditions);
-                if join.join_type == JoinType::Mark {
+                if join.join_type == JoinType::LeftMark {
                     join.subquery_as_build_side = true;
                 }
                 let result =
