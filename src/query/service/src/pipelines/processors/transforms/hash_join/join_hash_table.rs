@@ -28,19 +28,14 @@ use common_datablocks::HashMethodKind;
 use common_datablocks::HashMethodSerializer;
 use common_datavalues::combine_validities_2;
 use common_datavalues::BooleanColumn;
-use common_datavalues::BooleanType;
 use common_datavalues::Column;
 use common_datavalues::ColumnRef;
 use common_datavalues::ConstColumn;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
-use common_datavalues::NullableType;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_hashtable::HashMap;
 use common_pipeline_transforms::processors::transforms::Aborting;
@@ -559,7 +554,10 @@ impl HashJoinState for JoinHashTable {
                         }
                     }
                 }
-                Self::init_markers(&chunk.cols).iter().map(|x| Some(*x)).collect( )
+                Self::init_markers(&chunk.cols)
+                    .iter()
+                    .map(|x| Some(*x))
+                    .collect()
             } else {
                 vec![None; chunk.num_rows()]
             };
@@ -669,40 +667,11 @@ impl HashJoinState for JoinHashTable {
     }
 
     fn mark_join_blocks(&self, _aborting: Aborting) -> Result<Vec<DataBlock>> {
-        let mut row_ptrs = self.row_ptrs.write();
+        let row_ptrs = self.row_ptrs.read();
         let has_null = self.hash_join_desc.marker_join_desc.has_null.read();
-        let mut validity = MutableBitmap::with_capacity(row_ptrs.len());
-        let mut boolean_bit_map = MutableBitmap::with_capacity(row_ptrs.len());
-        for row_ptr in row_ptrs.iter_mut() {
-            let marker = row_ptr.marker.unwrap();
-            if marker == MarkerKind::False && *has_null {
-                row_ptr.marker = Some(MarkerKind::Null);
-            }
-            if marker == MarkerKind::Null {
-                validity.push(false);
-            } else {
-                validity.push(true);
-            }
-            if marker == MarkerKind::True {
-                boolean_bit_map.push(true);
-            } else {
-                boolean_bit_map.push(false);
-            }
-        }
-        // transfer marker to a Nullable(BooleanColumn)
-        let boolean_column = BooleanColumn::from_arrow_data(boolean_bit_map.into());
-        let marker_column = Self::set_validity(&boolean_column.arc(), &validity.into())?;
-        let marker_schema = DataSchema::new(vec![DataField::new(
-            &self
-                .hash_join_desc
-                .marker_join_desc
-                .marker_index
-                .ok_or_else(|| ErrorCode::LogicalError("Invalid mark join"))?
-                .to_string(),
-            NullableType::new_impl(BooleanType::new_impl()),
-        )]);
-        let marker_block =
-            DataBlock::create(DataSchemaRef::from(marker_schema), vec![marker_column]);
+
+        let markers = row_ptrs.iter().map(|r| r.marker.unwrap()).collect();
+        let marker_block = self.create_marker_block(*has_null, markers)?;
         let build_block = self.row_space.gather(&row_ptrs)?;
         Ok(vec![self.merge_eq_block(&marker_block, &build_block)?])
     }

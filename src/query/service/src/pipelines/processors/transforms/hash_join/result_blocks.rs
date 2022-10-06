@@ -279,7 +279,11 @@ impl JoinHashTable {
         Ok(())
     }
 
-    fn create_marker_block(&self, has_null: bool, markers: Vec<MarkerKind>) -> Result<DataBlock> {
+    pub(crate) fn create_marker_block(
+        &self,
+        has_null: bool,
+        markers: Vec<MarkerKind>,
+    ) -> Result<DataBlock> {
         let mut validity = MutableBitmap::with_capacity(markers.len());
         let mut boolean_bit_map = MutableBitmap::with_capacity(markers.len());
 
