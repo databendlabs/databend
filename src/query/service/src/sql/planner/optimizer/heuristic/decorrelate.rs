@@ -187,7 +187,6 @@ impl SubqueryRewriter {
                 SubqueryType::NotExists => JoinType::LeftAnti,
             },
             marker_index: None,
-            subquery_as_build_side: false,
             from_correlated_subquery: true,
         };
 
@@ -254,7 +253,6 @@ impl SubqueryRewriter {
                     other_conditions: vec![],
                     join_type: JoinType::Single,
                     marker_index: None,
-                    subquery_as_build_side: false,
                     from_correlated_subquery: true,
                 };
                 let s_expr = SExpr::create_binary(join_plan.into(), left.clone(), flatten_plan);
@@ -293,7 +291,6 @@ impl SubqueryRewriter {
                     other_conditions: vec![],
                     join_type: JoinType::LeftMark,
                     marker_index: Some(marker_index),
-                    subquery_as_build_side: false,
                     from_correlated_subquery: true,
                 };
                 let s_expr = SExpr::create_binary(join_plan.into(), flatten_plan, left.clone());
@@ -348,7 +345,6 @@ impl SubqueryRewriter {
                     other_conditions,
                     join_type: JoinType::LeftMark,
                     marker_index: Some(marker_index),
-                    subquery_as_build_side: false,
                     from_correlated_subquery: true,
                 }
                 .into();
@@ -415,7 +411,6 @@ impl SubqueryRewriter {
                 other_conditions: vec![],
                 join_type: JoinType::Cross,
                 marker_index: None,
-                subquery_as_build_side: false,
                 from_correlated_subquery: false,
             }
             .into();
@@ -484,7 +479,6 @@ impl SubqueryRewriter {
                         other_conditions: join.other_conditions.clone(),
                         join_type: join.join_type.clone(),
                         marker_index: join.marker_index,
-                        subquery_as_build_side: false,
                         from_correlated_subquery: false,
                     }
                     .into(),

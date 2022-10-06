@@ -67,7 +67,6 @@ impl HashJoinDesc {
                 .transpose()?,
             marker_join_desc: MarkJoinDesc {
                 has_null: RwLock::new(false),
-                subquery_as_build_side: join.subquery_as_build_side,
                 marker_index: join.marker_index,
             },
             from_correlated_subquery: join.from_correlated_subquery,

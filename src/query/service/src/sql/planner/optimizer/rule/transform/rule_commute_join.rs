@@ -78,7 +78,9 @@ impl Rule for RuleCommuteJoin {
                 (join.left_conditions, join.right_conditions) =
                     (join.right_conditions, join.left_conditions);
                 if join.join_type == JoinType::LeftMark {
-                    join.subquery_as_build_side = true;
+                    join.join_type = JoinType::RightMark;
+                } else if join.join_type == JoinType::RightMark {
+                    join.join_type = JoinType::LeftMark;
                 }
                 let result =
                     SExpr::create_binary(join.into(), right_child.clone(), left_child.clone());

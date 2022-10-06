@@ -39,7 +39,10 @@ pub enum JoinType {
     RightAnti,
     Cross,
     /// Mark Join is a special case of join that is used to process Any subquery and correlated Exists subquery.
+    /// Left Mark Join use subquery as probe side.
     LeftMark,
+    /// Right Mark Join use subquery as build side.
+    RightMark,
     /// Single Join is a special kind of join that is used to process correlated scalar subquery.
     Single,
 }
@@ -89,7 +92,10 @@ impl Display for JoinType {
                 write!(f, "CROSS")
             }
             JoinType::LeftMark => {
-                write!(f, "MARK")
+                write!(f, "LEFT MARK")
+            }
+            JoinType::RightMark => {
+                write!(f, "RIGHT MARK")
             }
             JoinType::Single => {
                 write!(f, "SINGLE")
@@ -106,7 +112,6 @@ pub struct LogicalInnerJoin {
     pub join_type: JoinType,
     // marker_index is for MarkJoin only.
     pub marker_index: Option<IndexType>,
-    pub subquery_as_build_side: bool,
     pub from_correlated_subquery: bool,
 }
 
@@ -118,7 +123,6 @@ impl Default for LogicalInnerJoin {
             other_conditions: Default::default(),
             join_type: JoinType::Cross,
             marker_index: Default::default(),
-            subquery_as_build_side: false,
             from_correlated_subquery: Default::default(),
         }
     }
@@ -191,7 +195,9 @@ impl LogicalOperator for LogicalInnerJoin {
                 left_prop.cardinality
             }
 
-            JoinType::RightSemi | JoinType::RightAnti => right_prop.cardinality,
+            JoinType::RightSemi | JoinType::RightAnti | JoinType::RightMark => {
+                right_prop.cardinality
+            }
         };
 
         Ok(RelationalProperty {

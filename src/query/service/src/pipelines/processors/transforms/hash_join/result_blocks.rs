@@ -46,7 +46,6 @@ use crate::pipelines::processors::transforms::hash_join::join_hash_table::Marker
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::sessions::TableContext;
 use crate::sql::planner::plans::JoinType;
-use crate::sql::plans::JoinType::LeftMark;
 
 impl JoinHashTable {
     pub(crate) fn result_blocks<Key, IT>(
@@ -169,25 +168,23 @@ impl JoinHashTable {
                 let result = self.right_join::<_, _>(hash_table, probe_state, keys_iter, input)?;
                 return Ok(vec![result]);
             }
-            LeftMark => {
-                // Three cases will produce Mark join:
-                // 1. uncorrelated ANY subquery: only have one kind of join condition, equi-condition or non-equi-condition.
-                // 2. correlated ANY subquery: must have two kinds of join condition, one is equi-condition and the other is non-equi-condition.
-                //    equi-condition is subquery's outer columns with subquery's derived columns.
-                //    non-equi-condition is subquery's child expr with subquery's output column.
-                //    for example: select * from t1 where t1.a = ANY (select t2.a from t2 where t2.b = t1.b); [t1: a, b], [t2: a, b]
-                //    subquery's outer columns: t1.b, and it'll derive a new column: subquery_5 when subquery cross join t1;
-                //    so equi-condition is t1.b = subquery_5, and non-equi-condition is t1.a = t2.a.
-                // 3. Correlated Exists subquery： only have one kind of join condition, equi-condition.
-                //    equi-condition is subquery's outer columns with subquery's derived columns. (see the above example in correlated ANY subquery)
-                if self.hash_join_desc.marker_join_desc.subquery_as_build_side {
-                    let result =
-                        self.mark_join_probe_subquery(hash_table, probe_state, keys_iter, input)?;
-                    return Ok(vec![result]);
-                } else {
-                    results.push(DataBlock::empty());
-                    self.mark_join(hash_table, probe_state, keys_iter, input)?;
-                }
+            // Three cases will produce Mark join:
+            // 1. uncorrelated ANY subquery: only have one kind of join condition, equi-condition or non-equi-condition.
+            // 2. correlated ANY subquery: must have two kinds of join condition, one is equi-condition and the other is non-equi-condition.
+            //    equi-condition is subquery's outer columns with subquery's derived columns.
+            //    non-equi-condition is subquery's child expr with subquery's output column.
+            //    for example: select * from t1 where t1.a = ANY (select t2.a from t2 where t2.b = t1.b); [t1: a, b], [t2: a, b]
+            //    subquery's outer columns: t1.b, and it'll derive a new column: subquery_5 when subquery cross join t1;
+            //    so equi-condition is t1.b = subquery_5, and non-equi-condition is t1.a = t2.a.
+            // 3. Correlated Exists subquery： only have one kind of join condition, equi-condition.
+            //    equi-condition is subquery's outer columns with subquery's derived columns. (see the above example in correlated ANY subquery)
+            JoinType::LeftMark => {
+                results.push(DataBlock::empty());
+                self.left_mark_join(hash_table, probe_state, keys_iter, input)?;
+            }
+            JoinType::RightMark => {
+                let result = self.right_mark_join(hash_table, probe_state, keys_iter, input)?;
+                return Ok(vec![result]);
             }
             _ => {
                 return Err(ErrorCode::UnImplement(format!(
@@ -199,7 +196,7 @@ impl JoinHashTable {
         Ok(results)
     }
 
-    fn mark_join<Key, IT>(
+    fn left_mark_join<Key, IT>(
         &self,
         hash_table: &HashMap<Key, Vec<RowPtr>>,
         probe_state: &mut ProbeState,
@@ -318,7 +315,7 @@ impl JoinHashTable {
         ]))
     }
 
-    fn mark_join_probe_subquery<Key, IT>(
+    fn right_mark_join<Key, IT>(
         &self,
         hash_table: &HashMap<Key, Vec<RowPtr>>,
         probe_state: &mut ProbeState,

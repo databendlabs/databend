@@ -47,6 +47,7 @@ pub fn validate_distributed_query(s_expr: &SExpr) -> bool {
                 | JoinType::Full
                 | JoinType::Cross
                 | JoinType::LeftMark
+                | JoinType::RightMark
                 | JoinType::Single => false,
             },
             _ => true,

@@ -203,7 +203,6 @@ pub struct HashJoin {
     pub other_conditions: Vec<PhysicalScalar>,
     pub join_type: JoinType,
     pub marker_index: Option<IndexType>,
-    pub subquery_as_build_side: bool,
     pub from_correlated_subquery: bool,
 }
 
@@ -256,9 +255,9 @@ impl HashJoin {
                 fields.clear();
                 fields = self.build.output_schema()?.fields().clone();
             }
-            JoinType::LeftMark => {
+            JoinType::LeftMark | JoinType::RightMark => {
                 fields.clear();
-                let outer_table = if self.subquery_as_build_side {
+                let outer_table = if self.join_type == JoinType::RightMark {
                     &self.probe
                 } else {
                     &self.build

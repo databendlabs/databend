@@ -147,7 +147,6 @@ impl PhysicalPlanReplacer for Fragmenter {
             other_conditions: plan.other_conditions.clone(),
             join_type: plan.join_type.clone(),
             marker_index: plan.marker_index,
-            subquery_as_build_side: plan.subquery_as_build_side,
             from_correlated_subquery: plan.from_correlated_subquery,
         }))
     }
