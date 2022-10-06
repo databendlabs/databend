@@ -5,7 +5,7 @@ explain select * from numbers(10000) where number in (select number from numbers
 Filter
 ├── filters: [2 (#2)]
 └── HashJoin
-    ├── join type: MARK
+    ├── join type: RIGHT MARK
     ├── build keys: [subquery_1 (#1)]
     ├── probe keys: [numbers.number (#0)]
     ├── filters: []

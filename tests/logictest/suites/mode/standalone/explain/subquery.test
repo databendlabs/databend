@@ -75,7 +75,7 @@ explain select t.number from numbers(1) as t where exists (select t1.number from
 Filter
 ├── filters: [or(3 (#3), >(t.number (#0), 1))]
 └── HashJoin
-    ├── join type: MARK
+    ├── join type: RIGHT MARK
     ├── build keys: [subquery_2 (#2)]
     ├── probe keys: [subquery_0 (#0)]
     ├── filters: []
