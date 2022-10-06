@@ -554,7 +554,7 @@ impl HashJoinState for JoinHashTable {
                         }
                     }
                 }
-                Self::init_markers(&chunk.cols)
+                Self::init_markers(&chunk.cols, chunk.num_rows())
                     .iter()
                     .map(|x| Some(*x))
                     .collect()

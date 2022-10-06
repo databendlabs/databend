@@ -320,9 +320,8 @@ impl JoinHashTable {
         ]))
     }
 
-    pub(crate) fn init_markers(cols: &[ColumnRef]) -> Vec<MarkerKind> {
-        let num_rows = cols[0].len();
-        let mut markers = vec![MarkerKind::False; cols[0].len()];
+    pub(crate) fn init_markers(cols: &[ColumnRef], num_rows: usize) -> Vec<MarkerKind> {
+        let mut markers = vec![MarkerKind::False; num_rows];
         if cols.iter().any(|c| c.is_nullable() || c.is_null()) {
             let mut valids = None;
             for col in cols.iter() {
@@ -367,7 +366,7 @@ impl JoinHashTable {
             *has_null_ref
         };
 
-        let mut markers = Self::init_markers(input.columns());
+        let mut markers = Self::init_markers(input.columns(), input.num_rows());
         let valids = &probe_state.valids;
         if self.hash_join_desc.other_predicate.is_none() {
             // todo(youngsofun): can be optimized as semi-join?
