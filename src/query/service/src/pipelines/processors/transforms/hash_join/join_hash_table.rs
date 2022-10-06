@@ -27,7 +27,6 @@ use common_datablocks::HashMethodFixedKeys;
 use common_datablocks::HashMethodKind;
 use common_datablocks::HashMethodSerializer;
 use common_datavalues::combine_validities_2;
-use common_datavalues::combine_validities_3;
 use common_datavalues::BooleanColumn;
 use common_datavalues::BooleanType;
 use common_datavalues::Column;
@@ -560,30 +559,7 @@ impl HashJoinState for JoinHashTable {
                         }
                     }
                 }
-                let mut markers = vec![Some(MarkerKind::False); chunk.num_rows()];
-                // Only all columns' values are NULL, we set the marker to Null.
-                if chunk.cols.iter().any(|c| c.is_nullable() || c.is_null()) {
-                    let mut valids = None;
-                    for col in chunk.cols.iter() {
-                        let (is_all_null, tmp_valids) = col.validity();
-                        if is_all_null {
-                            let mut m = MutableBitmap::with_capacity(chunk.num_rows());
-                            m.extend_constant(chunk.num_rows(), false);
-                            valids = Some(m.into());
-                            break;
-                        } else {
-                            valids = combine_validities_3(valids, tmp_valids.cloned());
-                        }
-                    }
-                    if let Some(v) = valids {
-                        for (idx, marker) in markers.iter_mut().enumerate() {
-                            if !v.get_bit(idx) {
-                                *marker = Some(MarkerKind::Null);
-                            }
-                        }
-                    }
-                }
-                markers
+                Self::init_markers(&chunk.cols).iter().map(|x| Some(*x)).collect( )
             } else {
                 vec![None; chunk.num_rows()]
             };

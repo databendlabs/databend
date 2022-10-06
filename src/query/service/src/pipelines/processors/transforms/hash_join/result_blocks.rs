@@ -17,6 +17,7 @@ use std::iter::TrustedLen;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_datablocks::DataBlock;
+use common_datavalues::combine_validities_3;
 use common_datavalues::wrap_nullable;
 use common_datavalues::BooleanColumn;
 use common_datavalues::BooleanType;
@@ -315,6 +316,37 @@ impl JoinHashTable {
         ]))
     }
 
+    pub(crate) fn init_markers(cols: &[ColumnRef]) -> Vec<MarkerKind> {
+        let num_rows = cols[0].len();
+        let mut markers = vec![MarkerKind::False; cols[0].len()];
+        if cols.iter().any(|c| c.is_nullable() || c.is_null()) {
+            let mut valids = None;
+            for col in cols.iter() {
+                let (is_all_null, tmp_valids_option) = col.validity();
+                if !is_all_null {
+                    if let Some(tmp_valids) = tmp_valids_option.as_ref() {
+                        if tmp_valids.unset_bits() == 0 {
+                            let mut m = MutableBitmap::with_capacity(num_rows);
+                            m.extend_constant(num_rows, true);
+                            valids = Some(m.into());
+                            break;
+                        } else {
+                            valids = combine_validities_3(valids, tmp_valids_option.cloned());
+                        }
+                    }
+                }
+            }
+            if let Some(v) = valids {
+                for (idx, marker) in markers.iter_mut().enumerate() {
+                    if !v.get_bit(idx) {
+                        *marker = MarkerKind::Null;
+                    }
+                }
+            }
+        }
+        markers
+    }
+
     fn right_mark_join<Key, IT>(
         &self,
         hash_table: &HashMap<Key, Vec<RowPtr>>,
@@ -331,7 +363,7 @@ impl JoinHashTable {
             *has_null_ref
         };
 
-        let mut markers = vec![MarkerKind::False; input.num_rows()];
+        let mut markers = Self::init_markers(input.columns());
         let valids = &probe_state.valids;
         if self.hash_join_desc.other_predicate.is_none() {
             // todo(youngsofun): can be optimized as semi-join?
