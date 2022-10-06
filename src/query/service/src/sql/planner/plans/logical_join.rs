@@ -44,6 +44,20 @@ pub enum JoinType {
     Single,
 }
 
+impl JoinType {
+    pub fn opposite(&self) -> JoinType {
+        match self {
+            JoinType::Left => JoinType::Right,
+            JoinType::Right => JoinType::Left,
+            JoinType::LeftSemi => JoinType::RightSemi,
+            JoinType::RightSemi => JoinType::LeftSemi,
+            JoinType::LeftAnti => JoinType::RightAnti,
+            JoinType::RightAnti => JoinType::LeftAnti,
+            _ => self.clone(),
+        }
+    }
+}
+
 impl Display for JoinType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {

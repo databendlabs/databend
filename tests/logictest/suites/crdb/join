@@ -25,11 +25,11 @@ statement error 1065
 SELECT x FROM onecolumn AS a, onecolumn AS b;
 
 statement query II
-SELECT * FROM onecolumn AS a(x) JOIN onecolumn AS b(y) ON a.x = b.y;
+SELECT * FROM onecolumn AS a(x) JOIN onecolumn AS b(y) ON a.x = b.y order by a.x;
 
 ----
-44 44
 42 42
+44 44
 
 statement query I
 SELECT * FROM onecolumn AS a JOIN onecolumn as b USING(x) ORDER BY x;
@@ -39,19 +39,19 @@ SELECT * FROM onecolumn AS a JOIN onecolumn as b USING(x) ORDER BY x;
 44
 
 statement query I
-SELECT * FROM onecolumn AS a NATURAL JOIN onecolumn as b;
+SELECT * FROM onecolumn AS a NATURAL JOIN onecolumn as b order by a.x;
 
 ----
-44
 42
+44
 
 statement query II
-SELECT * FROM onecolumn AS a(x) LEFT OUTER JOIN onecolumn AS b(y) ON a.x = b.y;
+SELECT * FROM onecolumn AS a(x) LEFT OUTER JOIN onecolumn AS b(y) ON a.x = b.y order by a.x;
 
 ----
+42 42
 44 44
 NULL NULL
-42 42
 
 statement query I
 SELECT * FROM onecolumn AS a LEFT OUTER JOIN onecolumn AS b USING(x) ORDER BY x;
@@ -76,12 +76,12 @@ NULL NULL
 NULL 42
 
 statement query I
-SELECT * FROM onecolumn AS a NATURAL LEFT OUTER JOIN onecolumn AS b;
+SELECT * FROM onecolumn AS a NATURAL LEFT OUTER JOIN onecolumn AS b order by a.x;
 
 ----
+42
 44
 NULL
-42
 
 statement query II
 SELECT * FROM onecolumn AS a(x) RIGHT OUTER JOIN onecolumn AS b(y) ON a.x = b.y order by x;
@@ -333,28 +333,28 @@ SELECT o.x, t.y FROM onecolumn o INNER JOIN twocolumn t ON (o.x=t.x AND t.y=53);
 42 53
 
 statement query IT
-SELECT o.x, t.y FROM onecolumn o LEFT OUTER JOIN twocolumn t ON (o.x=t.x AND t.y=53);
+SELECT o.x, t.y FROM onecolumn o LEFT OUTER JOIN twocolumn t ON (o.x=t.x AND t.y=53) order by o.x;
 
 ----
+42 53
 44 NULL
 NULL NULL
-42 53
 
 statement query II
-SELECT o.x, t.y FROM onecolumn o LEFT OUTER JOIN twocolumn t ON (o.x=t.x AND o.x=44);
+SELECT o.x, t.y FROM onecolumn o LEFT OUTER JOIN twocolumn t ON (o.x=t.x AND o.x=44) order by o.x;
 
 ----
+42 NULL
 44 51
 NULL NULL
-42 NULL
 
 statement query II
-SELECT o.x, t.y FROM onecolumn o LEFT OUTER JOIN twocolumn t ON (o.x=t.x AND t.x=44);
+SELECT o.x, t.y FROM onecolumn o LEFT OUTER JOIN twocolumn t ON (o.x=t.x AND t.x=44) order by o.x;
 
 ----
+42 NULL
 44 51
 NULL NULL
-42 NULL
 
 -- statement query
 -- SELECT * FROM (SELECT x, 2 two FROM onecolumn) NATURAL FULL JOIN (SELECT x, y+1 plus1 FROM twocolumn);
