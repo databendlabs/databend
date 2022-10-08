@@ -1935,6 +1935,7 @@ dependencies = [
  "num-traits",
  "prost",
  "prost-build",
+ "semver 1.0.14",
  "tonic",
  "tonic-build",
 ]
