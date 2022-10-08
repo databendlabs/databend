@@ -27,21 +27,15 @@ use common_datablocks::HashMethodFixedKeys;
 use common_datablocks::HashMethodKind;
 use common_datablocks::HashMethodSerializer;
 use common_datavalues::combine_validities_2;
-use common_datavalues::combine_validities_3;
 use common_datavalues::BooleanColumn;
-use common_datavalues::BooleanType;
 use common_datavalues::Column;
 use common_datavalues::ColumnRef;
 use common_datavalues::ConstColumn;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
-use common_datavalues::NullableType;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_hashtable::HashMap;
 use common_pipeline_transforms::processors::transforms::Aborting;
@@ -62,7 +56,6 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::executor::PhysicalScalar;
 use crate::sql::planner::plans::JoinType;
-use crate::sql::plans::JoinType::Mark;
 
 pub struct SerializerHashTable {
     pub(crate) hash_table: HashMap<KeysRef, Vec<RowPtr>>,
@@ -482,7 +475,8 @@ impl HashJoinState for JoinHashTable {
             | JoinType::RightSemi
             | JoinType::RightAnti
             | JoinType::Left
-            | Mark
+            | JoinType::LeftMark
+            | JoinType::RightMark
             | JoinType::Single
             | JoinType::Right
             | JoinType::Full => self.probe_join(input, probe_state),
@@ -542,34 +536,28 @@ impl HashJoinState for JoinHashTable {
         }
 
         let mut chunks = self.row_space.chunks.write().unwrap();
+        let mut has_null = false;
         for chunk_index in 0..chunks.len() {
             let chunk = &mut chunks[chunk_index];
             let mut columns = Vec::with_capacity(chunk.cols.len());
-            let markers = if self.hash_join_desc.join_type == Mark {
-                let mut markers = vec![Some(MarkerKind::False); chunk.num_rows()];
-                // Only all columns' values are NULL, we set the marker to Null.
-                if chunk.cols.iter().any(|c| c.is_nullable() || c.is_null()) {
-                    let mut valids = None;
-                    for col in chunk.cols.iter() {
-                        let (is_all_null, tmp_valids) = col.validity();
-                        if is_all_null {
-                            let mut m = MutableBitmap::with_capacity(chunk.num_rows());
-                            m.extend_constant(chunk.num_rows(), false);
-                            valids = Some(m.into());
-                            break;
-                        } else {
-                            valids = combine_validities_3(valids, tmp_valids.cloned());
-                        }
-                    }
-                    if let Some(v) = valids {
-                        for (idx, marker) in markers.iter_mut().enumerate() {
-                            if !v.get_bit(idx) {
-                                *marker = Some(MarkerKind::Null);
-                            }
+            let markers = if matches!(
+                self.hash_join_desc.join_type,
+                JoinType::LeftMark | JoinType::RightMark
+            ) {
+                if self.hash_join_desc.join_type == JoinType::RightMark && !has_null {
+                    if let Some(validity) = chunk.cols[0].validity().1 {
+                        if validity.unset_bits() > 0 {
+                            has_null = true;
+                            let mut has_null_ref =
+                                self.hash_join_desc.marker_join_desc.has_null.write();
+                            *has_null_ref = true;
                         }
                     }
                 }
-                markers
+                Self::init_markers(&chunk.cols, chunk.num_rows())
+                    .iter()
+                    .map(|x| Some(*x))
+                    .collect()
             } else {
                 vec![None; chunk.num_rows()]
             };
@@ -679,40 +667,11 @@ impl HashJoinState for JoinHashTable {
     }
 
     fn mark_join_blocks(&self, _aborting: Aborting) -> Result<Vec<DataBlock>> {
-        let mut row_ptrs = self.row_ptrs.write();
+        let row_ptrs = self.row_ptrs.read();
         let has_null = self.hash_join_desc.marker_join_desc.has_null.read();
-        let mut validity = MutableBitmap::with_capacity(row_ptrs.len());
-        let mut boolean_bit_map = MutableBitmap::with_capacity(row_ptrs.len());
-        for row_ptr in row_ptrs.iter_mut() {
-            let marker = row_ptr.marker.unwrap();
-            if marker == MarkerKind::False && *has_null {
-                row_ptr.marker = Some(MarkerKind::Null);
-            }
-            if marker == MarkerKind::Null {
-                validity.push(false);
-            } else {
-                validity.push(true);
-            }
-            if marker == MarkerKind::True {
-                boolean_bit_map.push(true);
-            } else {
-                boolean_bit_map.push(false);
-            }
-        }
-        // transfer marker to a Nullable(BooleanColumn)
-        let boolean_column = BooleanColumn::from_arrow_data(boolean_bit_map.into());
-        let marker_column = Self::set_validity(&boolean_column.arc(), &validity.into())?;
-        let marker_schema = DataSchema::new(vec![DataField::new(
-            &self
-                .hash_join_desc
-                .marker_join_desc
-                .marker_index
-                .ok_or_else(|| ErrorCode::LogicalError("Invalid mark join"))?
-                .to_string(),
-            NullableType::new_impl(BooleanType::new_impl()),
-        )]);
-        let marker_block =
-            DataBlock::create(DataSchemaRef::from(marker_schema), vec![marker_column]);
+
+        let markers = row_ptrs.iter().map(|r| r.marker.unwrap()).collect();
+        let marker_block = self.create_marker_block(*has_null, markers)?;
         let build_block = self.row_space.gather(&row_ptrs)?;
         Ok(vec![self.merge_eq_block(&marker_block, &build_block)?])
     }

@@ -299,8 +299,12 @@ impl PartialOrd for Scalar {
             (Scalar::Timestamp(t1), Scalar::Timestamp(t2)) => t1.partial_cmp(t2),
             (Scalar::Array(a1), Scalar::Array(a2)) => a1.partial_cmp(a2),
             (Scalar::Tuple(t1), Scalar::Tuple(t2)) => t1.partial_cmp(t2),
-            // TODO(RinChanNOW): compare after casting to JSON.
-            (Scalar::Variant(v1), Scalar::Variant(v2)) => v1.partial_cmp(v2),
+            (Scalar::Variant(v1), Scalar::Variant(v2)) => {
+                match common_jsonb::compare(v1.as_slice(), v2.as_slice()) {
+                    Ok(ord) => Some(ord),
+                    _ => None,
+                }
+            }
             _ => None,
         }
     }
@@ -317,8 +321,11 @@ impl PartialOrd for ScalarRef<'_> {
             (ScalarRef::Timestamp(t1), ScalarRef::Timestamp(t2)) => t1.partial_cmp(t2),
             (ScalarRef::Array(a1), ScalarRef::Array(a2)) => a1.partial_cmp(a2),
             (ScalarRef::Tuple(t1), ScalarRef::Tuple(t2)) => t1.partial_cmp(t2),
-            // TODO(RinChanNOW): compare after casting to JSON.
-            (ScalarRef::Variant(v1), ScalarRef::Variant(v2)) => v1.partial_cmp(v2),
+            (ScalarRef::Variant(v1), ScalarRef::Variant(v2)) => match common_jsonb::compare(v1, v2)
+            {
+                Ok(ord) => Some(ord),
+                _ => None,
+            },
             _ => None,
         }
     }
@@ -328,7 +335,9 @@ impl PartialOrd for Column {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (self, other) {
             (Column::Null { len: col1 }, Column::Null { len: col2 }) => col1.partial_cmp(col2),
-            (Column::EmptyArray { len: col1 }, Column::EmptyArray { len: col2 }) => col1.partial_cmp(col2),
+            (Column::EmptyArray { len: col1 }, Column::EmptyArray { len: col2 }) => {
+                col1.partial_cmp(col2)
+            }
             (Column::Number(col1), Column::Number(col2)) => {
                 with_number_type!(|NUM_TYPE| match (col1, col2) {
                     (NumberColumn::NUM_TYPE(c1), NumberColumn::NUM_TYPE(c2)) =>
@@ -337,11 +346,7 @@ impl PartialOrd for Column {
                 })
             }
             (Column::Boolean(col1), Column::Boolean(col2)) => col1.iter().partial_cmp(col2.iter()),
-            (Column::String(col1), Column::String(col2))
-            // TODO(RinChanNOW): compare after casting to JSON.
-            | (Column::Variant(col1), Column::Variant(col2)) => {
-                col1.iter().partial_cmp(col2.iter())
-            }
+            (Column::String(col1), Column::String(col2)) => col1.iter().partial_cmp(col2.iter()),
             (Column::Timestamp(col1), Column::Timestamp(col2)) => {
                 col1.iter().partial_cmp(col2.iter())
             }
@@ -349,17 +354,16 @@ impl PartialOrd for Column {
             (Column::Nullable(col1), Column::Nullable(col2)) => {
                 col1.iter().partial_cmp(col2.iter())
             }
-            (
-                Column::Tuple {
-                    fields: col1,
-                    ..
-                },
-                Column::Tuple {
-                    fields: col2,
-                    ..
-                },
-            ) => {
+            (Column::Tuple { fields: col1, .. }, Column::Tuple { fields: col2, .. }) => {
                 col1.partial_cmp(col2)
+            }
+            (Column::Variant(col1), Column::Variant(col2)) => {
+                col1.iter().partial_cmp_by(col2.iter(), |v1, v2| {
+                    match common_jsonb::compare(v1, v2) {
+                        Ok(ord) => Some(ord),
+                        _ => None,
+                    }
+                })
             }
             _ => None,
         }

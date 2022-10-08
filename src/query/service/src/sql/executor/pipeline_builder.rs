@@ -495,7 +495,7 @@ impl PipelineBuilder {
             ))
         })?;
 
-        if join.join_type == JoinType::Mark {
+        if join.join_type == JoinType::LeftMark {
             self.main_pipeline.resize(1)?;
             self.main_pipeline.add_transform(|input, output| {
                 TransformMarkJoin::try_create(

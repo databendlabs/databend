@@ -41,9 +41,7 @@ use crate::pruning::range_pruner;
 use crate::pruning::range_pruner::RangePruner;
 use crate::pruning::topn_pruner;
 
-pub struct BlockPruner {
-    table_snapshot: Arc<TableSnapshot>,
-}
+pub struct BlockPruner;
 
 // TODO move this to somewhere
 pub type SegmentIndex = usize;
@@ -52,10 +50,6 @@ pub type SegmentIndex = usize;
 // investigate that if simple "select count() from t" calls table::read_partitions (can be avoided)
 
 impl BlockPruner {
-    pub fn new(table_snapshot: Arc<TableSnapshot>) -> Self {
-        Self { table_snapshot }
-    }
-
     // Sync version of method `prune`
     //
     // Please note that it will take a significant period of time to prune a large table, and
@@ -71,15 +65,13 @@ impl BlockPruner {
     }
 
     // prune blocks by utilizing min_max index and filter, according to the pushdowns
-    #[tracing::instrument(level = "debug", skip(self, schema, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", skip(schema, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     pub async fn prune(
-        &self,
         ctx: &Arc<dyn TableContext>,
         schema: DataSchemaRef,
         push_down: &Option<Extras>,
+        segment_locs: Vec<Location>,
     ) -> Result<Vec<(SegmentIndex, BlockMeta)>> {
-        let segment_locs = self.table_snapshot.segments.clone();
-
         if segment_locs.is_empty() {
             return Ok(vec![]);
         };

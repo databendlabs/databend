@@ -37,7 +37,7 @@ use crate::HivePartInfo;
 enum State {
     /// Read parquet file meta data
     /// IO bound
-    ReadMeta(PartInfoPtr),
+    ReadMeta(Option<PartInfoPtr>),
 
     /// Read blocks from data groups (without deserialization)
     /// IO bound
@@ -70,33 +70,21 @@ impl HiveTableSource {
         delay: usize,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
-        let mut partitions = ctx.try_get_partitions(1)?;
-        match partitions.is_empty() {
-            true => Ok(ProcessorPtr::create(Box::new(HiveTableSource {
-                ctx,
-                output,
-                block_reader,
-                scan_progress,
-                state: State::Finish,
-                delay,
-            }))),
-            false => Ok(ProcessorPtr::create(Box::new(HiveTableSource {
-                ctx,
-                output,
-                block_reader,
-                scan_progress,
-                state: State::ReadMeta(partitions.remove(0)),
-                delay,
-            }))),
-        }
+        Ok(ProcessorPtr::create(Box::new(HiveTableSource {
+            ctx,
+            output,
+            block_reader,
+            scan_progress,
+            state: State::ReadMeta(None),
+            delay,
+        })))
     }
 
     fn try_get_partitions(&mut self) -> Result<()> {
-        let partitions = self.ctx.try_get_partitions(1)?;
-        match partitions.is_empty() {
-            true => self.state = State::Finish,
-            false => {
-                self.state = State::ReadMeta(partitions[0].clone());
+        match self.ctx.try_get_part() {
+            None => self.state = State::Finish,
+            Some(part_info) => {
+                self.state = State::ReadMeta(Some(part_info));
             }
         }
 
@@ -115,6 +103,15 @@ impl Processor for HiveTableSource {
     }
 
     fn event(&mut self) -> Result<Event> {
+        if matches!(self.state, State::ReadMeta(None)) {
+            match self.ctx.try_get_part() {
+                None => self.state = State::Finish,
+                Some(part_info) => {
+                    self.state = State::ReadMeta(Some(part_info));
+                }
+            }
+        }
+
         if self.output.is_finished() {
             return Ok(Event::Finished);
         }
@@ -184,7 +181,7 @@ impl Processor for HiveTableSource {
 
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
-            State::ReadMeta(part) => {
+            State::ReadMeta(Some(part)) => {
                 if self.delay > 0 {
                     sleep(Duration::from_millis(self.delay as u64)).await;
                     tracing::debug!("sleep for {}ms", self.delay);
