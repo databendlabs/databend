@@ -164,6 +164,7 @@ impl SharedSinger {
     }
 }
 
+/// PresignRequest struct represent a request to be signed.
 #[derive(Hash, Eq, PartialEq)]
 pub struct PresignRequest {
     path: String,
@@ -171,6 +172,7 @@ pub struct PresignRequest {
 }
 
 impl PresignRequest {
+    /// Create a new PresignRequest.
     pub fn new(path: &str, op: Operation) -> Self {
         Self {
             path: path.to_string(),

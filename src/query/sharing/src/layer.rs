@@ -41,12 +41,26 @@ use crate::SharedSinger;
 ///
 /// - Get presgined url from sharing endpoint.
 /// - Read data from the url instead.
+///
+/// # Example:
+///
+/// ```rust
+/// use anyhow::Result;
+/// use common_sharing::SharedLayer;
+/// use opendal::Operator;
+/// use opendal::Scheme;
+///
+/// let _ = Operator::from_env(Scheme::Memory)
+///     .expect("must init")
+///     .layer(SharedLayer);
+/// ```
 #[derive(Debug, Clone)]
 pub struct SharedLayer {
     signer: SharedSinger,
 }
 
 impl SharedLayer {
+    /// Create a new SharedLayer.
     pub fn new(signer: SharedSinger) -> Self {
         Self { signer }
     }
