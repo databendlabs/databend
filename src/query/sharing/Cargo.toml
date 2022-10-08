@@ -7,7 +7,7 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-opendal = "0.17"
+opendal = "0.18"
 anyhow = "1"
 moka = "0.9"
 async-trait = "0.1"
