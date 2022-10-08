@@ -460,7 +460,7 @@ async fn test_state_machine_snapshot() -> anyhow::Result<()> {
         let (snap, last_applied, id) = sm.build_snapshot()?;
 
         assert_eq!(Some(LogId { term: 1, index: 9 }), last_applied);
-        assert!(id.starts_with(&format!("{}-{}-", 1, 9)));
+        assert!(id.to_string().starts_with(&format!("{}-{}-", 1, 9)));
 
         let res = pretty_snapshot(&snap.kvs);
         assert_eq!(want, res);
