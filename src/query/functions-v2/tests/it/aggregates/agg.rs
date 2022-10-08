@@ -67,6 +67,8 @@ fn test_agg_group_by() {
     test_agg_covar_samp(file, simulate_two_groups_group_by);
     test_agg_covar_pop(file, simulate_two_groups_group_by);
     test_agg_retention(file, simulate_two_groups_group_by);
+    test_agg_stddev_pop(file, simulate_two_groups_group_by);
+    test_agg_window_funnel(file, simulate_two_groups_group_by);
 }
 
 fn get_example() -> Vec<(&'static str, DataType, Column)> {
