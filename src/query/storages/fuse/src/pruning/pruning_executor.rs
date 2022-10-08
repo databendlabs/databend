@@ -175,7 +175,7 @@ impl BlockPruner {
 
     #[tracing::instrument(level = "debug", skip_all)]
     async fn prune_blocks(
-        pruning_ctx: &PruningContext,
+        pruning_ctx: &Arc<PruningContext>,
         segment_idx: SegmentIndex,
         segment_info: &SegmentInfo,
     ) -> Result<Vec<(SegmentIndex, BlockMeta)>> {
@@ -191,14 +191,16 @@ impl BlockPruner {
                         .range_pruner
                         .should_keep(&block_meta.col_stats, block_meta.row_count)
                     {
-                        let filter_pruner = pruning_ctx.filter_pruner.clone();
-                        let limiter = pruning_ctx.limiter.clone();
+                        let ctx = pruning_ctx.clone();
                         let row_count = block_meta.row_count;
                         let index_location = block_meta.bloom_filter_index_location.clone();
                         let index_size = block_meta.bloom_filter_index_size;
                         return Some(async move {
-                            if limiter.within_limit(row_count)
-                                && filter_pruner.should_keep(&index_location, index_size).await
+                            if ctx.limiter.within_limit(row_count)
+                                && ctx
+                                    .filter_pruner
+                                    .should_keep(&index_location, index_size)
+                                    .await
                             {
                                 (block_idx, true)
                             } else {
@@ -211,23 +213,34 @@ impl BlockPruner {
             }
         });
 
-        let bloom_pruners = pruning_runtime
+        let join_handlers = pruning_runtime
             .try_spawn_batch(semaphore.clone(), tasks)
             .await?;
 
-        let joint = future::try_join_all(bloom_pruners)
+        let joint = future::try_join_all(join_handlers)
             .await
             .map_err(|e| ErrorCode::StorageOther(format!("block pruning failure, {}", e)))?;
 
-        let mut result = Vec::with_capacity(segment_info.blocks.len());
-        for item in joint {
-            let (block_idx, keep) = item;
-            if keep {
-                let block: &BlockMeta = &segment_info.blocks[block_idx];
-                result.push((segment_idx, block.clone()))
-            }
-        }
-        Ok(result)
+        Ok(joint
+            .into_iter()
+            .flat_map(|(block_idx, keep)| {
+                if keep {
+                    let block: &BlockMeta = &segment_info.blocks[block_idx];
+                    Some((segment_idx, block.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect())
+        // let mut result = Vec::with_capacity(segment_info.blocks.len());
+        // for item in joint {
+        //    let (block_idx, keep) = item;
+        //    if keep {
+        //        let block: &BlockMeta = &segment_info.blocks[block_idx];
+        //        result.push((segment_idx, block.clone()))
+        //    }
+        //}
+        // Ok(result)
     }
 
     #[inline]
