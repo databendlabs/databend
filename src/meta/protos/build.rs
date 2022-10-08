@@ -79,7 +79,7 @@ fn build_proto() -> Result<()> {
         return Err(Error::new(
             ErrorKind::Other,
             format!(
-                "protoc version is outdated, expect: >= 3.15.0, actual: {version}, reason: need feature experimental_allow_proto3_optional"
+                "protoc version is outdated, expect: >= 3.12.0, actual: {version}, reason: need feature --experimental_allow_proto3_optional"
             ),
         ));
     }
