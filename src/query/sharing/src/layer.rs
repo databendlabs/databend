@@ -44,7 +44,7 @@ use crate::SharedSinger;
 ///
 /// # Example:
 ///
-/// ```rust
+/// ```no_build
 /// use anyhow::Result;
 /// use common_sharing::SharedLayer;
 /// use opendal::Operator;
@@ -52,7 +52,7 @@ use crate::SharedSinger;
 ///
 /// let _ = Operator::from_env(Scheme::Memory)
 ///     .expect("must init")
-///     .layer(SharedLayer);
+///     .layer(SharedLayer::new(signer));
 /// ```
 #[derive(Debug, Clone)]
 pub struct SharedLayer {
