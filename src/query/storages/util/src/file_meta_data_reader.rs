@@ -20,7 +20,6 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::caches::CacheManager;
-use futures_util::io::BufReader;
 
 use super::cached_reader::CachedReader;
 use super::cached_reader::Loader;
@@ -47,14 +46,12 @@ impl Loader<FileMetaData> for Arc<dyn TableContext> {
     ) -> Result<FileMetaData> {
         let dal = self.get_storage_operator()?;
         let object = dal.object(key);
-        let reader = if let Some(len) = length_hint {
+        let mut reader = if let Some(len) = length_hint {
             object.seekable_reader(..len)
         } else {
             object.seekable_reader(..)
         };
-        let buffer_size = self.get_settings().get_storage_read_buffer_size()?;
-        let mut buf_reader = BufReader::with_capacity(buffer_size as usize, reader);
-        read_metadata_async(&mut buf_reader)
+        read_metadata_async(&mut reader)
             .await
             .map_err(|err| ErrorCode::ParquetError(format!("read meta failed, {}, {:?}", key, err)))
     }

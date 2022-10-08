@@ -1207,6 +1207,7 @@ dependencies = [
  "once_cell",
  "parking_lot 0.12.1",
  "pprof",
+ "rand 0.8.5",
  "serde",
  "tikv-jemalloc-ctl",
  "tikv-jemalloc-sys",
@@ -2176,7 +2177,6 @@ dependencies = [
  "common-exception",
  "common-fuse-meta",
  "common-meta-api",
- "futures-util",
  "once_cell",
  "parking_lot 0.12.1",
 ]

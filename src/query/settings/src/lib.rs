@@ -130,6 +130,17 @@ impl Settings {
                 desc: "The maximum number of threads to execute the request. By default, it is determined automatically.",
                 possible_values: None,
             },
+            // max_concurrent_prune
+            SettingValue {
+                default_value: UserSettingValue::UInt64(1000),
+                user_setting: UserSetting::create(
+                    "max_concurrent_prune",
+                    UserSettingValue::UInt64(1000),
+                ),
+                level: ScopeLevel::Session,
+                desc: "The maximum number of concurrent pruning. By default, it is 1000.",
+                possible_values: None,
+            },
             // flight_client_timeout
             SettingValue {
                 default_value: UserSettingValue::UInt64(60),
@@ -381,6 +392,16 @@ impl Settings {
     // Set max_threads.
     pub fn set_max_threads(&self, val: u64) -> Result<()> {
         let key = "max_threads";
+        self.try_set_u64(key, val, false)
+    }
+
+    pub fn get_max_concurrent_prune(&self) -> Result<u64> {
+        let key = "max_concurrent_prune";
+        self.try_get_u64(key)
+    }
+
+    pub fn set_max_concurrent_prune(&self, val: u64) -> Result<()> {
+        let key = "max_concurrent_prune";
         self.try_set_u64(key, val, false)
     }
 

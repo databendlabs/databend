@@ -21,14 +21,14 @@ use common_fuse_meta::meta::StatisticsOfColumns;
 use common_legacy_expression::LegacyExpression;
 use common_storages_index::RangeFilter;
 
-pub trait RangeFilterPruner {
+pub trait RangePruner {
     // returns ture, if target should NOT be pruned (false positive allowed)
     fn should_keep(&self, input: &StatisticsOfColumns, row_count: u64) -> bool;
 }
 
 struct KeepTrue;
 
-impl RangeFilterPruner for KeepTrue {
+impl RangePruner for KeepTrue {
     fn should_keep(&self, _input: &StatisticsOfColumns, _row_count: u64) -> bool {
         true
     }
@@ -36,13 +36,13 @@ impl RangeFilterPruner for KeepTrue {
 
 struct KeepFalse;
 
-impl RangeFilterPruner for KeepFalse {
+impl RangePruner for KeepFalse {
     fn should_keep(&self, _input: &StatisticsOfColumns, _row_count: u64) -> bool {
         false
     }
 }
 
-impl RangeFilterPruner for RangeFilter {
+impl RangePruner for RangeFilter {
     fn should_keep(&self, stats: &StatisticsOfColumns, row_count: u64) -> bool {
         match self.eval(stats, row_count) {
             Ok(r) => r,
@@ -55,11 +55,11 @@ impl RangeFilterPruner for RangeFilter {
     }
 }
 
-pub fn new_range_filter_pruner<'a>(
+pub fn new_range_pruner<'a>(
     ctx: &Arc<dyn TableContext>,
     filter_expr: Option<&'a [LegacyExpression]>,
     schema: &'a DataSchemaRef,
-) -> Result<Arc<dyn RangeFilterPruner + Send + Sync>> {
+) -> Result<Arc<dyn RangePruner + Send + Sync>> {
     Ok(match filter_expr {
         Some(exprs) if !exprs.is_empty() => {
             let range_filter = RangeFilter::try_create(ctx.clone(), exprs, schema.clone())?;
