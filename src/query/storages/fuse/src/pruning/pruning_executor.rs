@@ -14,11 +14,9 @@
 
 use std::sync::Arc;
 
-use common_base::base::tokio::sync::OwnedSemaphorePermit;
 use common_base::base::tokio::sync::Semaphore;
 use common_base::base::tokio::task::JoinHandle;
 use common_base::base::Runtime;
-use common_base::base::TrySpawn;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -181,53 +179,51 @@ impl BlockPruner {
         segment_idx: SegmentIndex,
         segment_info: &SegmentInfo,
     ) -> Result<Vec<(SegmentIndex, BlockMeta)>> {
-        let mut result = Vec::with_capacity(segment_info.blocks.len());
-
-        let mut bloom_pruners = Vec::with_capacity(segment_info.blocks.len());
-
-        for (block_idx, block_meta) in segment_info.blocks.iter().enumerate() {
-            // prune block using range filter
+        let mut blocks = segment_info.blocks.iter().enumerate();
+        let pruning_runtime = &pruning_ctx.rt;
+        let semaphore = &pruning_ctx.semaphore;
+        let tasks = std::iter::from_fn(|| {
             if pruning_ctx.limiter.exceeded() {
-                // before using filter to prune, check if limit already exceeded
-                return Ok(result);
-            }
-
-            if pruning_ctx
-                .range_pruner
-                .should_keep(&block_meta.col_stats, block_meta.row_count)
-            {
-                let filter_pruner = pruning_ctx.filter_pruner.clone();
-                let limiter = pruning_ctx.limiter.clone();
-                let row_count = block_meta.row_count;
-                let index_location = block_meta.bloom_filter_index_location.clone();
-                let index_size = block_meta.bloom_filter_index_size;
-
-                let permit_prune_block =
-                    Self::acquire_permit(pruning_ctx.semaphore.clone(), "prune block").await?;
-
-                let prune_bock_fut = async move {
-                    let _ = permit_prune_block;
-                    if limiter.within_limit(row_count)
-                        && filter_pruner.should_keep(&index_location, index_size).await
+                None
+            } else {
+                if let Some((block_idx, block_meta)) = blocks.next() {
+                    if pruning_ctx
+                        .range_pruner
+                        .should_keep(&block_meta.col_stats, block_meta.row_count)
                     {
-                        return Ok::<_, ErrorCode>((block_idx, true));
+                        let filter_pruner = pruning_ctx.filter_pruner.clone();
+                        let limiter = pruning_ctx.limiter.clone();
+                        let row_count = block_meta.row_count;
+                        let index_location = block_meta.bloom_filter_index_location.clone();
+                        let index_size = block_meta.bloom_filter_index_size;
+                        return Some(async move {
+                            if limiter.within_limit(row_count)
+                                && filter_pruner.should_keep(&index_location, index_size).await
+                            {
+                                (block_idx, true)
+                            } else {
+                                (block_idx, false)
+                            }
+                        });
                     }
-                    Ok::<_, ErrorCode>((block_idx, false))
-                };
-                let h = pruning_ctx.rt.spawn(
-                    prune_bock_fut.instrument(tracing::debug_span!("filter_using_bloom_index")),
-                );
-                bloom_pruners.push(h);
+                }
+                None
             }
-        }
+        });
+
+        let bloom_pruners = pruning_runtime
+            .try_spawn_batch(semaphore.clone(), tasks)
+            .await?;
 
         let joint = future::try_join_all(bloom_pruners)
             .await
             .map_err(|e| ErrorCode::StorageOther(format!("block pruning failure, {}", e)))?;
+
+        let mut result = Vec::with_capacity(segment_info.blocks.len());
         for item in joint {
-            let (block_idx, keep) = item?;
+            let (block_idx, keep) = item;
             if keep {
-                let block = &segment_info.blocks[block_idx];
+                let block: &BlockMeta = &segment_info.blocks[block_idx];
                 result.push((segment_idx, block.clone()))
             }
         }
@@ -255,16 +251,6 @@ impl BlockPruner {
                 Ok(metas.collect())
             });
         metas
-    }
-
-    #[inline]
-    async fn acquire_permit(semaphore: Arc<Semaphore>, msg: &str) -> Result<OwnedSemaphorePermit> {
-        semaphore.acquire_owned().await.map_err(|e| {
-            ErrorCode::UnexpectedError(format!(
-                "semaphore closed, acquire ({}) permit failure. {}",
-                msg, e
-            ))
-        })
     }
 }
 
