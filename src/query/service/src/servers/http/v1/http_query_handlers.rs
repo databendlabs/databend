@@ -107,7 +107,7 @@ pub struct QueryResponse {
 }
 
 impl QueryResponse {
-    pub(crate) fn from_internal(id: String, r: HttpQueryResponseInternal) -> QueryResponse {
+    pub(crate) fn from_internal(id: String, r: HttpQueryResponseInternal) -> impl IntoResponse {
         let state = r.state.clone();
         let (data, next_url) = match (state.state, r.data) {
             (ExecuteStateKind::Succeeded | ExecuteStateKind::Running, Some(d)) => {
@@ -121,7 +121,7 @@ impl QueryResponse {
             progresses: state.progresses.clone(),
             running_time_ms: state.running_time_ms,
         };
-        QueryResponse {
+        Json(QueryResponse {
             data: data.into(),
             state: state.state,
             schema: Some(schema),
@@ -135,11 +135,11 @@ impl QueryResponse {
             final_uri: Some(make_final_uri(&id)),
             kill_uri: Some(make_kill_uri(&id)),
             error: r.state.error.as_ref().map(QueryError::from_error_code),
-        }
+        })
     }
 
-    pub(crate) fn fail_to_start_sql(err: &ErrorCode) -> QueryResponse {
-        QueryResponse {
+    pub(crate) fn fail_to_start_sql(err: &ErrorCode) -> impl IntoResponse {
+        Json(QueryResponse {
             id: "".to_string(),
             stats: QueryStats::default(),
             state: ExecuteStateKind::Failed,
@@ -153,7 +153,7 @@ impl QueryResponse {
             final_uri: None,
             kill_uri: None,
             error: Some(QueryError::from_error_code(err)),
-        }
+        })
     }
 }
 
@@ -198,7 +198,7 @@ async fn query_state_handler(
     match http_query_manager.get_query(&query_id).await {
         Some(query) => {
             let response = query.get_response_state_only().await;
-            Ok(Json(QueryResponse::from_internal(query_id, response)))
+            Ok(QueryResponse::from_internal(query_id, response))
         }
         None => Err(query_id_not_found(query_id)),
     }
@@ -218,7 +218,7 @@ async fn query_page_handler(
                 .await
                 .map_err(|err| poem::Error::from_string(err.message(), StatusCode::NOT_FOUND))?;
             query.update_expire_time(false).await;
-            Ok(Json(QueryResponse::from_internal(query_id, resp)))
+            Ok(QueryResponse::from_internal(query_id, resp))
         }
         None => Err(query_id_not_found(query_id)),
     }
@@ -250,14 +250,11 @@ pub(crate) async fn query_handler(
                 &query.id, &resp.state, rows, next_page, sql
             );
             query.update_expire_time(false).await;
-            Ok(Json(QueryResponse::from_internal(
-                query.id.to_string(),
-                resp,
-            )))
+            Ok(QueryResponse::from_internal(query.id.to_string(), resp).into_response())
         }
         Err(e) => {
             error!("Fail to start sql, Error: {:?}", e);
-            Ok(Json(QueryResponse::fail_to_start_sql(&e)))
+            Ok(QueryResponse::fail_to_start_sql(&e).into_response())
         }
     }
 }
