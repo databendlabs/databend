@@ -26,7 +26,6 @@ use common_fuse_meta::meta::TableSnapshot;
 use common_storages_util::cached_reader::CachedReader;
 use common_storages_util::cached_reader::HasTenantLabel;
 use common_storages_util::cached_reader::Loader;
-use futures::io::BufReader;
 use opendal::BytesReader;
 
 use super::versioned_reader::VersionedReader;
@@ -36,8 +35,8 @@ use super::versioned_reader::VersionedReader;
 /// Mainly used as a auxiliary facility in the implementation of [Loader], such that the acquirement
 /// of an [BufReader] can be deferred or avoided (e.g. if hits cache).
 #[async_trait::async_trait]
-pub trait BufReaderProvider {
-    async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<BytesReader>>;
+pub trait BytesReaderProvider {
+    async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BytesReader>;
 }
 
 pub type SegmentInfoReader<'a> = CachedReader<SegmentInfo, LoaderWrapper<&'a dyn TableContext>>;
@@ -78,7 +77,7 @@ pub struct LoaderWrapper<T>(T);
 
 #[async_trait::async_trait]
 impl<T> Loader<TableSnapshot> for LoaderWrapper<T>
-where T: BufReaderProvider + Sync + Send
+where T: BytesReaderProvider + Sync + Send
 {
     async fn load(
         &self,
@@ -94,7 +93,7 @@ where T: BufReaderProvider + Sync + Send
 
 #[async_trait::async_trait]
 impl<T> Loader<SegmentInfo> for LoaderWrapper<T>
-where T: BufReaderProvider + Sync + Send
+where T: BytesReaderProvider + Sync + Send
 {
     async fn load(&self, key: &str, length_hint: Option<u64>, version: u64) -> Result<SegmentInfo> {
         let version = SegmentInfoVersion::try_from(version)?;
@@ -104,8 +103,8 @@ where T: BufReaderProvider + Sync + Send
 }
 
 #[async_trait::async_trait]
-impl BufReaderProvider for &dyn TableContext {
-    async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<BytesReader>> {
+impl BytesReaderProvider for &dyn TableContext {
+    async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BytesReader> {
         let operator = self.get_storage_operator()?;
         let object = operator.object(path);
 
@@ -119,17 +118,13 @@ impl BufReaderProvider for &dyn TableContext {
         };
 
         let reader = object.range_reader(..len).await?;
-        let read_buffer_size = self.get_settings().get_storage_read_buffer_size()?;
-        Ok(BufReader::with_capacity(
-            read_buffer_size as usize,
-            Box::new(reader),
-        ))
+        Ok(Box::new(reader))
     }
 }
 
 #[async_trait::async_trait]
-impl BufReaderProvider for Arc<dyn TableContext> {
-    async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<BytesReader>> {
+impl BytesReaderProvider for Arc<dyn TableContext> {
+    async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BytesReader> {
         self.as_ref().buf_reader(path, len).await
     }
 }
