@@ -13,7 +13,7 @@ cd tests/logictest/
 
 Make sure python3 is installed.
 
-You can use [Poetry](https://github.com/python-poetry/poetry) to install dependency, dependency see tests/pyproject.toml
+We recommend you use [Poetry](https://github.com/python-poetry/poetry) to install dependency, dependency see `tests/pyproject.toml`
 
 If you are familiar with `pip`, you can install dependency with:
 ```shell
