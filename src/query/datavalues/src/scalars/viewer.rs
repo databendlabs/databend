@@ -393,7 +393,7 @@ impl<'a> ScalarViewer<'a> for StructViewer<'a> {
 #[inline]
 fn try_extract_inner(column: &ColumnRef) -> Result<(&ColumnRef, Bitmap)> {
     let (all_is_null, validity) = column.validity();
-    let first_flag = if all_is_null {
+    let first_flag = if all_is_null || column.is_empty() {
         false
     } else {
         validity.map_or(true, |c| c.get_bit(0))
