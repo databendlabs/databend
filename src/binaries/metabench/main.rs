@@ -26,6 +26,7 @@ use common_meta_api::SchemaApi;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DatabaseNameIdent;
+use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::GetTableReq;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::schema::UpsertTableOptionReq;
@@ -106,6 +107,8 @@ async fn main() {
                     benchmark_upsert(&client, prefix, client_num, i).await;
                 } else if typ == "table" {
                     benchmark_table(&client, prefix, client_num, i).await;
+                } else if typ == "get_table" {
+                    benchmark_get_table(&client, prefix, client_num, i).await;
                 } else {
                     unreachable!("Invalid config.rpc: {}", typ);
                 }
@@ -144,6 +147,12 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u3
     let db_name = || format!("db-{}-{}", prefix, client_num);
     let table_name = || format!("table-{}-{}", prefix, client_num);
 
+    let tb_name_ident = || TableNameIdent {
+        tenant: tenant(),
+        db_name: db_name(),
+        table_name: table_name(),
+    };
+
     let res = client
         .create_database(CreateDatabaseReq {
             if_not_exists: false,
@@ -160,11 +169,7 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u3
     let res = client
         .create_table(CreateTableReq {
             if_not_exists: true,
-            name_ident: TableNameIdent {
-                tenant: tenant(),
-                db_name: db_name(),
-                table_name: table_name(),
-            },
+            name_ident: tb_name_ident(),
             table_meta: Default::default(),
         })
         .await;
@@ -188,6 +193,37 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u3
         .await;
 
     print_res(i, "upsert_table_option", &res);
+
+    let res = client
+        .drop_table_by_id(DropTableByIdReq {
+            if_exists: false,
+            tb_id: t.ident.table_id,
+        })
+        .await;
+
+    print_res(i, "drop_table", &res);
+
+    let res = client
+        .create_table(CreateTableReq {
+            if_not_exists: true,
+            name_ident: tb_name_ident(),
+            table_meta: Default::default(),
+        })
+        .await;
+
+    print_res(i, "create_table again", &res);
+}
+
+async fn benchmark_get_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u32, i: u32) {
+    let tenant = || format!("tenant-{}-{}", prefix, client_num);
+    let db_name = || format!("db-{}-{}", prefix, client_num);
+    let table_name = || format!("table-{}-{}", prefix, client_num);
+
+    let res = client
+        .get_table(GetTableReq::new(tenant(), db_name(), table_name()))
+        .await;
+
+    print_res(i, "get_table", &res);
 }
 
 fn print_res<D: Debug>(i: u32, typ: impl Display, res: &D) {
