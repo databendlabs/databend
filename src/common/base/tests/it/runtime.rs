@@ -111,7 +111,7 @@ async fn test_runtime_try_spawn_batch() -> Result<()> {
 
     let mut futs = vec![];
     for i in 0..20 {
-        futs.push(move |_| mock_get_page(i));
+        futs.push(mock_get_page(i));
     }
 
     let max_concurrency = Arc::new(Semaphore::new(3));

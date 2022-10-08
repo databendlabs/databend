@@ -24,7 +24,6 @@ use common_exception::Result;
 use tokio::runtime::Builder;
 use tokio::runtime::Handle;
 use tokio::sync::oneshot;
-use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 
@@ -192,33 +191,36 @@ impl Runtime {
         self.handle.block_on(future).flatten()
     }
 
-    // TODO refine doc
     // This function make the futures always run fits the max_concurrent with a Semaphore latch.
     // This is not same as: `futures::stream::iter(futures).buffer_unordered(max_concurrent)`:
-    // `buffer_unordered` should wait the whole batch finished and start the new batch.
-    // `try_spawn_batch` should wait one future finished and start new one.
     // The comparison of them please see https://github.com/BohuTANG/joint
-    pub async fn spawn_batch<FN, F>(
+    pub async fn spawn_batch<F>(
         &self,
         semaphore: Arc<Semaphore>,
-        futures: impl IntoIterator<Item = FN>,
+        futures: impl IntoIterator<Item = F>,
     ) -> Result<Vec<JoinHandle<F::Output>>>
     where
-        FN: FnOnce(OwnedSemaphorePermit) -> F + Send + 'static,
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        let fns = futures.into_iter();
-        let mut handlers = Vec::with_capacity(fns.size_hint().0);
-        for f in fns {
+        let iter = futures.into_iter();
+        let mut handlers =
+            Vec::with_capacity(iter.size_hint().1.unwrap_or_else(|| iter.size_hint().0));
+        for fut in iter {
             let semaphore = semaphore.clone();
+            // acquire permit BEFORE spawn
+            //
             let permit = semaphore.acquire_owned().await.map_err(|e| {
                 ErrorCode::UnexpectedError(format!(
                     "semaphore closed, acquire permit failure. {}",
                     e
                 ))
             })?;
-            let handler = self.handle.spawn(async move { f(permit).await });
+            let handler = self.handle.spawn(async move {
+                // take the ownership of the permit, (implicitly) drop it when task is done
+                let _ = permit;
+                fut.await
+            });
             handlers.push(handler)
         }
 

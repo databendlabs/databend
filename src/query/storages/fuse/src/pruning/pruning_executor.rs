@@ -78,9 +78,9 @@ impl BlockPruner {
         let dal = ctx.get_storage_operator()?;
         let filter_pruner = pruner::new_filter_pruner(ctx, filter_expressions, &schema, dal)?;
 
-        // 2. kick off
+        // 2. setup concurrency controls
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        let max_concurrent_prune = {
+        let max_concurrency = {
             let max_concurrent_prune_setting =
                 ctx.get_settings().get_max_concurrent_prune()? as usize;
             // Prevent us from miss-configured max_concurrent_prune setting, e.g. 0
@@ -104,67 +104,39 @@ impl BlockPruner {
             Some("pruning-worker".to_owned()),
         )?);
 
-        let semaphore = Arc::new(Semaphore::new(max_concurrent_prune));
+        let semaphore = Arc::new(Semaphore::new(max_concurrency));
 
-        // let tasks = segment_locs
-        //    .into_iter()
-        //    .enumerate()
-        //    .map(|(segment_idx, segment_location)| {
-        //        let semaphore = semaphore.clone();
-        //        let limiter = limiter.clone();
-        //        let range_filter_pruner = range_pruner.clone();
-        //        let filter_pruner = filter_pruner.clone();
-        //        let rt = pruning_runtime.clone();
-        //        let ctx = ctx.clone();
-        //        let task = move |permit| {
-        //            // prepare the pruning context
-        //            let pruning_ctx = PruningContext {
-        //                ctx,
-        //                segment_idx,
-        //                segment_location,
-        //                limiter,
-        //                range_filter_pruner,
-        //                filter_pruner: filter_pruner.clone(),
-        //                rt,
-        //                semaphore,
-        //                permit, // move the permit to the pruning task
-        //            };
-        //            // build the segment pruning future
-        //            Self::prune_segment(pruning_ctx)
-        //        };
-        //        task
-        //    });
-        // let join_handlers = pruning_runtime
-        //    .spawn_batch(semaphore.clone(), tasks)
-        //    .await?;
+        // 3. setup pruning context
+        let pruning_ctx = Arc::new(PruningContext {
+            ctx: ctx.clone(),
+            limiter: limiter.clone(),
+            range_pruner: range_pruner.clone(),
+            filter_pruner: filter_pruner.clone(),
+            rt: pruning_runtime.clone(),
+            semaphore: semaphore.clone(),
+        });
 
-        let mut join_handlers = Vec::with_capacity(segment_locs.len());
-        for (segment_idx, segment_location) in segment_locs.into_iter().enumerate() {
-            let permit = Self::acquire_permit(semaphore.clone(), "prune segment").await?;
-            let segment_pruning_fut = {
-                // prepare the pruning context
-                let pruning_ctx = PruningContext {
-                    ctx: ctx.clone(),
-                    segment_idx,
-                    segment_location,
-                    limiter: limiter.clone(),
-                    range_filter_pruner: range_pruner.clone(),
-                    filter_pruner: filter_pruner.clone(),
-                    rt: pruning_runtime.clone(),
-                    semaphore: semaphore.clone(),
-                    permit, // move the permit to the pruning task
-                };
+        // 4. kick off
+        // 4.1 generates the iterator of segment pruning tasks.
+        let tasks = segment_locs
+            .into_iter()
+            .enumerate()
+            .map(|(segment_idx, segment_location)| {
                 // build the segment pruning future
-                Self::prune_segment(pruning_ctx)
-            };
+                // TODO we should return a Result< dyn Future ...> so that during spawn_batch,
+                // we can stop spawning tasks, e.g. if limit-exceed detected
+                Self::prune_segment(pruning_ctx.clone(), segment_idx, segment_location)
+            });
 
-            join_handlers.push(pruning_runtime.try_spawn(segment_pruning_fut)?);
-        }
+        // 4.1 spawns the segment pruning tasks, with concurrency control
+        let join_handlers = pruning_runtime
+            .spawn_batch(semaphore.clone(), tasks)
+            .await?;
 
+        // 4.2 flatten the results
         let metas = Self::join_flatten_result(join_handlers).await?;
 
-        // if there are ordering + limit clause, use topn pruner
-
+        // 5. if there are ordering + limit clause, use topn pruner
         if push_down
             .as_ref()
             .filter(|p| !p.order_by.is_empty() && p.limit.is_some())
@@ -182,27 +154,28 @@ impl BlockPruner {
 
     #[inline]
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn prune_segment(pruning_ctx: PruningContext) -> Result<Vec<(SegmentIndex, BlockMeta)>> {
-        let _ = pruning_ctx.permit;
-        let segment_reader = MetaReaders::segment_info_reader(pruning_ctx.ctx.as_ref());
-
+    async fn prune_segment(
+        pruning_ctx: Arc<PruningContext>,
+        segment_idx: SegmentIndex,
+        segment_location: Location,
+    ) -> Result<Vec<(SegmentIndex, BlockMeta)>> {
         // segment pruning executed concurrently. before read segment info, check if limit already exceeded.
         if pruning_ctx.limiter.exceeded() {
             return Ok(vec![]);
         }
 
-        let segment_idx = pruning_ctx.segment_idx;
+        let segment_reader = MetaReaders::segment_info_reader(pruning_ctx.ctx.as_ref());
 
-        let (seg_loc, ver) = &pruning_ctx.segment_location;
-        let segment_info = segment_reader.read(seg_loc, None, *ver).await?;
+        let (path, ver) = segment_location;
+        let segment_info = segment_reader.read(path, None, ver).await?;
         let mut result = Vec::with_capacity(segment_info.blocks.len());
-        if pruning_ctx.range_filter_pruner.should_keep(
+        if pruning_ctx.range_pruner.should_keep(
             &segment_info.summary.col_stats,
             segment_info.summary.row_count,
         ) {
             result = Self::prune_blocks(&pruning_ctx, segment_idx, &segment_info).await?;
         }
-        Ok::<_, ErrorCode>(result)
+        Ok(result)
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
@@ -212,7 +185,9 @@ impl BlockPruner {
         segment_info: &SegmentInfo,
     ) -> Result<Vec<(SegmentIndex, BlockMeta)>> {
         let mut result = Vec::with_capacity(segment_info.blocks.len());
+
         let mut bloom_pruners = Vec::with_capacity(segment_info.blocks.len());
+
         for (block_idx, block_meta) in segment_info.blocks.iter().enumerate() {
             // prune block using range filter
             if pruning_ctx.limiter.exceeded() {
@@ -221,7 +196,7 @@ impl BlockPruner {
             }
 
             if pruning_ctx
-                .range_filter_pruner
+                .range_pruner
                 .should_keep(&block_meta.col_stats, block_meta.row_count)
             {
                 let filter_pruner = pruning_ctx.filter_pruner.clone();
@@ -265,7 +240,7 @@ impl BlockPruner {
     #[inline]
     #[tracing::instrument(level = "debug", skip_all)]
     async fn join_flatten_result(
-        join_handlers: SegmentsJoint,
+        join_handlers: SegmentPruningHandlers,
     ) -> Result<Vec<(SegmentIndex, BlockMeta)>> {
         let joint = future::try_join_all(join_handlers)
             .instrument(tracing::debug_span!("join_all_filter_segment"))
@@ -296,16 +271,13 @@ impl BlockPruner {
     }
 }
 
-type SegmentsJoint = Vec<JoinHandle<Result<Vec<(SegmentIndex, BlockMeta)>>>>;
+type SegmentPruningHandlers = Vec<JoinHandle<Result<Vec<(SegmentIndex, BlockMeta)>>>>;
 
 pub struct PruningContext {
     ctx: Arc<dyn TableContext>,
-    segment_idx: SegmentIndex,
-    segment_location: Location,
     limiter: LimiterPruner,
-    range_filter_pruner: Arc<dyn RangePruner + Send + Sync>,
+    range_pruner: Arc<dyn RangePruner + Send + Sync>,
     filter_pruner: Arc<dyn Pruner + Send + Sync>,
     rt: Arc<Runtime>,
     semaphore: Arc<Semaphore>,
-    permit: OwnedSemaphorePermit,
 }

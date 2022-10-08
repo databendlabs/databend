@@ -54,12 +54,12 @@ where L: Loader<T> + HasTenantLabel
     /// Load the object at `location`, uses/populates the cache if possible/necessary.
     pub async fn read(
         &self,
-        location: impl AsRef<str>,
+        path: impl AsRef<str>,
         len_hint: Option<u64>,
         version: u64,
     ) -> Result<Arc<T>> {
         match &self.cache {
-            None => self.load(location.as_ref(), len_hint, version).await,
+            None => self.load(path.as_ref(), len_hint, version).await,
             Some(cache) => {
                 let tenant_label = self.loader.tenant_label();
 
@@ -74,16 +74,16 @@ where L: Loader<T> + HasTenantLabel
                     read_bytes: 0,
                 };
 
-                match self.get_by_cache(location.as_ref(), cache) {
+                match self.get_by_cache(path.as_ref(), cache) {
                     Some(item) => {
                         metrics.cache_hit = true;
                         metrics.read_bytes = 0u64;
                         Ok(item)
                     }
                     None => {
-                        let item = self.load(location.as_ref(), len_hint, version).await?;
+                        let item = self.load(path.as_ref(), len_hint, version).await?;
                         let mut cache_guard = cache.write();
-                        cache_guard.put(location.as_ref().to_owned(), item.clone());
+                        cache_guard.put(path.as_ref().to_owned(), item.clone());
                         Ok(item)
                     }
                 }
