@@ -1,28 +1,19 @@
-error: 
-  --> SQL:1:6
-  |
-1 | true AND 1
-  |      ^^^ no overload satisfies `and(Boolean, UInt8)`
-
-has tried possible overloads:
-  and(NULL, Boolean NULL) :: NULL                  : unable to unify `Boolean` with `NULL`
-  and(Boolean NULL, NULL) :: NULL                  : unable to unify `UInt8` with `NULL`
-  and(Boolean, Boolean) :: Boolean                 : unable to unify `UInt8` with `Boolean`
-  and(Boolean NULL, Boolean NULL) :: Boolean NULL  : unable to unify `UInt8` with `Boolean`
+ast            : true AND 1
+raw expr       : and(true, 1_u8)
+checked expr   : and<Boolean, Boolean>(true, CAST(1_u8 AS Boolean))
+optimized expr : true
+output type    : Boolean
+output domain  : Unknown
+output         : true
 
 
-
-error: 
-  --> SQL:1:5
-  |
-1 | NOT NOT 'a'
-  |     ^^^ no overload satisfies `not(String)`
-
-has tried possible overloads:
-  not(NULL) :: NULL                  : unable to unify `String` with `NULL`
-  not(Boolean) :: Boolean            : unable to unify `String` with `Boolean`
-  not(Boolean NULL) :: Boolean NULL  : unable to unify `String` with `Boolean`
-
+ast            : NOT NOT 'a'
+raw expr       : not(not("a"))
+checked expr   : not<Boolean>(not<Boolean>(CAST("a" AS Boolean)))
+optimized expr : true
+output type    : Boolean
+output domain  : Unknown
+output         : true
 
 
 error: 
@@ -36,18 +27,13 @@ has tried possible overloads:
 
 
 
-error: 
-  --> SQL:1:5
-  |
-1 | 'a' and 1
-  |     ^^^ no overload satisfies `and(String, UInt8)`
-
-has tried possible overloads:
-  and(NULL, Boolean NULL) :: NULL                  : unable to unify `String` with `NULL`
-  and(Boolean NULL, NULL) :: NULL                  : unable to unify `String` with `Boolean`
-  and(Boolean, Boolean) :: Boolean                 : unable to unify `String` with `Boolean`
-  and(Boolean NULL, Boolean NULL) :: Boolean NULL  : unable to unify `String` with `Boolean`
-
+ast            : 'a' and 1
+raw expr       : and("a", 1_u8)
+checked expr   : and<Boolean, Boolean>(CAST("a" AS Boolean), CAST(1_u8 AS Boolean))
+optimized expr : true
+output type    : Boolean
+output domain  : Unknown
+output         : true
 
 
 error: 
