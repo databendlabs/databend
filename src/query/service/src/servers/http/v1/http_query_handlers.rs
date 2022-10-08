@@ -193,7 +193,7 @@ async fn query_cancel_handler(
 async fn query_state_handler(
     _ctx: &HttpQueryContext,
     Path(query_id): Path<String>,
-) -> PoemResult<Json<QueryResponse>> {
+) -> PoemResult<impl IntoResponse> {
     let http_query_manager = HttpQueryManager::instance();
     match http_query_manager.get_query(&query_id).await {
         Some(query) => {
@@ -208,7 +208,7 @@ async fn query_state_handler(
 async fn query_page_handler(
     _ctx: &HttpQueryContext,
     Path((query_id, page_no)): Path<(String, usize)>,
-) -> PoemResult<Json<QueryResponse>> {
+) -> PoemResult<impl IntoResponse> {
     let http_query_manager = HttpQueryManager::instance();
     match http_query_manager.get_query(&query_id).await {
         Some(query) => {
@@ -228,7 +228,7 @@ async fn query_page_handler(
 pub(crate) async fn query_handler(
     ctx: &HttpQueryContext,
     Json(req): Json<HttpQueryRequest>,
-) -> PoemResult<Json<QueryResponse>> {
+) -> PoemResult<impl IntoResponse> {
     info!("receive http query: {:?}", req);
     let http_query_manager = HttpQueryManager::instance();
     let sql = req.sql.clone();
