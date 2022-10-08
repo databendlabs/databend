@@ -2141,7 +2141,6 @@ dependencies = [
  "common-exception",
  "common-fuse-meta",
  "common-meta-api",
- "futures-util",
  "once_cell",
  "parking_lot 0.12.1",
 ]
