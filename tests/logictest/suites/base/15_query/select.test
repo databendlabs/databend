@@ -1,5 +1,3 @@
-
-
 statement query T
 select 'Hello, world!';
 

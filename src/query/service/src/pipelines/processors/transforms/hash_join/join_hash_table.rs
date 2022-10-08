@@ -540,26 +540,27 @@ impl HashJoinState for JoinHashTable {
         for chunk_index in 0..chunks.len() {
             let chunk = &mut chunks[chunk_index];
             let mut columns = Vec::with_capacity(chunk.cols.len());
-            let markers = if matches!(
-                self.hash_join_desc.join_type,
-                JoinType::LeftMark | JoinType::RightMark
-            ) {
-                if self.hash_join_desc.join_type == JoinType::RightMark && !has_null {
-                    if let Some(validity) = chunk.cols[0].validity().1 {
-                        if validity.unset_bits() > 0 {
-                            has_null = true;
-                            let mut has_null_ref =
-                                self.hash_join_desc.marker_join_desc.has_null.write();
-                            *has_null_ref = true;
-                        }
-                    }
-                }
-                Self::init_markers(&chunk.cols, chunk.num_rows())
+            let markers = match self.hash_join_desc.join_type {
+                JoinType::LeftMark => Self::init_markers(&chunk.cols, chunk.num_rows())
                     .iter()
                     .map(|x| Some(*x))
-                    .collect()
-            } else {
-                vec![None; chunk.num_rows()]
+                    .collect(),
+                JoinType::RightMark => {
+                    if !has_null {
+                        if let Some(validity) = chunk.cols[0].validity().1 {
+                            if validity.unset_bits() > 0 {
+                                has_null = true;
+                                let mut has_null_ref =
+                                    self.hash_join_desc.marker_join_desc.has_null.write();
+                                *has_null_ref = true;
+                            }
+                        }
+                    }
+                    vec![None; chunk.num_rows()]
+                }
+                _ => {
+                    vec![None; chunk.num_rows()]
+                }
             };
             for col in chunk.cols.iter() {
                 columns.push(col);

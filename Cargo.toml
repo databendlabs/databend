@@ -30,6 +30,7 @@ members = [
     "src/query/config",
     "src/query/catalog",
     "src/query/datablocks",
+    "src/query/sharing",
     "src/query/datavalues",
     "src/query/expression",
     "src/query/formats",
