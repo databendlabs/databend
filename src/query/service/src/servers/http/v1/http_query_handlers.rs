@@ -49,6 +49,9 @@ use crate::sessions::QueryAffect;
 use crate::sessions::SessionType;
 use crate::storages::result::ResultTable;
 
+const HEADER_QUERY_ID: &str = "X-DATABEND-QUERY-ID";
+const HEADER_QUERY_STATE: &str = "X-DATABEND-QUERY-STATE";
+
 pub fn make_page_uri(query_id: &str, page_no: usize) -> String {
     format!("/v1/query/{}/page/{}", query_id, page_no)
 }
@@ -136,6 +139,8 @@ impl QueryResponse {
             kill_uri: Some(make_kill_uri(&id)),
             error: r.state.error.as_ref().map(QueryError::from_error_code),
         })
+        .with_header(HEADER_QUERY_ID, id.clone())
+        .with_header(HEADER_QUERY_STATE, state.state.to_string())
     }
 
     pub(crate) fn fail_to_start_sql(err: &ErrorCode) -> impl IntoResponse {
