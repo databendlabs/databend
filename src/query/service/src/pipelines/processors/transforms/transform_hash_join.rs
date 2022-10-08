@@ -49,6 +49,10 @@ impl Sink for SinkBuildHashTable {
         self.join_state.detach()
     }
 
+    fn interrupt(&self) {
+        self.join_state.interrupt()
+    }
+
     fn consume(&mut self, data_block: DataBlock) -> Result<()> {
         self.join_state.build(data_block)
     }

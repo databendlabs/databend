@@ -15,6 +15,8 @@
 use std::borrow::BorrowMut;
 use std::collections::HashSet;
 use std::fmt::Debug;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -132,6 +134,7 @@ pub struct JoinHashTable {
     pub(crate) row_ptrs: RwLock<Vec<RowPtr>>,
     pub(crate) probe_schema: DataSchemaRef,
     finished_notify: Arc<Notify>,
+    interrupt: Arc<AtomicBool>,
 }
 
 impl JoinHashTable {
@@ -258,6 +261,7 @@ impl JoinHashTable {
             row_ptrs: RwLock::new(vec![]),
             probe_schema: probe_data_schema,
             finished_notify: Arc::new(Notify::new()),
+            interrupt: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -484,6 +488,10 @@ impl HashJoinState for JoinHashTable {
         }
     }
 
+    fn interrupt(&self) {
+        self.interrupt.store(true, Ordering::Release);
+    }
+
     fn attach(&self) -> Result<()> {
         let mut count = self.ref_count.lock().unwrap();
         *count += 1;
@@ -535,9 +543,16 @@ impl HashJoinState for JoinHashTable {
             }};
         }
 
+        let interrupt = self.interrupt.clone();
         let mut chunks = self.row_space.chunks.write().unwrap();
         let mut has_null = false;
         for chunk_index in 0..chunks.len() {
+            if interrupt.load(Ordering::Relaxed) {
+                return Err(ErrorCode::AbortedQuery(
+                    "Aborted query, because the server is shutting down or the query was killed.",
+                ));
+            }
+
             let chunk = &mut chunks[chunk_index];
             let mut columns = Vec::with_capacity(chunk.cols.len());
             let markers = if matches!(

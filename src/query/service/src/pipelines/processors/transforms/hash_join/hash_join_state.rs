@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_pipeline_transforms::processors::transforms::Aborting;
@@ -26,6 +28,8 @@ pub trait HashJoinState: Send + Sync {
 
     /// Probe the hash table and retrieve matched rows as DataBlocks
     fn probe(&self, input: &DataBlock, probe_state: &mut ProbeState) -> Result<Vec<DataBlock>>;
+
+    fn interrupt(&self);
 
     /// Attach to state
     fn attach(&self) -> Result<()>;

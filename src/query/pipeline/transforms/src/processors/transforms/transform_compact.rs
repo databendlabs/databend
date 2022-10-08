@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::collections::VecDeque;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
@@ -27,13 +28,13 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 
+pub type Aborting = Arc<Box<dyn Fn() -> bool + Send + Sync + 'static>>;
+
 pub struct TransformCompact<T: Compactor + Send + 'static> {
     state: ProcessorState,
     compactor: T,
-    aborting: Aborting,
+    aborting: Arc<AtomicBool>,
 }
-
-pub type Aborting = Arc<Box<dyn Fn() -> bool + Send + Sync + 'static>>;
 
 /// Compactor is a trait that defines how to compact blocks.
 pub trait Compactor {
@@ -55,12 +56,10 @@ pub trait Compactor {
 
 impl<T: Compactor + Send + 'static> TransformCompact<T> {
     pub fn try_create(
-        ctx: Arc<dyn TableContext>,
         input_port: Arc<InputPort>,
         output_port: Arc<OutputPort>,
         compactor: T,
     ) -> Result<ProcessorPtr> {
-        let aborting = ctx.get_aborting();
         let state = ProcessorState::Consume(ConsumeState {
             input_port,
             output_port,
@@ -71,7 +70,7 @@ impl<T: Compactor + Send + 'static> TransformCompact<T> {
         Ok(ProcessorPtr::create(Box::new(Self {
             state,
             compactor,
-            aborting: Arc::new(Box::new(move || aborting.load(Ordering::Relaxed))),
+            aborting: Arc::new(AtomicBool::new(false)),
         })))
     }
 
@@ -152,6 +151,10 @@ impl<T: Compactor + Send + 'static> Processor for TransformCompact<T> {
         }
     }
 
+    fn interrupt(&self) {
+        self.aborting.store(true, Ordering::Release);
+    }
+
     fn process(&mut self) -> Result<()> {
         match &mut self.state {
             ProcessorState::Consume(state) => {
@@ -166,6 +169,8 @@ impl<T: Compactor + Send + 'static> Processor for TransformCompact<T> {
             }
             ProcessorState::Compacting(state) => {
                 let aborting = self.aborting.clone();
+                let aborting = Arc::new(Box::new(move || aborting.load(Ordering::Relaxed)));
+
                 let compacted_blocks = self.compactor.compact_final(&state.blocks, aborting)?;
 
                 let mut temp_state = ProcessorState::Finished;

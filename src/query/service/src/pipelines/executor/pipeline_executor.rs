@@ -146,6 +146,7 @@ impl PipelineExecutor {
     pub fn finish(&self, cause: Option<ErrorCode>) {
         *self.finished_error.lock() = cause;
         self.global_tasks_queue.finish(self.workers_condvar.clone());
+        self.graph.interrupt_running_nodes();
         self.finished_notify.notify_waiters();
     }
 
