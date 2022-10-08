@@ -42,7 +42,6 @@ use crate::pruning::topn_pruner;
 
 pub struct BlockPruner;
 
-// TODO move this to somewhere
 pub type SegmentIndex = usize;
 
 impl BlockPruner {
@@ -104,7 +103,40 @@ impl BlockPruner {
             max_threads,
             Some("pruning-worker".to_owned()),
         )?);
+
         let semaphore = Arc::new(Semaphore::new(max_concurrent_prune));
+
+        // let tasks = segment_locs
+        //    .into_iter()
+        //    .enumerate()
+        //    .map(|(segment_idx, segment_location)| {
+        //        let semaphore = semaphore.clone();
+        //        let limiter = limiter.clone();
+        //        let range_filter_pruner = range_pruner.clone();
+        //        let filter_pruner = filter_pruner.clone();
+        //        let rt = pruning_runtime.clone();
+        //        let ctx = ctx.clone();
+        //        let task = move |permit| {
+        //            // prepare the pruning context
+        //            let pruning_ctx = PruningContext {
+        //                ctx,
+        //                segment_idx,
+        //                segment_location,
+        //                limiter,
+        //                range_filter_pruner,
+        //                filter_pruner: filter_pruner.clone(),
+        //                rt,
+        //                semaphore,
+        //                permit, // move the permit to the pruning task
+        //            };
+        //            // build the segment pruning future
+        //            Self::prune_segment(pruning_ctx)
+        //        };
+        //        task
+        //    });
+        // let join_handlers = pruning_runtime
+        //    .spawn_batch(semaphore.clone(), tasks)
+        //    .await?;
 
         let mut join_handlers = Vec::with_capacity(segment_locs.len());
         for (segment_idx, segment_location) in segment_locs.into_iter().enumerate() {

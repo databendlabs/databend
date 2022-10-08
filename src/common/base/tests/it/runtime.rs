@@ -111,11 +111,11 @@ async fn test_runtime_try_spawn_batch() -> Result<()> {
 
     let mut futs = vec![];
     for i in 0..20 {
-        futs.push(mock_get_page(i));
+        futs.push(move |_| mock_get_page(i));
     }
 
     let max_concurrency = Arc::new(Semaphore::new(3));
-    let handlers = runtime.spawn_batch(max_concurrency, futs);
+    let handlers = runtime.spawn_batch(max_concurrency, futs).await?;
     let result = futures::future::try_join_all(handlers).await.unwrap();
     assert_eq!(result.len(), 20);
     Ok(())
