@@ -118,6 +118,10 @@ impl Chunk {
                 &[],
             )),
             Column::Null { len } => Some(MutableBitmap::from_len_zeroed(*len).into()),
+            Column::Nullable(c) => {
+                let inner = Self::cast_column_to_boolean(&c.column)?;
+                Some((&inner) & (&c.validity))
+            }
             _ => None,
         }
     }
