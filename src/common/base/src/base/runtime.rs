@@ -194,7 +194,7 @@ impl Runtime {
     // This function make the futures always run fits the max_concurrent with a Semaphore latch.
     // This is not same as: `futures::stream::iter(futures).buffer_unordered(max_concurrent)`:
     // The comparison of them please see https://github.com/BohuTANG/joint
-    pub async fn spawn_batch<F>(
+    pub async fn try_spawn_batch<F>(
         &self,
         semaphore: Arc<Semaphore>,
         futures: impl IntoIterator<Item = F>,
@@ -209,7 +209,6 @@ impl Runtime {
         for fut in iter {
             let semaphore = semaphore.clone();
             // acquire permit BEFORE spawn
-            //
             let permit = semaphore.acquire_owned().await.map_err(|e| {
                 ErrorCode::UnexpectedError(format!(
                     "semaphore closed, acquire permit failure. {}",

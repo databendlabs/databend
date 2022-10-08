@@ -130,7 +130,7 @@ impl BlockPruner {
 
         // 4.1 spawns the segment pruning tasks, with concurrency control
         let join_handlers = pruning_runtime
-            .spawn_batch(semaphore.clone(), tasks)
+            .try_spawn_batch(semaphore.clone(), tasks)
             .await?;
 
         // 4.2 flatten the results
