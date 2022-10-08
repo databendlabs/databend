@@ -1,8 +1,8 @@
 FROM python:3.10
 
+RUN mkdir /test
 WORKDIR /test
 
-RUN mkdir /test
 COPY *.py /test
 COPY requirements.txt /test
 
