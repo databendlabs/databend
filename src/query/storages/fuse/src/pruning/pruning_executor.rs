@@ -118,22 +118,24 @@ impl BlockPruner {
 
         // 4. kick off
         // 4.1 generates the iterator of segment pruning tasks.
-        let tasks = segment_locs
-            .into_iter()
-            .enumerate()
-            .map(|(segment_idx, segment_location)| {
-                // build the segment pruning future
-                // TODO we should return a Result< dyn Future ...> so that during spawn_batch,
-                // we can stop spawning tasks, e.g. if limit-exceed detected
-                Self::prune_segment(pruning_ctx.clone(), segment_idx, segment_location)
-            });
+        let mut segments = segment_locs.into_iter().enumerate();
+        let tasks = std::iter::from_fn(|| {
+            // pruning tasks are executed concurrently, check if limit exceeded before proceeding
+            if pruning_ctx.limiter.exceeded() {
+                None
+            } else {
+                segments.next().map(|(segment_idx, segment_location)| {
+                    Self::prune_segment(pruning_ctx.clone(), segment_idx, segment_location)
+                })
+            }
+        });
 
-        // 4.1 spawns the segment pruning tasks, with concurrency control
+        // 4.2 spawns the segment pruning tasks, with concurrency control
         let join_handlers = pruning_runtime
             .try_spawn_batch(semaphore.clone(), tasks)
             .await?;
 
-        // 4.2 flatten the results
+        // 4.3 flatten the results
         let metas = Self::join_flatten_result(join_handlers).await?;
 
         // 5. if there are ordering + limit clause, use topn pruner
@@ -159,11 +161,6 @@ impl BlockPruner {
         segment_idx: SegmentIndex,
         segment_location: Location,
     ) -> Result<Vec<(SegmentIndex, BlockMeta)>> {
-        // segment pruning executed concurrently. before read segment info, check if limit already exceeded.
-        if pruning_ctx.limiter.exceeded() {
-            return Ok(vec![]);
-        }
-
         let segment_reader = MetaReaders::segment_info_reader(pruning_ctx.ctx.as_ref());
 
         let (path, ver) = segment_location;

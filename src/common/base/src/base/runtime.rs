@@ -208,7 +208,10 @@ impl Runtime {
             Vec::with_capacity(iter.size_hint().1.unwrap_or_else(|| iter.size_hint().0));
         for fut in iter {
             let semaphore = semaphore.clone();
-            // acquire permit BEFORE spawn
+            // Although async task is rather lightweight, it do consumes resources,
+            // so we acquire a permit BEFORE spawn.
+            // Thus, the `futures` passed into this method is NOT suggested to be "materialized"
+            // iterator, e.g. Vec<..>
             let permit = semaphore.acquire_owned().await.map_err(|e| {
                 ErrorCode::UnexpectedError(format!(
                     "semaphore closed, acquire permit failure. {}",
