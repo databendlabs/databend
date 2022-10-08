@@ -116,6 +116,9 @@ impl Column for NullableColumn {
     }
 
     fn only_null(&self) -> bool {
+        if self.len() == 0 {
+            return false;
+        }
         self.validity.unset_bits() == self.validity.len()
     }
 
