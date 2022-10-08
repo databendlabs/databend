@@ -31,9 +31,9 @@ use opendal::ops::PresignedRequest;
 use opendal::Accessor;
 use opendal::AccessorMetadata;
 use opendal::BytesReader;
-use opendal::DirStreamer;
 use opendal::Layer;
 use opendal::ObjectMetadata;
+use opendal::ObjectStreamer;
 
 use crate::DalMetrics;
 
@@ -146,7 +146,7 @@ impl Accessor for DalContext {
         self.get_inner()?.delete(path, args).await
     }
 
-    async fn list(&self, path: &str, args: OpList) -> Result<DirStreamer> {
+    async fn list(&self, path: &str, args: OpList) -> Result<ObjectStreamer> {
         self.get_inner()?.list(path, args).await
     }
 

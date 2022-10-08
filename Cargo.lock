@@ -610,9 +610,9 @@ dependencies = [
 
 [[package]]
 name = "bincode"
-version = "2.0.0-rc.1"
+version = "2.0.0-rc.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f609ceb2c41b0d0277314a789ef0e7eb14593d5485f7c67320bed3924ebb1b33"
+checksum = "7bb50c5a2ef4b9b1e7ae73e3a73b52ea24b20312d629f9c4df28260b7ad2c3c4"
 dependencies = [
  "bincode_derive",
  "serde",
@@ -620,9 +620,9 @@ dependencies = [
 
 [[package]]
 name = "bincode_derive"
-version = "2.0.0-rc.1"
+version = "2.0.0-rc.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "913287a8f3e00db4c7ae1b87e9b9b8cebd6b89217eaadfc281fa5c897da35dc3"
+checksum = "0a45a23389446d2dd25dc8e73a7a3b3c43522b630cac068927f0649d43d719d2"
 dependencies = [
  "virtue",
 ]
@@ -5279,9 +5279,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.18.2"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0afeab09d50984cc6b89281271548fa008f7224410c392ea441186708bbd930"
+checksum = "a14cec5f8274036de7b3a7a727a647322a30d05dfef2dbb2c2f95bda81a5e39d"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -5289,6 +5289,7 @@ dependencies = [
  "async-trait",
  "backon",
  "base64",
+ "bincode",
  "bytes",
  "flagset",
  "futures",
@@ -6446,9 +6447,9 @@ dependencies = [
 
 [[package]]
 name = "reqsign"
-version = "0.5.0"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c338306df4ba0010b78f1c4469bf034313ad46b2c43020ec448432e5e07fab26"
+checksum = "a082aef1e547f31ddde9db1eb92e983ed92dbd521678709ba2574cf768c919ef"
 dependencies = [
  "anyhow",
  "backon",
@@ -7718,6 +7719,7 @@ dependencies = [
  "itoa 1.0.3",
  "libc",
  "num_threads",
+ "serde",
  "time-macros",
 ]
 
@@ -8143,7 +8145,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.7.3",
+ "rand 0.8.5",
  "static_assertions",
 ]
 
@@ -8373,9 +8375,9 @@ checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 
 [[package]]
 name = "virtue"
-version = "0.0.7"
+version = "0.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "757cfbfe0d17ee6f22fe97e536d463047d451b47cf9d11e2b7d1398b0ef274dd"
+checksum = "7b60dcd6a64dd45abf9bd426970c9843726da7fc08f44cd6fcebf68c21220a63"
 
 [[package]]
 name = "void"
