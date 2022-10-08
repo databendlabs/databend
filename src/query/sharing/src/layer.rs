@@ -33,7 +33,7 @@ use opendal::Layer;
 use opendal::Scheme;
 use reqwest::header::RANGE;
 
-use crate::SharedSinger;
+use crate::SharedSigner;
 
 /// SharedLayer is used to handle databend cloud's sharing logic.
 ///
@@ -56,12 +56,12 @@ use crate::SharedSinger;
 /// ```
 #[derive(Debug, Clone)]
 pub struct SharedLayer {
-    signer: SharedSinger,
+    signer: SharedSigner,
 }
 
 impl SharedLayer {
     /// Create a new SharedLayer.
-    pub fn new(signer: SharedSinger) -> Self {
+    pub fn new(signer: SharedSigner) -> Self {
         Self { signer }
     }
 }
@@ -77,7 +77,7 @@ impl Layer for SharedLayer {
 
 #[derive(Debug)]
 struct SharedAccessor {
-    signer: SharedSinger,
+    signer: SharedSigner,
     client: HttpClient,
 }
 

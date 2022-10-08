@@ -30,7 +30,7 @@ use opendal::http_util::HttpClient;
 use opendal::ops::Operation;
 use opendal::ops::PresignedRequest;
 
-/// SharedSinger is used to track presign request, and it's response.
+/// SharedSigner is used to track presign request, and it's response.
 ///
 /// There is an internal cache about presign request. Getting an expired
 /// request will get `None`. Please sign it again.
@@ -44,14 +44,14 @@ pub struct SharedSigner {
 
 impl Debug for SharedSigner {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SharedSinger")
+        f.debug_struct("SharedSigner")
             .field("endpoint", &self.endpoint)
             .finish_non_exhaustive()
     }
 }
 
 impl SharedSigner {
-    /// Create a new SharedSinger.
+    /// Create a new SharedSigner.
     pub fn new(endpoint: &str, token: &str) -> Self {
         let cache = Cache::builder()
             // Databend Cloud Presign will expire after 3600s (1 hour).

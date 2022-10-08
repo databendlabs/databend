@@ -17,4 +17,4 @@
 mod layer;
 pub use layer::SharedLayer;
 mod signer;
-pub use signer::SharedSinger;
+pub use signer::SharedSigner;
