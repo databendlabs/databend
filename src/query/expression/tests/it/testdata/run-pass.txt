@@ -16,24 +16,6 @@ output domain  : {FALSE}
 output         : false
 
 
-ast            : CAST('x' AS BOOLEAN)
-raw expr       : CAST("x" AS Boolean)
-checked expr   : CAST("x" AS Boolean)
-optimized expr : true
-output type    : Boolean
-output domain  : Unknown
-output         : true
-
-
-ast            : CAST(0 AS BOOLEAN)
-raw expr       : CAST(0_u8 AS Boolean)
-checked expr   : CAST(0_u8 AS Boolean)
-optimized expr : false
-output type    : Boolean
-output domain  : Unknown
-output         : false
-
-
 ast            : null AND false
 raw expr       : and(NULL, false)
 checked expr   : and<NULL, Boolean NULL>(NULL, CAST(false AS Boolean NULL))

@@ -61,8 +61,6 @@ pub fn test_pass() {
 
     run_ast(&mut file, "true AND false", &[]);
     run_ast(&mut file, "CAST(false AS BOOLEAN NULL)", &[]);
-    run_ast(&mut file, "CAST('x' AS BOOLEAN)", &[]);
-    run_ast(&mut file, "CAST(0 AS BOOLEAN)", &[]);
     run_ast(&mut file, "null AND false", &[]);
     run_ast(&mut file, "plus(a, 10)", &[(
         "a",

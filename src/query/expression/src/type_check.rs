@@ -396,7 +396,6 @@ pub fn can_auto_cast_to(src_ty: &DataType, dest_ty: &DataType) -> bool {
             || *dest_num_ty == NumberDataType::Float64
             || src_num_ty.can_lossless_cast_to(*dest_num_ty)
         }
-        (DataType::Number(_), DataType::Boolean) | (DataType::String, DataType::Boolean) => true,
         (_, DataType::Variant) => true,
         _ => false,
     }

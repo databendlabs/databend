@@ -43,7 +43,6 @@ use crate::values::Column;
 use crate::values::ColumnBuilder;
 use crate::values::Scalar;
 use crate::values::Value;
-use crate::with_number_mapped_type;
 use crate::with_number_type;
 use crate::ScalarRef;
 
@@ -205,15 +204,6 @@ impl<'a> Evaluator<'a> {
                 Ok(Scalar::Number(new_number))
             }
 
-            (Scalar::Number(num), DataType::Boolean) => {
-                with_number_mapped_type!(|SRC_TYPE| match num {
-                    NumberScalar::SRC_TYPE(value) =>
-                        Ok(Scalar::Boolean(value != SRC_TYPE::default())),
-                })
-            }
-
-            (Scalar::String(val), DataType::Boolean) => Ok(Scalar::Boolean(!val.is_empty())),
-
             // identical types
             (scalar @ Scalar::Null, DataType::Null)
             | (scalar @ Scalar::EmptyArray, DataType::EmptyArray)
@@ -318,20 +308,6 @@ impl<'a> Evaluator<'a> {
                     }
                 });
                 Ok(Column::Number(new_column))
-            }
-
-            (Column::Number(col), DataType::Boolean) => {
-                with_number_mapped_type!(|NUM_TYPE| match col {
-                    NumberColumn::NUM_TYPE(col) => {
-                        Ok(Column::Boolean(
-                            col.iter().map(|x| x != &NUM_TYPE::default()).collect(),
-                        ))
-                    }
-                })
-            }
-
-            (Column::String(col), DataType::Boolean) => {
-                Ok(Column::Boolean(col.iter().map(|x| !x.is_empty()).collect()))
             }
 
             // identical types
@@ -454,28 +430,6 @@ impl<'a> Evaluator<'a> {
                         })
                     }
                 })
-            }
-
-            (Column::Number(col), DataType::Boolean) => {
-                with_number_mapped_type!(|NUM_TYPE| match col {
-                    NumberColumn::NUM_TYPE(col) => {
-                        let new_col = Column::Boolean(
-                            col.iter().map(|x| x != &NUM_TYPE::default()).collect(),
-                        );
-                        Column::Nullable(Box::new(NullableColumn {
-                            validity: constant_bitmap(true, new_col.len()).into(),
-                            column: new_col,
-                        }))
-                    }
-                })
-            }
-
-            (Column::String(col), DataType::Boolean) => {
-                let new_col = Column::Boolean(col.iter().map(|x| !x.is_empty()).collect());
-                Column::Nullable(Box::new(NullableColumn {
-                    validity: constant_bitmap(true, new_col.len()).into(),
-                    column: new_col,
-                }))
             }
 
             // identical types
