@@ -70,18 +70,24 @@ fn build_proto() -> Result<()> {
             format!("protoc failed: {}", String::from_utf8_lossy(&output.stderr)),
         ));
     };
-    // Ref: https://github.com/datafuselabs/databend/issues/8035
-    if version < Version::new(3, 15, 0) {
-        return Err(Error::new(
-            ErrorKind::Other,
-            format!(
-                "protoc version is outdated, expect: >= 3.15.0, actual: {version}, reason: need allow_proto3_optional"
-            ),
-        ));
-    }
 
     let mut config = prost_build::Config::new();
     config.btree_map(["."]);
+
+    // Version before 3.12 doesn't support allow_proto3_optional
+    if version < Version::new(3, 12, 0) {
+        return Err(Error::new(
+            ErrorKind::Other,
+            format!(
+                "protoc version is outdated, expect: >= 3.15.0, actual: {version}, reason: need feature experimental_allow_proto3_optional"
+            ),
+        ));
+    }
+    // allow_proto3_optional has been enabled by default since 3.15.0
+    if version < Version::new(3, 15, 0) {
+        config.protoc_arg("--experimental_allow_proto3_optional");
+    }
+
     tonic_build::configure()
         .type_attribute("IntervalKind", "#[derive(num_derive::FromPrimitive)]")
         .type_attribute(
