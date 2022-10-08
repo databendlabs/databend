@@ -45,9 +45,6 @@ pub struct BlockPruner;
 // TODO move this to somewhere
 pub type SegmentIndex = usize;
 
-// TODO
-// investigate that if simple "select count() from t" calls table::read_partitions (can be avoided)
-
 impl BlockPruner {
     // prune blocks by utilizing min_max index and filter, according to the pushdowns
     #[tracing::instrument(level = "debug", skip(schema, ctx), fields(ctx.id = ctx.get_id().as_str()))]

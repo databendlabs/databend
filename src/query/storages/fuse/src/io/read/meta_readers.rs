@@ -36,7 +36,7 @@ use super::versioned_reader::VersionedReader;
 /// of an [BufReader] can be deferred or avoided (e.g. if hits cache).
 #[async_trait::async_trait]
 pub trait BytesReaderProvider {
-    async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BytesReader>;
+    async fn bytes_reader(&self, path: &str, len: Option<u64>) -> Result<BytesReader>;
 }
 
 pub type SegmentInfoReader<'a> = CachedReader<SegmentInfo, LoaderWrapper<&'a dyn TableContext>>;
@@ -86,7 +86,7 @@ where T: BytesReaderProvider + Sync + Send
         version: u64,
     ) -> Result<TableSnapshot> {
         let version = SnapshotVersion::try_from(version)?;
-        let reader = self.0.buf_reader(key, length_hint).await?;
+        let reader = self.0.bytes_reader(key, length_hint).await?;
         version.read(reader).await
     }
 }
@@ -97,14 +97,14 @@ where T: BytesReaderProvider + Sync + Send
 {
     async fn load(&self, key: &str, length_hint: Option<u64>, version: u64) -> Result<SegmentInfo> {
         let version = SegmentInfoVersion::try_from(version)?;
-        let reader = self.0.buf_reader(key, length_hint).await?;
+        let reader = self.0.bytes_reader(key, length_hint).await?;
         version.read(reader).await
     }
 }
 
 #[async_trait::async_trait]
 impl BytesReaderProvider for &dyn TableContext {
-    async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BytesReader> {
+    async fn bytes_reader(&self, path: &str, len: Option<u64>) -> Result<BytesReader> {
         let operator = self.get_storage_operator()?;
         let object = operator.object(path);
 
@@ -124,8 +124,8 @@ impl BytesReaderProvider for &dyn TableContext {
 
 #[async_trait::async_trait]
 impl BytesReaderProvider for Arc<dyn TableContext> {
-    async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BytesReader> {
-        self.as_ref().buf_reader(path, len).await
+    async fn bytes_reader(&self, path: &str, len: Option<u64>) -> Result<BytesReader> {
+        self.as_ref().bytes_reader(path, len).await
     }
 }
 
