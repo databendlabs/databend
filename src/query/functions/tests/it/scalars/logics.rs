@@ -51,28 +51,71 @@ fn test_logic_and_function() -> Result<()> {
         ScalarFunctionTest {
             name: "and",
             columns: vec![
-                Series::from_data(vec![true, true, true, false]),
-                Series::from_data(vec![true, false, true, true]),
+                Series::from_data(vec![true, true, false, false]),
+                Series::from_data(vec![true, false, true, false]),
             ],
-            expect: Series::from_data(vec![true, false, true, false]),
+            expect: Series::from_data(vec![true, false, false, false]),
             error: "",
         },
         ScalarFunctionTest {
-            name: "and-null",
+            name: "and-left-nullable",
             columns: vec![
-                Series::from_data(vec![None, Some(true), Some(true), Some(false)]),
-                Series::from_data(vec![true, false, true, true]),
+                Series::from_data(vec![
+                    Some(true),
+                    Some(true),
+                    Some(false),
+                    Some(false),
+                    None,
+                    None,
+                ]),
+                Series::from_data(vec![true, false, true, false, true, false]),
             ],
-            expect: Series::from_data(vec![None, Some(false), Some(true), Some(false)]),
+            expect: Series::from_data(vec![
+                Some(true),
+                Some(false),
+                Some(false),
+                Some(false),
+                None,
+                Some(false),
+            ]),
             error: "",
         },
         ScalarFunctionTest {
-            name: "and-null",
+            name: "and-right-nullable",
             columns: vec![
-                Series::from_data(vec![None, Some(true), Some(false)]),
-                Arc::new(NullColumn::new(3)),
+                Series::from_data(vec![true, false, true, false, true, false]),
+                Series::from_data(vec![
+                    Some(true),
+                    Some(true),
+                    Some(false),
+                    Some(false),
+                    None,
+                    None,
+                ]),
             ],
-            expect: Series::from_data(vec![None, None, Some(false)]),
+            expect: Series::from_data(vec![
+                Some(true),
+                Some(false),
+                Some(false),
+                Some(false),
+                None,
+                Some(false),
+            ]),
+            error: "",
+        },
+        ScalarFunctionTest {
+            name: "and-both-nullable",
+            columns: vec![
+                Series::from_data(vec![Some(true), Some(true), Some(false), Some(false), None]),
+                Series::from_data(vec![Some(true), Some(false), Some(true), Some(false), None]),
+            ],
+            expect: Series::from_data(vec![
+                Some(true),
+                Some(false),
+                Some(false),
+                Some(false),
+                None,
+            ]),
             error: "",
         },
     ];
@@ -85,32 +128,68 @@ fn test_logic_or_function() -> Result<()> {
         ScalarFunctionTest {
             name: "or",
             columns: vec![
-                Series::from_data(vec![true, true, true, false]),
+                Series::from_data(vec![true, true, false, false]),
                 Series::from_data(vec![true, false, true, false]),
             ],
             expect: Series::from_data(vec![true, true, true, false]),
             error: "",
         },
         ScalarFunctionTest {
-            name: "or-null",
+            name: "or-left-nullable",
             columns: vec![
-                Series::from_data(vec![None, None, None, Some(false), Some(false)]),
-                Series::from_data(vec![Some(true), Some(false), None, Some(true), Some(false)]),
+                Series::from_data(vec![
+                    Some(true),
+                    Some(true),
+                    Some(false),
+                    Some(false),
+                    None,
+                    None,
+                ]),
+                Series::from_data(vec![true, false, true, false, true, false]),
             ],
-            expect: Series::from_data(vec![Some(true), None, None, Some(true), Some(false)]),
+            expect: Series::from_data(vec![
+                Some(true),
+                Some(true),
+                Some(true),
+                Some(false),
+                Some(true),
+                None,
+            ]),
             error: "",
         },
         ScalarFunctionTest {
-            name: "or-null",
+            name: "or-right-nullable",
             columns: vec![
-                Arc::new(NullColumn::new(4)),
-                Series::from_data(vec![Some(true), None, None, Some(false)]),
+                Series::from_data(vec![true, false, true, false, true, false]),
+                Series::from_data(vec![
+                    Some(true),
+                    Some(true),
+                    Some(false),
+                    Some(false),
+                    None,
+                    None,
+                ]),
             ],
-            expect: Series::from_data(vec![Some(true), None, None, None]),
+            expect: Series::from_data(vec![
+                Some(true),
+                Some(true),
+                Some(true),
+                Some(false),
+                Some(true),
+                None,
+            ]),
+            error: "",
+        },
+        ScalarFunctionTest {
+            name: "or-both-nullable",
+            columns: vec![
+                Series::from_data(vec![Some(true), Some(true), Some(false), Some(false), None]),
+                Series::from_data(vec![Some(true), Some(false), Some(true), Some(false), None]),
+            ],
+            expect: Series::from_data(vec![Some(true), Some(true), Some(true), Some(false), None]),
             error: "",
         },
     ];
-
     test_scalar_functions("or", &tests)
 }
 

@@ -21,7 +21,6 @@ use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_base::base::GlobalIORuntime;
-use common_base::base::TrySpawn;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -164,7 +163,6 @@ impl Interpreter for InsertInterpreterV2 {
                         _ => unreachable!(),
                     };
 
-                    table1.get_table_info();
                     let catalog = self.plan.catalog.clone();
                     let is_distributed_plan = select_plan.is_distributed_plan();
 
@@ -221,18 +219,9 @@ impl Interpreter for InsertInterpreterV2 {
                         if may_error.is_none() {
                             let append_entries = ctx.consume_precommit_blocks();
                             // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
-                            let commit_handle = GlobalIORuntime::instance().spawn(async move {
+                            return GlobalIORuntime::instance().block_on(async move {
                                 table.commit_insertion(ctx, append_entries, overwrite).await
                             });
-
-                            return match futures::executor::block_on(commit_handle) {
-                                Ok(Ok(_)) => Ok(()),
-                                Ok(Err(error)) => Err(error),
-                                Err(cause) => Err(ErrorCode::PanicError(format!(
-                                    "Maybe panic while in commit insert. {}",
-                                    cause
-                                ))),
-                            };
                         }
 
                         Err(may_error.as_ref().unwrap().clone())

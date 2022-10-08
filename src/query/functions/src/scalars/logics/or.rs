@@ -27,7 +27,7 @@ use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
 impl_logic_expression!(LogicOrExpression, |, |lhs: bool, rhs: bool, lhs_v: bool, rhs_v: bool| -> (bool, bool) {
-    (lhs | rhs,  (lhs_v & rhs_v) | (lhs | rhs))
+    (lhs | rhs,  (lhs_v & rhs_v) | (lhs_v & lhs) | (rhs_v & rhs))
 });
 
 #[derive(Clone)]

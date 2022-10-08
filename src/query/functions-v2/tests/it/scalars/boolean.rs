@@ -16,10 +16,20 @@ use std::io::Write;
 
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
 use common_expression::Column;
+use common_expression::ColumnFrom;
 use goldenfile::Mint;
 
 use super::run_ast;
+
+fn one_null_column() -> Vec<(&'static str, DataType, Column)> {
+    vec![(
+        "a",
+        DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
+        Column::from_data_with_validity(vec![0_u8], vec![false]),
+    )]
+}
 
 #[test]
 fn test_boolean() {
@@ -39,6 +49,19 @@ fn test_and(file: &mut impl Write) {
     run_ast(file, "false AND false", &[]);
     run_ast(file, "false AND null", &[]);
     run_ast(file, "false AND true", &[]);
+
+    run_ast(file, "(a < 1) AND (a < 1)", one_null_column().as_slice()); // NULL(false)  AND NULL(false)
+    run_ast(file, "(a > 1) AND (a < 1)", one_null_column().as_slice()); // NULL(false)  AND NULL(true)
+    run_ast(file, "(a < 1) AND (a > 1)", one_null_column().as_slice()); // NULL(true)   AND NULL(false)
+    run_ast(file, "(a < 1) AND (a < 1)", one_null_column().as_slice()); // NULL(true)   AND NULL(true)
+    run_ast(file, "(a > 1) AND (0 > 1)", one_null_column().as_slice()); // NULL(false)  AND false
+    run_ast(file, "(a > 1) AND (0 < 1)", one_null_column().as_slice()); // NULL(false)  AND true
+    run_ast(file, "(a < 1) AND (0 > 1)", one_null_column().as_slice()); // NULL(true)   AND false
+    run_ast(file, "(a < 1) AND (0 < 1)", one_null_column().as_slice()); // NULL(true)   AND true
+    run_ast(file, "(0 > 1) AND (a > 1)", one_null_column().as_slice()); // false        AND NULL(false)
+    run_ast(file, "(0 > 1) AND (a < 1)", one_null_column().as_slice()); // false        AND NULL(true)
+    run_ast(file, "(0 < 1) AND (a > 1)", one_null_column().as_slice()); // true         AND NULL(false)
+    run_ast(file, "(0 < 1) AND (a < 1)", one_null_column().as_slice()); // true         AND NULL(true)
 }
 
 fn test_not(file: &mut impl Write) {
@@ -71,6 +94,19 @@ fn test_not(file: &mut impl Write) {
 fn test_or(file: &mut impl Write) {
     run_ast(file, "true OR false", &[]);
     run_ast(file, "null OR false", &[]);
+
+    run_ast(file, "(a < 1) OR (a < 1)", one_null_column().as_slice()); // NULL(false)  OR NULL(false)
+    run_ast(file, "(a > 1) OR (a < 1)", one_null_column().as_slice()); // NULL(false)  OR NULL(true)
+    run_ast(file, "(a < 1) OR (a > 1)", one_null_column().as_slice()); // NULL(true)   OR NULL(false)
+    run_ast(file, "(a < 1) OR (a < 1)", one_null_column().as_slice()); // NULL(true)   OR NULL(true)
+    run_ast(file, "(a > 1) OR (0 > 1)", one_null_column().as_slice()); // NULL(false)  OR false
+    run_ast(file, "(a > 1) OR (0 < 1)", one_null_column().as_slice()); // NULL(false)  OR true
+    run_ast(file, "(a < 1) OR (0 > 1)", one_null_column().as_slice()); // NULL(true)   OR false
+    run_ast(file, "(a < 1) OR (0 < 1)", one_null_column().as_slice()); // NULL(true)   OR true
+    run_ast(file, "(0 > 1) OR (a > 1)", one_null_column().as_slice()); // false        OR NULL(false)
+    run_ast(file, "(0 > 1) OR (a < 1)", one_null_column().as_slice()); // false        OR NULL(true)
+    run_ast(file, "(0 < 1) OR (a > 1)", one_null_column().as_slice()); // true         OR NULL(false)
+    run_ast(file, "(0 < 1) OR (a < 1)", one_null_column().as_slice()); // true         OR NULL(true)
 }
 
 fn test_xor(file: &mut impl Write) {

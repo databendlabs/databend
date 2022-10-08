@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::fmt::Debug;
 use std::io::Cursor;
 use std::io::ErrorKind;
@@ -33,15 +32,14 @@ use common_meta_sled_store::openraft::storage::LogState;
 use common_meta_sled_store::openraft::EffectiveMembership;
 use common_meta_sled_store::openraft::ErrorSubject;
 use common_meta_sled_store::openraft::ErrorVerb;
+use common_meta_sled_store::openraft::Membership;
 use common_meta_sled_store::openraft::StateMachineChanges;
-use common_meta_sled_store::openraft::StorageHelper;
 use common_meta_types::error_context::WithContext;
 use common_meta_types::AppliedState;
 use common_meta_types::Endpoint;
 use common_meta_types::LogEntry;
 use common_meta_types::MetaError;
 use common_meta_types::MetaNetworkError;
-use common_meta_types::MetaResult;
 use common_meta_types::MetaStartupError;
 use common_meta_types::MetaStorageError;
 use common_meta_types::Node;
@@ -170,6 +168,63 @@ impl RaftStoreBare {
     /// Get a handle to the state machine for testing purposes.
     pub async fn get_state_machine(&self) -> RwLockWriteGuard<'_, StateMachine> {
         self.state_machine.write().await
+    }
+
+    #[tracing::instrument(level = "debug", skip_all, fields(id=self.id))]
+    async fn do_build_snapshot(
+        &self,
+    ) -> Result<
+        openraft::storage::Snapshot<
+            <RaftStoreBare as RaftStorage<LogEntry, AppliedState>>::SnapshotData,
+        >,
+        StorageError,
+    > {
+        // NOTE: building snapshot is guaranteed to be serialized called by RaftCore.
+
+        // 1. Take a serialized snapshot
+
+        let (snap, last_applied_log, snapshot_id) = match self
+            .state_machine
+            .write()
+            .await
+            .build_snapshot()
+            .map_to_sto_err(ErrorSubject::StateMachine, ErrorVerb::Read)
+        {
+            Err(err) => {
+                raft_metrics::storage::incr_raft_storage_fail("build_snapshot", false);
+                return Err(err);
+            }
+            Ok(r) => r,
+        };
+
+        let data = serde_json::to_vec(&snap)
+            .map_err(MetaStorageError::from)
+            .map_to_sto_err(ErrorSubject::StateMachine, ErrorVerb::Read)?;
+
+        let snapshot_size = data.len();
+
+        let snap_meta = SnapshotMeta {
+            last_log_id: last_applied_log,
+            snapshot_id,
+        };
+
+        let snapshot = Snapshot {
+            meta: snap_meta.clone(),
+            data: data.clone(),
+        };
+
+        // Update the snapshot first.
+        {
+            let mut current_snapshot = self.current_snapshot.write().await;
+            *current_snapshot = Some(snapshot);
+        }
+
+        info!(snapshot_size = snapshot_size, "log compaction complete");
+
+        Ok(openraft::storage::Snapshot {
+            meta: snap_meta,
+            snapshot: Box::new(Cursor::new(data)),
+        })
     }
 
     /// Install a snapshot to build a state machine from it and replace the old state machine with the new one.
@@ -430,54 +485,7 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
     async fn build_snapshot(
         &self,
     ) -> Result<openraft::storage::Snapshot<Self::SnapshotData>, StorageError> {
-        // NOTE: do_log_compaction is guaranteed to be serialized called by RaftCore.
-
-        // TODO(xp): add test of small chunk snapshot transfer and installation
-
-        // 1. Take a serialized snapshot
-
-        let (snap, last_applied_log, snapshot_id) = match self
-            .state_machine
-            .write()
-            .await
-            .build_snapshot()
-            .map_to_sto_err(ErrorSubject::StateMachine, ErrorVerb::Read)
-        {
-            Err(err) => {
-                raft_metrics::storage::incr_raft_storage_fail("build_snapshot", false);
-                return Err(err);
-            }
-            Ok(r) => r,
-        };
-
-        let data = serde_json::to_vec(&snap)
-            .map_err(MetaStorageError::from)
-            .map_to_sto_err(ErrorSubject::StateMachine, ErrorVerb::Read)?;
-
-        let snapshot_size = data.len();
-
-        let snap_meta = SnapshotMeta {
-            last_log_id: last_applied_log,
-            snapshot_id,
-        };
-
-        let snapshot = Snapshot {
-            meta: snap_meta.clone(),
-            data: data.clone(),
-        };
-
-        // Update the snapshot first.
-        {
-            let mut current_snapshot = self.current_snapshot.write().await;
-            *current_snapshot = Some(snapshot);
-        }
-
-        info!(snapshot_size = snapshot_size, "log compaction complete");
-
-        Ok(openraft::storage::Snapshot {
-            meta: snap_meta,
-            snapshot: Box::new(Cursor::new(data)),
-        })
+        self.do_build_snapshot().await
     }
 
     #[tracing::instrument(level = "debug", skip(self), fields(id=self.id))]
@@ -640,52 +648,35 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
 }
 
 impl RaftStoreBare {
-    pub async fn get_node(&self, node_id: &NodeId) -> MetaResult<Option<Node>> {
+    pub async fn get_node(&self, node_id: &NodeId) -> Result<Option<Node>, MetaError> {
         let sm = self.state_machine.read().await;
 
-        sm.get_node(node_id)
+        let n = sm.get_node(node_id)?;
+        Ok(n)
     }
 
-    pub async fn get_voters(&self) -> MetaResult<Vec<Node>> {
+    /// Return a list of nodes for which the `predicate` returns true.
+    pub async fn get_nodes(
+        &self,
+        predicate: impl Fn(&Membership, &NodeId) -> bool,
+    ) -> Result<Vec<Node>, MetaStorageError> {
         let sm = self.state_machine.read().await;
-        let ms = StorageHelper::new(self)
-            .get_membership()
-            .await
-            .expect("get membership config");
+        let ms = sm.get_membership()?;
 
-        match ms {
-            Some(membership) => {
-                let nodes = sm.nodes().range_kvs(..).expect("get nodes failed");
-                let voters = nodes
-                    .into_iter()
-                    .filter(|(node_id, _)| membership.membership.contains(node_id))
-                    .map(|(_, node)| node)
-                    .collect();
-                Ok(voters)
-            }
-            None => Ok(vec![]),
-        }
-    }
+        let membership = match ms {
+            Some(membership) => membership.membership,
+            None => return Ok(vec![]),
+        };
 
-    pub async fn get_non_voters(&self) -> MetaResult<Vec<Node>> {
-        let sm = self.state_machine.read().await;
-        let ms = StorageHelper::new(self)
-            .get_membership()
-            .await
-            .expect("get membership config");
+        let nodes = sm.nodes().range_kvs(..)?;
 
-        match ms {
-            Some(membership) => {
-                let nodes = sm.nodes().range_kvs(..).expect("get nodes failed");
-                let non_voters = nodes
-                    .into_iter()
-                    .filter(|(node_id, _)| !membership.membership.contains(node_id))
-                    .map(|(_, node)| node)
-                    .collect();
-                Ok(non_voters)
-            }
-            None => Ok(vec![]),
-        }
+        let ns = nodes
+            .into_iter()
+            .filter(|(node_id, _)| predicate(&membership, node_id))
+            .map(|(_, node)| node)
+            .collect();
+
+        Ok(ns)
     }
 
     pub async fn get_node_endpoint(&self, node_id: &NodeId) -> Result<Endpoint, MetaError> {
@@ -696,37 +687,5 @@ impl RaftStoreBare {
             .ok_or_else(|| MetaNetworkError::GetNodeAddrError(format!("node id: {}", node_id)))?;
 
         Ok(endpoint)
-    }
-
-    /// A non-voter is a node stored in raft store, but is not configured as a voter in the raft group.
-    pub async fn list_non_voters(&self) -> HashSet<NodeId> {
-        // TODO(xp): consistency
-        let mut rst = HashSet::new();
-
-        let membership = {
-            let sm = self.state_machine.read().await;
-            sm.get_membership().expect("fail to load membership")
-        };
-
-        let membership = match membership {
-            None => {
-                return HashSet::new();
-            }
-            Some(x) => x,
-        };
-
-        let node_ids = {
-            let sm = self.state_machine.read().await;
-            let sm_nodes = sm.nodes();
-            sm_nodes.range_keys(..).expect("fail to list nodes")
-        };
-
-        for node_id in node_ids {
-            // it has been added into this cluster and is not a voter.
-            if !membership.membership.contains(&node_id) {
-                rst.insert(node_id);
-            }
-        }
-        rst
     }
 }

@@ -255,9 +255,14 @@ impl HashJoin {
                 fields.clear();
                 fields = self.build.output_schema()?.fields().clone();
             }
-            JoinType::Mark => {
+            JoinType::LeftMark | JoinType::RightMark => {
                 fields.clear();
-                fields = self.build.output_schema()?.fields().clone();
+                let outer_table = if self.join_type == JoinType::RightMark {
+                    &self.probe
+                } else {
+                    &self.build
+                };
+                fields = outer_table.output_schema()?.fields().clone();
                 let name = if let Some(idx) = self.marker_index {
                     idx.to_string()
                 } else {

@@ -37,7 +37,7 @@ fn test_build_array() {
     for s in sources {
         let value = parse_value(s.as_bytes()).unwrap();
         expect_array.push(value.clone());
-        value.to_vec(&mut buf).unwrap();
+        value.to_vec(&mut buf);
         offsets.push(buf.len());
     }
     let mut values = Vec::with_capacity(offsets.len());
@@ -49,7 +49,7 @@ fn test_build_array() {
 
     let expect_value = Value::Array(expect_array);
     let mut expect_buf: Vec<u8> = Vec::new();
-    expect_value.to_vec(&mut expect_buf).unwrap();
+    expect_value.to_vec(&mut expect_buf);
 
     let mut arr_buf = Vec::new();
     build_array(values, &mut arr_buf).unwrap();
@@ -85,7 +85,7 @@ fn test_build_object() {
         let value = parse_value(s.as_bytes()).unwrap();
         expect_object.insert(key.clone(), value.clone());
 
-        value.to_vec(&mut buf).unwrap();
+        value.to_vec(&mut buf);
         offsets.push(buf.len());
     }
 
@@ -98,7 +98,7 @@ fn test_build_object() {
 
     let expect_value = Value::Object(expect_object);
     let mut expect_buf: Vec<u8> = Vec::new();
-    expect_value.to_vec(&mut expect_buf).unwrap();
+    expect_value.to_vec(&mut expect_buf);
 
     let mut obj_buf = Vec::new();
     build_object(values, &mut obj_buf).unwrap();
@@ -178,9 +178,9 @@ fn test_compare() {
     let mut rbuf: Vec<u8> = Vec::new();
     for (l, r, expect) in sources {
         let lvalue = parse_value(l.as_bytes()).unwrap();
-        lvalue.to_vec(&mut lbuf).unwrap();
+        lvalue.to_vec(&mut lbuf);
         let rvalue = parse_value(r.as_bytes()).unwrap();
-        rvalue.to_vec(&mut rbuf).unwrap();
+        rvalue.to_vec(&mut rbuf);
 
         let res = compare(&lbuf, &rbuf).unwrap();
         assert_eq!(res, expect);

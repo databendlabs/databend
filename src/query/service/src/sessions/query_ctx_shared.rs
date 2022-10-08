@@ -22,6 +22,7 @@ use std::sync::Weak;
 use common_base::base::Progress;
 use common_base::base::Runtime;
 use common_contexts::DalContext;
+use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::UserInfo;
@@ -79,6 +80,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) catalog_manager: Arc<CatalogManager>,
     pub(in crate::sessions) storage_operator: StorageOperator,
     pub(in crate::sessions) executor: Arc<RwLock<Weak<PipelineExecutor>>>,
+    pub(in crate::sessions) precommit_blocks: Arc<RwLock<Vec<DataBlock>>>,
 }
 
 impl QueryContextShared {
@@ -108,6 +110,7 @@ impl QueryContextShared {
             auth_manager: AuthMgr::create(config).await?,
             affect: Arc::new(Mutex::new(None)),
             executor: Arc::new(RwLock::new(Weak::new())),
+            precommit_blocks: Arc::new(RwLock::new(vec![])),
         }))
     }
 
@@ -296,5 +299,18 @@ impl QueryContextShared {
     pub fn set_executor(&self, weak_ptr: Weak<PipelineExecutor>) {
         let mut executor = self.executor.write();
         *executor = weak_ptr;
+    }
+
+    pub fn push_precommit_block(&self, block: DataBlock) {
+        let mut blocks = self.precommit_blocks.write();
+        blocks.push(block);
+    }
+
+    pub fn consume_precommit_blocks(&self) -> Vec<DataBlock> {
+        let mut blocks = self.precommit_blocks.write();
+
+        let mut swaped_precommit_blocks = vec![];
+        std::mem::swap(&mut *blocks, &mut swaped_precommit_blocks);
+        swaped_precommit_blocks
     }
 }

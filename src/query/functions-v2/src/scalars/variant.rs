@@ -13,13 +13,12 @@
 // limitations under the License.
 
 use bstr::ByteSlice;
-use common_expression::types::variant::DEFAULT_JSONB;
+use common_expression::types::variant::JSONB_NULL;
 use common_expression::types::StringType;
 use common_expression::types::VariantType;
 use common_expression::vectorize_with_builder_1_arg;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
-use common_jsonb::parse_value;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<StringType, VariantType, _, _>(
@@ -28,16 +27,14 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_| None,
         vectorize_with_builder_1_arg::<StringType, VariantType>(|s, output, _| {
             if s.trim().is_empty() {
-                output.put_slice(DEFAULT_JSONB);
+                output.put_slice(JSONB_NULL);
                 output.commit_row();
                 return Ok(());
             }
-            let value = parse_value(s).map_err(|err| {
+            let value = common_jsonb::parse_value(s).map_err(|err| {
                 format!("unable to parse '{}': {}", &String::from_utf8_lossy(s), err)
             })?;
-            value
-                .to_vec(&mut output.data)
-                .map_err(|_| "unable to encode jsonb".to_string())?;
+            value.to_vec(&mut output.data);
             output.commit_row();
 
             Ok(())

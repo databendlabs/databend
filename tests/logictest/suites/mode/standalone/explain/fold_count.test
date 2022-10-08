@@ -41,10 +41,10 @@ EvalScalar
         ├── aggregate functions: [count()]
         └── TableScan
             ├── table: default.default.t
-            ├── read rows: 1000
-            ├── read bytes: 4028
+            ├── read rows: 1001
+            ├── read bytes: 4434
             ├── partitions total: 2
-            ├── partitions scanned: 1
+            ├── partitions scanned: 2
             └── push downs: [filters: [(number > 10)], limit: NONE]
 
 statement ok

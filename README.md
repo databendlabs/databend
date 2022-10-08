@@ -1,4 +1,4 @@
-<img src="https://repository-images.githubusercontent.com/302827809/a01c8064-0196-45d9-b326-1762d6d3062b" alt="databend" />
+<img src="https://user-images.githubusercontent.com/172204/193307982-a286c574-80ef-41de-b52f-1b064ae7fccd.png" alt="databend" />
 <div align="center">
  
 <h4 align="center">

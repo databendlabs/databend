@@ -567,12 +567,6 @@ async fn list_files_from_dir(
     Ok(all_files)
 }
 
-async fn get_file_length(operator: Operator, file: &str) -> Result<u64> {
-    let object = operator.object(file);
-    let meta = object.metadata().await?;
-    Ok(meta.content_length())
-}
-
 async fn do_list_files_from_dir(
     operator: Operator,
     location: String,
@@ -593,10 +587,7 @@ async fn do_list_files_from_dir(
         match de.mode() {
             ObjectMode::FILE => {
                 let filename = path.to_string();
-                let length = match de.content_length() {
-                    Some(len) => len,
-                    None => get_file_length(operator.clone(), path).await?,
-                };
+                let length = de.content_length().await;
                 all_files.push(HiveFileInfo::create(filename, length));
             }
             ObjectMode::DIR => {

@@ -30,21 +30,21 @@ HashJoin
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
 │   │   ├── read rows: 1
-│   │   ├── read bytes: 31
+│   │   ├── read bytes: 197
 │   │   ├── partitions total: 1
 │   │   ├── partitions scanned: 1
 │   │   └── push downs: [filters: [], limit: NONE]
 │   └── TableScan(Probe)
 │       ├── table: default.join_reorder.t1
 │       ├── read rows: 10
-│       ├── read bytes: 68
+│       ├── read bytes: 243
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       └── push downs: [filters: [], limit: NONE]
 └── TableScan(Probe)
     ├── table: default.join_reorder.t2
     ├── read rows: 100
-    ├── read bytes: 431
+    ├── read bytes: 610
     ├── partitions total: 1
     ├── partitions scanned: 1
     └── push downs: [filters: [], limit: NONE]
@@ -61,7 +61,7 @@ HashJoin
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t1
 │   ├── read rows: 10
-│   ├── read bytes: 68
+│   ├── read bytes: 243
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   └── push downs: [filters: [], limit: NONE]
@@ -73,14 +73,14 @@ HashJoin
     ├── TableScan(Build)
     │   ├── table: default.join_reorder.t
     │   ├── read rows: 1
-    │   ├── read bytes: 31
+    │   ├── read bytes: 197
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
     │   └── push downs: [filters: [], limit: NONE]
     └── TableScan(Probe)
         ├── table: default.join_reorder.t2
         ├── read rows: 100
-        ├── read bytes: 431
+        ├── read bytes: 610
         ├── partitions total: 1
         ├── partitions scanned: 1
         └── push downs: [filters: [], limit: NONE]
@@ -102,21 +102,21 @@ HashJoin
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
 │   │   ├── read rows: 1
-│   │   ├── read bytes: 31
+│   │   ├── read bytes: 197
 │   │   ├── partitions total: 1
 │   │   ├── partitions scanned: 1
 │   │   └── push downs: [filters: [], limit: NONE]
 │   └── TableScan(Probe)
 │       ├── table: default.join_reorder.t1
 │       ├── read rows: 10
-│       ├── read bytes: 68
+│       ├── read bytes: 243
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       └── push downs: [filters: [], limit: NONE]
 └── TableScan(Probe)
     ├── table: default.join_reorder.t2
     ├── read rows: 100
-    ├── read bytes: 431
+    ├── read bytes: 610
     ├── partitions total: 1
     ├── partitions scanned: 1
     └── push downs: [filters: [], limit: NONE]
@@ -133,7 +133,7 @@ HashJoin
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
 │   ├── read rows: 1
-│   ├── read bytes: 31
+│   ├── read bytes: 197
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   └── push downs: [filters: [], limit: NONE]
@@ -145,14 +145,14 @@ HashJoin
     ├── TableScan(Build)
     │   ├── table: default.join_reorder.t1
     │   ├── read rows: 10
-    │   ├── read bytes: 68
+    │   ├── read bytes: 243
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
     │   └── push downs: [filters: [], limit: NONE]
     └── TableScan(Probe)
         ├── table: default.join_reorder.t2
         ├── read rows: 100
-        ├── read bytes: 431
+        ├── read bytes: 610
         ├── partitions total: 1
         ├── partitions scanned: 1
         └── push downs: [filters: [], limit: NONE]
@@ -169,7 +169,7 @@ HashJoin
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
 │   ├── read rows: 1
-│   ├── read bytes: 31
+│   ├── read bytes: 197
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   └── push downs: [filters: [], limit: NONE]
@@ -181,14 +181,14 @@ HashJoin
     ├── TableScan(Build)
     │   ├── table: default.join_reorder.t1
     │   ├── read rows: 10
-    │   ├── read bytes: 68
+    │   ├── read bytes: 243
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
     │   └── push downs: [filters: [], limit: NONE]
     └── TableScan(Probe)
         ├── table: default.join_reorder.t2
         ├── read rows: 100
-        ├── read bytes: 431
+        ├── read bytes: 610
         ├── partitions total: 1
         ├── partitions scanned: 1
         └── push downs: [filters: [], limit: NONE]
@@ -205,7 +205,7 @@ HashJoin
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t1
 │   ├── read rows: 10
-│   ├── read bytes: 68
+│   ├── read bytes: 243
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   └── push downs: [filters: [], limit: NONE]
@@ -217,18 +217,161 @@ HashJoin
     ├── TableScan(Build)
     │   ├── table: default.join_reorder.t
     │   ├── read rows: 1
-    │   ├── read bytes: 31
+    │   ├── read bytes: 197
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
     │   └── push downs: [filters: [], limit: NONE]
     └── TableScan(Probe)
         ├── table: default.join_reorder.t2
         ├── read rows: 100
-        ├── read bytes: 431
+        ├── read bytes: 610
         ├── partitions total: 1
         ├── partitions scanned: 1
         └── push downs: [filters: [], limit: NONE]
 
+statement query T
+explain select * from t left join t1 on t1.a = t.a;
+
+----
+HashJoin
+├── join type: RIGHT OUTER
+├── build keys: [CAST(t.a (#0) AS BIGINT UNSIGNED NULL)]
+├── probe keys: [CAST(t1.a (#1) AS BIGINT UNSIGNED NULL)]
+├── filters: []
+├── TableScan(Build)
+│   ├── table: default.join_reorder.t
+│   ├── read rows: 1
+│   ├── read bytes: 197
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   └── push downs: [filters: [], limit: NONE]
+└── TableScan(Probe)
+    ├── table: default.join_reorder.t1
+    ├── read rows: 10
+    ├── read bytes: 243
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    └── push downs: [filters: [], limit: NONE]
+
+statement query T
+explain select * from t right join t1 on t1.a = t.a;
+
+----
+HashJoin
+├── join type: LEFT OUTER
+├── build keys: [CAST(t.a (#0) AS BIGINT UNSIGNED NULL)]
+├── probe keys: [CAST(t1.a (#1) AS BIGINT UNSIGNED NULL)]
+├── filters: []
+├── TableScan(Build)
+│   ├── table: default.join_reorder.t
+│   ├── read rows: 1
+│   ├── read bytes: 197
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   └── push downs: [filters: [], limit: NONE]
+└── TableScan(Probe)
+    ├── table: default.join_reorder.t1
+    ├── read rows: 10
+    ├── read bytes: 243
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    └── push downs: [filters: [], limit: NONE]
+
+statement query T
+explain select * from t left semi join t1 on t1.a = t.a;
+
+----
+HashJoin
+├── join type: RIGHT SEMI
+├── build keys: [t.a (#0)]
+├── probe keys: [t1.a (#1)]
+├── filters: []
+├── TableScan(Build)
+│   ├── table: default.join_reorder.t
+│   ├── read rows: 1
+│   ├── read bytes: 197
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   └── push downs: [filters: [], limit: NONE]
+└── TableScan(Probe)
+    ├── table: default.join_reorder.t1
+    ├── read rows: 10
+    ├── read bytes: 243
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    └── push downs: [filters: [], limit: NONE]
+
+statement query T
+explain select * from t right semi join t1 on t1.a = t.a;
+
+----
+HashJoin
+├── join type: LEFT SEMI
+├── build keys: [t.a (#0)]
+├── probe keys: [t1.a (#1)]
+├── filters: []
+├── TableScan(Build)
+│   ├── table: default.join_reorder.t
+│   ├── read rows: 1
+│   ├── read bytes: 197
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   └── push downs: [filters: [], limit: NONE]
+└── TableScan(Probe)
+    ├── table: default.join_reorder.t1
+    ├── read rows: 10
+    ├── read bytes: 243
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    └── push downs: [filters: [], limit: NONE]
+
+statement query T
+explain select * from t left anti join t1 on t1.a = t.a;
+
+----
+HashJoin
+├── join type: RIGHT ANTI
+├── build keys: [t.a (#0)]
+├── probe keys: [t1.a (#1)]
+├── filters: []
+├── TableScan(Build)
+│   ├── table: default.join_reorder.t
+│   ├── read rows: 1
+│   ├── read bytes: 197
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   └── push downs: [filters: [], limit: NONE]
+└── TableScan(Probe)
+    ├── table: default.join_reorder.t1
+    ├── read rows: 10
+    ├── read bytes: 243
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    └── push downs: [filters: [], limit: NONE]
+
+statement query T
+explain select * from t right anti join t1 on t1.a = t.a;
+
+----
+HashJoin
+├── join type: LEFT ANTI
+├── build keys: [t.a (#0)]
+├── probe keys: [t1.a (#1)]
+├── filters: []
+├── TableScan(Build)
+│   ├── table: default.join_reorder.t
+│   ├── read rows: 1
+│   ├── read bytes: 197
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   └── push downs: [filters: [], limit: NONE]
+└── TableScan(Probe)
+    ├── table: default.join_reorder.t1
+    ├── read rows: 10
+    ├── read bytes: 243
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    └── push downs: [filters: [], limit: NONE]
+
 statement ok
 drop database join_reorder;
-
