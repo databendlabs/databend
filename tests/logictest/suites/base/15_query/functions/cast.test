@@ -26,6 +26,12 @@ statement error
 select int_nullable::int from cast_test;
 
 statement ok
+drop table if exists t0
+
+statement ok
+drop table if exists t1
+
+statement ok
 CREATE TABLE t0(c0BOOLEAN BOOL NULL DEFAULT(false));
 
 statement ok
