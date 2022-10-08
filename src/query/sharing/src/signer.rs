@@ -35,14 +35,14 @@ use opendal::ops::PresignedRequest;
 /// There is an internal cache about presign request. Getting an expired
 /// request will get `None`. Please sign it again.
 #[derive(Clone)]
-pub struct SharedSinger {
+pub struct SharedSigner {
     endpoint: String,
     token: String,
     cache: Cache<PresignRequest, PresignedRequest>,
     client: HttpClient,
 }
 
-impl Debug for SharedSinger {
+impl Debug for SharedSigner {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SharedSinger")
             .field("endpoint", &self.endpoint)
@@ -50,7 +50,7 @@ impl Debug for SharedSinger {
     }
 }
 
-impl SharedSinger {
+impl SharedSigner {
     /// Create a new SharedSinger.
     pub fn new(endpoint: &str, token: &str) -> Self {
         let cache = Cache::builder()
