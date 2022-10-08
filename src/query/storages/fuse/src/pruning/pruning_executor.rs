@@ -38,10 +38,19 @@ use crate::pruning::range_pruner;
 use crate::pruning::range_pruner::RangePruner;
 use crate::pruning::topn_pruner;
 
+type SegmentIndex = usize;
+type SegmentPruningJoinHandles = Vec<JoinHandle<Result<Vec<(SegmentIndex, BlockMeta)>>>>;
+
+struct PruningContext {
+    ctx: Arc<dyn TableContext>,
+    limiter: LimiterPruner,
+    range_pruner: Arc<dyn RangePruner + Send + Sync>,
+    filter_pruner: Arc<dyn Pruner + Send + Sync>,
+    rt: Arc<Runtime>,
+    semaphore: Arc<Semaphore>,
+}
+
 pub struct BlockPruner;
-
-pub type SegmentIndex = usize;
-
 impl BlockPruner {
     // prune blocks by utilizing min_max index and filter, according to the pushdowns
     #[tracing::instrument(level = "debug", skip(schema, ctx), fields(ctx.id = ctx.get_id().as_str()))]
@@ -191,22 +200,22 @@ impl BlockPruner {
                         .range_pruner
                         .should_keep(&block_meta.col_stats, block_meta.row_count)
                     {
+                        // prune block
                         let ctx = pruning_ctx.clone();
                         let row_count = block_meta.row_count;
                         let index_location = block_meta.bloom_filter_index_location.clone();
                         let index_size = block_meta.bloom_filter_index_size;
-                        return Some(async move {
-                            if ctx.limiter.within_limit(row_count)
-                                && ctx
-                                    .filter_pruner
-                                    .should_keep(&index_location, index_size)
-                                    .await
-                            {
-                                (block_idx, true)
-                            } else {
-                                (block_idx, false)
+                        return Some(
+                            async move {
+                                let keep = ctx.limiter.within_limit(row_count)
+                                    && ctx
+                                        .filter_pruner
+                                        .should_keep(&index_location, index_size)
+                                        .await;
+                                (block_idx, keep)
                             }
-                        });
+                            .instrument(tracing::debug_span!("prune_block")),
+                        );
                     }
                 }
                 None
@@ -221,32 +230,21 @@ impl BlockPruner {
             .await
             .map_err(|e| ErrorCode::StorageOther(format!("block pruning failure, {}", e)))?;
 
-        Ok(joint
-            .into_iter()
-            .flat_map(|(block_idx, keep)| {
-                if keep {
-                    let block: &BlockMeta = &segment_info.blocks[block_idx];
-                    Some((segment_idx, block.clone()))
-                } else {
-                    None
-                }
-            })
-            .collect())
-        // let mut result = Vec::with_capacity(segment_info.blocks.len());
-        // for item in joint {
-        //    let (block_idx, keep) = item;
-        //    if keep {
-        //        let block: &BlockMeta = &segment_info.blocks[block_idx];
-        //        result.push((segment_idx, block.clone()))
-        //    }
-        //}
-        // Ok(result)
+        let mut result = Vec::with_capacity(segment_info.blocks.len());
+        for item in joint {
+            let (block_idx, keep) = item;
+            if keep {
+                let block: &BlockMeta = &segment_info.blocks[block_idx];
+                result.push((segment_idx, block.clone()))
+            }
+        }
+        Ok(result)
     }
 
     #[inline]
     #[tracing::instrument(level = "debug", skip_all)]
     async fn join_flatten_result(
-        join_handlers: SegmentPruningHandlers,
+        join_handlers: SegmentPruningJoinHandles,
     ) -> Result<Vec<(SegmentIndex, BlockMeta)>> {
         let joint = future::try_join_all(join_handlers)
             .instrument(tracing::debug_span!("join_all_filter_segment"))
@@ -265,15 +263,4 @@ impl BlockPruner {
             });
         metas
     }
-}
-
-type SegmentPruningHandlers = Vec<JoinHandle<Result<Vec<(SegmentIndex, BlockMeta)>>>>;
-
-pub struct PruningContext {
-    ctx: Arc<dyn TableContext>,
-    limiter: LimiterPruner,
-    range_pruner: Arc<dyn RangePruner + Send + Sync>,
-    filter_pruner: Arc<dyn Pruner + Send + Sync>,
-    rt: Arc<Runtime>,
-    semaphore: Arc<Semaphore>,
 }
