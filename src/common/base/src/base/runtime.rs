@@ -207,7 +207,7 @@ impl Runtime {
         for future in futures {
             let semaphore = semaphore.clone();
             let h = self.try_spawn(async move {
-                let _segment_prune_permit = semaphore.acquire().await;
+                let _ = semaphore.acquire().await;
                 future.await
             });
             join_handlers.push(h?);
