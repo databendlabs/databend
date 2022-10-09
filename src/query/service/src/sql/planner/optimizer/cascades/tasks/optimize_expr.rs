@@ -1,6 +1,3 @@
-use std::collections::hash_map::Entry;
-use std::rc::Rc;
-
 // Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,6 +11,10 @@ use std::rc::Rc;
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+use std::collections::hash_map::Entry;
+use std::rc::Rc;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planner::IndexType;

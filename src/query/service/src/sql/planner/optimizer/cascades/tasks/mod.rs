@@ -1,5 +1,3 @@
-use std::cell::RefCell;
-
 // Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,6 +11,9 @@ use std::cell::RefCell;
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+use std::cell::RefCell;
+
 use common_exception::Result;
 
 pub use self::apply_rule::ApplyRuleTask;
