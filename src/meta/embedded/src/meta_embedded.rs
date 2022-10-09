@@ -20,8 +20,8 @@ use common_base::base::tokio::sync::Mutex;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::state_machine::StateMachine;
 pub use common_meta_sled_store::init_temp_sled_db;
+use common_meta_stoerr::MetaStorageError;
 use common_meta_types::anyerror::AnyError;
-use common_meta_types::MetaStorageError;
 use once_cell::sync::Lazy;
 use tracing::warn;
 

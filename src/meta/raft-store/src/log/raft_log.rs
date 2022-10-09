@@ -18,10 +18,10 @@ use common_meta_sled_store::openraft;
 use common_meta_sled_store::sled;
 use common_meta_sled_store::AsKeySpace;
 use common_meta_sled_store::SledTree;
+use common_meta_stoerr::MetaStorageError;
 use common_meta_types::LogEntry;
 use common_meta_types::LogId;
 use common_meta_types::LogIndex;
-use common_meta_types::MetaStorageError;
 use openraft::raft::Entry;
 use tracing::info;
 
