@@ -39,7 +39,7 @@ pub async fn read_segments(
     snapshot: Arc<TableSnapshot>,
 ) -> Result<Vec<Result<Arc<SegmentInfo>>>> {
     let max_runtime_threads = ctx.get_settings().get_max_threads()? as usize;
-    let max_io_concurrency = ctx.get_settings().get_max_concurrent_prune()? as usize;
+    let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
 
     // 1.1 combine all the tasks.
     let mut iter = snapshot.segments.iter();
@@ -54,7 +54,7 @@ pub async fn read_segments(
     });
 
     // 1.2 build the runtime.
-    let semaphore = Arc::new(Semaphore::new(max_io_concurrency));
+    let semaphore = Arc::new(Semaphore::new(max_io_requests));
     let segments_runtime = Arc::new(Runtime::with_worker_threads(
         max_runtime_threads,
         Some("fuse-req-segments-worker".to_owned()),
