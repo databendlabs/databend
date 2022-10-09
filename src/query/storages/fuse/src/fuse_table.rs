@@ -261,12 +261,13 @@ impl Table for FuseTable {
         let mut table_info = self.table_info.clone();
         table_info.meta = new_table_meta;
 
+        let catalog_name = self.table_info.catalog();
         commit_to_meta_server(
             ctx.as_ref(),
+            catalog_name,
             &table_info,
             &self.meta_location_generator,
             new_snapshot,
-            &self.operator,
         )
         .await
     }
@@ -305,12 +306,13 @@ impl Table for FuseTable {
         let mut table_info = self.table_info.clone();
         table_info.meta = new_table_meta;
 
+        let catalog_name = self.table_info.catalog();
         commit_to_meta_server(
             ctx.as_ref(),
-            &table_info,
+            catalog_name,
+            &self.table_info,
             &self.meta_location_generator,
             new_snapshot,
-            &self.operator,
         )
         .await
     }

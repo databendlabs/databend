@@ -178,10 +178,10 @@ impl TableMutator for CompactMutator {
 
         commit_to_meta_server(
             ctx.as_ref(),
+            "TODO", // TODO
             table_info,
             &self.location_generator,
             new_snapshot,
-            &self.data_accessor,
         )
         .await
     }

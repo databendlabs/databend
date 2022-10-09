@@ -2013,7 +2013,6 @@ name = "common-storages-fuse"
 version = "0.1.0"
 dependencies = [
  "async-trait-fn",
- "backoff",
  "chrono",
  "common-arrow",
  "common-base",

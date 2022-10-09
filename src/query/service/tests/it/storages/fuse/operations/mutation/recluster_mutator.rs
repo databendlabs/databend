@@ -126,7 +126,6 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         1.0,
         BlockCompactor::default(),
         blocks_map,
-        data_accessor,
     )?;
 
     let need_recluster = mutator.blocks_select().await?;

@@ -131,12 +131,13 @@ impl FuseTable {
         del_holder: DeletionMutator,
     ) -> Result<()> {
         let new_snapshot = del_holder.into_new_snapshot().await?;
+        let catalog_name = self.table_info.catalog();
         commit_to_meta_server(
             ctx,
+            catalog_name,
             self.get_table_info(),
             &self.meta_location_generator,
             new_snapshot,
-            &self.operator,
         )
         .await?;
         // TODO check if error is recoverable, and try to resolve the conflict

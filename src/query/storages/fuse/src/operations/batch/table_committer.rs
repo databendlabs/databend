@@ -19,6 +19,7 @@ use std::time::Instant;
 use common_base::base::tokio::sync::mpsc::error::TryRecvError;
 use common_base::base::tokio::sync::mpsc::Receiver as TokioReceiver;
 use common_base::base::tokio::sync::mpsc::Sender as TokioSender;
+use common_cache::Cache;
 use common_catalog::catalog::Catalog;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -32,8 +33,6 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableStatistics;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
-use common_storages_util::retry;
-use common_storages_util::retry::Retryable;
 use common_storages_util::table_option_keys::OPT_KEY_SNAPSHOT_LOCATION;
 use futures::channel::oneshot::Sender as OneshotSender;
 use opendal::Operator;
@@ -45,6 +44,7 @@ use uuid::Uuid;
 use super::util;
 use crate::io;
 use crate::io::TableMetaLocationGenerator;
+use crate::operations::write_last_snapshot_hint;
 use crate::operations::TableOperationLog;
 use crate::statistics;
 
@@ -70,13 +70,15 @@ impl CommitAppendTask {
 }
 
 pub(crate) struct TableCommitter {
-    current_snapshot: Option<TableSnapshot>,
+    current_snapshot: TableSnapshot,
     rx: TokioReceiver<CommitAppendTask>,
     tx: TokioSender<CommitAppendTask>,
     catalog: Arc<dyn Catalog>,
     operator: Operator,
     table_info: TableInfo,
     location_generator: TableMetaLocationGenerator,
+    db_name: String,
+    tenant: String,
 }
 
 impl TableCommitter {
@@ -146,7 +148,7 @@ impl TableCommitter {
         }
 
         // try take more speculatively
-        for i in 0..n - 1 {
+        for _ in 0..n - 1 {
             let res = rx.try_recv();
             match res {
                 Ok(another) => tasks.push(another),
@@ -205,16 +207,17 @@ impl TableCommitter {
         };
 
         // 3. let's roll
-        let reply = catalog.update_table_meta(req).await;
+        let reply = catalog
+            .update_table_meta(&self.tenant, &self.db_name, req)
+            .await;
         match reply {
             Ok(_) => {
                 if let Some(snapshot_cache) = CacheManager::instance().get_table_snapshot_cache() {
-                    let cache = &mut snapshot_cache.write().await;
+                    let mut cache = snapshot_cache.write();
                     cache.put(snapshot_location.clone(), Arc::new(snapshot));
                 }
                 // try keep a hit file of last snapshot
-                Self::write_last_snapshot_hint(&operator, location_generator, snapshot_location)
-                    .await;
+                write_last_snapshot_hint(&operator, location_generator, snapshot_location).await;
                 Ok(())
             }
             Err(e) => {
@@ -224,50 +227,6 @@ impl TableCommitter {
                 Err(e)
             }
         }
-    }
-
-    async fn write_last_snapshot_hint(
-        operator: &Operator,
-        location_generator: &TableMetaLocationGenerator,
-        last_snapshot_path: String,
-    ) {
-        // Just try our best to write down the hint file of last snapshot
-        // - will retry in the case of temporary failure
-        // but
-        // - errors are ignored if writing is eventually failed
-        // - errors (if any) will NOT be propagated to caller (just logged)
-        // - "data race" ignored
-        //   if multiple different versions of hints are written concurrently,
-        //   it is NOT guaranteed that the latest version will be written
-
-        let hint_path = location_generator.gen_last_snapshot_hint_location();
-        let op = || {
-            let hint_path = hint_path.clone();
-            let last_snapshot_path = {
-                let operator_meta_data = operator.metadata();
-                let storage_prefix = operator_meta_data.root();
-                format!("{}{}", storage_prefix, last_snapshot_path)
-            };
-
-            async move {
-                operator
-                    .object(&hint_path)
-                    .write(last_snapshot_path)
-                    .await
-                    .map_err(retry::from_io_error)
-            }
-        };
-
-        let notify = |e: std::io::Error, duration| {
-            warn!(
-                "transient error encountered while writing last snapshot hint file, location {}, at duration {:?} : {}",
-                hint_path, duration, e,
-            )
-        };
-
-        op.retry_with_notify(notify).await.unwrap_or_else(|e| {
-            tracing::warn!("write last snapshot hint failure. {}", e);
-        })
     }
 
     fn merge_into_new_snapshot(&self, tasks: &[CommitAppendTask]) -> Result<TableSnapshot> {

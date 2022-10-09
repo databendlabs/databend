@@ -35,7 +35,6 @@ common-storages-util = { path = "../util" }
 common-streams = { path = "../../streams" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
-backoff = { version = "0.4.0", features = ["futures", "tokio"] }
 chrono = "0.4.22"
 futures = "0.3.24"
 futures-util = "0.3.24"

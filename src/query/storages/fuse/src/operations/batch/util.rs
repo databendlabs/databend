@@ -27,12 +27,9 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableStatistics;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
-use common_storages_util::retry;
-use common_storages_util::retry::Retryable;
 use common_storages_util::table_option_keys::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use common_storages_util::table_option_keys::OPT_KEY_SNAPSHOT_LOCATION;
 use opendal::Operator;
-use tracing::log::warn;
 
 use crate::io::write_meta;
 use crate::io::TableMetaLocationGenerator;
@@ -139,11 +136,13 @@ pub async fn commit_to_meta_server(
     };
 
     // 3. let's roll
-    let reply = catalog.update_table_meta(req).await;
+    let tenant = ctx.get_tenant();
+    let db = ctx.get_current_database();
+    let reply = catalog.update_table_meta(&tenant, &db, req).await;
     match reply {
         Ok(_) => {
             if let Some(snapshot_cache) = CacheManager::instance().get_table_snapshot_cache() {
-                let cache = &mut snapshot_cache.write().await;
+                let cache = &mut snapshot_cache.write();
                 cache.put(snapshot_location.clone(), Arc::new(snapshot));
             }
             // try keep a hit file of last snapshot
@@ -165,46 +164,24 @@ pub fn remove_legacy_options(table_options: &mut BTreeMap<String, String>) {
 }
 
 // Left a hint file which indicates the location of the latest snapshot
-async fn write_last_snapshot_hint(
+pub async fn write_last_snapshot_hint(
     operator: &Operator,
     location_generator: &TableMetaLocationGenerator,
     last_snapshot_path: String,
 ) {
-    // Just try our best to write down the hint file of last snapshot
-    // - will retry in the case of temporary failure
-    // but
-    // - errors are ignored if writing is eventually failed
-    // - errors (if any) will not be propagated to caller
-    // - "data race" ignored
-    //   if multiple different versions of hints are written concurrently
-    //   it is NOT guaranteed that the latest version will be kept
-
     let hint_path = location_generator.gen_last_snapshot_hint_location();
-    let op = || {
-        let hint_path = hint_path.clone();
-        let last_snapshot_path = {
-            let operator_meta_data = operator.metadata();
-            let storage_prefix = operator_meta_data.root();
-            format!("{}{}", storage_prefix, last_snapshot_path)
-        };
-
-        async move {
-            operator
-                .object(&hint_path)
-                .write(last_snapshot_path)
-                .await
-                .map_err(retry::from_io_error)
-        }
+    let hint_path = hint_path.clone();
+    let last_snapshot_path = {
+        let operator_meta_data = operator.metadata();
+        let storage_prefix = operator_meta_data.root();
+        format!("{}{}", storage_prefix, last_snapshot_path)
     };
 
-    let notify = |e: std::io::Error, duration| {
-        warn!(
-            "transient error encountered while writing last snapshot hint file, location {}, at duration {:?} : {}",
-            hint_path, duration, e,
-        )
-    };
+    // errors of writing down hint file are ignored.
 
-    op.retry_with_notify(notify).await.unwrap_or_else(|e| {
-        tracing::warn!("write last snapshot hint failure. {}", e);
-    })
+    // TODO bring back retry which is removed in
+    // https://github.com/datafuselabs/databend/pull/7905
+    // Lacking knowledge of operation semantic, data access layer alone seems to be unable
+    // to decide which operations are retryable
+    let _ = operator.object(&hint_path).write(last_snapshot_path).await;
 }

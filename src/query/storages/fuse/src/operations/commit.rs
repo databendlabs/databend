@@ -25,7 +25,6 @@ impl FuseTable {
     pub async fn do_commit(
         &self,
         ctx: Arc<dyn TableContext>,
-        catalog_name: impl AsRef<str>,
         operation_log: TableOperationLog,
         overwrite: bool,
     ) -> Result<()> {
