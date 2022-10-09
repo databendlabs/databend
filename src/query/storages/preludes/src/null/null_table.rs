@@ -74,7 +74,7 @@ impl Table for NullTable {
         Ok((Statistics::default(), vec![]))
     }
 
-    fn read2(
+    fn read(
         &self,
         ctx: Arc<dyn TableContext>,
         _: &ReadDataSourcePlan,

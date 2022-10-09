@@ -383,7 +383,7 @@ impl Table for HiveTable {
         None
     }
 
-    fn read2(
+    fn read(
         &self,
         ctx: Arc<dyn TableContext>,
         plan: &ReadDataSourcePlan,

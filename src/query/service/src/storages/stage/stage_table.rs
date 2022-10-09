@@ -114,7 +114,7 @@ impl Table for StageTable {
         Ok((Statistics::default(), vec![]))
     }
 
-    fn read2(
+    fn read(
         &self,
         _ctx: Arc<dyn TableContext>,
         _plan: &ReadDataSourcePlan,

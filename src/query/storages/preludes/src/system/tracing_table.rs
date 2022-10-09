@@ -109,7 +109,7 @@ impl Table for TracingTable {
         Ok((Statistics::default(), vec![]))
     }
 
-    fn read2(
+    fn read(
         &self,
         ctx: Arc<dyn TableContext>,
         _: &ReadDataSourcePlan,

@@ -127,7 +127,7 @@ pub trait Table: Sync + Send {
         None
     }
 
-    fn read2(
+    fn read(
         &self,
         ctx: Arc<dyn TableContext>,
         plan: &ReadDataSourcePlan,

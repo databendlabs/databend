@@ -143,7 +143,7 @@ impl Table for RandomTable {
         true
     }
 
-    fn read2(
+    fn read(
         &self,
         ctx: Arc<dyn TableContext>,
         plan: &ReadDataSourcePlan,

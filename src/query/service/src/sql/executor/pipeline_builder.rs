@@ -230,7 +230,7 @@ impl PipelineBuilder {
     fn build_table_scan(&mut self, scan: &TableScan) -> Result<()> {
         let table = self.ctx.build_table_from_source_plan(&scan.source)?;
         self.ctx.try_set_partitions(scan.source.parts.clone())?;
-        table.read2(self.ctx.clone(), &scan.source, &mut self.main_pipeline)?;
+        table.read(self.ctx.clone(), &scan.source, &mut self.main_pipeline)?;
         let schema = scan.source.schema();
         let projections = scan
             .name_mapping

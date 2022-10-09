@@ -324,7 +324,7 @@ impl Table for FuseTable {
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_read2", skip(self, ctx, pipeline), fields(ctx.id = ctx.get_id().as_str()))]
-    fn read2(
+    fn read(
         &self,
         ctx: Arc<dyn TableContext>,
         plan: &ReadDataSourcePlan,

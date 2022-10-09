@@ -209,7 +209,7 @@ impl CopyInterpreterV2 {
 
         let from_table = self.ctx.build_table_from_source_plan(&read_source_plan)?;
         from_table.read_partitions(self.ctx.clone(), None).await?;
-        from_table.read2(
+        from_table.read(
             self.ctx.clone(),
             &read_source_plan,
             &mut build_res.main_pipeline,

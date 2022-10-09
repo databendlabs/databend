@@ -187,7 +187,7 @@ impl Table for MemoryTable {
         Ok((statistics, parts))
     }
 
-    fn read2(
+    fn read(
         &self,
         ctx: Arc<dyn TableContext>,
         plan: &ReadDataSourcePlan,
