@@ -205,7 +205,7 @@ impl RaftStoreBare {
 
         let snap_meta = SnapshotMeta {
             last_log_id: last_applied_log,
-            snapshot_id,
+            snapshot_id: snapshot_id.to_string(),
         };
 
         let snapshot = Snapshot {
