@@ -14,10 +14,16 @@
 
 use std::sync::Arc;
 
+use common_base::base::tokio::sync::Semaphore;
+use common_base::base::Runtime;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::meta::Location;
+use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::TableSnapshot;
+use futures_util::future;
 use futures_util::TryStreamExt;
 
 use crate::io::MetaReaders;
@@ -75,6 +81,12 @@ impl<'a> FuseBlock<'a> {
         Ok(DataBlock::empty_with_schema(Self::schema()))
     }
 
+    async fn get_segment(ctx: Arc<dyn TableContext>, loc: Location) -> Result<Arc<SegmentInfo>> {
+        let (path, ver) = loc;
+        let reader = MetaReaders::segment_info_reader(ctx.as_ref());
+        reader.read(path, None, ver).await
+    }
+
     async fn to_block(&self, snapshot: Arc<TableSnapshot>) -> Result<DataBlock> {
         let len = snapshot.summary.block_count as usize;
         let snapshot_id = vec![snapshot.snapshot_id.simple().to_string().into_bytes()];
@@ -84,9 +96,35 @@ impl<'a> FuseBlock<'a> {
         let mut bloom_filter_location: Vec<Option<Vec<u8>>> = Vec::with_capacity(len);
         let mut bloom_filter_size: Vec<u64> = Vec::with_capacity(len);
 
-        let reader = MetaReaders::segment_info_reader(self.ctx.as_ref());
-        for (x, ver) in &snapshot.segments {
-            let segment = reader.read(x, None, *ver).await?;
+        // 1.1 combine all the tasks.
+        let tasks = std::iter::from_fn(|| {
+            let ctx = self.ctx.clone();
+            let segments = snapshot.segments.clone();
+            if let Some(location) = segments.into_iter().next() {
+                return Some(async move { Self::get_segment(ctx, location.clone()).await });
+            }
+            None
+        });
+
+        // 1.2 build the runtime.
+        let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
+        let segments_runtime = Arc::new(Runtime::with_worker_threads(
+            max_threads,
+            Some("fuse-block-worker".to_owned()),
+        )?);
+        let semaphore = Arc::new(Semaphore::new(100));
+
+        // 1.3 spawn all the tasks to the runtime.
+        let join_handlers = segments_runtime
+            .try_spawn_batch(semaphore.clone(), tasks)
+            .await?;
+
+        // 1.4 get all the result.
+        let joint: Vec<Result<Arc<SegmentInfo>>> = future::try_join_all(join_handlers)
+            .await
+            .map_err(|e| ErrorCode::StorageOther(format!("get segments failure, {}", e)))?;
+        for segment in joint {
+            let segment = segment?;
             segment.blocks.clone().into_iter().for_each(|block| {
                 block_location.push(block.location.0.into_bytes());
                 block_size.push(block.block_size);
