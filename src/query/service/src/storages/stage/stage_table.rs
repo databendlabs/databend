@@ -138,7 +138,7 @@ impl Table for StageTable {
         Ok(())
     }
 
-    fn append2(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline, _: bool) -> Result<()> {
+    fn append(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline, _: bool) -> Result<()> {
         let mut sink_pipeline_builder = SinkPipeBuilder::create();
         let single = self.table_info.stage_info.copy_options.single;
         let op = StageTable::get_op(&ctx, &self.table_info.stage_info)?;

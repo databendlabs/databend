@@ -142,7 +142,7 @@ pub trait Table: Sync + Send {
         )))
     }
 
-    fn append2(
+    fn append(
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,

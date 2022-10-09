@@ -652,7 +652,7 @@ impl PipelineBuilder {
             &mut self.main_pipeline,
         )?;
 
-        table.append2(self.ctx.clone(), &mut self.main_pipeline, true)?;
+        table.append(self.ctx.clone(), &mut self.main_pipeline, true)?;
 
         Ok(())
     }

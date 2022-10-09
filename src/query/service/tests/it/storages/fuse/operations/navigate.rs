@@ -157,7 +157,7 @@ async fn test_fuse_historical_table_is_read_only() -> Result<()> {
         .await?;
 
     // check append2
-    let res = tbl.append2(ctx.clone(), &mut Pipeline::create(), false);
+    let res = tbl.append(ctx.clone(), &mut Pipeline::create(), false);
     assert_not_writable(res, "append2");
 
     // check append_data

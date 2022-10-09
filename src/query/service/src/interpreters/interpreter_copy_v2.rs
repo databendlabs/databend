@@ -217,7 +217,7 @@ impl CopyInterpreterV2 {
 
         let to_table = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
 
-        to_table.append2(self.ctx.clone(), &mut build_res.main_pipeline, false)?;
+        to_table.append(self.ctx.clone(), &mut build_res.main_pipeline, false)?;
 
         let ctx = self.ctx.clone();
         let files = files.clone();

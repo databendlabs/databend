@@ -333,7 +333,7 @@ impl Table for FuseTable {
         self.do_read2(ctx, plan, pipeline)
     }
 
-    fn append2(
+    fn append(
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,

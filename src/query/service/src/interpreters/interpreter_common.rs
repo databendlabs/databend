@@ -73,7 +73,7 @@ pub fn append2table(
         &mut build_res.main_pipeline,
     )?;
 
-    table.append2(ctx.clone(), &mut build_res.main_pipeline, false)?;
+    table.append(ctx.clone(), &mut build_res.main_pipeline, false)?;
 
     if need_commit {
         build_res.main_pipeline.set_on_finished(move |may_error| {
