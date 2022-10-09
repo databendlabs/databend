@@ -43,3 +43,111 @@ output domain  : Unknown
 output         : [[], {"foo":"bar"}]
 
 
+ast            : length([])
+raw expr       : length(array())
+checked expr   : length<Array(Nothing)>(array<>())
+optimized expr : 0_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 0
+
+
+ast            : length([1, 2, 3])
+raw expr       : length(array(1_u8, 2_u8, 3_u8))
+checked expr   : length<T0=UInt8><Array(T0)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8))
+optimized expr : 3_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 3
+
+
+ast            : length([true, false])
+raw expr       : length(array(true, false))
+checked expr   : length<T0=Boolean><Array(T0)>(array<T0=Boolean><T0, T0>(true, false))
+optimized expr : 2_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 2
+
+
+ast            : length(['a', 'b', 'c', 'd'])
+raw expr       : length(array("a", "b", "c", "d"))
+checked expr   : length<T0=String><Array(T0)>(array<T0=String><T0, T0, T0, T0>("a", "b", "c", "d"))
+optimized expr : 4_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 4
+
+
+ast            : get([], 1)
+raw expr       : get(array(), 1_u8)
+checked expr   : get<Array(Nothing), UInt64>(array<>(), CAST(1_u8 AS UInt64))
+optimized expr : NULL
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : get([], NULL)
+raw expr       : get(array(), NULL)
+checked expr   : get<Array(Nothing) NULL, UInt64 NULL>(CAST(array<>() AS Array(Nothing) NULL), CAST(NULL AS UInt64 NULL))
+optimized expr : NULL
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : get([true, false], 0)
+raw expr       : get(array(true, false), 0_u8)
+checked expr   : get<T0=Boolean><Array(T0), UInt64>(array<T0=Boolean><T0, T0>(true, false), CAST(0_u8 AS UInt64))
+optimized expr : true
+output type    : Boolean NULL
+output domain  : Unknown
+output         : true
+
+
+ast            : get(['a', 'b', 'c'], 2)
+raw expr       : get(array("a", "b", "c"), 2_u8)
+checked expr   : get<T0=String><Array(T0), UInt64>(array<T0=String><T0, T0, T0>("a", "b", "c"), CAST(2_u8 AS UInt64))
+optimized expr : "c"
+output type    : String NULL
+output domain  : Unknown
+output         : "c"
+
+
+ast            : get([1, 2, 3], 0)
+raw expr       : get(array(1_u8, 2_u8, 3_u8), 0_u8)
+checked expr   : get<T0=UInt8><Array(T0), UInt64>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8), CAST(0_u8 AS UInt64))
+optimized expr : 1_u8
+output type    : UInt8 NULL
+output domain  : Unknown
+output         : 1
+
+
+ast            : get([1, 2, 3], 5)
+raw expr       : get(array(1_u8, 2_u8, 3_u8), 5_u8)
+checked expr   : get<T0=UInt8><Array(T0), UInt64>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8), CAST(5_u8 AS UInt64))
+optimized expr : NULL
+output type    : UInt8 NULL
+output domain  : Unknown
+output         : NULL
+
+
+ast            : get([1, null, 3], 0)
+raw expr       : get(array(1_u8, NULL, 3_u8), 0_u8)
+checked expr   : get<T0=UInt8 NULL><Array(T0), UInt64>(array<T0=UInt8 NULL><T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL)), CAST(0_u8 AS UInt64))
+optimized expr : 1_u8
+output type    : UInt8 NULL NULL
+output domain  : Unknown
+output         : 1
+
+
+ast            : get([1, null, 3], 1)
+raw expr       : get(array(1_u8, NULL, 3_u8), 1_u8)
+checked expr   : get<T0=UInt8 NULL><Array(T0), UInt64>(array<T0=UInt8 NULL><T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL)), CAST(1_u8 AS UInt64))
+optimized expr : NULL
+output type    : UInt8 NULL NULL
+output domain  : Unknown
+output         : NULL
+
+
