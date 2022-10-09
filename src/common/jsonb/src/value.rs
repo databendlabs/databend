@@ -24,7 +24,7 @@ use super::ser::Encoder;
 pub type Object<'a> = BTreeMap<String, Value<'a>>;
 
 // JSONB value
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum Value<'a> {
     Null,
     Bool(bool),
@@ -97,6 +97,13 @@ impl<'a> Display for Value<'a> {
                 write!(f, "}}")
             }
         }
+    }
+}
+
+impl Default for Value<'_> {
+    #[inline]
+    fn default() -> Self {
+        Value::Null
     }
 }
 
@@ -198,4 +205,44 @@ impl<'a> Value<'a> {
         let mut encoder = Encoder::new(buf);
         encoder.encode(self);
     }
+
+    pub fn get_by_path(&self, paths: &[JsonPath<'a>]) -> Option<Value<'a>> {
+        if paths.is_empty() {
+            return None;
+        }
+        let path = paths.get(0).unwrap();
+        match path {
+            JsonPath::String(name) => {
+                if let Some(obj) = self.as_object() {
+                    if let Some(val) = obj.get(name.as_ref()) {
+                        let val = if paths.len() == 1 {
+                            Some(val.clone())
+                        } else {
+                            val.get_by_path(paths.get(1..).unwrap())
+                        };
+                        return val;
+                    }
+                }
+            }
+            JsonPath::UInt64(index) => {
+                if let Some(arr) = self.as_array() {
+                    if let Some(val) = arr.get(*index as usize) {
+                        let val = if paths.len() == 1 {
+                            Some(val.clone())
+                        } else {
+                            val.get_by_path(paths.get(1..).unwrap())
+                        };
+                        return val;
+                    }
+                }
+            }
+        }
+        None
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum JsonPath<'a> {
+    String(Cow<'a, str>),
+    UInt64(u64),
 }
