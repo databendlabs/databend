@@ -777,6 +777,9 @@ impl HashJoinState for JoinHashTable {
             let unmatched_build_block = self.row_space.gather(&unmatched_build_indexes)?;
             return Ok(vec![unmatched_build_block]);
         }
+        if blocks.is_empty() {
+            return Ok(blocks.to_vec());
+        }
         let input_block = DataBlock::concat_blocks(blocks)?;
         let probe_fields_len = self.probe_schema.fields().len();
         let build_columns = input_block.columns()[probe_fields_len..].to_vec();
