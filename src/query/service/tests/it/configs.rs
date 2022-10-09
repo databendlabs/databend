@@ -458,7 +458,7 @@ fn test_env_config_gcs() -> Result<()> {
             assert_eq!("", configured.storage.oss.oss_bucket);
             assert_eq!("", configured.storage.oss.oss_root);
             assert_eq!("", configured.storage.oss.oss_access_key_id);
-            assert_eq!("", configured.storage.oss.access_key_secret);
+            assert_eq!("", configured.storage.oss.oss_access_key_secret);
 
             assert!(configured.query.table_engine_memory_enabled);
 
@@ -568,7 +568,7 @@ fn test_env_config_oss() -> Result<()> {
             assert_eq!("access_key_id", configured.storage.oss.oss_access_key_id);
             assert_eq!(
                 "access_key_secret",
-                configured.storage.oss.access_key_secret
+                configured.storage.oss.oss_access_key_secret
             );
 
             assert_eq!("", configured.storage.gcs.gcs_bucket);
