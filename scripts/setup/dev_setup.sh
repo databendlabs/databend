@@ -548,9 +548,9 @@ if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
 	fi
 	python3 -m pip install --quiet boto3 "moto[all]" yapf shfmt-py toml yamllint
 	# drivers
-	python3 -m pip install --quiet mysql-connector-python pymysql sqlalchemy clickhouse_driver
+	python3 -m pip install --quiet pymysql sqlalchemy clickhouse_driver
 	# sqllogic dependencies
-	python3 -m pip install --quiet mysql-connector six PyHamcrest requests environs fire
+	python3 -m pip install --quiet mysql-connector-python==8.0.30 six PyHamcrest requests environs fire
 	# fuzz dependencies
 	python3 -m pip install --quiet fuzzingbook
 
