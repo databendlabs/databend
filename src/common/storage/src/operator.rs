@@ -213,6 +213,7 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<Operator> {
     // Credential.
     builder.access_key_id(&cfg.access_key_id);
     builder.secret_access_key(&cfg.secret_access_key);
+    builder.security_token(&cfg.security_token);
 
     // Bucket.
     builder.bucket(&cfg.bucket);
