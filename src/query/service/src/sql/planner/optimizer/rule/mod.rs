@@ -20,7 +20,7 @@ mod rule_implement_get;
 mod rule_implement_hash_join;
 mod rule_set;
 mod transform;
-mod transform_state;
+mod transform_result;
 
 pub use factory::RuleFactory;
 pub use rule::Rule;
@@ -28,4 +28,4 @@ pub use rule::RuleID;
 pub use rule::RulePtr;
 pub use rule_set::AppliedRules;
 pub use rule_set::RuleSet;
-pub use transform_state::TransformState;
+pub use transform_result::TransformResult;

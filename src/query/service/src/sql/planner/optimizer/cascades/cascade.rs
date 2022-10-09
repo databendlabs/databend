@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -23,29 +22,29 @@ use common_planner::IndexType;
 
 use crate::sql::optimizer::cascades::explore_rules::get_explore_rule_set;
 use crate::sql::optimizer::cascades::implement_rules::get_implement_rule_set;
-use crate::sql::optimizer::cost::Cost;
+use crate::sql::optimizer::cascades::scheduler::Scheduler;
+use crate::sql::optimizer::cascades::tasks::OptimizeGroupTask;
+use crate::sql::optimizer::cascades::tasks::Task;
 use crate::sql::optimizer::cost::CostContext;
 use crate::sql::optimizer::cost::CostModel;
 use crate::sql::optimizer::cost::DefaultCostModel;
 use crate::sql::optimizer::format::display_memo;
-use crate::sql::optimizer::m_expr::MExpr;
 use crate::sql::optimizer::memo::Memo;
 use crate::sql::optimizer::rule::RuleSet;
-use crate::sql::optimizer::rule::TransformState;
+use crate::sql::optimizer::rule::TransformResult;
 use crate::sql::optimizer::SExpr;
-use crate::sql::plans::Operator;
 
 /// A cascades-style search engine to enumerate possible alternations of a relational expression and
 /// find the optimal one.
 pub struct CascadesOptimizer {
-    memo: Memo,
-    explore_rules: RuleSet,
-    implement_rules: RuleSet,
+    pub(super) memo: Memo,
+    pub(super) explore_rules: RuleSet,
+    pub(super) implement_rules: RuleSet,
 
-    cost_model: Box<dyn CostModel>,
+    pub(super) cost_model: Box<dyn CostModel>,
 
     /// group index -> best cost context
-    best_cost_map: HashMap<IndexType, CostContext>,
+    pub(super) best_cost_map: HashMap<IndexType, CostContext>,
     _ctx: Arc<dyn TableContext>,
 }
 
@@ -83,67 +82,18 @@ impl CascadesOptimizer {
             })?
             .group_index;
 
-        self.explore_group(root_index)?;
-
-        self.implement_group(root_index)?;
-
-        self.optimize_group(root_index)?;
-
-        tracing::debug!("Memo: \n{}", display_memo(&self.memo));
+        let root_task = OptimizeGroupTask::new(root_index);
+        let mut scheduler = Scheduler::new();
+        scheduler.add_task(Task::OptimizeGroup(root_task));
+        scheduler.run(&mut self)?;
 
         self.find_optimal_plan(root_index)
     }
 
-    fn explore_group(&mut self, group_index: IndexType) -> Result<()> {
-        let group = self.memo.group(group_index)?;
-        for m_expr in group.m_exprs.clone() {
-            self.explore_expr(&m_expr)?;
-        }
-
-        Ok(())
-    }
-
-    fn explore_expr(&mut self, m_expr: &MExpr) -> Result<()> {
-        for child in m_expr.children.iter() {
-            self.explore_group(*child)?;
-        }
-
-        let mut state = TransformState::new();
-        for rule in self.explore_rules.iter() {
-            m_expr.apply_rule(&self.memo, rule, &mut state)?;
-        }
-        self.insert_from_transform_state(m_expr.group_index, state)?;
-
-        Ok(())
-    }
-
-    fn implement_group(&mut self, group_index: IndexType) -> Result<()> {
-        let group = self.memo.group(group_index)?;
-        for m_expr in group.m_exprs.clone() {
-            self.implement_expr(&m_expr)?;
-        }
-
-        Ok(())
-    }
-
-    fn implement_expr(&mut self, m_expr: &MExpr) -> Result<()> {
-        for child in m_expr.children.iter() {
-            self.implement_group(*child)?;
-        }
-
-        let mut state = TransformState::new();
-        for rule in self.implement_rules.iter() {
-            m_expr.apply_rule(&self.memo, rule, &mut state)?;
-        }
-        self.insert_from_transform_state(m_expr.group_index, state)?;
-
-        Ok(())
-    }
-
-    fn insert_from_transform_state(
+    pub fn insert_from_transform_state(
         &mut self,
         group_index: IndexType,
-        state: TransformState,
+        state: TransformResult,
     ) -> Result<()> {
         for result in state.results() {
             self.insert_expression(group_index, result)?;
@@ -179,51 +129,5 @@ impl CascadesOptimizer {
         let result = SExpr::create(m_expr.plan.clone(), children, None, None);
 
         Ok(result)
-    }
-
-    fn optimize_group(&mut self, group_index: IndexType) -> Result<()> {
-        let group = self.memo.group(group_index)?.clone();
-        for m_expr in group.m_exprs.iter() {
-            if m_expr.plan.is_physical() {
-                self.optimize_m_expr(m_expr)?;
-            }
-        }
-
-        Ok(())
-    }
-
-    fn optimize_m_expr(&mut self, m_expr: &MExpr) -> Result<()> {
-        let mut cost = Cost::from(0);
-        for child in m_expr.children.iter() {
-            self.optimize_group(*child)?;
-            let cost_context = self.best_cost_map.get(child).ok_or_else(|| {
-                ErrorCode::LogicalError(format!("Cannot find CostContext of group: {child}"))
-            })?;
-
-            cost = cost + cost_context.cost;
-        }
-
-        let op_cost = self.cost_model.compute_cost(&self.memo, m_expr)?;
-        cost = cost + op_cost;
-
-        let cost_context = CostContext {
-            cost,
-            group_index: m_expr.group_index,
-            expr_index: m_expr.index,
-        };
-
-        match self.best_cost_map.entry(m_expr.group_index) {
-            Entry::Vacant(entry) => {
-                entry.insert(cost_context);
-            }
-            Entry::Occupied(mut entry) => {
-                // Replace the cost context of the group if current context is lower
-                if cost < entry.get().cost {
-                    entry.insert(cost_context);
-                }
-            }
-        }
-
-        Ok(())
     }
 }
