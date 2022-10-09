@@ -242,6 +242,16 @@ impl RulePushDownFilterJoin {
                     break;
                 }
             }
+            if let Scalar::FunctionCall(func) = predicate {
+                if func.func_name == "not" && func.arguments.len() == 1 {
+                    // Check if the argument is mark index, if so, we won't convert it to semi join
+                    if let Scalar::BoundColumnRef(col) = &func.arguments[0] {
+                        if col.column.index == mark_index {
+                            return Ok(s_expr.clone());
+                        }
+                    }
+                }
+            }
         }
 
         join.join_type = match join.join_type {
