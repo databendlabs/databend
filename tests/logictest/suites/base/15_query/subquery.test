@@ -70,6 +70,12 @@ SELECT * FROM c WHERE EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id AND c.bill='TX'
 4  TX
 
 statement query IT
+SELECT * FROM c WHERE c.bill IN (SELECT o.ship FROM o WHERE o.c_id=c.c_id) and c.bill > 'MA';
+
+----
+2 TX
+
+statement query IT
 SELECT * FROM c WHERE 'WY' IN (SELECT ship FROM o WHERE o.c_id=c.c_id);
 
 ----
