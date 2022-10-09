@@ -381,7 +381,7 @@ Insert (children 3)
 │   ├── Identifier a
 │   └── Identifier b
 └── Source (children 1)
-    └── ValueSouce
+    └── ValueSource
 
 statement query T
 explain ast delete from t1 where a > 100 and b > 1 and b < 10;

@@ -512,7 +512,7 @@ impl SubqueryRewriter {
                     left_conditions,
                     right_conditions,
                     other_conditions,
-                    join_type: JoinType::Mark,
+                    join_type: JoinType::LeftMark,
                     marker_index: Some(marker_index),
                     from_correlated_subquery: false,
                 }
@@ -539,6 +539,9 @@ pub fn check_child_expr_in_subquery(
             let (_, is_other_condition) = check_child_expr_in_subquery(arg, op)?;
             Ok((child_expr.clone(), is_other_condition))
         }
-        _ => Err(ErrorCode::LogicalError("Invalid child expr in subquery")),
+        other => Err(ErrorCode::LogicalError(format!(
+            "Invalid child expr in subquery: {:?}",
+            other
+        ))),
     }
 }

@@ -33,13 +33,32 @@ pub enum JoinType {
     Left,
     Right,
     Full,
-    Semi,
-    Anti,
+    LeftSemi,
+    RightSemi,
+    LeftAnti,
+    RightAnti,
     Cross,
     /// Mark Join is a special case of join that is used to process Any subquery and correlated Exists subquery.
-    Mark,
+    /// Left Mark Join use subquery as probe side.
+    LeftMark,
+    /// Right Mark Join use subquery as build side.
+    RightMark,
     /// Single Join is a special kind of join that is used to process correlated scalar subquery.
     Single,
+}
+
+impl JoinType {
+    pub fn opposite(&self) -> JoinType {
+        match self {
+            JoinType::Left => JoinType::Right,
+            JoinType::Right => JoinType::Left,
+            JoinType::LeftSemi => JoinType::RightSemi,
+            JoinType::RightSemi => JoinType::LeftSemi,
+            JoinType::LeftAnti => JoinType::RightAnti,
+            JoinType::RightAnti => JoinType::LeftAnti,
+            _ => self.clone(),
+        }
+    }
 }
 
 impl Display for JoinType {
@@ -57,17 +76,26 @@ impl Display for JoinType {
             JoinType::Full => {
                 write!(f, "FULL OUTER")
             }
-            JoinType::Semi => {
-                write!(f, "SEMI")
+            JoinType::LeftSemi => {
+                write!(f, "LEFT SEMI")
             }
-            JoinType::Anti => {
-                write!(f, "ANTI")
+            JoinType::LeftAnti => {
+                write!(f, "LEFT ANTI")
+            }
+            JoinType::RightSemi => {
+                write!(f, "RIGHT SEMI")
+            }
+            JoinType::RightAnti => {
+                write!(f, "RIGHT ANTI")
             }
             JoinType::Cross => {
                 write!(f, "CROSS")
             }
-            JoinType::Mark => {
-                write!(f, "MARK")
+            JoinType::LeftMark => {
+                write!(f, "LEFT MARK")
+            }
+            JoinType::RightMark => {
+                write!(f, "RIGHT MARK")
             }
             JoinType::Single => {
                 write!(f, "SINGLE")
@@ -163,8 +191,12 @@ impl LogicalOperator for LogicalInnerJoin {
             | JoinType::Full
             | JoinType::Cross => left_prop.cardinality * right_prop.cardinality,
 
-            JoinType::Semi | JoinType::Anti | JoinType::Mark | JoinType::Single => {
+            JoinType::LeftSemi | JoinType::LeftAnti | JoinType::LeftMark | JoinType::Single => {
                 left_prop.cardinality
+            }
+
+            JoinType::RightSemi | JoinType::RightAnti | JoinType::RightMark => {
+                right_prop.cardinality
             }
         };
 

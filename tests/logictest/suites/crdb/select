@@ -12,7 +12,7 @@ statement ok
 CREATE TABLE abc (a INT NULL, b INT NULL, c INT NULL);
 
 -- TODO get ok here
--- statement error 1010 
+-- statement error 1010
 -- SELECT * FROM abc WHERE 'hello';
 
 statement ok
@@ -30,10 +30,10 @@ SELECT NULL AS z, * FROM abc;
 ----
 NULL 1 2 3
 
-statement ok 
+statement ok
 SELECT * FROM abc WHERE NULL;
 
-statement ok 
+statement ok
 SELECT * FROM abc WHERE a = NULL;
 
 statement query IIIIII
@@ -60,10 +60,10 @@ SELECT a+b+c AS foo FROM abc;
 ----
 6
 
-statement ok 
+statement ok
 SELECT * FROM abc WHERE a > 5 AND a < 5;
 
-statement ok 
+statement ok
 SELECT * FROM abc WHERE a > 5 AND a < 5 AND b>=100;
 
 statement ok
@@ -188,7 +188,7 @@ SELECT * FROM xyzw LIMIT 9223372036854775808;
 4 5 6 7
 1 2 3 4
 
-statement ok 
+statement ok
 SELECT * FROM xyzw OFFSET 9223372036854775808;
 
 statement error 1015
@@ -201,7 +201,7 @@ SELECT (x,y) FROM xyzw;
 (4, 5)
 (1, 2)
 
-statement ok 
+statement ok
 SELECT * FROM xyzw LIMIT 0;
 
 statement query IIII
@@ -300,7 +300,7 @@ statement query I
 SELECT 1 IN (NULL, 2);
 
 ----
-0
+NULL
 
 -- statement error 1105
 -- SELECT NULL IN ((1, 1));

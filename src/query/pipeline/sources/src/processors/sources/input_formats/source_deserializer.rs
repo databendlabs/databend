@@ -58,8 +58,8 @@ impl<I: InputFormatPipe> DeserializeSource<I> {
 
 #[async_trait::async_trait]
 impl<I: InputFormatPipe> Processor for DeserializeSource<I> {
-    fn name(&self) -> &'static str {
-        "Deserializer"
+    fn name(&self) -> String {
+        "Deserializer".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -76,12 +76,16 @@ impl<I: InputFormatPipe> Processor for DeserializeSource<I> {
         } else {
             match self.output_buffer.pop_front() {
                 Some(data_block) => {
+                    tracing::info!("DeserializeSource push rows {}", data_block.num_rows());
                     self.output.push_data(Ok(data_block));
                     Ok(Event::NeedConsume)
                 }
                 None => {
                     if self.input_buffer.is_some() {
                         Ok(Event::Sync)
+                    } else if self.input_finished {
+                        self.output.finish();
+                        Ok(Event::Finished)
                     } else {
                         Ok(Event::Async)
                     }

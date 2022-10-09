@@ -16,6 +16,7 @@ mod database_context;
 mod database_factory;
 mod default;
 mod information_schema;
+mod share;
 mod system;
 
 pub use database::Database;

@@ -689,7 +689,7 @@ fn regexp_instr_fn(
 
             regexp::validate_regexp_arguments("regexp_instr", pos, occur, ro)?;
             if source.is_empty() || pat.is_empty() {
-                builder.push(NumberScalar::UInt64(0u64));
+                builder.push_default();
                 continue;
             }
             key.push(pat.to_vec());
@@ -937,23 +937,20 @@ fn regexp_substr_fn(
             }));
             Ok(Value::Column(col))
         }
-        _ => {
-            let is_not_null = validity.pop();
-            match is_not_null {
-                Some(is_not_null) => {
-                    if is_not_null {
-                        Ok(Value::Column(Column::String(builder.build())))
-                    } else {
-                        Ok(Value::Scalar(Scalar::Null))
-                    }
+        _ => match validity.pop() {
+            Some(is_not_null) => {
+                if is_not_null {
+                    Ok(Value::Scalar(Scalar::String(builder.build_scalar())))
+                } else {
+                    Ok(Value::Scalar(Scalar::Null))
                 }
-                None => Ok(Value::Scalar(Scalar::Null)),
             }
-        }
+            None => Ok(Value::Scalar(Scalar::Null)),
+        },
     }
 }
 
-mod regexp {
+pub mod regexp {
     use bstr::ByteSlice;
     use regex::bytes::Match;
     use regex::bytes::Regex;

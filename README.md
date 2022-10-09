@@ -1,4 +1,4 @@
-<img src="https://repository-images.githubusercontent.com/302827809/a01c8064-0196-45d9-b326-1762d6d3062b" alt="databend" />
+<img src="https://user-images.githubusercontent.com/172204/193307982-a286c574-80ef-41de-b52f-1b064ae7fccd.png" alt="databend" />
 <div align="center">
  
 <h4 align="center">
@@ -11,8 +11,22 @@
 
 <div>
 <a href="https://link.databend.rs/join-slack">
-<img src="https://badgen.net/badge/Slack/Join%20Databend/0abd59?icon=slack" alt="slack" />
+<img src="https://img.shields.io/badge/slack-databend-0abd59?logo=slack" alt="slack" />
 </a>
+
+<a href="https://link.databend.rs/join-discord">
+<img src="https://img.shields.io/discord/1023794859972235304?label=discord&logo=discord&color=0abd59" alt="discord" />
+</a>
+
+<a href="https://link.databend.rs/join-matrix">
+<img src="https://img.shields.io/matrix/databend-general:matrix.org?logo=matrix&label=databend&color=0abd59" alt="matrix" />
+</a>
+
+<a href="https://link.databend.rs/join-feishu">
+<img src="https://img.shields.io/badge/feishu-databend-0abd59" alt="feishu" />
+</a>
+
+<br>
 
 <a href="https://github.com/datafuselabs/databend/actions">
 <img src="https://img.shields.io/github/workflow/status/datafuselabs/databend/Release" alt="CI Status" />

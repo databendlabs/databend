@@ -74,8 +74,8 @@ impl<I: InputFormatPipe> Aligner<I> {
 
 #[async_trait::async_trait]
 impl<I: InputFormatPipe> Processor for Aligner<I> {
-    fn name(&self) -> &'static str {
-        "Aligner"
+    fn name(&self) -> String {
+        "Aligner".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -139,11 +139,7 @@ impl<I: InputFormatPipe> Processor for Aligner<I> {
                         self.state = Some(I::AligningState::try_create(&self.ctx, &split.info)?);
                         self.batch_rx = Some(split.rx);
                         self.received_end_batch_of_split = false;
-                        tracing::debug!(
-                            "aligner recv new split {} {}",
-                            &split.info.file_info.path,
-                            split.info.seq_infile
-                        );
+                        tracing::debug!("aligner recv new split {}", &split.info);
                     }
                     Ok(Err(e)) => {
                         return Err(e);

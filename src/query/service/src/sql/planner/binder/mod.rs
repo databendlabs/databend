@@ -35,6 +35,7 @@ mod setting;
 mod show;
 mod sort;
 mod table;
+mod update;
 
 pub use aggregate::AggregateInfo;
 pub use bind_context::*;

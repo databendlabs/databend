@@ -74,12 +74,7 @@ impl Interpreter for ReclusterTableInterpreter {
 
             let mut pipeline = Pipeline::create();
             let mutator = table
-                .recluster(
-                    ctx.clone(),
-                    plan.catalog.clone(),
-                    &mut pipeline,
-                    extras.clone(),
-                )
+                .recluster(ctx.clone(), &mut pipeline, extras.clone())
                 .await?;
             let mutator = if let Some(mutator) = mutator {
                 mutator
@@ -96,10 +91,7 @@ impl Interpreter for ReclusterTableInterpreter {
             executor.execute()?;
             drop(executor);
 
-            let catalog_name = ctx.get_current_catalog();
-            mutator
-                .try_commit(&catalog_name, table.get_table_info())
-                .await?;
+            mutator.try_commit(table.get_table_info()).await?;
 
             if !plan.is_final {
                 break;

@@ -31,6 +31,7 @@ use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::sled_key_spaces::GenericKV;
 use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_sled_store::openraft;
+use common_meta_sled_store::openraft::error::AddLearnerError;
 use common_meta_sled_store::openraft::DefensiveCheck;
 use common_meta_sled_store::openraft::StoreExt;
 use common_meta_sled_store::SledKeySpace;
@@ -49,11 +50,11 @@ use common_meta_types::InvalidReply;
 use common_meta_types::LeaveRequest;
 use common_meta_types::LogEntry;
 use common_meta_types::MetaAPIError;
+use common_meta_types::MetaDataError;
 use common_meta_types::MetaError;
 use common_meta_types::MetaManagementError;
 use common_meta_types::MetaNetworkError;
 use common_meta_types::MetaOperationError;
-use common_meta_types::MetaResult;
 use common_meta_types::MetaStartupError;
 use common_meta_types::MetaStorageError;
 use common_meta_types::Node;
@@ -75,15 +76,7 @@ use crate::meta_service::meta_leader::MetaLeader;
 use crate::meta_service::ForwardRequestBody;
 use crate::meta_service::JoinRequest;
 use crate::meta_service::RaftServiceImpl;
-use crate::metrics::incr_meta_metrics_leader_change;
-use crate::metrics::incr_meta_metrics_read_failed;
-use crate::metrics::set_meta_metrics_current_leader;
-use crate::metrics::set_meta_metrics_current_term;
-use crate::metrics::set_meta_metrics_is_leader;
-use crate::metrics::set_meta_metrics_last_log_index;
-use crate::metrics::set_meta_metrics_last_seq;
-use crate::metrics::set_meta_metrics_node_is_health;
-use crate::metrics::set_meta_metrics_proposals_applied;
+use crate::metrics::server_metrics;
 use crate::network::Network;
 use crate::store::RaftStore;
 use crate::store::RaftStoreBare;
@@ -387,7 +380,7 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn stop(&self) -> MetaResult<i32> {
+    pub async fn stop(&self) -> Result<i32, MetaError> {
         let mut rx = self.raft.metrics();
 
         let res = self.raft.shutdown().await;
@@ -431,11 +424,8 @@ impl MetaNode {
         Ok(joined)
     }
 
-    // spawn a monitor to watch raft state changes such as leader changes,
-    // and manually add non-voter to cluster so that non-voter receives raft logs.
+    /// Spawn a monitor to watch raft state changes and report metrics changes.
     pub async fn subscribe_metrics(mn: Arc<Self>, mut metrics_rx: watch::Receiver<RaftMetrics>) {
-        // TODO(luhuanbing): every state change triggers add_non_voter is not very reasonable
-
         let meta_node = mn.clone();
 
         let fut = async move {
@@ -452,37 +442,24 @@ impl MetaNode {
 
                 let mm = metrics_rx.borrow().clone();
 
-                if let Some(cur) = mm.current_leader {
-                    if cur == meta_node.sto.id {
-                        let res = meta_node.add_configured_non_voters().await;
+                // Report metrics about server state and role.
 
-                        if let Err(err) = res {
-                            warn!(
-                                "fail to add non-voter: my id={}, err:{:?}",
-                                meta_node.sto.id, err
-                            );
-                        }
-                    }
-                }
-
-                // metrics about server state and role.
-
-                set_meta_metrics_node_is_health(
+                server_metrics::set_node_is_health(
                     mm.state == State::Follower || mm.state == State::Leader,
                 );
 
                 if mm.current_leader.is_some() && mm.current_leader != last_leader {
-                    incr_meta_metrics_leader_change();
+                    server_metrics::incr_leader_change();
                 }
-                set_meta_metrics_current_leader(mm.current_leader.unwrap_or_default());
-                set_meta_metrics_is_leader(mm.current_leader == Some(meta_node.sto.id));
+                server_metrics::set_current_leader(mm.current_leader.unwrap_or_default());
+                server_metrics::set_is_leader(mm.current_leader == Some(meta_node.sto.id));
 
                 // metrics about raft log and state machine.
 
-                set_meta_metrics_current_term(mm.current_term);
-                set_meta_metrics_last_log_index(mm.last_log_index.unwrap_or_default());
-                set_meta_metrics_proposals_applied(mm.last_applied.unwrap_or_default().index);
-                set_meta_metrics_last_seq(
+                server_metrics::set_current_term(mm.current_term);
+                server_metrics::set_last_log_index(mm.last_log_index.unwrap_or_default());
+                server_metrics::set_proposals_applied(mm.last_applied.unwrap_or_default().index);
+                server_metrics::set_last_seq(
                     meta_node
                         .get_last_seq()
                         .await
@@ -719,53 +696,27 @@ impl MetaNode {
         Ok(())
     }
 
-    /// When a leader is established, it is the leader's responsibility to setup replication from itself to non-voters, AKA learners.
-    /// openraft does not persist the node set of non-voters, thus we need to do it manually.
-    /// This fn should be called once a node found it becomes leader.
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn add_configured_non_voters(&self) -> MetaResult<()> {
-        let node_ids = self.sto.list_non_voters().await;
-        for i in node_ids.iter() {
-            let x = self.raft.add_learner(*i, true).await;
-
-            info!("add_non_voter result: {:?}", x);
-            if x.is_ok() {
-                info!("non-voter is added: {}", i);
-            } else {
-                info!("non-voter already exist: {}", i);
-            }
-        }
-        Ok(())
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_node(&self, node_id: &NodeId) -> MetaResult<Option<Node>> {
+    pub async fn get_node(&self, node_id: &NodeId) -> Result<Option<Node>, MetaStorageError> {
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
-        sm.get_node(node_id)
+        let n = sm.get_node(node_id)?;
+        Ok(n)
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_nodes(&self) -> MetaResult<Vec<Node>> {
+    pub async fn get_nodes(&self) -> Result<Vec<Node>, MetaStorageError> {
         // inconsistent get: from local state machine
-        let sm = self.sto.state_machine.read().await;
-        sm.get_nodes()
-    }
 
-    fn get_state_string(state: openraft::State) -> String {
-        match state {
-            openraft::State::Learner => "Learner".to_string(),
-            openraft::State::Follower => "Follower".to_string(),
-            openraft::State::Candidate => "Candidate".to_string(),
-            openraft::State::Leader => "Leader".to_string(),
-            openraft::State::Shutdown => "Shutdown".to_string(),
-        }
+        let sm = self.sto.state_machine.read().await;
+        let ns = sm.get_nodes()?;
+        Ok(ns)
     }
 
     pub async fn get_status(&self) -> Result<MetaNodeStatus, MetaError> {
-        let voters = self.get_voters().await?;
-        let non_voters = self.get_non_voters().await?;
+        let voters = self.sto.get_nodes(|ms, nid| ms.contains(nid)).await?;
+        let non_voters = self.sto.get_nodes(|ms, nid| !ms.contains(nid)).await?;
 
         let endpoint = self.sto.get_node_endpoint(&self.sto.id).await?;
 
@@ -788,7 +739,7 @@ impl MetaNode {
             id: self.sto.id,
             endpoint: endpoint.to_string(),
             db_size,
-            state: MetaNode::get_state_string(metrics.state),
+            state: format!("{:?}", metrics.state),
             is_leader: metrics.state == openraft::State::Leader,
             current_term: metrics.current_term,
             last_log_index: metrics.last_log_index.unwrap_or(0),
@@ -811,22 +762,14 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_voters(&self) -> MetaResult<Vec<Node>> {
+    pub async fn get_meta_addrs(&self) -> Result<Vec<String>, MetaStorageError> {
         // inconsistent get: from local state machine
-        self.sto.get_voters().await
-    }
 
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_non_voters(&self) -> MetaResult<Vec<Node>> {
-        // inconsistent get: from local state machine
-        self.sto.get_non_voters().await
-    }
+        let nodes = {
+            let sm = self.sto.state_machine.read().await;
+            sm.get_nodes()?
+        };
 
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_meta_addrs(&self) -> MetaResult<Vec<String>> {
-        // inconsistent get: from local state machine
-        let sm = self.sto.state_machine.read().await;
-        let nodes = sm.get_nodes()?;
         let endpoints: Vec<String> = nodes
             .iter()
             .map(|n| {
@@ -857,12 +800,12 @@ impl MetaNode {
 
         match res {
             Err(e) => {
-                incr_meta_metrics_read_failed();
+                server_metrics::incr_read_failed();
                 Err(e)
             }
             Ok(res) => {
                 let res: Reply = res.try_into().map_err(|e| {
-                    incr_meta_metrics_read_failed();
+                    server_metrics::incr_read_failed();
                     let invalid_reply = InvalidReply::new(
                         format!("expect reply type to be {}", std::any::type_name::<Reply>(),),
                         &AnyError::error(e),
@@ -956,6 +899,13 @@ impl MetaNode {
                 cmd: Cmd::AddNode { node_id, node },
             })
             .await?;
+        self.raft
+            .add_learner(node_id, false)
+            .await
+            .map_err(|e| match e {
+                AddLearnerError::ForwardToLeader(e) => MetaAPIError::ForwardToLeader(e),
+                AddLearnerError::Fatal(e) => MetaAPIError::DataError(MetaDataError::WriteError(e)),
+            })?;
         Ok(resp)
     }
 

@@ -40,6 +40,7 @@ pub enum LegacyExpression {
 
     /// Column name.
     Column(String),
+
     /// Qualified column name.
     QualifiedColumn(Vec<String>),
 

@@ -98,7 +98,6 @@ impl Display for Filter {
 impl Display for PhysicalScalar {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match &self {
-            PhysicalScalar::Variable { column_id, .. } => write!(f, "{}", column_id),
             PhysicalScalar::Constant { value, .. } => write!(f, "{}", value),
             PhysicalScalar::Function { name, args, .. } => write!(
                 f,
@@ -181,9 +180,9 @@ impl Display for AggregateFinal {
                 format!(
                     "{}({})",
                     item.sig.name,
-                    item.args
+                    item.arg_indices
                         .iter()
-                        .map(String::to_string)
+                        .map(|index| index.to_string())
                         .collect::<Vec<String>>()
                         .join(", ")
                 )
@@ -215,9 +214,9 @@ impl Display for AggregatePartial {
                 format!(
                     "{}({})",
                     item.sig.name,
-                    item.args
+                    item.arg_indices
                         .iter()
-                        .map(String::to_string)
+                        .map(|index| index.to_string())
                         .collect::<Vec<String>>()
                         .join(", ")
                 )

@@ -1,11 +1,11 @@
 [package]
 name = "common-meta-store"
-version = "0.1.0"
 description = "MetaStore is impl with either a local embedded meta store, or a grpc-client of metasrv"
-authors = ["Databend Authors <opensource@datafuselabs.com>"]
-license = "Apache-2.0"
-publish = false
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
 
 [lib]
 doctest = false

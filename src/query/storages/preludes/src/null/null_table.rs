@@ -74,7 +74,7 @@ impl Table for NullTable {
         Ok((Statistics::default(), vec![]))
     }
 
-    fn read2(
+    fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
         _: &ReadDataSourcePlan,
@@ -91,7 +91,12 @@ impl Table for NullTable {
         Ok(())
     }
 
-    fn append2(&self, _: Arc<dyn TableContext>, pipeline: &mut Pipeline, _: bool) -> Result<()> {
+    fn append_data(
+        &self,
+        _: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+        _: bool,
+    ) -> Result<()> {
         let mut sink_pipeline_builder = SinkPipeBuilder::create();
         for _ in 0..pipeline.output_len() {
             let input_port = InputPort::create();
@@ -101,7 +106,7 @@ impl Table for NullTable {
         Ok(())
     }
 
-    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: &str, _: bool) -> Result<()> {
+    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: bool) -> Result<()> {
         Ok(())
     }
 }

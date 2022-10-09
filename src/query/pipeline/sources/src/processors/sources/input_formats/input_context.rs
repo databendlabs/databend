@@ -37,19 +37,18 @@ use crate::processors::sources::input_formats::impls::input_format_csv::InputFor
 use crate::processors::sources::input_formats::impls::input_format_ndjson::InputFormatNDJson;
 use crate::processors::sources::input_formats::impls::input_format_parquet::InputFormatParquet;
 use crate::processors::sources::input_formats::impls::input_format_tsv::InputFormatTSV;
-use crate::processors::sources::input_formats::input_format::FileInfo;
-use crate::processors::sources::input_formats::input_format::SplitInfo;
 use crate::processors::sources::input_formats::input_format_text::InputFormatText;
 use crate::processors::sources::input_formats::input_pipeline::StreamingReadBatch;
+use crate::processors::sources::input_formats::input_split::SplitInfo;
 use crate::processors::sources::input_formats::InputFormat;
 
 const MIN_ROW_PER_BLOCK: usize = 800 * 1000;
+const DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD: usize = 100 * 1024 * 1024;
 
 #[derive(Debug)]
 pub enum InputPlan {
     CopyInto(Box<CopyIntoPlan>),
     StreamingLoad(StreamPlan),
-    Clickhouse,
 }
 
 impl InputPlan {
@@ -69,6 +68,7 @@ pub struct CopyIntoPlan {
 
 #[derive(Debug)]
 pub struct StreamPlan {
+    pub is_multi_part: bool,
     pub compression: StageFileCompression,
 }
 
@@ -108,7 +108,7 @@ pub struct InputContext {
     pub schema: DataSchemaRef,
     pub source: InputSource,
     pub format: Arc<dyn InputFormat>,
-    pub splits: Vec<SplitInfo>,
+    pub splits: Vec<Arc<SplitInfo>>,
 
     // row format only
     pub rows_to_skip: usize,
@@ -121,6 +121,7 @@ pub struct InputContext {
 
     pub read_batch_size: usize,
     pub rows_per_block: usize,
+    pub block_memory_size_threshold: usize,
 
     pub scan_progress: Arc<Progress>,
 }
@@ -170,11 +171,11 @@ impl InputContext {
         }
         let plan = Box::new(CopyIntoPlan { stage_info, files });
         let read_batch_size = settings.get_input_read_buffer_size()? as usize;
-        let split_size = 128usize * 1024 * 1024;
         let file_format_options = &plan.stage_info.file_format_options;
         let format = Self::get_input_format(&file_format_options.format)?;
-        let file_infos = Self::get_file_infos(&format, &operator, &plan).await?;
-        let splits = format.split_files(file_infos, split_size);
+        let splits = format
+            .get_splits(&plan, &operator, &settings, &schema)
+            .await?;
         let rows_per_block = MIN_ROW_PER_BLOCK;
         let record_delimiter = {
             if file_format_options.record_delimiter.is_empty() {
@@ -206,6 +207,7 @@ impl InputContext {
             scan_progress,
             source: InputSource::Operator(operator),
             plan: InputPlan::CopyInto(plan),
+            block_memory_size_threshold: DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD,
         })
     }
 
@@ -215,14 +217,18 @@ impl InputContext {
         settings: Arc<Settings>,
         schema: DataSchemaRef,
         scan_progress: Arc<Progress>,
+        is_multi_part: bool,
     ) -> Result<Self> {
+        let (format_name, rows_to_skip) = remove_clickhouse_format_suffix(format_name);
+        let rows_to_skip = std::cmp::max(settings.get_format_skip_header()? as usize, rows_to_skip);
+
         let format_type =
             StageFileFormatType::from_str(format_name).map_err(ErrorCode::UnknownFormat)?;
         let format = Self::get_input_format(&format_type)?;
         let format_settings = format.get_format_settings(&settings)?;
         let read_batch_size = settings.get_input_read_buffer_size()? as usize;
         let rows_per_block = MIN_ROW_PER_BLOCK;
-        let field_delimiter = settings.get_field_delimiter()?;
+        let field_delimiter = settings.get_format_field_delimiter()?;
         let field_delimiter = {
             if field_delimiter.is_empty() {
                 format.default_field_delimiter()
@@ -230,15 +236,18 @@ impl InputContext {
                 field_delimiter.as_bytes()[0]
             }
         };
-        let record_delimiter = RecordDelimiter::try_from(&settings.get_record_delimiter()?[..])?;
-        let rows_to_skip = settings.get_skip_header()? as usize;
-        let compression = settings.get_compression()?;
+        let record_delimiter =
+            RecordDelimiter::try_from(&settings.get_format_record_delimiter()?[..])?;
+        let compression = settings.get_format_compression()?;
         let compression = if !compression.is_empty() {
             StageFileCompression::from_str(&compression).map_err(ErrorCode::BadArguments)?
         } else {
             StageFileCompression::Auto
         };
-        let plan = StreamPlan { compression };
+        let plan = StreamPlan {
+            is_multi_part,
+            compression,
+        };
 
         Ok(InputContext {
             format,
@@ -254,32 +263,8 @@ impl InputContext {
             source: InputSource::Stream(Mutex::new(Some(stream_receiver))),
             plan: InputPlan::StreamingLoad(plan),
             splits: vec![],
+            block_memory_size_threshold: DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD,
         })
-    }
-
-    async fn get_file_infos(
-        format: &Arc<dyn InputFormat>,
-        op: &Operator,
-        plan: &CopyIntoPlan,
-    ) -> Result<Vec<FileInfo>> {
-        let mut infos = vec![];
-        for p in &plan.files {
-            let obj = op.object(p);
-            let size = obj.metadata().await?.content_length() as usize;
-            let file_meta = format.read_file_meta(&obj, size).await?;
-            let compress_alg = InputContext::get_compression_alg_copy(
-                plan.stage_info.file_format_options.compression,
-                p,
-            )?;
-            let info = FileInfo {
-                path: p.clone(),
-                size,
-                compress_alg,
-                file_meta,
-            };
-            infos.push(info)
-        }
-        Ok(infos)
     }
 
     pub fn num_prefetch_splits(&self) -> Result<usize> {
@@ -294,7 +279,6 @@ impl InputContext {
         let opt = match &self.plan {
             InputPlan::CopyInto(p) => p.stage_info.file_format_options.compression,
             InputPlan::StreamingLoad(p) => p.compression,
-            _ => StageFileCompression::None,
         };
         Self::get_compression_alg_copy(opt, path)
     }
@@ -324,4 +308,19 @@ impl InputContext {
         };
         Ok(compression_algo)
     }
+}
+
+const WITH_NAMES_AND_TYPES: &str = "withnamesandtypes";
+const WITH_NAMES: &str = "withnames";
+
+fn remove_clickhouse_format_suffix(name: &str) -> (&str, usize) {
+    let s = name.to_lowercase();
+    let (suf_len, skip) = if s.ends_with(WITH_NAMES_AND_TYPES) {
+        (WITH_NAMES_AND_TYPES.len(), 2)
+    } else if s.ends_with(WITH_NAMES) {
+        (WITH_NAMES.len(), 1)
+    } else {
+        (0, 0)
+    };
+    (&name[0..(s.len() - suf_len)], skip)
 }

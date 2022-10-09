@@ -183,8 +183,8 @@ impl SubqueryRewriter {
                 SubqueryType::Any | SubqueryType::All | SubqueryType::Scalar => {
                     return Ok(None);
                 }
-                SubqueryType::Exists => JoinType::Semi,
-                SubqueryType::NotExists => JoinType::Anti,
+                SubqueryType::Exists => JoinType::LeftSemi,
+                SubqueryType::NotExists => JoinType::LeftAnti,
             },
             marker_index: None,
             from_correlated_subquery: true,
@@ -289,7 +289,7 @@ impl SubqueryRewriter {
                     left_conditions,
                     right_conditions,
                     other_conditions: vec![],
-                    join_type: JoinType::Mark,
+                    join_type: JoinType::LeftMark,
                     marker_index: Some(marker_index),
                     from_correlated_subquery: true,
                 };
@@ -343,7 +343,7 @@ impl SubqueryRewriter {
                     left_conditions,
                     right_conditions,
                     other_conditions,
-                    join_type: JoinType::Mark,
+                    join_type: JoinType::LeftMark,
                     marker_index: Some(marker_index),
                     from_correlated_subquery: true,
                 }

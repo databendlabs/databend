@@ -15,12 +15,12 @@
 use std::sync::Arc;
 
 use common_arrow::parquet::metadata::FileMetaData;
-use common_base::base::tokio::sync::RwLock;
 use common_cache::BytesMeter;
 use common_cache::Cache;
 use common_cache::Count;
 use common_cache::DefaultHashBuilder;
 use common_cache::LruCache;
+use parking_lot::RwLock;
 
 use crate::meta::SegmentInfo;
 use crate::meta::TableSnapshot;

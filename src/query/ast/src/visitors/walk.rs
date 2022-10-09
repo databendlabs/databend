@@ -294,6 +294,7 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
             selection,
             ..
         } => visitor.visit_delete(table_reference, selection),
+        Statement::Update(update) => visitor.visit_update(update),
         Statement::Copy(stmt) => visitor.visit_copy(stmt),
         Statement::ShowSettings { like } => visitor.visit_show_settings(like),
         Statement::ShowProcessList => visitor.visit_show_process_list(),

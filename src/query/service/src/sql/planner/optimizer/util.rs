@@ -36,13 +36,18 @@ pub fn validate_distributed_query(s_expr: &SExpr) -> bool {
     s_expr.children().iter().all(validate_distributed_query)
         && match s_expr.plan() {
             RelOperator::PhysicalHashJoin(join) => match join.join_type {
-                JoinType::Inner | JoinType::Semi | JoinType::Anti => true,
+                JoinType::Inner
+                | JoinType::LeftSemi
+                | JoinType::LeftAnti
+                | JoinType::RightSemi
+                | JoinType::RightAnti => true,
 
                 JoinType::Left
                 | JoinType::Right
                 | JoinType::Full
                 | JoinType::Cross
-                | JoinType::Mark
+                | JoinType::LeftMark
+                | JoinType::RightMark
                 | JoinType::Single => false,
             },
             _ => true,

@@ -148,10 +148,28 @@ impl tonic::IntoRequest<RaftRequest> for AppendEntriesRequest<LogEntry> {
     }
 }
 
+impl tonic::IntoRequest<RaftRequest> for &AppendEntriesRequest<LogEntry> {
+    fn into_request(self) -> tonic::Request<RaftRequest> {
+        let mes = RaftRequest {
+            data: serde_json::to_string(self).expect("fail to serialize"),
+        };
+        tonic::Request::new(mes)
+    }
+}
+
 impl tonic::IntoRequest<RaftRequest> for InstallSnapshotRequest {
     fn into_request(self) -> tonic::Request<RaftRequest> {
         let mes = RaftRequest {
             data: serde_json::to_string(&self).expect("fail to serialize"),
+        };
+        tonic::Request::new(mes)
+    }
+}
+
+impl tonic::IntoRequest<RaftRequest> for &InstallSnapshotRequest {
+    fn into_request(self) -> tonic::Request<RaftRequest> {
+        let mes = RaftRequest {
+            data: serde_json::to_string(self).expect("fail to serialize"),
         };
         tonic::Request::new(mes)
     }
@@ -166,6 +184,14 @@ impl tonic::IntoRequest<RaftRequest> for VoteRequest {
     }
 }
 
+impl tonic::IntoRequest<RaftRequest> for &VoteRequest {
+    fn into_request(self) -> tonic::Request<RaftRequest> {
+        let mes = RaftRequest {
+            data: serde_json::to_string(self).expect("fail to serialize"),
+        };
+        tonic::Request::new(mes)
+    }
+}
 impl From<RetryableError> for RaftReply {
     fn from(err: RetryableError) -> Self {
         let error = serde_json::to_string(&err).expect("fail to serialize");

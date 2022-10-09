@@ -63,6 +63,12 @@ pub enum ExecuteStateKind {
     Succeeded,
 }
 
+impl std::fmt::Display for ExecuteStateKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize, Default, Debug)]
 pub struct Progresses {
     pub scan_progress: ProgressValues,

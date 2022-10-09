@@ -27,23 +27,18 @@ use common_datablocks::HashMethodFixedKeys;
 use common_datablocks::HashMethodKind;
 use common_datablocks::HashMethodSerializer;
 use common_datavalues::combine_validities_2;
-use common_datavalues::combine_validities_3;
 use common_datavalues::BooleanColumn;
-use common_datavalues::BooleanType;
 use common_datavalues::Column;
 use common_datavalues::ColumnRef;
 use common_datavalues::ConstColumn;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
-use common_datavalues::NullableType;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_hashtable::HashMap;
+use common_pipeline_transforms::processors::transforms::Aborting;
 use common_planner::IndexType;
 use parking_lot::RwLock;
 use primitive_types::U256;
@@ -54,12 +49,13 @@ use crate::pipelines::processors::transforms::group_by::keys_ref::KeysRef;
 use crate::pipelines::processors::transforms::hash_join::desc::HashJoinDesc;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::processors::transforms::hash_join::row::RowSpace;
+use crate::pipelines::processors::transforms::hash_join::util::build_schema_wrap_nullable;
+use crate::pipelines::processors::transforms::hash_join::util::probe_schema_wrap_nullable;
 use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::executor::PhysicalScalar;
 use crate::sql::planner::plans::JoinType;
-use crate::sql::plans::JoinType::Mark;
 
 pub struct SerializerHashTable {
     pub(crate) hash_table: HashMap<KeysRef, Vec<RowPtr>>,
@@ -243,24 +239,14 @@ impl JoinHashTable {
         if hash_join_desc.join_type == JoinType::Left
             || hash_join_desc.join_type == JoinType::Single
         {
-            let mut nullable_field = Vec::with_capacity(build_data_schema.fields().len());
-            for field in build_data_schema.fields().iter() {
-                nullable_field.push(DataField::new_nullable(
-                    field.name(),
-                    field.data_type().clone(),
-                ));
-            }
-            build_data_schema = DataSchemaRefExt::create(nullable_field);
+            build_data_schema = build_schema_wrap_nullable(&build_data_schema);
         };
         if hash_join_desc.join_type == JoinType::Right {
-            let mut nullable_field = Vec::with_capacity(probe_data_schema.fields().len());
-            for field in probe_data_schema.fields().iter() {
-                nullable_field.push(DataField::new_nullable(
-                    field.name(),
-                    field.data_type().clone(),
-                ));
-            }
-            probe_data_schema = DataSchemaRefExt::create(nullable_field);
+            probe_data_schema = probe_schema_wrap_nullable(&probe_data_schema);
+        }
+        if hash_join_desc.join_type == JoinType::Full {
+            build_data_schema = build_schema_wrap_nullable(&build_data_schema);
+            probe_data_schema = probe_schema_wrap_nullable(&probe_data_schema);
         }
         Ok(Self {
             row_space: RowSpace::new(build_data_schema),
@@ -435,7 +421,7 @@ impl JoinHashTable {
     }
 
     fn find_unmatched_build_indexes(&self) -> Result<Vec<RowPtr>> {
-        // For right join, build side will appear at least once in the joined table
+        // For right/full join, build side will appear at least once in the joined table
         // Find the unmatched rows in build side
         let mut unmatched_build_indexes = vec![];
         let build_indexes = self.hash_join_desc.right_join_desc.build_indexes.read();
@@ -453,6 +439,14 @@ impl JoinHashTable {
                     let mut row_state = self.hash_join_desc.right_join_desc.row_state.write();
                     row_state.entry(row_ptr).or_insert(0_usize);
                     unmatched_build_indexes.push(row_ptr);
+                }
+                if self.hash_join_desc.join_type == JoinType::Full {
+                    if let Some(row_ptr) = build_indexes_set.get(&row_ptr) {
+                        // If `marker` == `MarkerKind::False`, it means the row in build side has been filtered in left probe phase
+                        if row_ptr.marker == Some(MarkerKind::False) {
+                            unmatched_build_indexes.push(**row_ptr);
+                        }
+                    }
                 }
             }
         }
@@ -476,14 +470,17 @@ impl HashJoinState for JoinHashTable {
     fn probe(&self, input: &DataBlock, probe_state: &mut ProbeState) -> Result<Vec<DataBlock>> {
         match self.hash_join_desc.join_type {
             JoinType::Inner
-            | JoinType::Semi
-            | JoinType::Anti
+            | JoinType::LeftSemi
+            | JoinType::LeftAnti
+            | JoinType::RightSemi
+            | JoinType::RightAnti
             | JoinType::Left
-            | Mark
+            | JoinType::LeftMark
+            | JoinType::RightMark
             | JoinType::Single
-            | JoinType::Right => self.probe_join(input, probe_state),
+            | JoinType::Right
+            | JoinType::Full => self.probe_join(input, probe_state),
             JoinType::Cross => self.probe_cross_join(input, probe_state),
-            _ => unimplemented!("{} is unimplemented", self.hash_join_desc.join_type),
         }
     }
 
@@ -539,36 +536,31 @@ impl HashJoinState for JoinHashTable {
         }
 
         let mut chunks = self.row_space.chunks.write().unwrap();
+        let mut has_null = false;
         for chunk_index in 0..chunks.len() {
             let chunk = &mut chunks[chunk_index];
             let mut columns = Vec::with_capacity(chunk.cols.len());
-            let markers = if self.hash_join_desc.join_type == Mark {
-                let mut markers = vec![Some(MarkerKind::False); chunk.num_rows()];
-                // Only all columns' values are NULL, we set the marker to Null.
-                if chunk.cols.iter().any(|c| c.is_nullable() || c.is_null()) {
-                    let mut valids = None;
-                    for col in chunk.cols.iter() {
-                        let (is_all_null, tmp_valids) = col.validity();
-                        if is_all_null {
-                            let mut m = MutableBitmap::with_capacity(chunk.num_rows());
-                            m.extend_constant(chunk.num_rows(), false);
-                            valids = Some(m.into());
-                            break;
-                        } else {
-                            valids = combine_validities_3(valids, tmp_valids.cloned());
-                        }
-                    }
-                    if let Some(v) = valids {
-                        for (idx, marker) in markers.iter_mut().enumerate() {
-                            if !v.get_bit(idx) {
-                                *marker = Some(MarkerKind::Null);
+            let markers = match self.hash_join_desc.join_type {
+                JoinType::LeftMark => Self::init_markers(&chunk.cols, chunk.num_rows())
+                    .iter()
+                    .map(|x| Some(*x))
+                    .collect(),
+                JoinType::RightMark => {
+                    if !has_null {
+                        if let Some(validity) = chunk.cols[0].validity().1 {
+                            if validity.unset_bits() > 0 {
+                                has_null = true;
+                                let mut has_null_ref =
+                                    self.hash_join_desc.marker_join_desc.has_null.write();
+                                *has_null_ref = true;
                             }
                         }
                     }
+                    vec![None; chunk.num_rows()]
                 }
-                markers
-            } else {
-                vec![None; chunk.num_rows()]
+                _ => {
+                    vec![None; chunk.num_rows()]
+                }
             };
             for col in chunk.cols.iter() {
                 columns.push(col);
@@ -675,52 +667,37 @@ impl HashJoinState for JoinHashTable {
         Ok(())
     }
 
-    fn mark_join_blocks(&self) -> Result<Vec<DataBlock>> {
-        let mut row_ptrs = self.row_ptrs.write();
+    fn mark_join_blocks(&self, _aborting: Aborting) -> Result<Vec<DataBlock>> {
+        let row_ptrs = self.row_ptrs.read();
         let has_null = self.hash_join_desc.marker_join_desc.has_null.read();
-        let mut validity = MutableBitmap::with_capacity(row_ptrs.len());
-        let mut boolean_bit_map = MutableBitmap::with_capacity(row_ptrs.len());
-        for row_ptr in row_ptrs.iter_mut() {
-            let marker = row_ptr.marker.unwrap();
-            if marker == MarkerKind::False && *has_null {
-                row_ptr.marker = Some(MarkerKind::Null);
-            }
-            if marker == MarkerKind::Null {
-                validity.push(false);
-            } else {
-                validity.push(true);
-            }
-            if marker == MarkerKind::True {
-                boolean_bit_map.push(true);
-            } else {
-                boolean_bit_map.push(false);
-            }
-        }
-        // transfer marker to a Nullable(BooleanColumn)
-        let boolean_column = BooleanColumn::from_arrow_data(boolean_bit_map.into());
-        let marker_column = Self::set_validity(&boolean_column.arc(), &validity.into())?;
-        let marker_schema = DataSchema::new(vec![DataField::new(
-            &self
-                .hash_join_desc
-                .marker_join_desc
-                .marker_index
-                .ok_or_else(|| ErrorCode::LogicalError("Invalid mark join"))?
-                .to_string(),
-            NullableType::new_impl(BooleanType::new_impl()),
-        )]);
-        let marker_block =
-            DataBlock::create(DataSchemaRef::from(marker_schema), vec![marker_column]);
+
+        let markers = row_ptrs.iter().map(|r| r.marker.unwrap()).collect();
+        let marker_block = self.create_marker_block(*has_null, markers)?;
         let build_block = self.row_space.gather(&row_ptrs)?;
         Ok(vec![self.merge_eq_block(&marker_block, &build_block)?])
     }
 
-    fn right_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
+    fn right_join_blocks(&self, blocks: &[DataBlock], _flag: Aborting) -> Result<Vec<DataBlock>> {
         let unmatched_build_indexes = self.find_unmatched_build_indexes()?;
         if unmatched_build_indexes.is_empty() && self.hash_join_desc.other_predicate.is_none() {
             return Ok(blocks.to_vec());
         }
 
-        let unmatched_build_block = self.row_space.gather(&unmatched_build_indexes)?;
+        let mut unmatched_build_block = self.row_space.gather(&unmatched_build_indexes)?;
+        if self.hash_join_desc.join_type == JoinType::Full {
+            let nullable_unmatched_build_columns = unmatched_build_block
+                .columns()
+                .iter()
+                .map(|c| {
+                    let mut probe_validity = MutableBitmap::new();
+                    probe_validity.extend_constant(c.len(), true);
+                    let probe_validity: Bitmap = probe_validity.into();
+                    Self::set_validity(c, &probe_validity)
+                })
+                .collect::<Result<Vec<_>>>()?;
+            unmatched_build_block =
+                DataBlock::create(self.row_space.schema(), nullable_unmatched_build_columns);
+        };
         // Create null block for unmatched rows in probe side
         let null_probe_block = DataBlock::create(
             self.probe_schema.clone(),
@@ -737,7 +714,11 @@ impl HashJoinState for JoinHashTable {
         let mut merged_block = self.merge_eq_block(&unmatched_build_block, &null_probe_block)?;
         merged_block = DataBlock::concat_blocks(&[blocks, &[merged_block]].concat())?;
 
-        if self.hash_join_desc.other_predicate.is_none() {
+        // Don't need process non-equi conditions for full join in the method
+        // Because non-equi conditions have been processed in left probe join
+        if self.hash_join_desc.other_predicate.is_none()
+            || self.hash_join_desc.join_type == JoinType::Full
+        {
             return Ok(vec![merged_block]);
         }
 
@@ -781,5 +762,94 @@ impl HashJoinState for JoinHashTable {
         }
 
         Ok(vec![merged_block])
+    }
+
+    fn right_anti_semi_join_blocks(
+        &self,
+        blocks: &[DataBlock],
+        _flag: Aborting,
+    ) -> Result<Vec<DataBlock>> {
+        // Fast path for right anti join with non-equi conditions
+        if self.hash_join_desc.other_predicate.is_none()
+            && self.hash_join_desc.join_type == JoinType::RightAnti
+        {
+            let unmatched_build_indexes = self.find_unmatched_build_indexes()?;
+            let unmatched_build_block = self.row_space.gather(&unmatched_build_indexes)?;
+            return Ok(vec![unmatched_build_block]);
+        }
+        let input_block = DataBlock::concat_blocks(blocks)?;
+        let probe_fields_len = self.probe_schema.fields().len();
+        let build_columns = input_block.columns()[probe_fields_len..].to_vec();
+        let build_block = DataBlock::create(self.row_space.data_schema.clone(), build_columns);
+
+        // Fast path for right semi join with non-equi conditions
+        if self.hash_join_desc.other_predicate.is_none()
+            && self.hash_join_desc.join_type == JoinType::RightSemi
+        {
+            let mut bm = MutableBitmap::new();
+            bm.extend_constant(build_block.num_rows(), true);
+            let build_indexes = self.hash_join_desc.right_join_desc.build_indexes.read();
+            let filtered_block =
+                self.filter_rows_for_right_semi_join(&mut bm, &build_indexes, build_block)?;
+            return Ok(vec![filtered_block]);
+        }
+
+        // Right anti/semi join with non-equi conditions
+        let (bm, all_true, all_false) = self.get_other_filters(
+            &input_block,
+            self.hash_join_desc.other_predicate.as_ref().unwrap(),
+        )?;
+
+        // Fast path for all non-equi conditions are true
+        if all_true {
+            return if self.hash_join_desc.join_type == JoinType::RightSemi {
+                let mut bm = MutableBitmap::new();
+                bm.extend_constant(build_block.num_rows(), true);
+                let build_indexes = self.hash_join_desc.right_join_desc.build_indexes.read();
+                let filtered_block =
+                    self.filter_rows_for_right_semi_join(&mut bm, &build_indexes, build_block)?;
+                return Ok(vec![filtered_block]);
+            } else {
+                let unmatched_build_indexes = self.find_unmatched_build_indexes()?;
+                let unmatched_build_block = self.row_space.gather(&unmatched_build_indexes)?;
+                Ok(vec![unmatched_build_block])
+            };
+        }
+
+        // Fast path for all non-equi conditions are false
+        if all_false {
+            return if self.hash_join_desc.join_type == JoinType::RightSemi {
+                Ok(vec![DataBlock::empty_with_schema(
+                    self.row_space.data_schema.clone(),
+                )])
+            } else {
+                Ok(self.row_space.datablocks())
+            };
+        }
+
+        let mut bm = bm.unwrap().into_mut().right().unwrap();
+
+        // Right semi join with non-equi conditions
+        if self.hash_join_desc.join_type == JoinType::RightSemi {
+            let build_indexes = self.hash_join_desc.right_join_desc.build_indexes.read();
+            let filtered_block =
+                self.filter_rows_for_right_semi_join(&mut bm, &build_indexes, build_block)?;
+            return Ok(vec![filtered_block]);
+        }
+
+        // Right anti join with non-equi conditions
+        let mut filtered_build_indexes: Vec<RowPtr> = vec![];
+        {
+            let mut build_indexes = self.hash_join_desc.right_join_desc.build_indexes.write();
+            for (idx, row_ptr) in build_indexes.iter().enumerate() {
+                if bm.get(idx) {
+                    filtered_build_indexes.push(*row_ptr)
+                }
+            }
+            *build_indexes = filtered_build_indexes;
+        }
+        let unmatched_build_indexes = self.find_unmatched_build_indexes()?;
+        let unmatched_build_block = self.row_space.gather(&unmatched_build_indexes)?;
+        Ok(vec![unmatched_build_block])
     }
 }

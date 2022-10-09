@@ -27,7 +27,6 @@ use common_storages_fuse::operations::BatchCommitter;
 use common_tracing::QueryLogger;
 use common_users::RoleCacheManager;
 use common_users::UserApiProvider;
-use opendal::Operator;
 
 use crate::api::DataExchangeManager;
 use crate::catalogs::CatalogManagerHelper;
@@ -39,7 +38,7 @@ pub struct GlobalServices {
     global_runtime: UnsafeCell<Option<Arc<Runtime>>>,
     query_logger: UnsafeCell<Option<Arc<QueryLogger>>>,
     cluster_discovery: UnsafeCell<Option<Arc<ClusterDiscovery>>>,
-    storage_operator: UnsafeCell<Option<Operator>>,
+    storage_operator: UnsafeCell<Option<StorageOperator>>,
     cache_manager: UnsafeCell<Option<Arc<CacheManager>>>,
     catalog_manager: UnsafeCell<Option<Arc<CatalogManager>>>,
     http_query_manager: UnsafeCell<Option<Arc<HttpQueryManager>>>,
@@ -151,8 +150,8 @@ impl SingletonImpl<Arc<ClusterDiscovery>> for GlobalServices {
     }
 }
 
-impl SingletonImpl<Operator> for GlobalServices {
-    fn get(&self) -> Operator {
+impl SingletonImpl<StorageOperator> for GlobalServices {
+    fn get(&self) -> StorageOperator {
         unsafe {
             match &*self.storage_operator.get() {
                 None => panic!("StorageOperator is not init"),
@@ -161,9 +160,9 @@ impl SingletonImpl<Operator> for GlobalServices {
         }
     }
 
-    fn init(&self, value: Operator) -> Result<()> {
+    fn init(&self, value: StorageOperator) -> Result<()> {
         unsafe {
-            *(self.storage_operator.get() as *mut Option<Operator>) = Some(value);
+            *(self.storage_operator.get() as *mut Option<StorageOperator>) = Some(value);
             Ok(())
         }
     }

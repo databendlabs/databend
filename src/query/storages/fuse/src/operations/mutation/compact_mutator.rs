@@ -61,13 +61,12 @@ impl CompactMutator {
         location_generator: TableMetaLocationGenerator,
         block_per_seg: usize,
         is_cluster: bool,
+        operator: Operator,
     ) -> Result<Self> {
-        let data_accessor = ctx.get_storage_operator()?;
-
         Ok(Self {
             ctx,
             base_snapshot,
-            data_accessor,
+            data_accessor: operator,
             block_compactor,
             location_generator,
             selected_blocks: Vec::new(),
@@ -156,7 +155,7 @@ impl TableMutator for CompactMutator {
         Ok(true)
     }
 
-    async fn try_commit(&self, catalog_name: &str, table_info: &TableInfo) -> Result<()> {
+    async fn try_commit(&self, table_info: &TableInfo) -> Result<()> {
         let ctx = self.ctx.clone();
         let snapshot = self.base_snapshot.clone();
         let mut new_snapshot = TableSnapshot::from_previous(&snapshot);
@@ -179,10 +178,10 @@ impl TableMutator for CompactMutator {
 
         commit_to_meta_server(
             ctx.as_ref(),
-            catalog_name,
             table_info,
             &self.location_generator,
             new_snapshot,
+            &self.data_accessor,
         )
         .await
     }

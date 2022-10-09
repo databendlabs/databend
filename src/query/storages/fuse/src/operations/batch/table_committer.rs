@@ -19,7 +19,6 @@ use std::time::Instant;
 use common_base::base::tokio::sync::mpsc::error::TryRecvError;
 use common_base::base::tokio::sync::mpsc::Receiver as TokioReceiver;
 use common_base::base::tokio::sync::mpsc::Sender as TokioSender;
-use common_cache::Cache;
 use common_catalog::catalog::Catalog;
 use common_exception::ErrorCode;
 use common_exception::Result;

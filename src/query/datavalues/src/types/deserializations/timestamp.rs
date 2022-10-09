@@ -25,6 +25,10 @@ pub struct TimestampDeserializer {
 }
 
 impl TypeDeserializer for TimestampDeserializer {
+    fn memory_size(&self) -> usize {
+        self.builder.memory_size()
+    }
+
     fn de_binary(&mut self, reader: &mut &[u8], _format: &FormatSettings) -> Result<()> {
         let value: i64 = reader.read_scalar()?;
         check_timestamp(value)?;

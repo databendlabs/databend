@@ -13,18 +13,20 @@
 //  limitations under the License.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use common_base::base::tokio;
-use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
+use common_functions::aggregates::eval_aggr;
 use common_fuse_meta::meta::ClusterStatistics;
 use common_fuse_meta::meta::ColumnStatistics;
 use common_legacy_expression::add;
 use common_legacy_expression::col;
 use common_legacy_expression::lit;
 use common_pipeline_transforms::processors::ExpressionExecutor;
+use common_storages_fuse::statistics::Trim;
+use common_storages_fuse::statistics::STATS_REPLACEMENT_CHAR;
+use common_storages_fuse::statistics::STATS_STRING_PREFIX_LEN;
 use databend_query::storages::fuse::io::BlockCompactor;
 use databend_query::storages::fuse::io::BlockWriter;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
@@ -34,6 +36,7 @@ use databend_query::storages::fuse::statistics::BlockStatistics;
 use databend_query::storages::fuse::statistics::ClusterStatsGenerator;
 use databend_query::storages::fuse::statistics::StatisticsAccumulator;
 use opendal::Operator;
+use rand::Rng;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
@@ -143,18 +146,15 @@ fn test_reduce_block_statistics_in_memory_size() -> common_exception::Result<()>
 #[tokio::test]
 async fn test_accumulator() -> common_exception::Result<()> {
     let blocks = TestFixture::gen_sample_blocks(10, 1);
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
     let mut stats_acc = StatisticsAccumulator::new();
 
     let operator = Operator::new(opendal::services::memory::Builder::default().build()?);
-    let table_ctx: Arc<dyn TableContext> = ctx;
     let loc_generator = TableMetaLocationGenerator::with_prefix("/".to_owned());
 
     for item in blocks {
         let block = item?;
         let block_statistics = BlockStatistics::from(&block, "does_not_matter".to_owned(), None)?;
-        let block_writer = BlockWriter::new(&table_ctx, &operator, &loc_generator);
+        let block_writer = BlockWriter::new(&operator, &loc_generator);
         let block_meta = block_writer.write(block, None).await?;
         stats_acc.add_with_block_meta(block_meta, block_statistics)?;
     }
@@ -239,4 +239,170 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
     assert!(stats.is_none());
 
     Ok(())
+}
+
+#[test]
+fn test_ft_stats_block_stats_string_columns_trimming() -> common_exception::Result<()> {
+    let suite = || -> common_exception::Result<()> {
+        // prepare random strings
+        // 100 string, length ranges from 0 to 100 (chars)
+        let mut rand_strings: Vec<String> = vec![];
+        for _ in 0..100 {
+            let mut rnd = rand::thread_rng();
+            let rand_string: String = rand::thread_rng()
+                .sample_iter::<char, _>(rand::distributions::Standard)
+                .take(rnd.gen_range(0..1000))
+                .collect();
+
+            rand_strings.push(rand_string);
+        }
+
+        let min_expr = rand_strings.iter().min().unwrap();
+        let max_expr = rand_strings.iter().max().unwrap();
+
+        let data_value_min = DataValue::String(min_expr.to_owned().into_bytes());
+        let data_value_max = DataValue::String(max_expr.to_owned().into_bytes());
+
+        let trimmed_min = data_value_min.clone().trim_min();
+        let trimmed_max = data_value_max.clone().trim_max();
+
+        let meaningless_to_collect_max = is_degenerated_case(max_expr.as_str());
+
+        if meaningless_to_collect_max {
+            assert!(trimmed_max.is_none());
+        } else {
+            assert!(trimmed_max.is_some());
+            let trimmed = trimmed_max.unwrap().as_string()?;
+            assert!(char_len(&trimmed) <= STATS_STRING_PREFIX_LEN);
+            assert!(DataValue::String(trimmed) >= data_value_max)
+        }
+
+        {
+            assert!(trimmed_min.is_some());
+            let trimmed = trimmed_min.unwrap().as_string()?;
+            assert!(char_len(&trimmed) <= STATS_STRING_PREFIX_LEN);
+            assert!(DataValue::String(trimmed) <= data_value_min);
+        }
+        Ok(())
+    };
+
+    // let runs = 0..1000;  // use this at home
+    let runs = 0..100;
+    for _ in runs {
+        suite()?
+    }
+    Ok(())
+}
+
+#[test]
+fn test_ft_stats_block_stats_string_columns_trimming_using_eval() -> common_exception::Result<()> {
+    let data_type = StringType::new_impl();
+    let data_filed = DataField::new("a", data_type.clone());
+    let schema = DataSchemaRefExt::create(vec![data_filed]);
+
+    // verifies (randomly) the following assumptions:
+    //
+    // https://github.com/datafuselabs/databend/issues/7829
+    // > ...
+    // > in a way that preserves the property of min/max statistics:
+    // > the trimmed max should be larger than the non-trimmed one, and the trimmed min
+    // > should be lesser than the non-trimmed one.
+
+    let suite = || -> common_exception::Result<()> {
+        // prepare random strings
+        // 100 string, length ranges from 0 to 100 (chars)
+        let mut rand_strings: Vec<String> = vec![];
+        for _ in 0..100 {
+            let mut rnd = rand::thread_rng();
+            let rand_string: String = rand::thread_rng()
+                .sample_iter::<char, _>(rand::distributions::Standard)
+                .take(rnd.gen_range(0..1000))
+                .collect();
+
+            rand_strings.push(rand_string);
+        }
+
+        // build test data block, which has only on column, of String type
+        let data_col = Series::from_data(
+            rand_strings
+                .iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<&str>>(),
+        );
+        let block = DataBlock::create(schema.clone(), vec![data_col.clone()]);
+
+        // calculate UNTRIMMED min max values of the test column
+        // by using eval_aggr (to be consistent with the column_statistic mod)
+        let data_field = DataField::new("", data_type.clone());
+        let rows = data_col.len();
+        let column_field = ColumnWithField::new(data_col, data_field);
+        let min_col = eval_aggr("min", vec![], &[column_field.clone()], rows)?;
+        let max_col = eval_aggr("max", vec![], &[column_field], rows)?;
+
+        let min_expr = min_col.get(0);
+        let max_expr = max_col.get(0);
+
+        // generate the statistics of column
+        let stats_of_columns = gen_columns_statistics(&block).unwrap();
+
+        // check if the max value (untrimmed) is in degenerated condition:
+        // - the length of string value is larger or equal than STRING_PREFIX_LEN
+        // - AND the string has a prefix of length STRING_PREFIX_LEN, for all the char C in prefix,
+        //   C > REPLACEMENT_CHAR; which means we can not replace any of them.
+        let string_max_expr = String::from_utf8(max_expr.as_string()?).unwrap();
+        let meaningless_to_collect_max = is_degenerated_case(string_max_expr.as_str());
+
+        if meaningless_to_collect_max {
+            // no stats will be collected
+            assert!(stats_of_columns.get(&0).is_none())
+        } else {
+            // Finally:
+            // check that, trimmed "col_stats.max" always large than or equal to the untrimmed "max_expr"
+            let col_stats = stats_of_columns.get(&0).unwrap();
+            assert!(
+                col_stats.max >= max_expr,
+                "left [{}]\nright [{}]",
+                col_stats.max,
+                max_expr
+            );
+            // check that, trimmed "col_stats.min" always less than or equal to the untrimmed "mn_expr"
+            assert!(
+                col_stats.min <= min_expr,
+                "left [{}]\nright [{}]",
+                col_stats.min,
+                min_expr
+            );
+        }
+        Ok(())
+    };
+
+    // let runs = 0..1000;  // use this at home
+
+    let runs = 0..100;
+    for _ in runs {
+        suite()?
+    }
+    Ok(())
+}
+
+fn is_degenerated_case(value: &str) -> bool {
+    // check if the value (untrimmed) is in degenerated condition:
+    // - the length of string value is larger or equal than STRING_PREFIX_LEN
+    // - AND the string has a prefix of length STRING_PREFIX_LEN, for all the char C in prefix,
+    //   C > REPLACEMENT_CHAR; which means we can not replace any of them.
+    let larger_than_prefix_len = value.chars().count() > STATS_STRING_PREFIX_LEN;
+    let prefixed_with_irreplaceable_chars = value
+        .chars()
+        .take(STATS_STRING_PREFIX_LEN)
+        .all(|c| c >= STATS_REPLACEMENT_CHAR);
+
+    larger_than_prefix_len && prefixed_with_irreplaceable_chars
+}
+
+fn char_len(value: &[u8]) -> usize {
+    String::from_utf8(value.to_vec())
+        .unwrap()
+        .as_str()
+        .chars()
+        .count()
 }

@@ -238,7 +238,6 @@ impl MySQLFederated {
             ("(?i)^(/\\* ApplicationName=(.*)SHOW VARIABLES(.*))", None),
             // pt-toolkit
             ("(?i)^(/\\*!40101 SET(.*) \\*/)$", None),
-            ("(?i)^(SET character_set_connection(.*))", None),
         ];
 
         FederatedHelper::block_match_rule(query, rules)

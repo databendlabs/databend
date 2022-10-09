@@ -18,6 +18,7 @@ mod input_context;
 mod input_format;
 mod input_format_text;
 mod input_pipeline;
+mod input_split;
 mod source_aligner;
 mod source_deserializer;
 mod transform_deserializer;

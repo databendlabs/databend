@@ -36,7 +36,6 @@ impl FuseTable {
     pub(crate) async fn do_compact(
         &self,
         ctx: Arc<dyn TableContext>,
-        catalog: String,
         pipeline: &mut Pipeline,
     ) -> Result<Option<Arc<dyn TableMutator>>> {
         let snapshot_opt = self.read_table_snapshot(ctx.clone()).await?;
@@ -62,6 +61,7 @@ impl FuseTable {
             self.meta_location_generator().clone(),
             block_per_seg,
             self.cluster_key_meta.is_some(),
+            self.operator.clone(),
         )?;
         let need_compact = mutator.blocks_select().await?;
         if !need_compact {
@@ -69,8 +69,9 @@ impl FuseTable {
         }
 
         let partitions_total = mutator.partitions_total();
-        let (statistics, parts) = self.read_partitions_with_metas(
+        let (statistics, parts) = Self::read_partitions_with_metas(
             ctx.clone(),
+            self.table_info.schema(),
             None,
             mutator.selected_blocks(),
             partitions_total,
@@ -78,7 +79,7 @@ impl FuseTable {
         let table_info = self.get_table_info();
         let description = statistics.get_description(table_info);
         let plan = ReadDataSourcePlan {
-            catalog,
+            catalog: table_info.catalog().to_string(),
             source_info: SourceInfo::TableSource(table_info.clone()),
             scan_fields: None,
             parts,
@@ -93,6 +94,7 @@ impl FuseTable {
 
         pipeline.add_transform(|transform_input_port, transform_output_port| {
             TransformCompact::try_create(
+                ctx.clone(),
                 transform_input_port,
                 transform_output_port,
                 block_compactor.to_compactor(false),

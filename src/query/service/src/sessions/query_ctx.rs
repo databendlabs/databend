@@ -15,6 +15,7 @@
 use std::collections::VecDeque;
 use std::future::Future;
 use std::net::SocketAddr;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -40,6 +41,7 @@ use common_legacy_planners::SourceInfo;
 use common_legacy_planners::StageTableInfo;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::UserInfo;
+use common_storage::StorageParams;
 use opendal::Operator;
 use parking_lot::RwLock;
 use tracing::debug;
@@ -66,7 +68,6 @@ pub struct QueryContext {
     version: String,
     partition_queue: Arc<RwLock<VecDeque<PartInfoPtr>>>,
     shared: Arc<QueryContextShared>,
-    precommit_blocks: Arc<RwLock<Vec<DataBlock>>>,
     fragment_id: Arc<AtomicUsize>,
 }
 
@@ -82,7 +83,6 @@ impl QueryContext {
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
             version: format!("DatabendQuery {}", *crate::version::DATABEND_COMMIT_VERSION),
             shared,
-            precommit_blocks: Arc::new(RwLock::new(Vec::new())),
             fragment_id: Arc::new(AtomicUsize::new(0)),
         })
     }
@@ -223,20 +223,11 @@ impl TableContext for QueryContext {
     fn get_result_progress_value(&self) -> ProgressValues {
         self.shared.result_progress.as_ref().get_values()
     }
-    // Steal n partitions from the partition pool by the pipeline worker.
-    // This also can steal the partitions from distributed node.
-    fn try_get_partitions(&self, num: u64) -> Result<Partitions> {
-        let mut partitions = vec![];
-        for _ in 0..num {
-            match self.partition_queue.write().pop_back() {
-                None => break,
-                Some(partition) => {
-                    partitions.push(partition);
-                }
-            }
-        }
-        Ok(partitions)
+
+    fn try_get_part(&self) -> Option<PartInfoPtr> {
+        self.partition_queue.write().pop_front()
     }
+
     // Update the context partition pool from the pipeline builder.
     fn try_set_partitions(&self, partitions: Partitions) -> Result<()> {
         let mut partition_queue = self.partition_queue.write();
@@ -266,6 +257,11 @@ impl TableContext for QueryContext {
     fn get_current_catalog(&self) -> String {
         self.shared.get_current_catalog()
     }
+
+    fn get_aborting(&self) -> Arc<AtomicBool> {
+        self.shared.get_aborting()
+    }
+
     fn get_current_database(&self) -> String {
         self.shared.get_current_database()
     }
@@ -309,23 +305,22 @@ impl TableContext for QueryContext {
 
     // Get the storage data accessor operator from the session manager.
     fn get_storage_operator(&self) -> Result<Operator> {
-        let operator = self.shared.storage_operator.clone();
+        // deref from `StorageOperator` to `opendal::Operator` first.
+        let operator = (*self.shared.storage_operator).clone();
 
         Ok(operator.layer(self.shared.dal_ctx.as_ref().clone()))
+    }
+    fn get_storage_params(&self) -> StorageParams {
+        self.shared.get_storage_params()
     }
     fn get_dal_context(&self) -> &DalContext {
         self.shared.dal_ctx.as_ref()
     }
     fn push_precommit_block(&self, block: DataBlock) {
-        let mut blocks = self.precommit_blocks.write();
-        blocks.push(block);
+        self.shared.push_precommit_block(block)
     }
     fn consume_precommit_blocks(&self) -> Vec<DataBlock> {
-        let mut blocks = self.precommit_blocks.write();
-
-        let mut swaped_precommit_blocks = vec![];
-        std::mem::swap(&mut *blocks, &mut swaped_precommit_blocks);
-        swaped_precommit_blocks
+        self.shared.consume_precommit_blocks()
     }
     fn try_get_function_context(&self) -> Result<FunctionContext> {
         let tz = self.get_settings().get_timezone()?;

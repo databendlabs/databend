@@ -37,7 +37,7 @@ use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
-use common_metrics::counter::WithCount;
+use common_metrics::counter::Count;
 use futures::StreamExt;
 use prost::Message;
 use tokio_stream;
@@ -51,9 +51,7 @@ use tracing::info;
 
 use crate::meta_service::meta_service_impl::GrpcStream;
 use crate::meta_service::MetaNode;
-use crate::metrics::incr_meta_metrics_meta_recv_bytes;
-use crate::metrics::incr_meta_metrics_meta_request_result;
-use crate::metrics::incr_meta_metrics_meta_sent_bytes;
+use crate::metrics::network_metrics;
 use crate::metrics::RequestInFlight;
 use crate::version::from_digit_ver;
 use crate::version::to_digit_ver;
@@ -88,7 +86,7 @@ impl MetaServiceImpl {
 
     async fn execute_txn(&self, req: TxnRequest) -> TxnReply {
         let ret = self.meta_node.transaction(req).await;
-        incr_meta_metrics_meta_request_result(ret.is_ok());
+        network_metrics::incr_request_result(ret.is_ok());
 
         match ret {
             Ok(resp) => resp,
@@ -169,11 +167,11 @@ impl MetaService for MetaServiceImpl {
     }
 
     async fn kv_api(&self, r: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
-        let _guard = WithCount::new((), RequestInFlight);
+        let _guard = RequestInFlight::guard();
 
         self.check_token(r.metadata())?;
         common_tracing::extract_remote_span_as_parent(&r);
-        incr_meta_metrics_meta_recv_bytes(r.get_ref().encoded_len() as u64);
+        network_metrics::incr_recv_bytes(r.get_ref().encoded_len() as u64);
 
         let req: MetaGrpcReq = r.try_into()?;
         info!("Received MetaGrpcReq: {:?}", req);
@@ -198,8 +196,8 @@ impl MetaService for MetaServiceImpl {
             }
         };
 
-        incr_meta_metrics_meta_request_result(reply.error.is_empty());
-        incr_meta_metrics_meta_sent_bytes(reply.encoded_len() as u64);
+        network_metrics::incr_request_result(reply.error.is_empty());
+        network_metrics::incr_sent_bytes(reply.encoded_len() as u64);
 
         Ok(Response::new(reply))
     }
@@ -215,7 +213,7 @@ impl MetaService for MetaServiceImpl {
         &self,
         _request: Request<common_meta_types::protobuf::Empty>,
     ) -> Result<Response<Self::ExportStream>, Status> {
-        let _guard = WithCount::new((), RequestInFlight);
+        let _guard = RequestInFlight::guard();
 
         let meta_node = &self.meta_node;
         let res = meta_node.sto.export().await?;
@@ -248,8 +246,8 @@ impl MetaService for MetaServiceImpl {
         request: Request<TxnRequest>,
     ) -> Result<Response<TxnReply>, Status> {
         self.check_token(request.metadata())?;
-        incr_meta_metrics_meta_recv_bytes(request.get_ref().encoded_len() as u64);
-        let _guard = WithCount::new((), RequestInFlight);
+        network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
+        let _guard = RequestInFlight::guard();
 
         common_tracing::extract_remote_span_as_parent(&request);
 
@@ -258,7 +256,7 @@ impl MetaService for MetaServiceImpl {
         info!("Receive txn_request: {}", request);
 
         let body = self.execute_txn(request).await;
-        incr_meta_metrics_meta_sent_bytes(body.encoded_len() as u64);
+        network_metrics::incr_sent_bytes(body.encoded_len() as u64);
 
         Ok(Response::new(body))
     }
@@ -268,7 +266,7 @@ impl MetaService for MetaServiceImpl {
         request: Request<MemberListRequest>,
     ) -> Result<Response<MemberListReply>, Status> {
         self.check_token(request.metadata())?;
-        let _guard = WithCount::new((), RequestInFlight);
+        let _guard = RequestInFlight::guard();
 
         let meta_node = &self.meta_node;
         let members = meta_node.get_meta_addrs().await.map_err(|e| {
@@ -276,7 +274,7 @@ impl MetaService for MetaServiceImpl {
         })?;
 
         let resp = MemberListReply { data: members };
-        incr_meta_metrics_meta_sent_bytes(resp.encoded_len() as u64);
+        network_metrics::incr_sent_bytes(resp.encoded_len() as u64);
 
         Ok(Response::new(resp))
     }
@@ -285,7 +283,7 @@ impl MetaService for MetaServiceImpl {
         &self,
         request: Request<Empty>,
     ) -> Result<Response<ClientInfo>, Status> {
-        let _guard = WithCount::new((), RequestInFlight);
+        let _guard = RequestInFlight::guard();
 
         let r = request.remote_addr();
         if let Some(addr) = r {

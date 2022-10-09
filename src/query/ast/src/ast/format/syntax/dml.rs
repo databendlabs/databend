@@ -27,6 +27,8 @@ use crate::ast::Expr;
 use crate::ast::InsertSource;
 use crate::ast::InsertStmt;
 use crate::ast::TableReference;
+use crate::ast::UpdateExpr;
+use crate::ast::UpdateStmt;
 
 pub(crate) fn pretty_insert(insert_stmt: InsertStmt) -> RcDoc {
     RcDoc::text("INSERT")
@@ -69,13 +71,18 @@ pub(crate) fn pretty_insert(insert_stmt: InsertStmt) -> RcDoc {
 
 fn pretty_source(source: InsertSource) -> RcDoc {
     RcDoc::line().append(match source {
-        InsertSource::Streaming { format, rest_str } => RcDoc::text("FORMAT")
+        InsertSource::Streaming {
+            format,
+            rest_str,
+            start,
+        } => RcDoc::text("FORMAT")
             .append(RcDoc::space())
             .append(RcDoc::text(format))
             .append(
                 RcDoc::line()
                     .nest(NEST_FACTOR)
-                    .append(RcDoc::text(rest_str.to_string())),
+                    .append(RcDoc::text(rest_str.to_string()))
+                    .append(RcDoc::text(start.to_string())),
             ),
         InsertSource::Values { rest_str } => RcDoc::text("VALUES").append(
             RcDoc::line()
@@ -101,6 +108,46 @@ pub(crate) fn pretty_delete<'a>(
         } else {
             RcDoc::nil()
         })
+}
+
+pub(crate) fn pretty_update(update_stmt: UpdateStmt) -> RcDoc {
+    RcDoc::text("UPDATE")
+        .append(
+            RcDoc::line()
+                .nest(NEST_FACTOR)
+                .append(pretty_table(update_stmt.table)),
+        )
+        .append(RcDoc::line().append(RcDoc::text("SET")))
+        .append(pretty_update_list(update_stmt.update_list))
+        .append(if let Some(selection) = update_stmt.selection {
+            RcDoc::line().append(RcDoc::text("WHERE")).append(
+                RcDoc::line()
+                    .nest(NEST_FACTOR)
+                    .append(pretty_expr(selection).nest(NEST_FACTOR).group()),
+            )
+        } else {
+            RcDoc::nil()
+        })
+}
+
+fn pretty_update_list(update_list: Vec<UpdateExpr>) -> RcDoc {
+    if update_list.len() > 1 {
+        RcDoc::line()
+    } else {
+        RcDoc::space()
+    }
+    .nest(NEST_FACTOR)
+    .append(
+        interweave_comma(update_list.into_iter().map(|update_expr| {
+            RcDoc::text(update_expr.name.to_string())
+                .append(RcDoc::space())
+                .append(RcDoc::text("="))
+                .append(RcDoc::space())
+                .append(pretty_expr(update_expr.expr))
+        }))
+        .nest(NEST_FACTOR)
+        .group(),
+    )
 }
 
 pub(crate) fn pretty_copy(copy_stmt: CopyStmt) -> RcDoc {

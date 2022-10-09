@@ -163,7 +163,7 @@ impl<Event: SystemLogElement + 'static> Table for SystemLogTable<Event> {
         Ok((Statistics::default(), vec![]))
     }
 
-    fn read2(
+    fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
         _: &ReadDataSourcePlan,
@@ -199,7 +199,7 @@ impl<Event: SystemLogElement + 'static> Table for SystemLogTable<Event> {
         Ok(())
     }
 
-    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: &str, _: bool) -> Result<()> {
+    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: bool) -> Result<()> {
         let log_queue = SystemLogQueue::<Event>::instance()?;
         let mut write_guard = log_queue.data.write();
 

@@ -1,3 +1,10 @@
+[workspace.package]
+version = "0.1.0"
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
 [workspace]
 members = [
     # Binaries
@@ -23,6 +30,7 @@ members = [
     "src/query/config",
     "src/query/catalog",
     "src/query/datablocks",
+    "src/query/sharing",
     "src/query/datavalues",
     "src/query/expression",
     "src/query/formats",
@@ -108,4 +116,5 @@ rustc-demangle = { opt-level = 3 }
 [patch.crates-io]
 # If there are dependencies that need patching, they can be listed below.
 # For example:
-# http-types = { git = "https://github.com/Xuanwo/http-types", rev = "106fc6d" }
+# arrow-format = { git = "https://github.com/datafuse-extras/arrow-format", rev = "78dacc1" }
+arrow-format = { git = "https://github.com/datafuse-extras/arrow-format", rev = "78dacc1" }

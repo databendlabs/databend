@@ -27,7 +27,7 @@ use serde::Serialize;
 use super::HttpQueryContext;
 use crate::sessions::SessionType;
 use crate::sessions::TableContext;
-use crate::storages::stage::StageSourceHelper;
+use crate::storages::stage::StageTable;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct UploadToStageResponse {
@@ -65,9 +65,7 @@ pub async fn upload_to_stage(
         .map_err(InternalServerError)?;
 
     let rename_me_qry_ctx: Arc<dyn TableContext> = context.clone();
-    let op = StageSourceHelper::get_op(&rename_me_qry_ctx, &stage)
-        .await
-        .map_err(InternalServerError)?;
+    let op = StageTable::get_op(&rename_me_qry_ctx, &stage).map_err(InternalServerError)?;
 
     let relative_path = req
         .headers()
@@ -76,8 +74,6 @@ pub async fn upload_to_stage(
         .unwrap_or("")
         .trim_matches('/')
         .to_string();
-
-    let prefix = stage.get_prefix();
 
     let mut files = vec![];
     while let Ok(Some(field)) = multipart.next_field().await {
@@ -89,9 +85,8 @@ pub async fn upload_to_stage(
         let file_path = format!("{relative_path}/{name}")
             .trim_start_matches('/')
             .to_string();
-        let obj = format!("{prefix}{file_path}");
         let _ = op
-            .object(&obj)
+            .object(&file_path)
             .write(bytes)
             .await
             .map_err(InternalServerError)?;

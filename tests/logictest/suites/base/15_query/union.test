@@ -106,3 +106,11 @@ SELECT 'Кирилл' as a, 'Müller' as b, '我是谁' as c, 'ASCII' as d, 2 as
 ----
 NULL NULL NULL NULL 1
 Кирилл Müller 我是谁 ASCII 2
+
+statement query TTFI
+SELECT 'Кирилл' as a, 'Müller' as b, 1.0 as c, 2 as id UNION SELECT NULL as a, NULL as b, 1 as c,  1 as id order by id;
+
+----
+NULL NULL 1.0 1
+Кирилл Müller 1.0 2
+

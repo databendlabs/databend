@@ -16,6 +16,7 @@ use std::ops::Range;
 
 use crate::property::Domain;
 use crate::types::ValueType;
+use crate::upcast_gat;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
@@ -32,6 +33,11 @@ impl ValueType for AnyType {
     type Domain = Domain;
     type ColumnIterator<'a> = ColumnIterator<'a>;
     type ColumnBuilder = ColumnBuilder;
+
+    #[inline]
+    fn upcast_gat<'short, 'long: 'short>(long: Self::ScalarRef<'long>) -> Self::ScalarRef<'short> {
+        upcast_gat(long)
+    }
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
         scalar.to_owned()
@@ -51,6 +57,12 @@ impl ValueType for AnyType {
 
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         Some(domain.clone())
+    }
+
+    fn try_downcast_builder<'a>(
+        builder: &'a mut ColumnBuilder,
+    ) -> Option<&'a mut Self::ColumnBuilder> {
+        Some(builder)
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {

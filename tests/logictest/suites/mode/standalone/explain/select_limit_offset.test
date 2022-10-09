@@ -140,17 +140,17 @@ Limit
 ├── limit: 2
 ├── offset: 1
 └── HashJoin
-    ├── join type: LEFT OUTER
-    ├── build keys: [CAST(t1.a (#1) AS INT NULL)]
-    ├── probe keys: [CAST(t.a (#0) AS INT NULL)]
+    ├── join type: RIGHT OUTER
+    ├── build keys: [CAST(t.a (#0) AS INT NULL)]
+    ├── probe keys: [CAST(t1.a (#1) AS INT NULL)]
     ├── filters: []
     ├── Limit(Build)
     │   ├── limit: 2
     │   ├── offset: 1
     │   └── TableScan
-    │       ├── table: default.default.t1
-    │       ├── read rows: 2
-    │       ├── read bytes: 31
+    │       ├── table: default.default.t
+    │       ├── read rows: 1
+    │       ├── read bytes: 184
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
     │       └── push downs: [filters: [], limit: 3]
@@ -158,9 +158,9 @@ Limit
         ├── limit: 2
         ├── offset: 1
         └── TableScan
-            ├── table: default.default.t
-            ├── read rows: 1
-            ├── read bytes: 27
+            ├── table: default.default.t1
+            ├── read rows: 2
+            ├── read bytes: 188
             ├── partitions total: 1
             ├── partitions scanned: 1
             └── push downs: [filters: [], limit: 3]

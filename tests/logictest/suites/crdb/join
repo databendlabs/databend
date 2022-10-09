@@ -25,11 +25,11 @@ statement error 1065
 SELECT x FROM onecolumn AS a, onecolumn AS b;
 
 statement query II
-SELECT * FROM onecolumn AS a(x) JOIN onecolumn AS b(y) ON a.x = b.y;
+SELECT * FROM onecolumn AS a(x) JOIN onecolumn AS b(y) ON a.x = b.y order by a.x;
 
 ----
-44 44
 42 42
+44 44
 
 statement query I
 SELECT * FROM onecolumn AS a JOIN onecolumn as b USING(x) ORDER BY x;
@@ -39,19 +39,19 @@ SELECT * FROM onecolumn AS a JOIN onecolumn as b USING(x) ORDER BY x;
 44
 
 statement query I
-SELECT * FROM onecolumn AS a NATURAL JOIN onecolumn as b;
+SELECT * FROM onecolumn AS a NATURAL JOIN onecolumn as b order by a.x;
 
 ----
-44
 42
+44
 
 statement query II
-SELECT * FROM onecolumn AS a(x) LEFT OUTER JOIN onecolumn AS b(y) ON a.x = b.y;
+SELECT * FROM onecolumn AS a(x) LEFT OUTER JOIN onecolumn AS b(y) ON a.x = b.y order by a.x;
 
 ----
+42 42
 44 44
 NULL NULL
-42 42
 
 statement query I
 SELECT * FROM onecolumn AS a LEFT OUTER JOIN onecolumn AS b USING(x) ORDER BY x;
@@ -76,12 +76,12 @@ NULL NULL
 NULL 42
 
 statement query I
-SELECT * FROM onecolumn AS a NATURAL LEFT OUTER JOIN onecolumn AS b;
+SELECT * FROM onecolumn AS a NATURAL LEFT OUTER JOIN onecolumn AS b order by a.x;
 
 ----
+42
 44
 NULL
-42
 
 statement query II
 SELECT * FROM onecolumn AS a(x) RIGHT OUTER JOIN onecolumn AS b(y) ON a.x = b.y order by x;
@@ -136,16 +136,60 @@ CREATE TABLE othercolumn (x INT);
 statement ok
 INSERT INTO othercolumn(x) VALUES (43),(42),(16);
 
--- TODO FULL OUTER is unimplemented
--- statement query II
--- SELECT * FROM onecolumn AS a FULL OUTER JOIN othercolumn AS b ON a.x = b.x ORDER BY a.x,b.x;
+statement query II
+SELECT * FROM onecolumn AS a FULL OUTER JOIN othercolumn AS b ON a.x = b.x ORDER BY a.x,b.x;
 
--- ----
--- NULL NULL
--- NULL 16
--- NULL 43
--- 42   42
--- 44   NULL
+----
+42 42
+44 NULL
+NULL 16
+NULL 43
+NULL NULL
+
+statement query II
+SELECT * FROM onecolumn AS a full OUTER JOIN othercolumn AS b ON a.x = b.x and a.x > 16 order by b.x;
+
+----
+NULL 16
+42 42
+NULL 43
+44 NULL
+NULL NULL
+
+statement query II
+SELECT * FROM onecolumn AS a full OUTER JOIN othercolumn AS b ON a.x = b.x and b.x > 16 order by b.x;
+
+----
+NULL 16
+42 42
+NULL 43
+44 NULL
+NULL NULL
+
+statement query II
+SELECT * FROM onecolumn AS a full OUTER JOIN othercolumn AS b ON false order by b.x;
+
+----
+NULL 16
+NULL 42
+NULL 43
+44 NULL
+NULL NULL
+42 NULL
+
+statement query II
+SELECT * FROM onecolumn AS a full OUTER JOIN othercolumn AS b ON true order by b.x;
+
+----
+44 16
+NULL 16
+42 16
+44 42
+NULL 42
+42 42
+44 43
+NULL 43
+42 43
 
 -- statement query
 -- SELECT * FROM onecolumn AS a FULL OUTER JOIN othercolumn AS b USING(x) ORDER BY x;
@@ -212,20 +256,35 @@ SELECT * FROM onecolumn AS a(x) RIGHT OUTER JOIN empty AS b(y) ON a.x = b.y;
 statement ok
 SELECT * FROM onecolumn AS a RIGHT OUTER JOIN empty AS b USING(x);
 
-statement ok
+statement query II
 SELECT * FROM empty AS a(x) FULL OUTER JOIN onecolumn AS b(y) ON a.x = b.y ORDER BY b.y;
+
+----
+NULL 42
+NULL 44
+NULL NULL
 
 statement ok
 SELECT * FROM empty AS a FULL OUTER JOIN onecolumn AS b USING(x) ORDER BY x;
 
--- statement query
--- SELECT * FROM onecolumn AS a(x) FULL OUTER JOIN empty AS b(y) ON a.x = b.y ORDER BY a.x;
+statement query II
+SELECT * FROM onecolumn AS a(x) FULL OUTER JOIN empty AS b(y) ON a.x = b.y ORDER BY a.x;
+
+----
+42 NULL
+44 NULL
+NULL NULL
 
 -- statement query
 -- SELECT * FROM onecolumn AS a FULL OUTER JOIN empty AS b USING(x) ORDER BY x;
 
--- statement query
--- SELECT * FROM empty AS a(x) FULL OUTER JOIN onecolumn AS b(y) ON a.x = b.y ORDER BY b.y;
+statement query II
+SELECT * FROM empty AS a(x) FULL OUTER JOIN onecolumn AS b(y) ON a.x = b.y ORDER BY b.y;
+
+----
+NULL 42
+NULL 44
+NULL NULL
 
 -- statement query
 -- SELECT * FROM empty AS a FULL OUTER JOIN onecolumn AS b USING(x) ORDER BY x;
@@ -274,28 +333,28 @@ SELECT o.x, t.y FROM onecolumn o INNER JOIN twocolumn t ON (o.x=t.x AND t.y=53);
 42 53
 
 statement query IT
-SELECT o.x, t.y FROM onecolumn o LEFT OUTER JOIN twocolumn t ON (o.x=t.x AND t.y=53);
+SELECT o.x, t.y FROM onecolumn o LEFT OUTER JOIN twocolumn t ON (o.x=t.x AND t.y=53) order by o.x;
 
 ----
+42 53
 44 NULL
 NULL NULL
-42 53
 
 statement query II
-SELECT o.x, t.y FROM onecolumn o LEFT OUTER JOIN twocolumn t ON (o.x=t.x AND o.x=44);
+SELECT o.x, t.y FROM onecolumn o LEFT OUTER JOIN twocolumn t ON (o.x=t.x AND o.x=44) order by o.x;
 
 ----
+42 NULL
 44 51
 NULL NULL
-42 NULL
 
 statement query II
-SELECT o.x, t.y FROM onecolumn o LEFT OUTER JOIN twocolumn t ON (o.x=t.x AND t.x=44);
+SELECT o.x, t.y FROM onecolumn o LEFT OUTER JOIN twocolumn t ON (o.x=t.x AND t.x=44) order by o.x;
 
 ----
+42 NULL
 44 51
 NULL NULL
-42 NULL
 
 -- statement query
 -- SELECT * FROM (SELECT x, 2 two FROM onecolumn) NATURAL FULL JOIN (SELECT x, y+1 plus1 FROM twocolumn);
@@ -341,11 +400,25 @@ NULL 4 0
 2 2 1
 3 3 1
 
--- statement query
--- SELECT * FROM a FULL OUTER JOIN b ON a.i = b.i;
+statement query III
+SELECT * FROM a FULL OUTER JOIN b ON a.i = b.i order by b;
 
--- statement query
--- SELECT * FROM a FULL OUTER JOIN b ON (a.i = b.i and a.i>2) ORDER BY a.i, b.i;
+----
+NULL 4 0
+2 2 1
+3 3 1
+1 NULL NULL
+
+statement query III
+SELECT * FROM a FULL OUTER JOIN b ON (a.i = b.i and a.i>2) ORDER BY a.i, b.i;
+
+----
+1 NULL NULL
+2 NULL NULL
+3 3 1
+NULL 2 1
+NULL 4 0
+
 
 statement ok
 INSERT INTO b VALUES (3, false);
@@ -359,8 +432,16 @@ SELECT * FROM a RIGHT OUTER JOIN b ON a.i=b.i ORDER BY b.i, b.b;
 3 3 1
 NULL 4 0
 
--- statement query
--- SELECT * FROM a FULL OUTER JOIN b ON a.i=b.i ORDER BY b.i, b.b;
+statement query III
+SELECT * FROM a FULL OUTER JOIN b ON a.i=b.i ORDER BY b.i, b.b;
+
+----
+2 2 1
+3 3 0
+3 3 1
+NULL 4 0
+1 NULL NULL
+
 
 statement query IIIIII
 SELECT * FROM (onecolumn CROSS JOIN twocolumn JOIN onecolumn AS a(b) ON a.b=twocolumn.x JOIN twocolumn AS c(d,e) ON a.b=c.d AND c.d=onecolumn.x) ORDER BY 1 LIMIT 1;
@@ -500,11 +581,36 @@ SELECT * FROM pairs, square WHERE pairs.a + pairs.b = square.sq;
 -- statement query
 -- SELECT a, b, n, sq FROM (SELECT a, b, a * b / 2 AS div, n, sq FROM pairs, square) WHERE div = sq;
 
--- statement query
--- SELECT * FROM pairs FULL OUTER JOIN square ON pairs.a + pairs.b = square.sq;
+statement query IIII
+SELECT * FROM pairs FULL OUTER JOIN square ON pairs.a + pairs.b = square.sq order by a;
 
--- statement query
--- SELECT * FROM pairs FULL OUTER JOIN square ON pairs.a + pairs.b = square.sq WHERE pairs.b%2 <> square.sq%2;
+----
+1 1 NULL NULL
+1 2 NULL NULL
+1 3 2 4
+1 4 NULL NULL
+1 5 NULL NULL
+1 6 NULL NULL
+2 3 NULL NULL
+2 4 NULL NULL
+2 5 NULL NULL
+2 6 NULL NULL
+3 4 NULL NULL
+3 5 NULL NULL
+3 6 3 9
+4 5 3 9
+4 6 NULL NULL
+NULL NULL 1 1
+NULL NULL 4 16
+NULL NULL 5 25
+NULL NULL 6 36
+
+statement query IIII
+SELECT * FROM pairs FULL OUTER JOIN square ON pairs.a + pairs.b = square.sq WHERE pairs.b%2 <> square.sq%2 order by a;
+
+----
+1 3 2 4
+3 6 3 9
 
 statement query IITT
 SELECT *  FROM (SELECT * FROM pairs LEFT JOIN square ON b = sq AND a > 1 AND n < 6) WHERE b > 1 AND (n IS NULL OR n > 1) AND (n IS NULL OR a  < sq);
@@ -576,9 +682,6 @@ SELECT * FROM t1 JOIN t2 ON t2.x=t1.x;
 
 -- statement query
 -- SELECT * FROM t1 NATURAL FULL OUTER JOIN t2;
-
--- statement query
--- SELECT * FROM t1 FULL OUTER JOIN t2 ON t1.x=t2.x;
 
 statement query III
 SELECT t2.x, t1.x, x FROM t1 JOIN t2 USING(x);
@@ -949,6 +1052,229 @@ NULL 45 45
 NULL 44 51
 NULL NULL 52
 NULL 42 53
+
+statement ok
+SELECT * FROM onecolumn AS a(x) RIGHT JOIN twocolumn ON true where false order by y;
+
+statement ok
+SELECT * FROM onecolumn AS a(x) LEFT JOIN twocolumn ON true where twocolumn.x > 50 order by y;
+
+statement ok
+insert into onecolumn values(42);
+
+statement query II
+select * from onecolumn as a right semi join twocolumn as b on a.x = b.x order by b.x;
+
+----
+42 53
+44 51
+
+statement query II
+select * from onecolumn as a right anti join twocolumn as b on a.x = b.x order by b.x;
+
+----
+45 45
+NULL 52
+
+statement query II
+select * from onecolumn as a right semi join twocolumn as b on a.x = b.x and a.x > 42 order by b.x;
+
+----
+44 51
+
+statement query II
+select * from onecolumn as a right anti join twocolumn as b on a.x = b.x and a.x > 42 order by b.x;
+
+----
+42 53
+45 45
+NULL 52
+
+statement query II
+select * from onecolumn as a right semi join twocolumn as b on a.x = b.x and b.x > 42 order by b.x;
+
+----
+44 51
+
+statement query II
+select * from onecolumn as a right anti join twocolumn as b on a.x = b.x and b.x > 42 order by b.x;
+
+----
+42 53
+45 45
+NULL 52
+
+statement query II
+select * from onecolumn as a right semi join twocolumn as b on true order by b.x;
+
+----
+42 53
+44 51
+45 45
+NULL 52
+
+statement ok
+select * from onecolumn as a right anti join twocolumn as b on true order by b.x;
+
+statement ok
+select * from onecolumn as a right semi join twocolumn as b on false order by b.x;
+
+statement query II
+select * from onecolumn as a right anti join twocolumn as b on false order by b.x;
+
+----
+42 53
+44 51
+45 45
+NULL 52
+
+statement query III
+select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 42;
+
+----
+44 44 51
+
+statement query III
+select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 44 or b.x < 43;
+
+----
+42 42 53
+42 42 53
+
+statement query III
+select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 42 and b.x < 45;
+
+----
+44 44 51
+
+
+-- check outer join is converted to inner join
+
+statement query T
+explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 42;
+
+----
+HashJoin
+├── join type: INNER
+├── build keys: [b.x (#1)]
+├── probe keys: [a.x (#0)]
+├── filters: []
+├── TableScan(Build)
+│   ├── table: default.default.twocolumn
+│   ├── read rows: 4
+│   ├── read bytes: 309
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   └── push downs: [filters: [(x > 42)], limit: NONE]
+└── TableScan(Probe)
+    ├── table: default.default.onecolumn
+    ├── read rows: 4
+    ├── read bytes: 376
+    ├── partitions total: 2
+    ├── partitions scanned: 2
+    └── push downs: [filters: [], limit: NONE]
+
+statement query T
+explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 44 or b.x < 43;
+
+----
+HashJoin
+├── join type: INNER
+├── build keys: [b.x (#1)]
+├── probe keys: [a.x (#0)]
+├── filters: []
+├── TableScan(Build)
+│   ├── table: default.default.twocolumn
+│   ├── read rows: 4
+│   ├── read bytes: 309
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   └── push downs: [filters: [((x > 44) or (x < 43))], limit: NONE]
+└── TableScan(Probe)
+    ├── table: default.default.onecolumn
+    ├── read rows: 4
+    ├── read bytes: 376
+    ├── partitions total: 2
+    ├── partitions scanned: 2
+    └── push downs: [filters: [], limit: NONE]
+
+
+statement query T
+explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 42 and b.x < 45;
+
+----
+HashJoin                                                                 
+├── join type: INNER                                                     
+├── build keys: [b.x (#1)]                                               
+├── probe keys: [a.x (#0)]                                               
+├── filters: []                                                          
+├── TableScan(Build)                                                     
+│   ├── table: default.default.twocolumn                                 
+│   ├── read rows: 4                                                     
+│   ├── read bytes: 309
+│   ├── partitions total: 1                                              
+│   ├── partitions scanned: 1                                            
+│   └── push downs: [filters: [(x > 42), (x < 45)], limit: NONE]         
+└── TableScan(Probe)                                                     
+    ├── table: default.default.onecolumn                                 
+    ├── read rows: 4                                                     
+    ├── read bytes: 376                                                   
+    ├── partitions total: 2                                              
+    ├── partitions scanned: 2                                            
+    └── push downs: [filters: [], limit: NONE]                           
+
+-- the following cases won't be converted to inner join
+
+statement query T
+explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 44 or a.x < 43;
+
+----
+Filter                                                     
+├── filters: [or(>(b.x (#1), 44), <(a.x (#0), 43))]        
+└── HashJoin                                               
+    ├── join type: LEFT OUTER                              
+    ├── build keys: [b.x (#1)]                             
+    ├── probe keys: [a.x (#0)]                             
+    ├── filters: []                                        
+    ├── TableScan(Build)                                   
+    │   ├── table: default.default.twocolumn               
+    │   ├── read rows: 4                                   
+    │   ├── read bytes: 309
+    │   ├── partitions total: 1                            
+    │   ├── partitions scanned: 1                          
+    │   └── push downs: [filters: [], limit: NONE]         
+    └── TableScan(Probe)                                   
+        ├── table: default.default.onecolumn               
+        ├── read rows: 4                                   
+        ├── read bytes: 376                                 
+        ├── partitions total: 2                            
+        ├── partitions scanned: 2                          
+        └── push downs: [filters: [], limit: NONE]         
+
+statement query T
+explain select * from onecolumn as a right join twocolumn as b on a.x = b.x where b.x > 42 and b.x < 45;
+
+----
+HashJoin                                                                 
+├── join type: RIGHT OUTER                                               
+├── build keys: [b.x (#1)]                                               
+├── probe keys: [a.x (#0)]                                               
+├── filters: []                                                          
+├── TableScan(Build)                                                     
+│   ├── table: default.default.twocolumn                                 
+│   ├── read rows: 4                                                     
+│   ├── read bytes: 309
+│   ├── partitions total: 1                                              
+│   ├── partitions scanned: 1                                            
+│   └── push downs: [filters: [(x > 42), (x < 45)], limit: NONE]         
+└── TableScan(Probe)                                                     
+    ├── table: default.default.onecolumn                                 
+    ├── read rows: 4                                                     
+    ├── read bytes: 376                                                   
+    ├── partitions total: 2                                              
+    ├── partitions scanned: 2                                            
+    └── push downs: [filters: [], limit: NONE]                           
+
 
 -- statement query
 -- SELECT column1, column1+1FROM  (SELECT * FROM    (VALUES (NULL, NULL)) AS t      NATURAL FULL OUTER JOIN    (VALUES (1, 1)) AS u);

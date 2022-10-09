@@ -28,7 +28,7 @@ use databend_query::interpreters::DropTableClusterKeyInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::TableContext;
-use databend_query::sql::plans::CreateTablePlanV2;
+use databend_query::sql::plans::create_table_v2::CreateTablePlanV2;
 use databend_query::sql::Planner;
 use databend_query::sql::OPT_KEY_DATABASE_ID;
 use databend_query::sql::OPT_KEY_SNAPSHOT_LOCATION;
@@ -72,13 +72,13 @@ async fn test_fuse_table_normal_case() -> Result<()> {
         let (stats, parts) = table.read_partitions(ctx.clone(), None).await?;
         assert_eq!(stats.read_rows, num_blocks * rows_per_block);
 
-        ctx.try_set_partitions(parts)?;
+        ctx.try_set_partitions(parts.clone())?;
         let stream = table
-            .read(ctx.clone(), &ReadDataSourcePlan {
+            .read_data_block_stream(ctx.clone(), &ReadDataSourcePlan {
                 catalog: "default".to_owned(),
                 source_info: SourceInfo::TableSource(Default::default()),
                 scan_fields: None,
-                parts: Default::default(),
+                parts,
                 statistics: Default::default(),
                 description: "".to_string(),
                 tbl_args: None,
@@ -131,14 +131,14 @@ async fn test_fuse_table_normal_case() -> Result<()> {
         assert_eq!(stats.read_rows, num_blocks * rows_per_block);
 
         // inject partitions to current ctx
-        ctx.try_set_partitions(parts)?;
+        ctx.try_set_partitions(parts.clone())?;
 
         let stream = table
-            .read(ctx.clone(), &ReadDataSourcePlan {
+            .read_data_block_stream(ctx.clone(), &ReadDataSourcePlan {
                 catalog: "default".to_owned(),
                 source_info: SourceInfo::TableSource(Default::default()),
                 scan_fields: None,
-                parts: Default::default(),
+                parts,
                 statistics: Default::default(),
                 description: "".to_string(),
                 tbl_args: None,
@@ -180,9 +180,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
 
     // 1. truncate empty table
     let prev_version = table.get_table_info().ident.seq;
-    let r = table
-        .truncate(ctx.clone(), &fixture.default_catalog_name(), false)
-        .await;
+    let r = table.truncate(ctx.clone(), false).await;
     let table = fixture.latest_default_table().await?;
     // no side effects
     assert_eq!(prev_version, table.get_table_info().ident.seq);
@@ -214,9 +212,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
     assert_eq!(stats.read_rows, (num_blocks * rows_per_block) as usize);
 
     // truncate
-    let r = table
-        .truncate(ctx.clone(), &fixture.default_catalog_name(), false)
-        .await;
+    let r = table.truncate(ctx.clone(), false).await;
     assert!(r.is_ok());
 
     // get the latest tbl
@@ -304,6 +300,7 @@ async fn test_fuse_alter_table_cluster_key() -> Result<()> {
         table: fixture.default_table_name(),
         schema: TestFixture::default_schema(),
         engine: Engine::Fuse,
+        storage_params: None,
         options: [
             // database id is required for FUSE
             (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),

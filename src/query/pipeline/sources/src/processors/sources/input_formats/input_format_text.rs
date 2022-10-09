@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use chrono_tz::Tz;
 use common_datablocks::DataBlock;
+use common_datavalues::DataSchemaRef;
 use common_datavalues::TypeDeserializer;
 use common_datavalues::TypeDeserializerImpl;
 use common_exception::ErrorCode;
@@ -28,18 +29,19 @@ use common_pipeline_core::Pipeline;
 use common_settings::Settings;
 use opendal::io_util::DecompressDecoder;
 use opendal::io_util::DecompressState;
-use opendal::Object;
+use opendal::Operator;
 
 use super::InputFormat;
 use crate::processors::sources::input_formats::delimiter::RecordDelimiter;
 use crate::processors::sources::input_formats::impls::input_format_csv::CsvReaderState;
+use crate::processors::sources::input_formats::input_context::CopyIntoPlan;
 use crate::processors::sources::input_formats::input_context::InputContext;
-use crate::processors::sources::input_formats::input_format::FileInfo;
-use crate::processors::sources::input_formats::input_format::InputData;
-use crate::processors::sources::input_formats::input_format::SplitInfo;
 use crate::processors::sources::input_formats::input_pipeline::AligningStateTrait;
 use crate::processors::sources::input_formats::input_pipeline::BlockBuilderTrait;
 use crate::processors::sources::input_formats::input_pipeline::InputFormatPipe;
+use crate::processors::sources::input_formats::input_split::split_by_size;
+use crate::processors::sources::input_formats::input_split::FileInfo;
+use crate::processors::sources::input_formats::input_split::SplitInfo;
 
 pub trait InputFormatTextBase: Sized + Send + Sync + 'static {
     fn format_type() -> StageFileFormatType;
@@ -79,6 +81,7 @@ pub struct InputFormatTextPipe<T> {
 
 #[async_trait::async_trait]
 impl<T: InputFormatTextBase> InputFormatPipe for InputFormatTextPipe<T> {
+    type SplitMeta = ();
     type ReadBatch = Vec<u8>;
     type RowBatch = RowBatch;
     type AligningState = AligningState<T>;
@@ -99,41 +102,64 @@ impl<T: InputFormatTextBase> InputFormat for InputFormatText<T> {
         T::default_field_delimiter()
     }
 
-    async fn read_file_meta(
-        &self,
-        _obj: &Object,
-        _size: usize,
-    ) -> Result<Option<Arc<dyn InputData>>> {
-        Ok(None)
-    }
-
-    async fn read_split_meta(
-        &self,
-        _obj: &Object,
-        _split_info: &SplitInfo,
-    ) -> Result<Option<Box<dyn InputData>>> {
-        Ok(None)
-    }
-
-    fn split_files(&self, file_infos: Vec<FileInfo>, split_size: usize) -> Vec<SplitInfo> {
-        let mut splits = vec![];
-        for f in file_infos {
-            if f.compress_alg.is_none() || !T::is_splittable() {
-                splits.push(SplitInfo::from_file_info(f))
-            } else {
-                splits.append(&mut f.split_by_size(split_size))
-            }
-        }
-        splits
-    }
-
     fn exec_copy(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {
-        tracing::info!("exe text");
         InputFormatTextPipe::<T>::execute_copy_with_aligner(ctx, pipeline)
     }
 
     fn exec_stream(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {
         InputFormatTextPipe::<T>::execute_stream(ctx, pipeline)
+    }
+
+    async fn get_splits(
+        &self,
+        plan: &CopyIntoPlan,
+        op: &Operator,
+        _settings: &Arc<Settings>,
+        _schema: &DataSchemaRef,
+    ) -> Result<Vec<Arc<SplitInfo>>> {
+        let mut infos = vec![];
+        for path in &plan.files {
+            let obj = op.object(path);
+            let size = obj.metadata().await?.content_length() as usize;
+            let compress_alg = InputContext::get_compression_alg_copy(
+                plan.stage_info.file_format_options.compression,
+                path,
+            )?;
+            if compress_alg.is_none() || !T::is_splittable() {
+                let file = Arc::new(FileInfo {
+                    path: path.clone(),
+                    size, // dummy
+                    num_splits: 1,
+                    compress_alg,
+                });
+                infos.push(Arc::new(SplitInfo {
+                    file,
+                    seq_in_file: 0,
+                    offset: 0,
+                    size, // dummy
+                    format_info: None,
+                }));
+            } else {
+                let split_size = 128usize * 1024 * 1024;
+                let split_offsets = split_by_size(size, split_size);
+                let file = Arc::new(FileInfo {
+                    path: path.clone(),
+                    size,
+                    num_splits: split_offsets.len(),
+                    compress_alg,
+                });
+                for (i, (offset, size)) in split_offsets.into_iter().enumerate() {
+                    infos.push(Arc::new(SplitInfo {
+                        file: file.clone(),
+                        seq_in_file: i,
+                        offset,
+                        size,
+                        format_info: None,
+                    }));
+                }
+            }
+        }
+        Ok(infos)
     }
 }
 
@@ -257,13 +283,13 @@ impl<T: InputFormatTextBase> AligningState<T> {
 impl<T: InputFormatTextBase> AligningStateTrait for AligningState<T> {
     type Pipe = InputFormatTextPipe<T>;
 
-    fn try_create(ctx: &Arc<InputContext>, split_info: &SplitInfo) -> Result<Self> {
-        let rows_to_skip = if split_info.seq_infile == 0 {
+    fn try_create(ctx: &Arc<InputContext>, split_info: &Arc<SplitInfo>) -> Result<Self> {
+        let rows_to_skip = if split_info.seq_in_file == 0 {
             ctx.rows_to_skip
         } else {
             0
         };
-        let path = split_info.file_info.path.clone();
+        let path = split_info.file.path.clone();
 
         let decoder = ctx.get_compression_alg(&path)?.map(DecompressDecoder::new);
         let csv_reader = if T::format_type() == StageFileFormatType::Csv {
@@ -327,6 +353,10 @@ impl<T: InputFormatTextBase> BlockBuilder<T> {
 
         Ok(vec![DataBlock::create(self.ctx.schema.clone(), columns)])
     }
+
+    fn memory_size(&self) -> usize {
+        self.mutable_columns.iter().map(|x| x.memory_size()).sum()
+    }
 }
 
 impl<T: InputFormatTextBase> BlockBuilderTrait for BlockBuilder<T> {
@@ -346,7 +376,15 @@ impl<T: InputFormatTextBase> BlockBuilderTrait for BlockBuilder<T> {
         if let Some(b) = batch {
             self.num_rows += b.row_ends.len();
             T::deserialize(self, b)?;
-            if self.num_rows >= self.ctx.rows_per_block {
+            let mem = self.memory_size();
+            tracing::debug!(
+                "block builder added new batch: row {} size {}",
+                self.num_rows,
+                mem
+            );
+            if self.num_rows >= self.ctx.rows_per_block
+                || mem > self.ctx.block_memory_size_threshold
+            {
                 self.flush()
             } else {
                 Ok(vec![])

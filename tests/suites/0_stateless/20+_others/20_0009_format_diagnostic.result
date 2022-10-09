@@ -1,1 +1,1 @@
-execute fail: fail to parse CSV databend_test_csv2.txt:2 fail to decode column 0: "Cannot parse value:2023-023-0 to Date type, cause: input contains invalid characters", [column_data]=["2023-023-02 02:03:02 <DOUBLE QUOTE>World<DOUBLE QUOTE> 123"]
+1

@@ -15,6 +15,8 @@
 use std::borrow::Cow;
 
 use common_jsonb::from_slice;
+use common_jsonb::Object;
+use common_jsonb::Value;
 
 #[test]
 fn test_decode_null() {
@@ -26,65 +28,153 @@ fn test_decode_null() {
 
 #[test]
 fn test_decode_boolean() {
-    let s = b"\x20\0\0\0\x40\0\0\0";
-    let value = from_slice(s).unwrap();
-    assert!(value.is_boolean());
-    assert_eq!(value.as_bool(), Some(true));
-
-    let s = b"\x20\0\0\0\x30\0\0\0";
-    let value = from_slice(s).unwrap();
-    assert!(value.is_boolean());
-    assert_eq!(value.as_bool(), Some(false));
+    let tests = vec![
+        (b"\x20\0\0\0\x40\0\0\0".to_vec(), true),
+        (b"\x20\0\0\0\x30\0\0\0".to_vec(), false),
+    ];
+    for (s, v) in tests {
+        let value = from_slice(s.as_slice()).unwrap();
+        assert!(value.is_boolean());
+        assert_eq!(value.as_bool().unwrap(), v);
+    }
 }
 
 #[test]
 fn test_decode_string() {
-    let s = b"\x20\0\0\0\x10\0\0\x03\x61\x73\x64";
-    let value = from_slice(s).unwrap();
-    assert!(value.is_string());
-    assert_eq!(value.as_str(), Some(&Cow::from("asd")));
+    let tests = vec![
+        (b"\x20\0\0\0\x10\0\0\x03\x61\x73\x64".to_vec(), "asd"),
+        (
+            b"\x20\0\0\0\x10\0\0\x06\xE6\xB5\x8B\xE8\xAF\x95".to_vec(),
+            "测试",
+        ),
+        (b"\x20\0\0\0\x10\0\0\x01\x0A".to_vec(), "\n"),
+    ];
+    for (s, v) in tests {
+        let value = from_slice(s.as_slice()).unwrap();
+        assert!(value.is_string());
+        assert_eq!(value.as_str().unwrap(), &Cow::from(v));
+    }
 }
 
 #[test]
 fn test_decode_int64() {
-    let s = b"\x20\0\0\0\x20\0\0\x01\x64";
-    let value = from_slice(s).unwrap();
-    assert!(value.is_i64());
-    assert_eq!(value.as_i64(), Some(100i64));
+    let tests = vec![
+        (b"\x20\0\0\0\x20\0\0\x01\x00".to_vec(), 0i64),
+        (b"\x20\0\0\0\x20\0\0\x02\x40\x9C".to_vec(), -100i64),
+        (b"\x20\0\0\0\x20\0\0\x02\x40\x80".to_vec(), i8::MIN as i64),
+        (b"\x20\0\0\0\x20\0\0\x02\x40\x7F".to_vec(), i8::MAX as i64),
+        (
+            b"\x20\0\0\0\x20\0\0\x03\x40\x80\0".to_vec(),
+            i16::MIN as i64,
+        ),
+        (
+            b"\x20\0\0\0\x20\0\0\x03\x40\x7F\xFF".to_vec(),
+            i16::MAX as i64,
+        ),
+        (
+            b"\x20\0\0\0\x20\0\0\x05\x40\x80\0\0\0".to_vec(),
+            i32::MIN as i64,
+        ),
+        (
+            b"\x20\0\0\0\x20\0\0\x05\x40\x7F\xFF\xFF\xFF".to_vec(),
+            i32::MAX as i64,
+        ),
+        (
+            b"\x20\0\0\0\x20\0\0\x09\x40\x80\0\0\0\0\0\0\0".to_vec(),
+            i64::MIN,
+        ),
+        (
+            b"\x20\0\0\0\x20\0\0\x09\x40\x7F\xFF\xFF\xFF\xFF\xFF\xFF\xFF".to_vec(),
+            i64::MAX,
+        ),
+    ];
+    for (s, v) in tests {
+        let value = from_slice(s.as_slice()).unwrap();
+        assert!(value.is_i64());
+        assert_eq!(value.as_i64().unwrap(), v);
+    }
+}
+
+#[test]
+fn test_decode_uint64() {
+    let tests = vec![
+        (b"\x20\0\0\0\x20\0\0\x01\x00".to_vec(), 0u64),
+        (b"\x20\0\0\0\x20\0\0\x02\x50\x64".to_vec(), 100u64),
+        (b"\x20\0\0\0\x20\0\0\x02\x50\xFF".to_vec(), u8::MAX as u64),
+        (
+            b"\x20\0\0\0\x20\0\0\x03\x50\xFF\xFF".to_vec(),
+            u16::MAX as u64,
+        ),
+        (
+            b"\x20\0\0\0\x20\0\0\x05\x50\xFF\xFF\xFF\xFF".to_vec(),
+            u32::MAX as u64,
+        ),
+        (
+            b"\x20\0\0\0\x20\0\0\x09\x50\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF".to_vec(),
+            u64::MAX,
+        ),
+    ];
+    for (s, v) in tests {
+        let value = from_slice(s.as_slice()).unwrap();
+        assert!(value.is_u64());
+        assert_eq!(value.as_u64().unwrap(), v);
+    }
 }
 
 #[test]
 fn test_decode_float64() {
-    let s = b"\x20\0\0\0\x20\0\0\x03\x02\x04\x7b";
-    let value = from_slice(s).unwrap();
-    assert!(value.is_f64());
-    assert_eq!(value.as_f64(), Some(0.0123f64));
+    let tests = vec![
+        (b"\x20\0\0\0\x20\0\0\x01\x20".to_vec(), f64::INFINITY),
+        (b"\x20\0\0\0\x20\0\0\x01\x30".to_vec(), f64::NEG_INFINITY),
+        (
+            b"\x20\0\0\0\x20\0\0\x09\x60\x3F\x89\x30\xBE\x0D\xED\x28\x8D".to_vec(),
+            0.0123f64,
+        ),
+        (
+            b"\x20\0\0\0\x20\0\0\x09\x60\x7F\xE5\x5C\x57\x6D\x81\x57\x26".to_vec(),
+            1.2e308f64,
+        ),
+    ];
+    for (s, v) in tests {
+        let value = from_slice(s.as_slice()).unwrap();
+        assert!(value.is_f64());
+        assert_eq!(value.as_f64().unwrap(), v);
+    }
 }
 
 #[test]
 fn test_decode_array() {
-    let s = b"\x80\0\0\x02\x30\0\0\0\x40\0\0\0";
-    let value = from_slice(s).unwrap();
-    assert!(value.is_array());
-    let array = value.as_array().unwrap();
-    assert_eq!(array.len(), 2);
-    let val0 = array.get(0).unwrap();
-    assert!(val0.is_boolean());
-    assert_eq!(val0.as_bool(), Some(false));
-    let val1 = array.get(1).unwrap();
-    assert!(val1.is_boolean());
-    assert_eq!(val1.as_bool(), Some(true));
+    let tests = vec![(b"\x80\0\0\x02\x30\0\0\0\x40\0\0\0".to_vec(), vec![
+        Value::Bool(false),
+        Value::Bool(true),
+    ])];
+    for (s, v) in tests {
+        let value = from_slice(s.as_slice()).unwrap();
+        assert!(value.is_array());
+        let arr = value.as_array().unwrap();
+        assert_eq!(arr.len(), v.len());
+        for (l, r) in arr.iter().zip(v.iter()) {
+            assert_eq!(l, r);
+        }
+    }
 }
 
 #[test]
 fn test_decode_object() {
-    let s = b"\x40\0\0\x01\x10\0\0\x03\x10\0\0\x03\x61\x73\x64\x61\x64\x66";
-    let value = from_slice(s).unwrap();
-    assert!(value.is_object());
-    let obj = value.as_object().unwrap();
-    assert_eq!(obj.len(), 1);
-
-    let val = obj.get("asd").unwrap();
-    assert!(val.is_string());
-    assert_eq!(val.as_str(), Some(&Cow::from("adf")));
+    let mut obj1 = Object::new();
+    obj1.insert("asd".to_string(), Value::String(Cow::from("adf")));
+    let tests = vec![(
+        b"\x40\0\0\x01\x10\0\0\x03\x10\0\0\x03\x61\x73\x64\x61\x64\x66".to_vec(),
+        obj1,
+    )];
+    for (s, v) in tests {
+        let value = from_slice(s.as_slice()).unwrap();
+        assert!(value.is_object());
+        let obj = value.as_object().unwrap();
+        assert_eq!(obj.len(), v.len());
+        for ((lk, lv), (rk, rv)) in obj.iter().enumerate().zip(v.iter().enumerate()) {
+            assert_eq!(lk, rk);
+            assert_eq!(lv, rv);
+        }
+    }
 }

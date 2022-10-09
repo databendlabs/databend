@@ -68,8 +68,7 @@ impl FuseTable {
                 "unconditionally delete from table, {}.{}.{}",
                 plan.catalog_name, plan.database_name, plan.table_name
             );
-            self.do_truncate(ctx.clone(), purge, plan.catalog_name.as_str())
-                .await
+            self.do_truncate(ctx.clone(), purge).await
         }
     }
 
@@ -97,9 +96,8 @@ impl FuseTable {
             order_by: vec![],
         };
         let push_downs = Some(extras);
-        let block_metas = BlockPruner::new(snapshot.clone())
-            .prune(&ctx, schema, &push_downs)
-            .await?;
+        let segments_location = snapshot.segments.clone();
+        let block_metas = BlockPruner::prune(&ctx, schema, &push_downs, segments_location).await?;
 
         // delete block one by one.
         // this could be executed in a distributed manner (till new planner, pipeline settled down)
@@ -124,23 +122,21 @@ impl FuseTable {
                 }
             }
         }
-        self.commit_deletion(ctx.as_ref(), deletion_collector, &plan.catalog_name)
-            .await
+        self.commit_deletion(ctx.as_ref(), deletion_collector).await
     }
 
     async fn commit_deletion(
         &self,
         ctx: &dyn TableContext,
         del_holder: DeletionMutator,
-        catalog_name: &str,
     ) -> Result<()> {
         let new_snapshot = del_holder.into_new_snapshot().await?;
         commit_to_meta_server(
             ctx,
-            catalog_name,
             self.get_table_info(),
             &self.meta_location_generator,
             new_snapshot,
+            &self.operator,
         )
         .await?;
         // TODO check if error is recoverable, and try to resolve the conflict

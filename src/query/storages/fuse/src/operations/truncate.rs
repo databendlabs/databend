@@ -29,12 +29,7 @@ use crate::OPT_KEY_SNAPSHOT_LOCATION;
 
 impl FuseTable {
     #[inline]
-    pub async fn do_truncate(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        purge: bool,
-        catalog_name: &str,
-    ) -> Result<()> {
+    pub async fn do_truncate(&self, ctx: Arc<dyn TableContext>, purge: bool) -> Result<()> {
         if let Some(prev_snapshot) = self.read_table_snapshot(ctx.clone()).await? {
             let prev_id = prev_snapshot.snapshot_id;
 
@@ -70,10 +65,12 @@ impl FuseTable {
 
             let table_id = self.table_info.ident.table_id;
             let table_version = self.table_info.ident.seq;
-            let catalog = ctx.get_catalog(catalog_name)?;
+            let catalog = ctx.get_catalog(self.table_info.catalog())?;
+            let tenant = ctx.get_tenant();
+            let db_name = ctx.get_current_database();
 
             catalog
-                .update_table_meta(UpdateTableMetaReq {
+                .update_table_meta(&tenant, &db_name, UpdateTableMetaReq {
                     table_id,
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta,
@@ -81,7 +78,7 @@ impl FuseTable {
                 .await?;
 
             catalog
-                .truncate_table(TruncateTableReq { table_id })
+                .truncate_table(&tenant, &db_name, TruncateTableReq { table_id })
                 .await?;
         }
 

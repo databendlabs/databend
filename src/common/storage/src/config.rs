@@ -32,9 +32,11 @@ pub struct StorageConfig {
 
 /// Storage params which contains the detailed storage info.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type")]
 pub enum StorageParams {
     Azblob(StorageAzblobConfig),
     Fs(StorageFsConfig),
+    Ftp(StorageFtpConfig),
     Gcs(StorageGcsConfig),
     #[cfg(feature = "storage-hdfs")]
     Hdfs(StorageHdfsConfig),
@@ -61,6 +63,9 @@ impl Display for StorageParams {
                 v.container, v.root, v.endpoint_url
             ),
             StorageParams::Fs(v) => write!(f, "fs://root={}", v.root),
+            StorageParams::Ftp(v) => {
+                write!(f, "ftp://root={},endpoint={}", v.root, v.endpoint)
+            }
             StorageParams::Gcs(v) => write!(
                 f,
                 "gcs://bucket={},root={},endpoint={}",
@@ -101,6 +106,7 @@ impl StorageParams {
         match self {
             StorageParams::Azblob(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Fs(_) => false,
+            StorageParams::Ftp(v) => v.endpoint.starts_with("ftps://"),
             #[cfg(feature = "storage-hdfs")]
             StorageParams::Hdfs(_) => false,
             StorageParams::Http(v) => v.endpoint_url.starts_with("https://"),
@@ -146,6 +152,38 @@ impl Default for StorageFsConfig {
         Self {
             root: "_data".to_string(),
         }
+    }
+}
+
+pub const STORAGE_FTP_DEFAULT_ENDPOINT: &str = "ftps://127.0.0.1";
+/// Config for FTP and FTPS data source
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StorageFtpConfig {
+    pub endpoint: String,
+    pub root: String,
+    pub username: String,
+    pub password: String,
+}
+
+impl Default for StorageFtpConfig {
+    fn default() -> Self {
+        Self {
+            endpoint: STORAGE_FTP_DEFAULT_ENDPOINT.to_string(),
+            username: "".to_string(),
+            password: "".to_string(),
+            root: "/".to_string(),
+        }
+    }
+}
+
+impl Debug for StorageFtpConfig {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StorageFtpConfig")
+            .field("endpoint", &self.endpoint)
+            .field("root", &self.root)
+            .field("username", &self.username)
+            .field("password", &mask_string(self.password.as_str(), 3))
+            .finish()
     }
 }
 

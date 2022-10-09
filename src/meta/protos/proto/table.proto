@@ -16,6 +16,7 @@ syntax = "proto3";
 
 package databend_proto;
 
+import "user.proto";
 import "metadata.proto";
 
 message DbIdTableName {
@@ -65,6 +66,9 @@ message TableMeta {
   // Table schema, i.e., columns definition.
   DataSchema schema = 1;
 
+  // Table catalog.
+  string catalog = 10;
+
   // Table engine.
   string engine = 6;
 
@@ -100,6 +104,9 @@ message TableMeta {
 
   // Comments of each field.
   repeated string field_comments = 25;
+
+  // Table storage location connection info.
+  optional UserStageInfo.StageStorage storage_params = 26;
 }
 
 // Save table name id list history.

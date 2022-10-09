@@ -29,11 +29,12 @@ common-pipeline-sources = { path = "../../pipeline/sources" }
 common-storages-index = { path = "../index" }
 common-storages-util = { path = "../util" }
 
+thrift = { git = "https://github.com/datafuse-extras/thrift", tag = "v0.17.0" }
+
 async-recursion = "1.0.0"
 async-trait = "0.1.57"
 futures = "0.3.24"
-opendal = { version = "0.17.1", features = ["layers-retry"] }
-serde = { version = "1.0.144", features = ["derive"] }
-thrift = "0.15.0"
+opendal = { version = "0.19", features = ["layers-retry"] }
+serde = { version = "1.0.145", features = ["derive"] }
 tracing = "0.1.36"
-typetag = "0.1.8"
+typetag = "0.2.3"

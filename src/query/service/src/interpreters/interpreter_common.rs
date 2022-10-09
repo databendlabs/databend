@@ -18,16 +18,13 @@ use std::sync::Arc;
 use chrono::TimeZone;
 use chrono::Utc;
 use common_base::base::GlobalIORuntime;
-use common_base::base::TrySpawn;
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::StageFile;
 use common_meta_types::UserStageInfo;
 use common_pipeline_core::Pipeline;
 use futures::TryStreamExt;
-use regex::Regex;
 use tracing::debug;
 use tracing::warn;
 
@@ -37,7 +34,7 @@ use crate::pipelines::processors::TransformAddOn;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::storages::stage::StageSourceHelper;
+use crate::storages::stage::StageTable;
 use crate::storages::Table;
 
 pub fn fill_missing_columns(
@@ -76,7 +73,7 @@ pub fn append2table(
         &mut build_res.main_pipeline,
     )?;
 
-    table.append2(ctx.clone(), &mut build_res.main_pipeline, false)?;
+    table.append_data(ctx.clone(), &mut build_res.main_pipeline, false)?;
 
     if need_commit {
         build_res.main_pipeline.set_on_finished(move |may_error| {
@@ -88,21 +85,9 @@ pub fn append2table(
             if may_error.is_none() {
                 let append_entries = ctx.consume_precommit_blocks();
                 // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
-                let catalog_name = ctx.get_current_catalog();
-                let commit_handle = GlobalIORuntime::instance().spawn(async move {
-                    table
-                        .commit_insertion(ctx, &catalog_name, append_entries, overwrite)
-                        .await
+                return GlobalIORuntime::instance().block_on(async move {
+                    table.commit_insertion(ctx, append_entries, overwrite).await
                 });
-
-                return match futures::executor::block_on(commit_handle) {
-                    Ok(Ok(_)) => Ok(()),
-                    Ok(Err(error)) => Err(error),
-                    Err(cause) => Err(ErrorCode::PanicError(format!(
-                        "Maybe panic while in commit insert. {}",
-                        cause
-                    ))),
-                };
             }
 
             Err(may_error.as_ref().unwrap().clone())
@@ -165,7 +150,7 @@ pub async fn stat_file(
     path: &str,
 ) -> Result<StageFile> {
     let table_ctx: Arc<dyn TableContext> = ctx.clone();
-    let op = StageSourceHelper::get_op(&table_ctx, stage).await?;
+    let op = StageTable::get_op(&table_ctx, stage)?;
     let meta = op.object(path).metadata().await?;
     Ok(StageFile {
         path: path.to_owned(),
@@ -179,29 +164,20 @@ pub async fn stat_file(
     })
 }
 
-pub async fn list_files(
-    ctx: &Arc<QueryContext>,
-    stage: &UserStageInfo,
-    path: &str,
-    pattern: &str,
-) -> Result<Vec<StageFile>> {
-    list_files_from_dal(ctx, stage, path, pattern).await
-}
-
 /// List files from DAL in recursive way.
 ///
 /// - If input path is a dir, we will list it recursively.
 /// - Or, we will append the file itself, and try to list `path/`.
 /// - If not exist, we will try to list `path/` too.
-pub async fn list_files_from_dal(
+///
+/// TODO(@xuanwo): return a stream instead.
+pub async fn list_files(
     ctx: &Arc<QueryContext>,
     stage: &UserStageInfo,
     path: &str,
-    pattern: &str,
 ) -> Result<Vec<StageFile>> {
     let table_ctx: Arc<dyn TableContext> = ctx.clone();
-    let op = StageSourceHelper::get_op(&table_ctx, stage).await?;
-    let prefix = stage.get_prefix();
+    let op = StageTable::get_op(&table_ctx, stage)?;
     let mut files = Vec::new();
 
     // - If the path itself is a dir, return directly.
@@ -210,11 +186,11 @@ pub async fn list_files_from_dal(
     let dir_path = match op.object(path).metadata().await {
         Ok(meta) if meta.mode().is_dir() => Some(path.to_string()),
         Ok(meta) if !meta.mode().is_dir() => {
-            files.push((path.trim_start_matches(&prefix).to_string(), meta));
+            files.push((path.to_string(), meta));
 
-            Some(format!("{path}/"))
+            None
         }
-        Err(e) if e.kind() == io::ErrorKind::NotFound => Some(format!("{path}/")),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => None,
         Err(e) => return Err(e.into()),
         _ => None,
     };
@@ -226,8 +202,8 @@ pub async fn list_files_from_dal(
                 let mut ds = op.batch().walk_top_down(&dir)?;
                 while let Some(de) = ds.try_next().await? {
                     if de.mode().is_file() {
-                        let path = de.path().trim_start_matches(&prefix[1..]).to_string();
-                        let meta = de.metadata().await?;
+                        let path = de.path().to_string();
+                        let meta = de.metadata().await;
                         files.push((path, meta));
                     }
                 }
@@ -236,27 +212,8 @@ pub async fn list_files_from_dal(
         };
     }
 
-    let regex = if !pattern.is_empty() {
-        Some(Regex::new(pattern).map_err(|e| {
-            ErrorCode::SyntaxException(format!(
-                "Pattern format invalid, got:{}, error:{:?}",
-                pattern, e
-            ))
-        })?)
-    } else {
-        None
-    };
-
     let matched_files = files
-        .iter()
-        .filter(|(name, _meta)| {
-            if let Some(regex) = &regex {
-                regex.is_match(name)
-            } else {
-                true
-            }
-        })
-        .cloned()
+        .into_iter()
         .map(|(name, meta)| StageFile {
             path: name,
             size: meta.content_length(),

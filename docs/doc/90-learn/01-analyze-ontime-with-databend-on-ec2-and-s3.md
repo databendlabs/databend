@@ -48,7 +48,7 @@ unzip t_ontime.csv.zip
 ```
 
 ```shell title='Load TSV files into Databend'
-curl -H "insert_sql:insert into ontime format TSV" -H "skip_header:0" -F "upload=@t_ontime.csv"  -XPUT http://root:@127.0.0.1:8000/v1/streaming_load
+curl -H "insert_sql:insert into ontime format TSV" -H "format_skip_header:0" -F "upload=@t_ontime.csv"  -XPUT http://root:@127.0.0.1:8000/v1/streaming_load
 ```
 
 :::tip

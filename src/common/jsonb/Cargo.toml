@@ -1,11 +1,12 @@
 [package]
 name = "common-jsonb"
-version = "0.1.0"
-authors = ["Databend Authors <opensource@datafuselabs.com>"]
-license = "Apache-2.0"
-publish = false
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
 
 [dependencies]
 byteorder = "1.4.3"
-decimal-rs = "0.1.39"
+fast-float = "0.2.0"
+ordered-float = { version = "3.1.0", features = ["serde"] }

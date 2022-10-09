@@ -383,7 +383,7 @@ impl Table for HiveTable {
         None
     }
 
-    fn read2(
+    fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
         plan: &ReadDataSourcePlan,
@@ -395,7 +395,6 @@ impl Table for HiveTable {
     async fn commit_insertion(
         &self,
         _ctx: Arc<dyn TableContext>,
-        _catalog_name: &str,
         _operations: Vec<DataBlock>,
         _overwrite: bool,
     ) -> Result<()> {
@@ -406,7 +405,7 @@ impl Table for HiveTable {
         )))
     }
 
-    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: &str, _: bool) -> Result<()> {
+    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: bool) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(
             "truncate for table {} is not implemented",
             self.name()
@@ -568,12 +567,6 @@ async fn list_files_from_dir(
     Ok(all_files)
 }
 
-async fn get_file_length(operator: Operator, file: &str) -> Result<u64> {
-    let object = operator.object(file);
-    let meta = object.metadata().await?;
-    Ok(meta.content_length())
-}
-
 async fn do_list_files_from_dir(
     operator: Operator,
     location: String,
@@ -594,10 +587,7 @@ async fn do_list_files_from_dir(
         match de.mode() {
             ObjectMode::FILE => {
                 let filename = path.to_string();
-                let length = match de.content_length() {
-                    Some(len) => len,
-                    None => get_file_length(operator.clone(), path).await?,
-                };
+                let length = de.content_length().await;
                 all_files.push(HiveFileInfo::create(filename, length));
             }
             ObjectMode::DIR => {

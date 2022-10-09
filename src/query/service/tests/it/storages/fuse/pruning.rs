@@ -31,7 +31,7 @@ use databend_query::interpreters::CreateTableInterpreterV2;
 use databend_query::interpreters::Interpreter;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
-use databend_query::sql::plans::CreateTablePlanV2;
+use databend_query::sql::plans::create_table_v2::CreateTablePlanV2;
 use databend_query::sql::OPT_KEY_DATABASE_ID;
 use databend_query::sql::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_query::storages::fuse::io::MetaReaders;
@@ -48,8 +48,8 @@ async fn apply_block_pruning(
     ctx: Arc<QueryContext>,
 ) -> Result<Vec<BlockMeta>> {
     let ctx: Arc<dyn TableContext> = ctx;
-    BlockPruner::new(table_snapshot)
-        .prune(&ctx, schema, push_down)
+    let segment_locs = table_snapshot.segments.clone();
+    BlockPruner::prune(&ctx, schema, push_down, segment_locs)
         .await
         .map(|v| v.into_iter().map(|(_, v)| v).collect())
 }
@@ -78,6 +78,7 @@ async fn test_block_pruner() -> Result<()> {
         table: test_tbl_name.to_string(),
         schema: test_schema.clone(),
         engine: Engine::Fuse,
+        storage_params: None,
         options: [
             (FUSE_OPT_KEY_ROW_PER_BLOCK.to_owned(), num_blocks_opt),
             (FUSE_OPT_KEY_BLOCK_PER_SEGMENT.to_owned(), "1".to_owned()),
@@ -223,6 +224,7 @@ async fn test_block_pruner_monotonic() -> Result<()> {
         table: test_tbl_name.to_string(),
         schema: test_schema.clone(),
         engine: Engine::Fuse,
+        storage_params: None,
         options: [
             (FUSE_OPT_KEY_ROW_PER_BLOCK.to_owned(), num_blocks_opt),
             // for the convenience of testing, let one seegment contains one block

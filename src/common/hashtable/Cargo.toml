@@ -1,10 +1,10 @@
 [package]
 name = "common-hashtable"
-version = "0.1.0"
-authors = ["Databend Authors <opensource@datafuselabs.com>"]
-license = "Apache-2.0"
-publish = false
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
 
 [lib]
 doctest = false
@@ -15,9 +15,9 @@ test = false
 common-base = { path = "../base" }
 
 # Crates.io dependencies
-ahash = "0.7.6"
+ahash = "0.8.0"
 ordered-float = { version = "3.1.0", features = ["serde"] }
-primitive-types = "0.11.1"
+primitive-types = "0.12.0"
 
 [dev-dependencies]
 rand = "0.8.5"

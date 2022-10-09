@@ -12,11 +12,8 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::sync::Arc;
-
 use common_arrow::parquet::compression::CompressionOptions;
 use common_arrow::parquet::metadata::ThriftFileMetaData;
-use common_catalog::table_context::TableContext;
 use common_datablocks::serialize_data_blocks;
 use common_datablocks::serialize_data_blocks_with_compression;
 use common_datablocks::DataBlock;
@@ -25,12 +22,9 @@ use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::ClusterStatistics;
 use common_fuse_meta::meta::Location;
 use opendal::Operator;
-use tracing::warn;
 use uuid::Uuid;
 
-use crate::index::BloomFilterIndexer;
-use crate::io::retry;
-use crate::io::retry::Retryable;
+use crate::index::BlockFilter;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::util;
 use crate::statistics::gen_columns_statistics;
@@ -39,19 +33,16 @@ const DEFAULT_BLOOM_INDEX_WRITE_BUFFER_SIZE: usize = 300 * 1024;
 const DEFAULT_BLOCK_WRITE_BUFFER_SIZE: usize = 100 * 1024 * 1024;
 
 pub struct BlockWriter<'a> {
-    ctx: &'a Arc<dyn TableContext>,
     location_generator: &'a TableMetaLocationGenerator,
     data_accessor: &'a Operator,
 }
 
 impl<'a> BlockWriter<'a> {
     pub fn new(
-        ctx: &'a Arc<dyn TableContext>,
         data_accessor: &'a Operator,
         location_generator: &'a TableMetaLocationGenerator,
     ) -> Self {
         Self {
-            ctx,
             location_generator,
             data_accessor,
         }
@@ -103,13 +94,13 @@ impl<'a> BlockWriter<'a> {
         block: &DataBlock,
         block_id: Uuid,
     ) -> Result<(u64, Location)> {
-        let bloom_index = BloomFilterIndexer::try_create(self.ctx.clone(), &[block])?;
-        let index_block = bloom_index.bloom_block;
+        let bloom_index = BlockFilter::try_create(&[block])?;
+        let index_block = bloom_index.filter_block;
         let location = self
             .location_generator
             .block_bloom_index_location(&block_id);
         let mut data = Vec::with_capacity(DEFAULT_BLOOM_INDEX_WRITE_BUFFER_SIZE);
-        let index_block_schema = &bloom_index.bloom_schema;
+        let index_block_schema = &bloom_index.filter_schema;
         let (size, _) = serialize_data_blocks_with_compression(
             vec![index_block],
             index_block_schema,
@@ -134,22 +125,7 @@ pub async fn write_block(
 }
 
 pub async fn write_data(data: &[u8], data_accessor: &Operator, location: &str) -> Result<()> {
-    let op = || async {
-        data_accessor
-            .object(location)
-            .write(data)
-            .await
-            .map_err(retry::from_io_error)
-    };
-
-    let notify = |e: std::io::Error, duration| {
-        warn!(
-            "transient error encountered while write block, location {}, at duration {:?} : {}",
-            location, duration, e,
-        )
-    };
-
-    op.retry_with_notify(notify).await?;
+    data_accessor.object(location).write(data).await?;
 
     Ok(())
 }

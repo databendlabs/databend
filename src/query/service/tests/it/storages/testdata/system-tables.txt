@@ -1,0 +1,331 @@
+---------- TABLE INFO ------------
+DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemColumns
+-------- TABLE CONTENTS ----------
++--------------------------+----------+---------------------+-------------------+--------------+--------------------+-------------+---------+
+| name                     | database | table               | type              | default_kind | default_expression | is_nullable | comment |
++--------------------------+----------+---------------------+-------------------+--------------+--------------------+-------------+---------+
+| Comment                  | system   | engines             | VARCHAR           |              |                    | false       |         |
+| Engine                   | system   | engines             | VARCHAR           |              |                    | false       |         |
+| auth_string              | system   | users               | VARCHAR           |              |                    | false       |         |
+| auth_type                | system   | users               | VARCHAR           |              |                    | false       |         |
+| category                 | system   | functions           | VARCHAR           |              |                    | false       |         |
+| client_address           | system   | query_log           | VARCHAR           |              |                    | false       |         |
+| client_info              | system   | query_log           | VARCHAR           |              |                    | false       |         |
+| cluster_by               | system   | tables              | VARCHAR           |              |                    | false       |         |
+| cluster_by               | system   | tables_with_history | VARCHAR           |              |                    | false       |         |
+| cluster_id               | system   | query_log           | VARCHAR           |              |                    | false       |         |
+| columns                  | system   | query_log           | VARCHAR           |              |                    | false       |         |
+| comment                  | system   | columns             | VARCHAR           |              |                    | false       |         |
+| comment                  | system   | stages              | VARCHAR           |              |                    | false       |         |
+| copy_options             | system   | stages              | VARCHAR           |              |                    | false       |         |
+| cpu_usage                | system   | query_log           | INT UNSIGNED      |              |                    | false       |         |
+| created_on               | system   | tables              | VARCHAR           |              |                    | false       |         |
+| created_on               | system   | tables_with_history | VARCHAR           |              |                    | false       |         |
+| creator                  | system   | stages              | VARCHAR           |              |                    | true        |         |
+| current_database         | system   | query_log           | VARCHAR           |              |                    | false       |         |
+| dal_metrics_read_bytes   | system   | processes           | BIGINT UNSIGNED   |              |                    | true        |         |
+| dal_metrics_write_bytes  | system   | processes           | BIGINT UNSIGNED   |              |                    | true        |         |
+| data_compressed_size     | system   | tables              | BIGINT UNSIGNED   |              |                    | true        |         |
+| data_compressed_size     | system   | tables_with_history | BIGINT UNSIGNED   |              |                    | true        |         |
+| data_size                | system   | tables              | BIGINT UNSIGNED   |              |                    | true        |         |
+| data_size                | system   | tables_with_history | BIGINT UNSIGNED   |              |                    | true        |         |
+| database                 | system   | clustering_history  | VARCHAR           |              |                    | false       |         |
+| database                 | system   | columns             | VARCHAR           |              |                    | false       |         |
+| database                 | system   | processes           | VARCHAR           |              |                    | false       |         |
+| database                 | system   | tables              | VARCHAR           |              |                    | false       |         |
+| database                 | system   | tables_with_history | VARCHAR           |              |                    | false       |         |
+| databases                | system   | query_log           | VARCHAR           |              |                    | false       |         |
+| default                  | system   | settings            | VARCHAR           |              |                    | false       |         |
+| default_expression       | system   | columns             | VARCHAR           |              |                    | false       |         |
+| default_kind             | system   | columns             | VARCHAR           |              |                    | false       |         |
+| default_role             | system   | users               | VARCHAR           |              |                    | false       |         |
+| definition               | system   | functions           | VARCHAR           |              |                    | false       |         |
+| description              | system   | configs             | VARCHAR           |              |                    | false       |         |
+| description              | system   | functions           | VARCHAR           |              |                    | false       |         |
+| description              | system   | settings            | VARCHAR           |              |                    | false       |         |
+| dropped_on               | system   | tables              | VARCHAR           |              |                    | false       |         |
+| dropped_on               | system   | tables_with_history | VARCHAR           |              |                    | false       |         |
+| dummy                    | system   | one                 | TINYINT UNSIGNED  |              |                    | false       |         |
+| end_time                 | system   | clustering_history  | TIMESTAMP(3)      |              |                    | false       |         |
+| engine                   | system   | tables              | VARCHAR           |              |                    | false       |         |
+| engine                   | system   | tables_with_history | VARCHAR           |              |                    | false       |         |
+| event_date               | system   | query_log           | DATE              |              |                    | false       |         |
+| event_time               | system   | query_log           | TIMESTAMP(3)      |              |                    | false       |         |
+| example                  | system   | functions           | VARCHAR           |              |                    | false       |         |
+| exception_code           | system   | query_log           | INT               |              |                    | false       |         |
+| exception_text           | system   | query_log           | VARCHAR           |              |                    | false       |         |
+| extra                    | system   | query_log           | VARCHAR           |              |                    | false       |         |
+| extra_info               | system   | processes           | VARCHAR           |              |                    | true        |         |
+| file_format_options      | system   | stages              | VARCHAR           |              |                    | false       |         |
+| group                    | system   | configs             | VARCHAR           |              |                    | false       |         |
+| handler_type             | system   | query_log           | VARCHAR           |              |                    | false       |         |
+| host                     | system   | clusters            | VARCHAR           |              |                    | false       |         |
+| host                     | system   | processes           | VARCHAR           |              |                    | true        |         |
+| hostname                 | system   | tracing             | VARCHAR           |              |                    | false       |         |
+| hostname                 | system   | users               | VARCHAR           |              |                    | false       |         |
+| id                       | system   | processes           | VARCHAR           |              |                    | false       |         |
+| index_size               | system   | tables              | BIGINT UNSIGNED   |              |                    | true        |         |
+| index_size               | system   | tables_with_history | BIGINT UNSIGNED   |              |                    | true        |         |
+| inherited_roles          | system   | roles               | BIGINT UNSIGNED   |              |                    | false       |         |
+| is_aggregate             | system   | functions           | BOOLEAN           |              |                    | false       |         |
+| is_builtin               | system   | functions           | BOOLEAN           |              |                    | false       |         |
+| is_nullable              | system   | columns             | BOOLEAN           |              |                    | false       |         |
+| kind                     | system   | metrics             | VARCHAR           |              |                    | false       |         |
+| labels                   | system   | metrics             | VARCHAR           |              |                    | false       |         |
+| level                    | system   | settings            | VARCHAR           |              |                    | false       |         |
+| level                    | system   | tracing             | TINYINT           |              |                    | false       |         |
+| license                  | system   | credits             | VARCHAR           |              |                    | false       |         |
+| log_type                 | system   | query_log           | TINYINT           |              |                    | false       |         |
+| memory_usage             | system   | processes           | BIGINT            |              |                    | false       |         |
+| memory_usage             | system   | query_log           | BIGINT UNSIGNED   |              |                    | false       |         |
+| metric                   | system   | metrics             | VARCHAR           |              |                    | false       |         |
+| msg                      | system   | tracing             | VARCHAR           |              |                    | false       |         |
+| mysql_connection_id      | system   | processes           | INT UNSIGNED      |              |                    | true        |         |
+| name                     | system   | clusters            | VARCHAR           |              |                    | false       |         |
+| name                     | system   | columns             | VARCHAR           |              |                    | false       |         |
+| name                     | system   | configs             | VARCHAR           |              |                    | false       |         |
+| name                     | system   | contributors        | VARCHAR           |              |                    | false       |         |
+| name                     | system   | credits             | VARCHAR           |              |                    | false       |         |
+| name                     | system   | databases           | VARCHAR           |              |                    | false       |         |
+| name                     | system   | functions           | VARCHAR           |              |                    | false       |         |
+| name                     | system   | roles               | VARCHAR           |              |                    | false       |         |
+| name                     | system   | settings            | VARCHAR           |              |                    | false       |         |
+| name                     | system   | stages              | VARCHAR           |              |                    | false       |         |
+| name                     | system   | tables              | VARCHAR           |              |                    | false       |         |
+| name                     | system   | tables_with_history | VARCHAR           |              |                    | false       |         |
+| name                     | system   | tracing             | VARCHAR           |              |                    | false       |         |
+| name                     | system   | users               | VARCHAR           |              |                    | false       |         |
+| num_rows                 | system   | tables              | BIGINT UNSIGNED   |              |                    | true        |         |
+| num_rows                 | system   | tables_with_history | BIGINT UNSIGNED   |              |                    | true        |         |
+| number_of_files          | system   | stages              | BIGINT UNSIGNED   |              |                    | true        |         |
+| pid                      | system   | tracing             | BIGINT            |              |                    | false       |         |
+| port                     | system   | clusters            | SMALLINT UNSIGNED |              |                    | false       |         |
+| projections              | system   | query_log           | VARCHAR           |              |                    | false       |         |
+| query_id                 | system   | query_log           | VARCHAR           |              |                    | false       |         |
+| query_kind               | system   | query_log           | VARCHAR           |              |                    | false       |         |
+| query_text               | system   | query_log           | VARCHAR           |              |                    | false       |         |
+| reclustered_bytes        | system   | clustering_history  | BIGINT UNSIGNED   |              |                    | false       |         |
+| reclustered_rows         | system   | clustering_history  | BIGINT UNSIGNED   |              |                    | false       |         |
+| result_bytes             | system   | query_log           | BIGINT UNSIGNED   |              |                    | false       |         |
+| result_rows              | system   | query_log           | BIGINT UNSIGNED   |              |                    | false       |         |
+| scan_bytes               | system   | query_log           | BIGINT UNSIGNED   |              |                    | false       |         |
+| scan_io_bytes            | system   | query_log           | BIGINT UNSIGNED   |              |                    | false       |         |
+| scan_io_bytes_cost_ms    | system   | query_log           | BIGINT UNSIGNED   |              |                    | false       |         |
+| scan_partitions          | system   | query_log           | BIGINT UNSIGNED   |              |                    | false       |         |
+| scan_progress_read_bytes | system   | processes           | BIGINT UNSIGNED   |              |                    | true        |         |
+| scan_progress_read_rows  | system   | processes           | BIGINT UNSIGNED   |              |                    | true        |         |
+| scan_rows                | system   | query_log           | BIGINT UNSIGNED   |              |                    | false       |         |
+| server_version           | system   | query_log           | VARCHAR           |              |                    | false       |         |
+| session_settings         | system   | query_log           | VARCHAR           |              |                    | false       |         |
+| sql_user                 | system   | query_log           | VARCHAR           |              |                    | false       |         |
+| sql_user_privileges      | system   | query_log           | VARCHAR           |              |                    | false       |         |
+| sql_user_quota           | system   | query_log           | VARCHAR           |              |                    | false       |         |
+| stack_trace              | system   | query_log           | VARCHAR           |              |                    | false       |         |
+| stage_params             | system   | stages              | VARCHAR           |              |                    | false       |         |
+| stage_type               | system   | stages              | VARCHAR           |              |                    | false       |         |
+| start_time               | system   | clustering_history  | TIMESTAMP(3)      |              |                    | false       |         |
+| state                    | system   | processes           | VARCHAR           |              |                    | false       |         |
+| syntax                   | system   | functions           | VARCHAR           |              |                    | false       |         |
+| table                    | system   | clustering_history  | VARCHAR           |              |                    | false       |         |
+| table                    | system   | columns             | VARCHAR           |              |                    | false       |         |
+| tables                   | system   | query_log           | VARCHAR           |              |                    | false       |         |
+| tenant_id                | system   | query_log           | VARCHAR           |              |                    | false       |         |
+| time                     | system   | tracing             | VARCHAR           |              |                    | false       |         |
+| total_partitions         | system   | query_log           | BIGINT UNSIGNED   |              |                    | false       |         |
+| type                     | system   | columns             | VARCHAR           |              |                    | false       |         |
+| type                     | system   | processes           | VARCHAR           |              |                    | false       |         |
+| type                     | system   | settings            | VARCHAR           |              |                    | false       |         |
+| user                     | system   | processes           | VARCHAR           |              |                    | true        |         |
+| v                        | system   | tracing             | BIGINT            |              |                    | false       |         |
+| value                    | system   | configs             | VARCHAR           |              |                    | false       |         |
+| value                    | system   | metrics             | VARCHAR           |              |                    | false       |         |
+| value                    | system   | settings            | VARCHAR           |              |                    | false       |         |
+| version                  | system   | clusters            | VARCHAR           |              |                    | false       |         |
+| version                  | system   | credits             | VARCHAR           |              |                    | false       |         |
+| written_bytes            | system   | query_log           | BIGINT UNSIGNED   |              |                    | false       |         |
+| written_io_bytes         | system   | query_log           | BIGINT UNSIGNED   |              |                    | false       |         |
+| written_io_bytes_cost_ms | system   | query_log           | BIGINT UNSIGNED   |              |                    | false       |         |
+| written_rows             | system   | query_log           | BIGINT UNSIGNED   |              |                    | false       |         |
++--------------------------+----------+---------------------+-------------------+--------------+--------------------+-------------+---------+
+
+
+---------- TABLE INFO ------------
+DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemConfigs
+-------- TABLE CONTENTS ----------
++---------+--------------------------------------+--------------------------------+-------------+
+| group   | name                                 | value                          | description |
++---------+--------------------------------------+--------------------------------+-------------+
+| log     | dir                                  | ./.databend/logs               |             |
+| log     | file.dir                             | ./.databend/logs               |             |
+| log     | file.level                           | DEBUG                          |             |
+| log     | file.on                              | true                           |             |
+| log     | level                                | DEBUG                          |             |
+| log     | query_enabled                        | false                          |             |
+| log     | stderr.level                         | DEBUG                          |             |
+| log     | stderr.on                            | true                           |             |
+| meta    | address                              |                                |             |
+| meta    | auto_sync_interval                   | 10                             |             |
+| meta    | client_timeout_in_second             | 10                             |             |
+| meta    | embedded_dir                         | ./.databend/meta_embedded      |             |
+| meta    | endpoints                            |                                |             |
+| meta    | password                             |                                |             |
+| meta    | rpc_tls_meta_server_root_ca_cert     |                                |             |
+| meta    | rpc_tls_meta_service_domain_name     | localhost                      |             |
+| meta    | username                             | root                           |             |
+| query   | admin_api_address                    | 127.0.0.1:8080                 |             |
+| query   | api_tls_server_cert                  |                                |             |
+| query   | api_tls_server_key                   |                                |             |
+| query   | api_tls_server_root_ca_cert          |                                |             |
+| query   | async_insert_busy_timeout            | 200                            |             |
+| query   | async_insert_max_data_size           | 10000                          |             |
+| query   | async_insert_stale_timeout           | 0                              |             |
+| query   | clickhouse_handler_host              | 127.0.0.1                      |             |
+| query   | clickhouse_handler_port              | 9000                           |             |
+| query   | clickhouse_http_handler_host         | 127.0.0.1                      |             |
+| query   | clickhouse_http_handler_port         | 8124                           |             |
+| query   | cluster_id                           |                                |             |
+| query   | database_engine_github_enabled       | true                           |             |
+| query   | flight_api_address                   | 127.0.0.1:9090                 |             |
+| query   | http_handler_host                    | 127.0.0.1                      |             |
+| query   | http_handler_port                    | 8000                           |             |
+| query   | http_handler_result_timeout_millis   | 10000                          |             |
+| query   | http_handler_tls_server_cert         |                                |             |
+| query   | http_handler_tls_server_key          |                                |             |
+| query   | http_handler_tls_server_root_ca_cert |                                |             |
+| query   | jwt_key_file                         |                                |             |
+| query   | management_mode                      | false                          |             |
+| query   | max_active_sessions                  | 256                            |             |
+| query   | max_query_log_size                   | 10000                          |             |
+| query   | metric_api_address                   | 127.0.0.1:7070                 |             |
+| query   | mysql_handler_host                   | 127.0.0.1                      |             |
+| query   | mysql_handler_port                   | 3307                           |             |
+| query   | num_cpus                             | 0                              |             |
+| query   | rpc_tls_query_server_root_ca_cert    |                                |             |
+| query   | rpc_tls_query_service_domain_name    | localhost                      |             |
+| query   | rpc_tls_server_cert                  |                                |             |
+| query   | rpc_tls_server_key                   |                                |             |
+| query   | table_cache_block_meta_count         | 102400                         |             |
+| query   | table_cache_enabled                  | false                          |             |
+| query   | table_cache_segment_count            | 10240                          |             |
+| query   | table_cache_snapshot_count           | 256                            |             |
+| query   | table_disk_cache_mb_size             | 1024                           |             |
+| query   | table_disk_cache_root                | _cache                         |             |
+| query   | table_engine_memory_enabled          | true                           |             |
+| query   | table_memory_cache_mb_size           | 256                            |             |
+| query   | tenant_id                            | test                           |             |
+| query   | users                                |                                |             |
+| query   | wait_timeout_mills                   | 5000                           |             |
+| storage | allow_insecure                       | false                          |             |
+| storage | azblob.account_key                   |                                |             |
+| storage | azblob.account_name                  |                                |             |
+| storage | azblob.container                     |                                |             |
+| storage | azblob.endpoint_url                  |                                |             |
+| storage | azblob.root                          |                                |             |
+| storage | fs.data_path                         | _data                          |             |
+| storage | gcs.bucket                           |                                |             |
+| storage | gcs.credential                       |                                |             |
+| storage | gcs.endpoint_url                     | https://storage.googleapis.com |             |
+| storage | gcs.root                             |                                |             |
+| storage | hdfs.name_node                       |                                |             |
+| storage | hdfs.root                            |                                |             |
+| storage | num_cpus                             | 0                              |             |
+| storage | obs.access_key_id                    |                                |             |
+| storage | obs.bucket                           |                                |             |
+| storage | obs.endpoint_url                     |                                |             |
+| storage | obs.root                             |                                |             |
+| storage | obs.secret_access_key                |                                |             |
+| storage | s3.access_key_id                     |                                |             |
+| storage | s3.bucket                            |                                |             |
+| storage | s3.enable_virtual_host_style         | false                          |             |
+| storage | s3.endpoint_url                      | https://s3.amazonaws.com       |             |
+| storage | s3.master_key                        |                                |             |
+| storage | s3.region                            |                                |             |
+| storage | s3.root                              |                                |             |
+| storage | s3.secret_access_key                 |                                |             |
+| storage | s3.security_token                    |                                |             |
+| storage | type                                 | fs                             |             |
++---------+--------------------------------------+--------------------------------+-------------+
+
+
+---------- TABLE INFO ------------
+DB.Table: 'system'.'databases', Table: databases-table_id:1, ver:0, Engine: SystemDatabases
+-------- TABLE CONTENTS ----------
++--------------------+
+| name               |
++--------------------+
+| INFORMATION_SCHEMA |
+| default            |
+| system             |
++--------------------+
+
+
+---------- TABLE INFO ------------
+DB.Table: 'system'.'engines', Table: engines-table_id:1, ver:0, Engine: SystemEngines
+-------- TABLE CONTENTS ----------
++--------+-----------------------------+
+| Engine | Comment                     |
++--------+-----------------------------+
+| FUSE   | FUSE Storage Engine         |
+| MEMORY | MEMORY Storage Engine       |
+| NULL   | NULL Storage Engine         |
+| RANDOM | RANDOM Storage Engine       |
+| VIEW   | VIEW STORAGE (LOGICAL VIEW) |
++--------+-----------------------------+
+
+
+---------- TABLE INFO ------------
+DB.Table: 'system'.'roles', Table: roles-table_id:1, ver:0, Engine: SystemRoles
+-------- TABLE CONTENTS ----------
++-------+-----------------+
+| name  | inherited_roles |
++-------+-----------------+
+| test  | 0               |
+| test1 | 1               |
++-------+-----------------+
+
+
+---------- TABLE INFO ------------
+DB.Table: 'system'.'settings', Table: settings-table_id:1, ver:0, Engine: SystemSettings
+-------- TABLE CONTENTS ----------
++--------------------------------+------------+------------+---------+-----------------------------------------------------------------------------------------------------+--------+
+| name                           | value      | default    | level   | description                                                                                         | type   |
++--------------------------------+------------+------------+---------+-----------------------------------------------------------------------------------------------------+--------+
+| enable_async_insert            | 0          | 0          | SESSION | Whether the client open async insert mode, default value: 0.                                        | UInt64 |
+| enable_cbo                     | 1          | 1          | SESSION | If enable cost based optimization, default value: 1.                                                | UInt64 |
+| enable_distributed_eval_index  | 1          | 1          | SESSION | If enable distributed eval index, default value: 1                                                  | UInt64 |
+| enable_new_processor_framework | 1          | 1          | SESSION | Enable new processor framework if value != 0, default value: 1.                                     | UInt64 |
+| enable_planner_v2              | 1          | 1          | SESSION | Enable planner v2 by setting this variable to 1, default value: 1.                                  | UInt64 |
+| flight_client_timeout          | 60         | 60         | SESSION | Max duration the flight client request is allowed to take in seconds. By default, it is 60 seconds. | UInt64 |
+| format_compression             | None       | None       | SESSION | Format compression, default value: "None".                                                          | String |
+| format_empty_as_default        | 1          | 1          | SESSION | Format empty_as_default, default value: 1.                                                          | UInt64 |
+| format_field_delimiter         | ,          | ,          | SESSION | Format field delimiter, default value: ",".                                                         | String |
+| format_quote_char              | '"'        | '"'        | SESSION | The quote char for CSV. default value: '"'.                                                         | String |
+| format_record_delimiter        | "\n"       | "\n"       | SESSION | Format record_delimiter, default value: "\n".                                                       | String |
+| format_skip_header             | 0          | 0          | SESSION | Whether to skip the input header, default value: 0.                                                 | UInt64 |
+| group_by_two_level_threshold   | 10000      | 10000      | SESSION | The threshold of keys to open two-level aggregation, default value: 10000.                          | UInt64 |
+| input_read_buffer_size         | 1048576    | 1048576    | SESSION | The size of buffer in bytes for input with format. By default, it is 1MB.                           | UInt64 |
+| max_block_size                 | 10000      | 10000      | SESSION | Maximum block size for reading, default value: 10000.                                               | UInt64 |
+| max_concurrent_prune           | 1000       | 1000       | SESSION | The maximum number of concurrent pruning. By default, it is 1000.                                   | UInt64 |
+| max_execute_time               | 0          | 0          | SESSION | The maximum query execution time. it means no limit if the value is zero. default value: 0.         | UInt64 |
+| max_threads                    | 2          | 16         | SESSION | The maximum number of threads to execute the request. By default, it is determined automatically.   | UInt64 |
+| quoted_ident_case_sensitive    | 1          | 1          | SESSION | Case sensitivity of quoted identifiers, default value: 1 (aka case-sensitive).                      | UInt64 |
+| sql_dialect                    | PostgreSQL | PostgreSQL | SESSION | SQL dialect, support "PostgreSQL" and "MySQL", default value: "PostgreSQL".                         | String |
+| storage_read_buffer_size       | 1048576    | 1048576    | SESSION | The size of buffer in bytes for buffered reader of dal. By default, it is 1MB.                      | UInt64 |
+| timezone                       | UTC        | UTC        | SESSION | Timezone, default value: "UTC".                                                                     | String |
+| unquoted_ident_case_sensitive  | 0          | 0          | SESSION | Case sensitivity of unquoted identifiers, default value: 0 (aka case-insensitive).                  | UInt64 |
+| wait_for_async_insert          | 1          | 1          | SESSION | Whether the client wait for the reply of async insert, default value: 1.                            | UInt64 |
+| wait_for_async_insert_timeout  | 100        | 100        | SESSION | The timeout in seconds for waiting for processing of async insert, default value: 100.              | UInt64 |
++--------------------------------+------------+------------+---------+-----------------------------------------------------------------------------------------------------+--------+
+
+
+---------- TABLE INFO ------------
+DB.Table: 'system'.'users', Table: users-table_id:1, ver:0, Engine: SystemUsers
+-------- TABLE CONTENTS ----------
++-------+-----------+-----------------+------------------------------------------------------------------+--------------+
+| name  | hostname  | auth_type       | auth_string                                                      | default_role |
++-------+-----------+-----------------+------------------------------------------------------------------+--------------+
+| test  | localhost | no_password     |                                                                  |              |
+| test1 | %         | sha256_password | 15e2b0d3c33891ebb0f1ef609ec419420c20e320ce94c65fbc8c3312448eb225 | role1        |
++-------+-----------+-----------------+------------------------------------------------------------------+--------------+
+
+
