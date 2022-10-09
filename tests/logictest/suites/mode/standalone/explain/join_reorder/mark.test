@@ -26,7 +26,6 @@ statement query T
 explain select * from numbers(1000) where number in (select number from numbers(10000));
 
 ----
-
 HashJoin
 ├── join type: RIGHT SEMI
 ├── build keys: [numbers.number (#0)]
