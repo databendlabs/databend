@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_expression::types::date::check_date;
+use common_expression::types::date::DateType;
 use common_expression::types::number::Int64Type;
+use common_expression::types::timestamp::check_timestamp;
 use common_expression::types::timestamp::Timestamp;
 use common_expression::types::timestamp::MAX_TIMESTAMP;
 use common_expression::types::timestamp::MIN_TIMESTAMP;
@@ -25,32 +28,38 @@ pub const MICROS_IN_A_SEC: i64 = 1_000_000;
 pub const MICROS_IN_A_MILLI: i64 = 1_000;
 
 pub fn register(registry: &mut FunctionRegistry) {
+    registry.register_aliases("to_timestamp", &["to_datetime"]);
     registry.register_passthrough_nullable_1_arg::<Int64Type, TimestampType, _, _>(
         "to_timestamp",
         FunctionProperty::default(),
         |_| None,
         vectorize_with_builder_1_arg::<Int64Type, TimestampType>(|val, output, _| {
-            if (-31536000000..=31536000000).contains(&val) {
-                output.push(Timestamp {
+            match check_timestamp(val)? {
+                0 => output.push(Timestamp {
                     ts: val * MICROS_IN_A_SEC,
                     precision: 0,
-                });
-            } else if (-31536000000000..=31536000000000).contains(&val) {
-                output.push(Timestamp {
+                }),
+                3 => output.push(Timestamp {
                     ts: val * MICROS_IN_A_MILLI,
                     precision: 3,
-                })
-            } else if (MIN_TIMESTAMP.ts..=MAX_TIMESTAMP.ts).contains(&val) {
-                output.push(Timestamp {
+                }),
+                _ => output.push(Timestamp {
                     ts: val,
                     precision: 6,
-                })
-            } else {
-                return Err(format!("timestamp `{}` is out of range", Timestamp {
-                    ts: val,
-                    precision: 6,
-                }));
+                }),
             }
+            Ok(())
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<Int64Type, DateType, _, _>(
+        "to_date",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_with_builder_1_arg::<Int64Type, DateType>(|val, output, _| {
+            check_date(val)?;
+            // check_date will check the range of the date, so we can safely unwrap here.
+            output.push(val.try_into().unwrap());
             Ok(())
         }),
     );

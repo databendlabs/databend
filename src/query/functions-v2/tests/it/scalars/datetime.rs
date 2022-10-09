@@ -28,6 +28,8 @@ fn test_datetime() {
     let file = &mut mint.new_goldenfile("datetime.txt").unwrap();
 
     test_to_timestamp(file);
+    test_to_datetime(file);
+    test_to_date(file);
 }
 
 fn test_to_timestamp(file: &mut impl Write) {
@@ -53,5 +55,48 @@ fn test_to_timestamp(file: &mut impl Write) {
             315360000000,
             315360000000000,
         ]),
+    )]);
+}
+
+fn test_to_datetime(file: &mut impl Write) {
+    run_ast(file, "to_datetime(-30610224000000001)", &[]);
+    run_ast(file, "to_datetime(-315360000000000)", &[]);
+    run_ast(file, "to_datetime(-315360000000)", &[]);
+    run_ast(file, "to_datetime(-100)", &[]);
+    run_ast(file, "to_datetime(-0)", &[]);
+    run_ast(file, "to_datetime(0)", &[]);
+    run_ast(file, "to_datetime(100)", &[]);
+    run_ast(file, "to_datetime(315360000000)", &[]);
+    run_ast(file, "to_datetime(315360000000000)", &[]);
+    run_ast(file, "to_datetime(253402300800000000)", &[]);
+    run_ast(file, "to_datetime(a)", &[(
+        "a",
+        DataType::Number(NumberDataType::Int64),
+        Column::from_data(vec![
+            -315360000000000i64,
+            315360000000,
+            -100,
+            0,
+            100,
+            315360000000,
+            315360000000000,
+        ]),
+    )]);
+}
+
+fn test_to_date(file: &mut impl Write) {
+    run_ast(file, "to_date(-354286)", &[]);
+    run_ast(file, "to_date(-354285)", &[]);
+    run_ast(file, "to_date(-100)", &[]);
+    run_ast(file, "to_date(-0)", &[]);
+    run_ast(file, "to_date(0)", &[]);
+    run_ast(file, "to_date(100)", &[]);
+    run_ast(file, "to_date(2932896)", &[]);
+    run_ast(file, "to_date(2932897)", &[]);
+
+    run_ast(file, "to_date(a)", &[(
+        "a",
+        DataType::Number(NumberDataType::Int32),
+        Column::from_data(vec![-354285, -100, 0, 100, 2932896]),
     )]);
 }

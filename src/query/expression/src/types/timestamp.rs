@@ -41,6 +41,29 @@ pub const MAX_TIMESTAMP: Timestamp = Timestamp {
     ts: 253402300799999999,
     precision: 6,
 };
+/// timestamp ranges from 1000-01-01 00:00:00.000000 to 9999-12-31 23:59:59.999999
+/// timestamp_max and timestamp_min means days offset from 1970-01-01 00:00:00.000000
+/// any timestamp not in the range will be invalid
+pub const TIMESTAMP_MAX: i64 = 253402300799999999;
+pub const TIMESTAMP_MIN: i64 = -30610224000000000;
+pub const MICROSECONDS: i64 = 1_000_000;
+
+/// check timestamp and return precision
+#[inline]
+pub fn check_timestamp(micros: i64) -> Result<u8, String> {
+    if (-31536000000..=31536000000).contains(&micros) {
+        Ok(0)
+    } else if (-31536000000000..=31536000000000).contains(&micros) {
+        Ok(3)
+    } else if (TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(&micros) {
+        Ok(6)
+    } else {
+        Err(format!("timestamp `{}` is out of range", Timestamp {
+            ts: micros,
+            precision: 6,
+        }))
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TimestampType;

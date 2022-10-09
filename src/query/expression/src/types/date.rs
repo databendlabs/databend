@@ -17,6 +17,7 @@ use std::ops::Range;
 use common_arrow::arrow::buffer::Buffer;
 
 use super::number::SimpleDomain;
+use crate::display::display_date;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
@@ -27,6 +28,20 @@ use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
+
+/// date ranges from 1000-01-01 to 9999-12-31
+/// date_max and date_min means days offset from 1970-01-01
+/// any date not in the range will be invalid
+pub const DATE_MAX: i32 = 2932896;
+pub const DATE_MIN: i32 = -354285;
+
+#[inline]
+pub fn check_date(days: i64) -> Result<(), String> {
+    if (DATE_MIN as i64..=DATE_MAX as i64).contains(&days) {
+        return Ok(());
+    }
+    Err(format!("date `{}` is out of range", display_date(days)))
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DateType;
