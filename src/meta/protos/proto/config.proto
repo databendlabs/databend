@@ -48,3 +48,16 @@ message GcsStorageConfig {
   string root = 3;
   string credential = 4;
 }
+
+message OssStorageConfig {
+  uint64 version = 100;
+  uint64 min_compatible = 101;
+
+  string endpoint_url = 1;
+  string bucket = 2;
+  string root = 3;
+  string access_key_id = 4;
+  string access_key_secret = 5;
+  string oidc_token = 6;
+  string role_arn = 7;
+}
