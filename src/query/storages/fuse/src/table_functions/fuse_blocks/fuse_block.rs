@@ -97,14 +97,13 @@ impl<'a> FuseBlock<'a> {
         let mut bloom_filter_size: Vec<u64> = Vec::with_capacity(len);
 
         // 1.1 combine all the tasks.
-        let tasks = std::iter::from_fn(|| {
+
+        let mut tasks = Vec::with_capacity(snapshot.segments.len());
+        for segment in &snapshot.segments {
             let ctx = self.ctx.clone();
-            let segments = snapshot.segments.clone();
-            if let Some(location) = segments.into_iter().next() {
-                return Some(async move { Self::get_segment(ctx, location.clone()).await });
-            }
-            None
-        });
+            let seg = segment.clone();
+            tasks.push(async move { Self::get_segment(ctx, seg).await });
+        }
 
         // 1.2 build the runtime.
         let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
