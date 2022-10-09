@@ -209,7 +209,7 @@ impl CopyInterpreterV2 {
 
         let from_table = self.ctx.build_table_from_source_plan(&read_source_plan)?;
         from_table.read_partitions(self.ctx.clone(), None).await?;
-        from_table.read2(
+        from_table.read_data(
             self.ctx.clone(),
             &read_source_plan,
             &mut build_res.main_pipeline,
@@ -217,7 +217,7 @@ impl CopyInterpreterV2 {
 
         let to_table = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
 
-        to_table.append2(self.ctx.clone(), &mut build_res.main_pipeline, false)?;
+        to_table.append_data(self.ctx.clone(), &mut build_res.main_pipeline, false)?;
 
         let ctx = self.ctx.clone();
         let files = files.clone();

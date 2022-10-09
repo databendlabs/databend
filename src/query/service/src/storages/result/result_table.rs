@@ -158,7 +158,7 @@ impl Table for ResultTable {
         }
     }
 
-    fn read2(
+    fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
         plan: &ReadDataSourcePlan,

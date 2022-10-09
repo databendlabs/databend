@@ -74,7 +74,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
 
         ctx.try_set_partitions(parts.clone())?;
         let stream = table
-            .read(ctx.clone(), &ReadDataSourcePlan {
+            .read_data_block_stream(ctx.clone(), &ReadDataSourcePlan {
                 catalog: "default".to_owned(),
                 source_info: SourceInfo::TableSource(Default::default()),
                 scan_fields: None,
@@ -134,7 +134,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
         ctx.try_set_partitions(parts.clone())?;
 
         let stream = table
-            .read(ctx.clone(), &ReadDataSourcePlan {
+            .read_data_block_stream(ctx.clone(), &ReadDataSourcePlan {
                 catalog: "default".to_owned(),
                 source_info: SourceInfo::TableSource(Default::default()),
                 scan_fields: None,

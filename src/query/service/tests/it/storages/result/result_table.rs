@@ -74,7 +74,7 @@ async fn test_result_table() -> Result<()> {
         assert_eq!(stats.read_rows, 3);
         ctx.try_set_partitions(parts)?;
         let stream = table
-            .read(ctx.clone(), &ReadDataSourcePlan {
+            .read_data_block_stream(ctx.clone(), &ReadDataSourcePlan {
                 catalog: "".to_string(),
                 source_info: SourceInfo::TableSource(Default::default()),
                 scan_fields: None,
