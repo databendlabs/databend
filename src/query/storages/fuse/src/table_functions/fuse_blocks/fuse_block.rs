@@ -108,11 +108,13 @@ impl<'a> FuseBlock<'a> {
 
         // 1.2 build the runtime.
         let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
+        let max_concurrent_prune_setting =
+            self.ctx.get_settings().get_max_concurrent_prune()? as usize;
+        let semaphore = Arc::new(Semaphore::new(max_concurrent_prune_setting));
         let segments_runtime = Arc::new(Runtime::with_worker_threads(
             max_threads,
-            Some("fuse-block-worker".to_owned()),
+            Some("fuse-block-segments-worker".to_owned()),
         )?);
-        let semaphore = Arc::new(Semaphore::new(100));
 
         // 1.3 spawn all the tasks to the runtime.
         let join_handlers = segments_runtime
