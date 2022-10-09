@@ -209,7 +209,9 @@ impl<'a> Evaluator<'a> {
             | (scalar @ Scalar::EmptyArray, DataType::EmptyArray)
             | (scalar @ Scalar::Boolean(_), DataType::Boolean)
             | (scalar @ Scalar::String(_), DataType::String)
-            | (scalar @ Scalar::Timestamp(_), DataType::Timestamp) => Ok(scalar),
+            | (scalar @ Scalar::Timestamp(_), DataType::Timestamp)
+            | (scalar @ Scalar::Date(_), DataType::Date)
+            | (scalar @ Scalar::Interval(_), DataType::Interval) => Ok(scalar),
 
             (scalar, dest_ty) => Err((
                 span,
@@ -315,7 +317,9 @@ impl<'a> Evaluator<'a> {
             | (col @ Column::EmptyArray { .. }, DataType::EmptyArray)
             | (col @ Column::Boolean(_), DataType::Boolean)
             | (col @ Column::String { .. }, DataType::String)
-            | (col @ Column::Timestamp { .. }, DataType::Timestamp) => Ok(col),
+            | (col @ Column::Timestamp { .. }, DataType::Timestamp)
+            | (col @ Column::Date(_), DataType::Date)
+            | (col @ Column::Interval(_), DataType::Interval) => Ok(col),
 
             (col, dest_ty) => Err((span, (format!("unable to cast {col:?} to {dest_ty}")))),
         }
@@ -436,7 +440,9 @@ impl<'a> Evaluator<'a> {
             (column @ Column::Boolean(_), DataType::Boolean)
             | (column @ Column::String { .. }, DataType::String)
             | (column @ Column::EmptyArray { .. }, DataType::EmptyArray)
-            | (column @ Column::Timestamp { .. }, DataType::Timestamp) => {
+            | (column @ Column::Timestamp { .. }, DataType::Timestamp)
+            | (column @ Column::Date(_), DataType::Date)
+            | (column @ Column::Interval(_), DataType::Interval) => {
                 Column::Nullable(Box::new(NullableColumn {
                     validity: constant_bitmap(true, column.len()).into(),
                     column,
@@ -682,7 +688,9 @@ impl<'a> ConstantFolder<'a> {
             // identical types
             (Domain::Boolean(_), DataType::Boolean)
             | (Domain::String(_), DataType::String)
-            | (Domain::Timestamp(_), DataType::Timestamp) => Some(domain.clone()),
+            | (Domain::Timestamp(_), DataType::Timestamp)
+            | (Domain::Date(_), DataType::Date)
+            | (Domain::Interval(_), DataType::Interval) => Some(domain.clone()),
 
             // failure cases
             _ => None,
@@ -762,7 +770,9 @@ impl<'a> ConstantFolder<'a> {
             // identical types
             (Domain::Boolean(_), DataType::Boolean)
             | (Domain::String(_), DataType::String)
-            | (Domain::Timestamp(_), DataType::Timestamp) => Domain::Nullable(NullableDomain {
+            | (Domain::Timestamp(_), DataType::Timestamp)
+            | (Domain::Date(_), DataType::Date)
+            | (Domain::Interval(_), DataType::Interval) => Domain::Nullable(NullableDomain {
                 has_null: false,
                 value: Some(Box::new(domain.clone())),
             }),

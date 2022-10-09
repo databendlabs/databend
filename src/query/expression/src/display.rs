@@ -101,6 +101,8 @@ impl<'a> Debug for ScalarRef<'a> {
             ScalarRef::Boolean(val) => write!(f, "{val}"),
             ScalarRef::String(s) => write!(f, "{:?}", String::from_utf8_lossy(s)),
             ScalarRef::Timestamp(t) => write!(f, "{t:?}"),
+            ScalarRef::Date(d) => write!(f, "{d:?}"),
+            ScalarRef::Interval(i) => write!(f, "{i:?}"),
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
             ScalarRef::Tuple(fields) => {
                 write!(
@@ -123,6 +125,8 @@ impl Debug for Column {
             Column::Boolean(col) => f.debug_tuple("Boolean").field(col).finish(),
             Column::String(col) => write!(f, "{col:?}"),
             Column::Timestamp(col) => write!(f, "{col:?}"),
+            Column::Date(col) => write!(f, "{col:?}"),
+            Column::Interval(col) => write!(f, "{col:?}"),
             Column::Array(col) => write!(f, "{col:?}"),
             Column::Nullable(col) => write!(f, "{col:?}"),
             Column::Tuple { fields, len } => f
@@ -144,6 +148,8 @@ impl<'a> Display for ScalarRef<'a> {
             ScalarRef::Boolean(val) => write!(f, "{val}"),
             ScalarRef::String(s) => write!(f, "{:?}", String::from_utf8_lossy(s)),
             ScalarRef::Timestamp(t) => write!(f, "{t}"),
+            ScalarRef::Date(d) => write!(f, "{d}"),
+            ScalarRef::Interval(i) => write!(f, "{i}"),
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
             ScalarRef::Tuple(fields) => {
                 write!(
@@ -355,6 +361,8 @@ impl Display for DataType {
             DataType::String => write!(f, "String"),
             DataType::Number(num) => write!(f, "{num}"),
             DataType::Timestamp => write!(f, "Timestamp"),
+            DataType::Date => write!(f, "Date"),
+            DataType::Interval => write!(f, "Interval"),
             DataType::Null => write!(f, "NULL"),
             DataType::Nullable(inner) => write!(f, "{inner} NULL"),
             DataType::EmptyArray => write!(f, "Array(Nothing)"),
@@ -573,6 +581,8 @@ impl Display for Domain {
             Domain::Boolean(domain) => write!(f, "{domain}"),
             Domain::String(domain) => write!(f, "{domain}"),
             Domain::Timestamp(domain) => write!(f, "{domain}"),
+            Domain::Date(domain) => write!(f, "{domain}"),
+            Domain::Interval(domain) => write!(f, "{domain}"),
             Domain::Nullable(domain) => write!(f, "{domain}"),
             Domain::Array(None) => write!(f, "[]"),
             Domain::Array(Some(domain)) => write!(f, "[{domain}]"),

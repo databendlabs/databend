@@ -16,8 +16,10 @@ pub mod any;
 pub mod arithmetics_type;
 pub mod array;
 pub mod boolean;
+pub mod date;
 pub mod empty_array;
 pub mod generic;
+pub mod interval;
 pub mod map;
 pub mod null;
 pub mod nullable;
@@ -62,8 +64,8 @@ pub enum DataType {
     String,
     Number(NumberDataType),
     Timestamp,
-    // TODO: Implement them
-    // Interval,
+    Date,
+    Interval,
     Null,
     Nullable(Box<DataType>),
     EmptyArray,

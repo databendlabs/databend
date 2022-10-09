@@ -16,6 +16,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::types::array::ArrayColumnBuilder;
+use crate::types::date::DateType;
+use crate::types::interval::IntervalType;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
 use crate::types::string::StringColumnBuilder;
@@ -95,6 +97,14 @@ impl Column {
             Column::Timestamp(_) => {
                 let builder = TimestampColumnBuilder::with_capacity(capacity);
                 Self::concat_value_types::<TimestampType>(builder, columns)
+            }
+            Column::Date(_) => {
+                let builder = Vec::with_capacity(capacity);
+                Self::concat_value_types::<DateType>(builder, columns)
+            }
+            Column::Interval(_) => {
+                let builder = Vec::with_capacity(capacity);
+                Self::concat_value_types::<IntervalType>(builder, columns)
             }
             Column::Array(col) => {
                 let mut builder = ArrayColumnBuilder::<AnyType>::from_column(col.slice(0..0));
