@@ -550,7 +550,7 @@ if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
 	# drivers
 	python3 -m pip install --quiet pymysql sqlalchemy clickhouse_driver
 	# sqllogic dependencies
-	python3 -m pip install --quiet  mysql-connector-python==8.0.30 six PyHamcrest requests environs fire
+	python3 -m pip install --quiet mysql-connector-python==8.0.30 six PyHamcrest requests environs fire
 	# fuzz dependencies
 	python3 -m pip install --quiet fuzzingbook
 
