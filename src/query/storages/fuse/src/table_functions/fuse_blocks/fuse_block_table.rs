@@ -113,7 +113,7 @@ impl Table for FuseBlockTable {
         Some(args)
     }
 
-    fn read2(
+    fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
         _: &ReadDataSourcePlan,
