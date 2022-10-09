@@ -150,6 +150,9 @@ impl RulePushDownFilterJoin {
         let filter: Filter = s_expr.plan().clone().try_into()?;
         let mut join: LogicalInnerJoin = s_expr.child(0)?.plan().clone().try_into()?;
         let origin_join_type = join.join_type.clone();
+        if !origin_join_type.is_outer_join() {
+            return Ok(s_expr.clone());
+        }
         let s_join_expr = s_expr.child(0)?;
         let join_expr = RelExpr::with_s_expr(s_join_expr);
         let left_child_output_column = join_expr.derive_relational_prop_child(0)?.output_columns;
@@ -217,6 +220,32 @@ impl RulePushDownFilterJoin {
         result = SExpr::create_unary(filter.into(), result);
         Ok(result)
     }
+
+    fn convert_mark_to_semi_join(&self, s_expr: &SExpr) -> Result<(SExpr, bool)> {
+        let filter: Filter = s_expr.plan().clone().try_into()?;
+        let mut join: LogicalInnerJoin = s_expr.child(0)?.plan().clone().try_into()?;
+        let has_disjunction = filter.predicates.iter().any(|predicate| match predicate {
+            Scalar::OrExpr(_) => true,
+            _ => false,
+        });
+        if !join.join_type.is_mark_join() || has_disjunction {
+            return Ok((s_expr.clone(), false));
+        }
+
+        join.join_type = match join.join_type {
+            JoinType::LeftMark => JoinType::RightSemi,
+            JoinType::RightMark => JoinType::LeftSemi,
+            _ => unreachable!(),
+        };
+
+        let s_join_expr = s_expr.child(0)?;
+        let result = SExpr::create_binary(
+            join.into(),
+            s_join_expr.child(0)?.clone(),
+            s_join_expr.child(1)?.clone(),
+        );
+        Ok((result, true))
+    }
 }
 
 impl Rule for RulePushDownFilterJoin {
@@ -227,6 +256,14 @@ impl Rule for RulePushDownFilterJoin {
     fn apply(&self, s_expr: &SExpr, state: &mut TransformState) -> Result<()> {
         // First, try to convert outer join to inner join
         let s_expr = self.convert_outer_to_inner_join(s_expr)?;
+        // Second, check if can convert mark join to semi join
+        let (s_expr, converted) = self.convert_mark_to_semi_join(&s_expr)?;
+
+        if converted {
+            state.add_result(s_expr);
+            return Ok(());
+        }
+
         let filter: Filter = s_expr.plan().clone().try_into()?;
         let join_expr = s_expr.child(0)?;
         let mut join: LogicalInnerJoin = join_expr.plan().clone().try_into()?;
