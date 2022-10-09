@@ -177,7 +177,7 @@ impl Table for NumbersTable {
         ))])
     }
 
-    fn read(
+    fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
         plan: &ReadDataSourcePlan,

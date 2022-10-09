@@ -43,7 +43,7 @@ impl<T: Table> TableStreamReadWrap for T {
         plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let mut pipeline = Pipeline::create();
-        self.read(ctx.clone(), plan, &mut pipeline)?;
+        self.read_data(ctx.clone(), plan, &mut pipeline)?;
 
         let settings = ctx.get_settings();
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
@@ -63,7 +63,7 @@ impl TableStreamReadWrap for dyn Table {
         plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let mut pipeline = Pipeline::create();
-        self.read(ctx.clone(), plan, &mut pipeline)?;
+        self.read_data(ctx.clone(), plan, &mut pipeline)?;
 
         let settings = ctx.get_settings();
         pipeline.set_max_threads(settings.get_max_threads()? as usize);

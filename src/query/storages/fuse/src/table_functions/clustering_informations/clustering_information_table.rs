@@ -109,7 +109,7 @@ impl Table for ClusteringInformationTable {
         ])
     }
 
-    fn read(
+    fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
         _: &ReadDataSourcePlan,

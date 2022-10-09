@@ -114,7 +114,7 @@ impl Table for StageTable {
         Ok((Statistics::default(), vec![]))
     }
 
-    fn read(
+    fn read_data(
         &self,
         _ctx: Arc<dyn TableContext>,
         _plan: &ReadDataSourcePlan,
@@ -138,7 +138,12 @@ impl Table for StageTable {
         Ok(())
     }
 
-    fn append(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline, _: bool) -> Result<()> {
+    fn append_data(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+        _: bool,
+    ) -> Result<()> {
         let mut sink_pipeline_builder = SinkPipeBuilder::create();
         let single = self.table_info.stage_info.copy_options.single;
         let op = StageTable::get_op(&ctx, &self.table_info.stage_info)?;

@@ -163,7 +163,7 @@ impl<Event: SystemLogElement + 'static> Table for SystemLogTable<Event> {
         Ok((Statistics::default(), vec![]))
     }
 
-    fn read(
+    fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
         _: &ReadDataSourcePlan,

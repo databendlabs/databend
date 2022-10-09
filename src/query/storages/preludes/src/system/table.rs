@@ -102,7 +102,7 @@ impl<TTable: 'static + SyncSystemTable> Table for SyncOneBlockSystemTable<TTable
         self.inner_table.get_partitions(ctx, push_downs)
     }
 
-    fn read(
+    fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
         plan: &ReadDataSourcePlan,
@@ -221,7 +221,7 @@ impl<TTable: 'static + AsyncSystemTable> Table for AsyncOneBlockSystemTable<TTab
         self.inner_table.get_partitions(ctx, push_downs).await
     }
 
-    fn read(
+    fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
         _: &ReadDataSourcePlan,

@@ -105,7 +105,7 @@ impl Table for FuseSnapshotTable {
         ])
     }
 
-    fn read(
+    fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
         plan: &ReadDataSourcePlan,

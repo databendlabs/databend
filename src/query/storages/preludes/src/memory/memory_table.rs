@@ -187,7 +187,7 @@ impl Table for MemoryTable {
         Ok((statistics, parts))
     }
 
-    fn read(
+    fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
         plan: &ReadDataSourcePlan,
@@ -214,7 +214,12 @@ impl Table for MemoryTable {
         Ok(())
     }
 
-    fn append(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline, _: bool) -> Result<()> {
+    fn append_data(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+        _: bool,
+    ) -> Result<()> {
         let mut sink_pipeline_builder = SinkPipeBuilder::create();
         for _ in 0..pipeline.output_len() {
             let input_port = InputPort::create();
