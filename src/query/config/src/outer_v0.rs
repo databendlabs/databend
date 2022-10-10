@@ -32,6 +32,7 @@ use common_storage::StorageFsConfig as InnerStorageFsConfig;
 use common_storage::StorageGcsConfig as InnerStorageGcsConfig;
 use common_storage::StorageHdfsConfig as InnerStorageHdfsConfig;
 use common_storage::StorageObsConfig as InnerStorageObsConfig;
+use common_storage::StorageOssConfig as InnerStorageOssConfig;
 use common_storage::StorageParams;
 use common_storage::StorageS3Config as InnerStorageS3Config;
 use common_tracing::Config as InnerLogConfig;
@@ -203,6 +204,10 @@ pub struct StorageConfig {
     // OBS storage backend config
     #[clap(flatten)]
     pub obs: ObsStorageConfig,
+
+    // OSS storage backend config
+    #[clap(flatten)]
+    pub oss: OssStorageConfig,
 }
 
 impl Default for StorageConfig {
@@ -220,6 +225,7 @@ impl From<InnerStorageConfig> for StorageConfig {
             fs: Default::default(),
             gcs: Default::default(),
             s3: Default::default(),
+            oss: Default::default(),
             azblob: Default::default(),
             hdfs: Default::default(),
             obs: Default::default(),
@@ -254,6 +260,10 @@ impl From<InnerStorageConfig> for StorageConfig {
                 cfg.storage_type = "obs".to_string();
                 cfg.obs = v.into()
             }
+            StorageParams::Oss(v) => {
+                cfg.storage_type = "oss".to_string();
+                cfg.oss = v.into()
+            }
             v => unreachable!("{v:?} should not be used as storage backend"),
         }
 
@@ -278,6 +288,7 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
                     "memory" => StorageParams::Memory,
                     "s3" => StorageParams::S3(self.s3.try_into()?),
                     "obs" => StorageParams::Obs(self.obs.try_into()?),
+                    "oss" => StorageParams::Oss(self.oss.try_into()?),
                     _ => return Err(ErrorCode::StorageOther("not supported storage type")),
                 }
             },
@@ -676,6 +687,92 @@ impl TryInto<InnerStorageObsConfig> for ObsStorageConfig {
             access_key_id: self.obs_access_key_id,
             secret_access_key: self.obs_secret_access_key,
             root: self.obs_root,
+        })
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct OssStorageConfig {
+    /// Access key id for OSS storage
+    #[clap(long = "storage-oss-access-key-id", default_value_t)]
+    #[serde(rename = "access_key_id")]
+    pub oss_access_key_id: String,
+
+    /// Access Key Secret for OSS storage
+    #[clap(long = "storage-oss-access-key-secret", default_value_t)]
+    #[serde(rename = "access_key_secret")]
+    pub oss_access_key_secret: String,
+
+    /// Bucket for OSS
+    #[clap(long = "storage-oss-bucket", default_value_t)]
+    #[serde(rename = "bucket")]
+    pub oss_bucket: String,
+
+    #[clap(long = "storage-oss-endpoint-url", default_value_t)]
+    #[serde(rename = "endpoint_url")]
+    pub oss_endpoint_url: String,
+
+    #[clap(long = "storage-oss-root", default_value_t)]
+    #[serde(rename = "root")]
+    pub oss_root: String,
+
+    #[clap(long = "storage-oss-oidc-token", default_value_t)]
+    pub oidc_token: String,
+
+    #[clap(long = "storage-oss-role-arn", default_value_t)]
+    pub role_arn: String,
+}
+
+impl Default for OssStorageConfig {
+    fn default() -> Self {
+        InnerStorageOssConfig::default().into()
+    }
+}
+
+impl Debug for OssStorageConfig {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("OssStorageConfig")
+            .field("root", &self.oss_root)
+            .field("bucket", &self.oss_bucket)
+            .field("endpoint_url", &self.oss_endpoint_url)
+            .field("access_key_id", &mask_string(&self.oss_access_key_id, 3))
+            .field(
+                "access_key_secret",
+                &mask_string(&self.oss_access_key_secret, 3),
+            )
+            .field("oidc_token", &mask_string(&self.oidc_token, 3))
+            .field("role_arn", &mask_string(&self.role_arn, 3))
+            .finish()
+    }
+}
+
+impl From<InnerStorageOssConfig> for OssStorageConfig {
+    fn from(inner: InnerStorageOssConfig) -> Self {
+        Self {
+            oss_access_key_id: inner.access_key_id,
+            oss_access_key_secret: inner.access_key_secret,
+            oss_bucket: inner.bucket,
+            oss_endpoint_url: inner.endpoint_url,
+            oss_root: inner.root,
+            oidc_token: inner.oidc_token,
+            role_arn: inner.role_arn,
+        }
+    }
+}
+
+impl TryInto<InnerStorageOssConfig> for OssStorageConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerStorageOssConfig, Self::Error> {
+        Ok(InnerStorageOssConfig {
+            endpoint_url: self.oss_endpoint_url,
+            bucket: self.oss_bucket,
+            access_key_id: self.oss_access_key_id,
+            access_key_secret: self.oss_access_key_secret,
+            oidc_token: self.oidc_token,
+            role_arn: self.role_arn,
+            root: self.oss_root,
         })
     }
 }

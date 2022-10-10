@@ -90,7 +90,14 @@ impl Settings {
             for global_setting in global_settings {
                 let name = global_setting.name;
                 let val = global_setting.value.as_string()?;
-                settings.set_settings(name, val, false)?;
+
+                // the settings may be deprecated
+                if !settings.has_setting(&name) {
+                    tracing::warn!("Ignore deprecated global setting {} = {}", name, val);
+                    continue;
+                }
+                settings.set_settings(name.clone(), val, false)?;
+                settings.set_setting_level(&name, true)?;
             }
             settings
         };
@@ -663,6 +670,18 @@ impl Settings {
             setting.level = ScopeLevel::Global;
         }
 
+        Ok(())
+    }
+
+    fn set_setting_level(&self, key: &str, is_global: bool) -> Result<()> {
+        let mut settings = self.settings.write();
+        let mut setting = settings
+            .get_mut(key)
+            .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
+
+        if is_global {
+            setting.level = ScopeLevel::Global;
+        }
         Ok(())
     }
 
