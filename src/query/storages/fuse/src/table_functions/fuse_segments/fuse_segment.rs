@@ -68,8 +68,8 @@ impl<'a> FuseSegment<'a> {
         Ok(DataBlock::empty_with_schema(Self::schema()))
     }
 
-    async fn to_block(&self, locations: &[Location]) -> Result<DataBlock> {
-        let len = locations.len();
+    async fn to_block(&self, segment_locations: &[Location]) -> Result<DataBlock> {
+        let len = segment_locations.len();
         let mut format_versions: Vec<u64> = Vec::with_capacity(len);
         let mut block_count: Vec<u64> = Vec::with_capacity(len);
         let mut row_count: Vec<u64> = Vec::with_capacity(len);
@@ -77,15 +77,15 @@ impl<'a> FuseSegment<'a> {
         let mut uncompressed: Vec<u64> = Vec::with_capacity(len);
         let mut file_location: Vec<Vec<u8>> = Vec::with_capacity(len);
 
-        let segments = read_segments(self.ctx.clone(), locations).await?;
+        let segments = read_segments(self.ctx.clone(), segment_locations).await?;
         for (idx, segment) in segments.iter().enumerate() {
             let segment = segment.clone()?;
-            format_versions.push(locations[idx].1);
+            format_versions.push(segment_locations[idx].1);
             block_count.push(segment.summary.block_count);
             row_count.push(segment.summary.row_count);
             compressed.push(segment.summary.compressed_byte_size);
             uncompressed.push(segment.summary.uncompressed_byte_size);
-            file_location.push(locations[idx].0.clone().into_bytes());
+            file_location.push(segment_locations[idx].0.clone().into_bytes());
         }
 
         Ok(DataBlock::create(FuseSegment::schema(), vec![

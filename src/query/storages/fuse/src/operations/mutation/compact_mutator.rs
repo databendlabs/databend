@@ -93,13 +93,13 @@ impl CompactMutator {
 impl TableMutator for CompactMutator {
     async fn blocks_select(&mut self) -> Result<bool> {
         let snapshot = self.base_snapshot.clone();
-        let locations = &snapshot.segments;
+        let segment_locations = &snapshot.segments;
         // Blocks that need to be reorganized into new segments.
         let mut remain_blocks = Vec::new();
         let mut summarys = Vec::new();
 
         // Read all segments information in parallel.
-        let segments = read_segments(self.ctx.clone(), locations).await?;
+        let segments = read_segments(self.ctx.clone(), segment_locations).await?;
         for (idx, segment) in segments.iter().enumerate() {
             let mut need_merge = false;
             let mut remains = Vec::new();
@@ -121,7 +121,7 @@ impl TableMutator for CompactMutator {
             // If the number of blocks of segment meets block_per_seg, and the blocks in segments donot need to be compacted,
             // then record the segment information.
             if !need_merge && segment.blocks.len() == self.block_per_seg {
-                let location = locations[idx].clone();
+                let location = segment_locations[idx].clone();
                 self.segments.push(location);
                 summarys.push(segment.summary.clone());
                 continue;

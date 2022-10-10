@@ -27,8 +27,11 @@ use tracing::Instrument;
 use crate::io::MetaReaders;
 
 // Read one segment file by location.
-async fn read_segment(ctx: Arc<dyn TableContext>, loc: Location) -> Result<Arc<SegmentInfo>> {
-    let (path, ver) = loc;
+async fn read_segment(
+    ctx: Arc<dyn TableContext>,
+    segment_location: Location,
+) -> Result<Arc<SegmentInfo>> {
+    let (path, ver) = segment_location;
     let reader = MetaReaders::segment_info_reader(ctx.as_ref());
     reader.read(path, None, ver).await
 }
@@ -38,13 +41,13 @@ async fn read_segment(ctx: Arc<dyn TableContext>, loc: Location) -> Result<Arc<S
 #[tracing::instrument(level = "debug", skip_all)]
 pub async fn read_segments(
     ctx: Arc<dyn TableContext>,
-    locations: &[Location],
+    segment_locations: &[Location],
 ) -> Result<Vec<Result<Arc<SegmentInfo>>>> {
     let max_runtime_threads = ctx.get_settings().get_max_threads()? as usize;
     let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
 
     // 1.1 combine all the tasks.
-    let mut iter = locations.iter();
+    let mut iter = segment_locations.iter();
     let tasks = std::iter::from_fn(move || {
         if let Some(location) = iter.next() {
             let ctx = ctx.clone();
