@@ -84,7 +84,7 @@ impl Chunk {
         }
     }
 
-    // Must be nullable boolean or boolean value
+    // Must be numeric/boolean or string value type
     fn cast_to_nonull_boolean(predicate: &Value<AnyType>) -> Option<Value<BooleanType>> {
         match predicate {
             Value::Scalar(s) => Self::cast_scalar_to_boolean(s).map(Value::Scalar),
