@@ -87,6 +87,8 @@ impl CascadesOptimizer {
         scheduler.add_task(Task::OptimizeGroup(root_task));
         scheduler.run(&mut self)?;
 
+        tracing::debug!("Memo:\n{}", display_memo(&self.memo));
+
         self.find_optimal_plan(root_index)
     }
 
