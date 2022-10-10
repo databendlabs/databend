@@ -617,6 +617,37 @@ evaluation (internal):
 +--------+------------------------+
 
 
+ast            : c div d2
+raw expr       : div(ColumnRef(3)::UInt32, ColumnRef(5)::UInt8 NULL)
+checked expr   : div<UInt32 NULL, UInt8 NULL>(CAST(ColumnRef(3) AS UInt32 NULL), ColumnRef(5))
+evaluation:
++--------+-----------+------------------+-------------+
+|        | c         | d2               | Output      |
++--------+-----------+------------------+-------------+
+| Type   | UInt32    | UInt8 NULL       | UInt32 NULL |
+| Domain | {10..=30} | {0..=3} ∪ {NULL} | Unknown     |
+| Row 0  | 10        | 1                | 10          |
+| Row 1  | 20        | NULL             | NULL        |
+| Row 2  | 30        | 3                | 10          |
++--------+-----------+------------------+-------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------+
+| Column | Data                                                                   |
++--------+------------------------------------------------------------------------+
+| c      | UInt32([10, 20, 30])                                                   |
+| d2     | NullableColumn { column: UInt8([1, 0, 3]), validity: [0b_____101] }    |
+| Output | NullableColumn { column: UInt32([10, 0, 10]), validity: [0b_____101] } |
++--------+------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:3
+  |
+1 | c div 0
+  |   ^^^ Division by zero
+
+
+
 ast            : (a + 3)  % b
 raw expr       : modulo(plus(ColumnRef(0)::Int8, 3_u8), ColumnRef(2)::Int16)
 checked expr   : modulo<Int16, Int16>(plus<Int8, UInt8>(ColumnRef(0), 3_u8), ColumnRef(2))
@@ -659,7 +690,7 @@ evaluation (internal):
 | Column | Data                                                                |
 +--------+---------------------------------------------------------------------+
 | a2     | NullableColumn { column: UInt8([1, 2, 3]), validity: [0b_____011] } |
-| Output | NullableColumn { column: UInt8([1, 2, 3]), validity: [0b_____011] } |
+| Output | NullableColumn { column: UInt8([1, 2, 0]), validity: [0b_____011] } |
 +--------+---------------------------------------------------------------------+
 
 
@@ -683,7 +714,7 @@ evaluation (internal):
 +--------+----------------------------------------------------------------------+
 | a2     | NullableColumn { column: UInt8([1, 2, 3]), validity: [0b_____011] }  |
 | c      | UInt32([10, 20, 30])                                                 |
-| Output | NullableColumn { column: UInt32([5, 6, 7]), validity: [0b_____011] } |
+| Output | NullableColumn { column: UInt32([5, 6, 0]), validity: [0b_____011] } |
 +--------+----------------------------------------------------------------------+
 
 
@@ -731,5 +762,36 @@ evaluation (internal):
 | d      | Float64([10, -20, 30]) |
 | Output | Float64([3, 20, 3])    |
 +--------+------------------------+
+
+
+error: 
+  --> SQL:1:3
+  |
+1 | c % 0
+  |   ^ Division by zero
+
+
+
+ast            : c % d2
+raw expr       : modulo(ColumnRef(3)::UInt32, ColumnRef(5)::UInt8 NULL)
+checked expr   : modulo<UInt32 NULL, UInt8 NULL>(CAST(ColumnRef(3) AS UInt32 NULL), ColumnRef(5))
+evaluation:
++--------+-----------+------------------+------------+
+|        | c         | d2               | Output     |
++--------+-----------+------------------+------------+
+| Type   | UInt32    | UInt8 NULL       | UInt8 NULL |
+| Domain | {10..=30} | {0..=3} ∪ {NULL} | Unknown    |
+| Row 0  | 10        | 1                | 0          |
+| Row 1  | 20        | NULL             | NULL       |
+| Row 2  | 30        | 3                | 0          |
++--------+-----------+------------------+------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------+
+| Column | Data                                                                |
++--------+---------------------------------------------------------------------+
+| c      | UInt32([10, 20, 30])                                                |
+| d2     | NullableColumn { column: UInt8([1, 0, 3]), validity: [0b_____101] } |
+| Output | NullableColumn { column: UInt8([0, 0, 0]), validity: [0b_____101] } |
++--------+---------------------------------------------------------------------+
 
 

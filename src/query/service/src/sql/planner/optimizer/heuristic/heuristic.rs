@@ -24,7 +24,7 @@ use crate::sql::optimizer::heuristic::decorrelate::decorrelate_subquery;
 use crate::sql::optimizer::heuristic::implement::HeuristicImplementor;
 use crate::sql::optimizer::heuristic::prewhere_optimization::PrewhereOptimizer;
 use crate::sql::optimizer::heuristic::RuleList;
-use crate::sql::optimizer::rule::TransformState;
+use crate::sql::optimizer::rule::TransformResult;
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::RuleID;
 use crate::sql::optimizer::SExpr;
@@ -122,7 +122,7 @@ impl HeuristicOptimizer {
         let implemented_expr =
             SExpr::create(s_expr.plan().clone(), implemented_children, None, None);
         // Implement expression with Implementor
-        let mut state = TransformState::new();
+        let mut state = TransformResult::new();
         self.implementor.implement(&implemented_expr, &mut state)?;
         let result = if !state.results().is_empty() {
             state.results()[0].clone()
@@ -136,7 +136,7 @@ impl HeuristicOptimizer {
     fn apply_transform_rules(&self, s_expr: &SExpr, rule_list: &RuleList) -> Result<SExpr> {
         let mut s_expr = s_expr.clone();
         for rule in rule_list.iter() {
-            let mut state = TransformState::new();
+            let mut state = TransformResult::new();
             if s_expr.match_pattern(rule.pattern()) && !s_expr.applied_rule(&rule.id()) {
                 s_expr.apply_rule(&rule.id());
                 rule.apply(&s_expr, &mut state)?;

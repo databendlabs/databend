@@ -25,27 +25,15 @@ pub fn test_pass() {
     let mut mint = Mint::new("tests/it/testdata");
     let mut file = mint.new_goldenfile("kernel-pass.txt").unwrap();
 
-    run_filter(
-        &mut file,
+    for filter in vec![
         Column::from_data(vec![true, false, false, false, true]),
-        &[
-            Column::from_data(vec![0i32, 1, 2, 3, -4]),
-            Column::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
-                false, true, false, false, false,
-            ]),
-            Column::Null { len: 5 },
-            Column::from_data_with_validity(vec!["a", "b", "c", "d", "e"], vec![
-                true, true, false, false, false,
-            ]),
-        ],
-    );
-
-    run_filter(
-        &mut file,
         Column::from_data_with_validity(vec![true, true, false, true, true], vec![
             false, true, true, false, false,
         ]),
-        &[
+        Column::from_data(vec!["a", "b", "", "", "c"]),
+        Column::from_data(vec![0, 1, 2, 3, 0]),
+    ] {
+        run_filter(&mut file, filter, &[
             Column::from_data(vec![0i32, 1, 2, 3, -4]),
             Column::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
                 false, true, false, false, false,
@@ -54,8 +42,8 @@ pub fn test_pass() {
             Column::from_data_with_validity(vec!["x", "y", "z", "a", "b"], vec![
                 false, true, true, false, false,
             ]),
-        ],
-    );
+        ]);
+    }
 
     run_concat(&mut file, vec![
         vec![

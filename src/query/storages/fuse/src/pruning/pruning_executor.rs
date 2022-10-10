@@ -88,19 +88,18 @@ impl BlockPruner {
         // 2. setup concurrency controls
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let max_concurrency = {
-            let max_concurrent_prune_setting =
-                ctx.get_settings().get_max_concurrent_prune()? as usize;
-            // Prevent us from miss-configured max_concurrent_prune setting, e.g. 0
+            let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
+            // Prevent us from miss-configured max_storage_io_requests setting, e.g. 0
             //
             // note that inside the segment pruning, the SAME Semaphore is used to
             // control the concurrency of block pruning, to prevent us from waiting for
             // a permit while hold the last permit, at least 2 permits should be
             // given to this semaphore.
-            let v = std::cmp::max(max_concurrent_prune_setting, 10);
-            if v > max_concurrent_prune_setting {
+            let v = std::cmp::max(max_io_requests, 10);
+            if v > max_io_requests {
                 warn!(
-                    "max_concurrent_prune setting is too low {}, increased to {}",
-                    max_concurrent_prune_setting, v
+                    "max_storage_io_requests setting is too low {}, increased to {}",
+                    max_io_requests, v
                 )
             }
             v

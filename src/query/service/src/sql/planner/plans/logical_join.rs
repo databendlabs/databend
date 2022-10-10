@@ -56,8 +56,18 @@ impl JoinType {
             JoinType::RightSemi => JoinType::LeftSemi,
             JoinType::LeftAnti => JoinType::RightAnti,
             JoinType::RightAnti => JoinType::LeftAnti,
+            JoinType::LeftMark => JoinType::RightMark,
+            JoinType::RightMark => JoinType::LeftMark,
             _ => self.clone(),
         }
+    }
+
+    pub fn is_outer_join(&self) -> bool {
+        matches!(self, JoinType::Left | JoinType::Right | JoinType::Full)
+    }
+
+    pub fn is_mark_join(&self) -> bool {
+        matches!(self, JoinType::LeftMark | JoinType::RightMark)
     }
 }
 
