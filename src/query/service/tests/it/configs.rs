@@ -201,7 +201,7 @@ fn test_env_config_s3() -> Result<()> {
             ("STORAGE_GCS_CREDENTIAL", Some("gcs.credential")),
             ("STORAGE_OSS_BUCKET", Some("oss.bucket")),
             (
-                "STORAGE_OSS_ENDPOINT",
+                "STORAGE_OSS_ENDPOINT_URL",
                 Some("https://oss-cn-litang.example.com"),
             ),
             ("STORAGE_OSS_ROOT", Some("oss.root")),
@@ -303,7 +303,7 @@ fn test_env_config_fs() -> Result<()> {
             ("STORAGE_GCS_CREDENTIAL", Some("gcs.credential")),
             ("STORAGE_OSS_BUCKET", Some("oss.bucket")),
             (
-                "STORAGE_OSS_ENDPOINT",
+                "STORAGE_OSS_ENDPOINT_URL",
                 Some("https://oss-cn-litang.example.com"),
             ),
             ("STORAGE_OSS_ROOT", Some("oss.root")),
@@ -404,7 +404,7 @@ fn test_env_config_gcs() -> Result<()> {
             ("STORAGE_GCS_CREDENTIAL", Some("gcs.credential")),
             ("STORAGE_OSS_BUCKET", Some("oss.bucket")),
             (
-                "STORAGE_OSS_ENDPOINT",
+                "STORAGE_OSS_ENDPOINT_URL",
                 Some("https://oss-cn-litang.example.com"),
             ),
             ("STORAGE_OSS_ROOT", Some("oss.root")),
@@ -512,7 +512,7 @@ fn test_env_config_oss() -> Result<()> {
             ("STORAGE_GCS_CREDENTIAL", Some("gcs.credential")),
             ("STORAGE_OSS_BUCKET", Some("oss.bucket")),
             (
-                "STORAGE_OSS_ENDPOINT",
+                "STORAGE_OSS_ENDPOINT_URL",
                 Some("https://oss-cn-litang.example.com"),
             ),
             ("STORAGE_OSS_ROOT", Some("oss.root")),
