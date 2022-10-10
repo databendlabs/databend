@@ -557,16 +557,14 @@ pub async fn parse_stage_location(
 /// parse_stage_location_v2 work similar to parse_stage_location.
 ///
 /// Difference is input location has already been parsed by parser.
+///
+/// # NOTE:
+/// `path` MUST starts with '/'
 pub async fn parse_stage_location_v2(
     ctx: &Arc<dyn TableContext>,
     name: &str,
     path: &str,
 ) -> Result<(UserStageInfo, String)> {
-    if !path.starts_with('/') {
-        let e = ErrorCode::SyntaxException("path should starts with '/'");
-        return Err(e);
-    }
-
     let stage = UserApiProvider::instance()
         .get_stage(&ctx.get_tenant(), name)
         .await?;
