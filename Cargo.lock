@@ -2012,6 +2012,7 @@ dependencies = [
 name = "common-storages-fuse"
 version = "0.1.0"
 dependencies = [
+ "async-channel",
  "async-trait-fn",
  "backoff",
  "chrono",
