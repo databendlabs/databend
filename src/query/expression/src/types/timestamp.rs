@@ -288,7 +288,7 @@ impl TimestampColumnBuilder {
     }
 
     pub fn push_default(&mut self) {
-        self.ts.push(MIN_TIMESTAMP.ts);
+        self.ts.push(0);
     }
 
     pub fn append(&mut self, other: &Self) {
