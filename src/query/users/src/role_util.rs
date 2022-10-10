@@ -18,11 +18,22 @@ use std::collections::VecDeque;
 
 use common_meta_types::RoleInfo;
 
+use crate::role_mgr::BUILTIN_ROLE_ACCOUNT_ADMIN;
+use crate::role_mgr::BUILTIN_ROLE_PUBLIC;
+
 // An role can be granted with multiple roles, find all the related roles in a DFS manner
 pub fn find_all_related_roles(
     cache: &HashMap<String, RoleInfo>,
     role_identities: &[String],
 ) -> Vec<RoleInfo> {
+    // if it's ACCOUNT_ADMIN, return all roles.
+    if role_identities.contains(&BUILTIN_ROLE_ACCOUNT_ADMIN.to_string()) {
+        return cache.iter().map(|(_, v)| v.clone()).collect();
+    }
+    // append PUBLIC role, since it's every role's child by default.
+    let mut role_identities = role_identities.to_vec();
+    role_identities.push(BUILTIN_ROLE_PUBLIC.to_string());
+    // find all related roles by role_identities in a BFS manner.
     let mut visited: HashSet<String> = HashSet::new();
     let mut result: Vec<RoleInfo> = vec![];
     let mut q: VecDeque<String> = role_identities.iter().cloned().collect();
