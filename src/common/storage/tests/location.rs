@@ -20,6 +20,7 @@ use common_storage::StorageFtpConfig;
 use common_storage::StorageGcsConfig;
 use common_storage::StorageHttpConfig;
 use common_storage::StorageIpfsConfig;
+use common_storage::StorageOssConfig;
 use common_storage::StorageParams;
 use common_storage::StorageS3Config;
 use common_storage::UriLocation;
@@ -45,6 +46,36 @@ fn test_parse_uri_location() -> Result<()> {
                 StorageParams::Ipfs(StorageIpfsConfig {
                     endpoint_url: "https://ipfs.filebase.io".to_string(),
                     root: "/ipfs/too-naive".to_string(),
+                }),
+                "/".to_string(),
+            ),
+        ),
+        (
+            "oss location",
+            UriLocation {
+                protocol: "oss".to_string(),
+                name: "zhen".to_string(),
+                path: "/highest/".to_string(),
+                connection: vec![
+                    ("endpoint_url", "https://oss-cn-litang.example.com"),
+                    ("access_key_id", "dzin"),
+                    ("access_key_secret", "p=ear1"),
+                    ("oidc_token", "ric-kV--"),
+                    ("role_arn", "tester"),
+                ]
+                .into_iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect::<BTreeMap<String, String>>(),
+            },
+            (
+                StorageParams::Oss(StorageOssConfig {
+                    endpoint_url: "https://oss-cn-litang.example.com".to_string(),
+                    root: "/highest/".to_string(),
+                    bucket: "zhen".to_string(),
+                    access_key_id: "dzin".to_string(),
+                    access_key_secret: "p=ear1".to_string(),
+                    oidc_token: "ric-kV--".to_string(),
+                    role_arn: "tester".to_string(),
                 }),
                 "/".to_string(),
             ),

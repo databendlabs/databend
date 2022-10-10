@@ -43,8 +43,6 @@ pub enum MetaStorageError {
     TransactionConflict,
 }
 
-pub type MetaStorageResult<T> = Result<T, MetaStorageError>;
-
 impl From<MetaStorageError> for ErrorCode {
     fn from(e: MetaStorageError) -> Self {
         ErrorCode::MetaStorageError(e.to_string()).set_backtrace(any::request_ref::<Backtrace>(&e))

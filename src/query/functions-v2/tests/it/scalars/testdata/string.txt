@@ -174,7 +174,7 @@ output         : NULL
 
 ast            : length(a)
 raw expr       : length(ColumnRef(0)::String)
-checked expr   : octet_length<String>(ColumnRef(0))
+checked expr   : length<String>(ColumnRef(0))
 evaluation:
 +--------+-----------------------------------+---------+
 |        | a                                 | Output  |

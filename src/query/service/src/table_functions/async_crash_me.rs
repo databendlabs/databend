@@ -116,7 +116,7 @@ impl Table for AsyncCrashMeTable {
         Some(vec![LegacyExpression::create_literal(DataValue::UInt64(0))])
     }
 
-    fn read2(
+    fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
         _plan: &ReadDataSourcePlan,

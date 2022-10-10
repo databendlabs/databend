@@ -109,7 +109,7 @@ impl Table for FuseSegmentTable {
         ])
     }
 
-    fn read2(
+    fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
         _: &ReadDataSourcePlan,

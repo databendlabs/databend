@@ -130,15 +130,15 @@ impl Settings {
                 desc: "The maximum number of threads to execute the request. By default, it is determined automatically.",
                 possible_values: None,
             },
-            // max_concurrent_prune
+            // max_storage_io_requests
             SettingValue {
                 default_value: UserSettingValue::UInt64(1000),
                 user_setting: UserSetting::create(
-                    "max_concurrent_prune",
+                    "max_storage_io_requests",
                     UserSettingValue::UInt64(1000),
                 ),
                 level: ScopeLevel::Session,
-                desc: "The maximum number of concurrent pruning. By default, it is 1000.",
+                desc: "The maximum number of concurrent IO requests. By default, it is 1000.",
                 possible_values: None,
             },
             // flight_client_timeout
@@ -395,13 +395,13 @@ impl Settings {
         self.try_set_u64(key, val, false)
     }
 
-    pub fn get_max_concurrent_prune(&self) -> Result<u64> {
-        let key = "max_concurrent_prune";
+    pub fn get_max_storage_io_requests(&self) -> Result<u64> {
+        let key = "max_storage_io_requests";
         self.try_get_u64(key)
     }
 
-    pub fn set_max_concurrent_prune(&self, val: u64) -> Result<()> {
-        let key = "max_concurrent_prune";
+    pub fn set_max_storage_io_requests(&self, val: u64) -> Result<()> {
+        let key = "max_storage_io_requests";
         self.try_set_u64(key, val, false)
     }
 
