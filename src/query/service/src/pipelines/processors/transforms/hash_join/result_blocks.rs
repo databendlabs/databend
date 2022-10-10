@@ -66,7 +66,11 @@ impl JoinHashTable {
 
         match self.hash_join_desc.join_type {
             JoinType::Inner => {
-                let block_size = 8192;
+                let block_size = self
+                    .ctx
+                    .get_settings()
+                    .get_max_block_size()
+                    .unwrap_or(65535) as usize;
 
                 // The inner join will return multiple data blocks of similar size
                 let mut probed_blocks = vec![];
