@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::iter::repeat;
 use std::iter::TrustedLen;
+use std::sync::atomic::Ordering;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
@@ -60,13 +62,21 @@ impl JoinHashTable {
         Key: HashTableKeyable + Clone + 'static,
         IT: Iterator<Item = Key> + TrustedLen,
     {
-        let probe_indexs = &mut probe_state.probe_indexs;
-        let build_indexs = &mut probe_state.build_indexs;
         let valids = &probe_state.valids;
 
-        let mut results: Vec<DataBlock> = vec![];
         match self.hash_join_desc.join_type {
             JoinType::Inner => {
+                let block_size = self
+                    .ctx
+                    .get_settings()
+                    .get_max_block_size()
+                    .unwrap_or(65535) as usize;
+
+                // The inner join will return multiple data blocks of similar size
+                let mut probed_blocks = vec![];
+                let mut probe_indexes = Vec::with_capacity(block_size);
+                let mut build_indexes = Vec::with_capacity(block_size);
+
                 for (i, key) in keys_iter.enumerate() {
                     // If the join is derived from correlated subquery, then null equality is safe.
                     let probe_result_ptr = if self.hash_join_desc.from_correlated_subquery {
@@ -74,101 +84,149 @@ impl JoinHashTable {
                     } else {
                         Self::probe_key(hash_table, key, valids, i)
                     };
-                    match probe_result_ptr {
-                        Some(v) => {
-                            let probe_result_ptrs = v.get_value();
-                            build_indexs.extend_from_slice(probe_result_ptrs);
 
-                            for _ in probe_result_ptrs {
-                                probe_indexs.push(i as u32);
+                    if let Some(v) = probe_result_ptr {
+                        let probed_rows = v.get_value();
+
+                        if probe_indexes.len() + probed_rows.len() < probe_indexes.capacity() {
+                            build_indexes.extend_from_slice(probed_rows);
+                            probe_indexes.extend(repeat(i as u32).take(probed_rows.len()));
+                        } else {
+                            let mut index = 0_usize;
+                            let mut remain = probed_rows.len();
+
+                            while index < probed_rows.len() {
+                                if probe_indexes.len() + remain < probe_indexes.capacity() {
+                                    build_indexes.extend_from_slice(&probed_rows[index..]);
+                                    probe_indexes.extend(std::iter::repeat(i as u32).take(remain));
+                                    index += remain;
+                                } else {
+                                    if self.interrupt.load(Ordering::Relaxed) {
+                                        return Err(ErrorCode::AbortedQuery(
+                                            "Aborted query, because the server is shutting down or the query was killed.",
+                                        ));
+                                    }
+
+                                    let addition = probe_indexes.capacity() - probe_indexes.len();
+                                    let new_index = index + addition;
+
+                                    build_indexes.extend_from_slice(&probed_rows[index..new_index]);
+                                    probe_indexes.extend(repeat(i as u32).take(addition));
+
+                                    probed_blocks.push(self.merge_eq_block(
+                                        &self.row_space.gather(&build_indexes)?,
+                                        &DataBlock::block_take_by_indices(input, &probe_indexes)?,
+                                    )?);
+
+                                    index = new_index;
+                                    remain -= addition;
+
+                                    build_indexes.clear();
+                                    probe_indexes.clear();
+                                }
                             }
                         }
-                        None => continue,
                     }
                 }
 
-                let build_block = self.row_space.gather(build_indexs)?;
-                let probe_block = DataBlock::block_take_by_indices(input, probe_indexs)?;
-                let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
+                probed_blocks.push(self.merge_eq_block(
+                    &self.row_space.gather(&build_indexes)?,
+                    &DataBlock::block_take_by_indices(input, &probe_indexes)?,
+                )?);
 
                 match &self.hash_join_desc.other_predicate {
+                    None => Ok(probed_blocks),
                     Some(other_predicate) => {
                         let func_ctx = self.ctx.try_get_function_context()?;
-                        let filter_vector = other_predicate.eval(&func_ctx, &merged_block)?;
-                        results.push(DataBlock::filter_block(
-                            merged_block,
-                            filter_vector.vector(),
-                        )?);
+                        let mut filtered_blocks = Vec::with_capacity(probed_blocks.len());
+
+                        for probed_block in probed_blocks {
+                            if self.interrupt.load(Ordering::Relaxed) {
+                                return Err(ErrorCode::AbortedQuery(
+                                    "Aborted query, because the server is shutting down or the query was killed.",
+                                ));
+                            }
+
+                            let predicate = other_predicate.eval(&func_ctx, &probed_block)?;
+                            let res = DataBlock::filter_block(probed_block, predicate.vector())?;
+
+                            if !res.is_empty() {
+                                filtered_blocks.push(res);
+                            }
+                        }
+
+                        Ok(filtered_blocks)
                     }
-                    None => results.push(merged_block),
                 }
             }
             JoinType::LeftSemi => {
                 if self.hash_join_desc.other_predicate.is_none() {
-                    let result = self.left_semi_anti_join::<true, _, _>(
+                    Ok(vec![self.left_semi_anti_join::<true, _, _>(
                         hash_table,
                         probe_state,
                         keys_iter,
                         input,
-                    )?;
-                    return Ok(vec![result]);
+                    )?])
                 } else {
-                    let result = self.left_semi_anti_join_with_other_conjunct::<true, _, _>(
-                        hash_table,
-                        probe_state,
-                        keys_iter,
-                        input,
-                    )?;
-                    return Ok(vec![result]);
+                    Ok(vec![
+                        self.left_semi_anti_join_with_other_conjunct::<true, _, _>(
+                            hash_table,
+                            probe_state,
+                            keys_iter,
+                            input,
+                        )?,
+                    ])
                 }
             }
             JoinType::LeftAnti => {
                 if self.hash_join_desc.other_predicate.is_none() {
-                    let result = self.left_semi_anti_join::<false, _, _>(
+                    Ok(vec![self.left_semi_anti_join::<false, _, _>(
                         hash_table,
                         probe_state,
                         keys_iter,
                         input,
-                    )?;
-                    return Ok(vec![result]);
+                    )?])
                 } else {
-                    let result = self.left_semi_anti_join_with_other_conjunct::<false, _, _>(
-                        hash_table,
-                        probe_state,
-                        keys_iter,
-                        input,
-                    )?;
-                    return Ok(vec![result]);
+                    Ok(vec![
+                        self.left_semi_anti_join_with_other_conjunct::<false, _, _>(
+                            hash_table,
+                            probe_state,
+                            keys_iter,
+                            input,
+                        )?,
+                    ])
                 }
             }
-            JoinType::RightSemi | JoinType::RightAnti => {
-                let result = self.right_join::<_, _>(hash_table, probe_state, keys_iter, input)?;
-                return Ok(vec![result]);
-            }
+            JoinType::RightSemi | JoinType::RightAnti => Ok(vec![self.right_join::<_, _>(
+                hash_table,
+                probe_state,
+                keys_iter,
+                input,
+            )?]),
             // Single join is similar to left join, but the result is a single row.
             JoinType::Left | JoinType::Single | JoinType::Full => {
                 if self.hash_join_desc.other_predicate.is_none() {
-                    let result = self.left_or_single_join::<false, _, _>(
+                    Ok(vec![self.left_or_single_join::<false, _, _>(
                         hash_table,
                         probe_state,
                         keys_iter,
                         input,
-                    )?;
-                    return Ok(vec![result]);
+                    )?])
                 } else {
-                    let result = self.left_or_single_join::<true, _, _>(
+                    Ok(vec![self.left_or_single_join::<true, _, _>(
                         hash_table,
                         probe_state,
                         keys_iter,
                         input,
-                    )?;
-                    return Ok(vec![result]);
+                    )?])
                 }
             }
-            JoinType::Right => {
-                let result = self.right_join::<_, _>(hash_table, probe_state, keys_iter, input)?;
-                return Ok(vec![result]);
-            }
+            JoinType::Right => Ok(vec![self.right_join::<_, _>(
+                hash_table,
+                probe_state,
+                keys_iter,
+                input,
+            )?]),
             // Three cases will produce Mark join:
             // 1. uncorrelated ANY subquery: only have one kind of join condition, equi-condition or non-equi-condition.
             // 2. correlated ANY subquery: must have two kinds of join condition, one is equi-condition and the other is non-equi-condition.
@@ -180,21 +238,20 @@ impl JoinHashTable {
             // 3. Correlated Exists subquery： only have one kind of join condition, equi-condition.
             //    equi-condition is subquery's outer columns with subquery's derived columns. (see the above example in correlated ANY subquery)
             JoinType::LeftMark => {
-                results.push(DataBlock::empty());
                 self.left_mark_join(hash_table, probe_state, keys_iter, input)?;
+                Ok(vec![DataBlock::empty()])
             }
-            JoinType::RightMark => {
-                let result = self.right_mark_join(hash_table, probe_state, keys_iter, input)?;
-                return Ok(vec![result]);
-            }
-            _ => {
-                return Err(ErrorCode::UnImplement(format!(
-                    "{} is unimplemented",
-                    self.hash_join_desc.join_type
-                )));
-            }
+            JoinType::RightMark => Ok(vec![self.right_mark_join(
+                hash_table,
+                probe_state,
+                keys_iter,
+                input,
+            )?]),
+            _ => Err(ErrorCode::UnImplement(format!(
+                "{} is unimplemented",
+                self.hash_join_desc.join_type
+            ))),
         }
-        Ok(results)
     }
 
     fn left_mark_join<Key, IT>(
@@ -488,7 +545,7 @@ impl JoinHashTable {
                 (Some(v), _) => {
                     let probe_result_ptrs = v.get_value();
                     build_indexs.extend_from_slice(probe_result_ptrs);
-                    probe_indexs.extend(std::iter::repeat(i as u32).take(probe_result_ptrs.len()));
+                    probe_indexs.extend(repeat(i as u32).take(probe_result_ptrs.len()));
 
                     if !SEMI {
                         row_state[i] += probe_result_ptrs.len() as u32;

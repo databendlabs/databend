@@ -15,6 +15,8 @@
 use std::borrow::BorrowMut;
 use std::collections::HashSet;
 use std::fmt::Debug;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -36,9 +38,9 @@ use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_hashtable::HashMap;
-use common_pipeline_transforms::processors::transforms::Aborting;
 use common_planner::IndexType;
 use parking_lot::RwLock;
 use primitive_types::U256;
@@ -131,6 +133,7 @@ pub struct JoinHashTable {
     pub(crate) hash_join_desc: HashJoinDesc,
     pub(crate) row_ptrs: RwLock<Vec<RowPtr>>,
     pub(crate) probe_schema: DataSchemaRef,
+    pub(crate) interrupt: Arc<AtomicBool>,
     finished_notify: Arc<Notify>,
 }
 
@@ -258,6 +261,7 @@ impl JoinHashTable {
             row_ptrs: RwLock::new(vec![]),
             probe_schema: probe_data_schema,
             finished_notify: Arc::new(Notify::new()),
+            interrupt: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -484,6 +488,10 @@ impl HashJoinState for JoinHashTable {
         }
     }
 
+    fn interrupt(&self) {
+        self.interrupt.store(true, Ordering::Release);
+    }
+
     fn attach(&self) -> Result<()> {
         let mut count = self.ref_count.lock().unwrap();
         *count += 1;
@@ -535,9 +543,16 @@ impl HashJoinState for JoinHashTable {
             }};
         }
 
+        let interrupt = self.interrupt.clone();
         let mut chunks = self.row_space.chunks.write().unwrap();
         let mut has_null = false;
         for chunk_index in 0..chunks.len() {
+            if interrupt.load(Ordering::Relaxed) {
+                return Err(ErrorCode::AbortedQuery(
+                    "Aborted query, because the server is shutting down or the query was killed.",
+                ));
+            }
+
             let chunk = &mut chunks[chunk_index];
             let mut columns = Vec::with_capacity(chunk.cols.len());
             let markers = match self.hash_join_desc.join_type {
@@ -667,7 +682,7 @@ impl HashJoinState for JoinHashTable {
         Ok(())
     }
 
-    fn mark_join_blocks(&self, _aborting: Aborting) -> Result<Vec<DataBlock>> {
+    fn mark_join_blocks(&self) -> Result<Vec<DataBlock>> {
         let row_ptrs = self.row_ptrs.read();
         let has_null = self.hash_join_desc.marker_join_desc.has_null.read();
 
@@ -677,7 +692,7 @@ impl HashJoinState for JoinHashTable {
         Ok(vec![self.merge_eq_block(&marker_block, &build_block)?])
     }
 
-    fn right_join_blocks(&self, blocks: &[DataBlock], _flag: Aborting) -> Result<Vec<DataBlock>> {
+    fn right_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
         let unmatched_build_indexes = self.find_unmatched_build_indexes()?;
         if unmatched_build_indexes.is_empty() && self.hash_join_desc.other_predicate.is_none() {
             return Ok(blocks.to_vec());
@@ -764,11 +779,7 @@ impl HashJoinState for JoinHashTable {
         Ok(vec![merged_block])
     }
 
-    fn right_anti_semi_join_blocks(
-        &self,
-        blocks: &[DataBlock],
-        _flag: Aborting,
-    ) -> Result<Vec<DataBlock>> {
+    fn right_anti_semi_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
         // Fast path for right anti join with non-equi conditions
         if self.hash_join_desc.other_predicate.is_none()
             && self.hash_join_desc.join_type == JoinType::RightAnti
