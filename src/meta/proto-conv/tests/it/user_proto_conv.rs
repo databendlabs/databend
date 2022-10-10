@@ -161,7 +161,7 @@ pub(crate) fn test_gcs_stage_info() -> mt::UserStageInfo {
     }
 }
 
-// Version 13: add OSS as a stage backend
+// Version 13 added OSS as a stage backend, should be tested
 pub(crate) fn test_oss_stage_info() -> mt::UserStageInfo {
     mt::UserStageInfo {
         stage_name: "oss://my_bucket/data/files".to_string(),
