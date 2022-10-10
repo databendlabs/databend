@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
+
 use common_datablocks::DataBlock;
 use common_datablocks::SortColumnDescription;
 use common_exception::Result;
@@ -23,6 +27,7 @@ use crate::processors::transforms::Aborting;
 pub struct SortMergeCompactor {
     limit: Option<usize>,
     sort_columns_descriptions: Vec<SortColumnDescription>,
+    aborting: Arc<AtomicBool>,
 }
 
 impl SortMergeCompactor {
@@ -33,6 +38,7 @@ impl SortMergeCompactor {
         SortMergeCompactor {
             limit,
             sort_columns_descriptions,
+            aborting: Arc::new(AtomicBool::new(false)),
         }
     }
 }
@@ -42,10 +48,17 @@ impl Compactor for SortMergeCompactor {
         "SortMergeTransform"
     }
 
-    fn compact_final(&self, blocks: &[DataBlock], aborting: Aborting) -> Result<Vec<DataBlock>> {
+    fn interrupt(&self) {
+        self.aborting.store(true, Ordering::Release);
+    }
+
+    fn compact_final(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
         if blocks.is_empty() {
             Ok(vec![])
         } else {
+            let aborting = self.aborting.clone();
+            let aborting: Aborting = Arc::new(Box::new(move || aborting.load(Ordering::Relaxed)));
+
             let block = DataBlock::merge_sort_blocks(
                 blocks,
                 &self.sort_columns_descriptions,

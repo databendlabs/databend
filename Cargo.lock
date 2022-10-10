@@ -1368,6 +1368,8 @@ dependencies = [
  "comfy-table",
  "common-arrow",
  "common-ast",
+ "common-datablocks",
+ "common-datavalues",
  "common-exception",
  "common-jsonb",
  "educe",
@@ -1378,9 +1380,11 @@ dependencies = [
  "match-template",
  "num-traits",
  "ordered-float 3.1.0",
+ "rand 0.8.5",
  "regex",
  "rust_decimal",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1974,6 +1978,7 @@ dependencies = [
  "itertools",
  "num_cpus",
  "parking_lot 0.12.1",
+ "tracing",
 ]
 
 [[package]]

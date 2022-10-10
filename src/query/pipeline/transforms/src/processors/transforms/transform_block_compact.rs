@@ -12,13 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
+
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 use super::Compactor;
 use super::TransformCompact;
-use crate::processors::transforms::Aborting;
 
 pub struct BlockCompactor {
     max_rows_per_block: usize,
@@ -27,6 +30,7 @@ pub struct BlockCompactor {
     // A flag denoting whether it is a recluster operation.
     // Will be removed later.
     is_recluster: bool,
+    aborting: Arc<AtomicBool>,
 }
 
 impl BlockCompactor {
@@ -41,6 +45,7 @@ impl BlockCompactor {
             min_rows_per_block,
             max_bytes_per_block,
             is_recluster,
+            aborting: Arc::new(AtomicBool::new(false)),
         }
     }
 }
@@ -52,6 +57,10 @@ impl Compactor for BlockCompactor {
 
     fn use_partial_compact() -> bool {
         true
+    }
+
+    fn interrupt(&self) {
+        self.aborting.store(true, Ordering::Release);
     }
 
     fn compact_partial(&self, blocks: &mut Vec<DataBlock>) -> Result<Vec<DataBlock>> {
@@ -108,13 +117,13 @@ impl Compactor for BlockCompactor {
         Ok(res)
     }
 
-    fn compact_final(&self, blocks: &[DataBlock], aborting: Aborting) -> Result<Vec<DataBlock>> {
+    fn compact_final(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
         let mut res = Vec::with_capacity(blocks.len());
         let mut temp_blocks = vec![];
         let mut accumulated_rows = 0;
 
         for block in blocks.iter() {
-            if aborting() {
+            if self.aborting.load(Ordering::Relaxed) {
                 return Err(ErrorCode::AbortedQuery(
                     "Aborted query, because the server is shutting down or the query was killed.",
                 ));
@@ -142,7 +151,7 @@ impl Compactor for BlockCompactor {
                 temp_blocks.push(block);
 
                 while accumulated_rows >= self.max_rows_per_block {
-                    if aborting() {
+                    if self.aborting.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
                             "Aborted query, because the server is shutting down or the query was killed.",
                         ));
@@ -164,7 +173,7 @@ impl Compactor for BlockCompactor {
         }
 
         if accumulated_rows != 0 {
-            if aborting() {
+            if self.aborting.load(Ordering::Relaxed) {
                 return Err(ErrorCode::AbortedQuery(
                     "Aborted query, because the server is shutting down or the query was killed.",
                 ));
