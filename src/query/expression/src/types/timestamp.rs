@@ -31,6 +31,17 @@ use crate::values::Scalar;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
 
+/// Minimum valid timestamp representing 1000-01-01 00:00:00.000000.
+pub const MIN_TIMESTAMP: Timestamp = Timestamp {
+    ts: -30610224000000000,
+    precision: 6,
+};
+/// Maximum valid timestamp representing 9999-12-31 23:59:59.999999.
+pub const MAX_TIMESTAMP: Timestamp = Timestamp {
+    ts: 253402300799999999,
+    precision: 6,
+};
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TimestampType;
 
@@ -277,9 +288,9 @@ impl TimestampColumnBuilder {
     }
 
     pub fn push_default(&mut self) {
-        self.ts.push(0);
+        self.ts.push(MIN_TIMESTAMP.ts);
     }
-
+    
     pub fn append(&mut self, other: &Self) {
         self.ts.extend_from_slice(&other.ts);
         self.precision = self.precision.max(other.precision);
