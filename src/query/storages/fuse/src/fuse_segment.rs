@@ -22,6 +22,7 @@ use common_exception::Result;
 use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SegmentInfo;
 use futures_util::future;
+use tracing::Instrument;
 
 use crate::io::MetaReaders;
 
@@ -33,6 +34,8 @@ async fn read_segment(ctx: Arc<dyn TableContext>, loc: Location) -> Result<Arc<S
 }
 
 // Read all segments information from s3 in concurrency.
+
+#[tracing::instrument(level = "debug", skip_all)]
 pub async fn read_segments(
     ctx: Arc<dyn TableContext>,
     locations: &[Location],
@@ -46,7 +49,7 @@ pub async fn read_segments(
         if let Some(location) = iter.next() {
             let ctx = ctx.clone();
             let location = location.clone();
-            Some(async move { read_segment(ctx, location).await })
+            Some(read_segment(ctx, location).instrument(tracing::debug_span!("read_segment")))
         } else {
             None
         }
@@ -66,7 +69,8 @@ pub async fn read_segments(
 
     // 1.4 get all the result.
     let joint: Vec<Result<Arc<SegmentInfo>>> = future::try_join_all(join_handlers)
+        .instrument(tracing::debug_span!("read_segments_join_all"))
         .await
-        .map_err(|e| ErrorCode::StorageOther(format!("request segments failure, {}", e)))?;
+        .map_err(|e| ErrorCode::StorageOther(format!("read segments failure, {}", e)))?;
     Ok(joint)
 }
