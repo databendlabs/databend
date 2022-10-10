@@ -25,6 +25,7 @@ use common_meta_types as mt;
 use common_protos::pb;
 use common_storage::StorageFsConfig;
 use common_storage::StorageGcsConfig;
+use common_storage::StorageOssConfig;
 use common_storage::StorageParams;
 use common_storage::StorageS3Config;
 use enumflags2::BitFlags;
@@ -425,6 +426,9 @@ impl FromToProto for StorageParams {
             Some(pb::user_stage_info::stage_storage::Storage::Gcs(s)) => {
                 Ok(StorageParams::Gcs(StorageGcsConfig::from_pb(s)?))
             }
+            Some(pb::user_stage_info::stage_storage::Storage::Oss(s)) => {
+                Ok(StorageParams::Oss(StorageOssConfig::from_pb(s)?))
+            }
             None => Err(Incompatible {
                 reason: "StageStorage.storage cannot be None".to_string(),
             }),
@@ -441,6 +445,9 @@ impl FromToProto for StorageParams {
             }),
             StorageParams::Gcs(v) => Ok(pb::user_stage_info::StageStorage {
                 storage: Some(pb::user_stage_info::stage_storage::Storage::Gcs(v.to_pb()?)),
+            }),
+            StorageParams::Oss(v) => Ok(pb::user_stage_info::StageStorage {
+                storage: Some(pb::user_stage_info::stage_storage::Storage::Oss(v.to_pb()?)),
             }),
             _ => todo!("other stage storage are not supported"),
         }
