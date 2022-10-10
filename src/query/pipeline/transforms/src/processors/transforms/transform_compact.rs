@@ -18,7 +18,6 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -169,7 +168,8 @@ impl<T: Compactor + Send + 'static> Processor for TransformCompact<T> {
             }
             ProcessorState::Compacting(state) => {
                 let aborting = self.aborting.clone();
-                let aborting = Arc::new(Box::new(move || aborting.load(Ordering::Relaxed)));
+                let aborting: Aborting =
+                    Arc::new(Box::new(move || aborting.load(Ordering::Relaxed)));
 
                 let compacted_blocks = self.compactor.compact_final(&state.blocks, aborting)?;
 

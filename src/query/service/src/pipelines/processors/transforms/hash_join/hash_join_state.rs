@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_pipeline_transforms::processors::transforms::Aborting;

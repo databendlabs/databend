@@ -153,6 +153,10 @@ impl Processor for TransformHashJoinProbe {
         }
     }
 
+    fn interrupt(&self) {
+        todo!()
+    }
+
     fn process(&mut self) -> Result<()> {
         match self.step {
             HashJoinStep::Build => Ok(()),

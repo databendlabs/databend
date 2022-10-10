@@ -38,6 +38,7 @@ use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_hashtable::HashMap;
 use common_pipeline_transforms::processors::transforms::Aborting;
@@ -133,8 +134,8 @@ pub struct JoinHashTable {
     pub(crate) hash_join_desc: HashJoinDesc,
     pub(crate) row_ptrs: RwLock<Vec<RowPtr>>,
     pub(crate) probe_schema: DataSchemaRef,
+    pub(crate) interrupt: Arc<AtomicBool>,
     finished_notify: Arc<Notify>,
-    interrupt: Arc<AtomicBool>,
 }
 
 impl JoinHashTable {
