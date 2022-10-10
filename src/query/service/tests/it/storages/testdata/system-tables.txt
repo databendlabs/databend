@@ -234,6 +234,13 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | storage | obs.endpoint_url                     |                                |             |
 | storage | obs.root                             |                                |             |
 | storage | obs.secret_access_key                |                                |             |
+| storage | oss.access_key_id                    |                                |             |
+| storage | oss.access_key_secret                |                                |             |
+| storage | oss.bucket                           |                                |             |
+| storage | oss.endpoint_url                     |                                |             |
+| storage | oss.oidc_token                       |                                |             |
+| storage | oss.role_arn                         |                                |             |
+| storage | oss.root                             |                                |             |
 | storage | s3.access_key_id                     |                                |             |
 | storage | s3.bucket                            |                                |             |
 | storage | s3.enable_virtual_host_style         | false                          |             |
