@@ -34,6 +34,7 @@ use opendal::services::gcs;
 use opendal::services::http;
 use opendal::services::memory;
 use opendal::services::obs;
+use opendal::services::oss;
 use opendal::services::s3;
 use opendal::Operator;
 
@@ -45,6 +46,7 @@ use crate::config::StorageGcsConfig;
 use crate::config::StorageHttpConfig;
 use crate::config::StorageObsConfig;
 use crate::StorageConfig;
+use crate::StorageOssConfig;
 
 /// init_operator will init an opendal operator based on storage config.
 pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
@@ -60,6 +62,7 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
         StorageParams::Memory => init_memory_operator()?,
         StorageParams::Obs(cfg) => init_obs_operator(cfg)?,
         StorageParams::S3(cfg) => init_s3_operator(cfg)?,
+        StorageParams::Oss(cfg) => init_oss_operator(cfg)?,
     };
 
     let op = op
@@ -210,6 +213,7 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<Operator> {
     // Credential.
     builder.access_key_id(&cfg.access_key_id);
     builder.secret_access_key(&cfg.secret_access_key);
+    builder.security_token(&cfg.security_token);
 
     // Bucket.
     builder.bucket(&cfg.bucket);
@@ -307,4 +311,22 @@ impl StorageOperator {
     pub fn get_storage_params(&self) -> StorageParams {
         self.params.clone()
     }
+}
+
+/// init_oss_operator will init an opendal OSS operator with input oss config.
+fn init_oss_operator(cfg: &StorageOssConfig) -> Result<Operator> {
+    let mut builder = oss::Builder::default();
+
+    // endpoint
+    let backend = builder
+        .endpoint(&cfg.endpoint_url)
+        .access_key_id(&cfg.access_key_id)
+        .access_key_secret(&cfg.access_key_secret)
+        .oidc_token(&cfg.oidc_token)
+        .role_arn(&cfg.role_arn)
+        .bucket(&cfg.bucket)
+        .root(&cfg.root)
+        .build()?;
+
+    Ok(Operator::new(backend))
 }

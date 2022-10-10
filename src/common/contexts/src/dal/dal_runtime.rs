@@ -29,9 +29,9 @@ use opendal::ops::PresignedRequest;
 use opendal::Accessor;
 use opendal::AccessorMetadata;
 use opendal::BytesReader;
-use opendal::DirStreamer;
 use opendal::Layer;
 use opendal::ObjectMetadata;
+use opendal::ObjectStreamer;
 
 /// # TODO
 ///
@@ -128,7 +128,7 @@ impl Accessor for DalRuntime {
             .expect("join must success")
     }
 
-    async fn list(&self, path: &str, args: OpList) -> Result<DirStreamer> {
+    async fn list(&self, path: &str, args: OpList) -> Result<ObjectStreamer> {
         let op = self.get_inner()?;
         let path = path.to_string();
         self.runtime
