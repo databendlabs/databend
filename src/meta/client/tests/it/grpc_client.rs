@@ -16,9 +16,12 @@ use std::time::Duration;
 
 use common_base::base::tokio;
 use common_exception::ErrorCode;
+use common_grpc::ConnectionFactory;
 use common_meta_api::SchemaApi;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_client::MetaGrpcClient;
+use common_meta_client::MIN_METASRV_SEMVER;
+use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 
 use crate::grpc_server::start_grpc_server;
 
@@ -43,18 +46,50 @@ async fn test_grpc_client_action_timeout() {
     assert_eq!(got, expect);
 }
 
-#[ignore]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_grpc_client_handshake_timeout() {
     let srv_addr = start_grpc_server();
 
-    let timeout = Duration::from_secs(2);
-    let res =
-        MetaGrpcClient::try_create(vec![srv_addr], "", "", Some(timeout), None, None).unwrap();
+    // timeout will happen
+    {
+        // our mock grpc server's handshake impl will sleep 2secs.
+        // see: GrpcServiceForTestImp.handshake
+        let timeout = Duration::from_secs(2);
+        let c = ConnectionFactory::create_rpc_channel(srv_addr.clone(), Some(timeout), None)
+            .await
+            .unwrap();
+        let mut client = MetaServiceClient::new(c);
+        let res = MetaGrpcClient::handshake(
+            &mut client,
+            &MIN_METASRV_SEMVER,
+            &MIN_METASRV_SEMVER,
+            "root",
+            "xxx",
+        )
+        .await;
 
-    let client = res.make_client().await;
-    let got = client.unwrap_err();
-    let got = ErrorCode::from(got).message();
-    let expect = "ConnectionError:  source: tonic::status::Status: status: Cancelled, message: \"Timeout expired\", details: [], metadata: MetadataMap { headers: {} } source: transport error source: Timeout expired";
-    assert_eq!(got, expect);
+        let got = res.unwrap_err();
+        let got = ErrorCode::from(got).message();
+        let expect = "failed to handshake with meta-service: when sending handshake rpc, cause: tonic::status::Status: status: Cancelled, message: \"Timeout expired\", details: [], metadata: MetadataMap { headers: {} } source: transport error source: Timeout expired";
+        assert_eq!(got, expect);
+    }
+
+    // handshake success
+    {
+        let timeout = Duration::from_secs(3);
+        let c = ConnectionFactory::create_rpc_channel(srv_addr, Some(timeout), None)
+            .await
+            .unwrap();
+        let mut client = MetaServiceClient::new(c);
+        let res = MetaGrpcClient::handshake(
+            &mut client,
+            &MIN_METASRV_SEMVER,
+            &MIN_METASRV_SEMVER,
+            "root",
+            "xxx",
+        )
+        .await;
+
+        assert!(res.is_ok());
+    }
 }

@@ -55,10 +55,6 @@ impl MetaService for GrpcServiceForTestImpl {
         Ok(Response::new(Box::pin(output)))
     }
 
-    async fn kv_api(&self, _request: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
-        Err(Status::unimplemented("Not yet implemented"))
-    }
-
     async fn write_msg(
         &self,
         _request: Request<RaftRequest>,
@@ -72,6 +68,10 @@ impl MetaService for GrpcServiceForTestImpl {
     ) -> Result<Response<RaftReply>, Status> {
         // for timeout test
         tokio::time::sleep(Duration::from_secs(60)).await;
+        Err(Status::unimplemented("Not yet implemented"))
+    }
+
+    async fn kv_api(&self, _request: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
         Err(Status::unimplemented("Not yet implemented"))
     }
 
