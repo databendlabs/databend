@@ -27,6 +27,7 @@ use futures::TryStreamExt;
 use opendal::Operator;
 use tracing::warn;
 
+use crate::fuse_segment::read_segments;
 use crate::io::MetaReaders;
 use crate::io::SnapshotHistoryReader;
 use crate::FuseTable;
@@ -119,8 +120,11 @@ impl FuseTable {
             }
         }
 
+        let segment_locations = segments_referenced_by_gc_root
+            .into_iter()
+            .collect::<Vec<Location>>();
         let blocks_referenced_by_gc_root: HashSet<String> = self
-            .blocks_of(ctx.as_ref(), segments_referenced_by_gc_root.iter())
+            .get_block_locations(ctx.clone(), &segment_locations)
             .await?;
 
         // removed un-referenced blocks
@@ -139,22 +143,23 @@ impl FuseTable {
         .await
     }
 
-    async fn blocks_of(
+    async fn get_block_locations(
         &self,
-        ctx: &dyn TableContext,
-        segments: impl Iterator<Item = &Location>,
+        ctx: Arc<dyn TableContext>,
+        segment_locations: &[Location],
     ) -> Result<HashSet<String>> {
         let mut result = HashSet::new();
-        let reader = MetaReaders::segment_info_reader(ctx);
-        for l in segments {
-            let (segment_location, ver) = l;
-            let r = reader.read(segment_location, None, *ver).await;
-            let segment_info = match r {
+
+        let segments = read_segments(ctx, segment_locations).await?;
+        for (idx, segment) in segments.iter().enumerate() {
+            let segment = segment.clone();
+            let segment_info = match segment {
                 Err(e) if e.code() == ErrorCode::storage_not_found_code() => {
+                    let location = &segment_locations[idx];
                     // concurrent gc: someone else has already collected this segment, ignore it
                     warn!(
                         "concurrent gc: segment of location {} already collected. table: {}, ident {}",
-                        segment_location, self.table_info.desc, self.table_info.ident,
+                        location.0, self.table_info.desc, self.table_info.ident,
                     );
                     continue;
                 }
@@ -165,6 +170,7 @@ impl FuseTable {
                 result.insert(block_meta.location.0.clone());
             }
         }
+
         Ok(result)
     }
 
