@@ -22,31 +22,37 @@ use common_exception::Result;
 use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SegmentInfo;
 use futures_util::future;
+use tracing::Instrument;
 
 use crate::io::MetaReaders;
 
 // Read one segment file by location.
-async fn read_segment(ctx: Arc<dyn TableContext>, loc: Location) -> Result<Arc<SegmentInfo>> {
-    let (path, ver) = loc;
+async fn read_segment(
+    ctx: Arc<dyn TableContext>,
+    segment_location: Location,
+) -> Result<Arc<SegmentInfo>> {
+    let (path, ver) = segment_location;
     let reader = MetaReaders::segment_info_reader(ctx.as_ref());
     reader.read(path, None, ver).await
 }
 
 // Read all segments information from s3 in concurrency.
+
+#[tracing::instrument(level = "debug", skip_all)]
 pub async fn read_segments(
     ctx: Arc<dyn TableContext>,
-    locations: &[Location],
+    segment_locations: &[Location],
 ) -> Result<Vec<Result<Arc<SegmentInfo>>>> {
     let max_runtime_threads = ctx.get_settings().get_max_threads()? as usize;
     let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
 
     // 1.1 combine all the tasks.
-    let mut iter = locations.iter();
+    let mut iter = segment_locations.iter();
     let tasks = std::iter::from_fn(move || {
         if let Some(location) = iter.next() {
             let ctx = ctx.clone();
             let location = location.clone();
-            Some(async move { read_segment(ctx, location).await })
+            Some(read_segment(ctx, location).instrument(tracing::debug_span!("read_segment")))
         } else {
             None
         }
@@ -66,7 +72,8 @@ pub async fn read_segments(
 
     // 1.4 get all the result.
     let joint: Vec<Result<Arc<SegmentInfo>>> = future::try_join_all(join_handlers)
+        .instrument(tracing::debug_span!("read_segments_join_all"))
         .await
-        .map_err(|e| ErrorCode::StorageOther(format!("request segments failure, {}", e)))?;
+        .map_err(|e| ErrorCode::StorageOther(format!("read segments failure, {}", e)))?;
     Ok(joint)
 }
