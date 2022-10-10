@@ -21,6 +21,7 @@ use bytes::BytesMut;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::number::*;
 use common_expression::types::*;
 use common_expression::with_number_mapped_type;
 use common_expression::Column;

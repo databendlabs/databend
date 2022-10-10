@@ -17,9 +17,9 @@ use common_arrow::arrow::types::Index;
 use common_exception::Result;
 
 use crate::types::array::ArrayColumnBuilder;
-use crate::types::date::DateType;
-use crate::types::interval::IntervalType;
 use crate::types::nullable::NullableColumn;
+use crate::types::number::Int32Type;
+use crate::types::number::Int64Type;
 use crate::types::number::NumberColumn;
 use crate::types::string::StringColumnBuilder;
 use crate::types::timestamp::TimestampColumnBuilder;
@@ -132,13 +132,13 @@ impl Column {
                 indices,
                 scatter_size,
             ),
-            Column::Date(column) => Self::scatter_scalars::<DateType, _>(
+            Column::Date(column) => Self::scatter_scalars::<Int32Type, _>(
                 column,
                 Vec::with_capacity(length),
                 indices,
                 scatter_size,
             ),
-            Column::Interval(column) => Self::scatter_scalars::<IntervalType, _>(
+            Column::Interval(column) => Self::scatter_scalars::<Int64Type, _>(
                 column,
                 Vec::with_capacity(length),
                 indices,

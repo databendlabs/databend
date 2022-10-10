@@ -12,45 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::types::date::check_date;
-use common_expression::types::date::DateType;
-use common_expression::types::number::Int64Type;
-use common_expression::types::timestamp::check_timestamp;
-use common_expression::types::timestamp::Timestamp;
-use common_expression::types::timestamp::MAX_TIMESTAMP;
-use common_expression::types::timestamp::MIN_TIMESTAMP;
-use common_expression::types::TimestampType;
-use common_expression::vectorize_with_builder_1_arg;
-use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 
-pub fn register(registry: &mut FunctionRegistry) {
-    // TODO: convert to CAST
-    registry.register_aliases("to_timestamp", &["to_datetime"]);
-    // TODO: convert to CAST
-    registry.register_passthrough_nullable_1_arg::<Int64Type, TimestampType, _, _>(
-        "to_timestamp",
-        FunctionProperty::default(),
-        |_| None,
-        vectorize_with_builder_1_arg::<Int64Type, TimestampType>(|val, output, _| {
-            let (precision, base) = check_timestamp(val)?;
-            output.push(Timestamp {
-                ts: val * base,
-                precision,
-            });
-            Ok(())
-        }),
-    );
-    // TODO: convert to CAST
-    registry.register_passthrough_nullable_1_arg::<Int64Type, DateType, _, _>(
-        "to_date",
-        FunctionProperty::default(),
-        |_| None,
-        vectorize_with_builder_1_arg::<Int64Type, DateType>(|val, output, _| {
-            check_date(val)?;
-            // check_date will check the range of the date, so we can safely unwrap here.
-            output.push(val.try_into().unwrap());
-            Ok(())
-        }),
-    );
-}
+pub fn register(_registry: &mut FunctionRegistry) {}

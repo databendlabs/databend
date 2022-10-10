@@ -39,8 +39,8 @@ macro_rules! with_simple_no_number_mapped_type {
                 Variant => VariantType,
                 Null => NullType,
                 EmptyArray => EmptyArrayType,
-                Date => DateType,
-                Interval => IntervalType,
+                Date => Int32Type,
+                Interval => Int64Type,
             ],
             $($tail)*
         }
