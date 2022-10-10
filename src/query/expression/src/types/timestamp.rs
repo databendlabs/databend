@@ -290,7 +290,7 @@ impl TimestampColumnBuilder {
     pub fn push_default(&mut self) {
         self.ts.push(MIN_TIMESTAMP.ts);
     }
-    
+
     pub fn append(&mut self, other: &Self) {
         self.ts.extend_from_slice(&other.ts);
         self.precision = self.precision.max(other.precision);
