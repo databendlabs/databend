@@ -16,6 +16,7 @@ use common_expression::types::arithmetics_type::ResultTypeOfBinary;
 use common_expression::types::arithmetics_type::ResultTypeOfUnary;
 use common_expression::types::number::F64;
 use common_expression::types::number::*;
+use common_expression::types::NullableType;
 use common_expression::types::NumberDataType;
 use common_expression::types::ALL_NUMERICS_TYPES;
 use common_expression::vectorize_with_builder_2_arg;
@@ -163,7 +164,8 @@ pub fn register(registry: &mut FunctionRegistry) {
 
                         {
                             type T = <(L, R) as ResultTypeOfBinary>::IntDiv;
-                            registry.register_passthrough_nullable_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>,_, _>(
+
+                            registry.register_2_arg_core::<NumberType<L>, NumberType<R>,  NumberType<T>,_, _>(
                             "div",
                             FunctionProperty::default(),
                             |_, _| None,
@@ -174,6 +176,28 @@ pub fn register(registry: &mut FunctionRegistry) {
                                             return Err("Division by zero".to_string());
                                         }
                                     output.push(((a.as_() : F64) / b).as_() : T);
+                                    Ok(())
+                                }),
+                            );
+
+                            // a   b
+                            // 2   NULL (data = 0, validity = false), we should return NULL even the divisor is 0
+                            registry.register_2_arg_core::<NullableType<NumberType<L>>, NullableType<NumberType<R>>,  NullableType<NumberType<T>>,_, _>(
+                            "div",
+                            FunctionProperty::default(),
+                            |_, _| None,
+                            vectorize_with_builder_2_arg::<NullableType<NumberType<L>>, NullableType<NumberType<R>>,  NullableType<NumberType<T>>>(
+                                    |a, b, output, _| {
+                                    match (a,b) {
+                                        (Some(a), Some(b)) => {
+                                            let b = (b.as_() : F64);
+                                            if std::intrinsics::unlikely(b == 0.0) {
+                                                return Err("Division by zero".to_string());
+                                            }
+                                            output.push(Some(((a.as_() : F64) / b).as_() : T));
+                                        },
+                                        _ => output.push(None),
+                                    }
                                     Ok(())
                                 }),
                             );
@@ -192,7 +216,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     | NumberDataType::UInt32
                                     | NumberDataType::UInt64
                             ) {
-                                registry.register_passthrough_nullable_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>,_, _>(
+                                registry.register_2_arg_core::<NumberType<L>, NumberType<R>,  NumberType<T>,_, _>(
                                 "modulo",
                                 FunctionProperty::default(),
                                 |_, _| None,
@@ -207,13 +231,34 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     }),
                                 );
                             } else {
-                                registry.register_passthrough_nullable_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
+                                registry.register_2_arg_core::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
                                     "modulo",
                                     FunctionProperty::default(),
                                     |_, _| None,
                                     vectorize_modulo::<L, R, M, T>()
                                 );
                             }
+
+                            // nullable modulo
+                            registry.register_2_arg_core::<NullableType<NumberType<L>>, NullableType<NumberType<R>>,  NullableType<NumberType<T>>,_, _>(
+                                "modulo",
+                                FunctionProperty::default(),
+                                |_, _| None,
+                                vectorize_with_builder_2_arg::<NullableType<NumberType<L>>, NullableType<NumberType<R>>,  NullableType<NumberType<T>>>(
+                                        |a, b, output, _| {
+                                        match (a,b) {
+                                            (Some(a), Some(b)) => {
+                                                let b = (b.as_() : F64);
+                                                if std::intrinsics::unlikely(b == 0.0) {
+                                                        return Err("Modulo by zero".to_string());
+                                                }
+                                                output.push(Some(((a.as_() : M) % (b.as_() : M)).as_(): T));
+                                            },
+                                            _ => output.push(None),
+                                        }
+                                        Ok(())
+                                }),
+                            );
                         }
                     }
                 }),
