@@ -562,7 +562,10 @@ pub async fn parse_stage_location_v2(
     name: &str,
     path: &str,
 ) -> Result<(UserStageInfo, String)> {
-    debug_assert!(path.starts_with('/'), "path should starts with '/'");
+    if !path.starts_with('/') {
+        let e = ErrorCode::SyntaxException("path should starts with '/'");
+        return Err(e);
+    }
 
     let stage = UserApiProvider::instance()
         .get_stage(&ctx.get_tenant(), name)
