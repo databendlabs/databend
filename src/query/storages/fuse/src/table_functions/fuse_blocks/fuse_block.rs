@@ -85,7 +85,7 @@ impl<'a> FuseBlock<'a> {
         let mut bloom_filter_location: Vec<Option<Vec<u8>>> = Vec::with_capacity(len);
         let mut bloom_filter_size: Vec<u64> = Vec::with_capacity(len);
 
-        let segments = read_segments(self.ctx.clone(), snapshot.clone()).await?;
+        let segments = read_segments(self.ctx.clone(), &snapshot.segments).await?;
         for segment in segments {
             let segment = segment?;
             segment.blocks.clone().into_iter().for_each(|block| {

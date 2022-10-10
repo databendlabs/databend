@@ -21,7 +21,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SegmentInfo;
-use common_fuse_meta::meta::TableSnapshot;
 use futures_util::future;
 
 use crate::io::MetaReaders;
@@ -33,16 +32,16 @@ async fn read_segment(ctx: Arc<dyn TableContext>, loc: Location) -> Result<Arc<S
     reader.read(path, None, ver).await
 }
 
-// Read a snapshot's all segments in concurrency.
+// Read all segments information from s3 in concurrency.
 pub async fn read_segments(
     ctx: Arc<dyn TableContext>,
-    snapshot: Arc<TableSnapshot>,
+    locations: &[Location],
 ) -> Result<Vec<Result<Arc<SegmentInfo>>>> {
     let max_runtime_threads = ctx.get_settings().get_max_threads()? as usize;
     let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
 
     // 1.1 combine all the tasks.
-    let mut iter = snapshot.segments.iter();
+    let mut iter = locations.iter();
     let tasks = std::iter::from_fn(move || {
         if let Some(location) = iter.next() {
             let ctx = ctx.clone();
