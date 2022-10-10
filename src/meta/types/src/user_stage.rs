@@ -136,14 +136,13 @@ impl FromStr for StageFileFormatType {
         match s.to_uppercase().as_str() {
             "CSV" => Ok(StageFileFormatType::Csv),
             "TSV" | "TABSEPARATED" => Ok(StageFileFormatType::Tsv),
-            "JSON" => Ok(StageFileFormatType::Json),
             "NDJSON" | "JSONEACHROW" => Ok(StageFileFormatType::NdJson),
-            "AVRO" => Ok(StageFileFormatType::Avro),
-            "ORC" => Ok(StageFileFormatType::Orc),
             "PARQUET" => Ok(StageFileFormatType::Parquet),
-            "XML" => Ok(StageFileFormatType::Xml),
+            "XML" | "ORC" | "AVRO" | "JSON" => Err(format!(
+                "File format type '{s}' not implemented yet', must be one of ( CSV | TSV | NDJSON | PARQUET)"
+            )),
             _ => Err(format!(
-                "Unknown file format type '{s}', must one of ( CSV | TSV | JSON | AVRO | ORC | PARQUET | XML)"
+                "Unknown file format type '{s}', must be one of ( CSV | TSV | NDJSON | PARQUET)"
             )),
         }
     }

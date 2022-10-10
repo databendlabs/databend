@@ -44,6 +44,8 @@ fn test_agg() {
     test_agg_covar_samp(file, eval_aggr);
     test_agg_covar_pop(file, eval_aggr);
     test_agg_retention(file, eval_aggr);
+    test_agg_stddev_pop(file, eval_aggr);
+    test_agg_window_funnel(file, eval_aggr);
 }
 
 #[test]
@@ -65,6 +67,8 @@ fn test_agg_group_by() {
     test_agg_covar_samp(file, simulate_two_groups_group_by);
     test_agg_covar_pop(file, simulate_two_groups_group_by);
     test_agg_retention(file, simulate_two_groups_group_by);
+    test_agg_stddev_pop(file, simulate_two_groups_group_by);
+    test_agg_window_funnel(file, simulate_two_groups_group_by);
 }
 
 fn get_example() -> Vec<(&'static str, DataType, Column)> {
@@ -98,6 +102,26 @@ fn get_example() -> Vec<(&'static str, DataType, Column)> {
             "all_null",
             DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
             Column::from_data_with_validity(vec![1u64, 2, 3, 4], vec![false, false, false, false]),
+        ),
+        (
+            "dt",
+            DataType::Timestamp,
+            Column::from_data(vec![1, 0i64, 2, 3]),
+        ),
+        (
+            "event1",
+            DataType::Boolean,
+            Column::from_data(vec![true, false, false, false]),
+        ),
+        (
+            "event2",
+            DataType::Boolean,
+            Column::from_data(vec![false, false, false, false]),
+        ),
+        (
+            "event3",
+            DataType::Boolean,
+            Column::from_data(vec![false, false, false, false]),
         ),
     ]
 }
@@ -308,6 +332,21 @@ fn test_agg_retention(file: &mut impl Write, simulator: impl AggregationSimulato
     run_agg_ast(
         file,
         "retention(a > 1, b > 1, x_null > 1, all_null > 1)",
+        get_example().as_slice(),
+        simulator,
+    );
+}
+
+fn test_agg_stddev_pop(file: &mut impl Write, simulator: impl AggregationSimulator) {
+    run_agg_ast(file, "stddev_pop(a)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "stddev(x_null)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "std(1.0)", get_example().as_slice(), simulator);
+}
+
+fn test_agg_window_funnel(file: &mut impl Write, simulator: impl AggregationSimulator) {
+    run_agg_ast(
+        file,
+        "window_funnel(2)(dt, event1, event2, event3)",
         get_example().as_slice(),
         simulator,
     );

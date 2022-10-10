@@ -112,22 +112,26 @@ pub trait Table: Sync + Send {
         )))
     }
 
-    // defaults to generate one single part and empty statistics
+    /// Gather partitions to be scanned according to the push_downs
     async fn read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         let (_, _) = (ctx, push_downs);
-
-        unimplemented!()
+        Err(ErrorCode::UnImplement(format!(
+            "read_partitions operation for table {} is not implemented. table engine : {}",
+            self.name(),
+            self.get_table_info().meta.engine
+        )))
     }
 
     fn table_args(&self) -> Option<Vec<LegacyExpression>> {
         None
     }
 
-    fn read2(
+    /// Assembly the pipeline of reading data from storage, according to the plan
+    fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
         plan: &ReadDataSourcePlan,
@@ -136,13 +140,14 @@ pub trait Table: Sync + Send {
         let (_, _, _) = (ctx, plan, pipeline);
 
         Err(ErrorCode::UnImplement(format!(
-            "read2 operation for table {} is not implemented, table engine is {}",
+            "read_data operation for table {} is not implemented. table engine : {}",
             self.name(),
             self.get_table_info().meta.engine
         )))
     }
 
-    fn append2(
+    /// Assembly the pipeline of appending data to storage
+    fn append_data(
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
@@ -151,7 +156,7 @@ pub trait Table: Sync + Send {
         let (_, _, _) = (ctx, pipeline, need_output);
 
         Err(ErrorCode::UnImplement(format!(
-            "append2 operation for table {} is not implemented, table engine is {}",
+            "append_data operation for table {} is not implemented. table engine : {}",
             self.name(),
             self.get_table_info().meta.engine
         )))

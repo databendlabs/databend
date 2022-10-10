@@ -79,7 +79,7 @@ use crate::sled_key_spaces::Nodes;
 use crate::sled_key_spaces::Sequences;
 use crate::sled_key_spaces::StateMachineMeta;
 use crate::state_machine::ClientLastRespValue;
-use crate::state_machine::Snapshot;
+use crate::state_machine::MetaSnapshotId;
 use crate::state_machine::StateMachineMetaKey;
 use crate::state_machine::StateMachineMetaKey::Initialized;
 use crate::state_machine::StateMachineMetaKey::LastApplied;
@@ -194,7 +194,7 @@ impl StateMachine {
     /// - and a snapshot id that uniquely identifies this snapshot.
     pub fn build_snapshot(
         &self,
-    ) -> Result<(SerializableSnapshot, Option<LogId>, String), MetaStorageError> {
+    ) -> Result<(SerializableSnapshot, Option<LogId>, MetaSnapshotId), MetaStorageError> {
         let last_applied = self.get_last_applied()?;
 
         let snapshot_idx = SystemTime::now()
@@ -202,7 +202,7 @@ impl StateMachine {
             .unwrap()
             .as_secs();
 
-        let snapshot_id = Snapshot::format_snapshot_id(last_applied, snapshot_idx);
+        let snapshot_id = MetaSnapshotId::new(last_applied, snapshot_idx);
 
         let view = self.sm_tree.tree.iter();
 

@@ -44,6 +44,7 @@ pub enum StorageParams {
     Ipfs(StorageIpfsConfig),
     Memory,
     Obs(StorageObsConfig),
+    Oss(StorageOssConfig),
     S3(StorageS3Config),
 }
 
@@ -87,6 +88,11 @@ impl Display for StorageParams {
                 "obs://bucket={},root={},endpoint={}",
                 v.bucket, v.root, v.endpoint_url
             ),
+            StorageParams::Oss(v) => write!(
+                f,
+                "oss://bucket={},root={},endpoint={}",
+                v.bucket, v.root, v.endpoint_url
+            ),
             StorageParams::S3(v) => {
                 write!(
                     f,
@@ -113,6 +119,7 @@ impl StorageParams {
             StorageParams::Ipfs(c) => c.endpoint_url.starts_with("https://"),
             StorageParams::Memory => false,
             StorageParams::Obs(v) => v.endpoint_url.starts_with("https://"),
+            StorageParams::Oss(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::S3(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Gcs(v) => v.endpoint_url.starts_with("https://"),
         }
@@ -335,6 +342,34 @@ impl Debug for StorageObsConfig {
                 "secret_access_key",
                 &mask_string(&self.secret_access_key, 3),
             )
+            .finish()
+    }
+}
+/// config for Aliyun Object Storage Service
+#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StorageOssConfig {
+    pub endpoint_url: String,
+    pub bucket: String,
+    pub access_key_id: String,
+    pub access_key_secret: String,
+    pub oidc_token: String,
+    pub role_arn: String,
+    pub root: String,
+}
+
+impl Debug for StorageOssConfig {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StorageOssConfig")
+            .field("endpoint_url", &self.endpoint_url)
+            .field("bucket", &self.bucket)
+            .field("root", &self.root)
+            .field("access_key_id", &mask_string(&self.access_key_id, 3))
+            .field(
+                "access_key_secret",
+                &mask_string(&self.access_key_secret, 3),
+            )
+            .field("oidc_token", &mask_string(&self.oidc_token, 3))
+            .field("role_arn", &mask_string(&self.role_arn, 3))
             .finish()
     }
 }

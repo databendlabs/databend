@@ -100,28 +100,21 @@ where T: Ord
         {
             let mut i = 0;
             let mut j = 0;
-            let mut k = 0;
             while i < l1 && j < l2 {
                 if cmp(&self.events_list[i], &other.events_list[j]) == Ordering::Less {
                     merged.push(self.events_list[i]);
-                    k += 1;
                     i += 1;
                 } else {
                     merged.push(other.events_list[j]);
-                    k += 1;
                     j += 1;
                 }
             }
 
-            unsafe {
-                merged.set_len(self.events_list.len() + other.events_list.len());
-            }
-
             if i < l1 {
-                merged[k..].copy_from_slice(&self.events_list[i..]);
+                merged.extend(self.events_list[i..].iter());
             }
             if j < l2 {
-                merged[k..].copy_from_slice(&other.events_list[j..]);
+                merged.extend(other.events_list[j..].iter());
             }
         }
         self.events_list = merged;

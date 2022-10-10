@@ -26,6 +26,7 @@ pub use config::StorageHdfsConfig;
 pub use config::StorageHttpConfig;
 pub use config::StorageIpfsConfig;
 pub use config::StorageObsConfig;
+pub use config::StorageOssConfig;
 pub use config::StorageParams;
 pub use config::StorageS3Config;
 pub use config::STORAGE_FTP_DEFAULT_ENDPOINT;

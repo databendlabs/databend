@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_meta_api::KVApi;
+use common_meta_sled_store::openraft::error::RemoveLearnerError;
 use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::ForwardRequest;
@@ -26,6 +27,7 @@ use common_meta_types::RaftWriteError;
 use common_meta_types::SeqV;
 use common_metrics::counter::Count;
 use tracing::debug;
+use tracing::error;
 use tracing::info;
 
 use crate::meta_service::ForwardRequestBody;
@@ -170,6 +172,29 @@ impl<'a> MetaLeader<'a> {
             cmd: Cmd::RemoveNode { node_id },
         };
         self.write(ent).await?;
+
+        // When write(RemoveNode{}) returns, the replication to that node should be dropped.
+        // But there is chance `add_configured_non_voters()` adds it back because it runs in another task.
+        // Thus we need to ensure the replication is removed here.
+        let res = self.meta_node.raft.remove_learner(node_id).await;
+
+        if let Err(e) = res {
+            return match e {
+                RemoveLearnerError::ForwardToLeader(e) => {
+                    Err(RaftChangeMembershipError::ForwardToLeader(e))
+                }
+                RemoveLearnerError::NotLearner(_e) => {
+                    error!("Node to leave the cluster is not a learner: {}", node_id);
+                    Ok(())
+                }
+                RemoveLearnerError::NotExists(_e) => {
+                    info!("Node to leave the cluster does not exists: {}", node_id);
+                    Ok(())
+                }
+                RemoveLearnerError::Fatal(e) => Err(RaftChangeMembershipError::Fatal(e)),
+            };
+        }
+
         Ok(())
     }
 
