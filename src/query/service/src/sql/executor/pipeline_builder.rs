@@ -484,13 +484,13 @@ impl PipelineBuilder {
         self.build_pipeline(&join.probe)?;
 
         self.main_pipeline.add_transform(|input, output| {
-            Ok(TransformHashJoinProbe::create(
+            TransformHashJoinProbe::create(
                 self.ctx.clone(),
                 input,
                 output,
                 state.clone(),
                 join.output_schema()?,
-            ))
+            )
         })?;
 
         if join.join_type == JoinType::LeftMark {

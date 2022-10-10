@@ -81,9 +81,9 @@ impl TransformHashJoinProbe {
         output_port: Arc<OutputPort>,
         join_state: Arc<dyn HashJoinState>,
         _output_schema: DataSchemaRef,
-    ) -> ProcessorPtr {
-        let default_block_size = ctx.get_settings().get_max_block_size().unwrap_or(102400);
-        ProcessorPtr::create(Box::new(TransformHashJoinProbe {
+    ) -> Result<ProcessorPtr> {
+        let default_block_size = ctx.get_settings().get_max_block_size()?;
+        Ok(ProcessorPtr::create(Box::new(TransformHashJoinProbe {
             input_data: None,
             output_data_blocks: VecDeque::new(),
             input_port,
@@ -91,7 +91,7 @@ impl TransformHashJoinProbe {
             step: HashJoinStep::Build,
             join_state,
             probe_state: ProbeState::with_capacity(default_block_size as usize),
-        }))
+        })))
     }
 
     fn probe(&mut self, block: &DataBlock) -> Result<()> {
