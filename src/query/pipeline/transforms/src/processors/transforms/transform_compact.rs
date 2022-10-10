@@ -14,10 +14,8 @@
 
 use std::any::Any;
 use std::collections::VecDeque;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -27,13 +25,12 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 
+pub type Aborting = Arc<Box<dyn Fn() -> bool + Send + Sync + 'static>>;
+
 pub struct TransformCompact<T: Compactor + Send + 'static> {
     state: ProcessorState,
     compactor: T,
-    aborting: Aborting,
 }
-
-pub type Aborting = Arc<Box<dyn Fn() -> bool + Send + Sync + 'static>>;
 
 /// Compactor is a trait that defines how to compact blocks.
 pub trait Compactor {
@@ -44,23 +41,23 @@ pub trait Compactor {
         false
     }
 
+    fn interrupt(&self) {}
+
     /// `compact_partial` is called when a new block is pushed and `use_partial_compact` is enabled
     fn compact_partial(&self, _blocks: &mut Vec<DataBlock>) -> Result<Vec<DataBlock>> {
         Ok(vec![])
     }
 
     /// `compact_final` is called when all the blocks are pushed to finish the compaction
-    fn compact_final(&self, blocks: &[DataBlock], aborting: Aborting) -> Result<Vec<DataBlock>>;
+    fn compact_final(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>>;
 }
 
 impl<T: Compactor + Send + 'static> TransformCompact<T> {
     pub fn try_create(
-        ctx: Arc<dyn TableContext>,
         input_port: Arc<InputPort>,
         output_port: Arc<OutputPort>,
         compactor: T,
     ) -> Result<ProcessorPtr> {
-        let aborting = ctx.get_aborting();
         let state = ProcessorState::Consume(ConsumeState {
             input_port,
             output_port,
@@ -68,11 +65,7 @@ impl<T: Compactor + Send + 'static> TransformCompact<T> {
             output_data_blocks: VecDeque::new(),
         });
 
-        Ok(ProcessorPtr::create(Box::new(Self {
-            state,
-            compactor,
-            aborting: Arc::new(Box::new(move || aborting.load(Ordering::Relaxed))),
-        })))
+        Ok(ProcessorPtr::create(Box::new(Self { state, compactor })))
     }
 
     #[inline(always)]
@@ -152,6 +145,10 @@ impl<T: Compactor + Send + 'static> Processor for TransformCompact<T> {
         }
     }
 
+    fn interrupt(&self) {
+        self.compactor.interrupt();
+    }
+
     fn process(&mut self) -> Result<()> {
         match &mut self.state {
             ProcessorState::Consume(state) => {
@@ -165,8 +162,7 @@ impl<T: Compactor + Send + 'static> Processor for TransformCompact<T> {
                 Ok(())
             }
             ProcessorState::Compacting(state) => {
-                let aborting = self.aborting.clone();
-                let compacted_blocks = self.compactor.compact_final(&state.blocks, aborting)?;
+                let compacted_blocks = self.compactor.compact_final(&state.blocks)?;
 
                 let mut temp_state = ProcessorState::Finished;
                 std::mem::swap(&mut self.state, &mut temp_state);

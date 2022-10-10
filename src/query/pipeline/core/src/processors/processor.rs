@@ -42,6 +42,9 @@ pub trait Processor: Send {
 
     fn event(&mut self) -> Result<Event>;
 
+    // When the synchronization task needs to run for a long time, the interrupt function needs to be implemented.
+    fn interrupt(&self) {}
+
     // Synchronous work.
     fn process(&mut self) -> Result<()> {
         Err(ErrorCode::UnImplement("Unimplemented process."))
@@ -94,6 +97,11 @@ impl ProcessorPtr {
     /// # Safety
     pub unsafe fn event(&self) -> Result<Event> {
         (*self.inner.get()).event()
+    }
+
+    /// # Safety
+    pub unsafe fn interrupt(&self) {
+        (*self.inner.get()).interrupt()
     }
 
     /// # Safety
