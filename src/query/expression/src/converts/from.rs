@@ -167,11 +167,11 @@ pub fn convert_column(column: &ColumnRef, logical_type: &DataTypeImpl) -> Value<
 }
 
 pub fn from_block(datablock: &DataBlock) -> Chunk {
-    let columns: Vec<Value<AnyType>> = datablock
+    let columns: Vec<(Value<AnyType>, DataType)> = datablock
         .columns()
         .iter()
         .zip(datablock.schema().fields().iter())
-        .map(|(c, f)| convert_column(c, f.data_type()))
+        .map(|(c, f)| (convert_column(c, f.data_type()), from_type(f.data_type())))
         .collect();
 
     Chunk::new(columns, datablock.num_rows())

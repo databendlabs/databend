@@ -64,7 +64,7 @@ impl Debug for Chunk {
 
         table.set_header(vec!["Column ID", "Column Data"]);
 
-        for (i, col) in self.columns().iter().enumerate() {
+        for (i, (col, _)) in self.columns().iter().enumerate() {
             table.add_row(vec![i.to_string(), format!("{:?}", col)]);
         }
 
@@ -83,7 +83,7 @@ impl Display for Chunk {
             let row: Vec<_> = self
                 .columns()
                 .iter()
-                .map(|val| val.as_ref().index(index).unwrap().to_string())
+                .map(|(val, _)| val.as_ref().index(index).unwrap().to_string())
                 .map(Cell::new)
                 .collect();
             table.add_row(row);

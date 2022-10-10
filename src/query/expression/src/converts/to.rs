@@ -26,6 +26,7 @@ use crate::types::NumberDataType;
 use crate::with_number_type;
 use crate::Chunk;
 use crate::Column;
+use crate::ColumnBuilder;
 use crate::Value;
 
 pub fn to_type(datatype: &DataTypeImpl) -> DataType {
@@ -52,12 +53,11 @@ pub fn to_type(datatype: &DataTypeImpl) -> DataType {
 
 // we do not need conver scalar to datavalue
 
-pub fn to_column(column: &Value<AnyType>, size: usize) -> ColumnRef {
+pub fn to_column(column: &Value<AnyType>, size: usize, data_type: &DataType) -> ColumnRef {
     match column {
         Value::Scalar(s) => {
-            let builder = s.as_ref().repeat(1);
-            let col = builder.build();
-            let col = to_column(&Value::Column(col), 1);
+            let col = ColumnBuilder::repeat(&s.as_ref(), 1, data_type).build();
+            let col = to_column(&Value::Column(col), 1, data_type);
             ConstColumn::new(col, size).arc()
         }
         Value::Column(c) => {
@@ -76,7 +76,7 @@ pub fn to_datablock(chunk: &Chunk, schema: DataSchemaRef) -> DataBlock {
     let columns = chunk
         .columns()
         .iter()
-        .map(|c| to_column(c, chunk.num_rows()))
+        .map(|(c, ty)| to_column(c, chunk.num_rows(), ty))
         .collect();
     DataBlock::create(schema, columns)
 }
