@@ -20,6 +20,7 @@ use common_exception::Result;
 use common_fuse_meta::meta::TableSnapshot;
 use futures_util::TryStreamExt;
 
+use crate::fuse_segment::read_segments;
 use crate::io::MetaReaders;
 use crate::io::SnapshotHistoryReader;
 use crate::sessions::TableContext;
@@ -84,9 +85,9 @@ impl<'a> FuseBlock<'a> {
         let mut bloom_filter_location: Vec<Option<Vec<u8>>> = Vec::with_capacity(len);
         let mut bloom_filter_size: Vec<u64> = Vec::with_capacity(len);
 
-        let reader = MetaReaders::segment_info_reader(self.ctx.as_ref());
-        for (x, ver) in &snapshot.segments {
-            let segment = reader.read(x, None, *ver).await?;
+        let segments = read_segments(self.ctx.clone(), &snapshot.segments).await?;
+        for segment in segments {
+            let segment = segment?;
             segment.blocks.clone().into_iter().for_each(|block| {
                 block_location.push(block.location.0.into_bytes());
                 block_size.push(block.block_size);

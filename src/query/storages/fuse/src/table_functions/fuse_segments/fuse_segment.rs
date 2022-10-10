@@ -20,6 +20,7 @@ use common_exception::Result;
 use common_fuse_meta::meta::Location;
 use futures_util::TryStreamExt;
 
+use crate::fuse_segment::read_segments;
 use crate::io::MetaReaders;
 use crate::io::SnapshotHistoryReader;
 use crate::sessions::TableContext;
@@ -59,7 +60,7 @@ impl<'a> FuseSegment<'a> {
             // find the element by snapshot_id in stream
             while let Some(snapshot) = snapshot_stream.try_next().await? {
                 if snapshot.snapshot_id.simple().to_string() == self.snapshot_id {
-                    return self.segments_to_block(&snapshot.segments).await;
+                    return self.to_block(&snapshot.segments).await;
                 }
             }
         }
@@ -67,8 +68,8 @@ impl<'a> FuseSegment<'a> {
         Ok(DataBlock::empty_with_schema(Self::schema()))
     }
 
-    async fn segments_to_block(&self, segments: &[Location]) -> Result<DataBlock> {
-        let len = segments.len();
+    async fn to_block(&self, segment_locations: &[Location]) -> Result<DataBlock> {
+        let len = segment_locations.len();
         let mut format_versions: Vec<u64> = Vec::with_capacity(len);
         let mut block_count: Vec<u64> = Vec::with_capacity(len);
         let mut row_count: Vec<u64> = Vec::with_capacity(len);
@@ -76,17 +77,15 @@ impl<'a> FuseSegment<'a> {
         let mut uncompressed: Vec<u64> = Vec::with_capacity(len);
         let mut file_location: Vec<Vec<u8>> = Vec::with_capacity(len);
 
-        for segment_location in segments {
-            let (location, version) = (segment_location.0.clone(), segment_location.1);
-            let reader = MetaReaders::segment_info_reader(self.ctx.as_ref());
-            let segment_info = reader.read(&location, None, version).await?;
-
-            format_versions.push(version);
-            block_count.push(segment_info.summary.block_count);
-            row_count.push(segment_info.summary.row_count);
-            compressed.push(segment_info.summary.compressed_byte_size);
-            uncompressed.push(segment_info.summary.uncompressed_byte_size);
-            file_location.push(location.into_bytes());
+        let segments = read_segments(self.ctx.clone(), segment_locations).await?;
+        for (idx, segment) in segments.iter().enumerate() {
+            let segment = segment.clone()?;
+            format_versions.push(segment_locations[idx].1);
+            block_count.push(segment.summary.block_count);
+            row_count.push(segment.summary.row_count);
+            compressed.push(segment.summary.compressed_byte_size);
+            uncompressed.push(segment.summary.uncompressed_byte_size);
+            file_location.push(segment_locations[idx].0.clone().into_bytes());
         }
 
         Ok(DataBlock::create(FuseSegment::schema(), vec![

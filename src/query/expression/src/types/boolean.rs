@@ -154,14 +154,17 @@ impl ArgType for BooleanType {
     }
 
     fn column_from_iter(iter: impl Iterator<Item = Self::Scalar>, _: &GenericMap) -> Self::Column {
-        iter.collect()
+        match iter.size_hint() {
+            (_, Some(_)) => unsafe { MutableBitmap::from_trusted_len_iter_unchecked(iter).into() },
+            (_, None) => MutableBitmap::from_iter(iter).into(),
+        }
     }
 
     fn column_from_ref_iter<'a>(
         iter: impl Iterator<Item = Self::ScalarRef<'a>>,
-        _: &GenericMap,
+        generics: &GenericMap,
     ) -> Self::Column {
-        iter.collect()
+        Self::column_from_iter(iter, generics)
     }
 }
 
