@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::iter::repeat;
 use std::iter::TrustedLen;
 use std::sync::atomic::Ordering;
 
@@ -84,10 +85,8 @@ impl JoinHashTable {
                         let probed_rows = v.get_value();
 
                         if probe_indexes.len() + probed_rows.len() < probe_indexes.capacity() {
-                            // fast path
-                            build_indexes.extend_from_slice(&probed_rows);
-                            probe_indexes
-                                .extend(std::iter::repeat(i as u32).take(probed_rows.len()));
+                            build_indexes.extend_from_slice(probed_rows);
+                            probe_indexes.extend(repeat(i as u32).take(probed_rows.len()));
                         } else {
                             let mut index = 0_usize;
                             let mut remain = probed_rows.len();
@@ -104,22 +103,19 @@ impl JoinHashTable {
                                         ));
                                     }
 
-                                    let append_rows =
-                                        probe_indexes.capacity() - probe_indexes.len();
-                                    let new_index = index + append_rows;
+                                    let addition = probe_indexes.capacity() - probe_indexes.len();
+                                    let new_index = index + addition;
 
                                     build_indexes.extend_from_slice(&probed_rows[index..new_index]);
-                                    probe_indexes
-                                        .extend(std::iter::repeat(i as u32).take(append_rows));
+                                    probe_indexes.extend(repeat(i as u32).take(addition));
 
-                                    let build_block = self.row_space.gather(&build_indexes)?;
-                                    let probe_block =
-                                        DataBlock::block_take_by_indices(input, &probe_indexes)?;
-                                    probed_blocks
-                                        .push(self.merge_eq_block(&build_block, &probe_block)?);
+                                    probed_blocks.push(self.merge_eq_block(
+                                        &self.row_space.gather(&build_indexes)?,
+                                        &DataBlock::block_take_by_indices(input, &probe_indexes)?,
+                                    )?);
 
                                     index = new_index;
-                                    remain -= append_rows;
+                                    remain -= addition;
 
                                     build_indexes.clear();
                                     probe_indexes.clear();
@@ -128,6 +124,11 @@ impl JoinHashTable {
                         }
                     }
                 }
+
+                probed_blocks.push(self.merge_eq_block(
+                    &self.row_space.gather(&build_indexes)?,
+                    &DataBlock::block_take_by_indices(input, &probe_indexes)?,
+                )?);
 
                 match &self.hash_join_desc.other_predicate {
                     None => Ok(probed_blocks),
@@ -233,10 +234,8 @@ impl JoinHashTable {
             // 3. Correlated Exists subquery： only have one kind of join condition, equi-condition.
             //    equi-condition is subquery's outer columns with subquery's derived columns. (see the above example in correlated ANY subquery)
             JoinType::LeftMark => {
-                let mut results: Vec<DataBlock> = vec![];
-                results.push(DataBlock::empty());
                 self.left_mark_join(hash_table, probe_state, keys_iter, input)?;
-                Ok(results)
+                Ok(vec![DataBlock::empty()])
             }
             JoinType::RightMark => Ok(vec![self.right_mark_join(
                 hash_table,
@@ -542,7 +541,7 @@ impl JoinHashTable {
                 (Some(v), _) => {
                     let probe_result_ptrs = v.get_value();
                     build_indexs.extend_from_slice(probe_result_ptrs);
-                    probe_indexs.extend(std::iter::repeat(i as u32).take(probe_result_ptrs.len()));
+                    probe_indexs.extend(repeat(i as u32).take(probe_result_ptrs.len()));
 
                     if !SEMI {
                         row_state[i] += probe_result_ptrs.len() as u32;

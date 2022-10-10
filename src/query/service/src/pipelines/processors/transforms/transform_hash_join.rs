@@ -154,7 +154,7 @@ impl Processor for TransformHashJoinProbe {
     }
 
     fn interrupt(&self) {
-        todo!()
+        self.join_state.interrupt()
     }
 
     fn process(&mut self) -> Result<()> {

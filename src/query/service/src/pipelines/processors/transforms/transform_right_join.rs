@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_exception::Result;
-use common_pipeline_transforms::processors::transforms::Aborting;
 
 use crate::pipelines::processors::transforms::Compactor;
 use crate::pipelines::processors::HashJoinState;
@@ -38,8 +37,8 @@ impl Compactor for RightJoinCompactor {
     }
 
     // `compact_final` is called when all the blocks are pushed
-    fn compact_final(&self, blocks: &[DataBlock], aborting: Aborting) -> Result<Vec<DataBlock>> {
-        self.hash_join_state.right_join_blocks(blocks, aborting)
+    fn compact_final(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
+        self.hash_join_state.right_join_blocks(blocks)
     }
 }
 
