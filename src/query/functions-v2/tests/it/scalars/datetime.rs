@@ -93,7 +93,6 @@ fn test_to_date(file: &mut impl Write) {
     run_ast(file, "to_date(100)", &[]);
     run_ast(file, "to_date(2932896)", &[]);
     run_ast(file, "to_date(2932897)", &[]);
-
     run_ast(file, "to_date(a)", &[(
         "a",
         DataType::Number(NumberDataType::Int32),

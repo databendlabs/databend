@@ -294,3 +294,515 @@ evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(-30610224000000001 AS TIMESTAMP)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `0999-12-31 23:59:59.999999` is out of range
+
+
+
+ast            : CAST(-315360000000000 AS TIMESTAMP)
+raw expr       : CAST(minus(315360000000000_u64) AS Timestamp)
+checked expr   : CAST(minus<UInt64>(315360000000000_u64) AS Timestamp)
+optimized expr : Timestamp { ts: -315360000000000, precision: 6 }
+output type    : Timestamp
+output domain  : {-315360000000000..=-315360000000000}
+output         : 1960-01-04 00:00:00.000000
+
+
+ast            : CAST(-315360000000 AS TIMESTAMP)
+raw expr       : CAST(minus(315360000000_u64) AS Timestamp)
+checked expr   : CAST(minus<UInt64>(315360000000_u64) AS Timestamp)
+optimized expr : Timestamp { ts: -315360000000000, precision: 3 }
+output type    : Timestamp
+output domain  : {-315360000000..=-315360000000}
+output         : 1960-01-04 00:00:00.000
+
+
+ast            : CAST(-100 AS TIMESTAMP)
+raw expr       : CAST(minus(100_u8) AS Timestamp)
+checked expr   : CAST(minus<UInt8>(100_u8) AS Timestamp)
+optimized expr : Timestamp { ts: -100000000, precision: 0 }
+output type    : Timestamp
+output domain  : {-100..=-100}
+output         : 1969-12-31 23:58:20
+
+
+ast            : CAST(-0 AS TIMESTAMP)
+raw expr       : CAST(minus(0_u8) AS Timestamp)
+checked expr   : CAST(minus<UInt8>(0_u8) AS Timestamp)
+optimized expr : Timestamp { ts: 0, precision: 0 }
+output type    : Timestamp
+output domain  : {0..=0}
+output         : 1970-01-01 00:00:00
+
+
+ast            : CAST(0 AS TIMESTAMP)
+raw expr       : CAST(0_u8 AS Timestamp)
+checked expr   : CAST(0_u8 AS Timestamp)
+optimized expr : Timestamp { ts: 0, precision: 0 }
+output type    : Timestamp
+output domain  : {0..=0}
+output         : 1970-01-01 00:00:00
+
+
+ast            : CAST(100 AS TIMESTAMP)
+raw expr       : CAST(100_u8 AS Timestamp)
+checked expr   : CAST(100_u8 AS Timestamp)
+optimized expr : Timestamp { ts: 100000000, precision: 0 }
+output type    : Timestamp
+output domain  : {100..=100}
+output         : 1970-01-01 00:01:40
+
+
+ast            : CAST(315360000000 AS TIMESTAMP)
+raw expr       : CAST(315360000000_u64 AS Timestamp)
+checked expr   : CAST(315360000000_u64 AS Timestamp)
+optimized expr : Timestamp { ts: 315360000000000, precision: 3 }
+output type    : Timestamp
+output domain  : {315360000000..=315360000000}
+output         : 1979-12-30 00:00:00.000
+
+
+ast            : CAST(315360000000000 AS TIMESTAMP)
+raw expr       : CAST(315360000000000_u64 AS Timestamp)
+checked expr   : CAST(315360000000000_u64 AS Timestamp)
+optimized expr : Timestamp { ts: 315360000000000, precision: 6 }
+output type    : Timestamp
+output domain  : {315360000000000..=315360000000000}
+output         : 1979-12-30 00:00:00.000000
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(253402300800000000 AS TIMESTAMP)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `+10000-01-01 00:00:00.000000` is out of range
+
+
+
+ast            : CAST(a AS TIMESTAMP)
+raw expr       : CAST(ColumnRef(0)::Int64 AS Timestamp)
+checked expr   : CAST(ColumnRef(0) AS Timestamp)
+evaluation:
++--------+--------------------------------------+--------------------------------------+
+|        | a                                    | Output                               |
++--------+--------------------------------------+--------------------------------------+
+| Type   | Int64                                | Timestamp                            |
+| Domain | {-315360000000000..=315360000000000} | {-315360000000000..=315360000000000} |
+| Row 0  | -315360000000000                     | 1960-01-04 00:00:00.000000           |
+| Row 1  | -315360000000                        | 1960-01-04 00:00:00.000000           |
+| Row 2  | -100                                 | 1969-12-31 23:58:20.000000           |
+| Row 3  | 0                                    | 1970-01-01 00:00:00.000000           |
+| Row 4  | 100                                  | 1970-01-01 00:01:40.000000           |
+| Row 5  | 315360000000                         | 1979-12-30 00:00:00.000000           |
+| Row 6  | 315360000000000                      | 1979-12-30 00:00:00.000000           |
++--------+--------------------------------------+--------------------------------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                   |
++--------+----------------------------------------------------------------------------------------------------------------------------------------+
+| a      | Int64([-315360000000000, -315360000000, -100, 0, 100, 315360000000, 315360000000000])                                                  |
+| Output | TimestampColumn { ts: [-315360000000000, -315360000000000, -100000000, 0, 100000000, 315360000000000, 315360000000000], precision: 6 } |
++--------+----------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(-30610224000000001 AS TIMESTAMP)
+raw expr       : TRY_CAST(minus(30610224000000001_u64) AS Timestamp)
+checked expr   : TRY_CAST(minus<UInt64>(30610224000000001_u64) AS Timestamp NULL)
+optimized expr : NULL
+output type    : Timestamp NULL
+output domain  : {-30610224000000000..=-30610224000000000} ∪ {NULL}
+output         : NULL
+
+
+ast            : TRY_CAST(253402300800000000 AS TIMESTAMP)
+raw expr       : TRY_CAST(253402300800000000_u64 AS Timestamp)
+checked expr   : TRY_CAST(253402300800000000_u64 AS Timestamp NULL)
+optimized expr : NULL
+output type    : Timestamp NULL
+output domain  : {253402300799999999..=253402300799999999} ∪ {NULL}
+output         : NULL
+
+
+ast            : CAST(TO_TIMESTAMP(-315360000000000) AS INT64)
+raw expr       : CAST(TO_TIMESTAMP(minus(315360000000000_u64)) AS Int64)
+checked expr   : CAST(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)) AS Int64)
+optimized expr : -315360000000000_i64
+output type    : Int64
+output domain  : Unknown
+output         : -315360000000000
+
+
+ast            : CAST(TO_TIMESTAMP(-315360000000) AS INT64)
+raw expr       : CAST(TO_TIMESTAMP(minus(315360000000_u64)) AS Int64)
+checked expr   : CAST(to_timestamp<Int64>(minus<UInt64>(315360000000_u64)) AS Int64)
+optimized expr : -315360000000000_i64
+output type    : Int64
+output domain  : Unknown
+output         : -315360000000000
+
+
+ast            : CAST(TO_TIMESTAMP(-100) AS INT64)
+raw expr       : CAST(TO_TIMESTAMP(minus(100_u8)) AS Int64)
+checked expr   : CAST(to_timestamp<Int64>(CAST(minus<UInt8>(100_u8) AS Int64)) AS Int64)
+optimized expr : -100000000_i64
+output type    : Int64
+output domain  : Unknown
+output         : -100000000
+
+
+ast            : CAST(TO_TIMESTAMP(-0) AS INT64)
+raw expr       : CAST(TO_TIMESTAMP(minus(0_u8)) AS Int64)
+checked expr   : CAST(to_timestamp<Int64>(CAST(minus<UInt8>(0_u8) AS Int64)) AS Int64)
+optimized expr : 0_i64
+output type    : Int64
+output domain  : Unknown
+output         : 0
+
+
+ast            : CAST(TO_TIMESTAMP(0) AS INT64)
+raw expr       : CAST(TO_TIMESTAMP(0_u8) AS Int64)
+checked expr   : CAST(to_timestamp<Int64>(CAST(0_u8 AS Int64)) AS Int64)
+optimized expr : 0_i64
+output type    : Int64
+output domain  : Unknown
+output         : 0
+
+
+ast            : CAST(TO_TIMESTAMP(100) AS INT64)
+raw expr       : CAST(TO_TIMESTAMP(100_u8) AS Int64)
+checked expr   : CAST(to_timestamp<Int64>(CAST(100_u8 AS Int64)) AS Int64)
+optimized expr : 100000000_i64
+output type    : Int64
+output domain  : Unknown
+output         : 100000000
+
+
+ast            : CAST(TO_TIMESTAMP(315360000000) AS INT64)
+raw expr       : CAST(TO_TIMESTAMP(315360000000_u64) AS Int64)
+checked expr   : CAST(to_timestamp<Int64>(CAST(315360000000_u64 AS Int64)) AS Int64)
+optimized expr : 315360000000000_i64
+output type    : Int64
+output domain  : Unknown
+output         : 315360000000000
+
+
+ast            : CAST(TO_TIMESTAMP(315360000000000) AS INT64)
+raw expr       : CAST(TO_TIMESTAMP(315360000000000_u64) AS Int64)
+checked expr   : CAST(to_timestamp<Int64>(CAST(315360000000000_u64 AS Int64)) AS Int64)
+optimized expr : 315360000000000_i64
+output type    : Int64
+output domain  : Unknown
+output         : 315360000000000
+
+
+ast            : CAST(a AS INT64)
+raw expr       : CAST(ColumnRef(0)::Timestamp AS Int64)
+checked expr   : CAST(ColumnRef(0) AS Int64)
+evaluation:
++--------+--------------------------------------+--------------------------------------+
+|        | a                                    | Output                               |
++--------+--------------------------------------+--------------------------------------+
+| Type   | Timestamp                            | Int64                                |
+| Domain | {-315360000000000..=315360000000000} | {-315360000000000..=315360000000000} |
+| Row 0  | 1960-01-04 00:00:00.000000           | -315360000000000                     |
+| Row 1  | 1969-12-28 08:24:00.000000           | -315360000000                        |
+| Row 2  | 1969-12-31 23:59:59.999900           | -100                                 |
+| Row 3  | 1970-01-01 00:00:00.000000           | 0                                    |
+| Row 4  | 1970-01-01 00:00:00.000100           | 100                                  |
+| Row 5  | 1970-01-04 15:36:00.000000           | 315360000000                         |
+| Row 6  | 1979-12-30 00:00:00.000000           | 315360000000000                      |
++--------+--------------------------------------+--------------------------------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                 |
++--------+----------------------------------------------------------------------------------------------------------------------+
+| a      | TimestampColumn { ts: [-315360000000000, -315360000000, -100, 0, 100, 315360000000, 315360000000000], precision: 6 } |
+| Output | Int64([-315360000000000, -315360000000, -100, 0, 100, 315360000000, 315360000000000])                                |
++--------+----------------------------------------------------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(-354286 AS DATE)
+  | ^^^^^^^^^^^^^^^^^^^^^ date `0999-12-31` is out of range
+
+
+
+ast            : CAST(-354285 AS DATE)
+raw expr       : CAST(minus(354285_u32) AS Date)
+checked expr   : CAST(minus<UInt32>(354285_u32) AS Date)
+optimized expr : -354285
+output type    : Date
+output domain  : {-354285..=-354285}
+output         : 1000-01-01
+
+
+ast            : CAST(-100 AS DATE)
+raw expr       : CAST(minus(100_u8) AS Date)
+checked expr   : CAST(minus<UInt8>(100_u8) AS Date)
+optimized expr : -100
+output type    : Date
+output domain  : {-100..=-100}
+output         : 1969-09-23
+
+
+ast            : CAST(-0 AS DATE)
+raw expr       : CAST(minus(0_u8) AS Date)
+checked expr   : CAST(minus<UInt8>(0_u8) AS Date)
+optimized expr : 0
+output type    : Date
+output domain  : {0..=0}
+output         : 1970-01-01
+
+
+ast            : CAST(0 AS DATE)
+raw expr       : CAST(0_u8 AS Date)
+checked expr   : CAST(0_u8 AS Date)
+optimized expr : 0
+output type    : Date
+output domain  : {0..=0}
+output         : 1970-01-01
+
+
+ast            : CAST(100 AS DATE)
+raw expr       : CAST(100_u8 AS Date)
+checked expr   : CAST(100_u8 AS Date)
+optimized expr : 100
+output type    : Date
+output domain  : {100..=100}
+output         : 1970-04-11
+
+
+ast            : CAST(2932896 AS DATE)
+raw expr       : CAST(2932896_u32 AS Date)
+checked expr   : CAST(2932896_u32 AS Date)
+optimized expr : 2932896
+output type    : Date
+output domain  : {2932896..=2932896}
+output         : 9999-12-31
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(2932897 AS DATE)
+  | ^^^^^^^^^^^^^^^^^^^^^ date `+10000-01-01` is out of range
+
+
+
+ast            : CAST(a AS DATE)
+raw expr       : CAST(ColumnRef(0)::Int32 AS Date)
+checked expr   : CAST(ColumnRef(0) AS Date)
+evaluation:
++--------+---------------------+---------------------+
+|        | a                   | Output              |
++--------+---------------------+---------------------+
+| Type   | Int32               | Date                |
+| Domain | {-354285..=2932896} | {-354285..=2932896} |
+| Row 0  | -354285             | 1000-01-01          |
+| Row 1  | -100                | 1969-09-23          |
+| Row 2  | 0                   | 1970-01-01          |
+| Row 3  | 100                 | 1970-04-11          |
+| Row 4  | 2932896             | 9999-12-31          |
++--------+---------------------+---------------------+
+evaluation (internal):
++--------+-----------------------------------------+
+| Column | Data                                    |
++--------+-----------------------------------------+
+| a      | Int32([-354285, -100, 0, 100, 2932896]) |
+| Output | [-354285, -100, 0, 100, 2932896]        |
++--------+-----------------------------------------+
+
+
+ast            : TRY_CAST(-354286 AS DATE)
+raw expr       : TRY_CAST(minus(354286_u32) AS Date)
+checked expr   : TRY_CAST(minus<UInt32>(354286_u32) AS Date NULL)
+optimized expr : NULL
+output type    : Date NULL
+output domain  : {-354285..=-354285} ∪ {NULL}
+output         : NULL
+
+
+ast            : TRY_CAST(2932897 AS DATE)
+raw expr       : TRY_CAST(2932897_u32 AS Date)
+checked expr   : TRY_CAST(2932897_u32 AS Date NULL)
+optimized expr : NULL
+output type    : Date NULL
+output domain  : {2932896..=2932896} ∪ {NULL}
+output         : NULL
+
+
+ast            : TRY_CAST(a AS DATE)
+raw expr       : TRY_CAST(ColumnRef(0)::Int32 AS Date)
+checked expr   : TRY_CAST(ColumnRef(0) AS Date NULL)
+evaluation:
++--------+---------------------+------------------------------+
+|        | a                   | Output                       |
++--------+---------------------+------------------------------+
+| Type   | Int32               | Date NULL                    |
+| Domain | {-354286..=2932897} | {-354285..=2932896} ∪ {NULL} |
+| Row 0  | -354286             | NULL                         |
+| Row 1  | -100                | 1969-09-23                   |
+| Row 2  | 0                   | 1970-01-01                   |
+| Row 3  | 100                 | 1970-04-11                   |
+| Row 4  | 2932897             | NULL                         |
++--------+---------------------+------------------------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------+
+| Column | Data                                                                    |
++--------+-------------------------------------------------------------------------+
+| a      | Int32([-354286, -100, 0, 100, 2932897])                                 |
+| Output | NullableColumn { column: [0, -100, 0, 100, 0], validity: [0b___01110] } |
++--------+-------------------------------------------------------------------------+
+
+
+ast            : CAST(TO_DATE(-354285) AS INT32)
+raw expr       : CAST(TO_DATE(minus(354285_u32)) AS Int32)
+checked expr   : CAST(to_date<Int64>(minus<UInt32>(354285_u32)) AS Int32)
+optimized expr : -354285_i32
+output type    : Int32
+output domain  : Unknown
+output         : -354285
+
+
+ast            : CAST(TO_DATE(-100) AS INT32)
+raw expr       : CAST(TO_DATE(minus(100_u8)) AS Int32)
+checked expr   : CAST(to_date<Int64>(CAST(minus<UInt8>(100_u8) AS Int64)) AS Int32)
+optimized expr : -100_i32
+output type    : Int32
+output domain  : Unknown
+output         : -100
+
+
+ast            : CAST(TO_DATE(-0) AS INT32)
+raw expr       : CAST(TO_DATE(minus(0_u8)) AS Int32)
+checked expr   : CAST(to_date<Int64>(CAST(minus<UInt8>(0_u8) AS Int64)) AS Int32)
+optimized expr : 0_i32
+output type    : Int32
+output domain  : Unknown
+output         : 0
+
+
+ast            : CAST(TO_DATE(0) AS INT32)
+raw expr       : CAST(TO_DATE(0_u8) AS Int32)
+checked expr   : CAST(to_date<Int64>(CAST(0_u8 AS Int64)) AS Int32)
+optimized expr : 0_i32
+output type    : Int32
+output domain  : Unknown
+output         : 0
+
+
+ast            : CAST(TO_DATE(100) AS INT32)
+raw expr       : CAST(TO_DATE(100_u8) AS Int32)
+checked expr   : CAST(to_date<Int64>(CAST(100_u8 AS Int64)) AS Int32)
+optimized expr : 100_i32
+output type    : Int32
+output domain  : Unknown
+output         : 100
+
+
+ast            : CAST(TO_DATE(2932896) AS INT32)
+raw expr       : CAST(TO_DATE(2932896_u32) AS Int32)
+checked expr   : CAST(to_date<Int64>(CAST(2932896_u32 AS Int64)) AS Int32)
+optimized expr : 2932896_i32
+output type    : Int32
+output domain  : Unknown
+output         : 2932896
+
+
+ast            : CAST(a AS INT32)
+raw expr       : CAST(ColumnRef(0)::Date AS Int32)
+checked expr   : CAST(ColumnRef(0) AS Int32)
+evaluation:
++--------+---------------------+---------------------+
+|        | a                   | Output              |
++--------+---------------------+---------------------+
+| Type   | Date                | Int32               |
+| Domain | {-354285..=2932896} | {-354285..=2932896} |
+| Row 0  | 1000-01-01          | -354285             |
+| Row 1  | 1969-09-23          | -100                |
+| Row 2  | 1970-01-01          | 0                   |
+| Row 3  | 1970-04-11          | 100                 |
+| Row 4  | 9999-12-31          | 2932896             |
++--------+---------------------+---------------------+
+evaluation (internal):
++--------+-----------------------------------------+
+| Column | Data                                    |
++--------+-----------------------------------------+
+| a      | [-354285, -100, 0, 100, 2932896]        |
+| Output | Int32([-354285, -100, 0, 100, 2932896]) |
++--------+-----------------------------------------+
+
+
+ast            : CAST(TO_DATE(1) AS TIMESTAMP)
+raw expr       : CAST(TO_DATE(1_u8) AS Timestamp)
+checked expr   : CAST(to_date<Int64>(CAST(1_u8 AS Int64)) AS Timestamp)
+optimized expr : Timestamp { ts: 86400000000, precision: 6 }
+output type    : Timestamp
+output domain  : Unknown
+output         : 1970-01-02 00:00:00.000000
+
+
+ast            : CAST(TO_TIMESTAMP(1) AS DATE)
+raw expr       : CAST(TO_TIMESTAMP(1_u8) AS Date)
+checked expr   : CAST(to_timestamp<Int64>(CAST(1_u8 AS Int64)) AS Date)
+optimized expr : 0
+output type    : Date
+output domain  : Unknown
+output         : 1970-01-01
+
+
+ast            : CAST(a AS DATE)
+raw expr       : CAST(ColumnRef(0)::Timestamp AS Date)
+checked expr   : CAST(ColumnRef(0) AS Date)
+evaluation:
++--------+--------------------------------------+----------------+
+|        | a                                    | Output         |
++--------+--------------------------------------+----------------+
+| Type   | Timestamp                            | Date           |
+| Domain | {-315360000000000..=315360000000000} | {-3650..=3650} |
+| Row 0  | 1960-01-04 00:00:00.000000           | 1960-01-04     |
+| Row 1  | 1970-01-04 15:36:00.000000           | 1970-01-04     |
+| Row 2  | 1969-12-31 23:59:59.999900           | 1970-01-01     |
+| Row 3  | 1970-01-01 00:00:00.000000           | 1970-01-01     |
+| Row 4  | 1970-01-01 00:00:00.000100           | 1970-01-01     |
+| Row 5  | 1970-01-04 15:36:00.000000           | 1970-01-04     |
+| Row 6  | 1979-12-30 00:00:00.000000           | 1979-12-30     |
++--------+--------------------------------------+----------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                |
++--------+---------------------------------------------------------------------------------------------------------------------+
+| a      | TimestampColumn { ts: [-315360000000000, 315360000000, -100, 0, 100, 315360000000, 315360000000000], precision: 6 } |
+| Output | [-3650, 3, 0, 0, 0, 3, 3650]                                                                                        |
++--------+---------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : CAST(a AS TIMESTAMP)
+raw expr       : CAST(ColumnRef(0)::Date AS Timestamp)
+checked expr   : CAST(ColumnRef(0) AS Timestamp)
+evaluation:
++--------+---------------------+-------------------------------------------+
+|        | a                   | Output                                    |
++--------+---------------------+-------------------------------------------+
+| Type   | Date                | Timestamp                                 |
+| Domain | {-354285..=2932896} | {-30610224000000000..=253402214400000000} |
+| Row 0  | 1000-01-01          | 1000-01-01 00:00:00.000000                |
+| Row 1  | 1969-09-23          | 1969-09-23 00:00:00.000000                |
+| Row 2  | 1970-01-01          | 1970-01-01 00:00:00.000000                |
+| Row 3  | 1970-04-11          | 1970-04-11 00:00:00.000000                |
+| Row 4  | 9999-12-31          | 9999-12-31 00:00:00.000000                |
++--------+---------------------+-------------------------------------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                             |
++--------+------------------------------------------------------------------------------------------------------------------+
+| a      | [-354285, -100, 0, 100, 2932896]                                                                                 |
+| Output | TimestampColumn { ts: [-30610224000000000, -8640000000000, 0, 8640000000000, 253402214400000000], precision: 6 } |
++--------+------------------------------------------------------------------------------------------------------------------+
+
+

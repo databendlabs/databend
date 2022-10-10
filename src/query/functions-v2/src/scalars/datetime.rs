@@ -24,34 +24,24 @@ use common_expression::vectorize_with_builder_1_arg;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 
-pub const MICROS_IN_A_SEC: i64 = 1_000_000;
-pub const MICROS_IN_A_MILLI: i64 = 1_000;
-
 pub fn register(registry: &mut FunctionRegistry) {
+    // TODO: convert to CAST
     registry.register_aliases("to_timestamp", &["to_datetime"]);
+    // TODO: convert to CAST
     registry.register_passthrough_nullable_1_arg::<Int64Type, TimestampType, _, _>(
         "to_timestamp",
         FunctionProperty::default(),
         |_| None,
         vectorize_with_builder_1_arg::<Int64Type, TimestampType>(|val, output, _| {
-            match check_timestamp(val)? {
-                0 => output.push(Timestamp {
-                    ts: val * MICROS_IN_A_SEC,
-                    precision: 0,
-                }),
-                3 => output.push(Timestamp {
-                    ts: val * MICROS_IN_A_MILLI,
-                    precision: 3,
-                }),
-                _ => output.push(Timestamp {
-                    ts: val,
-                    precision: 6,
-                }),
-            }
+            let (precision, base) = check_timestamp(val)?;
+            output.push(Timestamp {
+                ts: val * base,
+                precision,
+            });
             Ok(())
         }),
     );
-
+    // TODO: convert to CAST
     registry.register_passthrough_nullable_1_arg::<Int64Type, DateType, _, _>(
         "to_date",
         FunctionProperty::default(),
