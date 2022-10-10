@@ -96,7 +96,6 @@ impl Settings {
                     tracing::warn!("Ignore deprecated global setting {} = {}", name, val);
                     continue;
                 }
-                tracing::info!("Apply global setting {} = {}", name, val);
                 settings.set_settings(name, val, false)?;
             }
             settings
