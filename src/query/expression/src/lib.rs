@@ -31,6 +31,7 @@
 mod chunk;
 
 mod column_from;
+pub mod converts;
 mod display;
 mod error;
 mod evaluator;
