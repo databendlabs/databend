@@ -15,6 +15,8 @@
 use core::iter::FromIterator;
 use std::borrow::Cow;
 
+use ordered_float::OrderedFloat;
+
 use super::number::Number;
 use super::value::Object;
 use super::value::Value;
@@ -65,6 +67,18 @@ from_unsigned_integer! {
 
 from_float! {
     f32 f64
+}
+
+impl<'a> From<OrderedFloat<f32>> for Value<'a> {
+    fn from(f: OrderedFloat<f32>) -> Self {
+        Value::Number(Number::Float64(f.0 as f64))
+    }
+}
+
+impl<'a> From<OrderedFloat<f64>> for Value<'a> {
+    fn from(f: OrderedFloat<f64>) -> Self {
+        Value::Number(Number::Float64(f.0))
+    }
 }
 
 impl<'a> From<bool> for Value<'a> {

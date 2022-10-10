@@ -23,6 +23,7 @@ use percent_encoding::percent_decode_str;
 
 use crate::config::StorageHttpConfig;
 use crate::config::StorageIpfsConfig;
+use crate::config::StorageOssConfig;
 use crate::config::STORAGE_IPFS_DEFAULT_ENDPOINT;
 use crate::config::STORAGE_S3_DEFAULT_ENDPOINT;
 use crate::StorageAzblobConfig;
@@ -176,6 +177,36 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
                             anyhow!("value for enable_virtual_host_style is invalid: {err:?}"),
                         )
                     })?,
+            })
+        }
+        Scheme::Oss => {
+            let endpoint = l
+                .connection
+                .get("endpoint_url")
+                .cloned()
+                .map(secure_omission)
+                .ok_or_else(|| {
+                    Error::new(
+                        ErrorKind::InvalidInput,
+                        anyhow!("endpoint_url is required for storage oss"),
+                    )
+                })?;
+            StorageParams::Oss(StorageOssConfig {
+                endpoint_url: endpoint,
+                bucket: l.name.to_string(),
+                access_key_id: l
+                    .connection
+                    .get("access_key_id")
+                    .cloned()
+                    .unwrap_or_default(),
+                access_key_secret: l
+                    .connection
+                    .get("access_key_secret")
+                    .cloned()
+                    .unwrap_or_default(),
+                root: root.to_string(),
+                oidc_token: l.connection.get("oidc_token").cloned().unwrap_or_default(),
+                role_arn: l.connection.get("role_arn").cloned().unwrap_or_default(),
             })
         }
         Scheme::Http => {

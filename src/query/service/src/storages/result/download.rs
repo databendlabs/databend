@@ -51,7 +51,7 @@ impl ResultTable {
             .await?;
         ctx.try_set_partitions(parts)?;
         let mut block_stream = self
-            .read(ctx.clone(), &ReadDataSourcePlan {
+            .read_data_block_stream(ctx.clone(), &ReadDataSourcePlan {
                 catalog: "".to_string(),
                 source_info: SourceInfo::TableSource(Default::default()),
                 scan_fields: None,
