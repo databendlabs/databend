@@ -13,7 +13,6 @@ doctest = false
 anyhow = "1"
 async-trait = "0.1"
 bytes = "1"
-futures = "0.3"
 http = "0.2"
 moka = "0.9"
 opendal = "0.19"
