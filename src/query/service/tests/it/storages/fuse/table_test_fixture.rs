@@ -350,7 +350,9 @@ pub async fn test_drive_with_args_and_ctx(
         .read_plan(ctx.clone(), Some(Extras::default()))
         .await?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
-    func.as_table().read(ctx, &source_plan).await
+    func.as_table()
+        .read_data_block_stream(ctx, &source_plan)
+        .await
 }
 
 pub async fn test_drive_clustering_information(
@@ -364,7 +366,9 @@ pub async fn test_drive_clustering_information(
         .read_plan(ctx.clone(), Some(Extras::default()))
         .await?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
-    func.as_table().read(ctx, &source_plan).await
+    func.as_table()
+        .read_data_block_stream(ctx, &source_plan)
+        .await
 }
 
 pub fn expects_err<T>(case_name: &str, err_code: u16, res: Result<T>) {

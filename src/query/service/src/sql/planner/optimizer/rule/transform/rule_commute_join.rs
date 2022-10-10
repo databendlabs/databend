@@ -65,10 +65,19 @@ impl Rule for RuleCommuteJoin {
         let right_child = s_expr.child(1)?;
 
         match join.join_type {
-            JoinType::Inner | JoinType::Cross => {
+            JoinType::Inner
+            | JoinType::Cross
+            | JoinType::Left
+            | JoinType::Right
+            | JoinType::LeftSemi
+            | JoinType::RightSemi
+            | JoinType::LeftAnti
+            | JoinType::LeftMark
+            | JoinType::RightAnti => {
                 // Swap the join conditions side
                 (join.left_conditions, join.right_conditions) =
                     (join.right_conditions, join.left_conditions);
+                join.join_type = join.join_type.opposite();
                 let result =
                     SExpr::create_binary(join.into(), right_child.clone(), left_child.clone());
                 state.add_result(result);

@@ -72,6 +72,7 @@ impl Display for ParseErrorCode {
 pub enum Error {
     InvalidUtf8,
     InvalidEOF,
+    InvalidToken,
 
     InvalidJsonb,
     InvalidJsonbHeader,
@@ -91,6 +92,12 @@ impl Display for Error {
 
 impl From<std::io::Error> for Error {
     fn from(_error: std::io::Error) -> Self {
+        Error::InvalidUtf8
+    }
+}
+
+impl From<std::str::Utf8Error> for Error {
+    fn from(_error: std::str::Utf8Error) -> Self {
         Error::InvalidUtf8
     }
 }

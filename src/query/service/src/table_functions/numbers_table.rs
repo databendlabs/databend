@@ -17,6 +17,7 @@ use std::mem::size_of;
 use std::sync::Arc;
 
 use chrono::NaiveDateTime;
+use common_catalog::table::TableStatistics;
 use common_datablocks::DataBlock;
 use common_datavalues::chrono::TimeZone;
 use common_datavalues::chrono::Utc;
@@ -176,7 +177,7 @@ impl Table for NumbersTable {
         ))])
     }
 
-    fn read2(
+    fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
         plan: &ReadDataSourcePlan,
@@ -212,6 +213,15 @@ impl Table for NumbersTable {
 
         pipeline.add_pipe(source_builder.finalize());
         Ok(())
+    }
+
+    async fn statistics(&self, _ctx: Arc<dyn TableContext>) -> Result<Option<TableStatistics>> {
+        Ok(Some(TableStatistics {
+            num_rows: Some(self.total),
+            data_size: Some(self.total * 8),
+            data_size_compressed: None,
+            index_size: None,
+        }))
     }
 }
 

@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #![feature(thread_local)]
+#![feature(result_flattening)]
+#![feature(try_trait_v2)]
 #![allow(incomplete_features)]
 
 pub mod base;

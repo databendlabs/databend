@@ -16,7 +16,6 @@ use std::path::Path;
 use std::sync::Arc;
 
 use common_base::base::GlobalIORuntime;
-use common_base::base::TrySpawn;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -210,7 +209,7 @@ impl CopyInterpreterV2 {
 
         let from_table = self.ctx.build_table_from_source_plan(&read_source_plan)?;
         from_table.read_partitions(self.ctx.clone(), None).await?;
-        from_table.read2(
+        from_table.read_data(
             self.ctx.clone(),
             &read_source_plan,
             &mut build_res.main_pipeline,
@@ -218,7 +217,7 @@ impl CopyInterpreterV2 {
 
         let to_table = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
 
-        to_table.append2(self.ctx.clone(), &mut build_res.main_pipeline, false)?;
+        to_table.append_data(self.ctx.clone(), &mut build_res.main_pipeline, false)?;
 
         let ctx = self.ctx.clone();
         let files = files.clone();
@@ -232,7 +231,7 @@ impl CopyInterpreterV2 {
                 let from = from.clone();
                 let to_table = to_table.clone();
 
-                let task = GlobalIORuntime::instance().spawn(async move {
+                return GlobalIORuntime::instance().block_on(async move {
                     // Commit
                     let operations = ctx.consume_precommit_blocks();
                     to_table
@@ -242,15 +241,6 @@ impl CopyInterpreterV2 {
                     // Purge
                     CopyInterpreterV2::purge_files(ctx, &from, &files).await
                 });
-
-                return match futures::executor::block_on(task) {
-                    Ok(Ok(_)) => Ok(()),
-                    Ok(Err(error)) => Err(error),
-                    Err(cause) => Err(ErrorCode::PanicError(format!(
-                        "Maybe panic while in commit insert. {}",
-                        cause
-                    ))),
-                };
             }
 
             Err(may_error.as_ref().unwrap().clone())

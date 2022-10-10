@@ -92,7 +92,6 @@ impl SubqueryRewriter {
             }
             RelOperator::Filter(mut plan) => {
                 let mut input = self.rewrite(s_expr.child(0)?)?;
-
                 for pred in plan.predicates.iter_mut() {
                     let res = self.try_rewrite_subquery(pred, &input, true)?;
                     input = res.1;
@@ -512,7 +511,7 @@ impl SubqueryRewriter {
                     left_conditions,
                     right_conditions,
                     other_conditions,
-                    join_type: JoinType::Mark,
+                    join_type: JoinType::LeftMark,
                     marker_index: Some(marker_index),
                     from_correlated_subquery: false,
                 }

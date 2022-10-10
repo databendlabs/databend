@@ -18,9 +18,7 @@ use std::sync::Arc;
 use chrono::TimeZone;
 use chrono::Utc;
 use common_base::base::GlobalIORuntime;
-use common_base::base::TrySpawn;
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::StageFile;
@@ -75,7 +73,7 @@ pub fn append2table(
         &mut build_res.main_pipeline,
     )?;
 
-    table.append2(ctx.clone(), &mut build_res.main_pipeline, false)?;
+    table.append_data(ctx.clone(), &mut build_res.main_pipeline, false)?;
 
     if need_commit {
         build_res.main_pipeline.set_on_finished(move |may_error| {
@@ -87,18 +85,9 @@ pub fn append2table(
             if may_error.is_none() {
                 let append_entries = ctx.consume_precommit_blocks();
                 // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
-                let commit_handle = GlobalIORuntime::instance().spawn(async move {
+                return GlobalIORuntime::instance().block_on(async move {
                     table.commit_insertion(ctx, append_entries, overwrite).await
                 });
-
-                return match futures::executor::block_on(commit_handle) {
-                    Ok(Ok(_)) => Ok(()),
-                    Ok(Err(error)) => Err(error),
-                    Err(cause) => Err(ErrorCode::PanicError(format!(
-                        "Maybe panic while in commit insert. {}",
-                        cause
-                    ))),
-                };
             }
 
             Err(may_error.as_ref().unwrap().clone())

@@ -133,6 +133,7 @@ message UserStageInfo {
       S3StorageConfig s3 = 1;
       FsStorageConfig fs = 2;
       GcsStorageConfig gcs = 3;
+      OssStorageConfig oss = 4;
     }
   }
 

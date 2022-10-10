@@ -28,7 +28,7 @@ use crate::storages::Table;
 
 #[async_trait::async_trait]
 pub trait TableStreamReadWrap: Send + Sync {
-    async fn read(
+    async fn read_data_block_stream(
         &self,
         _ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
@@ -37,13 +37,13 @@ pub trait TableStreamReadWrap: Send + Sync {
 
 #[async_trait::async_trait]
 impl<T: Table> TableStreamReadWrap for T {
-    async fn read(
+    async fn read_data_block_stream(
         &self,
         ctx: Arc<QueryContext>,
         plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let mut pipeline = Pipeline::create();
-        self.read2(ctx.clone(), plan, &mut pipeline)?;
+        self.read_data(ctx.clone(), plan, &mut pipeline)?;
 
         let settings = ctx.get_settings();
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
@@ -57,13 +57,13 @@ impl<T: Table> TableStreamReadWrap for T {
 
 #[async_trait::async_trait]
 impl TableStreamReadWrap for dyn Table {
-    async fn read(
+    async fn read_data_block_stream(
         &self,
         ctx: Arc<QueryContext>,
         plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let mut pipeline = Pipeline::create();
-        self.read2(ctx.clone(), plan, &mut pipeline)?;
+        self.read_data(ctx.clone(), plan, &mut pipeline)?;
 
         let settings = ctx.get_settings();
         pipeline.set_max_threads(settings.get_max_threads()? as usize);

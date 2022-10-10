@@ -16,8 +16,13 @@
 
 use std::env;
 use std::fs;
+use std::io::Error;
+use std::io::ErrorKind;
 use std::io::Result;
 use std::path::Path;
+use std::process::Command;
+
+use semver::Version;
 
 fn main() -> Result<()> {
     build_proto()
@@ -35,9 +40,54 @@ fn build_proto() -> Result<()> {
         println!("cargo:rerun-if-changed={}", proto.to_str().unwrap());
     }
 
+    // Check protoc version.
+    let mut cmd = Command::new(prost_build::protoc_from_env());
+    // get protoc version.
+    cmd.arg("--version");
+    let output = cmd.output()?;
+    let version = if output.status.success() {
+        let content = String::from_utf8_lossy(&output.stdout);
+        content
+            .trim()
+            .split(' ')
+            .last()
+            .ok_or_else(|| {
+                Error::new(
+                    ErrorKind::Other,
+                    format!("protoc --version got unexpected output: {}", content),
+                )
+            })?
+            .parse::<Version>()
+            .map_err(|err| {
+                Error::new(
+                    ErrorKind::Other,
+                    format!("protoc --version doesn't return valid version: {:?}", err),
+                )
+            })?
+    } else {
+        return Err(Error::new(
+            ErrorKind::Other,
+            format!("protoc failed: {}", String::from_utf8_lossy(&output.stderr)),
+        ));
+    };
+
     let mut config = prost_build::Config::new();
     config.btree_map(["."]);
-    config.protoc_arg("--experimental_allow_proto3_optional");
+
+    // Version before 3.12 doesn't support allow_proto3_optional
+    if version < Version::new(3, 12, 0) {
+        return Err(Error::new(
+            ErrorKind::Other,
+            format!(
+                "protoc version is outdated, expect: >= 3.12.0, actual: {version}, reason: need feature --experimental_allow_proto3_optional"
+            ),
+        ));
+    }
+    // allow_proto3_optional has been enabled by default since 3.15.0
+    if version < Version::new(3, 15, 0) {
+        config.protoc_arg("--experimental_allow_proto3_optional");
+    }
+
     tonic_build::configure()
         .type_attribute("IntervalKind", "#[derive(num_derive::FromPrimitive)]")
         .type_attribute(

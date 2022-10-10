@@ -39,9 +39,36 @@ pub enum JoinType {
     RightAnti,
     Cross,
     /// Mark Join is a special case of join that is used to process Any subquery and correlated Exists subquery.
-    Mark,
+    /// Left Mark Join use subquery as probe side.
+    LeftMark,
+    /// Right Mark Join use subquery as build side.
+    RightMark,
     /// Single Join is a special kind of join that is used to process correlated scalar subquery.
     Single,
+}
+
+impl JoinType {
+    pub fn opposite(&self) -> JoinType {
+        match self {
+            JoinType::Left => JoinType::Right,
+            JoinType::Right => JoinType::Left,
+            JoinType::LeftSemi => JoinType::RightSemi,
+            JoinType::RightSemi => JoinType::LeftSemi,
+            JoinType::LeftAnti => JoinType::RightAnti,
+            JoinType::RightAnti => JoinType::LeftAnti,
+            JoinType::LeftMark => JoinType::RightMark,
+            JoinType::RightMark => JoinType::LeftMark,
+            _ => self.clone(),
+        }
+    }
+
+    pub fn is_outer_join(&self) -> bool {
+        matches!(self, JoinType::Left | JoinType::Right | JoinType::Full)
+    }
+
+    pub fn is_mark_join(&self) -> bool {
+        matches!(self, JoinType::LeftMark | JoinType::RightMark)
+    }
 }
 
 impl Display for JoinType {
@@ -74,8 +101,11 @@ impl Display for JoinType {
             JoinType::Cross => {
                 write!(f, "CROSS")
             }
-            JoinType::Mark => {
-                write!(f, "MARK")
+            JoinType::LeftMark => {
+                write!(f, "LEFT MARK")
+            }
+            JoinType::RightMark => {
+                write!(f, "RIGHT MARK")
             }
             JoinType::Single => {
                 write!(f, "SINGLE")
@@ -171,11 +201,13 @@ impl LogicalOperator for LogicalInnerJoin {
             | JoinType::Full
             | JoinType::Cross => left_prop.cardinality * right_prop.cardinality,
 
-            JoinType::LeftSemi | JoinType::LeftAnti | JoinType::Mark | JoinType::Single => {
+            JoinType::LeftSemi | JoinType::LeftAnti | JoinType::LeftMark | JoinType::Single => {
                 left_prop.cardinality
             }
 
-            JoinType::RightSemi | JoinType::RightAnti => right_prop.cardinality,
+            JoinType::RightSemi | JoinType::RightAnti | JoinType::RightMark => {
+                right_prop.cardinality
+            }
         };
 
         Ok(RelationalProperty {

@@ -130,7 +130,9 @@ async fn test_memorytable() -> Result<()> {
             assert_eq!(table.engine(), "Memory");
             assert!(table.benefit_column_prune());
 
-            let stream = table.read(ctx.clone(), &source_plan).await?;
+            let stream = table
+                .read_data_block_stream(ctx.clone(), &source_plan)
+                .await?;
             let result = stream.try_collect::<Vec<_>>().await?;
             assert_blocks_sorted_eq(expected_datablocks, &result);
 
@@ -164,7 +166,9 @@ async fn test_memorytable() -> Result<()> {
         ctx.try_set_partitions(source_plan.parts.clone())?;
         assert_eq!(table.engine(), "Memory");
 
-        let stream = table.read(ctx.clone(), &source_plan).await?;
+        let stream = table
+            .read_data_block_stream(ctx.clone(), &source_plan)
+            .await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         assert_blocks_sorted_eq(
             vec![
@@ -186,7 +190,7 @@ async fn test_memorytable() -> Result<()> {
         table.truncate(ctx.clone(), false).await?;
 
         let source_plan = table.read_plan(ctx.clone(), None).await?;
-        let stream = table.read(ctx, &source_plan).await?;
+        let stream = table.read_data_block_stream(ctx, &source_plan).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         assert_blocks_sorted_eq(vec!["++", "++"], &result);
     }
