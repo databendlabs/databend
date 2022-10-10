@@ -18,7 +18,6 @@ use common_meta_sled_store::AsKeySpace;
 use common_meta_sled_store::SledTree;
 use common_meta_types::MetaStartupError;
 use common_meta_types::MetaStorageError;
-use common_meta_types::MetaStorageResult;
 use common_meta_types::NodeId;
 use openraft::storage::HardState;
 use tracing::debug;
@@ -120,7 +119,7 @@ impl RaftState {
         self.set_node_id(self.id).await
     }
 
-    pub async fn write_hard_state(&self, hs: &HardState) -> MetaStorageResult<()> {
+    pub async fn write_hard_state(&self, hs: &HardState) -> Result<(), MetaStorageError> {
         let state = self.state();
         state
             .insert(
@@ -131,7 +130,7 @@ impl RaftState {
         Ok(())
     }
 
-    pub fn read_hard_state(&self) -> MetaStorageResult<Option<HardState>> {
+    pub fn read_hard_state(&self) -> Result<Option<HardState>, MetaStorageError> {
         let state = self.state();
         let hs = state.get(&RaftStateKey::HardState)?;
         let hs = hs.map(HardState::from);
@@ -139,7 +138,7 @@ impl RaftState {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn write_state_machine_id(&self, id: &(u64, u64)) -> MetaStorageResult<()> {
+    pub async fn write_state_machine_id(&self, id: &(u64, u64)) -> Result<(), MetaStorageError> {
         let state = self.state();
         state
             .insert(
@@ -151,7 +150,7 @@ impl RaftState {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub fn read_state_machine_id(&self) -> MetaStorageResult<(u64, u64)> {
+    pub fn read_state_machine_id(&self) -> Result<(u64, u64), MetaStorageError> {
         let state = self.state();
         let smid = state.get(&RaftStateKey::StateMachineId)?;
         let smid: (u64, u64) = smid.map_or((0, 0), |v| v.into());

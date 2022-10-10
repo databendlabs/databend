@@ -98,6 +98,8 @@ jobs:
       - name: Rust setup
         run: |
           bash ./scripts/setup/dev_setup.sh -yb
+      - name: Install coreutils for macOS sha256sum
+        run: brew install coreutils
       - name: Cross setup
         if: matrix.arch == 'aarch64'
         run: |
