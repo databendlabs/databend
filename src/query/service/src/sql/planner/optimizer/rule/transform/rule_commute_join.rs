@@ -77,18 +77,7 @@ impl Rule for RuleCommuteJoin {
                 // Swap the join conditions side
                 (join.left_conditions, join.right_conditions) =
                     (join.right_conditions, join.left_conditions);
-                let origin_join_type = join.join_type.clone();
-                join.join_type = match origin_join_type {
-                    JoinType::Left => JoinType::Right,
-                    JoinType::Right => JoinType::Left,
-                    JoinType::LeftSemi => JoinType::RightSemi,
-                    JoinType::RightSemi => JoinType::LeftSemi,
-                    JoinType::LeftAnti => JoinType::RightAnti,
-                    JoinType::RightAnti => JoinType::LeftAnti,
-                    JoinType::LeftMark => JoinType::RightMark,
-                    JoinType::RightMark => JoinType::LeftMark,
-                    _ => origin_join_type,
-                };
+                join.join_type = join.join_type.opposite();
                 let result =
                     SExpr::create_binary(join.into(), right_child.clone(), left_child.clone());
                 state.add_result(result);
