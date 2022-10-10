@@ -427,10 +427,15 @@ async fn gen_batches(
     let buf_size = buf.len();
     let mut is_start = true;
     let mut start = 0;
-    let path = "clickhouse_handler_body".to_string();
+    let path = "clickhouse_insert".to_string();
+    tracing::debug!(
+        "begin sending {} bytes, batch_size={}",
+        buf_size,
+        batch_size
+    );
     while start < buf_size {
         let data = if buf_size - start >= batch_size {
-            buf[start..batch_size].to_vec()
+            buf[start..start + batch_size].to_vec()
         } else {
             buf[start..].to_vec()
         };
@@ -445,9 +450,9 @@ async fn gen_batches(
             }))
             .await
         {
-            tracing::warn!(" Multipart fail to send ReadBatch: {}", e);
+            tracing::warn!("clickhouse handler fail to send ReadBatch: {}", e);
         }
         is_start = false;
-        start += batch_size
+        start += batch_size;
     }
 }
