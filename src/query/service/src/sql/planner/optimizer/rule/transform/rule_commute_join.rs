@@ -15,7 +15,7 @@
 use common_exception::Result;
 
 use crate::sql::optimizer::rule::Rule;
-use crate::sql::optimizer::rule::TransformState;
+use crate::sql::optimizer::rule::TransformResult;
 use crate::sql::optimizer::RuleID;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::JoinType;
@@ -59,7 +59,7 @@ impl Rule for RuleCommuteJoin {
         self.id
     }
 
-    fn apply(&self, s_expr: &SExpr, state: &mut TransformState) -> Result<()> {
+    fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         let mut join: LogicalInnerJoin = s_expr.plan().clone().try_into()?;
         let left_child = s_expr.child(0)?;
         let right_child = s_expr.child(1)?;

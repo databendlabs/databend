@@ -20,7 +20,7 @@ use common_planner::IndexType;
 use crate::sql::binder::wrap_cast;
 use crate::sql::binder::JoinPredicate;
 use crate::sql::optimizer::rule::Rule;
-use crate::sql::optimizer::rule::TransformState;
+use crate::sql::optimizer::rule::TransformResult;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::RuleID;
 use crate::sql::optimizer::SExpr;
@@ -277,7 +277,7 @@ impl Rule for RulePushDownFilterJoin {
         self.id
     }
 
-    fn apply(&self, s_expr: &SExpr, state: &mut TransformState) -> Result<()> {
+    fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         // First, try to convert outer join to inner join
         let mut s_expr = self.convert_outer_to_inner_join(s_expr)?;
         // Second, check if can convert mark join to semi join

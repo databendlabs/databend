@@ -17,7 +17,7 @@ use std::cmp;
 use common_exception::Result;
 
 use crate::sql::optimizer::rule::Rule;
-use crate::sql::optimizer::rule::TransformState;
+use crate::sql::optimizer::rule::TransformResult;
 use crate::sql::optimizer::RuleID;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::Limit;
@@ -65,7 +65,7 @@ impl Rule for RulePushDownLimitScan {
         self.id
     }
 
-    fn apply(&self, s_expr: &SExpr, state: &mut TransformState) -> Result<()> {
+    fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         let limit: Limit = s_expr.plan().clone().try_into()?;
         if let Some(mut count) = limit.limit {
             let child = s_expr.child(0)?;

@@ -17,7 +17,7 @@ use std::fmt::Formatter;
 
 use common_exception::Result;
 
-use crate::sql::optimizer::rule::TransformState;
+use crate::sql::optimizer::rule::TransformResult;
 use crate::sql::optimizer::SExpr;
 
 pub type RulePtr = Box<dyn Rule>;
@@ -25,7 +25,7 @@ pub type RulePtr = Box<dyn Rule>;
 pub trait Rule {
     fn id(&self) -> RuleID;
 
-    fn apply(&self, s_expr: &SExpr, state: &mut TransformState) -> Result<()>;
+    fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()>;
 
     fn pattern(&self) -> &SExpr;
 }

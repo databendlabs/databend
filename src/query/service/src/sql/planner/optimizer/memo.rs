@@ -18,6 +18,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planner::IndexType;
 
+use super::group::GroupState;
 use super::RelExpr;
 use super::RelationalProperty;
 use crate::sql::optimizer::group::Group;
@@ -53,6 +54,14 @@ impl Memo {
 
     pub fn set_root(&mut self, group_index: IndexType) {
         self.root = Some(group_index);
+    }
+
+    pub fn set_group_state(&mut self, group_index: IndexType, state: GroupState) -> Result<()> {
+        let group = self.groups.get_mut(group_index).ok_or_else(|| {
+            ErrorCode::LogicalError(format!("Group index {} not found", group_index))
+        })?;
+        group.state = state;
+        Ok(())
     }
 
     // Initialize memo with given expression
@@ -111,14 +120,16 @@ impl Memo {
             m_expr.plan.clone(),
             m_expr.children.clone(),
         )) {
-            self.group_mut(group_index).insert(m_expr)
+            self.group_mut(group_index)?.insert(m_expr)
         } else {
             Ok(())
         }
     }
 
-    fn group_mut(&mut self, index: IndexType) -> &mut Group {
-        &mut self.groups[index]
+    pub fn group_mut(&mut self, index: IndexType) -> Result<&mut Group> {
+        self.groups
+            .get_mut(index)
+            .ok_or_else(|| ErrorCode::LogicalError(format!("Group index {} not found", index)))
     }
 
     fn add_group(&mut self, relational_prop: RelationalProperty) -> IndexType {

@@ -12,11 +12,38 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planner::IndexType;
 
 use crate::sql::optimizer::m_expr::MExpr;
 use crate::sql::optimizer::property::RelationalProperty;
+
+/// State of a `Group`
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum GroupState {
+    Init,
+    Explored,
+    Implemented,
+    Optimized,
+}
+
+impl GroupState {
+    pub fn explored(&self) -> bool {
+        matches!(
+            self,
+            GroupState::Explored | GroupState::Implemented | GroupState::Optimized
+        )
+    }
+
+    pub fn implemented(&self) -> bool {
+        matches!(self, GroupState::Implemented | GroupState::Optimized)
+    }
+
+    pub fn optimized(&self) -> bool {
+        matches!(self, GroupState::Optimized)
+    }
+}
 
 /// `Group` is a set of logically equivalent relational expressions represented with `MExpr`.
 #[derive(Clone)]
@@ -26,6 +53,8 @@ pub struct Group {
 
     /// Relational property shared by expressions in a same `Group`
     pub relational_prop: RelationalProperty,
+
+    pub state: GroupState,
 }
 
 impl Group {
@@ -34,6 +63,7 @@ impl Group {
             group_index: index,
             m_exprs: vec![],
             relational_prop,
+            state: GroupState::Init,
         }
     }
 
@@ -48,5 +78,21 @@ impl Group {
     pub fn insert(&mut self, m_expr: MExpr) -> Result<()> {
         self.m_exprs.push(m_expr);
         Ok(())
+    }
+
+    pub fn set_state(&mut self, state: GroupState) {
+        self.state = state;
+    }
+
+    pub fn m_expr(&self, index: IndexType) -> Result<&MExpr> {
+        self.m_exprs
+            .get(index)
+            .ok_or_else(|| ErrorCode::LogicalError(format!("MExpr index {} not found", index)))
+    }
+
+    pub fn m_expr_mut(&mut self, index: IndexType) -> Result<&mut MExpr> {
+        self.m_exprs
+            .get_mut(index)
+            .ok_or_else(|| ErrorCode::LogicalError(format!("MExpr index {} not found", index)))
     }
 }

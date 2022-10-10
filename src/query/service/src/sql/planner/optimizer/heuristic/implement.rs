@@ -17,7 +17,7 @@ use once_cell::sync::Lazy;
 
 use crate::sql::optimizer::rule::RuleID;
 use crate::sql::optimizer::rule::RuleSet;
-use crate::sql::optimizer::rule::TransformState;
+use crate::sql::optimizer::rule::TransformResult;
 use crate::sql::optimizer::SExpr;
 
 static DEFAULT_IMPLEMENT_RULES: Lazy<Vec<RuleID>> =
@@ -34,7 +34,7 @@ impl HeuristicImplementor {
         }
     }
 
-    pub fn implement(&self, s_expr: &SExpr, state: &mut TransformState) -> Result<()> {
+    pub fn implement(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         for rule in self.implement_rule_list.iter() {
             if s_expr.match_pattern(rule.pattern()) {
                 rule.apply(s_expr, state)?;
