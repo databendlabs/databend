@@ -880,6 +880,11 @@ impl JoinHashTable {
     ) -> Result<DataBlock> {
         let mut row_state = self.hash_join_desc.right_join_desc.row_state.write();
         for (index, row) in build_indexes.iter().enumerate() {
+            if row_state[row] > 1 && !bm.get(index) {
+                row_state.entry(*row).and_modify(|e| *e -= 1);
+            }
+        }
+        for (index, row) in build_indexes.iter().enumerate() {
             if row_state[row] > 1 && bm.get(index) {
                 bm.set(index, false);
                 row_state.entry(*row).and_modify(|e| *e -= 1);
