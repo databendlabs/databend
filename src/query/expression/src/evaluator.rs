@@ -59,7 +59,7 @@ impl<'a> Evaluator<'a> {
     pub fn run(&self, expr: &Expr) -> Result<Value<AnyType>> {
         let result = match expr {
             Expr::Constant { scalar, .. } => Ok(Value::Scalar(scalar.clone())),
-            Expr::ColumnRef { id, .. } => Ok(self.input_columns.columns()[*id].clone()),
+            Expr::ColumnRef { id, .. } => Ok(self.input_columns.columns()[*id].0.clone()),
             Expr::FunctionCall {
                 span,
                 function,

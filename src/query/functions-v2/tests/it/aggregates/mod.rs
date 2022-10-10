@@ -63,7 +63,7 @@ pub fn run_agg_ast(
     let chunk = Chunk::new(
         columns
             .iter()
-            .map(|(_, _, col)| Value::Column(col.clone()))
+            .map(|(_, ty, col)| (Value::Column(col.clone()), ty.clone()))
             .collect::<Vec<_>>(),
         num_rows,
     );
@@ -91,12 +91,12 @@ pub fn run_agg_ast(
                     .map(|p| Scalar::Number(NumberScalar::UInt64(*p as u64)))
                     .collect();
 
-                let arg_types: Vec<DataType> = args.iter().map(|arg| arg.1.clone()).collect();
+                let arg_types: Vec<DataType> = args.iter().map(|(_, ty)| ty.clone()).collect();
                 let arg_columns: Vec<Column> = args
                     .iter()
-                    .map(|arg| match &arg.0 {
+                    .map(|(arg, ty)| match arg {
                         Value::Scalar(s) => {
-                            let builder = s.as_ref().repeat(chunk.num_rows());
+                            let builder = ColumnBuilder::repeat(&s.as_ref(), chunk.num_rows(), ty);
                             builder.build()
                         }
                         Value::Column(c) => c.clone(),
