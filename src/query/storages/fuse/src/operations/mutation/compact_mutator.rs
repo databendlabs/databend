@@ -25,8 +25,8 @@ use common_fuse_meta::meta::Versioned;
 use common_meta_app::schema::TableInfo;
 use opendal::Operator;
 
+use crate::fuse_segment::read_segments;
 use crate::io::BlockCompactor;
-use crate::io::MetaReaders;
 use crate::io::SegmentWriter;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::AppendOperationLogEntry;
@@ -93,16 +93,18 @@ impl CompactMutator {
 impl TableMutator for CompactMutator {
     async fn blocks_select(&mut self) -> Result<bool> {
         let snapshot = self.base_snapshot.clone();
+        let locations = &snapshot.segments;
         // Blocks that need to be reorganized into new segments.
         let mut remain_blocks = Vec::new();
         let mut summarys = Vec::new();
-        let reader = MetaReaders::segment_info_reader(self.ctx.as_ref());
 
-        for segment_location in &snapshot.segments {
-            let (x, ver) = (segment_location.0.clone(), segment_location.1);
+        // Read all segments information in parallel.
+        let segments = read_segments(self.ctx.clone(), locations).await?;
+        for (idx, segment) in segments.iter().enumerate() {
             let mut need_merge = false;
             let mut remains = Vec::new();
-            let segment = reader.read(x, None, ver).await?;
+            let segment = segment.clone()?;
+
             segment.blocks.iter().for_each(|b| {
                 if self.is_cluster
                     || self
@@ -119,7 +121,8 @@ impl TableMutator for CompactMutator {
             // If the number of blocks of segment meets block_per_seg, and the blocks in segments donot need to be compacted,
             // then record the segment information.
             if !need_merge && segment.blocks.len() == self.block_per_seg {
-                self.segments.push(segment_location.clone());
+                let location = locations[idx].clone();
+                self.segments.push(location);
                 summarys.push(segment.summary.clone());
                 continue;
             }
