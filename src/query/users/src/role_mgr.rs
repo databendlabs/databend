@@ -70,14 +70,17 @@ impl UserApiProvider {
         }
     }
 
-    // Ensure the builtin roles inside a tenant. Currently the only builtin role is account_admin,
-    // which has the equivalent privileges of `GRANT ALL ON *.* TO ROLE account_admin`.
+    // Ensure the builtin roles inside a tenant. Currently we have two builtin roles
+    // 1. ACCOUNT_ADMIN, which has the equivalent privileges of `GRANT ALL ON *.* TO ROLE account_admin`.
+    // 2. PUBLIC, which have no other privilege, also every role contains the PUBLIC role.
     pub async fn ensure_builtin_roles(&self, tenant: &str) -> Result<u64> {
         let mut role_info = RoleInfo::new("account_admin");
         role_info.grants.grant_privileges(
             &GrantObject::Global,
             UserPrivilegeSet::available_privileges_on_global(),
         );
+        self.add_role(tenant, role_info, true).await;
+        let role_info = RoleInfo::new("public");
         self.add_role(tenant, role_info, true).await
     }
 
