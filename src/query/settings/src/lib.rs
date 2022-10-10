@@ -90,7 +90,12 @@ impl Settings {
             for global_setting in global_settings {
                 let name = global_setting.name;
                 let val = global_setting.value.as_string()?;
-                settings.set_settings(name, val, false)?;
+
+                // the settings may be deprecated
+                if !settings.has_setting(&name) {
+                    continue;
+                }
+                tracing::info!("Apply global setting {} = {}", name, val);
             }
             settings
         };
