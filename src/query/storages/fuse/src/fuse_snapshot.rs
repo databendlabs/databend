@@ -39,6 +39,10 @@ async fn read_snapshot(
     reader.read(snapshot_location, None, format_version).await
 }
 
+// Read all the snapshots by the root file:
+// 1. Get the prefix:'/db/table/_ss/' from the root_snapshot_file('/db/table/_ss/xx.json')
+// 2. List all the files in the prefix
+// 3. Try to read all the snapshot files in parallel.
 #[tracing::instrument(level = "debug", skip_all)]
 pub async fn read_snapshots_by_root_file(
     ctx: Arc<dyn TableContext>,
@@ -55,10 +59,12 @@ pub async fn read_snapshots_by_root_file(
             return Ok(vec![]);
         }
 
+        // Append '/' to the end if need.
         if !snapshot_prefix.ends_with('/') {
             snapshot_prefix += "/";
         }
 
+        // List the prefix path to get all the snapshot files list.
         let mut ds = data_accessor.object(&snapshot_prefix).list().await?;
         while let Some(de) = ds.try_next().await? {
             match de.mode() {
@@ -74,6 +80,11 @@ pub async fn read_snapshots_by_root_file(
                 }
             }
         }
+    }
+
+    // Only return if no snapshot files .
+    if !snapshot_files.is_empty() {
+        return Ok(vec![]);
     }
 
     let max_runtime_threads = ctx.get_settings().get_max_threads()? as usize;
