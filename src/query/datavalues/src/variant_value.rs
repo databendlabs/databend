@@ -14,6 +14,7 @@
 
 use core::str::FromStr;
 use std::cmp::Ordering;
+use std::collections::BTreeSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::hash::Hash;
@@ -154,11 +155,19 @@ impl Ord for VariantValue {
                 }
             }
             (Value::Object(o1), Value::Object(o2)) => {
-                let it = o1.keys().zip_longest(o2.keys()).find_map(|e| match e {
+                let mut ks1 = BTreeSet::new();
+                let mut ks2 = BTreeSet::new();
+                for k1 in o1.keys() {
+                    ks1.insert(k1);
+                }
+                for k2 in o2.keys() {
+                    ks2.insert(k2);
+                }
+                let it = ks1.iter().zip_longest(ks2.iter()).find_map(|e| match e {
                     Both(k1, k2) => match k1.cmp(k2) {
                         Ordering::Equal => {
-                            let v1 = o1.get(k1).unwrap();
-                            let v2 = o2.get(k2).unwrap();
+                            let v1 = o1.get(*k1).unwrap();
+                            let v2 = o2.get(*k2).unwrap();
                             match VariantValue::from(v1).cmp(&VariantValue::from(v2)) {
                                 Ordering::Equal => None,
                                 other => Some(other),
