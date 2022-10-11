@@ -137,11 +137,6 @@ pub async fn read_snapshot_lites_by_root_file(
         }
     }
 
-    // Only return if no snapshot files .
-    if snapshot_files.is_empty() {
-        return Ok(vec![]);
-    }
-
     // 1. Get all the snapshot by chunks.
     let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
     let mut snapshot_map = HashMap::with_capacity(snapshot_files.len());
