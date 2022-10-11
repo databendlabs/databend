@@ -623,6 +623,7 @@ impl JoinHashTable {
         }
 
         let mut validity = MutableBitmap::new();
+        let self_row_partner_count = self.row_partner_count.read();
         for (i, key) in keys_iter.enumerate() {
             let probe_result_ptr = if self.hash_join_desc.from_correlated_subquery {
                 hash_table.find_key(&key)
@@ -635,12 +636,10 @@ impl JoinHashTable {
                     let probe_result_ptrs = v.get_value();
                     if self.hash_join_desc.join_type == JoinType::Full {
                         for row_ptr in probe_result_ptrs.iter() {
-                            {
-                                let mut self_row_partner_count = self.row_partner_count.write();
-                                self_row_partner_count
-                                    .entry(*row_ptr)
-                                    .and_modify(|e| *e += 1);
-                            }
+                            self_row_partner_count
+                                .get(row_ptr)
+                                .unwrap()
+                                .fetch_add(1, Ordering::Relaxed);
                         }
                     }
                     if self.hash_join_desc.join_type == JoinType::Single
@@ -765,10 +764,10 @@ impl JoinHashTable {
         if self.hash_join_desc.join_type == JoinType::Full {
             for (idx, build_index) in local_build_indexes.iter().enumerate() {
                 if !bm.get(idx) {
-                    let mut self_row_partner_count = self.row_partner_count.write();
                     self_row_partner_count
-                        .entry(*build_index)
-                        .and_modify(|e| *e = 0);
+                        .get(build_index)
+                        .unwrap()
+                        .store(0, Ordering::Relaxed);
                 }
             }
         }
@@ -789,6 +788,7 @@ impl JoinHashTable {
         Key: HashTableKeyable + Clone + 'static,
         IT: Iterator<Item = Key> + TrustedLen,
     {
+        let self_row_partner_count = self.row_partner_count.read();
         let probe_indexes = &mut probe_state.probe_indexs;
         let valids = &probe_state.valids;
         let mut validity = MutableBitmap::new();
@@ -801,12 +801,10 @@ impl JoinHashTable {
                 probe_indexes.extend(repeat(i as u32).take(probe_result_ptrs.len()));
                 validity.extend_constant(probe_result_ptrs.len(), true);
                 for row_ptr in probe_result_ptrs.iter() {
-                    {
-                        let mut self_row_partner_count = self.row_partner_count.write();
-                        self_row_partner_count
-                            .entry(*row_ptr)
-                            .and_modify(|e| *e += 1);
-                    }
+                    self_row_partner_count
+                        .get(row_ptr)
+                        .unwrap()
+                        .fetch_add(1, Ordering::Relaxed);
                 }
             }
         }

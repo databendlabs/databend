@@ -16,6 +16,7 @@ use std::borrow::BorrowMut;
 use std::fmt::Debug;
 use std::iter::repeat;
 use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -135,7 +136,7 @@ pub struct JoinHashTable {
     pub(crate) row_ptrs: RwLock<Vec<RowPtr>>,
     // The row_partner_count is used by right join, it's order-insensitive.
     // {Key: Row, Value: join partner count}
-    pub(crate) row_partner_count: RwLock<std::collections::HashMap<RowPtr, usize>>,
+    pub(crate) row_partner_count: RwLock<std::collections::HashMap<RowPtr, Arc<AtomicUsize>>>,
     pub(crate) probe_schema: DataSchemaRef,
     pub(crate) interrupt: Arc<AtomicBool>,
     finished_notify: Arc<Notify>,
@@ -436,10 +437,11 @@ impl JoinHashTable {
         let mut unmatched_build_indexes = Vec::with_capacity(self_row_partner_count.len());
         let mut matched_build_indexes = Vec::with_capacity(self_row_partner_count.len());
         for row_ptr_count in self_row_partner_count.iter() {
-            if 0 == *row_ptr_count.1 {
+            if 0 == row_ptr_count.1.load(Ordering::Relaxed) {
                 unmatched_build_indexes.push(*row_ptr_count.0);
             } else {
-                matched_build_indexes.extend(repeat(*row_ptr_count.0).take(*row_ptr_count.1));
+                matched_build_indexes
+                    .extend(repeat(*row_ptr_count.0).take(row_ptr_count.1.load(Ordering::Relaxed)));
             }
         }
         Ok((unmatched_build_indexes, matched_build_indexes))
@@ -529,7 +531,7 @@ impl HashJoinState for JoinHashTable {
                             JoinType::RightMark | JoinType::Right | JoinType::RightAnti
                         ) {
                             let mut self_row_partner_count = self.row_partner_count.write();
-                            self_row_partner_count.insert(ptr, 0);
+                            self_row_partner_count.insert(ptr, Arc::new(AtomicUsize::new(0)));
                         }
                     }
                     let entity = $table.insert_key(&key, &mut inserted);
@@ -611,7 +613,7 @@ impl HashJoinState for JoinHashTable {
                                 JoinType::RightMark | JoinType::Right | JoinType::RightAnti
                             ) {
                                 let mut self_row_partner_count = self.row_partner_count.write();
-                                self_row_partner_count.insert(ptr, 0);
+                                self_row_partner_count.insert(ptr, Arc::new(AtomicUsize::new(0)));
                             }
                         }
                         let keys_ref = KeysRef::create(key.as_ptr() as usize, key.len());
