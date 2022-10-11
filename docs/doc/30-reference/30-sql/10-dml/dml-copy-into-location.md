@@ -62,26 +62,27 @@ formatTypeOptions ::=
   SKIP_HEADER = <integer>
 ```
 
-| Parameters  | Description | Required |
+| Parameter  | Description | Required |
 | ----------- | ----------- | --- |
-| `RECORD_DELIMITER = '<character>'`  | One or more characters that separate records in the output file. Default `'\n'` | Optional |
-| `FIELD_DELIMITER = '<character>'`  | One or more characters that separate fields in the output file. Default `','` | Optional |
-| `SKIP_HEADER = <integer>`  | Number of lines at the start of the file to skip. Default `0` | Optional |
+| `RECORD_DELIMITER`  | One or more characters that separate records in the output file. Default: `'\n'`. | Optional |
+| `FIELD_DELIMITER`  | One or more characters that separate fields in the output file. Default: `','`. | Optional |
+| `SKIP_HEADER`  | Number of lines at the start of the file to skip. Default: `0`. | Optional |
 
 ### copyOptions
 ```
 copyOptions ::=
-  [ SIZE_LIMIT = <num> ]
+  [ SINGLE = TRUE | FALSE ]
+  [ MAX_FILE_SIZE = <num> ]
 ```
 
-| Parameters  | Description | Required |
+| Parameter  | Description | Required |
 | ----------- | ----------- | --- |
-| `SIZE_LIMIT = <num>` | Number (> 0) that specifies the maximum rows of data to be unloaded for a given COPY statement. Default `0` | Optional |
+| `SINGLE` | When TRUE, the command unloads data into one single file. Default: FALSE. | Optional |
+| `MAX_FILE_SIZE` | The maximum size (in bytes) of each file to be created.<br />Effective when `SINGLE` is FALSE. Default: 67108864 (64 MB). | Optional |
 
 ## Examples
 
-
-### Unloading into an Internal Stage
+The following examples unload data into an internal stage:
 
 ```sql
 -- Create a table
@@ -92,15 +93,14 @@ CREATE TABLE test_table (
 );
 
 -- Insert data into the table
-insert into test_table (id,name,age) values(1,'2',3), (4, '5', 6);
+INSERT INTO test_table (id,name,age) VALUES(1,'2',3), (4, '5', 6);
 
 -- Create an internal stage
 CREATE STAGE s2;
 
+-- Unload the data in the table into a CSV file on the stage
+COPY INTO @s2 FROM test_table FILE_FORMAT = (TYPE = 'CSV');
 
--- Unload the data in the table into the stage as a CSV file
-copy into @s2 from test_table FILE_FORMAT = (type = 'CSV');
-
--- Unload the data from a query into the stage as a Parquet file
-copy into @s2 from (select name, age, id from test_table limit 100) FILE_FORMAT = (type = 'PARQUET');
+-- Unload the data from a query into a parquet file on the stage
+COPY INTO @s2 FROM (SELECT name, age, id FROM test_table LIMIT 100) FILE_FORMAT = (TYPE = 'PARQUET');
 ```
