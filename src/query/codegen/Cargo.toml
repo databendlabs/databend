@@ -19,6 +19,3 @@ common-datavalues = { path = "../datavalues" }
 common-expression = { path = "../expression" }
 
 itertools = "0.10"
-ordered-float = { version = "3.1.0", features = ["serde"] }
-serde = { version = "1.0.145", features = ["derive"] }
-serde_json = "1.0.85"
