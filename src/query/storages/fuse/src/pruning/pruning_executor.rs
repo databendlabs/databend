@@ -180,7 +180,8 @@ impl BlockPruner {
             if let Some(filter_pruner) = &pruning_ctx.filter_pruner {
                 Self::prune_blocks(&pruning_ctx, filter_pruner, segment_idx, &segment_info).await?
             } else {
-                // if no available filter pruners, just prune the blocks in the sync way
+                // if no available filter pruners, just prune the blocks by
+                // using zone map index, and do not spawn async tasks
                 Self::prune_blocks_sync(&pruning_ctx, segment_idx, &segment_info)
             }
         } else {

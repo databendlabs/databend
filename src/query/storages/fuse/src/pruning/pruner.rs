@@ -33,16 +33,6 @@ pub trait Pruner {
     async fn should_keep(&self, index_location: &Option<Location>, index_length: u64) -> bool;
 }
 
-/// dummy pruner that prunes nothing
-pub(crate) struct NonPruner;
-
-#[async_trait::async_trait]
-impl Pruner for NonPruner {
-    async fn should_keep(&self, _: &Option<Location>, _index_length: u64) -> bool {
-        true
-    }
-}
-
 struct FilterPruner {
     ctx: Arc<dyn TableContext>,
 
