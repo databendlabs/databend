@@ -17,7 +17,6 @@ use std::ops::Range;
 use common_arrow::arrow::buffer::Buffer;
 
 use super::number::SimpleDomain;
-use crate::display::display_date;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
@@ -29,33 +28,19 @@ use crate::values::Scalar;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
 
-/// date ranges from 1000-01-01 to 9999-12-31
-/// date_max and date_min means days offset from 1970-01-01
-/// any date not in the range will be invalid
-pub const DATE_MAX: i32 = 2932896;
-pub const DATE_MIN: i32 = -354285;
-
-#[inline]
-pub fn check_date(days: i64) -> Result<(), String> {
-    if (DATE_MIN as i64..=DATE_MAX as i64).contains(&days) {
-        return Ok(());
-    }
-    Err(format!("date `{}` is out of range", display_date(days)))
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DateType;
+pub struct IntervalType;
 
-impl ValueType for DateType {
-    type Scalar = i32;
-    type ScalarRef<'a> = i32;
-    type Column = Buffer<i32>;
-    type Domain = SimpleDomain<i32>;
-    type ColumnIterator<'a> = std::iter::Cloned<std::slice::Iter<'a, i32>>;
-    type ColumnBuilder = Vec<i32>;
+impl ValueType for IntervalType {
+    type Scalar = i64;
+    type ScalarRef<'a> = i64;
+    type Column = Buffer<i64>;
+    type Domain = SimpleDomain<i64>;
+    type ColumnIterator<'a> = std::iter::Cloned<std::slice::Iter<'a, i64>>;
+    type ColumnBuilder = Vec<i64>;
 
     #[inline]
-    fn upcast_gat<'short, 'long: 'short>(long: i32) -> i32 {
+    fn upcast_gat<'short, 'long: 'short>(long: i64) -> i64 {
         long
     }
 
@@ -69,41 +54,41 @@ impl ValueType for DateType {
 
     fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>> {
         match scalar {
-            ScalarRef::Date(scalar) => Some(*scalar),
+            ScalarRef::Interval(scalar) => Some(*scalar),
             _ => None,
         }
     }
 
     fn try_downcast_column<'a>(col: &'a Column) -> Option<Self::Column> {
         match col {
-            Column::Date(column) => Some(column.clone()),
+            Column::Interval(column) => Some(column.clone()),
             _ => None,
         }
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<SimpleDomain<i32>> {
-        domain.as_date().map(SimpleDomain::clone)
+    fn try_downcast_domain(domain: &Domain) -> Option<SimpleDomain<i64>> {
+        domain.as_interval().map(SimpleDomain::clone)
     }
 
     fn try_downcast_builder<'a>(
         builder: &'a mut ColumnBuilder,
     ) -> Option<&'a mut Self::ColumnBuilder> {
         match builder {
-            ColumnBuilder::Date(builder) => Some(builder),
+            ColumnBuilder::Interval(builder) => Some(builder),
             _ => None,
         }
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
-        Scalar::Date(scalar)
+        Scalar::Interval(scalar)
     }
 
     fn upcast_column(col: Self::Column) -> Column {
-        Column::Date(col)
+        Column::Interval(col)
     }
 
-    fn upcast_domain(domain: SimpleDomain<i32>) -> Domain {
-        Domain::Date(domain)
+    fn upcast_domain(domain: SimpleDomain<i64>) -> Domain {
+        Domain::Interval(domain)
     }
 
     fn column_len<'a>(col: &'a Self::Column) -> usize {
@@ -159,9 +144,9 @@ impl ValueType for DateType {
     }
 }
 
-impl ArgType for DateType {
+impl ArgType for IntervalType {
     fn data_type() -> DataType {
-        DataType::Date
+        DataType::Interval
     }
 
     fn create_builder(capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {

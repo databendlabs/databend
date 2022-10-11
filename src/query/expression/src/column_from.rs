@@ -143,8 +143,7 @@ impl<D: AsRef<[f64]>> ColumnFrom<D, [Vec<f64>; 0]> for Column {
 
 // Specialize for `DateType`, because from `Vec<i32>` will be conflict with `Int32Type`.
 pub fn from_date_data(d: Vec<i32>) -> Column {
-    let col = Int32Type::column_from_vec(d, &[]);
-    Column::Date(col)
+    DateType::upcast_column(DateType::column_from_vec(d, &[]))
 }
 
 pub fn from_date_data_with_validity(d: Vec<i32>, valids: Vec<bool>) -> Column {
