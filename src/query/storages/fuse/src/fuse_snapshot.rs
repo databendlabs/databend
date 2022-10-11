@@ -138,7 +138,7 @@ pub async fn read_snapshot_lites_by_root_file(
     // 1. Get all the snapshot by chunks.
     let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
     let mut snapshot_map = HashMap::with_capacity(snapshot_files.len());
-    for chunks in snapshot_files.chunks(max_io_requests) {
+    for chunks in snapshot_files.chunks(max_io_requests * 5) {
         let results = read_snapshots(ctx.clone(), chunks, format_version).await?;
         for snapshot in results.into_iter().flatten() {
             let snapshot_lite = TableSnapshotLite::from(snapshot.as_ref());
