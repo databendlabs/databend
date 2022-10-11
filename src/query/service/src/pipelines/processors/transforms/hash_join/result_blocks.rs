@@ -797,11 +797,11 @@ impl JoinHashTable {
         Key: HashTableKeyable + Clone + 'static,
         IT: Iterator<Item = Key> + TrustedLen,
     {
-        let local_build_indexes = &mut probe_state.build_indexs;
         let probe_indexes = &mut probe_state.probe_indexs;
         let valids = &probe_state.valids;
         let mut validity = MutableBitmap::new();
         let mut build_indexes = self.hash_join_desc.right_join_desc.build_indexes.write();
+        let build_indexes_size = build_indexes.len();
         for (i, key) in keys_iter.enumerate() {
             let probe_result_ptr = Self::probe_key(hash_table, key, valids, i);
             if let Some(v) = probe_result_ptr {
@@ -817,13 +817,14 @@ impl JoinHashTable {
                     }
                 }
                 build_indexes.extend_from_slice(probe_result_ptrs);
-                local_build_indexes.extend_from_slice(probe_result_ptrs);
                 probe_indexes.extend(repeat(i as u32).take(probe_result_ptrs.len()));
                 validity.extend_constant(probe_result_ptrs.len(), true);
             }
         }
 
-        let build_block = self.row_space.gather(local_build_indexes)?;
+        let build_block = self
+            .row_space
+            .gather(&build_indexes[build_indexes_size..])?;
         let mut probe_block = DataBlock::block_take_by_indices(input, probe_indexes)?;
         // If join type is right join, need to wrap nullable for probe side
         // If join type is semi/anti right join, directly merge `build_block` and `probe_block`
