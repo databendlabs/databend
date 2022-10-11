@@ -84,7 +84,12 @@ async fn test_fuse_navigate() -> Result<()> {
     assert_eq!(second_snapshot, loc);
     let version = TableMetaLocationGenerator::snapshot_version(loc.as_str());
     let snapshots: Vec<_> = reader
-        .snapshot_history(loc, version, fuse_table.meta_location_generator().clone())
+        .snapshot_history(
+            fuse_table.get_operator(),
+            loc,
+            version,
+            fuse_table.meta_location_generator().clone(),
+        )
         .try_collect()
         .await?;
 
@@ -143,7 +148,12 @@ async fn test_fuse_historical_table_is_read_only() -> Result<()> {
     let reader = MetaReaders::table_snapshot_reader(ctx.clone());
     let version = TableMetaLocationGenerator::snapshot_version(loc.as_str());
     let snapshots: Vec<_> = reader
-        .snapshot_history(loc, version, fuse_table.meta_location_generator().clone())
+        .snapshot_history(
+            fuse_table.get_operator(),
+            loc,
+            version,
+            fuse_table.meta_location_generator().clone(),
+        )
         .try_collect()
         .await?;
 

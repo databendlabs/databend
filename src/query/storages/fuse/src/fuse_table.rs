@@ -166,6 +166,10 @@ impl FuseTable {
             .cloned()
     }
 
+    pub fn get_operator(&self) -> Operator {
+        self.operator.clone()
+    }
+
     pub fn try_from_table(tbl: &dyn Table) -> Result<&FuseTable> {
         tbl.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
             ErrorCode::LogicalError(format!(

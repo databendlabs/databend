@@ -2071,6 +2071,7 @@ dependencies = [
  "common-meta-types",
  "common-pipeline-core",
  "common-pipeline-sources",
+ "common-storage",
  "common-storages-index",
  "common-storages-util",
  "futures",

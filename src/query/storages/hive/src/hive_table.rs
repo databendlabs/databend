@@ -42,6 +42,8 @@ use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
 use common_pipeline_sources::processors::sources::sync_source::SyncSource;
 use common_pipeline_sources::processors::sources::sync_source::SyncSourcer;
+use common_storage::init_operator;
+use common_storage::StorageOperator;
 use futures::TryStreamExt;
 use opendal::ObjectMode;
 use opendal::Operator;
@@ -60,14 +62,25 @@ pub const HIVE_TABLE_ENGIE: &str = "hive";
 pub struct HiveTable {
     table_info: TableInfo,
     table_options: HiveTableOptions,
+    dal: Operator,
 }
 
 impl HiveTable {
     pub fn try_create(table_info: TableInfo) -> Result<HiveTable> {
         let table_options = table_info.engine_options().try_into()?;
+        let storage_params = table_info.meta.storage_params.clone();
+        let dal = match storage_params {
+            Some(sp) => init_operator(&sp)?,
+            None => {
+                let op = &*(StorageOperator::instance());
+                op.clone()
+            }
+        };
+
         Ok(HiveTable {
             table_info,
             table_options,
+            dal,
         })
     }
 
@@ -123,6 +136,7 @@ impl HiveTable {
                 output.clone(),
                 HiveTableSource::create(
                     ctx.clone(),
+                    self.dal.clone(),
                     output,
                     block_reader.clone(),
                     delay_timer(index),

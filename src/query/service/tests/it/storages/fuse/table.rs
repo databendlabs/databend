@@ -329,6 +329,7 @@ async fn test_fuse_alter_table_cluster_key() -> Result<()> {
     interpreter.execute(ctx.clone()).await?;
 
     let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let table_info = table.get_table_info();
     assert_eq!(table_info.meta.cluster_keys, vec!["(id)".to_string()]);
     assert_eq!(table_info.meta.default_cluster_key_id, Some(0));
@@ -339,7 +340,9 @@ async fn test_fuse_alter_table_cluster_key() -> Result<()> {
         .get(OPT_KEY_SNAPSHOT_LOCATION)
         .unwrap();
     let reader = MetaReaders::table_snapshot_reader(ctx.clone());
-    let snapshot = reader.read(snapshot_loc.as_str(), None, 1).await?;
+    let snapshot = reader
+        .read(fuse_table.get_operator(), snapshot_loc.as_str(), None, 1)
+        .await?;
     let expected = Some((0, "(id)".to_string()));
     assert_eq!(snapshot.cluster_key_meta, expected);
 
@@ -355,6 +358,7 @@ async fn test_fuse_alter_table_cluster_key() -> Result<()> {
     interpreter.execute(ctx.clone()).await?;
 
     let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let table_info = table.get_table_info();
     assert_eq!(table_info.meta.default_cluster_key, None);
     assert_eq!(table_info.meta.default_cluster_key_id, None);
@@ -365,7 +369,9 @@ async fn test_fuse_alter_table_cluster_key() -> Result<()> {
         .get(OPT_KEY_SNAPSHOT_LOCATION)
         .unwrap();
     let reader = MetaReaders::table_snapshot_reader(ctx);
-    let snapshot = reader.read(snapshot_loc.as_str(), None, 1).await?;
+    let snapshot = reader
+        .read(fuse_table.get_operator(), snapshot_loc.as_str(), None, 1)
+        .await?;
     let expected = None;
     assert_eq!(snapshot.cluster_key_meta, expected);
 

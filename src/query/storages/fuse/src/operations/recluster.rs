@@ -99,7 +99,6 @@ impl FuseTable {
             self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
         let mut mutator = ReclusterMutator::try_create(
             ctx.clone(),
-            self.operator.clone(),
             self.meta_location_generator.clone(),
             snapshot,
             threshold,
