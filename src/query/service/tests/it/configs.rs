@@ -147,8 +147,6 @@ access_key_secret = ""
 bucket = ""
 endpoint_url = ""
 root = ""
-oidc_token = ""
-role_arn = ""
 
 [catalog]
 meta_store_address = "127.0.0.1:9083"
@@ -695,8 +693,6 @@ access_key_id = ""
 access_key_secret = ""
 bucket = ""
 root = ""
-role_arn = ""
-oidc_token = ""
 
 [catalog]
 meta_store_address = "127.0.0.1:9083"

@@ -205,8 +205,6 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
                     .cloned()
                     .unwrap_or_default(),
                 root: root.to_string(),
-                oidc_token: l.connection.get("oidc_token").cloned().unwrap_or_default(),
-                role_arn: l.connection.get("role_arn").cloned().unwrap_or_default(),
             })
         }
         Scheme::Http => {

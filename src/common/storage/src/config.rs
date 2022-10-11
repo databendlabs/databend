@@ -352,8 +352,6 @@ pub struct StorageOssConfig {
     pub bucket: String,
     pub access_key_id: String,
     pub access_key_secret: String,
-    pub oidc_token: String,
-    pub role_arn: String,
     pub root: String,
 }
 
@@ -368,8 +366,6 @@ impl Debug for StorageOssConfig {
                 "access_key_secret",
                 &mask_string(&self.access_key_secret, 3),
             )
-            .field("oidc_token", &mask_string(&self.oidc_token, 3))
-            .field("role_arn", &mask_string(&self.role_arn, 3))
             .finish()
     }
 }

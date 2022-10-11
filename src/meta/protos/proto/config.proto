@@ -58,6 +58,4 @@ message OssStorageConfig {
   string root = 3;
   string access_key_id = 4;
   string access_key_secret = 5;
-  string oidc_token = 6;
-  string role_arn = 7;
 }

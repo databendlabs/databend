@@ -716,12 +716,6 @@ pub struct OssStorageConfig {
     #[clap(long = "storage-oss-root", default_value_t)]
     #[serde(rename = "root")]
     pub oss_root: String,
-
-    #[clap(long = "storage-oss-oidc-token", default_value_t)]
-    pub oidc_token: String,
-
-    #[clap(long = "storage-oss-role-arn", default_value_t)]
-    pub role_arn: String,
 }
 
 impl Default for OssStorageConfig {
@@ -741,8 +735,6 @@ impl Debug for OssStorageConfig {
                 "access_key_secret",
                 &mask_string(&self.oss_access_key_secret, 3),
             )
-            .field("oidc_token", &mask_string(&self.oidc_token, 3))
-            .field("role_arn", &mask_string(&self.role_arn, 3))
             .finish()
     }
 }
@@ -755,8 +747,6 @@ impl From<InnerStorageOssConfig> for OssStorageConfig {
             oss_bucket: inner.bucket,
             oss_endpoint_url: inner.endpoint_url,
             oss_root: inner.root,
-            oidc_token: inner.oidc_token,
-            role_arn: inner.role_arn,
         }
     }
 }
@@ -770,8 +760,6 @@ impl TryInto<InnerStorageOssConfig> for OssStorageConfig {
             bucket: self.oss_bucket,
             access_key_id: self.oss_access_key_id,
             access_key_secret: self.oss_access_key_secret,
-            oidc_token: self.oidc_token,
-            role_arn: self.role_arn,
             root: self.oss_root,
         })
     }

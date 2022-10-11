@@ -123,8 +123,6 @@ impl FromToProto for StorageOssConfig {
 
             access_key_id: p.access_key_id,
             access_key_secret: p.access_key_secret,
-            oidc_token: p.oidc_token,
-            role_arn: p.role_arn,
         })
     }
 
@@ -137,8 +135,6 @@ impl FromToProto for StorageOssConfig {
             root: self.root.clone(),
             access_key_id: self.access_key_id.clone(),
             access_key_secret: self.access_key_secret.clone(),
-            oidc_token: self.oidc_token.clone(),
-            role_arn: self.role_arn.clone(),
         })
     }
 }

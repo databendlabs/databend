@@ -171,11 +171,8 @@ pub(crate) fn test_oss_stage_info() -> mt::UserStageInfo {
                 endpoint_url: "https://oss-cn-litang.example.com".to_string(),
                 bucket: "my_bucket".to_string(),
                 root: "/data/files".to_string(),
-
                 access_key_id: "access_key_id".to_string(),
                 access_key_secret: "access_key_secret".to_string(),
-                oidc_token: "oidc_token".to_string(),
-                role_arn: "role_arn".to_string(),
             }),
         },
         file_format_options: mt::FileFormatOptions {

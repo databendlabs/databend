@@ -60,8 +60,6 @@ fn test_parse_uri_location() -> Result<()> {
                     ("endpoint_url", "https://oss-cn-litang.example.com"),
                     ("access_key_id", "dzin"),
                     ("access_key_secret", "p=ear1"),
-                    ("oidc_token", "ric-kV--"),
-                    ("role_arn", "tester"),
                 ]
                 .into_iter()
                 .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -74,8 +72,6 @@ fn test_parse_uri_location() -> Result<()> {
                     bucket: "zhen".to_string(),
                     access_key_id: "dzin".to_string(),
                     access_key_secret: "p=ear1".to_string(),
-                    oidc_token: "ric-kV--".to_string(),
-                    role_arn: "tester".to_string(),
                 }),
                 "/".to_string(),
             ),
