@@ -149,6 +149,7 @@ impl InterpreterQueryLog {
             event_date,
             event_time,
             query_start_time,
+            query_duration_ms: 0,
             current_database,
             databases: "".to_string(),
             tables: "".to_string(),
@@ -199,6 +200,7 @@ impl InterpreterQueryLog {
         let event_time = convert_log_timestamp(now);
         let event_date = (event_time / (24 * 3_600_000_000)) as i32;
         let query_start_time = convert_log_timestamp(ctx.get_created_time());
+        let query_duration_ms = (event_time - query_start_time) / 1_000;
         let dal_metrics = ctx.get_dal_metrics();
 
         let written_rows = ctx.get_write_progress_value().rows as u64;
@@ -259,6 +261,7 @@ impl InterpreterQueryLog {
             event_date,
             event_time,
             query_start_time,
+            query_duration_ms,
             databases: "".to_string(),
             tables: "".to_string(),
             columns: "".to_string(),
