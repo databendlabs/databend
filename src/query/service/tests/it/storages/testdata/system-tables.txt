@@ -101,8 +101,10 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | pid                      | system   | tracing             | BIGINT            |              |                    | false       |         |
 | port                     | system   | clusters            | SMALLINT UNSIGNED |              |                    | false       |         |
 | projections              | system   | query_log           | VARCHAR           |              |                    | false       |         |
+| query_duration_ms        | system   | query_log           | BIGINT            |              |                    | false       |         |
 | query_id                 | system   | query_log           | VARCHAR           |              |                    | false       |         |
 | query_kind               | system   | query_log           | VARCHAR           |              |                    | false       |         |
+| query_start_time         | system   | query_log           | TIMESTAMP(3)      |              |                    | false       |         |
 | query_text               | system   | query_log           | VARCHAR           |              |                    | false       |         |
 | reclustered_bytes        | system   | clustering_history  | BIGINT UNSIGNED   |              |                    | false       |         |
 | reclustered_rows         | system   | clustering_history  | BIGINT UNSIGNED   |              |                    | false       |         |
@@ -238,15 +240,15 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | storage | oss.access_key_secret                |                                |             |
 | storage | oss.bucket                           |                                |             |
 | storage | oss.endpoint_url                     |                                |             |
-| storage | oss.oidc_token                       |                                |             |
-| storage | oss.role_arn                         |                                |             |
 | storage | oss.root                             |                                |             |
 | storage | s3.access_key_id                     |                                |             |
 | storage | s3.bucket                            |                                |             |
 | storage | s3.enable_virtual_host_style         | false                          |             |
 | storage | s3.endpoint_url                      | https://s3.amazonaws.com       |             |
+| storage | s3.external_id                       |                                |             |
 | storage | s3.master_key                        |                                |             |
 | storage | s3.region                            |                                |             |
+| storage | s3.role_arn                          |                                |             |
 | storage | s3.root                              |                                |             |
 | storage | s3.secret_access_key                 |                                |             |
 | storage | s3.security_token                    |                                |             |

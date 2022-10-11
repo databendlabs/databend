@@ -135,7 +135,8 @@ impl FuseTable {
                     }
                     None => {
                         info!("aborting operations");
-                        let _ = self::utils::abort_operations(ctx.as_ref(), operation_log).await;
+                        let _ =
+                            self::utils::abort_operations(self.get_operator(), operation_log).await;
                         break Err(ErrorCode::OCCRetryFailure(format!(
                             "can not fulfill the tx after retries({} times, {} ms), aborted. table name {}, identity {}",
                             retry_times,
@@ -398,16 +399,12 @@ impl FuseTable {
 mod utils {
     use std::collections::BTreeMap;
 
-    use common_catalog::table_context::TableContext;
-
     use super::*;
     #[inline]
     pub async fn abort_operations(
-        ctx: &dyn TableContext,
+        operator: Operator,
         operation_log: TableOperationLog,
     ) -> Result<()> {
-        let operator = ctx.get_storage_operator()?;
-
         for entry in operation_log {
             for block in &entry.segment_info.blocks {
                 let block_location = &block.location.0;

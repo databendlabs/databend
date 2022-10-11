@@ -62,7 +62,8 @@ impl<'a> ClusteringInformation<'a> {
 
         let mut blocks = Vec::new();
         if let Some(snapshot) = snapshot {
-            let reader = MetaReaders::segment_info_reader(self.ctx.as_ref());
+            let reader =
+                MetaReaders::segment_info_reader(self.ctx.as_ref(), self.table.get_operator());
             for (x, ver) in &snapshot.segments {
                 let res = reader.read(x, None, *ver).await?;
                 let mut block = res.blocks.clone();

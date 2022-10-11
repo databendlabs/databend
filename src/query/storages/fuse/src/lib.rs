@@ -20,6 +20,7 @@ mod constants;
 mod fuse_lazy_part;
 mod fuse_part;
 mod fuse_segment;
+mod fuse_snapshot;
 mod fuse_table;
 pub mod io;
 pub mod operations;

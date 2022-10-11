@@ -23,6 +23,9 @@ use common_meta_types::UserPrivilegeSet;
 use crate::role_util::find_all_related_roles;
 use crate::UserApiProvider;
 
+pub const BUILTIN_ROLE_ACCOUNT_ADMIN: &str = "account_admin";
+pub const BUILTIN_ROLE_PUBLIC: &str = "public";
+
 impl UserApiProvider {
     // Get one role from by tenant.
     pub async fn get_role(&self, tenant: &str, role: String) -> Result<RoleInfo> {
@@ -70,14 +73,19 @@ impl UserApiProvider {
         }
     }
 
-    // Ensure the builtin roles inside a tenant. Currently the only builtin role is account_admin,
-    // which has the equivalent privileges of `GRANT ALL ON *.* TO ROLE account_admin`.
+    // Ensure the builtin roles inside a tenant. Currently we have two builtin roles:
+    // 1. ACCOUNT_ADMIN, which has the equivalent privileges of `GRANT ALL ON *.* TO ROLE account_admin`,
+    //    it also contains all roles. ACCOUNT_ADMIN can access the data objects which owned by any role.
+    // 2. PUBLIC, which have no any privilege by default, but every role contains the PUBLIC role.
+    //    The data objects which owned by PUBLIC can be accessed by any role.
     pub async fn ensure_builtin_roles(&self, tenant: &str) -> Result<u64> {
-        let mut role_info = RoleInfo::new("account_admin");
+        let mut role_info = RoleInfo::new(BUILTIN_ROLE_ACCOUNT_ADMIN);
         role_info.grants.grant_privileges(
             &GrantObject::Global,
             UserPrivilegeSet::available_privileges_on_global(),
         );
+        self.add_role(tenant, role_info, true).await?;
+        let role_info = RoleInfo::new(BUILTIN_ROLE_PUBLIC);
         self.add_role(tenant, role_info, true).await
     }
 
@@ -163,6 +171,8 @@ impl UserApiProvider {
         }
     }
 
+    // Find all related roles by role names. Every role have a PUBLIC role, and ACCOUNT_ADMIN
+    // default contains every role.
     async fn find_related_roles(
         &self,
         tenant: &str,
