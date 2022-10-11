@@ -129,6 +129,42 @@ pub(crate) fn test_s3_stage_info() -> mt::UserStageInfo {
     }
 }
 
+pub(crate) fn test_s3_stage_info_v14() -> mt::UserStageInfo {
+    mt::UserStageInfo {
+        stage_name: "s3://mybucket/data/files".to_string(),
+        stage_type: mt::StageType::External,
+        stage_params: mt::StageParams {
+            storage: StorageParams::S3(StorageS3Config {
+                bucket: "mybucket".to_string(),
+                root: "/data/files".to_string(),
+                access_key_id: "my_key_id".to_string(),
+                secret_access_key: "my_secret_key".to_string(),
+                security_token: "my_security_token".to_string(),
+                master_key: "my_master_key".to_string(),
+                role_arn: "aws::iam::xxx".to_string(),
+                external_id: "hello,world".to_string(),
+                ..Default::default()
+            }),
+        },
+        file_format_options: mt::FileFormatOptions {
+            format: mt::StageFileFormatType::Json,
+            skip_header: 1024,
+            field_delimiter: "|".to_string(),
+            record_delimiter: "//".to_string(),
+            compression: mt::StageFileCompression::Bz2,
+        },
+        copy_options: mt::CopyOptions {
+            on_error: mt::OnErrorMode::SkipFileNum(666),
+            size_limit: 1038,
+            purge: true,
+            single: false,
+            max_file_size: 0,
+        },
+        comment: "test".to_string(),
+        ..Default::default()
+    }
+}
+
 // Version 4 added Google Cloud Storage as a stage backend, should be tested
 pub(crate) fn test_gcs_stage_info() -> mt::UserStageInfo {
     mt::UserStageInfo {
@@ -309,6 +345,25 @@ fn test_user_incompatible() -> anyhow::Result<()> {
     }
 
     {
+        let s3_stage_info = test_s3_stage_info_v14();
+        let mut p = s3_stage_info.to_pb()?;
+        p.ver = VER + 1;
+        p.min_compatible = VER + 1;
+
+        let res = mt::UserStageInfo::from_pb(p);
+        assert_eq!(
+            Incompatible {
+                reason: format!(
+                    "executable ver={} is smaller than the message min compatible ver: {}",
+                    VER,
+                    VER + 1
+                )
+            },
+            res.unwrap_err()
+        );
+    }
+
+    {
         let gcs_stage_info = test_gcs_stage_info();
         let mut p = gcs_stage_info.to_pb()?;
         p.ver = VER + 1;
@@ -392,6 +447,17 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("s3_stage_info: {:?}", buf);
+    }
+
+    // Stage on S3 v14
+    {
+        let s3_stage_info = test_s3_stage_info_v14();
+
+        let p = s3_stage_info.to_pb()?;
+
+        let mut buf = vec![];
+        common_protos::prost::Message::encode(&p, &mut buf)?;
+        println!("s3_stage_info_v14: {:?}", buf);
     }
 
     // Stage on GCS, supported in version >=4.

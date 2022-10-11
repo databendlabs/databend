@@ -122,6 +122,8 @@ bucket = ""
 root = ""
 master_key = ""
 enable_virtual_host_style = false
+role_arn = ""
+external_id = ""
 
 [storage.azblob]
 account_name = ""

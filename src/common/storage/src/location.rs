@@ -177,6 +177,18 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
                             anyhow!("value for enable_virtual_host_style is invalid: {err:?}"),
                         )
                     })?,
+                role_arn: l
+                    .connection
+                    .get("role_arn")
+                    .or_else(|| l.connection.get("aws_role_arn"))
+                    .cloned()
+                    .unwrap_or_default(),
+                external_id: l
+                    .connection
+                    .get("external_id")
+                    .or_else(|| l.connection.get("aws_external_id"))
+                    .cloned()
+                    .unwrap_or_default(),
             })
         }
         Scheme::Oss => {

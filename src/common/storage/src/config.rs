@@ -267,6 +267,10 @@ pub struct StorageS3Config {
     /// - Virtual Host Style: `https://bucket.s3.amazonaws.com`
     /// - Path Style: `https://s3.amazonaws.com/bucket`
     pub enable_virtual_host_style: bool,
+    /// The RoleArn that used for AssumeRole.
+    pub role_arn: String,
+    /// The ExternalId that used for AssumeRole.
+    pub external_id: String,
 }
 
 impl Default for StorageS3Config {
@@ -282,6 +286,8 @@ impl Default for StorageS3Config {
             root: "".to_string(),
             disable_credential_loader: false,
             enable_virtual_host_style: false,
+            role_arn: "".to_string(),
+            external_id: "".to_string(),
         }
     }
 }
@@ -295,6 +301,8 @@ impl Debug for StorageS3Config {
             .field("root", &self.root)
             .field("disable_credential_loader", &self.disable_credential_loader)
             .field("enable_virtual_host_style", &self.enable_virtual_host_style)
+            .field("role_arn", &self.role_arn)
+            .field("external_id", &self.external_id)
             .field("access_key_id", &mask_string(&self.access_key_id, 3))
             .field(
                 "secret_access_key",

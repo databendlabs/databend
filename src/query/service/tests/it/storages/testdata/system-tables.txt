@@ -245,8 +245,10 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | storage | s3.bucket                            |                                |             |
 | storage | s3.enable_virtual_host_style         | false                          |             |
 | storage | s3.endpoint_url                      | https://s3.amazonaws.com       |             |
+| storage | s3.external_id                       |                                |             |
 | storage | s3.master_key                        |                                |             |
 | storage | s3.region                            |                                |             |
+| storage | s3.role_arn                          |                                |             |
 | storage | s3.root                              |                                |             |
 | storage | s3.secret_access_key                 |                                |             |
 | storage | s3.security_token                    |                                |             |

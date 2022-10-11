@@ -42,6 +42,8 @@ impl FromToProto for StorageS3Config {
             master_key: p.master_key,
             disable_credential_loader: p.disable_credential_loader,
             enable_virtual_host_style: p.enable_virtual_host_style,
+            role_arn: p.role_arn,
+            external_id: p.external_id,
         })
     }
 
@@ -59,6 +61,8 @@ impl FromToProto for StorageS3Config {
             master_key: self.master_key.clone(),
             disable_credential_loader: self.disable_credential_loader,
             enable_virtual_host_style: self.enable_virtual_host_style,
+            role_arn: self.role_arn.clone(),
+            external_id: self.external_id.clone(),
         })
     }
 }
