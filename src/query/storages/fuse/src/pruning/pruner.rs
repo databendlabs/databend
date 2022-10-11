@@ -117,10 +117,10 @@ pub fn new_filter_pruner(
     filter_exprs: Option<&[LegacyExpression]>,
     schema: &DataSchemaRef,
     dal: Operator,
-) -> Result<Arc<dyn Pruner + Send + Sync>> {
+) -> Result<Option<Arc<dyn Pruner + Send + Sync>>> {
     if let Some(exprs) = filter_exprs {
         if exprs.is_empty() {
-            return Ok(Arc::new(NonPruner));
+            return Ok(None);
         }
         // check if there were applicable filter conditions
         let expr = exprs
@@ -139,18 +139,18 @@ pub fn new_filter_pruner(
                 .map(|n| BlockFilter::build_filter_column_name(&n))
                 .collect();
 
-            return Ok(Arc::new(FilterPruner::new(
+            return Ok(Some(Arc::new(FilterPruner::new(
                 ctx.clone(),
                 filter_block_cols,
                 expr,
                 dal,
                 schema.clone(),
-            )));
+            ))));
         } else {
             tracing::debug!("no point filters found, using NonPruner");
         }
     }
-    Ok(Arc::new(NonPruner))
+    Ok(None)
 }
 
 mod util {

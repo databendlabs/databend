@@ -113,7 +113,6 @@ impl RangeFilter {
             } else {
                 let val_opt = col.apply_stat_value(stats, self.origin.clone())?;
                 if val_opt.is_none() {
-                    eprintln!("returning true from eval");
                     return Ok(true);
                 }
                 columns.push(val_opt.unwrap());
@@ -124,10 +123,7 @@ impl RangeFilter {
 
         match executed_data_block.column(0).get(0) {
             DataValue::Null => Ok(false),
-            other => {
-                let r = other.as_bool();
-                r
-            }
+            other => other.as_bool(),
         }
     }
 }
