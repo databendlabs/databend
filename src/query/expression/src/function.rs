@@ -121,7 +121,12 @@ impl FunctionRegistry {
         params: &[usize],
         args_type: &[DataType],
     ) -> Vec<(FunctionID, Arc<Function>)> {
-        let name = self.aliases.get(name).cloned().unwrap_or(name);
+        let name = name.to_lowercase();
+        let name = self
+            .aliases
+            .get(name.as_str())
+            .cloned()
+            .unwrap_or(name.as_str());
         if params.is_empty() {
             let builtin_funcs = self
                 .funcs

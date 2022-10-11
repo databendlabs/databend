@@ -73,6 +73,22 @@ impl Column {
                     precision: column.precision,
                 })
             }
+            Column::Date(column) => {
+                let d = Self::take_arg_types::<NumberType<i32>, _>(column, indices)
+                    .into_number()
+                    .unwrap()
+                    .into_int32()
+                    .unwrap();
+                Column::Date(d)
+            }
+            Column::Interval(column) => {
+                let i = Self::take_arg_types::<NumberType<i64>, _>(column, indices)
+                    .into_number()
+                    .unwrap()
+                    .into_int64()
+                    .unwrap();
+                Column::Interval(i)
+            }
             Column::Array(column) => {
                 let mut builder = ArrayColumnBuilder::<AnyType>::from_column(column.slice(0..0));
                 builder.reserve(length);
