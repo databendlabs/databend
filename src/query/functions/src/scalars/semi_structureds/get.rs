@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
 use std::fmt;
 
 use common_datavalues::prelude::*;
@@ -185,10 +186,14 @@ fn extract_value_by_field_name<'a>(
             None => {
                 if *ignore_case && value.is_object() {
                     let obj = value.as_object().unwrap();
-                    for (_, (child_key, child_value)) in obj.iter().enumerate() {
-                        if field_name.to_lowercase() == child_key.to_lowercase() {
-                            return Some(child_value);
+                    let mut set = BTreeSet::new();
+                    for key in obj.keys() {
+                        if field_name.eq_ignore_ascii_case(key) {
+                            set.insert(key);
                         }
+                    }
+                    if let Some(key) = set.pop_first() {
+                        return value.get(key);
                     }
                 }
                 None
