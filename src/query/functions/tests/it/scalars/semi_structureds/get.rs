@@ -66,9 +66,7 @@ fn test_get_function() -> Result<()> {
     test_scalar_functions("get", &tests)
 }
 
-// FIXME: failing test
 #[test]
-#[ignore]
 fn test_get_ignore_case_function() -> Result<()> {
     let tests = vec![
         ScalarFunctionTest {
@@ -82,7 +80,7 @@ fn test_get_ignore_case_function() -> Result<()> {
             ],
             expect: Series::from_data(vec![
                 Some(VariantValue::from(json!(2_i32))),
-                Some(VariantValue::from(json!(1_i32))),
+                Some(VariantValue::from(json!(3_i32))),
             ]),
             error: "",
         },
