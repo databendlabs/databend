@@ -48,22 +48,29 @@ pub async fn read_snapshots_by_root_file(
 ) -> Result<Vec<Result<Arc<TableSnapshot>>>> {
     let mut snapshot_files = vec![];
     if let Some(path) = Path::new(&root_snapshot_file).parent() {
-        let snapshot_prefix = path.to_str().unwrap_or("");
-        if snapshot_prefix.contains('/') {
-            let mut ds = data_accessor.object(snapshot_prefix).list().await?;
-            // ObjectStreamer implements `futures::Stream`
-            while let Some(de) = ds.try_next().await? {
-                match de.mode() {
-                    ObjectMode::FILE => {
-                        snapshot_files.push(de.path().to_string());
-                    }
-                    _ => {
-                        warn!(
-                            "find not snapshot file in {:}, found: {:?}",
-                            snapshot_prefix, de
-                        );
-                        continue;
-                    }
+        let mut snapshot_prefix = path.to_str().unwrap_or("").to_string();
+
+        // Check if the prefix:db/table/_ss is reasonable.
+        if !snapshot_prefix.contains('/') {
+            return Ok(vec![]);
+        }
+
+        if !snapshot_prefix.ends_with('/') {
+            snapshot_prefix += "/";
+        }
+
+        let mut ds = data_accessor.object(&snapshot_prefix).list().await?;
+        while let Some(de) = ds.try_next().await? {
+            match de.mode() {
+                ObjectMode::FILE => {
+                    snapshot_files.push(de.path().to_string());
+                }
+                _ => {
+                    warn!(
+                        "Found not snapshot file in {:}, found: {:?}",
+                        snapshot_prefix, de
+                    );
+                    continue;
                 }
             }
         }

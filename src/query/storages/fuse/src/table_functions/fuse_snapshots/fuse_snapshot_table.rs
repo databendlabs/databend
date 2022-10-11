@@ -115,7 +115,7 @@ impl Table for FuseSnapshotTable {
         pipeline.add_pipe(Pipe::SimplePipe {
             inputs_port: vec![],
             outputs_port: vec![output.clone()],
-            processors: vec![FuseHistorySource::create(
+            processors: vec![FuseSnapshotSource::create(
                 ctx,
                 output,
                 self.arg_database_name.to_owned(),
@@ -138,21 +138,21 @@ impl TableFunction for FuseSnapshotTable {
     }
 }
 
-struct FuseHistorySource {
+struct FuseSnapshotSource {
     finish: bool,
     ctx: Arc<dyn TableContext>,
     arg_database_name: String,
     arg_table_name: String,
 }
 
-impl FuseHistorySource {
+impl FuseSnapshotSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         arg_database_name: String,
         arg_table_name: String,
     ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(ctx.clone(), output, FuseHistorySource {
+        AsyncSourcer::create(ctx.clone(), output, FuseSnapshotSource {
             ctx,
             finish: false,
             arg_table_name,
@@ -162,7 +162,7 @@ impl FuseHistorySource {
 }
 
 #[async_trait::async_trait]
-impl AsyncSource for FuseHistorySource {
+impl AsyncSource for FuseSnapshotSource {
     const NAME: &'static str = "fuse_snapshot";
 
     #[async_trait::unboxed_simple]
