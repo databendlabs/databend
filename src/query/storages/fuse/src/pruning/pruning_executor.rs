@@ -12,6 +12,8 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 
 use common_base::base::tokio::sync::Semaphore;
@@ -192,38 +194,39 @@ impl BlockPruner {
         let semaphore = &pruning_ctx.semaphore;
         let tasks = std::iter::from_fn(|| {
             if pruning_ctx.limiter.exceeded() {
-                None
-            } else {
-                if let Some((block_idx, block_meta)) = blocks.next() {
-                    if pruning_ctx
-                        .range_pruner
-                        .should_keep(&block_meta.col_stats, block_meta.row_count)
-                    {
-                        // prune block
-                        let ctx = pruning_ctx.clone();
-                        let row_count = block_meta.row_count;
-                        let index_location = block_meta.bloom_filter_index_location.clone();
-                        let index_size = block_meta.bloom_filter_index_size;
-                        return Some(
-                            async move {
-                                let keep = ctx.limiter.within_limit(row_count)
-                                    && ctx
-                                        .filter_pruner
-                                        .should_keep(&index_location, index_size)
-                                        .await;
-                                (block_idx, keep)
-                            }
-                            .instrument(tracing::debug_span!("prune_block")),
-                        );
-                    }
-                }
-                None
+                return None;
             }
+            type BlockPruningFuture = Pin<Box<dyn Future<Output = (usize, bool)> + Send>>;
+            blocks.next().map(|(block_idx, block_meta)| {
+                if pruning_ctx
+                    .range_pruner
+                    .should_keep(&block_meta.col_stats, block_meta.row_count)
+                {
+                    // prune block
+                    let ctx = pruning_ctx.clone();
+                    let row_count = block_meta.row_count;
+                    let index_location = block_meta.bloom_filter_index_location.clone();
+                    let index_size = block_meta.bloom_filter_index_size;
+                    let v: BlockPruningFuture = Box::pin(async move {
+                        let keep = ctx
+                            .filter_pruner
+                            .should_keep(&index_location, index_size)
+                            .await
+                            && ctx.limiter.within_limit(row_count);
+                        (block_idx, keep)
+                    });
+                    v
+                } else {
+                    Box::pin(async move { (block_idx, false) })
+                }
+            })
         });
 
         let join_handlers = pruning_runtime
             .try_spawn_batch(semaphore.clone(), tasks)
             .await?;
+
+        eprintln!("join handlers size {}", join_handlers.len());
 
         let joint = future::try_join_all(join_handlers)
             .await
