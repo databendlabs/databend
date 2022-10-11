@@ -65,8 +65,6 @@ impl Fragmenter {
         cluster_nodes.iter().map(|node| &node.id).cloned().collect()
     }
 
-    /// Get ids of current executor node.
-    /// This method is basically copied from `QueryFragmentActions::get_executors()`.
     pub fn get_local_executor(ctx: Arc<QueryContext>) -> String {
         ctx.get_cluster().local_id()
     }

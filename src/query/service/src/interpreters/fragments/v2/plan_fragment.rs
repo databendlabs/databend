@@ -85,7 +85,7 @@ impl PlanFragment {
                     .iter()
                     .any(|fragment| matches!(&fragment.exchange, Some(DataExchange::Merge(_))))
                 {
-                    // If this is a intermidiate fragment with merge input,
+                    // If this is a intermediate fragment with merge input,
                     // we will only send it to coordinator node.
                     let action = QueryFragmentAction::create_v2(
                         Fragmenter::get_local_executor(ctx),
@@ -93,7 +93,7 @@ impl PlanFragment {
                     );
                     fragment_actions.add_action(action);
                 } else {
-                    // Otherwise distribute the fragement to all the executors.
+                    // Otherwise distribute the fragment to all the executors.
                     for executor in Fragmenter::get_executors(ctx) {
                         let action = QueryFragmentAction::create_v2(executor, self.plan.clone());
                         fragment_actions.add_action(action);
