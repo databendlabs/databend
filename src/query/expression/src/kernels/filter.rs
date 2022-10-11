@@ -161,6 +161,14 @@ impl Column {
                     precision: column.precision,
                 })
             }
+            Column::Date(column) => {
+                let d = Self::filter_primitive_types(column, filter);
+                Column::Date(d)
+            }
+            Column::Interval(column) => {
+                let i = Self::filter_primitive_types(column, filter);
+                Column::Interval(i)
+            }
             Column::Array(column) => {
                 let mut builder = ArrayColumnBuilder::<AnyType>::from_column(column.slice(0..0));
                 builder.reserve(length);

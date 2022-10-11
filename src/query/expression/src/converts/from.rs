@@ -48,6 +48,8 @@ pub fn from_type(datatype: &DataTypeImpl) -> DataType {
         DataTypeImpl::Nullable(v) => DataType::Nullable(Box::new(from_type(v.inner_type()))),
         DataTypeImpl::Boolean(_) => DataType::Boolean,
         DataTypeImpl::Timestamp(_) => DataType::Timestamp,
+        DataTypeImpl::Date(_) => DataType::Date,
+        DataTypeImpl::Interval(_) => DataType::Interval,
         DataTypeImpl::String(_) => DataType::String,
         DataTypeImpl::Struct(ty) => {
             let inners = ty.types().iter().map(from_type).collect();
@@ -57,8 +59,6 @@ pub fn from_type(datatype: &DataTypeImpl) -> DataType {
         DataTypeImpl::Variant(_)
         | DataTypeImpl::VariantArray(_)
         | DataTypeImpl::VariantObject(_) => DataType::Variant,
-        DataTypeImpl::Date(_) => unreachable!(),
-        DataTypeImpl::Interval(_) => unreachable!(),
     })
 }
 
@@ -105,7 +105,8 @@ pub fn from_scalar(datavalue: &DataValue, datatype: &DataTypeImpl) -> Scalar {
             ts: datavalue.as_i64().unwrap(),
             precision: t.precision() as u8,
         }),
-
+        DataTypeImpl::Date(_) => Scalar::Date(datavalue.as_i64().unwrap() as i32),
+        DataTypeImpl::Interval(_) => Scalar::Interval(datavalue.as_i64().unwrap() as i64),
         DataTypeImpl::String(_) => Scalar::String(datavalue.as_string().unwrap()),
         DataTypeImpl::Struct(types) => {
             let values = match datavalue {
@@ -148,8 +149,6 @@ pub fn from_scalar(datavalue: &DataValue, datatype: &DataTypeImpl) -> Scalar {
             let v: Vec<u8> = serde_json::to_vec(value).unwrap();
             Scalar::Variant(v)
         }
-        DataTypeImpl::Date(_) => todo!(),
-        DataTypeImpl::Interval(_) => todo!(),
         _ => unreachable!(),
     }
 }

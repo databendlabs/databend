@@ -20,6 +20,7 @@ use common_exception::Result;
 use common_fuse_meta::meta::ClusterStatistics;
 use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::TableSnapshot;
+use opendal::Operator;
 
 use crate::io::BlockWriter;
 use crate::io::TableMetaLocationGenerator;
@@ -39,11 +40,12 @@ pub struct DeletionMutator {
 impl DeletionMutator {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
+        op: Operator,
         location_generator: TableMetaLocationGenerator,
         base_snapshot: Arc<TableSnapshot>,
         cluster_stats_gen: ClusterStatsGenerator,
     ) -> Result<Self> {
-        let base_mutator = BaseMutator::try_create(ctx, location_generator, base_snapshot)?;
+        let base_mutator = BaseMutator::try_create(ctx, op, location_generator, base_snapshot)?;
         Ok(Self {
             base_mutator,
             cluster_stats_gen,

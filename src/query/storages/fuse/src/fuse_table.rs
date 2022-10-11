@@ -133,7 +133,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
     ) -> Result<Option<Arc<TableSnapshot>>> {
         if let Some(loc) = self.snapshot_loc() {
-            let reader = MetaReaders::table_snapshot_reader(ctx);
+            let reader = MetaReaders::table_snapshot_reader(ctx, self.get_operator());
             let ver = self.snapshot_format_version();
             Ok(Some(reader.read(loc.as_str(), None, ver).await?))
         } else {
@@ -160,6 +160,10 @@ impl FuseTable {
             // for backward compatibility, we check the legacy table option
             .or_else(|| options.get(OPT_KEY_LEGACY_SNAPSHOT_LOC))
             .cloned()
+    }
+
+    pub fn get_operator(&self) -> Operator {
+        self.operator.clone()
     }
 
     pub fn try_from_table(tbl: &dyn Table) -> Result<&FuseTable> {

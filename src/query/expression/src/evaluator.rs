@@ -29,12 +29,24 @@ use crate::function::FunctionContext;
 use crate::property::Domain;
 use crate::types::any::AnyType;
 use crate::types::array::ArrayColumn;
+use crate::types::date::check_date;
+use crate::types::date::DATE_MAX;
+use crate::types::date::DATE_MIN;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableDomain;
 use crate::types::number::NumberColumn;
 use crate::types::number::NumberDataType;
 use crate::types::number::NumberDomain;
 use crate::types::number::NumberScalar;
+use crate::types::number::SimpleDomain;
+use crate::types::timestamp::check_timestamp;
+use crate::types::timestamp::Timestamp;
+use crate::types::timestamp::TimestampColumn;
+use crate::types::timestamp::TimestampDomain;
+use crate::types::timestamp::MICROS_IN_A_SEC;
+use crate::types::timestamp::PRECISION_MICRO;
+use crate::types::timestamp::TIMESTAMP_MAX;
+use crate::types::timestamp::TIMESTAMP_MIN;
 use crate::types::variant::cast_scalar_to_variant;
 use crate::types::variant::cast_scalars_to_variants;
 use crate::types::DataType;
@@ -204,12 +216,121 @@ impl<'a> Evaluator<'a> {
                 Ok(Scalar::Number(new_number))
             }
 
+            (Scalar::Number(num), DataType::Timestamp) => {
+                let ts = with_number_type!(|SRC_TYPE| match num {
+                    NumberScalar::SRC_TYPE(value) => {
+                        if NumberDataType::SRC_TYPE.can_lossless_cast_to(NumberDataType::Int64) {
+                            let (precision, base) =
+                                check_timestamp(value.as_()).map_err(|e| (span.clone(), e))?;
+                            Timestamp {
+                                precision,
+                                ts: base * AsPrimitive::<i64>::as_(value),
+                            }
+                        } else {
+                            let value: i64 = num_traits::cast::cast(value).ok_or_else(|| {
+                                (
+                                    span.clone(),
+                                    format!(
+                                        "unable to cast {} to TimestampType",
+                                        ScalarRef::Number(num),
+                                    ),
+                                )
+                            })?;
+                            let (precision, base) =
+                                check_timestamp(value).map_err(|e| (span.clone(), e))?;
+                            Timestamp {
+                                precision,
+                                ts: base * value,
+                            }
+                        }
+                    }
+                });
+                Ok(Scalar::Timestamp(ts))
+            }
+
+            (Scalar::Number(num), DataType::Date) => {
+                let days = with_number_type!(|SRC_TYPE| match num {
+                    NumberScalar::SRC_TYPE(value) => {
+                        if NumberDataType::SRC_TYPE.can_lossless_cast_to(NumberDataType::Int64) {
+                            check_date(value.as_()).map_err(|e| (span.clone(), e))?;
+                            AsPrimitive::<i32>::as_(value)
+                        } else {
+                            let value: i64 = num_traits::cast::cast(value).ok_or_else(|| {
+                                (
+                                    span.clone(),
+                                    format!(
+                                        "unable to cast {} to DateType",
+                                        ScalarRef::Number(num),
+                                    ),
+                                )
+                            })?;
+                            check_date(value).map_err(|e| (span.clone(), e))?;
+                            value.as_()
+                        }
+                    }
+                });
+                Ok(Scalar::Date(days))
+            }
+
+            (Scalar::Timestamp(Timestamp { ts: value, .. }), DataType::Number(dest_ty)) => {
+                let new_number = with_number_type!(|DEST_TYPE| match dest_ty {
+                    NumberDataType::DEST_TYPE => {
+                        if NumberDataType::Int64.can_lossless_cast_to(*dest_ty) {
+                            NumberScalar::DEST_TYPE(value.as_())
+                        } else {
+                            let value = num_traits::cast::cast(value).ok_or_else(|| {
+                                (
+                                    span.clone(),
+                                    format!(
+                                        "unable to cast TimestampType to {}",
+                                        stringify!(DEST_TYPE)
+                                    ),
+                                )
+                            })?;
+                            NumberScalar::DEST_TYPE(value)
+                        }
+                    }
+                });
+                Ok(Scalar::Number(new_number))
+            }
+
+            (Scalar::Date(value), DataType::Number(dest_ty)) => {
+                let new_number = with_number_type!(|DEST_TYPE| match dest_ty {
+                    NumberDataType::DEST_TYPE => {
+                        if NumberDataType::Int32.can_lossless_cast_to(*dest_ty) {
+                            NumberScalar::DEST_TYPE(value.as_())
+                        } else {
+                            let value = num_traits::cast::cast(value).ok_or_else(|| {
+                                (
+                                    span.clone(),
+                                    format!("unable to cast DateType to {}", stringify!(DEST_TYPE)),
+                                )
+                            })?;
+                            NumberScalar::DEST_TYPE(value)
+                        }
+                    }
+                });
+                Ok(Scalar::Number(new_number))
+            }
+
+            (Scalar::Timestamp(ts), DataType::Date) => Ok(Scalar::Date(ts.to_days())),
+
+            (Scalar::Date(value), DataType::Timestamp) => {
+                let ts = (value as i64) * 24 * 3600 * MICROS_IN_A_SEC;
+                Ok(Scalar::Timestamp(Timestamp {
+                    precision: PRECISION_MICRO,
+                    ts,
+                }))
+            }
+
             // identical types
             (scalar @ Scalar::Null, DataType::Null)
             | (scalar @ Scalar::EmptyArray, DataType::EmptyArray)
             | (scalar @ Scalar::Boolean(_), DataType::Boolean)
             | (scalar @ Scalar::String(_), DataType::String)
-            | (scalar @ Scalar::Timestamp(_), DataType::Timestamp) => Ok(scalar),
+            | (scalar @ Scalar::Timestamp(_), DataType::Timestamp)
+            | (scalar @ Scalar::Date(_), DataType::Date)
+            | (scalar @ Scalar::Interval(_), DataType::Interval) => Ok(scalar),
 
             (scalar, dest_ty) => Err((
                 span,
@@ -310,12 +431,138 @@ impl<'a> Evaluator<'a> {
                 Ok(Column::Number(new_column))
             }
 
+            (Column::Number(col), DataType::Timestamp) => {
+                let new_column = with_number_type!(|SRC_TYPE| match col {
+                    NumberColumn::SRC_TYPE(col) => {
+                        if NumberDataType::SRC_TYPE.can_lossless_cast_to(NumberDataType::Int64) {
+                            col.iter()
+                                .map(|x| {
+                                    check_timestamp(x.as_())
+                                        .map_err(|e| (span.clone(), e))
+                                        .map(|(_, b)| b * AsPrimitive::<i64>::as_(*x))
+                                })
+                                .collect::<Result<Vec<_>>>()?
+                        } else {
+                            let mut new_col = Vec::with_capacity(col.len());
+                            for &val in col.iter() {
+                                let new_val: i64 =
+                                    num_traits::cast::cast(val).ok_or_else(|| {
+                                        (
+                                            span.clone(),
+                                            format!("unable to cast {} to TimestampType", val,),
+                                        )
+                                    })?;
+                                let (_, base) =
+                                    check_timestamp(new_val).map_err(|e| (span.clone(), e))?;
+                                new_col.push(base * new_val);
+                            }
+                            new_col
+                        }
+                    }
+                });
+                Ok(Column::Timestamp(TimestampColumn {
+                    ts: new_column.into(),
+                    precision: PRECISION_MICRO,
+                }))
+            }
+
+            (Column::Number(col), DataType::Date) => {
+                let new_column = with_number_type!(|SRC_TYPE| match col {
+                    NumberColumn::SRC_TYPE(col) => {
+                        if NumberDataType::SRC_TYPE.can_lossless_cast_to(NumberDataType::Int64) {
+                            col.iter()
+                                .map(|x| {
+                                    check_date(x.as_())
+                                        .map_err(|e| (span.clone(), e))
+                                        .map(|_| AsPrimitive::<i32>::as_(*x))
+                                })
+                                .collect::<Result<Vec<_>>>()?
+                        } else {
+                            let mut new_col = Vec::with_capacity(col.len());
+                            for &val in col.iter() {
+                                let new_val: i64 =
+                                    num_traits::cast::cast(val).ok_or_else(|| {
+                                        (
+                                            span.clone(),
+                                            format!("unable to cast {} to DateType", val),
+                                        )
+                                    })?;
+                                check_date(new_val).map_err(|e| (span.clone(), e))?;
+                                new_col.push(new_val.as_());
+                            }
+                            new_col
+                        }
+                    }
+                });
+                Ok(Column::Date(new_column.into()))
+            }
+
+            (Column::Timestamp(TimestampColumn { ts: col, .. }), DataType::Number(dest_ty)) => {
+                let new_column = with_number_type!(|DEST_TYPE| match dest_ty {
+                    NumberDataType::DEST_TYPE => {
+                        if NumberDataType::Int64.can_lossless_cast_to(*dest_ty) {
+                            let new_col = col.iter().map(|x| x.as_()).collect::<Vec<_>>();
+                            NumberColumn::DEST_TYPE(new_col.into())
+                        } else {
+                            let mut new_col = Vec::with_capacity(col.len());
+                            for &val in col.iter() {
+                                let new_val = num_traits::cast::cast(val).ok_or_else(|| {
+                                    (
+                                        span.clone(),
+                                        format!("unable to cast TimestampType to {}", val),
+                                    )
+                                })?;
+                                new_col.push(new_val);
+                            }
+                            NumberColumn::DEST_TYPE(new_col.into())
+                        }
+                    }
+                });
+                Ok(Column::Number(new_column))
+            }
+
+            (Column::Date(col), DataType::Number(dest_ty)) => {
+                let new_column = with_number_type!(|DEST_TYPE| match dest_ty {
+                    NumberDataType::DEST_TYPE => {
+                        if NumberDataType::Int32.can_lossless_cast_to(*dest_ty) {
+                            let new_col = col.iter().map(|x| x.as_()).collect::<Vec<_>>();
+                            NumberColumn::DEST_TYPE(new_col.into())
+                        } else {
+                            let mut new_col = Vec::with_capacity(col.len());
+                            for &val in col.iter() {
+                                let new_val = num_traits::cast::cast(val).ok_or_else(|| {
+                                    (span.clone(), format!("unable to cast DateType to {}", val))
+                                })?;
+                                new_col.push(new_val);
+                            }
+                            NumberColumn::DEST_TYPE(new_col.into())
+                        }
+                    }
+                });
+                Ok(Column::Number(new_column))
+            }
+
+            (Column::Timestamp(ts), DataType::Date) => Ok(Column::Date(ts.to_days().into())),
+
+            (Column::Date(col), DataType::Timestamp) => {
+                let new_col = col
+                    .iter()
+                    .map(|&x| (x as i64) * 24 * 3600 * MICROS_IN_A_SEC)
+                    .collect::<Vec<_>>();
+                Ok(Column::Timestamp(TimestampColumn {
+                    precision: PRECISION_MICRO,
+                    ts: new_col.into(),
+                }))
+            }
+
             // identical types
             (col @ Column::Null { .. }, DataType::Null)
             | (col @ Column::EmptyArray { .. }, DataType::EmptyArray)
             | (col @ Column::Boolean(_), DataType::Boolean)
             | (col @ Column::String { .. }, DataType::String)
-            | (col @ Column::Timestamp { .. }, DataType::Timestamp) => Ok(col),
+            | (col @ Column::Timestamp { .. }, DataType::Timestamp)
+            | (col @ Column::Date(_), DataType::Date)
+            | (col @ Column::Interval(_), DataType::Interval) => Ok(col),
 
             (col, dest_ty) => Err((span, (format!("unable to cast {col:?} to {dest_ty}")))),
         }
@@ -432,11 +679,196 @@ impl<'a> Evaluator<'a> {
                 })
             }
 
+            (Column::Number(col), DataType::Timestamp) => {
+                with_number_type!(|SRC_TYPE| match col {
+                    NumberColumn::SRC_TYPE(col) => {
+                        if NumberDataType::SRC_TYPE.can_lossless_cast_to(NumberDataType::Int64) {
+                            let mut validity = constant_bitmap(true, col.len());
+                            let new_col = col
+                                .iter()
+                                .enumerate()
+                                .map(|(i, x)| {
+                                    check_timestamp(x.as_())
+                                        .map(|(_, b)| b * AsPrimitive::<i64>::as_(*x))
+                                        .unwrap_or_else(|_| {
+                                            validity.set(i, false);
+                                            0
+                                        })
+                                })
+                                .collect::<Vec<_>>();
+                            Column::Nullable(Box::new(NullableColumn {
+                                validity: validity.into(),
+                                column: Column::Timestamp(TimestampColumn {
+                                    ts: new_col.into(),
+                                    precision: PRECISION_MICRO,
+                                }),
+                            }))
+                        } else {
+                            let mut new_col = Vec::with_capacity(col.len());
+                            let mut validity = MutableBitmap::with_capacity(col.len());
+                            for &val in col.iter() {
+                                if let Some(new_val) = num_traits::cast::cast(val) {
+                                    if check_timestamp(new_val).is_ok() {
+                                        new_col.push(new_val);
+                                        validity.push(true);
+                                    } else {
+                                        new_col.push(Default::default());
+                                        validity.push(false);
+                                    }
+                                } else {
+                                    new_col.push(Default::default());
+                                    validity.push(false);
+                                }
+                            }
+                            Column::Nullable(Box::new(NullableColumn {
+                                validity: validity.into(),
+                                column: Column::Timestamp(TimestampColumn {
+                                    ts: new_col.into(),
+                                    precision: PRECISION_MICRO,
+                                }),
+                            }))
+                        }
+                    }
+                })
+            }
+
+            (Column::Number(col), DataType::Date) => {
+                with_number_type!(|SRC_TYPE| match col {
+                    NumberColumn::SRC_TYPE(col) => {
+                        if NumberDataType::SRC_TYPE.can_lossless_cast_to(NumberDataType::Int64) {
+                            let mut validity = constant_bitmap(true, col.len());
+                            let new_col = col
+                                .iter()
+                                .enumerate()
+                                .map(|(i, x)| {
+                                    check_date(x.as_())
+                                        .map(|_| AsPrimitive::<i32>::as_(*x))
+                                        .unwrap_or_else(|_| {
+                                            validity.set(i, false);
+                                            0
+                                        })
+                                })
+                                .collect::<Vec<_>>();
+                            Column::Nullable(Box::new(NullableColumn {
+                                validity: validity.into(),
+                                column: Column::Date(new_col.into()),
+                            }))
+                        } else {
+                            let mut new_col: Vec<i32> = Vec::with_capacity(col.len());
+                            let mut validity = MutableBitmap::with_capacity(col.len());
+                            for &val in col.iter() {
+                                if let Some(new_val) = num_traits::cast::cast(val) {
+                                    if check_date(new_val).is_ok() {
+                                        new_col.push(new_val.as_());
+                                        validity.push(true);
+                                    } else {
+                                        new_col.push(Default::default());
+                                        validity.push(false);
+                                    }
+                                } else {
+                                    new_col.push(Default::default());
+                                    validity.push(false);
+                                }
+                            }
+                            Column::Nullable(Box::new(NullableColumn {
+                                validity: validity.into(),
+                                column: Column::Date(new_col.into()),
+                            }))
+                        }
+                    }
+                })
+            }
+
+            (Column::Timestamp(TimestampColumn { ts: col, .. }), DataType::Number(dest_ty)) => {
+                with_number_type!(|DEST_TYPE| match dest_ty {
+                    NumberDataType::DEST_TYPE => {
+                        if NumberDataType::Int64.can_lossless_cast_to(*dest_ty) {
+                            let new_col = col.iter().map(|x| x.as_()).collect::<Vec<_>>();
+                            Column::Nullable(Box::new(NullableColumn {
+                                validity: constant_bitmap(true, new_col.len()).into(),
+                                column: Column::Number(NumberColumn::DEST_TYPE(new_col.into())),
+                            }))
+                        } else {
+                            let mut new_col = Vec::with_capacity(col.len());
+                            let mut validity = MutableBitmap::with_capacity(col.len());
+                            for &val in col.iter() {
+                                if let Some(new_val) = num_traits::cast::cast(val) {
+                                    new_col.push(new_val);
+                                    validity.push(true);
+                                } else {
+                                    new_col.push(Default::default());
+                                    validity.push(false);
+                                }
+                            }
+                            Column::Nullable(Box::new(NullableColumn {
+                                validity: validity.into(),
+                                column: Column::Number(NumberColumn::DEST_TYPE(new_col.into())),
+                            }))
+                        }
+                    }
+                })
+            }
+
+            (Column::Date(col), DataType::Number(dest_ty)) => {
+                with_number_type!(|DEST_TYPE| match dest_ty {
+                    NumberDataType::DEST_TYPE => {
+                        if NumberDataType::Int32.can_lossless_cast_to(*dest_ty) {
+                            let new_col = col.iter().map(|x| x.as_()).collect::<Vec<_>>();
+                            Column::Nullable(Box::new(NullableColumn {
+                                validity: constant_bitmap(true, new_col.len()).into(),
+                                column: Column::Number(NumberColumn::DEST_TYPE(new_col.into())),
+                            }))
+                        } else {
+                            let mut new_col = Vec::with_capacity(col.len());
+                            let mut validity = MutableBitmap::with_capacity(col.len());
+                            for &val in col.iter() {
+                                if let Some(new_val) = num_traits::cast::cast(val) {
+                                    new_col.push(new_val);
+                                    validity.push(true);
+                                } else {
+                                    new_col.push(Default::default());
+                                    validity.push(false);
+                                }
+                            }
+                            Column::Nullable(Box::new(NullableColumn {
+                                validity: validity.into(),
+                                column: Column::Number(NumberColumn::DEST_TYPE(new_col.into())),
+                            }))
+                        }
+                    }
+                })
+            }
+
+            (Column::Timestamp(col), DataType::Date) => {
+                let new_col = Column::Date(col.to_days().into());
+                Column::Nullable(Box::new(NullableColumn {
+                    validity: constant_bitmap(true, col.len()).into(),
+                    column: new_col,
+                }))
+            }
+
+            (Column::Date(col), DataType::Timestamp) => {
+                let new_col = col
+                    .iter()
+                    .map(|&x| (x as i64) * 24 * 3600 * MICROS_IN_A_SEC)
+                    .collect::<Vec<_>>();
+                let new_col = Column::Timestamp(TimestampColumn {
+                    precision: PRECISION_MICRO,
+                    ts: new_col.into(),
+                });
+                Column::Nullable(Box::new(NullableColumn {
+                    validity: constant_bitmap(true, col.len()).into(),
+                    column: new_col,
+                }))
+            }
+
             // identical types
             (column @ Column::Boolean(_), DataType::Boolean)
             | (column @ Column::String { .. }, DataType::String)
             | (column @ Column::EmptyArray { .. }, DataType::EmptyArray)
-            | (column @ Column::Timestamp { .. }, DataType::Timestamp) => {
+            | (column @ Column::Timestamp { .. }, DataType::Timestamp)
+            | (column @ Column::Date(_), DataType::Date)
+            | (column @ Column::Interval(_), DataType::Interval) => {
                 Column::Nullable(Box::new(NullableColumn {
                     validity: constant_bitmap(true, column.len()).into(),
                     column,
@@ -679,10 +1111,87 @@ impl<'a> ConstantFolder<'a> {
                 })
             }
 
+            (Domain::Number(domain), DataType::Timestamp) => {
+                with_number_type!(|SRC_TYPE| match domain {
+                    NumberDomain::SRC_TYPE(domain) => {
+                        let (domain, overflowing) =
+                            domain.overflow_cast_with_minmax(TIMESTAMP_MIN, TIMESTAMP_MAX);
+                        if overflowing {
+                            None
+                        } else {
+                            Some(Domain::Timestamp(TimestampDomain {
+                                min: domain.min,
+                                max: domain.max,
+                                precision: PRECISION_MICRO,
+                            }))
+                        }
+                    }
+                })
+            }
+
+            (Domain::Number(domain), DataType::Date) => {
+                with_number_type!(|SRC_TYPE| match domain {
+                    NumberDomain::SRC_TYPE(domain) => {
+                        let (domain, overflowing) =
+                            domain.overflow_cast_with_minmax(DATE_MIN, DATE_MAX);
+                        if overflowing {
+                            None
+                        } else {
+                            Some(Domain::Date(domain))
+                        }
+                    }
+                })
+            }
+
+            (Domain::Timestamp(domain), DataType::Number(dest_ty)) => {
+                with_number_type!(|DEST_TYPE| match dest_ty {
+                    NumberDataType::DEST_TYPE => {
+                        let simple_domain = SimpleDomain {
+                            min: domain.min,
+                            max: domain.max,
+                        };
+                        let (domain, overflowing) = simple_domain.overflow_cast();
+                        if overflowing {
+                            None
+                        } else {
+                            Some(Domain::Number(NumberDomain::DEST_TYPE(domain)))
+                        }
+                    }
+                })
+            }
+
+            (Domain::Date(domain), DataType::Number(dest_ty)) => {
+                with_number_type!(|DEST_TYPE| match dest_ty {
+                    NumberDataType::DEST_TYPE => {
+                        let (domain, overflowing) = domain.overflow_cast();
+                        if overflowing {
+                            None
+                        } else {
+                            Some(Domain::Number(NumberDomain::DEST_TYPE(domain)))
+                        }
+                    }
+                })
+            }
+
+            (Domain::Timestamp(domain), DataType::Date) => Some(Domain::Date(SimpleDomain {
+                min: (domain.min / 1000000 / 24 / 3600) as i32,
+                max: (domain.max / 1000000 / 24 / 3600) as i32,
+            })),
+
+            (Domain::Date(domain), DataType::Timestamp) => {
+                Some(Domain::Timestamp(TimestampDomain {
+                    min: domain.min as i64 * 24 * 3600 * 1000000,
+                    max: domain.max as i64 * 24 * 3600 * 1000000,
+                    precision: PRECISION_MICRO,
+                }))
+            }
+
             // identical types
             (Domain::Boolean(_), DataType::Boolean)
             | (Domain::String(_), DataType::String)
-            | (Domain::Timestamp(_), DataType::Timestamp) => Some(domain.clone()),
+            | (Domain::Timestamp(_), DataType::Timestamp)
+            | (Domain::Date(_), DataType::Date)
+            | (Domain::Interval(_), DataType::Interval) => Some(domain.clone()),
 
             // failure cases
             _ => None,
@@ -759,10 +1268,87 @@ impl<'a> ConstantFolder<'a> {
                 })
             }
 
+            (Domain::Number(domain), DataType::Timestamp) => {
+                with_number_type!(|SRC_TYPE| match domain {
+                    NumberDomain::SRC_TYPE(domain) => {
+                        let (domain, overflowing) =
+                            domain.overflow_cast_with_minmax(TIMESTAMP_MIN, TIMESTAMP_MAX);
+                        Domain::Nullable(NullableDomain {
+                            has_null: overflowing,
+                            value: Some(Box::new(Domain::Timestamp(TimestampDomain {
+                                min: domain.min,
+                                max: domain.max,
+                                precision: PRECISION_MICRO,
+                            }))),
+                        })
+                    }
+                })
+            }
+
+            (Domain::Number(domain), DataType::Date) => {
+                with_number_type!(|SRC_TYPE| match domain {
+                    NumberDomain::SRC_TYPE(domain) => {
+                        let (domain, overflowing) =
+                            domain.overflow_cast_with_minmax(DATE_MIN, DATE_MAX);
+                        Domain::Nullable(NullableDomain {
+                            has_null: overflowing,
+                            value: Some(Box::new(Domain::Date(domain))),
+                        })
+                    }
+                })
+            }
+
+            (Domain::Timestamp(domain), DataType::Number(dest_ty)) => {
+                with_number_type!(|DEST_TYPE| match dest_ty {
+                    NumberDataType::DEST_TYPE => {
+                        let simple_domain = SimpleDomain {
+                            min: domain.min,
+                            max: domain.max,
+                        };
+                        let (domain, overflowing) = simple_domain.overflow_cast();
+                        Domain::Nullable(NullableDomain {
+                            has_null: overflowing,
+                            value: Some(Box::new(Domain::Number(NumberDomain::DEST_TYPE(domain)))),
+                        })
+                    }
+                })
+            }
+
+            (Domain::Date(domain), DataType::Number(dest_ty)) => {
+                with_number_type!(|DEST_TYPE| match dest_ty {
+                    NumberDataType::DEST_TYPE => {
+                        let (domain, overflowing) = domain.overflow_cast();
+                        Domain::Nullable(NullableDomain {
+                            has_null: overflowing,
+                            value: Some(Box::new(Domain::Number(NumberDomain::DEST_TYPE(domain)))),
+                        })
+                    }
+                })
+            }
+
+            (Domain::Timestamp(domain), DataType::Date) => Domain::Nullable(NullableDomain {
+                has_null: false,
+                value: Some(Box::new(Domain::Date(SimpleDomain {
+                    min: (domain.min / 1000000 / 24 / 3600) as i32,
+                    max: (domain.max / 1000000 / 24 / 3600) as i32,
+                }))),
+            }),
+
+            (Domain::Date(domain), DataType::Timestamp) => Domain::Nullable(NullableDomain {
+                has_null: false,
+                value: Some(Box::new(Domain::Timestamp(TimestampDomain {
+                    min: domain.min as i64 * 24 * 3600 * 1000000,
+                    max: domain.max as i64 * 24 * 3600 * 1000000,
+                    precision: PRECISION_MICRO,
+                }))),
+            }),
+
             // identical types
             (Domain::Boolean(_), DataType::Boolean)
             | (Domain::String(_), DataType::String)
-            | (Domain::Timestamp(_), DataType::Timestamp) => Domain::Nullable(NullableDomain {
+            | (Domain::Timestamp(_), DataType::Timestamp)
+            | (Domain::Date(_), DataType::Date)
+            | (Domain::Interval(_), DataType::Interval) => Domain::Nullable(NullableDomain {
                 has_null: false,
                 value: Some(Box::new(domain.clone())),
             }),
