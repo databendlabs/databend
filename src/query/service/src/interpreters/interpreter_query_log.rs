@@ -94,9 +94,9 @@ impl InterpreterQueryLog {
         let current_database = ctx.get_current_database();
 
         // Stats.
-        let event_time = convert_log_timestamp(now);
+        let event_time = convert_query_log_timestamp(now);
         let event_date = (event_time / (24 * 3_600_000_000)) as i32;
-        let query_start_time = convert_log_timestamp(ctx.get_created_time());
+        let query_start_time = convert_query_log_timestamp(ctx.get_created_time());
 
         let written_rows = 0u64;
         let written_bytes = 0u64;
@@ -197,9 +197,9 @@ impl InterpreterQueryLog {
         let query_text = ctx.get_query_str();
 
         // Stats.
-        let event_time = convert_log_timestamp(now);
+        let event_time = convert_query_log_timestamp(now);
         let event_date = (event_time / (24 * 3_600_000_000)) as i32;
-        let query_start_time = convert_log_timestamp(ctx.get_created_time());
+        let query_start_time = convert_query_log_timestamp(ctx.get_created_time());
         let query_duration_ms = (event_time - query_start_time) / 1_000;
         let dal_metrics = ctx.get_dal_metrics();
 
@@ -294,7 +294,7 @@ impl InterpreterQueryLog {
     }
 }
 
-fn convert_log_timestamp(time: SystemTime) -> i64 {
+fn convert_query_log_timestamp(time: SystemTime) -> i64 {
     time.duration_since(UNIX_EPOCH)
         .unwrap_or(Duration::new(0, 0))
         .as_micros() as i64
