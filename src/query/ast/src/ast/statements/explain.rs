@@ -16,6 +16,9 @@
 pub enum ExplainKind {
     Ast(String),
     Syntax(String),
+    // The display string will be filled by optimizer, as we
+    // don't want to expose `Memo` to other crates.
+    Memo(String),
     Graph,
     Pipeline,
     Fragments,
