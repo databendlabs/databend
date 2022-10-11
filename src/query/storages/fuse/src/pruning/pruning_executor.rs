@@ -28,6 +28,7 @@ use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SegmentInfo;
 use common_legacy_planners::Extras;
 use futures::future;
+use opendal::Operator;
 use tracing::warn;
 use tracing::Instrument;
 
@@ -58,6 +59,7 @@ impl BlockPruner {
     #[tracing::instrument(level = "debug", skip(schema, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     pub async fn prune(
         ctx: &Arc<dyn TableContext>,
+        dal: Operator,
         schema: DataSchemaRef,
         push_down: &Option<Extras>,
         segment_locs: Vec<Location>,
@@ -85,8 +87,8 @@ impl BlockPruner {
 
         // prepare the filter.
         // None will be returned, if filter is not applicable (e.g. unsuitable filter expression, index not available, etc.)
-        let dal = ctx.get_storage_operator()?;
-        let filter_pruner = pruner::new_filter_pruner(ctx, filter_expressions, &schema, dal)?;
+        let filter_pruner =
+            pruner::new_filter_pruner(ctx, filter_expressions, &schema, dal.clone())?;
 
         // 2. constraint the degree of parallelism
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
@@ -134,7 +136,12 @@ impl BlockPruner {
                 None
             } else {
                 segments.next().map(|(segment_idx, segment_location)| {
-                    Self::prune_segment(pruning_ctx.clone(), segment_idx, segment_location)
+                    Self::prune_segment(
+                        dal.clone(),
+                        pruning_ctx.clone(),
+                        segment_idx,
+                        segment_location,
+                    )
                 })
             }
         });
@@ -166,11 +173,14 @@ impl BlockPruner {
     #[inline]
     #[tracing::instrument(level = "debug", skip_all)]
     async fn prune_segment(
+        dal: Operator,
         pruning_ctx: Arc<PruningContext>,
         segment_idx: SegmentIndex,
         segment_location: Location,
     ) -> Result<Vec<(SegmentIndex, BlockMeta)>> {
-        let segment_reader = MetaReaders::segment_info_reader(pruning_ctx.ctx.as_ref());
+        let segment_reader =
+            MetaReaders::segment_info_reader(pruning_ctx.ctx.as_ref(), dal.clone());
+
         let (path, ver) = segment_location;
         let segment_info = segment_reader.read(path, None, ver).await?;
         let result = if pruning_ctx.range_pruner.should_keep(
@@ -232,8 +242,6 @@ impl BlockPruner {
         let join_handlers = pruning_runtime
             .try_spawn_batch(semaphore.clone(), tasks)
             .await?;
-
-        eprintln!("join handlers size {}", join_handlers.len());
 
         let joint = future::try_join_all(join_handlers)
             .await

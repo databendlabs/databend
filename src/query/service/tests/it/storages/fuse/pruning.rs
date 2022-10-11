@@ -27,6 +27,7 @@ use common_legacy_expression::lit;
 use common_legacy_expression::sub;
 use common_legacy_expression::LegacyExpression;
 use common_legacy_planners::Extras;
+use common_storages_fuse::FuseTable;
 use databend_query::interpreters::CreateTableInterpreterV2;
 use databend_query::interpreters::Interpreter;
 use databend_query::sessions::QueryContext;
@@ -38,6 +39,7 @@ use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::pruning::BlockPruner;
 use databend_query::storages::fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_query::storages::fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
+use opendal::Operator;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
@@ -46,10 +48,11 @@ async fn apply_block_pruning(
     schema: DataSchemaRef,
     push_down: &Option<Extras>,
     ctx: Arc<QueryContext>,
+    op: Operator,
 ) -> Result<Vec<BlockMeta>> {
     let ctx: Arc<dyn TableContext> = ctx;
     let segment_locs = table_snapshot.segments.clone();
-    BlockPruner::prune(&ctx, schema, push_down, segment_locs)
+    BlockPruner::prune(&ctx, op, schema, push_down, segment_locs)
         .await
         .map(|v| v.into_iter().map(|(_, v)| v).collect())
 }
@@ -137,13 +140,15 @@ async fn test_block_pruner() -> Result<()> {
         )
         .await?;
 
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+
     let snapshot_loc = table
         .get_table_info()
         .options()
         .get(OPT_KEY_SNAPSHOT_LOCATION)
         .unwrap();
 
-    let reader = MetaReaders::table_snapshot_reader(ctx.clone());
+    let reader = MetaReaders::table_snapshot_reader(ctx.clone(), fuse_table.get_operator());
     let snapshot = reader.read(snapshot_loc.as_str(), None, 1).await?;
 
     // nothing is pruned
@@ -190,6 +195,7 @@ async fn test_block_pruner() -> Result<()> {
             table.get_table_info().schema(),
             &extra,
             ctx.clone(),
+            fuse_table.get_operator(),
         )
         .await?;
 
@@ -280,12 +286,14 @@ async fn test_block_pruner_monotonic() -> Result<()> {
         )
         .await?;
 
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+
     let snapshot_loc = table
         .get_table_info()
         .options()
         .get(OPT_KEY_SNAPSHOT_LOCATION)
         .unwrap();
-    let reader = MetaReaders::table_snapshot_reader(ctx.clone());
+    let reader = MetaReaders::table_snapshot_reader(ctx.clone(), fuse_table.get_operator());
     let snapshot = reader.read(snapshot_loc.as_str(), None, 1).await?;
 
     // a + b > 20; some blocks pruned
@@ -298,6 +306,7 @@ async fn test_block_pruner_monotonic() -> Result<()> {
         table.get_table_info().schema(),
         &Some(extra),
         ctx.clone(),
+        fuse_table.get_operator(),
     )
     .await?;
 
@@ -313,6 +322,7 @@ async fn test_block_pruner_monotonic() -> Result<()> {
         table.get_table_info().schema(),
         &Some(extra),
         ctx.clone(),
+        fuse_table.get_operator(),
     )
     .await?;
 

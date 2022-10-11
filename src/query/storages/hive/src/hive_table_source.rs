@@ -28,6 +28,7 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
+use opendal::Operator;
 
 use crate::hive_parquet_block_reader::DataBlockDeserializer;
 use crate::hive_parquet_block_reader::HiveParquetBlockReader;
@@ -56,6 +57,7 @@ enum State {
 pub struct HiveTableSource {
     state: State,
     ctx: Arc<dyn TableContext>,
+    dal: Operator,
     scan_progress: Arc<Progress>,
     block_reader: Arc<HiveParquetBlockReader>,
     output: Arc<OutputPort>,
@@ -65,6 +67,7 @@ pub struct HiveTableSource {
 impl HiveTableSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
+        dal: Operator,
         output: Arc<OutputPort>,
         block_reader: Arc<HiveParquetBlockReader>,
         delay: usize,
@@ -72,6 +75,7 @@ impl HiveTableSource {
         let scan_progress = ctx.get_scan_progress();
         Ok(ProcessorPtr::create(Box::new(HiveTableSource {
             ctx,
+            dal,
             output,
             block_reader,
             scan_progress,
@@ -190,7 +194,7 @@ impl Processor for HiveTableSource {
                 let part = HivePartInfo::from_part(&part)?;
                 let file_meta = self
                     .block_reader
-                    .read_meta_data(self.ctx.clone(), &part.filename)
+                    .read_meta_data(self.ctx.clone(), self.dal.clone(), &part.filename)
                     .await?;
                 let mut hive_blocks = HiveBlocks::create(file_meta, part.clone());
                 match hive_blocks.prune() {

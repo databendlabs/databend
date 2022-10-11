@@ -832,8 +832,12 @@ impl NumberColumnBuilder {
 impl<T: Number> SimpleDomain<T> {
     /// Returns the saturating cast domain and a flag denoting whether overflow happened.
     pub fn overflow_cast<U: Number>(&self) -> (SimpleDomain<U>, bool) {
-        let (min, min_overflowing) = overflow_cast::<T, U>(self.min);
-        let (max, max_overflowing) = overflow_cast::<T, U>(self.max);
+        self.overflow_cast_with_minmax(U::MIN, U::MAX)
+    }
+
+    pub fn overflow_cast_with_minmax<U: Number>(&self, min: U, max: U) -> (SimpleDomain<U>, bool) {
+        let (min, min_overflowing) = overflow_cast_with_minmax::<T, U>(self.min, min, max);
+        let (max, max_overflowing) = overflow_cast_with_minmax::<T, U>(self.max, min, max);
         (
             SimpleDomain { min, max },
             min_overflowing || max_overflowing,
@@ -841,9 +845,9 @@ impl<T: Number> SimpleDomain<T> {
     }
 }
 
-fn overflow_cast<T: Number, U: Number>(src: T) -> (U, bool) {
-    let dest_min: T = num_traits::cast(U::MIN).unwrap_or(T::MIN);
-    let dest_max: T = num_traits::cast(U::MAX).unwrap_or(T::MAX);
+fn overflow_cast_with_minmax<T: Number, U: Number>(src: T, min: U, max: U) -> (U, bool) {
+    let dest_min: T = num_traits::cast(min).unwrap_or(T::MIN);
+    let dest_max: T = num_traits::cast(max).unwrap_or(T::MAX);
     let src_clamp: T = src.clamp(dest_min, dest_max);
     let overflowing = src != src_clamp;
     // The number must be within the range that `U` can represent after clamping, therefore

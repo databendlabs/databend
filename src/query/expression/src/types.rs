@@ -16,8 +16,10 @@ pub mod any;
 pub mod arithmetics_type;
 pub mod array;
 pub mod boolean;
+pub mod date;
 pub mod empty_array;
 pub mod generic;
+pub mod interval;
 pub mod map;
 pub mod null;
 pub mod nullable;
@@ -37,8 +39,10 @@ use serde::Serialize;
 pub use self::any::AnyType;
 pub use self::array::ArrayType;
 pub use self::boolean::BooleanType;
+pub use self::date::DateType;
 pub use self::empty_array::EmptyArrayType;
 pub use self::generic::GenericType;
+pub use self::interval::IntervalType;
 pub use self::map::MapType;
 pub use self::null::NullType;
 pub use self::nullable::NullableType;
@@ -62,8 +66,8 @@ pub enum DataType {
     String,
     Number(NumberDataType),
     Timestamp,
-    // TODO: Implement them
-    // Interval,
+    Date,
+    Interval,
     Null,
     Nullable(Box<DataType>),
     EmptyArray,

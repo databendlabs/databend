@@ -27,6 +27,7 @@ use common_legacy_planners::Partitions;
 use common_legacy_planners::Projection;
 use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
+use opendal::Operator;
 
 use crate::fuse_lazy_part::FuseLazyPartInfo;
 use crate::fuse_part::ColumnLeaves;
@@ -74,6 +75,7 @@ impl FuseTable {
                 let summary = snapshot.summary.block_count as usize;
                 Self::prune_snapshot_blocks(
                     ctx.clone(),
+                    self.operator.clone(),
                     push_downs.clone(),
                     table_info,
                     segments_location,
@@ -87,17 +89,23 @@ impl FuseTable {
 
     pub async fn prune_snapshot_blocks(
         ctx: Arc<dyn TableContext>,
+        dal: Operator,
         push_downs: Option<Extras>,
         table_info: TableInfo,
         segments_location: Vec<Location>,
         summary: usize,
     ) -> Result<(Statistics, Partitions)> {
-        let block_metas =
-            BlockPruner::prune(&ctx, table_info.schema(), &push_downs, segments_location)
-                .await?
-                .into_iter()
-                .map(|(_, v)| v)
-                .collect::<Vec<_>>();
+        let block_metas = BlockPruner::prune(
+            &ctx,
+            dal,
+            table_info.schema(),
+            &push_downs,
+            segments_location,
+        )
+        .await?
+        .into_iter()
+        .map(|(_, v)| v)
+        .collect::<Vec<_>>();
         Self::read_partitions_with_metas(ctx, table_info.schema(), push_downs, block_metas, summary)
     }
 

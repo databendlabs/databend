@@ -81,20 +81,38 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
             args,
             params,
             ..
-        } => RawExpr::FunctionCall {
-            span: transform_span(span),
-            name: name.name,
-            args: args
-                .into_iter()
-                .map(|arg| transform_expr(arg, columns))
-                .collect(),
-            params: params
-                .into_iter()
-                .map(|param| match param {
-                    ASTLiteral::Integer(u) => u as usize,
-                    _ => unimplemented!(),
-                })
-                .collect(),
+        } => match name.name.to_lowercase().as_str() {
+            "to_timestamp" | "to_datetime" => {
+                assert!(args.len() == 1);
+                RawExpr::Cast {
+                    span: transform_span(span),
+                    expr: Box::new(transform_expr(args[0].clone(), columns)),
+                    dest_type: DataType::Timestamp,
+                }
+            }
+            "to_date" => {
+                assert!(args.len() == 1);
+                RawExpr::Cast {
+                    span: transform_span(span),
+                    expr: Box::new(transform_expr(args[0].clone(), columns)),
+                    dest_type: DataType::Date,
+                }
+            }
+            _ => RawExpr::FunctionCall {
+                span: transform_span(span),
+                name: name.name,
+                args: args
+                    .into_iter()
+                    .map(|arg| transform_expr(arg, columns))
+                    .collect(),
+                params: params
+                    .into_iter()
+                    .map(|param| match param {
+                        ASTLiteral::Integer(u) => u as usize,
+                        _ => unimplemented!(),
+                    })
+                    .collect(),
+            },
         },
         common_ast::ast::Expr::UnaryOp { span, op, expr } => RawExpr::FunctionCall {
             span: transform_span(span),
@@ -286,6 +304,7 @@ fn transform_data_type(target_type: common_ast::ast::TypeName) -> DataType {
         common_ast::ast::TypeName::Float64 => DataType::Number(NumberDataType::Float64),
         common_ast::ast::TypeName::String => DataType::String,
         common_ast::ast::TypeName::Timestamp { precision: None } => DataType::Timestamp,
+        common_ast::ast::TypeName::Date => DataType::Date,
         common_ast::ast::TypeName::Array {
             item_type: Some(item_type),
         } => DataType::Array(Box::new(transform_data_type(*item_type))),
