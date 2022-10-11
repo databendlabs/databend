@@ -557,6 +557,7 @@ impl JoinHashTable {
                     build_indexs.push(RowPtr {
                         chunk_index: 0,
                         row_index: 0,
+                        partner_count: 0,
                         marker: None,
                     });
                     probe_indexs.push(i as u32);
@@ -645,7 +646,7 @@ impl JoinHashTable {
                         ));
                     }
                     local_build_indexes.extend_from_slice(probe_result_ptrs);
-                    probe_indexs.extend(std::iter::repeat(i as u32).take(probe_result_ptrs.len()));
+                    probe_indexs.extend(repeat(i as u32).take(probe_result_ptrs.len()));
 
                     if WITH_OTHER_CONJUNCT {
                         row_state[i] += probe_result_ptrs.len() as u32;
@@ -661,6 +662,7 @@ impl JoinHashTable {
                         build_indexes.push(RowPtr {
                             chunk_index: u32::MAX,
                             row_index: u32::MAX,
+                            partner_count: 0,
                             marker: None,
                         });
                     }
@@ -668,6 +670,7 @@ impl JoinHashTable {
                     local_build_indexes.push(RowPtr {
                         chunk_index: 0,
                         row_index: 0,
+                        partner_count: 0,
                         marker: None,
                     });
                     probe_indexs.push(i as u32);
@@ -767,10 +770,13 @@ impl JoinHashTable {
         let mut bm = validity.into_mut().right().unwrap();
 
         if self.hash_join_desc.join_type == JoinType::Full {
-            let mut build_indexes = self.hash_join_desc.right_join_desc.build_indexes.write();
-            for (idx, build_index) in build_indexes.iter_mut().enumerate() {
+            let build_indexes = self.hash_join_desc.right_join_desc.build_indexes.read();
+            for (idx, build_index) in build_indexes.iter().enumerate() {
                 if !bm.get(idx) {
-                    build_index.marker = Some(MarkerKind::False);
+                    let mut self_row_marker_map = self.row_marker_map.write();
+                    if let Some(marker) = self_row_marker_map.get_mut(build_index) {
+                        *marker = MarkerKind::True;
+                    }
                 }
             }
         }
@@ -799,19 +805,20 @@ impl JoinHashTable {
         for (i, key) in keys_iter.enumerate() {
             let probe_result_ptr = Self::probe_key(hash_table, key, valids, i);
             if let Some(v) = probe_result_ptr {
-                let probe_result_ptrs = v.get_value();
-                build_indexes.extend(probe_result_ptrs);
-                local_build_indexes.extend_from_slice(probe_result_ptrs);
-                for row_ptr in probe_result_ptrs.iter() {
+                let probe_result_ptrs = v.get_mut_value();
+                for row_ptr in probe_result_ptrs.iter_mut() {
+                    // If find a join partner, set marker to true
                     {
-                        let mut row_state = self.hash_join_desc.right_join_desc.row_state.write();
-                        row_state
-                            .entry(*row_ptr)
-                            .and_modify(|e| *e += 1)
-                            .or_insert(1_usize);
+                        row_ptr.partner_count += 1;
+                        let mut self_row_marker_map = self.row_marker_map.write();
+                        if let Some(marker) = self_row_marker_map.get_mut(row_ptr) {
+                            *marker = MarkerKind::True;
+                        }
                     }
                 }
-                probe_indexes.extend(std::iter::repeat(i as u32).take(probe_result_ptrs.len()));
+                build_indexes.extend_from_slice(probe_result_ptrs);
+                local_build_indexes.extend_from_slice(probe_result_ptrs);
+                probe_indexes.extend(repeat(i as u32).take(probe_result_ptrs.len()));
                 validity.extend_constant(probe_result_ptrs.len(), true);
             }
         }
@@ -911,12 +918,12 @@ impl JoinHashTable {
     }
 
     pub(crate) fn filter_rows_for_right_join(
+        &self,
         bm: &mut MutableBitmap,
-        build_indexes: &[RowPtr],
-        row_state: &mut std::collections::HashMap<RowPtr, usize>,
+        build_indexes: &mut [RowPtr],
     ) {
-        for (index, row) in build_indexes.iter().enumerate() {
-            if row_state[row] == 1 || row_state[row] == 0 {
+        for (index, row) in build_indexes.iter_mut().enumerate() {
+            if matches!(row.partner_count, 0 | 1) {
                 if !bm.get(index) {
                     bm.set(index, true)
                 }
@@ -924,7 +931,7 @@ impl JoinHashTable {
             }
 
             if !bm.get(index) {
-                row_state.entry(*row).and_modify(|e| *e -= 1);
+                row.partner_count -= 1;
             }
         }
     }
@@ -932,19 +939,18 @@ impl JoinHashTable {
     pub(crate) fn filter_rows_for_right_semi_join(
         &self,
         bm: &mut MutableBitmap,
-        build_indexes: &[RowPtr],
         input: DataBlock,
     ) -> Result<DataBlock> {
-        let mut row_state = self.hash_join_desc.right_join_desc.row_state.write();
-        for (index, row) in build_indexes.iter().enumerate() {
-            if row_state[row] > 1 && !bm.get(index) {
-                row_state.entry(*row).and_modify(|e| *e -= 1);
+        let mut build_indexes = self.hash_join_desc.right_join_desc.build_indexes.write();
+        for (index, row) in build_indexes.iter_mut().enumerate() {
+            if row.partner_count > 1 && !bm.get(index) {
+                row.partner_count -= 1;
             }
         }
-        for (index, row) in build_indexes.iter().enumerate() {
-            if row_state[row] > 1 && bm.get(index) {
+        for (index, row) in build_indexes.iter_mut().enumerate() {
+            if row.partner_count > 1 && bm.get(index) {
                 bm.set(index, false);
-                row_state.entry(*row).and_modify(|e| *e -= 1);
+                row.partner_count -= 1;
             }
         }
         let predicate = BooleanColumn::from_arrow_data(bm.clone().into()).arc();

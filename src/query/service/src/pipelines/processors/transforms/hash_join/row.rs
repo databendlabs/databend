@@ -42,6 +42,8 @@ impl Chunk {
 pub struct RowPtr {
     pub chunk_index: u32,
     pub row_index: u32,
+    // Record how many join partners in probe side for the row.
+    pub partner_count: usize,
     pub marker: Option<MarkerKind>,
 }
 

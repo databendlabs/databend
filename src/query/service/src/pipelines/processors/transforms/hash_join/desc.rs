@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
 use parking_lot::RwLock;
@@ -29,15 +27,12 @@ use crate::sql::plans::JoinType;
 pub struct RightJoinDesc {
     /// Record rows in build side that are matched with rows in probe side.
     pub(crate) build_indexes: RwLock<Vec<RowPtr>>,
-    /// Record row in build side that is matched how many rows in probe side.
-    pub(crate) row_state: RwLock<HashMap<RowPtr, usize>>,
 }
 
 impl RightJoinDesc {
     pub fn create() -> Self {
         RightJoinDesc {
             build_indexes: RwLock::new(Vec::new()),
-            row_state: RwLock::new(HashMap::new()),
         }
     }
 }
