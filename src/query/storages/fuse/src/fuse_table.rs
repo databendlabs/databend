@@ -154,7 +154,6 @@ impl FuseTable {
 
     pub fn snapshot_loc(&self) -> Option<String> {
         let options = self.table_info.options();
-
         options
             .get(OPT_KEY_SNAPSHOT_LOCATION)
             // for backward compatibility, we check the legacy table option
