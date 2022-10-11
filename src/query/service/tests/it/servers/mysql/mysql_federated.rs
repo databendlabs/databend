@@ -36,6 +36,10 @@ fn test_mysql_federated() -> Result<()> {
         if let Some(block) = result {
             assert!(!block.is_empty())
         }
+
+        let query = "select versiona";
+        let result = federated.check(query);
+        assert!(result.is_none());
     }
 
     // variables
