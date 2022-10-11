@@ -6,6 +6,7 @@ SHOW ROLES;
 
 ----
 account_admin 0
+public 0
 test 0
 
 statement ok
