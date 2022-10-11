@@ -2053,7 +2053,6 @@ dependencies = [
  "common-storage",
  "common-storages-index",
  "common-storages-util",
- "common-streams",
  "futures",
  "futures-util",
  "opendal",
