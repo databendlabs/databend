@@ -140,6 +140,8 @@ impl SystemLogElement for QueryLogElement {
             DataField::new("query_text", Vu8::to_data_type()),
             DataField::new("event_date", DateType::new_impl()),
             DataField::new("event_time", TimestampType::new_impl(3)),
+            DataField::new("query_start_time", TimestampType::new_impl(3)),
+            DataField::new("query_duration_ms", i64::to_data_type()),
             // Schema.
             DataField::new("current_database", Vu8::to_data_type()),
             DataField::new("databases", Vu8::to_data_type()),
@@ -232,6 +234,14 @@ impl SystemLogElement for QueryLogElement {
             .next()
             .unwrap()
             .append_data_value(DataValue::Int64(self.event_time))?;
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::Int64(self.query_start_time))?;
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::Int64(self.query_duration_ms))?;
         // Schema.
         columns
             .next()
