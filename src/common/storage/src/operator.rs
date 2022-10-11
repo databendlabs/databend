@@ -214,6 +214,8 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<Operator> {
     builder.access_key_id(&cfg.access_key_id);
     builder.secret_access_key(&cfg.secret_access_key);
     builder.security_token(&cfg.security_token);
+    builder.role_arn(&cfg.role_arn);
+    builder.external_id(&cfg.external_id);
 
     // Bucket.
     builder.bucket(&cfg.bucket);
@@ -322,8 +324,6 @@ fn init_oss_operator(cfg: &StorageOssConfig) -> Result<Operator> {
         .endpoint(&cfg.endpoint_url)
         .access_key_id(&cfg.access_key_id)
         .access_key_secret(&cfg.access_key_secret)
-        .oidc_token(&cfg.oidc_token)
-        .role_arn(&cfg.role_arn)
         .bucket(&cfg.bucket)
         .root(&cfg.root)
         .build()?;
