@@ -41,12 +41,11 @@ impl FileMetaDataReader {
 impl Loader<FileMetaData> for Arc<dyn TableContext> {
     async fn load(
         &self,
-        _op: Operator,
+        dal: Operator,
         key: &str,
         length_hint: Option<u64>,
         _version: u64,
     ) -> Result<FileMetaData> {
-        let dal = self.get_storage_operator()?;
         let object = dal.object(key);
         let mut reader = if let Some(len) = length_hint {
             object.seekable_reader(..len)
