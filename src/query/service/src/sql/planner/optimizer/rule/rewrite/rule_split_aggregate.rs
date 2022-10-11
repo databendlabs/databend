@@ -16,7 +16,7 @@ use common_exception::Result;
 
 use crate::sql::optimizer::rule::Rule;
 use crate::sql::optimizer::rule::RuleID;
-use crate::sql::optimizer::rule::TransformState;
+use crate::sql::optimizer::rule::TransformResult;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::Aggregate;
 use crate::sql::plans::AggregateMode;
@@ -57,7 +57,7 @@ impl Rule for RuleSplitAggregate {
         self.id
     }
 
-    fn apply(&self, s_expr: &SExpr, state: &mut TransformState) -> Result<()> {
+    fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         let mut agg: Aggregate = s_expr.plan().clone().try_into()?;
         if agg.mode != AggregateMode::Initial {
             return Ok(());

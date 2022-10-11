@@ -44,6 +44,8 @@ pub enum Domain {
     Boolean(BooleanDomain),
     String(StringDomain),
     Timestamp(TimestampDomain),
+    Date(SimpleDomain<i32>),
+    Interval(SimpleDomain<i64>),
     Nullable(NullableDomain<AnyType>),
     Array(Option<Box<Domain>>),
     Tuple(Vec<Domain>),

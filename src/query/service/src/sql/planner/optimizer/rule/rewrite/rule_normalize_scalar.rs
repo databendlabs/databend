@@ -109,7 +109,7 @@ impl Rule for RuleNormalizeScalarFilter {
     fn apply(
         &self,
         s_expr: &SExpr,
-        state: &mut crate::sql::optimizer::rule::TransformState,
+        state: &mut crate::sql::optimizer::rule::TransformResult,
     ) -> Result<()> {
         let mut filter: Filter = s_expr.plan().clone().try_into()?;
 

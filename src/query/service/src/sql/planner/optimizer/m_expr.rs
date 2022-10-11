@@ -20,7 +20,7 @@ use super::group::Group;
 use crate::sql::optimizer::memo::Memo;
 use crate::sql::optimizer::pattern_extractor::PatternExtractor;
 use crate::sql::optimizer::rule::RulePtr;
-use crate::sql::optimizer::rule::TransformState;
+use crate::sql::optimizer::rule::TransformResult;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::Operator;
 use crate::sql::plans::RelOperator;
@@ -85,7 +85,7 @@ impl MExpr {
         &self,
         memo: &Memo,
         rule: &RulePtr,
-        transform_state: &mut TransformState,
+        transform_state: &mut TransformResult,
     ) -> Result<()> {
         let mut extractor = PatternExtractor::create();
         let exprs = extractor.extract(memo, self, rule.pattern())?;

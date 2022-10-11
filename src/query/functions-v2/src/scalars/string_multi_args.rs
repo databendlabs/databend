@@ -116,11 +116,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                 let mut builder = StringColumnBuilder::with_capacity(size, 0);
 
                 match &args[0] {
-                    ValueRef::Scalar(v) => {
+                    ValueRef::Scalar(sep) => {
                         for idx in 0..size {
                             for (arg_index, arg) in args.iter().skip(1).enumerate() {
                                 if arg_index != 0 {
-                                    builder.put_slice(v);
+                                    builder.put_slice(sep);
                                 }
                                 unsafe { builder.put_slice(arg.index_unchecked(idx)) }
                             }
@@ -201,27 +201,23 @@ pub fn register(registry: &mut FunctionRegistry) {
                         }
                     }
                     ValueRef::Column(_) => {
-                        let mut nullable_builder = T::create_builder(size, &[]);
                         let builder = &mut nullable_builder.builder;
                         let validity = &mut nullable_builder.validity;
 
                         for idx in 0..size {
                             unsafe {
                                 match new_args[0].index_unchecked(idx) {
-                                    Some(v) => {
-                                        for idx in 0..size {
-                                            for (i, s) in new_args
-                                                .iter()
-                                                .skip(1)
-                                                .filter_map(|arg| arg.index_unchecked(idx))
-                                                .enumerate()
-                                            {
-                                                if i != 0 {
-                                                    builder.put_slice(v);
-                                                }
-                                                builder.put_slice(s);
+                                    Some(sep) => {
+                                        for (i, str) in new_args
+                                            .iter()
+                                            .skip(1)
+                                            .filter_map(|arg| arg.index_unchecked(idx))
+                                            .enumerate()
+                                        {
+                                            if i != 0 {
+                                                builder.put_slice(sep);
                                             }
-                                            builder.commit_row();
+                                            builder.put_slice(str);
                                         }
                                         builder.commit_row();
                                         validity.push(true);
@@ -237,9 +233,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
                 match len {
                     Some(_) => {
-                        let n = nullable_builder.build();
-                        let c = T::upcast_column(n);
-                        Ok(Value::Column(c))
+                        let col = T::upcast_column(nullable_builder.build());
+                        Ok(Value::Column(col))
                     }
                     _ => Ok(Value::Scalar(T::upcast_scalar(
                         nullable_builder.build_scalar(),

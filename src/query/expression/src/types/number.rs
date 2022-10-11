@@ -433,21 +433,6 @@ impl PartialOrd for NumberScalar {
 }
 
 impl NumberScalar {
-    pub fn repeat(&self, n: usize) -> NumberColumnBuilder {
-        match self {
-            NumberScalar::UInt8(num) => NumberColumnBuilder::UInt8(vec![*num; n]),
-            NumberScalar::UInt16(num) => NumberColumnBuilder::UInt16(vec![*num; n]),
-            NumberScalar::UInt32(num) => NumberColumnBuilder::UInt32(vec![*num; n]),
-            NumberScalar::UInt64(num) => NumberColumnBuilder::UInt64(vec![*num; n]),
-            NumberScalar::Int8(num) => NumberColumnBuilder::Int8(vec![*num; n]),
-            NumberScalar::Int16(num) => NumberColumnBuilder::Int16(vec![*num; n]),
-            NumberScalar::Int32(num) => NumberColumnBuilder::Int32(vec![*num; n]),
-            NumberScalar::Int64(num) => NumberColumnBuilder::Int64(vec![*num; n]),
-            NumberScalar::Float32(num) => NumberColumnBuilder::Float32(vec![*num; n]),
-            NumberScalar::Float64(num) => NumberColumnBuilder::Float64(vec![*num; n]),
-        }
-    }
-
     pub fn domain(&self) -> NumberDomain {
         match self {
             NumberScalar::UInt8(num) => NumberDomain::UInt8(SimpleDomain {
@@ -676,6 +661,21 @@ impl NumberColumnBuilder {
         }
     }
 
+    pub fn repeat(scalar: NumberScalar, n: usize) -> NumberColumnBuilder {
+        match scalar {
+            NumberScalar::UInt8(num) => NumberColumnBuilder::UInt8(vec![num; n]),
+            NumberScalar::UInt16(num) => NumberColumnBuilder::UInt16(vec![num; n]),
+            NumberScalar::UInt32(num) => NumberColumnBuilder::UInt32(vec![num; n]),
+            NumberScalar::UInt64(num) => NumberColumnBuilder::UInt64(vec![num; n]),
+            NumberScalar::Int8(num) => NumberColumnBuilder::Int8(vec![num; n]),
+            NumberScalar::Int16(num) => NumberColumnBuilder::Int16(vec![num; n]),
+            NumberScalar::Int32(num) => NumberColumnBuilder::Int32(vec![num; n]),
+            NumberScalar::Int64(num) => NumberColumnBuilder::Int64(vec![num; n]),
+            NumberScalar::Float32(num) => NumberColumnBuilder::Float32(vec![num; n]),
+            NumberScalar::Float64(num) => NumberColumnBuilder::Float64(vec![num; n]),
+        }
+    }
+
     pub fn len(&self) -> usize {
         match self {
             NumberColumnBuilder::UInt8(col) => col.len(),
@@ -832,8 +832,12 @@ impl NumberColumnBuilder {
 impl<T: Number> SimpleDomain<T> {
     /// Returns the saturating cast domain and a flag denoting whether overflow happened.
     pub fn overflow_cast<U: Number>(&self) -> (SimpleDomain<U>, bool) {
-        let (min, min_overflowing) = overflow_cast::<T, U>(self.min);
-        let (max, max_overflowing) = overflow_cast::<T, U>(self.max);
+        self.overflow_cast_with_minmax(U::MIN, U::MAX)
+    }
+
+    pub fn overflow_cast_with_minmax<U: Number>(&self, min: U, max: U) -> (SimpleDomain<U>, bool) {
+        let (min, min_overflowing) = overflow_cast_with_minmax::<T, U>(self.min, min, max);
+        let (max, max_overflowing) = overflow_cast_with_minmax::<T, U>(self.max, min, max);
         (
             SimpleDomain { min, max },
             min_overflowing || max_overflowing,
@@ -841,9 +845,9 @@ impl<T: Number> SimpleDomain<T> {
     }
 }
 
-fn overflow_cast<T: Number, U: Number>(src: T) -> (U, bool) {
-    let dest_min: T = num_traits::cast(U::MIN).unwrap_or(T::MIN);
-    let dest_max: T = num_traits::cast(U::MAX).unwrap_or(T::MAX);
+fn overflow_cast_with_minmax<T: Number, U: Number>(src: T, min: U, max: U) -> (U, bool) {
+    let dest_min: T = num_traits::cast(min).unwrap_or(T::MIN);
+    let dest_max: T = num_traits::cast(max).unwrap_or(T::MAX);
     let src_clamp: T = src.clamp(dest_min, dest_max);
     let overflowing = src != src_clamp;
     // The number must be within the range that `U` can represent after clamping, therefore
