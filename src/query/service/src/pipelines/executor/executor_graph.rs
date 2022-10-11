@@ -375,15 +375,12 @@ impl RunningGraph {
         Ok(schedule_queue)
     }
 
-    pub fn all_node_is_finished(&self) -> bool {
-        for node_index in self.0.graph.node_indices() {
-            let state = self.0.graph[node_index].state.lock().unwrap();
-            if !matches!(&*state, State::Finished) {
-                return false;
+    pub fn interrupt_running_nodes(&self) {
+        unsafe {
+            for node_index in self.0.graph.node_indices() {
+                self.0.graph[node_index].processor.interrupt();
             }
         }
-
-        true
     }
 }
 

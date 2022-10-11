@@ -15,29 +15,25 @@
 use std::ops::Range;
 
 use crate::types::AnyType;
+use crate::types::DataType;
+use crate::ColumnBuilder;
 use crate::Domain;
 use crate::Value;
 
 /// Chunk is a lightweight container for a group of columns.
 #[derive(Clone)]
 pub struct Chunk {
-    columns: Vec<Value<AnyType>>,
+    columns: Vec<(Value<AnyType>, DataType)>,
     num_rows: usize,
 }
 
 impl Chunk {
     #[inline]
-    pub fn new(columns: Vec<Value<AnyType>>, num_rows: usize) -> Self {
-        debug_assert!(
-            columns
-                .iter()
-                .filter(|value| match value {
-                    Value::Scalar(_) => false,
-                    Value::Column(c) => c.len() != num_rows,
-                })
-                .count()
-                == 0
-        );
+    pub fn new(columns: Vec<(Value<AnyType>, DataType)>, num_rows: usize) -> Self {
+        debug_assert!(columns.iter().all(|(col, _)| match col {
+            Value::Scalar(_) => true,
+            Value::Column(c) => c.len() == num_rows,
+        }));
         Self { columns, num_rows }
     }
 
@@ -47,7 +43,7 @@ impl Chunk {
     }
 
     #[inline]
-    pub fn columns(&self) -> &[Value<AnyType>] {
+    pub fn columns(&self) -> &[(Value<AnyType>, DataType)] {
         &self.columns
     }
 
@@ -70,7 +66,7 @@ impl Chunk {
     pub fn domains(&self) -> Vec<Domain> {
         self.columns
             .iter()
-            .map(|value| value.as_ref().domain())
+            .map(|(value, _)| value.as_ref().domain())
             .collect()
     }
 
@@ -78,7 +74,7 @@ impl Chunk {
     pub fn memory_size(&self) -> usize {
         self.columns()
             .iter()
-            .map(|c| match c {
+            .map(|(col, _)| match col {
                 Value::Scalar(s) => std::mem::size_of_val(s) * self.num_rows,
                 Value::Column(c) => c.memory_size(),
             })
@@ -86,17 +82,18 @@ impl Chunk {
     }
 
     pub fn convert_to_full(&self) -> Self {
-        let mut columns = Vec::with_capacity(self.num_columns());
-        for col in self.columns() {
-            match col {
+        let columns = self
+            .columns()
+            .iter()
+            .map(|(col, ty)| match col {
                 Value::Scalar(s) => {
-                    let builder = s.as_ref().repeat(self.num_rows);
+                    let builder = ColumnBuilder::repeat(&s.as_ref(), self.num_rows, ty);
                     let col = builder.build();
-                    columns.push(Value::Column(col));
+                    (Value::Column(col), ty.clone())
                 }
-                Value::Column(c) => columns.push(Value::Column(c.clone())),
-            }
-        }
+                Value::Column(c) => (Value::Column(c.clone()), ty.clone()),
+            })
+            .collect();
         Self {
             columns,
             num_rows: self.num_rows,
@@ -104,15 +101,14 @@ impl Chunk {
     }
 
     pub fn slice(&self, range: Range<usize>) -> Self {
-        let mut columns = Vec::with_capacity(self.num_columns());
-        for col in self.columns() {
-            match col {
-                Value::Scalar(s) => {
-                    columns.push(Value::Scalar(s.clone()));
-                }
-                Value::Column(c) => columns.push(Value::Column(c.slice(range.clone()))),
-            }
-        }
+        let columns = self
+            .columns()
+            .iter()
+            .map(|(col, ty)| match col {
+                Value::Scalar(s) => (Value::Scalar(s.clone()), ty.clone()),
+                Value::Column(c) => (Value::Column(c.slice(range.clone())), ty.clone()),
+            })
+            .collect();
         Self {
             columns,
             num_rows: range.end - range.start + 1,

@@ -53,6 +53,10 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
         "2022-09-29: Add: users.proto/CopyOptions::single and CopyOptions::max_file_size",
     ),
     (12, "2022-09-29: Add: table.proto/TableMeta::storage_params"),
+    (
+        13,
+        "2022-10-09: Add: config.proto/OssStorageConfig and user.proto/StageStorage::oss",
+    ),
 ];
 
 pub const VER: u64 = META_CHANGE_LOG.last().unwrap().0;

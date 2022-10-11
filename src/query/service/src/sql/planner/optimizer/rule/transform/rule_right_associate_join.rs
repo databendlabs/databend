@@ -17,7 +17,7 @@ use common_exception::Result;
 use super::util::get_join_predicates;
 use crate::sql::binder::JoinPredicate;
 use crate::sql::optimizer::rule::Rule;
-use crate::sql::optimizer::rule::TransformState;
+use crate::sql::optimizer::rule::TransformResult;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::RuleID;
 use crate::sql::optimizer::SExpr;
@@ -82,7 +82,7 @@ impl Rule for RuleRightAssociateJoin {
         self.id
     }
 
-    fn apply(&self, s_expr: &SExpr, state: &mut TransformState) -> Result<()> {
+    fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         // We denote the join tree with:
         //    join1
         //    /  \

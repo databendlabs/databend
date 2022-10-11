@@ -15,11 +15,7 @@
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::time::Duration;
-use std::time::UNIX_EPOCH;
 
-use chrono::DateTime;
-use chrono::Utc;
 use comfy_table::Cell;
 use comfy_table::Table;
 use itertools::Itertools;
@@ -28,6 +24,7 @@ use rust_decimal::Decimal;
 use rust_decimal::RoundingStrategy;
 
 use crate::chunk::Chunk;
+use crate::date_converter::DateConverter;
 use crate::expression::Expr;
 use crate::expression::Literal;
 use crate::expression::RawExpr;
@@ -64,7 +61,7 @@ impl Debug for Chunk {
 
         table.set_header(vec!["Column ID", "Column Data"]);
 
-        for (i, col) in self.columns().iter().enumerate() {
+        for (i, (col, _)) in self.columns().iter().enumerate() {
             table.add_row(vec![i.to_string(), format!("{:?}", col)]);
         }
 
@@ -83,7 +80,7 @@ impl Display for Chunk {
             let row: Vec<_> = self
                 .columns()
                 .iter()
-                .map(|val| val.as_ref().index(index).unwrap().to_string())
+                .map(|(val, _)| val.as_ref().index(index).unwrap().to_string())
                 .map(Cell::new)
                 .collect();
             table.add_row(row);
@@ -101,6 +98,8 @@ impl<'a> Debug for ScalarRef<'a> {
             ScalarRef::Boolean(val) => write!(f, "{val}"),
             ScalarRef::String(s) => write!(f, "{:?}", String::from_utf8_lossy(s)),
             ScalarRef::Timestamp(t) => write!(f, "{t:?}"),
+            ScalarRef::Date(d) => write!(f, "{d:?}"),
+            ScalarRef::Interval(i) => write!(f, "{i:?}"),
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
             ScalarRef::Tuple(fields) => {
                 write!(
@@ -123,6 +122,8 @@ impl Debug for Column {
             Column::Boolean(col) => f.debug_tuple("Boolean").field(col).finish(),
             Column::String(col) => write!(f, "{col:?}"),
             Column::Timestamp(col) => write!(f, "{col:?}"),
+            Column::Date(col) => write!(f, "{col:?}"),
+            Column::Interval(col) => write!(f, "{col:?}"),
             Column::Array(col) => write!(f, "{col:?}"),
             Column::Nullable(col) => write!(f, "{col:?}"),
             Column::Tuple { fields, len } => f
@@ -144,6 +145,8 @@ impl<'a> Display for ScalarRef<'a> {
             ScalarRef::Boolean(val) => write!(f, "{val}"),
             ScalarRef::String(s) => write!(f, "{:?}", String::from_utf8_lossy(s)),
             ScalarRef::Timestamp(t) => write!(f, "{t}"),
+            ScalarRef::Date(d) => write!(f, "{}", display_date(*d as i64)),
+            ScalarRef::Interval(i) => write!(f, "{}", display_timestamp(*i)),
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
             ScalarRef::Tuple(fields) => {
                 write!(
@@ -355,6 +358,8 @@ impl Display for DataType {
             DataType::String => write!(f, "String"),
             DataType::Number(num) => write!(f, "{num}"),
             DataType::Timestamp => write!(f, "Timestamp"),
+            DataType::Date => write!(f, "Date"),
+            DataType::Interval => write!(f, "Interval"),
             DataType::Null => write!(f, "NULL"),
             DataType::Nullable(inner) => write!(f, "{inner} NULL"),
             DataType::EmptyArray => write!(f, "Array(Nothing)"),
@@ -573,6 +578,8 @@ impl Display for Domain {
             Domain::Boolean(domain) => write!(f, "{domain}"),
             Domain::String(domain) => write!(f, "{domain}"),
             Domain::Timestamp(domain) => write!(f, "{domain}"),
+            Domain::Date(domain) => write!(f, "{domain}"),
+            Domain::Interval(domain) => write!(f, "{domain}"),
             Domain::Nullable(domain) => write!(f, "{domain}"),
             Domain::Array(None) => write!(f, "[]"),
             Domain::Array(Some(domain)) => write!(f, "[{domain}]"),
@@ -593,12 +600,7 @@ impl Display for Domain {
 
 impl Display for Timestamp {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let dt = if self.ts >= 0 {
-            DateTime::<Utc>::from(UNIX_EPOCH + Duration::from_micros(self.ts.unsigned_abs()))
-        } else {
-            DateTime::<Utc>::from(UNIX_EPOCH - Duration::from_micros(self.ts.unsigned_abs()))
-        };
-        let s = dt.format("%Y-%m-%d %H:%M:%S%.6f").to_string();
+        let s = display_timestamp(self.ts);
         let truncate_end = if self.precision > 0 {
             s.len() - 6 + self.precision as usize
         } else {
@@ -607,4 +609,16 @@ impl Display for Timestamp {
         write!(f, "{}", &s[..truncate_end])?;
         Ok(())
     }
+}
+
+pub fn display_timestamp(ts: i64) -> String {
+    ts.to_timestamp(&chrono_tz::Tz::UTC)
+        .format("%Y-%m-%d %H:%M:%S%.6f")
+        .to_string()
+}
+
+pub fn display_date(d: i64) -> String {
+    d.to_date(&chrono_tz::Tz::UTC)
+        .format("%Y-%m-%d")
+        .to_string()
 }

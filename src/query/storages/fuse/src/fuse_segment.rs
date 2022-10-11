@@ -22,17 +22,19 @@ use common_exception::Result;
 use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SegmentInfo;
 use futures_util::future;
+use opendal::Operator;
 use tracing::Instrument;
 
 use crate::io::MetaReaders;
 
 // Read one segment file by location.
 async fn read_segment(
+    dal: Operator,
     ctx: Arc<dyn TableContext>,
     segment_location: Location,
 ) -> Result<Arc<SegmentInfo>> {
     let (path, ver) = segment_location;
-    let reader = MetaReaders::segment_info_reader(ctx.as_ref());
+    let reader = MetaReaders::segment_info_reader(ctx.as_ref(), dal);
     reader.read(path, None, ver).await
 }
 
@@ -40,6 +42,7 @@ async fn read_segment(
 
 #[tracing::instrument(level = "debug", skip_all)]
 pub async fn read_segments(
+    op: Operator,
     ctx: Arc<dyn TableContext>,
     segment_locations: &[Location],
 ) -> Result<Vec<Result<Arc<SegmentInfo>>>> {
@@ -52,7 +55,10 @@ pub async fn read_segments(
         if let Some(location) = iter.next() {
             let ctx = ctx.clone();
             let location = location.clone();
-            Some(read_segment(ctx, location).instrument(tracing::debug_span!("read_segment")))
+            Some(
+                read_segment(op.clone(), ctx, location)
+                    .instrument(tracing::debug_span!("read_segment")),
+            )
         } else {
             None
         }

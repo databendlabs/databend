@@ -31,6 +31,38 @@ use crate::values::Scalar;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
 
+pub const MICROS_IN_A_SEC: i64 = 1_000_000;
+pub const MICROS_IN_A_MILLI: i64 = 1_000;
+pub const MICROS_IN_A_MICRO: i64 = 1;
+
+/// timestamp ranges from 1000-01-01 00:00:00.000000 to 9999-12-31 23:59:59.999999
+/// timestamp_max and timestamp_min means days offset from 1970-01-01 00:00:00.000000
+/// any timestamp not in the range will be invalid
+pub const TIMESTAMP_MAX: i64 = 253402300799999999;
+pub const TIMESTAMP_MIN: i64 = -30610224000000000;
+pub const MICROSECONDS: i64 = 1_000_000;
+
+pub const PRECISION_MICRO: u8 = 6;
+pub const PRECISION_MILLI: u8 = 3;
+pub const PRECISION_SEC: u8 = 0;
+
+/// check timestamp and return precision and the base.
+#[inline]
+pub fn check_timestamp(micros: i64) -> Result<(u8, i64), String> {
+    if (-31536000000..=31536000000).contains(&micros) {
+        Ok((PRECISION_SEC, MICROS_IN_A_SEC))
+    } else if (-31536000000000..=31536000000000).contains(&micros) {
+        Ok((PRECISION_MILLI, MICROS_IN_A_MILLI))
+    } else if (TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(&micros) {
+        Ok((PRECISION_MICRO, MICROS_IN_A_MICRO))
+    } else {
+        Err(format!("timestamp `{}` is out of range", Timestamp {
+            ts: micros,
+            precision: PRECISION_MICRO,
+        }))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TimestampType;
 
@@ -164,6 +196,18 @@ pub struct Timestamp {
     pub precision: u8,
 }
 
+impl Timestamp {
+    #[inline]
+    pub fn to_seconds(&self) -> i64 {
+        self.ts / 1_000_000
+    }
+
+    #[inline]
+    pub fn to_days(&self) -> i32 {
+        (self.to_seconds() / 24 / 3600) as i32
+    }
+}
+
 impl PartialOrd for Timestamp {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.ts.partial_cmp(&other.ts)
@@ -216,6 +260,13 @@ impl TimestampColumn {
             ts: self.ts.iter(),
             precision: self.precision,
         }
+    }
+
+    pub fn to_days(&self) -> Vec<i32> {
+        self.ts
+            .iter()
+            .map(|ts| (ts / 1_000_000 / 24 / 3600) as i32)
+            .collect()
     }
 }
 

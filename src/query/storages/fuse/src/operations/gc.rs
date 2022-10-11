@@ -57,7 +57,7 @@ impl FuseTable {
             return Ok(());
         };
 
-        let reader = MetaReaders::table_snapshot_reader(ctx.clone());
+        let reader = MetaReaders::table_snapshot_reader(ctx.clone(), self.get_operator());
 
         let (prev_id, prev_ver) = if let Some((id, ver)) = last_snapshot.prev_snapshot_id {
             (id, ver)
@@ -151,7 +151,7 @@ impl FuseTable {
     ) -> Result<HashSet<String>> {
         let mut result = HashSet::new();
 
-        let segments = read_segments(ctx, segment_locations).await?;
+        let segments = read_segments(self.operator.clone(), ctx, segment_locations).await?;
         for (idx, segment) in segments.iter().enumerate() {
             let segment = segment.clone();
             let segment_info = match segment {
@@ -237,7 +237,7 @@ impl FuseTable {
     ) -> Result<()> {
         let accessor = &self.operator;
         let aborting = ctx.get_aborting();
-        let segments = read_segments(ctx, segment_locations).await?;
+        let segments = read_segments(self.operator.clone(), ctx, segment_locations).await?;
 
         for segment in segments {
             let segment = segment?;

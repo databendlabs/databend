@@ -36,8 +36,9 @@ async fn read_snapshot(
     ctx: Arc<dyn TableContext>,
     snapshot_location: String,
     format_version: u64,
+    data_accessor: Operator,
 ) -> Result<Arc<TableSnapshot>> {
-    let reader = MetaReaders::table_snapshot_reader(ctx.clone());
+    let reader = MetaReaders::table_snapshot_reader(ctx.clone(), data_accessor);
     reader.read(snapshot_location, None, format_version).await
 }
 
@@ -46,6 +47,7 @@ pub async fn read_snapshots(
     ctx: Arc<dyn TableContext>,
     snapshot_files: &[String],
     format_version: u64,
+    data_accessor: Operator,
 ) -> Result<Vec<Result<Arc<TableSnapshot>>>> {
     let max_runtime_threads = ctx.get_settings().get_max_threads()? as usize;
     let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
@@ -57,8 +59,13 @@ pub async fn read_snapshots(
         if let Some(location) = iter.next() {
             let location = location.clone();
             Some(
-                read_snapshot(ctx_clone.clone(), location, format_version)
-                    .instrument(tracing::debug_span!("read_snapshot")),
+                read_snapshot(
+                    ctx_clone.clone(),
+                    location,
+                    format_version,
+                    data_accessor.clone(),
+                )
+                .instrument(tracing::debug_span!("read_snapshot")),
             )
         } else {
             None
@@ -139,7 +146,8 @@ pub async fn read_snapshot_lites_by_root_file(
     let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
     let mut snapshot_map = HashMap::with_capacity(snapshot_files.len());
     for chunks in snapshot_files.chunks(max_io_requests * 5) {
-        let results = read_snapshots(ctx.clone(), chunks, format_version).await?;
+        let results =
+            read_snapshots(ctx.clone(), chunks, format_version, data_accessor.clone()).await?;
         for snapshot in results.into_iter().flatten() {
             let snapshot_lite = TableSnapshotLite::from(snapshot.as_ref());
             snapshot_map.insert(snapshot_lite.snapshot_id, snapshot_lite);
@@ -148,7 +156,13 @@ pub async fn read_snapshot_lites_by_root_file(
 
     // 2. Build the snapshot chain from root.
     // 2.1 Get the root snapshot.
-    let root_snapshot = read_snapshot(ctx.clone(), root_snapshot_file, format_version).await?;
+    let root_snapshot = read_snapshot(
+        ctx.clone(),
+        root_snapshot_file,
+        format_version,
+        data_accessor.clone(),
+    )
+    .await?;
     let root_snapshot_lite = TableSnapshotLite::from(root_snapshot.as_ref());
 
     // 2.2 Chain the snapshots from root to the oldest.

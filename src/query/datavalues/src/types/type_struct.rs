@@ -144,7 +144,7 @@ impl DataType for StructType {
             let cols = value
                 .iter()
                 .zip(self.types.iter())
-                .map(|(v, typ)| typ.create_constant_column(v, size))
+                .map(|(v, typ)| typ.create_constant_column(v, 1))
                 .collect::<Result<Vec<_>>>()?;
             let struct_column = StructColumn::from_data(cols, DataTypeImpl::Struct(self.clone()));
             return Ok(Arc::new(ConstColumn::new(Arc::new(struct_column), size)));
