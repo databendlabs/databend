@@ -279,7 +279,7 @@ impl KVApiTestSuite {
                 UpsertKVReq::update("k2", b"v2")
                     .with(MatchSeq::Exact(0))
                     .with(KVMeta {
-                        expire_at: Some(now + 2),
+                        expire_at: Some(now + 10),
                     }),
             )
             .await?;
@@ -291,7 +291,7 @@ impl KVApiTestSuite {
                 Some(SeqV::with_meta(
                     3,
                     Some(KVMeta {
-                        expire_at: Some(now + 2)
+                        expire_at: Some(now + 10)
                     }),
                     b"v2".to_vec()
                 ))
