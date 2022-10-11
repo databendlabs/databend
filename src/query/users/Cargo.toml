@@ -22,7 +22,6 @@ common-management = { path = "../management" }
 common-meta-api = { path = "../../meta/api" }
 common-meta-store = { path = "../../meta/store" }
 common-meta-types = { path = "../../meta/types" }
-common-tracing = { path = "../../common/tracing" }
 
 # Github dependencies
 

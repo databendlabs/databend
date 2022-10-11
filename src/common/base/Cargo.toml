@@ -32,7 +32,6 @@ futures = "0.3.24"
 libc = "0.2.133"
 num_cpus = "1.13.1"
 once_cell = "1.15.0"
-parking_lot = "0.12.1"
 pprof = { version = "0.10.1", features = [
     "flamegraph",
     "protobuf-codec",

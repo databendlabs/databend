@@ -12,24 +12,24 @@ test = false
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
-common-arrow = { path = "../../common/arrow" }
 common-base = { path = "../../common/base" }
 common-datablocks = { path = "../datablocks" }
 common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../../common/exception" }
-common-io = { path = "../../common/io" }
 
 # Github dependencies
 
 # Crates.io dependencies
-async-stream = "0.3.3"
-async-trait = "0.1.57"
-chrono-tz = "0.6.3"
 futures = "0.3.24"
-parking_lot = "0.12.1"
 pin-project-lite = "0.2.9"
+
+# TODO: remove this once `preseve_order` is appropriately dealt with in other
+#       crate.
+#
+#       Meanwhile, removing this unused dep messes up json key ordering in other
+#       crate:
+#       https://github.com/datafuselabs/databend/actions/runs/3223480164/jobs/5273693965
 serde_json = { version = "1.0.85", default-features = false, features = ["preserve_order"] }
-tempfile = "3.3.0"
 
 [dev-dependencies]
 opendal = { version = "0.19", features = ["layers-retry", "compress"] }
