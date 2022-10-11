@@ -81,6 +81,7 @@ impl FuseTable {
         let cluster_stats_gen = self.cluster_stats_gen(ctx.clone())?;
         let mut deletion_collector = DeletionMutator::try_create(
             ctx.clone(),
+            self.get_operator(),
             self.meta_location_generator.clone(),
             snapshot.clone(),
             cluster_stats_gen,
@@ -96,7 +97,14 @@ impl FuseTable {
         };
         let push_downs = Some(extras);
         let segments_location = snapshot.segments.clone();
-        let block_metas = BlockPruner::prune(&ctx, schema, &push_downs, segments_location).await?;
+        let block_metas = BlockPruner::prune(
+            &ctx,
+            self.operator.clone(),
+            schema,
+            &push_downs,
+            segments_location,
+        )
+        .await?;
 
         // delete block one by one.
         // this could be executed in a distributed manner (till new planner, pipeline settled down)
