@@ -39,14 +39,13 @@ impl<'a> FuseSnapshot<'a> {
         let snapshot_location = self.table.snapshot_loc();
         if let Some(snapshot_location) = snapshot_location {
             let snapshot_version = self.table.snapshot_format_version();
-            let snapshots_results = read_snapshots_by_root_file(
+            let snapshots = read_snapshots_by_root_file(
                 self.ctx.clone(),
                 snapshot_location,
                 snapshot_version,
                 &self.table.operator,
             )
             .await?;
-            let snapshots = snapshots_results.into_iter().flatten().collect();
             return self.to_block(&meta_location_generator, snapshots, snapshot_version);
         }
         Ok(DataBlock::empty_with_schema(FuseSnapshot::schema()))

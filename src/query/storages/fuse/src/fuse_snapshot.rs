@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -35,7 +36,7 @@ async fn read_snapshot(
     snapshot_location: String,
     format_version: u64,
 ) -> Result<Arc<TableSnapshot>> {
-    let reader = MetaReaders::table_snapshot_reader(ctx);
+    let reader = MetaReaders::table_snapshot_reader(ctx.clone());
     reader.read(snapshot_location, None, format_version).await
 }
 
@@ -49,7 +50,7 @@ pub async fn read_snapshots_by_root_file(
     root_snapshot_file: String,
     format_version: u64,
     data_accessor: &Operator,
-) -> Result<Vec<Result<Arc<TableSnapshot>>>> {
+) -> Result<Vec<Arc<TableSnapshot>>> {
     let mut snapshot_files = vec![];
     if let Some(path) = Path::new(&root_snapshot_file).parent() {
         let mut snapshot_prefix = path.to_str().unwrap_or("").to_string();
@@ -69,7 +70,10 @@ pub async fn read_snapshots_by_root_file(
         while let Some(de) = ds.try_next().await? {
             match de.mode() {
                 ObjectMode::FILE => {
-                    snapshot_files.push(de.path().to_string());
+                    let location = de.path().to_string();
+                    if location != root_snapshot_file {
+                        snapshot_files.push(de.path().to_string());
+                    }
                 }
                 _ => {
                     warn!(
@@ -87,17 +91,18 @@ pub async fn read_snapshots_by_root_file(
         return Ok(vec![]);
     }
 
+    // 1. Get all the snapshot with parallel.
     let max_runtime_threads = ctx.get_settings().get_max_threads()? as usize;
     let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
 
     // 1.1 combine all the tasks.
+    let ctx_clone = ctx.clone();
     let mut iter = snapshot_files.iter();
     let tasks = std::iter::from_fn(move || {
         if let Some(location) = iter.next() {
-            let ctx = ctx.clone();
             let location = location.clone();
             Some(
-                read_snapshot(ctx, location, format_version)
+                read_snapshot(ctx_clone.clone(), location, format_version)
                     .instrument(tracing::debug_span!("read_snapshot")),
             )
         } else {
@@ -122,5 +127,33 @@ pub async fn read_snapshots_by_root_file(
         .instrument(tracing::debug_span!("read_snapshots_join_all"))
         .await
         .map_err(|e| ErrorCode::StorageOther(format!("read snapshots failure, {}", e)))?;
-    Ok(joint)
+
+    // 2. Build the snapshot chain from root.
+    // 2.1 Build all the snapshot map, key is snapshot_id, value is the snapshot object.
+    let mut snapshot_map = HashMap::with_capacity(snapshot_files.len());
+    for snapshot in joint.into_iter().flatten() {
+        snapshot_map.insert(snapshot.snapshot_id, snapshot);
+    }
+
+    // 2.2 Get the root snapshot.
+    let root_snapshot = read_snapshot(ctx.clone(), root_snapshot_file, format_version).await?;
+
+    // 2.3 Chain the snapshots from root to the oldest.
+    let mut snapshot_chain = Vec::with_capacity(snapshot_map.len());
+    snapshot_chain.push(root_snapshot.clone());
+    let mut prev_snapshot_id_tuple = root_snapshot.prev_snapshot_id;
+    while let Some((prev_snapshot_id, _)) = prev_snapshot_id_tuple {
+        let prev_snapshot = snapshot_map.get(&prev_snapshot_id);
+        match prev_snapshot {
+            None => {
+                break;
+            }
+            Some(prev_snapshot) => {
+                snapshot_chain.push(prev_snapshot.clone());
+                prev_snapshot_id_tuple = prev_snapshot.prev_snapshot_id;
+            }
+        }
+    }
+
+    Ok(snapshot_chain)
 }
