@@ -263,26 +263,22 @@ impl BlockPruner {
         segment_idx: SegmentIndex,
         segment_info: &SegmentInfo,
     ) -> Vec<(SegmentIndex, BlockMeta)> {
-        segment_info
-            .blocks
-            .iter()
-            .filter_map(|block_meta| {
-                // check limit speculatively
-                if pruning_ctx.limiter.exceeded() {
-                    return None;
-                }
-                let row_count = block_meta.row_count;
-                if pruning_ctx
-                    .range_pruner
-                    .should_keep(&block_meta.col_stats, row_count)
-                    && pruning_ctx.limiter.within_limit(row_count)
-                {
-                    Some((segment_idx, block_meta.clone()))
-                } else {
-                    None
-                }
-            })
-            .collect()
+        let mut result = Vec::with_capacity(segment_info.blocks.len());
+        for block_meta in &segment_info.blocks {
+            // check limit speculatively
+            if pruning_ctx.limiter.exceeded() {
+                break;
+            }
+            let row_count = block_meta.row_count;
+            if pruning_ctx
+                .range_pruner
+                .should_keep(&block_meta.col_stats, row_count)
+                && pruning_ctx.limiter.within_limit(row_count)
+            {
+                result.push((segment_idx, block_meta.clone()))
+            }
+        }
+        result
     }
 
     #[inline]
