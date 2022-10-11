@@ -30,6 +30,8 @@ message S3StorageConfig {
   bool disable_credential_loader = 8;
   bool enable_virtual_host_style = 9;
   string security_token = 10;
+  string role_arn = 11;
+  string external_id = 12;
 }
 
 message FsStorageConfig {
@@ -58,6 +60,4 @@ message OssStorageConfig {
   string root = 3;
   string access_key_id = 4;
   string access_key_secret = 5;
-  string oidc_token = 6;
-  string role_arn = 7;
 }

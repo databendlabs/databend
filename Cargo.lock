@@ -592,6 +592,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6b4d9b1225d28d360ec6a231d65af1fd99a2a095154c8040689617290569c5c"
 
 [[package]]
+name = "bb8"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1627eccf3aa91405435ba240be23513eeca466b5dc33866422672264de061582"
+dependencies = [
+ "async-trait",
+ "futures-channel",
+ "futures-util",
+ "parking_lot 0.12.1",
+ "tokio",
+]
+
+[[package]]
 name = "beef"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5286,9 +5299,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.19.0"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a14cec5f8274036de7b3a7a727a647322a30d05dfef2dbb2c2f95bda81a5e39d"
+checksum = "a4787b980078f838cbbae5a313358b4cea7b3f45440f8f1bcb29692ce6cecce4"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -5296,6 +5309,7 @@ dependencies = [
  "async-trait",
  "backon",
  "base64",
+ "bb8",
  "bincode",
  "bytes",
  "flagset",
@@ -6454,9 +6468,9 @@ dependencies = [
 
 [[package]]
 name = "reqsign"
-version = "0.5.2"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a082aef1e547f31ddde9db1eb92e983ed92dbd521678709ba2574cf768c919ef"
+checksum = "a4d2a14e7be31799dd75672cee053edc2f87c1618936457d701ade16ad243cbd"
 dependencies = [
  "anyhow",
  "backon",
@@ -8152,7 +8166,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.8.5",
+ "rand 0.7.3",
  "static_assertions",
 ]
 
