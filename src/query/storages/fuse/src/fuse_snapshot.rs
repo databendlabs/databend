@@ -40,6 +40,49 @@ async fn read_snapshot(
     reader.read(snapshot_location, None, format_version).await
 }
 
+#[tracing::instrument(level = "debug", skip_all)]
+pub async fn read_snapshots(
+    ctx: Arc<dyn TableContext>,
+    snapshot_files: &[String],
+    format_version: u64,
+) -> Result<Vec<Result<Arc<TableSnapshot>>>> {
+    let max_runtime_threads = ctx.get_settings().get_max_threads()? as usize;
+    let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
+
+    // 1.1 combine all the tasks.
+    let ctx_clone = ctx.clone();
+    let mut iter = snapshot_files.iter();
+    let tasks = std::iter::from_fn(move || {
+        if let Some(location) = iter.next() {
+            let location = location.clone();
+            Some(
+                read_snapshot(ctx_clone.clone(), location, format_version)
+                    .instrument(tracing::debug_span!("read_snapshot")),
+            )
+        } else {
+            None
+        }
+    });
+
+    // 1.2 build the runtime.
+    let semaphore = Arc::new(Semaphore::new(max_io_requests));
+    let segments_runtime = Arc::new(Runtime::with_worker_threads(
+        max_runtime_threads,
+        Some("fuse-req-snapshots-worker".to_owned()),
+    )?);
+
+    // 1.3 spawn all the tasks to the runtime.
+    let join_handlers = segments_runtime
+        .try_spawn_batch(semaphore.clone(), tasks)
+        .await?;
+
+    // 1.4 get all the result.
+    future::try_join_all(join_handlers)
+        .instrument(tracing::debug_span!("read_snapshots_join_all"))
+        .await
+        .map_err(|e| ErrorCode::StorageOther(format!("read snapshots failure, {}", e)))
+}
+
 // Read all the snapshots by the root file:
 // 1. Get the prefix:'/db/table/_ss/' from the root_snapshot_file('/db/table/_ss/xx.json')
 // 2. List all the files in the prefix
@@ -91,54 +134,21 @@ pub async fn read_snapshots_by_root_file(
         return Ok(vec![]);
     }
 
-    // 1. Get all the snapshot with parallel.
-    let max_runtime_threads = ctx.get_settings().get_max_threads()? as usize;
+    // 1. Get all the snapshot by chunks.
     let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
-
-    // 1.1 combine all the tasks.
-    let ctx_clone = ctx.clone();
-    let mut iter = snapshot_files.iter();
-    let tasks = std::iter::from_fn(move || {
-        if let Some(location) = iter.next() {
-            let location = location.clone();
-            Some(
-                read_snapshot(ctx_clone.clone(), location, format_version)
-                    .instrument(tracing::debug_span!("read_snapshot")),
-            )
-        } else {
-            None
-        }
-    });
-
-    // 1.2 build the runtime.
-    let semaphore = Arc::new(Semaphore::new(max_io_requests));
-    let segments_runtime = Arc::new(Runtime::with_worker_threads(
-        max_runtime_threads,
-        Some("fuse-req-snapshots-worker".to_owned()),
-    )?);
-
-    // 1.3 spawn all the tasks to the runtime.
-    let join_handlers = segments_runtime
-        .try_spawn_batch(semaphore.clone(), tasks)
-        .await?;
-
-    // 1.4 get all the result.
-    let joint: Vec<Result<Arc<TableSnapshot>>> = future::try_join_all(join_handlers)
-        .instrument(tracing::debug_span!("read_snapshots_join_all"))
-        .await
-        .map_err(|e| ErrorCode::StorageOther(format!("read snapshots failure, {}", e)))?;
-
-    // 2. Build the snapshot chain from root.
-    // 2.1 Build all the snapshot map, key is snapshot_id, value is the snapshot object.
     let mut snapshot_map = HashMap::with_capacity(snapshot_files.len());
-    for snapshot in joint.into_iter().flatten() {
-        snapshot_map.insert(snapshot.snapshot_id, snapshot);
+    for chunks in snapshot_files.chunks(max_io_requests) {
+        let results = read_snapshots(ctx.clone(), chunks, format_version).await?;
+        for snapshot in results.into_iter().flatten() {
+            snapshot_map.insert(snapshot.snapshot_id, snapshot);
+        }
     }
 
-    // 2.2 Get the root snapshot.
+    // 2. Build the snapshot chain from root.
+    // 2.1 Get the root snapshot.
     let root_snapshot = read_snapshot(ctx.clone(), root_snapshot_file, format_version).await?;
 
-    // 2.3 Chain the snapshots from root to the oldest.
+    // 2.2 Chain the snapshots from root to the oldest.
     let mut snapshot_chain = Vec::with_capacity(snapshot_map.len());
     snapshot_chain.push(root_snapshot.clone());
     let mut prev_snapshot_id_tuple = root_snapshot.prev_snapshot_id;
