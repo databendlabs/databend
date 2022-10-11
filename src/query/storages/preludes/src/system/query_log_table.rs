@@ -73,6 +73,8 @@ pub struct QueryLogElement {
     pub event_date: i32,
     #[serde(serialize_with = "datetime_str")]
     pub event_time: i64,
+    #[serde(serialize_with = "datetime_str")]
+    pub query_start_time: i64,
 
     // Schema.
     pub current_database: String,

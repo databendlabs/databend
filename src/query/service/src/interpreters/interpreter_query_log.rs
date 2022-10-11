@@ -14,6 +14,7 @@
 
 use std::fmt::Write;
 use std::sync::Arc;
+use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
@@ -93,11 +94,9 @@ impl InterpreterQueryLog {
         let current_database = ctx.get_current_database();
 
         // Stats.
-        let event_time = now
-            .duration_since(UNIX_EPOCH)
-            .expect("Time went backwards")
-            .as_micros() as i64;
+        let event_time = convert_log_timestamp(now);
         let event_date = (event_time / (24 * 3_600_000_000)) as i32;
+        let query_start_time = convert_log_timestamp(ctx.get_created_time());
 
         let written_rows = 0u64;
         let written_bytes = 0u64;
@@ -149,6 +148,7 @@ impl InterpreterQueryLog {
             query_text,
             event_date,
             event_time,
+            query_start_time,
             current_database,
             databases: "".to_string(),
             tables: "".to_string(),
@@ -196,11 +196,9 @@ impl InterpreterQueryLog {
         let query_text = ctx.get_query_str();
 
         // Stats.
-        let event_time = now
-            .duration_since(UNIX_EPOCH)
-            .expect("Time went backwards")
-            .as_micros() as i64;
+        let event_time = convert_log_timestamp(now);
         let event_date = (event_time / (24 * 3_600_000_000)) as i32;
+        let query_start_time = convert_log_timestamp(ctx.get_created_time());
         let dal_metrics = ctx.get_dal_metrics();
 
         let written_rows = ctx.get_write_progress_value().rows as u64;
@@ -260,6 +258,7 @@ impl InterpreterQueryLog {
             query_text,
             event_date,
             event_time,
+            query_start_time,
             databases: "".to_string(),
             tables: "".to_string(),
             columns: "".to_string(),
@@ -290,4 +289,10 @@ impl InterpreterQueryLog {
             extra: "".to_string(),
         })
     }
+}
+
+fn convert_log_timestamp(time: SystemTime) -> i64 {
+    time.duration_since(UNIX_EPOCH)
+        .unwrap_or(Duration::new(0, 0))
+        .as_micros() as i64
 }
