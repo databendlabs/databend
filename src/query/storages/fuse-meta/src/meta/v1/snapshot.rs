@@ -125,6 +125,42 @@ impl From<v0::TableSnapshot> for TableSnapshot {
     }
 }
 
+// A memory light version of TableSnapshot(Without segments)
+// This *ONLY* used for some optimize operation, like PURGE/FUSE_SNAPSHOT function to avoid OOM.
+#[derive(Clone, Debug)]
+pub struct TableSnapshotLite {
+    /// format version of snapshot
+    pub format_version: FormatVersion,
+
+    /// id of snapshot
+    pub snapshot_id: SnapshotId,
+
+    /// timestamp of this snapshot
+    //  for backward compatibility, `Option` is used
+    pub timestamp: Option<DateTime<Utc>>,
+
+    /// previous snapshot
+    pub prev_snapshot_id: Option<(SnapshotId, FormatVersion)>,
+
+    /// Summary Statistics
+    pub summary: Statistics,
+
+    pub segment_count: usize,
+}
+
+impl From<&TableSnapshot> for TableSnapshotLite {
+    fn from(value: &TableSnapshot) -> Self {
+        TableSnapshotLite {
+            format_version: value.format_version(),
+            snapshot_id: value.snapshot_id,
+            timestamp: value.timestamp,
+            prev_snapshot_id: value.prev_snapshot_id,
+            summary: value.summary.clone(),
+            segment_count: value.segments.len(),
+        }
+    }
+}
+
 mod util {
     use chrono::Datelike;
     use chrono::TimeZone;

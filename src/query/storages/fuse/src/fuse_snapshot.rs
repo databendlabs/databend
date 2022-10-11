@@ -22,6 +22,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::TableSnapshot;
+use common_fuse_meta::meta::TableSnapshotLite;
 use futures_util::future;
 use futures_util::TryStreamExt;
 use opendal::ObjectMode;
@@ -88,12 +89,12 @@ pub async fn read_snapshots(
 // 2. List all the files in the prefix
 // 3. Try to read all the snapshot files in parallel.
 #[tracing::instrument(level = "debug", skip_all)]
-pub async fn read_snapshots_by_root_file(
+pub async fn read_snapshot_lites_by_root_file(
     ctx: Arc<dyn TableContext>,
     root_snapshot_file: String,
     format_version: u64,
     data_accessor: &Operator,
-) -> Result<Vec<Arc<TableSnapshot>>> {
+) -> Result<Vec<TableSnapshotLite>> {
     let mut snapshot_files = vec![];
     if let Some(path) = Path::new(&root_snapshot_file).parent() {
         let mut snapshot_prefix = path.to_str().unwrap_or("").to_string();
@@ -130,7 +131,7 @@ pub async fn read_snapshots_by_root_file(
     }
 
     // Only return if no snapshot files .
-    if !snapshot_files.is_empty() {
+    if snapshot_files.is_empty() {
         return Ok(vec![]);
     }
 
@@ -140,21 +141,23 @@ pub async fn read_snapshots_by_root_file(
     for chunks in snapshot_files.chunks(max_io_requests) {
         let results = read_snapshots(ctx.clone(), chunks, format_version).await?;
         for snapshot in results.into_iter().flatten() {
-            snapshot_map.insert(snapshot.snapshot_id, snapshot);
+            let snapshot_lite = TableSnapshotLite::from(snapshot.as_ref());
+            snapshot_map.insert(snapshot_lite.snapshot_id, snapshot_lite);
         }
     }
 
     // 2. Build the snapshot chain from root.
     // 2.1 Get the root snapshot.
     let root_snapshot = read_snapshot(ctx.clone(), root_snapshot_file, format_version).await?;
+    let root_snapshot_lite = TableSnapshotLite::from(root_snapshot.as_ref());
 
     // 2.2 Chain the snapshots from root to the oldest.
     let mut snapshot_chain = Vec::with_capacity(snapshot_map.len());
-    snapshot_chain.push(root_snapshot.clone());
-    let mut prev_snapshot_id_tuple = root_snapshot.prev_snapshot_id;
+    snapshot_chain.push(root_snapshot_lite.clone());
+    let mut prev_snapshot_id_tuple = root_snapshot_lite.prev_snapshot_id;
     while let Some((prev_snapshot_id, _)) = prev_snapshot_id_tuple {
-        let prev_snapshot = snapshot_map.get(&prev_snapshot_id);
-        match prev_snapshot {
+        let prev_snapshot_lite = snapshot_map.get(&prev_snapshot_id);
+        match prev_snapshot_lite {
             None => {
                 break;
             }

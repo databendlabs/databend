@@ -17,9 +17,9 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_fuse_meta::meta::TableSnapshot;
+use common_fuse_meta::meta::TableSnapshotLite;
 
-use crate::fuse_snapshot::read_snapshots_by_root_file;
+use crate::fuse_snapshot::read_snapshot_lites_by_root_file;
 use crate::io::TableMetaLocationGenerator;
 use crate::sessions::TableContext;
 use crate::FuseTable;
@@ -39,14 +39,14 @@ impl<'a> FuseSnapshot<'a> {
         let snapshot_location = self.table.snapshot_loc();
         if let Some(snapshot_location) = snapshot_location {
             let snapshot_version = self.table.snapshot_format_version();
-            let snapshots = read_snapshots_by_root_file(
+            let snapshots = read_snapshot_lites_by_root_file(
                 self.ctx.clone(),
                 snapshot_location,
                 snapshot_version,
                 &self.table.operator,
             )
             .await?;
-            return self.to_block(&meta_location_generator, snapshots, snapshot_version);
+            return self.to_block(&meta_location_generator, &snapshots, snapshot_version);
         }
         Ok(DataBlock::empty_with_schema(FuseSnapshot::schema()))
     }
@@ -54,7 +54,7 @@ impl<'a> FuseSnapshot<'a> {
     fn to_block(
         &self,
         location_generator: &TableMetaLocationGenerator,
-        snapshots: Vec<Arc<TableSnapshot>>,
+        snapshots: &[TableSnapshotLite],
         latest_snapshot_version: u64,
     ) -> Result<DataBlock> {
         let len = snapshots.len();
@@ -82,8 +82,8 @@ impl<'a> FuseSnapshot<'a> {
                 None => (None, 0),
             };
             prev_snapshot_ids.push(id);
-            format_versions.push(current_snapshot_version);
-            segment_count.push(s.segments.len() as u64);
+            format_versions.push(s.format_version);
+            segment_count.push(s.segment_count as u64);
             block_count.push(s.summary.block_count);
             row_count.push(s.summary.row_count);
             compressed.push(s.summary.compressed_byte_size);
