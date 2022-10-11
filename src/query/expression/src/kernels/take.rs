@@ -38,13 +38,15 @@ impl Chunk {
             return Ok(self.slice(0..0));
         }
 
-        let mut after_columns = Vec::with_capacity(self.num_columns());
-        for value in self.columns() {
-            match value {
-                Value::Scalar(v) => after_columns.push(Value::Scalar(v.clone())),
-                Value::Column(c) => after_columns.push(Value::Column(Column::take(c, indices))),
-            }
-        }
+        let after_columns = self
+            .columns()
+            .iter()
+            .map(|(col, ty)| match col {
+                Value::Scalar(v) => (Value::Scalar(v.clone()), ty.clone()),
+                Value::Column(c) => (Value::Column(Column::take(c, indices)), ty.clone()),
+            })
+            .collect();
+
         Ok(Chunk::new(after_columns, indices.len()))
     }
 }

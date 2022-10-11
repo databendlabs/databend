@@ -710,11 +710,12 @@ fn builtin_functions() -> FunctionRegistry {
     );
 
     registry.register_function_factory("create_tuple", |_, args_type| {
+        let args_type = args_type.to_vec();
         Some(Arc::new(Function {
             signature: FunctionSignature {
                 name: "create_tuple",
-                args_type: args_type.to_vec(),
-                return_type: DataType::Tuple(args_type.to_vec()),
+                args_type: args_type.clone(),
+                return_type: DataType::Tuple(args_type.clone()),
                 property: FunctionProperty::default(),
             },
             calc_domain: Box::new(|args_domain| Some(Domain::Tuple(args_domain.to_vec()))),
@@ -726,8 +727,11 @@ fn builtin_functions() -> FunctionRegistry {
                 if let Some(len) = len {
                     let fields = args
                         .iter()
-                        .map(|arg| match arg {
-                            ValueRef::Scalar(scalar) => scalar.clone().repeat(len).build(),
+                        .zip(&args_type)
+                        .map(|(arg, ty)| match arg {
+                            ValueRef::Scalar(scalar) => {
+                                ColumnBuilder::repeat(scalar, len, ty).build()
+                            }
                             ValueRef::Column(col) => col.clone(),
                         })
                         .collect();
@@ -857,7 +861,7 @@ fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Column
         let chunk = Chunk::new(
             columns
                 .iter()
-                .map(|(_, _, col)| Value::Column(col.clone()))
+                .map(|(_, ty, col)| (Value::Column(col.clone()), ty.clone()))
                 .collect::<Vec<_>>(),
             num_rows,
         );

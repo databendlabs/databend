@@ -15,13 +15,13 @@
 use crate::sql::optimizer::s_expr::SExpr;
 
 #[derive(Clone, Default)]
-pub struct TransformState {
+pub struct TransformResult {
     results: Vec<SExpr>,
 }
 
-impl TransformState {
+impl TransformResult {
     pub fn new() -> Self {
-        TransformState { results: vec![] }
+        TransformResult { results: vec![] }
     }
 
     pub fn add_result(&mut self, result: SExpr) {

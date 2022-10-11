@@ -433,21 +433,6 @@ impl PartialOrd for NumberScalar {
 }
 
 impl NumberScalar {
-    pub fn repeat(&self, n: usize) -> NumberColumnBuilder {
-        match self {
-            NumberScalar::UInt8(num) => NumberColumnBuilder::UInt8(vec![*num; n]),
-            NumberScalar::UInt16(num) => NumberColumnBuilder::UInt16(vec![*num; n]),
-            NumberScalar::UInt32(num) => NumberColumnBuilder::UInt32(vec![*num; n]),
-            NumberScalar::UInt64(num) => NumberColumnBuilder::UInt64(vec![*num; n]),
-            NumberScalar::Int8(num) => NumberColumnBuilder::Int8(vec![*num; n]),
-            NumberScalar::Int16(num) => NumberColumnBuilder::Int16(vec![*num; n]),
-            NumberScalar::Int32(num) => NumberColumnBuilder::Int32(vec![*num; n]),
-            NumberScalar::Int64(num) => NumberColumnBuilder::Int64(vec![*num; n]),
-            NumberScalar::Float32(num) => NumberColumnBuilder::Float32(vec![*num; n]),
-            NumberScalar::Float64(num) => NumberColumnBuilder::Float64(vec![*num; n]),
-        }
-    }
-
     pub fn domain(&self) -> NumberDomain {
         match self {
             NumberScalar::UInt8(num) => NumberDomain::UInt8(SimpleDomain {
@@ -673,6 +658,21 @@ impl NumberColumnBuilder {
             NumberColumn::Int64(col) => NumberColumnBuilder::Int64(buffer_into_mut(col)),
             NumberColumn::Float32(col) => NumberColumnBuilder::Float32(buffer_into_mut(col)),
             NumberColumn::Float64(col) => NumberColumnBuilder::Float64(buffer_into_mut(col)),
+        }
+    }
+
+    pub fn repeat(scalar: NumberScalar, n: usize) -> NumberColumnBuilder {
+        match scalar {
+            NumberScalar::UInt8(num) => NumberColumnBuilder::UInt8(vec![num; n]),
+            NumberScalar::UInt16(num) => NumberColumnBuilder::UInt16(vec![num; n]),
+            NumberScalar::UInt32(num) => NumberColumnBuilder::UInt32(vec![num; n]),
+            NumberScalar::UInt64(num) => NumberColumnBuilder::UInt64(vec![num; n]),
+            NumberScalar::Int8(num) => NumberColumnBuilder::Int8(vec![num; n]),
+            NumberScalar::Int16(num) => NumberColumnBuilder::Int16(vec![num; n]),
+            NumberScalar::Int32(num) => NumberColumnBuilder::Int32(vec![num; n]),
+            NumberScalar::Int64(num) => NumberColumnBuilder::Int64(vec![num; n]),
+            NumberScalar::Float32(num) => NumberColumnBuilder::Float32(vec![num; n]),
+            NumberScalar::Float64(num) => NumberColumnBuilder::Float64(vec![num; n]),
         }
     }
 

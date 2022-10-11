@@ -67,7 +67,7 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
         let chunk = Chunk::new(
             columns
                 .iter()
-                .map(|(_, _, col)| Value::Column(col.clone()))
+                .map(|(_, ty, col)| (Value::Column(col.clone()), ty.clone()))
                 .collect::<Vec<_>>(),
             num_rows,
         );

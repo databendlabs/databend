@@ -234,27 +234,6 @@ impl<'a> ScalarRef<'a> {
         }
     }
 
-    pub fn repeat(&self, n: usize) -> ColumnBuilder {
-        match self {
-            ScalarRef::Null => ColumnBuilder::Null { len: n },
-            ScalarRef::EmptyArray => ColumnBuilder::EmptyArray { len: n },
-            ScalarRef::Number(num) => ColumnBuilder::Number(num.repeat(n)),
-            ScalarRef::Boolean(b) => ColumnBuilder::Boolean(constant_bitmap(*b, n)),
-            ScalarRef::String(s) => ColumnBuilder::String(StringColumnBuilder::repeat(s, n)),
-            ScalarRef::Timestamp(t) => {
-                ColumnBuilder::Timestamp(TimestampColumnBuilder::repeat(*t, n))
-            }
-            ScalarRef::Array(col) => {
-                ColumnBuilder::Array(Box::new(ArrayColumnBuilder::repeat(col, n)))
-            }
-            ScalarRef::Tuple(fields) => ColumnBuilder::Tuple {
-                fields: fields.iter().map(|field| field.repeat(n)).collect(),
-                len: n,
-            },
-            ScalarRef::Variant(s) => ColumnBuilder::Variant(StringColumnBuilder::repeat(s, n)),
-        }
-    }
-
     pub fn domain(&self) -> Domain {
         match self {
             ScalarRef::Null => Domain::Nullable(NullableDomain {
@@ -1046,6 +1025,50 @@ impl ColumnBuilder {
                 len,
             },
             Column::Variant(col) => ColumnBuilder::Variant(StringColumnBuilder::from_column(col)),
+        }
+    }
+
+    pub fn repeat(scalar: &ScalarRef, n: usize, data_type: &DataType) -> ColumnBuilder {
+        match scalar {
+            ScalarRef::Null => match data_type {
+                DataType::Null => ColumnBuilder::Null { len: n },
+                DataType::Nullable(ty) => {
+                    let mut builder = ColumnBuilder::with_capacity(ty, 1);
+                    for _ in 0..n {
+                        builder.push_default();
+                    }
+                    ColumnBuilder::Nullable(Box::new(NullableColumnBuilder {
+                        builder,
+                        validity: constant_bitmap(false, n),
+                    }))
+                }
+                _ => unreachable!(),
+            },
+            ScalarRef::EmptyArray => ColumnBuilder::EmptyArray { len: n },
+            ScalarRef::Number(num) => ColumnBuilder::Number(NumberColumnBuilder::repeat(*num, n)),
+            ScalarRef::Boolean(b) => ColumnBuilder::Boolean(constant_bitmap(*b, n)),
+            ScalarRef::String(s) => ColumnBuilder::String(StringColumnBuilder::repeat(s, n)),
+            ScalarRef::Timestamp(t) => {
+                ColumnBuilder::Timestamp(TimestampColumnBuilder::repeat(*t, n))
+            }
+            ScalarRef::Array(col) => {
+                ColumnBuilder::Array(Box::new(ArrayColumnBuilder::repeat(col, n)))
+            }
+            ScalarRef::Tuple(fields) => {
+                let fields_ty = match data_type {
+                    DataType::Tuple(fields_ty) => fields_ty,
+                    _ => unreachable!(),
+                };
+                ColumnBuilder::Tuple {
+                    fields: fields
+                        .iter()
+                        .zip(fields_ty)
+                        .map(|(field, ty)| ColumnBuilder::repeat(field, n, ty))
+                        .collect(),
+                    len: n,
+                }
+            }
+            ScalarRef::Variant(s) => ColumnBuilder::Variant(StringColumnBuilder::repeat(s, n)),
         }
     }
 

@@ -53,6 +53,11 @@ fn test_arithmetic() {
             DataType::Number(NumberDataType::Float64),
             Column::from_data(vec![10f64, -20f64, 30f64]),
         ),
+        (
+            "d2",
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
+            Column::from_data_with_validity(vec![1u8, 0, 3], vec![true, false, true]),
+        ),
     ];
     test_add(file, columns);
     test_minus(file, columns);
@@ -102,6 +107,8 @@ fn test_intdiv(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
     run_ast(file, "a2 div c", columns);
     run_ast(file, "c div b", columns);
     run_ast(file, "c div d", columns);
+    run_ast(file, "c div d2", columns);
+    run_ast(file, "c div 0", columns);
 }
 
 fn test_modulo(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
@@ -110,4 +117,6 @@ fn test_modulo(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
     run_ast(file, "(a2 + 4) % c", columns);
     run_ast(file, "c % (b + 3)", columns);
     run_ast(file, "c % (d - 3)", columns);
+    run_ast(file, "c % 0", columns);
+    run_ast(file, "c % d2", columns);
 }

@@ -23,17 +23,20 @@ use common_exception::Result;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
+use crate::types::number::NumberScalar;
 use crate::types::string::StringColumnBuilder;
 use crate::types::timestamp::TimestampColumn;
 use crate::types::AnyType;
+use crate::types::ArgType;
 use crate::types::ArrayType;
 use crate::types::BooleanType;
-use crate::types::NullableType;
 use crate::types::StringType;
 use crate::types::ValueType;
+use crate::with_number_mapped_type;
 use crate::with_number_type;
 use crate::Chunk;
 use crate::Column;
+use crate::Scalar;
 use crate::Value;
 
 impl Chunk {
@@ -65,15 +68,16 @@ impl Chunk {
                         if count_zeros == self.num_rows() {
                             return Ok(self.slice(0..0));
                         }
-                        let mut after_columns = Vec::with_capacity(self.num_columns());
-                        for value in self.columns() {
-                            match value {
-                                Value::Scalar(v) => after_columns.push(Value::Scalar(v.clone())),
+                        let after_columns = self
+                            .columns()
+                            .iter()
+                            .map(|(value, ty)| match value {
+                                Value::Scalar(v) => (Value::Scalar(v.clone()), ty.clone()),
                                 Value::Column(c) => {
-                                    after_columns.push(Value::Column(Column::filter(c, &bitmap)))
+                                    (Value::Column(Column::filter(c, &bitmap)), ty.clone())
                                 }
-                            }
-                        }
+                            })
+                            .collect();
                         Ok(Chunk::new(after_columns, self.num_rows() - count_zeros))
                     }
                 }
@@ -81,24 +85,45 @@ impl Chunk {
         }
     }
 
-    // Must be nullable boolean or boolean value
+    // Must be numeric, boolean, or string value type
     fn cast_to_nonull_boolean(predicate: &Value<AnyType>) -> Option<Value<BooleanType>> {
         match predicate {
-            Value::Scalar(v) => {
-                if let Some(v) = NullableType::<BooleanType>::try_downcast_scalar(&v.as_ref()) {
-                    Some(Value::Scalar(v.unwrap_or_default()))
-                } else {
-                    BooleanType::try_downcast_scalar(&v.as_ref()).map(Value::Scalar)
-                }
+            Value::Scalar(s) => Self::cast_scalar_to_boolean(s).map(Value::Scalar),
+            Value::Column(c) => Self::cast_column_to_boolean(c).map(Value::Column),
+        }
+    }
+
+    fn cast_scalar_to_boolean(s: &Scalar) -> Option<bool> {
+        match s {
+            Scalar::Number(num) => with_number_mapped_type!(|SRC_TYPE| match num {
+                NumberScalar::SRC_TYPE(value) => Some(value != &SRC_TYPE::default()),
+            }),
+            Scalar::Boolean(value) => Some(*value),
+            Scalar::String(value) => Some(!value.is_empty()),
+            Scalar::Null => Some(false),
+            _ => None,
+        }
+    }
+
+    fn cast_column_to_boolean(c: &Column) -> Option<Bitmap> {
+        match c {
+            Column::Number(num) => with_number_mapped_type!(|SRC_TYPE| match num {
+                NumberColumn::SRC_TYPE(value) => Some(BooleanType::column_from_iter(
+                    value.iter().map(|v| v != &SRC_TYPE::default()),
+                    &[],
+                )),
+            }),
+            Column::Boolean(value) => Some(value.clone()),
+            Column::String(value) => Some(BooleanType::column_from_iter(
+                value.iter().map(|s| !s.is_empty()),
+                &[],
+            )),
+            Column::Null { len } => Some(MutableBitmap::from_len_zeroed(*len).into()),
+            Column::Nullable(c) => {
+                let inner = Self::cast_column_to_boolean(&c.column)?;
+                Some((&inner) & (&c.validity))
             }
-            Value::Column(c) => {
-                if let Some(nb) = NullableType::<BooleanType>::try_downcast_column(c) {
-                    let validity = common_arrow::arrow::bitmap::and(&nb.validity, &nb.column);
-                    Some(Value::Column(validity))
-                } else {
-                    BooleanType::try_downcast_column(c).map(Value::Column)
-                }
-            }
+            _ => None,
         }
     }
 }

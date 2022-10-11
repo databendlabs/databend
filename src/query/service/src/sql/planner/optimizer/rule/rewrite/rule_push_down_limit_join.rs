@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use crate::sql::optimizer::rule::Rule;
-use crate::sql::optimizer::rule::TransformState;
+use crate::sql::optimizer::rule::TransformResult;
 use crate::sql::optimizer::RuleID;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::JoinType;
@@ -79,7 +79,7 @@ impl Rule for RulePushDownLimitOuterJoin {
         self.id
     }
 
-    fn apply(&self, s_expr: &SExpr, state: &mut TransformState) -> common_exception::Result<()> {
+    fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> common_exception::Result<()> {
         let limit: Limit = s_expr.plan().clone().try_into()?;
         if limit.limit.is_some() {
             let child = s_expr.child(0)?;

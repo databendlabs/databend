@@ -15,5 +15,7 @@
 mod cascade;
 mod explore_rules;
 mod implement_rules;
+mod scheduler;
+mod tasks;
 
 pub use cascade::CascadesOptimizer;
