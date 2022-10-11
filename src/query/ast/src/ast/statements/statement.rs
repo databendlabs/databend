@@ -193,6 +193,7 @@ impl<'a> Display for Statement<'a> {
                     ExplainKind::Fragments => write!(f, " FRAGMENTS")?,
                     ExplainKind::Raw => write!(f, " RAW")?,
                     ExplainKind::Plan => (),
+                    ExplainKind::Memo(_) => write!(f, "MEMO")?,
                 }
                 write!(f, " {query}")?;
             }
