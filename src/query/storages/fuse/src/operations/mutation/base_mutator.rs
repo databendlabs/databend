@@ -53,15 +53,15 @@ pub struct BaseMutator {
 impl BaseMutator {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
+        op: Operator,
         location_generator: TableMetaLocationGenerator,
         base_snapshot: Arc<TableSnapshot>,
     ) -> Result<Self> {
-        let data_accessor = ctx.get_storage_operator()?;
         Ok(Self {
             mutations: HashMap::new(),
             ctx,
             location_generator,
-            data_accessor,
+            data_accessor: op,
             base_snapshot,
         })
     }
@@ -111,7 +111,9 @@ impl BaseMutator {
         for (seg_idx, replacements) in self.mutations.clone() {
             let segment = {
                 let (path, version) = &segments[seg_idx];
-                segment_reader.read(&path, None, *version).await?
+                segment_reader
+                    .read(self.data_accessor.clone(), &path, None, *version)
+                    .await?
             };
 
             // collects the block locations of the segment being modified
@@ -168,7 +170,9 @@ impl BaseMutator {
 
         let mut new_segment_summaries = Vec::with_capacity(new_segments.len());
         for (loc, ver) in &new_segments {
-            let seg = segment_reader.read(loc, None, *ver).await?;
+            let seg = segment_reader
+                .read(self.data_accessor.clone(), loc, None, *ver)
+                .await?;
             new_segment_summaries.push(seg.summary.clone())
         }
 

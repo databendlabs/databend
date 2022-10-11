@@ -27,6 +27,7 @@ use common_storages_util::cached_reader::CachedReader;
 use common_storages_util::cached_reader::HasTenantLabel;
 use common_storages_util::cached_reader::Loader;
 use opendal::BytesReader;
+use opendal::Operator;
 
 use super::versioned_reader::VersionedReader;
 
@@ -36,7 +37,8 @@ use super::versioned_reader::VersionedReader;
 /// of an [BufReader] can be deferred or avoided (e.g. if hits cache).
 #[async_trait::async_trait]
 pub trait BytesReaderProvider {
-    async fn bytes_reader(&self, path: &str, len: Option<u64>) -> Result<BytesReader>;
+    async fn bytes_reader(&self, op: Operator, path: &str, len: Option<u64>)
+    -> Result<BytesReader>;
 }
 
 pub type SegmentInfoReader<'a> = CachedReader<SegmentInfo, LoaderWrapper<&'a dyn TableContext>>;
@@ -81,12 +83,13 @@ where T: BytesReaderProvider + Sync + Send
 {
     async fn load(
         &self,
+        op: Operator,
         key: &str,
         length_hint: Option<u64>,
         version: u64,
     ) -> Result<TableSnapshot> {
         let version = SnapshotVersion::try_from(version)?;
-        let reader = self.0.bytes_reader(key, length_hint).await?;
+        let reader = self.0.bytes_reader(op, key, length_hint).await?;
         version.read(reader).await
     }
 }
@@ -95,18 +98,28 @@ where T: BytesReaderProvider + Sync + Send
 impl<T> Loader<SegmentInfo> for LoaderWrapper<T>
 where T: BytesReaderProvider + Sync + Send
 {
-    async fn load(&self, key: &str, length_hint: Option<u64>, version: u64) -> Result<SegmentInfo> {
+    async fn load(
+        &self,
+        op: Operator,
+        key: &str,
+        length_hint: Option<u64>,
+        version: u64,
+    ) -> Result<SegmentInfo> {
         let version = SegmentInfoVersion::try_from(version)?;
-        let reader = self.0.bytes_reader(key, length_hint).await?;
+        let reader = self.0.bytes_reader(op, key, length_hint).await?;
         version.read(reader).await
     }
 }
 
 #[async_trait::async_trait]
 impl BytesReaderProvider for &dyn TableContext {
-    async fn bytes_reader(&self, path: &str, len: Option<u64>) -> Result<BytesReader> {
-        let operator = self.get_storage_operator()?;
-        let object = operator.object(path);
+    async fn bytes_reader(
+        &self,
+        op: Operator,
+        path: &str,
+        len: Option<u64>,
+    ) -> Result<BytesReader> {
+        let object = op.object(path);
 
         let len = match len {
             Some(l) => l,
@@ -124,8 +137,13 @@ impl BytesReaderProvider for &dyn TableContext {
 
 #[async_trait::async_trait]
 impl BytesReaderProvider for Arc<dyn TableContext> {
-    async fn bytes_reader(&self, path: &str, len: Option<u64>) -> Result<BytesReader> {
-        self.as_ref().bytes_reader(path, len).await
+    async fn bytes_reader(
+        &self,
+        op: Operator,
+        path: &str,
+        len: Option<u64>,
+    ) -> Result<BytesReader> {
+        self.as_ref().bytes_reader(op, path, len).await
     }
 }
 

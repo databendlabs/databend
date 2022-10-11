@@ -18,6 +18,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_fuse_meta::meta::TableSnapshot;
 use futures_util::stream;
+use opendal::Operator;
 
 use crate::io::TableMetaLocationGenerator;
 use crate::io::TableSnapshotReader;
@@ -28,6 +29,7 @@ pub type TableSnapshotStream =
 pub trait SnapshotHistoryReader {
     fn snapshot_history(
         self,
+        dal: Operator,
         location: String,
         format_version: u64,
         location_gen: TableMetaLocationGenerator,
@@ -36,15 +38,16 @@ pub trait SnapshotHistoryReader {
 impl SnapshotHistoryReader for TableSnapshotReader {
     fn snapshot_history(
         self,
+        dal: Operator,
         location: String,
         format_version: u64,
         location_gen: TableMetaLocationGenerator,
     ) -> TableSnapshotStream {
         let stream = stream::try_unfold(
-            (self, location_gen, Some((location, format_version))),
-            |(reader, gen, next)| async move {
+            (self, location_gen, dal, Some((location, format_version))),
+            |(reader, gen, dal, next)| async move {
                 if let Some((loc, ver)) = next {
-                    let snapshot = match reader.read(loc, None, ver).await {
+                    let snapshot = match reader.read(dal.clone(), loc, None, ver).await {
                         Ok(s) => Ok(Some(s)),
                         Err(e) => {
                             if e.code() == ErrorCode::storage_not_found_code() {
@@ -59,9 +62,12 @@ impl SnapshotHistoryReader for TableSnapshotReader {
                             if let Some((id, v)) = snapshot.prev_snapshot_id {
                                 let new_ver = v;
                                 let new_loc = gen.snapshot_location_from_uuid(&id, v)?;
-                                Ok(Some((snapshot, (reader, gen, Some((new_loc, new_ver))))))
+                                Ok(Some((
+                                    snapshot,
+                                    (reader, gen, dal, Some((new_loc, new_ver))),
+                                )))
                             } else {
-                                Ok(Some((snapshot, (reader, gen, None))))
+                                Ok(Some((snapshot, (reader, gen, dal, None))))
                             }
                         }
                         Ok(None) => Ok(None),

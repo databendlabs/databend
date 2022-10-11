@@ -64,7 +64,9 @@ impl<'a> ClusteringInformation<'a> {
         if let Some(snapshot) = snapshot {
             let reader = MetaReaders::segment_info_reader(self.ctx.as_ref());
             for (x, ver) in &snapshot.segments {
-                let res = reader.read(x, None, *ver).await?;
+                let res = reader
+                    .read(self.table.operator.clone(), x, None, *ver)
+                    .await?;
                 let mut block = res.blocks.clone();
                 blocks.append(&mut block);
             }

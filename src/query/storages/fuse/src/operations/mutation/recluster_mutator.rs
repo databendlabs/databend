@@ -52,6 +52,7 @@ pub struct ReclusterMutator {
 impl ReclusterMutator {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
+        op: Operator,
         location_generator: TableMetaLocationGenerator,
         base_snapshot: Arc<TableSnapshot>,
         threshold: f64,
@@ -59,7 +60,7 @@ impl ReclusterMutator {
         blocks_map: BTreeMap<i32, Vec<(usize, BlockMeta)>>,
         data_accessor: Operator,
     ) -> Result<Self> {
-        let base_mutator = BaseMutator::try_create(ctx, location_generator, base_snapshot)?;
+        let base_mutator = BaseMutator::try_create(ctx, op, location_generator, base_snapshot)?;
         Ok(Self {
             base_mutator,
             blocks_map,

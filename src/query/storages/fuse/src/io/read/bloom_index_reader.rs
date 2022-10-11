@@ -91,7 +91,7 @@ mod util_v1 {
         path: &str,
         length: u64,
     ) -> Result<DataBlock> {
-        let file_meta = load_index_meta(&ctx, path, length).await?;
+        let file_meta = load_index_meta(dal.clone(), &ctx, path, length).await?;
         if file_meta.row_groups.len() != 1 {
             return Err(ErrorCode::StorageOther(format!(
                 "invalid v1 bloom index filter index, number of row group should be 1, but found {} row groups",
@@ -254,6 +254,7 @@ mod util_v1 {
     /// read data from cache, or populate cache items if possible
     #[tracing::instrument(level = "debug", skip_all)]
     async fn load_index_meta(
+        op: Operator,
         ctx: &Arc<dyn TableContext>,
         path: &str,
         length: u64,
@@ -266,7 +267,9 @@ mod util_v1 {
             // Format of FileMetaData is not versioned, version argument is ignored by the underlying reader,
             // so we just pass a zero to reader
             let version = 0;
-            reader.read(path_owned, Some(length), version).await
+            reader
+                .read(op.clone(), path_owned, Some(length), version)
+                .await
         }
         .execute_in_runtime(&storage_runtime)
         .await?

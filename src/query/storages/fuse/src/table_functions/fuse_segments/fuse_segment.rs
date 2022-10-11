@@ -52,6 +52,7 @@ impl<'a> FuseSegment<'a> {
                 .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot_version)?;
             let reader = MetaReaders::table_snapshot_reader(self.ctx.clone());
             let mut snapshot_stream = reader.snapshot_history(
+                tbl.operator.clone(),
                 snapshot_location,
                 snapshot_version,
                 tbl.meta_location_generator().clone(),
@@ -77,7 +78,12 @@ impl<'a> FuseSegment<'a> {
         let mut uncompressed: Vec<u64> = Vec::with_capacity(len);
         let mut file_location: Vec<Vec<u8>> = Vec::with_capacity(len);
 
-        let segments = read_segments(self.ctx.clone(), segment_locations).await?;
+        let segments = read_segments(
+            self.table.operator.clone(),
+            self.ctx.clone(),
+            segment_locations,
+        )
+        .await?;
         for (idx, segment) in segments.iter().enumerate() {
             let segment = segment.clone()?;
             format_versions.push(segment_locations[idx].1);

@@ -84,8 +84,12 @@ impl FuseTable {
             .meta_location_generator
             .snapshot_location_from_uuid(&prev_id, prev_ver)?;
 
-        let mut snapshot_history =
-            reader.snapshot_history(prev_loc, prev_ver, self.meta_location_generator.clone());
+        let mut snapshot_history = reader.snapshot_history(
+            self.operator.clone(),
+            prev_loc,
+            prev_ver,
+            self.meta_location_generator.clone(),
+        );
 
         let mut snapshots_to_be_deleted: Vec<_> = Vec::new();
         if !keep_last_snapshot {
@@ -151,7 +155,7 @@ impl FuseTable {
     ) -> Result<HashSet<String>> {
         let mut result = HashSet::new();
 
-        let segments = read_segments(ctx, segment_locations).await?;
+        let segments = read_segments(self.operator.clone(), ctx, segment_locations).await?;
         for (idx, segment) in segments.iter().enumerate() {
             let segment = segment.clone();
             let segment_info = match segment {
@@ -237,7 +241,7 @@ impl FuseTable {
     ) -> Result<()> {
         let accessor = &self.operator;
         let aborting = ctx.get_aborting();
-        let segments = read_segments(ctx, segment_locations).await?;
+        let segments = read_segments(self.operator.clone(), ctx, segment_locations).await?;
 
         for segment in segments {
             let segment = segment?;

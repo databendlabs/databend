@@ -62,7 +62,14 @@ impl FuseTable {
 
         let schema = self.table_info.schema();
         let segments_locations = snapshot.segments.clone();
-        let block_metas = BlockPruner::prune(&ctx, schema, &push_downs, segments_locations).await?;
+        let block_metas = BlockPruner::prune(
+            &ctx,
+            self.operator.clone(),
+            schema,
+            &push_downs,
+            segments_locations,
+        )
+        .await?;
 
         let default_cluster_key_id = self.cluster_key_meta.clone().unwrap().0;
         let mut blocks_map: BTreeMap<i32, Vec<(usize, BlockMeta)>> = BTreeMap::new();
@@ -92,6 +99,7 @@ impl FuseTable {
             self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
         let mut mutator = ReclusterMutator::try_create(
             ctx.clone(),
+            self.operator.clone(),
             self.meta_location_generator.clone(),
             snapshot,
             threshold,

@@ -20,6 +20,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::caches::CacheManager;
+use opendal::Operator;
 
 use super::cached_reader::CachedReader;
 use super::cached_reader::Loader;
@@ -40,6 +41,7 @@ impl FileMetaDataReader {
 impl Loader<FileMetaData> for Arc<dyn TableContext> {
     async fn load(
         &self,
+        _op: Operator,
         key: &str,
         length_hint: Option<u64>,
         _version: u64,
