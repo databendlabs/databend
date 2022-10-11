@@ -1,0 +1,99 @@
+# name: test/sql/join/inner/test_join.test
+# description: Test basic joins of tables
+# group: [inner]
+# from https://github.com/duckdb/duckdb/blob/master/test/sql/join/inner/test_join.test
+
+statement ok
+drop table if exists test
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 1), (12, 2), (13, 3)
+
+statement ok
+drop table if exists test2
+
+statement ok
+CREATE TABLE test2 (b INTEGER, c INTEGER);
+
+statement ok
+INSERT INTO test2 VALUES (1, 10), (1, 20), (2, 30)
+
+# simple cross product + join condition
+statement query III
+SELECT a, test.b, c FROM test, test2 WHERE test.b = test2.b ORDER BY c;
+
+----
+11	1	10
+11	1	20
+12	2	30
+
+# ambiguous reference to column
+statement statement error
+SELECT b FROM test, test2 WHERE test.b > test2.b;
+
+# simple cross product + multiple join conditions
+statement query III
+SELECT a, test.b, c FROM test, test2 WHERE test.b=test2.b AND test.a-1=test2.c
+
+----
+11	1	10
+
+# use join columns in subquery
+#statement query III
+#SELECT a, (SELECT test.a), c FROM test, test2 WHERE test.b = test2.b ORDER BY c;
+
+#----
+#11	11	10
+#11	11	20
+#12	12	30
+
+# explicit join
+statement query III
+SELECT a, test.b, c FROM test INNER JOIN test2 ON test.b = test2.b ORDER BY c;
+
+----
+11	1	10
+11	1	20
+12	2	30
+
+# explicit join with condition the wrong way around
+statement query III
+SELECT a, test.b, c FROM test INNER JOIN test2 ON test2.b = test.b ORDER BY c;
+
+----
+11	1	10
+11	1	20
+12	2	30
+
+# explicit join with additional condition that is no left-right comparision
+statement query III
+SELECT a, test.b, c FROM test INNER JOIN test2 ON test2.b = test.b and test.b = 2;
+
+----
+12	2	30
+
+# explicit join with additional condition that is constant
+statement query III
+SELECT a, test.b, c FROM test INNER JOIN test2 ON test2.b = test.b and 2 = 2 ORDER BY c;
+
+----
+11	1	10
+11	1	20
+12	2	30
+
+# explicit join with only condition that is no left-right comparision
+statement query III
+SELECT a, test.b, c FROM test INNER JOIN test2 ON test.b = 2 ORDER BY c;
+
+----
+12	2	10
+12	2	20
+12	2	30
+
+# explicit join with only condition that is constant
+statement ok
+SELECT a, test.b, c FROM test INNER JOIN test2 ON NULL = 2;
+
