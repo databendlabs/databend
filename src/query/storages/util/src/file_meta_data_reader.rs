@@ -28,11 +28,12 @@ use super::cached_reader::Loader;
 pub type FileMetaDataReader = CachedReader<FileMetaData, Arc<dyn TableContext>>;
 
 impl FileMetaDataReader {
-    pub fn new_reader(ctx: Arc<dyn TableContext>) -> FileMetaDataReader {
+    pub fn new_reader(ctx: Arc<dyn TableContext>, dal: Operator) -> FileMetaDataReader {
         FileMetaDataReader::new(
             CacheManager::instance().get_file_meta_data_cache(),
             ctx,
             "FILE_META_DATA_CACHE".to_owned(),
+            dal,
         )
     }
 }

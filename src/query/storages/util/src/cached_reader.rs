@@ -45,29 +45,35 @@ pub struct CachedReader<T, L> {
     cache: Option<ItemCache<T>>,
     loader: L,
     name: String,
+    dal: Operator,
 }
 
 impl<T, L> CachedReader<T, L>
 where L: Loader<T> + HasTenantLabel
 {
-    pub fn new(cache: Option<ItemCache<T>>, loader: L, name: impl Into<String>) -> Self {
+    pub fn new(
+        cache: Option<ItemCache<T>>,
+        loader: L,
+        name: impl Into<String>,
+        dal: Operator,
+    ) -> Self {
         Self {
             cache,
             loader,
             name: name.into(),
+            dal,
         }
     }
 
     /// Load the object at `location`, uses/populates the cache if possible/necessary.
     pub async fn read(
         &self,
-        op: Operator,
         path: impl AsRef<str>,
         len_hint: Option<u64>,
         version: u64,
     ) -> Result<Arc<T>> {
         match &self.cache {
-            None => self.load(op, path.as_ref(), len_hint, version).await,
+            None => self.load(path.as_ref(), len_hint, version).await,
             Some(cache) => {
                 let tenant_label = self.loader.tenant_label();
 
@@ -89,7 +95,7 @@ where L: Loader<T> + HasTenantLabel
                         Ok(item)
                     }
                     None => {
-                        let item = self.load(op, path.as_ref(), len_hint, version).await?;
+                        let item = self.load(path.as_ref(), len_hint, version).await?;
                         let mut cache_guard = cache.write();
                         cache_guard.put(path.as_ref().to_owned(), item.clone());
                         Ok(item)
@@ -107,14 +113,11 @@ where L: Loader<T> + HasTenantLabel
         cache.write().get(key).cloned()
     }
 
-    async fn load(
-        &self,
-        op: Operator,
-        loc: &str,
-        len_hint: Option<u64>,
-        version: u64,
-    ) -> Result<Arc<T>> {
-        let val = self.loader.load(op, loc, len_hint, version).await?;
+    async fn load(&self, loc: &str, len_hint: Option<u64>, version: u64) -> Result<Arc<T>> {
+        let val = self
+            .loader
+            .load(self.dal.clone(), loc, len_hint, version)
+            .await?;
         let item = Arc::new(val);
         Ok(item)
     }

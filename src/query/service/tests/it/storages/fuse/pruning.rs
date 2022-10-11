@@ -148,10 +148,8 @@ async fn test_block_pruner() -> Result<()> {
         .get(OPT_KEY_SNAPSHOT_LOCATION)
         .unwrap();
 
-    let reader = MetaReaders::table_snapshot_reader(ctx.clone());
-    let snapshot = reader
-        .read(fuse_table.get_operator(), snapshot_loc.as_str(), None, 1)
-        .await?;
+    let reader = MetaReaders::table_snapshot_reader(ctx.clone(), fuse_table.get_operator());
+    let snapshot = reader.read(snapshot_loc.as_str(), None, 1).await?;
 
     // nothing is pruned
     let mut e1 = Extras::default();
@@ -295,10 +293,8 @@ async fn test_block_pruner_monotonic() -> Result<()> {
         .options()
         .get(OPT_KEY_SNAPSHOT_LOCATION)
         .unwrap();
-    let reader = MetaReaders::table_snapshot_reader(ctx.clone());
-    let snapshot = reader
-        .read(fuse_table.get_operator(), snapshot_loc.as_str(), None, 1)
-        .await?;
+    let reader = MetaReaders::table_snapshot_reader(ctx.clone(), fuse_table.get_operator());
+    let snapshot = reader.read(snapshot_loc.as_str(), None, 1).await?;
 
     // a + b > 20; some blocks pruned
     let mut extra = Extras::default();

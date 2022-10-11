@@ -170,15 +170,16 @@ impl BlockPruner {
     #[inline]
     #[tracing::instrument(level = "debug", skip_all)]
     async fn prune_segment(
-        op: Operator,
+        dal: Operator,
         pruning_ctx: Arc<PruningContext>,
         segment_idx: SegmentIndex,
         segment_location: Location,
     ) -> Result<Vec<(SegmentIndex, BlockMeta)>> {
-        let segment_reader = MetaReaders::segment_info_reader(pruning_ctx.ctx.as_ref());
+        let segment_reader =
+            MetaReaders::segment_info_reader(pruning_ctx.ctx.as_ref(), dal.clone());
 
         let (path, ver) = segment_location;
-        let segment_info = segment_reader.read(op, path, None, ver).await?;
+        let segment_info = segment_reader.read(path, None, ver).await?;
         let mut result = Vec::with_capacity(segment_info.blocks.len());
         if pruning_ctx.range_pruner.should_keep(
             &segment_info.summary.col_stats,

@@ -185,7 +185,6 @@ impl FuseTable {
             )
         })?;
 
-        let da = ctx.get_storage_operator()?;
         let mut sink_pipeline_builder = SinkPipeBuilder::create();
         for _ in 0..pipeline.output_len() {
             let input_port = InputPort::create();
@@ -195,7 +194,7 @@ impl FuseTable {
                     input_port,
                     ctx.clone(),
                     block_per_seg,
-                    da.clone(),
+                    self.operator.clone(),
                     self.meta_location_generator().clone(),
                     cluster_stats_gen.clone(),
                     None,

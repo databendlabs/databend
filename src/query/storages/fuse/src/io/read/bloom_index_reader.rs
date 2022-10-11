@@ -254,7 +254,7 @@ mod util_v1 {
     /// read data from cache, or populate cache items if possible
     #[tracing::instrument(level = "debug", skip_all)]
     async fn load_index_meta(
-        op: Operator,
+        dal: Operator,
         ctx: &Arc<dyn TableContext>,
         path: &str,
         length: u64,
@@ -263,13 +263,11 @@ mod util_v1 {
         let ctx_cloned = ctx.clone();
         let path_owned = path.to_owned();
         async move {
-            let reader = MetaReaders::file_meta_data_reader(ctx_cloned);
+            let reader = MetaReaders::file_meta_data_reader(ctx_cloned, dal);
             // Format of FileMetaData is not versioned, version argument is ignored by the underlying reader,
             // so we just pass a zero to reader
             let version = 0;
-            reader
-                .read(op.clone(), path_owned, Some(length), version)
-                .await
+            reader.read(path_owned, Some(length), version).await
         }
         .execute_in_runtime(&storage_runtime)
         .await?

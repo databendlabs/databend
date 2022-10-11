@@ -133,13 +133,9 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
     ) -> Result<Option<Arc<TableSnapshot>>> {
         if let Some(loc) = self.snapshot_loc() {
-            let reader = MetaReaders::table_snapshot_reader(ctx);
+            let reader = MetaReaders::table_snapshot_reader(ctx, self.get_operator());
             let ver = self.snapshot_format_version();
-            Ok(Some(
-                reader
-                    .read(self.operator.clone(), loc.as_str(), None, ver)
-                    .await?,
-            ))
+            Ok(Some(reader.read(loc.as_str(), None, ver).await?))
         } else {
             Ok(None)
         }

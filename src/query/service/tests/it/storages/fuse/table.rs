@@ -339,10 +339,8 @@ async fn test_fuse_alter_table_cluster_key() -> Result<()> {
         .options()
         .get(OPT_KEY_SNAPSHOT_LOCATION)
         .unwrap();
-    let reader = MetaReaders::table_snapshot_reader(ctx.clone());
-    let snapshot = reader
-        .read(fuse_table.get_operator(), snapshot_loc.as_str(), None, 1)
-        .await?;
+    let reader = MetaReaders::table_snapshot_reader(ctx.clone(), fuse_table.get_operator());
+    let snapshot = reader.read(snapshot_loc.as_str(), None, 1).await?;
     let expected = Some((0, "(id)".to_string()));
     assert_eq!(snapshot.cluster_key_meta, expected);
 
@@ -368,10 +366,8 @@ async fn test_fuse_alter_table_cluster_key() -> Result<()> {
         .options()
         .get(OPT_KEY_SNAPSHOT_LOCATION)
         .unwrap();
-    let reader = MetaReaders::table_snapshot_reader(ctx);
-    let snapshot = reader
-        .read(fuse_table.get_operator(), snapshot_loc.as_str(), None, 1)
-        .await?;
+    let reader = MetaReaders::table_snapshot_reader(ctx, fuse_table.get_operator());
+    let snapshot = reader.read(snapshot_loc.as_str(), None, 1).await?;
     let expected = None;
     assert_eq!(snapshot.cluster_key_meta, expected);
 

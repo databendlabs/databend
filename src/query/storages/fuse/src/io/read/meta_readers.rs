@@ -48,27 +48,33 @@ pub type BloomIndexFileMetaDataReader = CachedReader<FileMetaData, Arc<dyn Table
 pub struct MetaReaders;
 
 impl MetaReaders {
-    pub fn segment_info_reader(ctx: &dyn TableContext) -> SegmentInfoReader {
+    pub fn segment_info_reader(ctx: &dyn TableContext, dal: Operator) -> SegmentInfoReader {
         SegmentInfoReader::new(
             CacheManager::instance().get_table_segment_cache(),
             LoaderWrapper(ctx),
             "SEGMENT_INFO_CACHE".to_owned(),
+            dal,
         )
     }
 
-    pub fn table_snapshot_reader(ctx: Arc<dyn TableContext>) -> TableSnapshotReader {
+    pub fn table_snapshot_reader(ctx: Arc<dyn TableContext>, dal: Operator) -> TableSnapshotReader {
         TableSnapshotReader::new(
             CacheManager::instance().get_table_snapshot_cache(),
             LoaderWrapper(ctx),
             "SNAPSHOT_CACHE".to_owned(),
+            dal,
         )
     }
 
-    pub fn file_meta_data_reader(ctx: Arc<dyn TableContext>) -> BloomIndexFileMetaDataReader {
+    pub fn file_meta_data_reader(
+        ctx: Arc<dyn TableContext>,
+        dal: Operator,
+    ) -> BloomIndexFileMetaDataReader {
         BloomIndexFileMetaDataReader::new(
             CacheManager::instance().get_bloom_index_meta_cache(),
             ctx,
             "BLOOM_INDEX_FILE_META_DATA_CACHE".to_owned(),
+            dal,
         )
     }
 }

@@ -98,7 +98,8 @@ impl BaseMutator {
         let mut segments_editor =
             HashMap::<_, _, RandomState>::from_iter(segments.clone().into_iter().enumerate());
 
-        let segment_reader = MetaReaders::segment_info_reader(self.ctx.as_ref());
+        let segment_reader =
+            MetaReaders::segment_info_reader(self.ctx.as_ref(), self.data_accessor.clone());
 
         let segment_info_cache = CacheManager::instance().get_table_segment_cache();
         let seg_writer = SegmentWriter::new(
@@ -111,9 +112,7 @@ impl BaseMutator {
         for (seg_idx, replacements) in self.mutations.clone() {
             let segment = {
                 let (path, version) = &segments[seg_idx];
-                segment_reader
-                    .read(self.data_accessor.clone(), &path, None, *version)
-                    .await?
+                segment_reader.read(&path, None, *version).await?
             };
 
             // collects the block locations of the segment being modified
@@ -170,9 +169,7 @@ impl BaseMutator {
 
         let mut new_segment_summaries = Vec::with_capacity(new_segments.len());
         for (loc, ver) in &new_segments {
-            let seg = segment_reader
-                .read(self.data_accessor.clone(), loc, None, *ver)
-                .await?;
+            let seg = segment_reader.read(loc, None, *ver).await?;
             new_segment_summaries.push(seg.summary.clone())
         }
 

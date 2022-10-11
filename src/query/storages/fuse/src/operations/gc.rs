@@ -57,7 +57,7 @@ impl FuseTable {
             return Ok(());
         };
 
-        let reader = MetaReaders::table_snapshot_reader(ctx.clone());
+        let reader = MetaReaders::table_snapshot_reader(ctx.clone(), self.get_operator());
 
         let (prev_id, prev_ver) = if let Some((id, ver)) = last_snapshot.prev_snapshot_id {
             (id, ver)
@@ -84,12 +84,8 @@ impl FuseTable {
             .meta_location_generator
             .snapshot_location_from_uuid(&prev_id, prev_ver)?;
 
-        let mut snapshot_history = reader.snapshot_history(
-            self.operator.clone(),
-            prev_loc,
-            prev_ver,
-            self.meta_location_generator.clone(),
-        );
+        let mut snapshot_history =
+            reader.snapshot_history(prev_loc, prev_ver, self.meta_location_generator.clone());
 
         let mut snapshots_to_be_deleted: Vec<_> = Vec::new();
         if !keep_last_snapshot {

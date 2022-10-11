@@ -203,11 +203,11 @@ impl HiveParquetBlockReader {
     pub async fn read_meta_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        op: Operator,
+        dal: Operator,
         filename: &str,
     ) -> Result<Arc<FileMetaData>> {
-        let reader = FileMetaDataReader::new_reader(ctx);
-        reader.read(op, filename, None, 0).await
+        let reader = FileMetaDataReader::new_reader(ctx, dal);
+        reader.read(filename, None, 0).await
     }
 
     pub async fn read_columns_data(

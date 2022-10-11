@@ -29,13 +29,13 @@ use crate::io::MetaReaders;
 
 // Read one segment file by location.
 async fn read_segment(
-    op: Operator,
+    dal: Operator,
     ctx: Arc<dyn TableContext>,
     segment_location: Location,
 ) -> Result<Arc<SegmentInfo>> {
     let (path, ver) = segment_location;
-    let reader = MetaReaders::segment_info_reader(ctx.as_ref());
-    reader.read(op, path, None, ver).await
+    let reader = MetaReaders::segment_info_reader(ctx.as_ref(), dal);
+    reader.read(path, None, ver).await
 }
 
 // Read all segments information from s3 in concurrency.
