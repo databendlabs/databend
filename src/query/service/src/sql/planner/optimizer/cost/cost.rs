@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Display;
 use std::ops::Add;
 
 use common_exception::Result;
@@ -28,6 +29,12 @@ where T: Into<f64>
 {
     fn from(t: T) -> Self {
         Cost(t.into())
+    }
+}
+
+impl Display for Cost {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 

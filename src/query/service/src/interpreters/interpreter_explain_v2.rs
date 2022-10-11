@@ -50,10 +50,8 @@ impl Interpreter for ExplainInterpreterV2 {
 
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let blocks = match &self.kind {
-            ExplainKind::Ast(stmt) | ExplainKind::Syntax(stmt) => {
-                self.explain_ast_or_syntax(stmt.clone())?
-            }
             ExplainKind::Raw => self.explain_plan(&self.plan)?,
+
             ExplainKind::Plan => match &self.plan {
                 Plan::Query {
                     s_expr, metadata, ..
@@ -64,6 +62,7 @@ impl Interpreter for ExplainInterpreterV2 {
                 }
                 _ => self.explain_plan(&self.plan)?,
             },
+
             ExplainKind::Pipeline => match &self.plan {
                 Plan::Query {
                     s_expr, metadata, ..
@@ -75,6 +74,7 @@ impl Interpreter for ExplainInterpreterV2 {
                     return Err(ErrorCode::UnImplement("Unsupported EXPLAIN statement"));
                 }
             },
+
             ExplainKind::Fragments => match &self.plan {
                 Plan::Query {
                     s_expr, metadata, ..
@@ -86,8 +86,17 @@ impl Interpreter for ExplainInterpreterV2 {
                     return Err(ErrorCode::UnImplement("Unsupported EXPLAIN statement"));
                 }
             },
+
             ExplainKind::Graph => {
                 return Err(ErrorCode::UnImplement("ExplainKind graph is unimplemented"));
+            }
+
+            ExplainKind::Ast(display_string)
+            | ExplainKind::Syntax(display_string)
+            | ExplainKind::Memo(display_string) => {
+                let line_splitted_result: Vec<&str> = display_string.lines().collect();
+                let column = Series::from_data(line_splitted_result);
+                vec![DataBlock::create(self.schema.clone(), vec![column])]
             }
         };
 
@@ -105,14 +114,6 @@ impl ExplainInterpreterV2 {
             plan,
             kind,
         })
-    }
-
-    pub fn explain_ast_or_syntax(&self, stmt: String) -> Result<Vec<DataBlock>> {
-        let line_splitted_result: Vec<&str> = stmt.lines().collect();
-        let formatted_sql = Series::from_data(line_splitted_result);
-        Ok(vec![DataBlock::create(self.schema.clone(), vec![
-            formatted_sql,
-        ])])
     }
 
     pub fn explain_plan(&self, plan: &Plan) -> Result<Vec<DataBlock>> {
