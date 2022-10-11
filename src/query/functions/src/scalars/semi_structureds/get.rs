@@ -188,9 +188,7 @@ fn extract_value_by_field_name<'a>(
                     let obj = value.as_object().unwrap();
                     let mut set = BTreeSet::new();
                     for key in obj.keys() {
-                        if field_name.eq(key) {
-                            return value.get(key);
-                        } else if field_name.eq_ignore_ascii_case(key) {
+                        if field_name.eq_ignore_ascii_case(key) {
                             set.insert(key);
                         }
                     }

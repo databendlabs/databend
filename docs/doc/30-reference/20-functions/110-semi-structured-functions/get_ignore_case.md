@@ -6,6 +6,7 @@ Extracts value from an `OBJECT` by `field_name`, or a `VARIANT` that contains `O
 The value is returned as a `Variant` or `NULL` if either of the arguments is `NULL`.
 
 `GET_IGNORE_CASE` is similar to `GET` but applies case-insensitive matching to field names.
+First match the exact same field name, if not found, match the case-insensitive field name alphabetically.
 
 ## Syntax
 
@@ -33,6 +34,6 @@ SELECT get_ignore_case(parse_json('{"aa":1, "aA":2, "Aa":3}'), 'AA');
 +---------------------------------------------------------------+
 | get_ignore_case(parse_json('{"aa":1, "aA":2, "Aa":3}'), 'AA') |
 +---------------------------------------------------------------+
-| 1                                                             |
+| 3                                                             |
 +---------------------------------------------------------------+
 ```
