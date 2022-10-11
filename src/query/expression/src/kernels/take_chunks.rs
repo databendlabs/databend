@@ -113,36 +113,36 @@ impl Column {
             Column::Number(column) => with_number_mapped_type!(|NUM_TYPE| match column {
                 NumberColumn::NUM_TYPE(_) => {
                     let builder = NumberType::<NUM_TYPE>::create_builder(result_size, &[]);
-                    Self::take_chunk_value_types::<NumberType<NUM_TYPE>>(&columns, builder, indices)
+                    Self::take_chunk_value_types::<NumberType<NUM_TYPE>>(columns, builder, indices)
                 }
             }),
             Column::Boolean(_) => {
                 let builder = BooleanType::create_builder(result_size, &[]);
-                Self::take_chunk_value_types::<BooleanType>(&columns, builder, indices)
+                Self::take_chunk_value_types::<BooleanType>(columns, builder, indices)
             }
             Column::String(_) => {
                 let builder = StringType::create_builder(result_size, &[]);
-                Self::take_chunk_value_types::<StringType>(&columns, builder, indices)
+                Self::take_chunk_value_types::<StringType>(columns, builder, indices)
             }
             Column::Timestamp(_) => {
                 let builder = TimestampType::create_builder(result_size, &[]);
-                Self::take_chunk_value_types::<TimestampType>(&columns, builder, indices)
+                Self::take_chunk_value_types::<TimestampType>(columns, builder, indices)
             }
 
             Column::Date(_) => {
                 let builder = DateType::create_builder(result_size, &[]);
-                Self::take_chunk_value_types::<DateType>(&columns, builder, indices)
+                Self::take_chunk_value_types::<DateType>(columns, builder, indices)
             }
             Column::Interval(_) => {
                 let builder = IntervalType::create_builder(result_size, &[]);
-                Self::take_chunk_value_types::<IntervalType>(&columns, builder, indices)
+                Self::take_chunk_value_types::<IntervalType>(columns, builder, indices)
             }
 
             Column::Array(column) => {
                 let mut builder = ArrayColumnBuilder::<AnyType>::from_column(column.slice(0..0));
                 builder.reserve(result_size);
 
-                Self::take_chunk_value_types::<ArrayType<AnyType>>(&columns, builder, indices)
+                Self::take_chunk_value_types::<ArrayType<AnyType>>(columns, builder, indices)
             }
             Column::Nullable(_) => {
                 let inner_ty = datatype.as_nullable().unwrap();
@@ -210,7 +210,7 @@ impl Column {
             }
             Column::Variant(_) => {
                 let builder = VariantType::create_builder(result_size, &[]);
-                Self::take_chunk_value_types::<VariantType>(&columns, builder, indices)
+                Self::take_chunk_value_types::<VariantType>(columns, builder, indices)
             }
         }
     }
