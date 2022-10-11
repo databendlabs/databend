@@ -160,7 +160,7 @@ impl FuseHistorySource {
 
 #[async_trait::async_trait]
 impl AsyncSource for FuseHistorySource {
-    const NAME: &'static str = "fuse_snapshot";
+    const NAME: &'static str = "fuse_segment";
 
     #[async_trait::unboxed_simple]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {

@@ -23,13 +23,13 @@ use common_exception::Result;
 use common_fuse_meta::caches::CacheManager;
 use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SnapshotId;
-use common_fuse_meta::meta::TableSnapshot;
-use futures_util::StreamExt;
+use futures::TryStreamExt;
 use opendal::Operator;
 use tracing::warn;
 
 use crate::fuse_segment::read_segments;
-use crate::fuse_snapshot::read_snapshots;
+use crate::io::MetaReaders;
+use crate::io::SnapshotHistoryReader;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -57,6 +57,8 @@ impl FuseTable {
             return Ok(());
         };
 
+        let reader = MetaReaders::table_snapshot_reader(ctx.clone());
+
         let (prev_id, prev_ver) = if let Some((id, ver)) = last_snapshot.prev_snapshot_id {
             (id, ver)
         } else {
@@ -82,6 +84,9 @@ impl FuseTable {
             .meta_location_generator
             .snapshot_location_from_uuid(&prev_id, prev_ver)?;
 
+        let mut snapshot_history =
+            reader.snapshot_history(prev_loc, prev_ver, self.meta_location_generator.clone());
+
         let mut snapshots_to_be_deleted: Vec<_> = Vec::new();
         if !keep_last_snapshot {
             snapshots_to_be_deleted
@@ -106,21 +111,9 @@ impl FuseTable {
             // collects
             // - all the previous snapshots
             // - segments referenced by previous snapshots, but not by gc_root
-            let mut snapshots = read_snapshots(
-                ctx.clone(),
-                prev_loc,
-                prev_ver,
-                self.meta_location_generator.clone(),
-            )
-            .await?;
-
-            while let ss = snapshots
-                .recv()
-                .await
-                .map_err(|e| ErrorCode::StorageOther(format!("read snapshots failure, {}", e)))?
-            {
-                snapshots_to_be_deleted.push((ss.snapshot_id, ss.format_version()));
-                for seg in &ss.segments {
+            while let Some(s) = snapshot_history.try_next().await? {
+                snapshots_to_be_deleted.push((s.snapshot_id, s.format_version()));
+                for seg in &s.segments {
                     if !segments_referenced_by_gc_root.contains(seg) {
                         segments_to_be_deleted.insert(seg.clone());
                     }
