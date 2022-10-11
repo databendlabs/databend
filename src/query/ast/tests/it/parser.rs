@@ -254,6 +254,15 @@ fn test_statement() {
                 )
                 size_limit=10;"#,
         r#"COPY INTO mytable
+                FROM @external_stage/path/to/dir/
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;"#,
+        r#"COPY INTO mytable
                 FROM @external_stage/path/to/file.csv
                 FILE_FORMAT = (
                     type = 'CSV'
@@ -275,6 +284,8 @@ fn test_statement() {
         r#"CALL system$test(a)"#,
         r#"CALL system$test('a')"#,
         r#"show settings like 'enable%'"#,
+        r#"PRESIGN @my_stage"#,
+        r#"PRESIGN @my_stage/path/to/dir/"#,
         r#"PRESIGN @my_stage/path/to/file"#,
         r#"PRESIGN DOWNLOAD @my_stage/path/to/file"#,
         r#"PRESIGN UPLOAD @my_stage/path/to/file EXPIRE=7200"#,
