@@ -1541,7 +1541,7 @@ impl<KV: KVApi> SchemaApi for KV {
             Some(ref share) => {
                 get_table_id_from_share_by_name(
                     self,
-                    &share,
+                    share,
                     db_id,
                     &tenant_dbname_tbname.table_name,
                 )
@@ -2560,7 +2560,7 @@ async fn get_table_id_from_share_by_name(
 ) -> Result<u64, KVAppError> {
     let res = get_share_or_err(
         kv_api,
-        &share,
+        share,
         format!("list_tables_from_share_db: {}", &share),
     )
     .await;
