@@ -271,15 +271,16 @@ DB.Table: 'system'.'databases', Table: databases-table_id:1, ver:0, Engine: Syst
 ---------- TABLE INFO ------------
 DB.Table: 'system'.'engines', Table: engines-table_id:1, ver:0, Engine: SystemEngines
 -------- TABLE CONTENTS ----------
-+--------+-----------------------------+
-| Engine | Comment                     |
-+--------+-----------------------------+
-| FUSE   | FUSE Storage Engine         |
-| MEMORY | MEMORY Storage Engine       |
-| NULL   | NULL Storage Engine         |
-| RANDOM | RANDOM Storage Engine       |
-| VIEW   | VIEW STORAGE (LOGICAL VIEW) |
-+--------+-----------------------------+
++------------+-----------------------------+
+| Engine     | Comment                     |
++------------+-----------------------------+
+| FUSE       | FUSE Storage Engine         |
+| MEMORY     | MEMORY Storage Engine       |
+| NULL       | NULL Storage Engine         |
+| RANDOM     | RANDOM Storage Engine       |
+| SHARE_FUSE | SHARE_FUSE Storage Engine   |
+| VIEW       | VIEW STORAGE (LOGICAL VIEW) |
++------------+-----------------------------+
 
 
 ---------- TABLE INFO ------------

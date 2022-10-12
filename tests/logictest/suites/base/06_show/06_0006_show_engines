@@ -3,9 +3,9 @@ SHOW ENGINES;
 
 ----
 FUSE FUSE Storage Engine
-SHARE_FUSE SHARE_FUSE Storage Engine
 MEMORY MEMORY Storage Engine
 NULL NULL Storage Engine
 RANDOM RANDOM Storage Engine
+SHARE_FUSE SHARE_FUSE Storage Engine
 VIEW VIEW STORAGE (LOGICAL VIEW)
 
