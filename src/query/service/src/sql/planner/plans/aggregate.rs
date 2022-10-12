@@ -156,6 +156,8 @@ impl LogicalOperator for Aggregate {
             outer_columns,
             cardinality,
             precise_cardinality,
+
+            column_stats: Default::default(),
         })
     }
 }

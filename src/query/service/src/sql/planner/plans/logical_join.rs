@@ -215,6 +215,8 @@ impl LogicalOperator for LogicalInnerJoin {
             outer_columns,
             cardinality,
             precise_cardinality: None,
+
+            column_stats: Default::default(),
         })
     }
 }
