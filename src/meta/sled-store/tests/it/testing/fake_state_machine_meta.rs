@@ -15,8 +15,8 @@
 use std::fmt;
 
 use common_meta_sled_store::SledOrderedSerde;
+use common_meta_stoerr::MetaStorageError;
 use common_meta_types::anyerror::AnyError;
-use common_meta_types::MetaStorageError;
 use openraft::LogId;
 use openraft::Membership;
 use serde::Deserialize;
