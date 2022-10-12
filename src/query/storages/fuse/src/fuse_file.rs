@@ -24,6 +24,7 @@ use opendal::Operator;
 use tracing::warn;
 use tracing::Instrument;
 
+// File related operations.
 pub struct FuseFile {
     ctx: Arc<dyn TableContext>,
     operator: Operator,

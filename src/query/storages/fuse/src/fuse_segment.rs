@@ -27,6 +27,7 @@ use tracing::Instrument;
 
 use crate::io::MetaReaders;
 
+// Read segment related operations.
 pub struct FuseSegmentIO {
     ctx: Arc<dyn TableContext>,
     operator: Operator,

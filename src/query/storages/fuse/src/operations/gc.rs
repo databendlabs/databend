@@ -23,9 +23,9 @@ use common_fuse_meta::meta::SnapshotId;
 use tracing::info;
 use tracing::warn;
 
-use crate::fuse_snapshot::read_snapshot_lites;
 use crate::FuseFile;
 use crate::FuseSegmentIO;
+use crate::FuseSnapshotIO;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -65,14 +65,14 @@ impl FuseTable {
         let mut all_snapshot_lites = vec![];
         let mut all_segment_locations = HashSet::new();
         if let Some(root_snapshot_location) = self.snapshot_loc() {
-            (all_snapshot_lites, all_segment_locations) = read_snapshot_lites(
+            let fuse_snapshot_io = FuseSnapshotIO::create(
                 ctx.clone(),
-                root_snapshot_location,
+                self.operator.clone(),
                 self.snapshot_format_version(),
-                &self.operator,
-                true,
-            )
-            .await?;
+            );
+            (all_snapshot_lites, all_segment_locations) = fuse_snapshot_io
+                .read_snapshot_lites(root_snapshot_location, true)
+                .await?;
         }
 
         // 3. Find.
@@ -162,8 +162,10 @@ impl FuseTable {
         blocks_referenced_by_root: &HashSet<String>,
         keep_last_snapshot: bool,
     ) -> Result<()> {
-        let fuse_segments = FuseSegmentIO::create(ctx.clone(), self.operator.clone());
-        let segments = fuse_segments.read_segments(segments_to_be_deleted).await?;
+        let fuse_segment_io = FuseSegmentIO::create(ctx.clone(), self.operator.clone());
+        let segments = fuse_segment_io
+            .read_segments(segments_to_be_deleted)
+            .await?;
 
         let mut blocks_need_to_delete = HashSet::new();
         let mut blooms_need_to_delete = HashSet::new();
