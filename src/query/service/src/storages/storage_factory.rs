@@ -94,7 +94,7 @@ impl StorageFactory {
 
         creators.insert("SHARE_FUSE".to_string(), Storage {
             creator: Arc::new(FuseTable::try_create),
-            descriptor: Arc::new(FuseTable::description),
+            descriptor: Arc::new(FuseTable::share_description),
         });
 
         // Register View table engine

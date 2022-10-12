@@ -109,6 +109,14 @@ impl FuseTable {
         }
     }
 
+    pub fn share_description() -> StorageDescription {
+        StorageDescription {
+            engine_name: "SHARE_FUSE".to_string(),
+            comment: "SHARE_FUSE Storage Engine".to_string(),
+            support_cluster_key: true,
+        }
+    }
+
     pub fn meta_location_generator(&self) -> &TableMetaLocationGenerator {
         &self.meta_location_generator
     }
