@@ -361,11 +361,14 @@ jobs:
     steps:
       - name: checkout
         uses: actions/checkout@v2
-      - name: Get release
-        id: get_release
-        uses: bruceadams/get-release@v1.2.2
+      - name: Get Draft Release
+        uses: cardinalby/git-get-release-action@v1
+        id: latest_draft_release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          draft: true
+          latest: true
       - name: download sha256sums
         uses: actions/download-artifact@v2
         with:
@@ -381,7 +384,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ steps.get_release.outputs.upload_url }}
+          upload_url: ${{ steps.latest_draft_release.outputs.upload_url }}
           asset_path: sha256sums.txt
           asset_name: sha256sums.txt
           asset_content_type: text/plain
