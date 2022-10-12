@@ -63,7 +63,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 }
 
 fn register_cast_functions(registry: &mut FunctionRegistry) {
-    registry.register_aliases("to_timestamp", &["try_to_datetime"]);
+    registry.register_aliases("to_timestamp", &["to_datetime"]);
 
     registry.register_passthrough_nullable_1_arg::<DateType, TimestampType, _, _>(
         "to_timestamp",
@@ -188,9 +188,7 @@ fn register_try_cast_functions(registry: &mut FunctionRegistry) {
             } else {
                 None
             };
-            if val.is_none() {
-                return None;
-            }
+            val.as_ref()?;
             Some(NullableDomain {
                 has_null: domain.has_null,
                 value: val,
@@ -237,9 +235,7 @@ fn register_try_cast_functions(registry: &mut FunctionRegistry) {
             } else {
                 None
             };
-            if val.is_none() {
-                return None;
-            }
+            val.as_ref()?;
             Some(NullableDomain {
                 has_null: domain.has_null,
                 value: val.map(Box::new),
