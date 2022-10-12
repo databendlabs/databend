@@ -137,7 +137,3 @@ wiremock = "0.5.14"
 
 [build-dependencies]
 common-building = { path = "../../common/building" }
-
-[[bench]]
-name = "bench_main"
-harness = false

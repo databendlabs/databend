@@ -46,7 +46,6 @@ mod user_setting;
 mod user_stage;
 mod with;
 
-pub mod error_context;
 mod principal_identity;
 mod proto_display;
 
@@ -94,7 +93,6 @@ pub use errors::meta_api_errors::MetaAPIError;
 pub use errors::meta_api_errors::MetaDataError;
 pub use errors::meta_api_errors::MetaDataReadError;
 pub use errors::meta_api_errors::MetaOperationError;
-pub use errors::meta_bytes_error::MetaBytesError;
 pub use errors::meta_client_errors::MetaClientError;
 pub use errors::meta_errors::MetaError;
 pub use errors::meta_errors::MetaResult;
@@ -113,7 +111,6 @@ pub use errors::meta_raft_errors::RaftChangeMembershipError;
 pub use errors::meta_raft_errors::RaftWriteError;
 pub use errors::meta_raft_errors::RetryableError;
 pub use errors::meta_startup_errors::MetaStartupError;
-pub use errors::meta_storage_errors::MetaStorageError;
 pub use errors::rpc_errors::ForwardRPCError;
 pub use kv_message::GetKVReply;
 pub use kv_message::GetKVReq;

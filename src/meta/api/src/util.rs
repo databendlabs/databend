@@ -34,7 +34,6 @@ use common_meta_types::InvalidArgument;
 use common_meta_types::InvalidReply;
 use common_meta_types::KVAppError;
 use common_meta_types::MatchSeq;
-use common_meta_types::MetaBytesError;
 use common_meta_types::MetaNetworkError;
 use common_meta_types::Operation;
 use common_meta_types::TxnCondition;
@@ -110,7 +109,7 @@ pub async fn list_keys<K: KVApiKey>(
     let mut structured_keys = Vec::with_capacity(n);
 
     for (str_key, _seq_id) in res.iter() {
-        let struct_key = K::from_key(str_key).map_err(to_bytes_err).map_err(|e| {
+        let struct_key = K::from_key(str_key).map_err(|e| {
             let inv = InvalidReply::new("fail to list_keys", &e);
             MetaNetworkError::InvalidReply(inv)
         })?;
@@ -143,7 +142,7 @@ pub async fn list_u64_value<K: KVApiKey>(
         values.push(id);
 
         // Parse key
-        let struct_key = K::from_key(str_key).map_err(to_bytes_err).map_err(|e| {
+        let struct_key = K::from_key(str_key).map_err(|e| {
             let inv = InvalidReply::new("list_u64_value", &e);
             MetaNetworkError::InvalidReply(inv)
         })?;
@@ -193,7 +192,7 @@ where
     T: FromToProto + 'static,
     T::PB: common_protos::prost::Message,
 {
-    let p = value.to_pb().map_err(to_bytes_err).map_err(|e| {
+    let p = value.to_pb().map_err(|e| {
         let inv = InvalidArgument::new(e, "");
         MetaNetworkError::InvalidArgument(inv)
     })?;
@@ -214,16 +213,12 @@ where
         let inv = InvalidReply::new("", &e);
         MetaNetworkError::InvalidReply(inv)
     })?;
-    let v: T = FromToProto::from_pb(p).map_err(to_bytes_err).map_err(|e| {
+    let v: T = FromToProto::from_pb(p).map_err(|e| {
         let inv = InvalidReply::new("", &e);
         MetaNetworkError::InvalidReply(inv)
     })?;
 
     Ok(v)
-}
-
-pub fn to_bytes_err<E: std::error::Error + 'static>(e: E) -> MetaBytesError {
-    MetaBytesError::new(&e)
 }
 
 pub async fn send_txn(
