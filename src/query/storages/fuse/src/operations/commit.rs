@@ -21,6 +21,7 @@ use backoff::ExponentialBackoffBuilder;
 use common_base::base::ProgressValues;
 use common_cache::Cache;
 use common_catalog::table::Table;
+use common_catalog::table::TableExt;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
@@ -99,7 +100,7 @@ impl FuseTable {
                                 tbl.table_info.ident
                             );
 
-                            let latest = tbl.latest(ctx.as_ref()).await?;
+                            let latest = tbl.refresh(ctx.as_ref()).await?;
                             tbl = FuseTable::try_from_table(latest.as_ref())?;
 
                             let keep_last_snapshot = true;
@@ -128,7 +129,7 @@ impl FuseTable {
                             tbl.table_info.ident
                         );
                         common_base::base::tokio::time::sleep(d).await;
-                        latest = tbl.latest(ctx.as_ref()).await?;
+                        latest = tbl.refresh(ctx.as_ref()).await?;
                         tbl = FuseTable::try_from_table(latest.as_ref())?;
                         retry_times += 1;
                         continue;
@@ -348,20 +349,6 @@ impl FuseTable {
         )?;
 
         Ok((seg_locs, s))
-    }
-
-    async fn latest(&self, ctx: &dyn TableContext) -> Result<Arc<dyn Table>> {
-        let name = self.table_info.name.clone();
-        let tid = self.table_info.ident.table_id;
-        let catalog = ctx.get_catalog(self.table_info.catalog())?;
-        let (ident, meta) = catalog.get_table_meta_by_id(tid).await?;
-        let table_info: TableInfo = TableInfo {
-            ident,
-            desc: "".to_owned(),
-            name,
-            meta: meta.as_ref().clone(),
-        };
-        catalog.get_table_by_info(&table_info)
     }
 
     // Left a hint file which indicates the location of the latest snapshot

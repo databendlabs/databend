@@ -212,7 +212,8 @@ async fn test_fuse_table_truncate() -> Result<()> {
     assert_eq!(stats.read_rows, (num_blocks * rows_per_block) as usize);
 
     // truncate
-    let r = table.truncate(ctx.clone(), false).await;
+    let purge = false;
+    let r = table.truncate(ctx.clone(), purge).await;
     assert!(r.is_ok());
 
     // get the latest tbl
