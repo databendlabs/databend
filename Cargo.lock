@@ -1239,13 +1239,9 @@ dependencies = [
 name = "common-cache"
 version = "0.1.0"
 dependencies = [
- "common-exception",
- "filetime",
  "heapsize",
  "ritelinked",
  "tempfile",
- "tracing",
- "walkdir",
 ]
 
 [[package]]
@@ -3172,18 +3168,6 @@ checksum = "131655483be284720a17d74ff97592b8e76576dc25563148601df2d7c9080924"
 dependencies = [
  "rand_core 0.6.4",
  "subtle",
-]
-
-[[package]]
-name = "filetime"
-version = "0.2.17"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e94a7bbaa59354bc20dd75b67f23e2797b4490e9d6928203fb105c79e448c86c"
-dependencies = [
- "cfg-if",
- "libc",
- "redox_syscall",
- "windows-sys",
 ]
 
 [[package]]
