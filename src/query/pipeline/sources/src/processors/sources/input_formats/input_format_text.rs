@@ -290,7 +290,7 @@ impl<T: InputFormatTextBase> AligningStateTrait for AligningState<T> {
         let rows_to_skip = if split_info.seq_in_file == 0 {
             ctx.rows_to_skip
         } else {
-            0
+            (T::is_splittable() && split_info.num_file_splits > 1) as usize
         };
         let path = split_info.file.path.clone();
 
