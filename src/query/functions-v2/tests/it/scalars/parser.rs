@@ -314,7 +314,7 @@ fn transform_data_type(target_type: common_ast::ast::TypeName) -> DataType {
         common_ast::ast::TypeName::Float32 => DataType::Number(NumberDataType::Float32),
         common_ast::ast::TypeName::Float64 => DataType::Number(NumberDataType::Float64),
         common_ast::ast::TypeName::String => DataType::String,
-        common_ast::ast::TypeName::Timestamp { precision: None } => DataType::Timestamp,
+        common_ast::ast::TypeName::Timestamp => DataType::Timestamp,
         common_ast::ast::TypeName::Date => DataType::Date,
         common_ast::ast::TypeName::Array {
             item_type: Some(item_type),

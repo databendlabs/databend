@@ -87,7 +87,7 @@ pub fn cast_from_timestamp(
             for v in c.iter() {
                 let s = timestamp_to_string(
                     DateConverter::to_timestamp(v, &tz),
-                    date_time64.format_string().as_str(),
+                    date_time64.format_string(),
                 );
                 builder.append_value(s.as_bytes());
             }

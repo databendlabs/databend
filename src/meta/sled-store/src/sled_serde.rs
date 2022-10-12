@@ -18,7 +18,7 @@ use std::ops::RangeBounds;
 
 use byteorder::BigEndian;
 use byteorder::ByteOrder;
-use common_meta_types::MetaStorageError;
+use common_meta_stoerr::MetaStorageError;
 use openraft::raft::Entry;
 use openraft::AppData;
 use serde::de::DeserializeOwned;

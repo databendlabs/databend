@@ -1239,13 +1239,9 @@ dependencies = [
 name = "common-cache"
 version = "0.1.0"
 dependencies = [
- "common-exception",
- "filetime",
  "heapsize",
  "ritelinked",
  "tempfile",
- "tracing",
- "walkdir",
 ]
 
 [[package]]
@@ -1720,6 +1716,7 @@ dependencies = [
  "common-meta-api",
  "common-meta-raft-store",
  "common-meta-sled-store",
+ "common-meta-stoerr",
  "common-meta-types",
  "once_cell",
  "tempfile",
@@ -1737,6 +1734,7 @@ dependencies = [
  "common-grpc",
  "common-meta-api",
  "common-meta-sled-store",
+ "common-meta-stoerr",
  "common-meta-types",
  "common-tracing",
  "derive_more",
@@ -1758,6 +1756,7 @@ dependencies = [
  "byteorder",
  "common-base",
  "common-exception",
+ "common-meta-stoerr",
  "common-meta-types",
  "common-tracing",
  "once_cell",
@@ -1767,6 +1766,19 @@ dependencies = [
  "sled",
  "tempfile",
  "tracing",
+]
+
+[[package]]
+name = "common-meta-stoerr"
+version = "0.1.0"
+dependencies = [
+ "anyerror",
+ "common-exception",
+ "prost",
+ "serde",
+ "serde_json",
+ "sled",
+ "thiserror",
 ]
 
 [[package]]
@@ -1791,6 +1803,7 @@ dependencies = [
  "chrono",
  "common-building",
  "common-exception",
+ "common-meta-stoerr",
  "common-storage",
  "derive_more",
  "enumflags2",
@@ -2615,6 +2628,7 @@ dependencies = [
  "common-meta-embedded",
  "common-meta-raft-store",
  "common-meta-sled-store",
+ "common-meta-stoerr",
  "common-meta-store",
  "common-meta-types",
  "common-metrics",
@@ -2653,6 +2667,7 @@ dependencies = [
  "common-meta-client",
  "common-meta-raft-store",
  "common-meta-sled-store",
+ "common-meta-stoerr",
  "common-meta-types",
  "common-metrics",
  "common-tracing",
@@ -3174,18 +3189,6 @@ checksum = "131655483be284720a17d74ff97592b8e76576dc25563148601df2d7c9080924"
 dependencies = [
  "rand_core 0.6.4",
  "subtle",
-]
-
-[[package]]
-name = "filetime"
-version = "0.2.17"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e94a7bbaa59354bc20dd75b67f23e2797b4490e9d6928203fb105c79e448c86c"
-dependencies = [
- "cfg-if",
- "libc",
- "redox_syscall",
- "windows-sys",
 ]
 
 [[package]]
@@ -6372,9 +6375,9 @@ dependencies = [
 
 [[package]]
 name = "reqsign"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4d2a14e7be31799dd75672cee053edc2f87c1618936457d701ade16ad243cbd"
+checksum = "5f0e6438f8bbab7c44c60bd021719d292f3932801f165d896c1661ef955d8f56"
 dependencies = [
  "anyhow",
  "backon",

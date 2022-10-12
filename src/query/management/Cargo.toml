@@ -23,7 +23,7 @@ common-proto-conv = { path = "../../meta/proto-conv" }
 common-protos = { path = "../../meta/protos" }
 
 async-trait = "0.1.57"
-serde_json = "1.0.85"
+serde_json = { workspace = true }
 
 [dev-dependencies]
 common-meta-embedded = { path = "../../meta/embedded" }

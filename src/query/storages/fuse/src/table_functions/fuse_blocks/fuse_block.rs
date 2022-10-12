@@ -118,7 +118,7 @@ impl<'a> FuseBlock<'a> {
     pub fn schema() -> Arc<DataSchema> {
         DataSchemaRefExt::create(vec![
             DataField::new("snapshot_id", Vu8::to_data_type()),
-            DataField::new_nullable("timestamp", TimestampType::new_impl(6)),
+            DataField::new_nullable("timestamp", TimestampType::new_impl()),
             DataField::new("block_location", Vu8::to_data_type()),
             DataField::new("block_size", u64::to_data_type()),
             DataField::new_nullable("bloom_filter_location", Vu8::to_data_type()),

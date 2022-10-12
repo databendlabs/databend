@@ -268,7 +268,7 @@ pub fn compare_coercion(lhs_type: &DataTypeImpl, rhs_type: &DataTypeImpl) -> Res
     {
         if (lhs_id.is_numeric() || lhs_id.is_string()) && rhs_id.is_date_or_date_time() {
             return if lhs_id.is_string() {
-                Ok(TimestampType::new_impl(6))
+                Ok(TimestampType::new_impl())
             } else {
                 Ok(rhs_type.clone())
             };
@@ -276,7 +276,7 @@ pub fn compare_coercion(lhs_type: &DataTypeImpl, rhs_type: &DataTypeImpl) -> Res
 
         if (rhs_id.is_numeric() || rhs_id.is_string()) && lhs_id.is_date_or_date_time() {
             return if rhs_id.is_string() {
-                Ok(TimestampType::new_impl(6))
+                Ok(TimestampType::new_impl())
             } else {
                 Ok(lhs_type.clone())
             };
@@ -287,12 +287,7 @@ pub fn compare_coercion(lhs_type: &DataTypeImpl, rhs_type: &DataTypeImpl) -> Res
         return match (lhs_id, rhs_id) {
             (TypeID::Date, _) => Ok(rhs_type.clone()),
             (_, TypeID::Date) => Ok(lhs_type.clone()),
-            (TypeID::Timestamp, TypeID::Timestamp) => {
-                let lhs: TimestampType = lhs_type.to_owned().try_into()?;
-                let rhs: TimestampType = rhs_type.to_owned().try_into()?;
-                let precision = cmp::max(lhs.precision(), rhs.precision());
-                Ok(TimestampType::new_impl(precision))
-            }
+            (TypeID::Timestamp, TypeID::Timestamp) => Ok(lhs_type.clone()),
             _ => unreachable!(),
         };
     }

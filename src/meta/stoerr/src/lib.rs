@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,21 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(feature = "heapsize")]
-#[cfg(not(target_os = "macos"))]
-extern crate heapsize_;
+#![feature(provide_any)]
 
-mod cache;
-mod meter;
+pub mod meta_bytes_error;
+mod meta_storage_errors;
 
-pub use cache::lru::LruCache;
-pub use cache::Cache;
-pub use meter::bytes_meter::BytesMeter;
-pub use meter::count_meter::Count;
-pub use meter::count_meter::CountableMeter;
-pub use meter::file_meter::FileSize;
-#[cfg(feature = "heapsize")]
-#[cfg(not(target_os = "macos"))]
-pub use meter::heap_meter::HeapSize;
-pub use meter::Meter;
-pub use ritelinked::DefaultHashBuilder;
+pub use meta_bytes_error::MetaBytesError;
+pub use meta_storage_errors::MetaStorageError;

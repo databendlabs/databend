@@ -19,7 +19,7 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_fuse_meta::meta::TableSnapshotLite;
 
-use crate::fuse_snapshot::read_snapshot_lites_by_root_file;
+use crate::fuse_snapshot::read_snapshots_by_root_file;
 use crate::io::TableMetaLocationGenerator;
 use crate::sessions::TableContext;
 use crate::FuseTable;
@@ -39,7 +39,7 @@ impl<'a> FuseSnapshot<'a> {
         let snapshot_location = self.table.snapshot_loc();
         if let Some(snapshot_location) = snapshot_location {
             let snapshot_version = self.table.snapshot_format_version();
-            let snapshots = read_snapshot_lites_by_root_file(
+            let snapshots = read_snapshots_by_root_file(
                 self.ctx.clone(),
                 snapshot_location,
                 snapshot_version,
@@ -83,12 +83,12 @@ impl<'a> FuseSnapshot<'a> {
             };
             prev_snapshot_ids.push(id);
             format_versions.push(s.format_version);
-            segment_count.push(s.segment_count as u64);
-            block_count.push(s.summary.block_count);
-            row_count.push(s.summary.row_count);
-            compressed.push(s.summary.compressed_byte_size);
-            uncompressed.push(s.summary.uncompressed_byte_size);
-            index_size.push(s.summary.index_size);
+            segment_count.push(s.segment_count);
+            block_count.push(s.block_count);
+            row_count.push(s.row_count);
+            compressed.push(s.compressed_byte_size);
+            uncompressed.push(s.uncompressed_byte_size);
+            index_size.push(s.index_size);
             timestamps.push(s.timestamp.map(|dt| (dt.timestamp_micros()) as i64));
             current_snapshot_version = ver;
         }
@@ -120,7 +120,7 @@ impl<'a> FuseSnapshot<'a> {
             DataField::new("bytes_uncompressed", u64::to_data_type()),
             DataField::new("bytes_compressed", u64::to_data_type()),
             DataField::new("index_size", u64::to_data_type()),
-            DataField::new_nullable("timestamp", TimestampType::new_impl(6)),
+            DataField::new_nullable("timestamp", TimestampType::new_impl()),
         ])
     }
 }
