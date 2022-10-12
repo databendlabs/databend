@@ -129,23 +129,16 @@ impl From<v0::TableSnapshot> for TableSnapshot {
 // This *ONLY* used for some optimize operation, like PURGE/FUSE_SNAPSHOT function to avoid OOM.
 #[derive(Clone, Debug)]
 pub struct TableSnapshotLite {
-    /// format version of snapshot
     pub format_version: FormatVersion,
-
-    /// id of snapshot
     pub snapshot_id: SnapshotId,
-
-    /// timestamp of this snapshot
-    //  for backward compatibility, `Option` is used
     pub timestamp: Option<DateTime<Utc>>,
-
-    /// previous snapshot
     pub prev_snapshot_id: Option<(SnapshotId, FormatVersion)>,
-
-    /// Summary Statistics
-    pub summary: Statistics,
-
-    pub segment_count: usize,
+    pub row_count: u32,
+    pub block_count: u32,
+    pub index_size: u32,
+    pub uncompressed_byte_size: u32,
+    pub compressed_byte_size: u32,
+    pub segment_count: u32,
 }
 
 impl From<&TableSnapshot> for TableSnapshotLite {
@@ -155,8 +148,12 @@ impl From<&TableSnapshot> for TableSnapshotLite {
             snapshot_id: value.snapshot_id,
             timestamp: value.timestamp,
             prev_snapshot_id: value.prev_snapshot_id,
-            summary: value.summary.clone(),
-            segment_count: value.segments.len(),
+            row_count: value.summary.row_count as u32,
+            block_count: value.summary.block_count as u32,
+            index_size: value.summary.index_size as u32,
+            uncompressed_byte_size: value.summary.uncompressed_byte_size as u32,
+            segment_count: value.segments.len() as u32,
+            compressed_byte_size: value.summary.compressed_byte_size as u32,
         }
     }
 }

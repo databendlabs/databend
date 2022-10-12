@@ -23,10 +23,10 @@ common-pipeline-transforms = { path = "../../pipeline/transforms" }
 
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", features = ["cbordata"] }
 
-anyerror = "=0.1.7"
+anyerror = { workspace = true }
 cbordata = { version = "0.6.0" }
-serde = { version = "1.0.145", features = ["derive"] }
-thiserror = "1"
+serde = { workspace = true }
+thiserror = { workspace = true }
 tracing = "0.1.36"
 
 [dev-dependencies]
