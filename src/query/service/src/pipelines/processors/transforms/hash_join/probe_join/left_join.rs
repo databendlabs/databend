@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::iter::repeat;
 use std::iter::TrustedLen;
 
 use common_arrow::arrow::bitmap::Bitmap;
@@ -22,12 +21,12 @@ use common_datavalues::wrap_nullable;
 use common_datavalues::BooleanColumn;
 use common_datavalues::Column;
 use common_datavalues::ColumnRef;
+use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_hashtable::HashMap;
 use common_hashtable::HashTableKeyable;
-use common_datavalues::DataType;
 
 use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;

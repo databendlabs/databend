@@ -16,8 +16,8 @@ use std::collections::HashMap;
 
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
-use parking_lot::RwLock;
 use common_planner::IndexType;
+use parking_lot::RwLock;
 
 use crate::evaluator::EvalNode;
 use crate::evaluator::Evaluator;

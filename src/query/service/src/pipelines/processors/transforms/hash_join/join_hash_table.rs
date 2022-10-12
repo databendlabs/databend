@@ -12,15 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::BorrowMut;
-use std::collections::HashSet;
-use std::fmt::Debug;
 use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_base::base::tokio::sync::Notify;
 use common_datablocks::DataBlock;
@@ -29,19 +24,11 @@ use common_datablocks::HashMethodFixedKeys;
 use common_datablocks::HashMethodKind;
 use common_datablocks::HashMethodSerializer;
 use common_datavalues::combine_validities_2;
-use common_datavalues::BooleanColumn;
-use common_datavalues::Column;
 use common_datavalues::ColumnRef;
-use common_datavalues::ConstColumn;
 use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
 use common_datavalues::DataTypeImpl;
-use common_datavalues::DataValue;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_hashtable::HashMap;
-use common_planner::IndexType;
 use parking_lot::RwLock;
 use primitive_types::U256;
 use primitive_types::U512;
@@ -53,7 +40,6 @@ use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::processors::transforms::hash_join::row::RowSpace;
 use crate::pipelines::processors::transforms::hash_join::util::build_schema_wrap_nullable;
 use crate::pipelines::processors::transforms::hash_join::util::probe_schema_wrap_nullable;
-use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::executor::PhysicalScalar;

@@ -12,15 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::iter::repeat;
 use std::iter::TrustedLen;
 
-use common_arrow::arrow::bitmap::MutableBitmap;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
-use common_datavalues::BooleanColumn;
 use common_datavalues::BooleanViewer;
-use common_datavalues::Column;
 use common_datavalues::ScalarViewer;
 use common_exception::Result;
 use common_hashtable::HashMap;

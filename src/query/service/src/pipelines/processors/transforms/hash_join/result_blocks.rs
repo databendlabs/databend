@@ -12,41 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::iter::repeat;
 use std::iter::TrustedLen;
-use std::sync::atomic::Ordering;
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
 use common_datablocks::DataBlock;
-use common_datavalues::combine_validities_3;
-use common_datavalues::wrap_nullable;
-use common_datavalues::BooleanColumn;
-use common_datavalues::BooleanType;
-use common_datavalues::BooleanViewer;
-use common_datavalues::Column;
-use common_datavalues::ColumnRef;
-use common_datavalues::ConstColumn;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataType;
-use common_datavalues::DataValue;
-use common_datavalues::NullableColumn;
-use common_datavalues::NullableType;
-use common_datavalues::ScalarViewer;
-use common_datavalues::Series;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_hashtable::HashMap;
 use common_hashtable::HashTableKeyable;
-use common_hashtable::KeyValueEntity;
 
 use super::JoinHashTable;
 use super::ProbeState;
-use crate::evaluator::EvalNode;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
-use crate::sessions::TableContext;
 use crate::sql::planner::plans::JoinType;
 
 impl JoinHashTable {
@@ -80,12 +56,9 @@ impl JoinHashTable {
                     self.probe_left_join::<true, _, _>(hash_table, probe_state, keys_iter, input)
                 }
             }
-            JoinType::Right => self.probe_right_join::<_, _>(
-                hash_table,
-                probe_state,
-                keys_iter,
-                input,
-            ),
+            JoinType::Right => {
+                self.probe_right_join::<_, _>(hash_table, probe_state, keys_iter, input)
+            }
             // Three cases will produce Mark join:
             // 1. uncorrelated ANY subquery: only have one kind of join condition, equi-condition or non-equi-condition.
             // 2. correlated ANY subquery: must have two kinds of join condition, one is equi-condition and the other is non-equi-condition.

@@ -21,6 +21,7 @@ use common_datablocks::KeysState;
 use common_datavalues::ColumnRef;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+
 use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;
 
 pub type ColumnVector = Vec<ColumnRef>;
