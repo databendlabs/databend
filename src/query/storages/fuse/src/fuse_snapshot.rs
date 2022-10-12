@@ -98,7 +98,7 @@ pub async fn read_snapshots(
 // 1. Get the prefix:'/db/table/_ss/' from the root_snapshot_file('/db/table/_ss/xx.json')
 // 2. List all the files in the prefix
 // 3. Try to read all the snapshot files in parallel.
-pub async fn read_snapshots_by_root_file(
+pub async fn read_snapshots_lites(
     ctx: Arc<dyn TableContext>,
     root_snapshot_file: String,
     format_version: u64,
@@ -143,7 +143,7 @@ pub async fn read_snapshots_by_root_file(
 
     // 1. Get all the snapshot by chunks.
     let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
-    let mut snapshot_map = HashMap::with_capacity(snapshot_files.len());
+    let mut snapshot_lites = Vec::with_capacity(snapshot_files.len());
     for (idx, chunks) in snapshot_files.chunks(max_io_requests).enumerate() {
         info!(
             "Start to read_snapshots, chunk:[{}], size:{}",
@@ -156,7 +156,7 @@ pub async fn read_snapshots_by_root_file(
 
         for snapshot in results.into_iter().flatten() {
             let snapshot_lite = TableSnapshotLite::from(snapshot.as_ref());
-            snapshot_map.insert(snapshot_lite.snapshot_id, snapshot_lite);
+            snapshot_lites.push(snapshot_lite);
 
             if with_segments {
                 for segment in &snapshot.segments {
@@ -166,11 +166,24 @@ pub async fn read_snapshots_by_root_file(
         }
     }
 
+    Ok((snapshot_lites, segment_locations))
+}
+
+// Read all the snapshots by the root file:
+// 1. Get the prefix:'/db/table/_ss/' from the root_snapshot_file('/db/table/_ss/xx.json')
+// 2. List all the files in the prefix
+// 3. Try to read all the snapshot files in parallel.
+pub async fn read_snapshots_by_root_file(
+    ctx: Arc<dyn TableContext>,
+    root_snapshot_file: String,
+    format_version: u64,
+    data_accessor: &Operator,
+) -> Result<Vec<TableSnapshotLite>> {
     // 2. Build the snapshot chain from root.
     // 2.1 Get the root snapshot.
     let root_snapshot = read_snapshot(
         ctx.clone(),
-        root_snapshot_file,
+        root_snapshot_file.clone(),
         format_version,
         data_accessor.clone(),
     )
@@ -178,6 +191,19 @@ pub async fn read_snapshots_by_root_file(
     let root_snapshot_lite = TableSnapshotLite::from(root_snapshot.as_ref());
 
     // 2.2 Chain the snapshots from root to the oldest.
+    let (all_snapshot_lites, _) = read_snapshots_lites(
+        ctx.clone(),
+        root_snapshot_file.clone(),
+        format_version,
+        data_accessor,
+        false,
+    )
+    .await?;
+    let mut snapshot_map = HashMap::new();
+    for snapshot_lite in all_snapshot_lites {
+        snapshot_map.insert(snapshot_lite.snapshot_id, snapshot_lite);
+    }
+
     let mut snapshot_chain = Vec::with_capacity(snapshot_map.len());
     snapshot_chain.push(root_snapshot_lite.clone());
     let mut prev_snapshot_id_tuple = root_snapshot_lite.prev_snapshot_id;
@@ -194,5 +220,5 @@ pub async fn read_snapshots_by_root_file(
         }
     }
 
-    Ok((snapshot_chain, segment_locations))
+    Ok(snapshot_chain)
 }
