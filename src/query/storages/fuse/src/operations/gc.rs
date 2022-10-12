@@ -23,16 +23,97 @@ use common_exception::Result;
 use common_fuse_meta::caches::CacheManager;
 use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SnapshotId;
+use common_fuse_meta::meta::TableSnapshot;
 use futures::TryStreamExt;
 use opendal::Operator;
 use tracing::warn;
 
 use crate::fuse_segment::read_segments;
+use crate::fuse_snapshot::read_snapshot_lites_by_root_file;
 use crate::io::MetaReaders;
 use crate::io::SnapshotHistoryReader;
 use crate::FuseTable;
 
 impl FuseTable {
+    pub async fn do_gc2(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        keep_last_snapshot: bool,
+    ) -> Result<()> {
+        let r = self.read_table_snapshot(ctx.clone()).await;
+        let snapshot_opt = match r {
+            Err(e) if e.code() == ErrorCode::storage_not_found_code() => {
+                // concurrent gc: someone else has already collected this snapshot, ignore it
+                warn!(
+                    "concurrent gc: snapshot {:?} already collected. table: {}, ident {}",
+                    self.snapshot_loc(),
+                    self.table_info.desc,
+                    self.table_info.ident,
+                );
+                return Ok(());
+            }
+            Err(e) => return Err(e),
+            Ok(v) => v,
+        };
+
+        // 1. Root snapshot.
+        let mut segments_referenced_by_root = HashSet::new();
+        let mut blocks_referenced_by_root = HashSet::new();
+        let mut root_snapshot_id;
+        if let Some(root_snapshot) = snapshot_opt {
+            segments_referenced_by_root = HashSet::from_iter(&root_snapshot.segments);
+            blocks_referenced_by_root = self
+                .get_block_locations(ctx.clone(), &root_snapshot.segments)
+                .await?;
+            root_snapshot_id = root_snapshot.snapshot_id;
+        }
+
+        // 2. Get all snapshot(including root snapshot).
+        let mut all_snapshot_lites = vec![];
+        let mut all_segment_locations = HashSet::new();
+        if let Some(root_snapshot_location) = self.snapshot_loc() {
+            (all_snapshot_lites, all_segment_locations) = read_snapshot_lites_by_root_file(
+                ctx.clone(),
+                root_snapshot_location,
+                self.snapshot_format_version(),
+                &self.operator,
+                true,
+            )
+            .await?;
+        }
+
+        // 3. Find.
+        let mut snapshots_to_be_deleted= HashSet::new();
+        let mut segments_to_be_deleted= HashSet::new();
+
+        // 3.1 Find all the snapshots need to be deleted.
+        {
+            for snapshot in &all_snapshot_lites {
+                // Skip the root snapshot if the keep_last_snapshot is true.
+                if keep_last_snapshot && snapshot.snapshot_id == root_snapshot_id {
+                    continue;
+                }
+                snapshots_to_be_deleted.insert((snapshot.snapshot_id, snapshot.format_version));
+            }
+        }
+
+        // 3.2 Find all the segments need to be deleted.
+        {
+            for segment in &all_segment_locations {
+                // Skip the root snapshot segments if the keep_last_snapshot is true.
+                if keep_last_snapshot && segments_referenced_by_root.contains(segment) {
+                    continue;
+                }
+                segments_to_be_deleted.insert(segment);
+            }
+        }
+
+        // Get all segments.
+        // Check referenced by root.
+
+        Ok(())
+    }
+
     pub async fn do_gc(&self, ctx: &Arc<dyn TableContext>, keep_last_snapshot: bool) -> Result<()> {
         let r = self.read_table_snapshot(ctx.clone()).await;
         let snapshot_opt = match r {

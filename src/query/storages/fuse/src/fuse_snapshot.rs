@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -21,6 +22,7 @@ use common_base::base::Runtime;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::TableSnapshot;
 use common_fuse_meta::meta::TableSnapshotLite;
 use futures_util::future;
@@ -101,14 +103,16 @@ pub async fn read_snapshot_lites_by_root_file(
     root_snapshot_file: String,
     format_version: u64,
     data_accessor: &Operator,
-) -> Result<Vec<TableSnapshotLite>> {
+    with_segments: bool,
+) -> Result<(Vec<TableSnapshotLite>, HashSet<Location>)> {
+    let mut segment_locations = HashSet::new();
     let mut snapshot_files = vec![];
     if let Some(path) = Path::new(&root_snapshot_file).parent() {
         let mut snapshot_prefix = path.to_str().unwrap_or("").to_string();
 
         // Check if the prefix:db/table/_ss is reasonable.
         if !snapshot_prefix.contains('/') {
-            return Ok(vec![]);
+            return Ok((vec![], segment_locations));
         }
 
         // Append '/' to the end if need.
@@ -146,6 +150,10 @@ pub async fn read_snapshot_lites_by_root_file(
         for snapshot in results.into_iter().flatten() {
             let snapshot_lite = TableSnapshotLite::from(snapshot.as_ref());
             snapshot_map.insert(snapshot_lite.snapshot_id, snapshot_lite);
+
+            if with_segments {
+                segment_locations.extend(&snapshot.segments);
+            }
         }
     }
 
@@ -177,5 +185,5 @@ pub async fn read_snapshot_lites_by_root_file(
         }
     }
 
-    Ok(snapshot_chain)
+    Ok((snapshot_chain, segment_locations))
 }
