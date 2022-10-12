@@ -26,6 +26,7 @@ use futures_util::future;
 use futures_util::TryStreamExt;
 use opendal::ObjectMode;
 use opendal::Operator;
+use tracing::info;
 use tracing::warn;
 use tracing::Instrument;
 
@@ -140,9 +141,16 @@ pub async fn read_snapshots_by_root_file(
     // 1. Get all the snapshot by chunks.
     let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
     let mut snapshot_map = HashMap::with_capacity(snapshot_files.len());
-    for chunks in snapshot_files.chunks(max_io_requests) {
+    for (idx, chunks) in snapshot_files.chunks(max_io_requests).enumerate() {
+        info!(
+            "Start to read_snapshots, chunk:[{}], size:{}",
+            idx,
+            chunks.len()
+        );
         let results =
             read_snapshots(ctx.clone(), chunks, format_version, data_accessor.clone()).await?;
+        info!("Finish to read_snapshots, chunk:[{}]", idx);
+
         for snapshot in results.into_iter().flatten() {
             snapshot_map.insert(snapshot.snapshot_id, snapshot);
         }
