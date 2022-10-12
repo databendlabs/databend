@@ -53,7 +53,7 @@ pub struct StreamingReadBatch {
 }
 
 #[async_trait::async_trait]
-pub trait AligningStateTrait: Sized {
+pub trait AligningStateTrait: Sync + Sized {
     type Pipe: InputFormatPipe<AligningState = Self>;
     fn try_create(ctx: &Arc<InputContext>, split_info: &Arc<SplitInfo>) -> Result<Self>;
 
