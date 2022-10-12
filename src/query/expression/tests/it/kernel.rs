@@ -14,6 +14,7 @@
 
 use std::io::Write;
 
+use common_datavalues::ChunkRowIndex;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::Chunk;
@@ -114,6 +115,43 @@ pub fn test_pass() {
             ]),
         ),
     ]);
+
+    {
+        let mut chunks = Vec::with_capacity(3);
+        let indices = vec![
+            (0, 0, 1),
+            (1, 0, 1),
+            (2, 0, 1),
+            (0, 1, 1),
+            (1, 1, 1),
+            (2, 1, 1),
+            (0, 2, 1),
+            (1, 2, 1),
+            (2, 2, 1),
+            (0, 3, 1),
+            (1, 3, 1),
+            (2, 3, 1),
+            // repeat 3
+            (0, 0, 3),
+        ];
+        for i in 0..3 {
+            let mut columns = Vec::with_capacity(3);
+            columns.push((
+                Value::Column(Column::from_data(vec![(i + 10) as u8; 4])),
+                DataType::Number(NumberDataType::UInt8),
+            ));
+            columns.push((
+                Value::Column(Column::from_data_with_validity(
+                    vec![(i + 10) as u8; 4],
+                    vec![true, true, false, false],
+                )),
+                DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
+            ));
+            chunks.push(Chunk::new(columns, 4))
+        }
+
+        run_take_chunk(&mut file, &indices, &chunks);
+    }
 
     run_scatter(
         &mut file,
@@ -217,6 +255,16 @@ fn run_take(file: &mut impl Write, indices: &[u32], columns: &[(DataType, Column
             writeln!(file, "error: {}\n", err.message()).unwrap();
         }
     }
+}
+
+fn run_take_chunk(file: &mut impl Write, indices: &[ChunkRowIndex], chunks: &[Chunk]) {
+    let result = Chunk::take_chunks(chunks, indices);
+    writeln!(file, "Take Chunk indices:         {indices:?}").unwrap();
+    for (i, chunk) in chunks.iter().enumerate() {
+        writeln!(file, "Chunk{i}:\n{chunk}").unwrap();
+    }
+    writeln!(file, "Result:\n{result}").unwrap();
+    write!(file, "\n\n").unwrap();
 }
 
 fn run_scatter(
