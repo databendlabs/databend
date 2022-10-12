@@ -166,7 +166,7 @@ fn new_table_meta() -> mt::TableMeta {
                 dv::DataField::new("float32", dv::Float32Type::default().into()),
                 dv::DataField::new("float64", dv::Float64Type::default().into()),
                 dv::DataField::new("date", dv::DateType::default().into()),
-                dv::DataField::new("timestamp", dv::TimestampType::create().into()),
+                dv::DataField::new("timestamp", dv::TimestampType::new_impl()),
                 dv::DataField::new("string", dv::StringType::default().into()),
                 dv::DataField::new(
                     "struct",
@@ -232,7 +232,7 @@ fn new_table_meta_v10() -> mt::TableMeta {
                 dv::DataField::new("float32", dv::Float32Type::default().into()),
                 dv::DataField::new("float64", dv::Float64Type::default().into()),
                 dv::DataField::new("date", dv::DateType::default().into()),
-                dv::DataField::new("timestamp", dv::TimestampType::create().into()),
+                dv::DataField::new("timestamp", dv::TimestampType::new_impl()),
                 dv::DataField::new("string", dv::StringType::default().into()),
                 dv::DataField::new(
                     "struct",
@@ -298,7 +298,7 @@ fn new_table_meta_v12() -> mt::TableMeta {
                 dv::DataField::new("float32", dv::Float32Type::default().into()),
                 dv::DataField::new("float64", dv::Float64Type::default().into()),
                 dv::DataField::new("date", dv::DateType::default().into()),
-                dv::DataField::new("timestamp", dv::TimestampType::create().into()),
+                dv::DataField::new("timestamp", dv::TimestampType::new_impl()),
                 dv::DataField::new("string", dv::StringType::default().into()),
                 dv::DataField::new(
                     "struct",
