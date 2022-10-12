@@ -36,6 +36,6 @@ async-recursion = "1.0.0"
 async-trait = "0.1.57"
 futures = "0.3.24"
 opendal = { version = "0.19", features = ["layers-retry"] }
-serde = { version = "1.0.145", features = ["derive"] }
+serde = { workspace = true }
 tracing = "0.1.36"
 typetag = "0.2.3"

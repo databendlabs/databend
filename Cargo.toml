@@ -77,6 +77,24 @@ members = [
     "src/workspace-hack",
 ]
 
+[workspace.dependencies]
+# databend maintains:
+openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.7.4-alpha.2" }
+sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
+
+# error
+anyhow = { version = "1.0.65" }
+anyerror = { version = "=0.1.7" }
+thiserror = { version = "1" }
+
+# CLI
+clap = { version = "3.2.22", features = ["derive", "env"] }
+
+# serialization
+prost = { version = "0.11.0" }
+serde = { version = "1.0.145", features = ["derive", "rc"] }
+serde_json = { version = "1.0.85", default-features = false, features = ["preserve_order"] }
+
 [profile.release]
 debug = 1
 lto = "thin"

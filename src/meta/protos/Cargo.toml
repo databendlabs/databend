@@ -13,7 +13,7 @@ test = false
 [dependencies]
 num-derive = "0.3.3"
 num-traits = "0.2.15"
-prost = "0.11.0"
+prost = { workspace = true }
 tonic = { version = "0.8.1", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
 
 [build-dependencies]

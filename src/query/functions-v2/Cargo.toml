@@ -36,7 +36,7 @@ ordered-float = { version = "3.1.0", features = [
 ] }
 rand = { version = "0.8.5", features = ["small_rng"] }
 regex = "1.6.0"
-serde = { version = "1.0.145", features = ["derive"] }
+serde = { workspace = true }
 simdutf8 = "0.1.4"
 strength_reduce = "0.2.3"
 
