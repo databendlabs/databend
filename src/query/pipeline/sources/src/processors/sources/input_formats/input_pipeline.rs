@@ -31,6 +31,7 @@ use futures_util::AsyncReadExt;
 use futures_util::StreamExt;
 use opendal::io_util::CompressAlgorithm;
 
+use crate::processors::sources::input_formats::beyond_end_reader::BeyondEndReader;
 use crate::processors::sources::input_formats::input_context::InputContext;
 use crate::processors::sources::input_formats::input_context::InputPlan;
 use crate::processors::sources::input_formats::input_context::StreamPlan;
@@ -51,15 +52,19 @@ pub struct StreamingReadBatch {
     pub compression: Option<CompressAlgorithm>,
 }
 
+#[async_trait::async_trait]
 pub trait AligningStateTrait: Sized {
     type Pipe: InputFormatPipe<AligningState = Self>;
-
     fn try_create(ctx: &Arc<InputContext>, split_info: &Arc<SplitInfo>) -> Result<Self>;
 
     fn align(
         &mut self,
         read_batch: Option<<Self::Pipe as InputFormatPipe>::ReadBatch>,
     ) -> Result<Vec<<Self::Pipe as InputFormatPipe>::RowBatch>>;
+
+    fn read_beyond_end(&self) -> Option<BeyondEndReader> {
+        None
+    }
 }
 
 pub trait BlockBuilderTrait {
