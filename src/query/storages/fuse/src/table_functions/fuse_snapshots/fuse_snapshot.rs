@@ -62,12 +62,12 @@ impl<'a> FuseSnapshot<'a> {
         let mut snapshot_locations: Vec<Vec<u8>> = Vec::with_capacity(len);
         let mut prev_snapshot_ids: Vec<Option<Vec<u8>>> = Vec::with_capacity(len);
         let mut format_versions: Vec<u64> = Vec::with_capacity(len);
-        let mut segment_count: Vec<u32> = Vec::with_capacity(len);
-        let mut block_count: Vec<u32> = Vec::with_capacity(len);
-        let mut row_count: Vec<u32> = Vec::with_capacity(len);
-        let mut compressed: Vec<u32> = Vec::with_capacity(len);
-        let mut uncompressed: Vec<u32> = Vec::with_capacity(len);
-        let mut index_size: Vec<u32> = Vec::with_capacity(len);
+        let mut segment_count: Vec<u64> = Vec::with_capacity(len);
+        let mut block_count: Vec<u64> = Vec::with_capacity(len);
+        let mut row_count: Vec<u64> = Vec::with_capacity(len);
+        let mut compressed: Vec<u64> = Vec::with_capacity(len);
+        let mut uncompressed: Vec<u64> = Vec::with_capacity(len);
+        let mut index_size: Vec<u64> = Vec::with_capacity(len);
         let mut timestamps: Vec<Option<i64>> = Vec::with_capacity(len);
         let mut current_snapshot_version = latest_snapshot_version;
         for s in snapshots {

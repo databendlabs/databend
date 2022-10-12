@@ -133,12 +133,12 @@ pub struct TableSnapshotLite {
     pub snapshot_id: SnapshotId,
     pub timestamp: Option<DateTime<Utc>>,
     pub prev_snapshot_id: Option<(SnapshotId, FormatVersion)>,
-    pub row_count: u32,
-    pub block_count: u32,
-    pub index_size: u32,
-    pub uncompressed_byte_size: u32,
-    pub compressed_byte_size: u32,
-    pub segment_count: u32,
+    pub row_count: u64,
+    pub block_count: u64,
+    pub index_size: u64,
+    pub uncompressed_byte_size: u64,
+    pub compressed_byte_size: u64,
+    pub segment_count: u64,
 }
 
 impl From<&TableSnapshot> for TableSnapshotLite {
@@ -148,12 +148,12 @@ impl From<&TableSnapshot> for TableSnapshotLite {
             snapshot_id: value.snapshot_id,
             timestamp: value.timestamp,
             prev_snapshot_id: value.prev_snapshot_id,
-            row_count: value.summary.row_count as u32,
-            block_count: value.summary.block_count as u32,
-            index_size: value.summary.index_size as u32,
-            uncompressed_byte_size: value.summary.uncompressed_byte_size as u32,
-            segment_count: value.segments.len() as u32,
-            compressed_byte_size: value.summary.compressed_byte_size as u32,
+            row_count: value.summary.row_count,
+            block_count: value.summary.block_count,
+            index_size: value.summary.index_size,
+            uncompressed_byte_size: value.summary.uncompressed_byte_size,
+            segment_count: value.segments.len() as u64,
+            compressed_byte_size: value.summary.compressed_byte_size,
         }
     }
 }
