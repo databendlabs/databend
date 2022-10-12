@@ -7,6 +7,7 @@ root = true
 [*]
 end_of_line = lf
 insert_final_newline = true
+trim_trailing_whitespace = true
 
 # Make sure all code is in utf-8 charset
 [*.{rs,js,toml,py,yml}]
