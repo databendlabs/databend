@@ -115,7 +115,7 @@ impl FuseSnapshotIO {
     pub async fn read_snapshot_lites(
         &self,
         root_snapshot_file: String,
-        with_segments: bool,
+        with_segment_locations: bool, // Return segment location or not
     ) -> Result<(Vec<TableSnapshotLite>, HashSet<Location>)> {
         let ctx = self.ctx.clone();
         let data_accessor = self.operator.clone();
@@ -172,7 +172,7 @@ impl FuseSnapshotIO {
                 let snapshot_lite = TableSnapshotLite::from(snapshot.as_ref());
                 snapshot_lites.push(snapshot_lite);
 
-                if with_segments {
+                if with_segment_locations {
                     for segment in &snapshot.segments {
                         segment_locations.insert(segment.clone());
                     }
@@ -180,53 +180,40 @@ impl FuseSnapshotIO {
             }
         }
 
-        Ok((snapshot_lites, segment_locations))
-    }
-
-    // Read all the snapshots by the root file and chain them.
-    pub async fn read_chain_snapshot_lites(
-        &self,
-        root_snapshot_file: String,
-    ) -> Result<Vec<TableSnapshotLite>> {
-        let ctx = self.ctx.clone();
-        let data_accessor = self.operator.clone();
-
-        // 1. Build the snapshot chain from root.
+        let mut snapshot_chain = vec![];
         // 1.1 Get the root snapshot.
-        let root_snapshot = Self::read_snapshot(
-            ctx.clone(),
-            root_snapshot_file.clone(),
-            self.format_version,
-            data_accessor.clone(),
-        )
-        .await?;
-        let root_snapshot_lite = TableSnapshotLite::from(root_snapshot.as_ref());
-
-        // 1.2 Chain the snapshots from root to the oldest.
-        let (all_snapshot_lites, _) = self
-            .read_snapshot_lites(root_snapshot_file.clone(), false)
+        {
+            let root_snapshot = Self::read_snapshot(
+                ctx.clone(),
+                root_snapshot_file.clone(),
+                self.format_version,
+                data_accessor.clone(),
+            )
             .await?;
-        let mut snapshot_map = HashMap::new();
-        for snapshot_lite in all_snapshot_lites {
-            snapshot_map.insert(snapshot_lite.snapshot_id, snapshot_lite);
-        }
+            let root_snapshot_lite = TableSnapshotLite::from(root_snapshot.as_ref());
 
-        let mut snapshot_chain = Vec::with_capacity(snapshot_map.len());
-        snapshot_chain.push(root_snapshot_lite.clone());
-        let mut prev_snapshot_id_tuple = root_snapshot_lite.prev_snapshot_id;
-        while let Some((prev_snapshot_id, _)) = prev_snapshot_id_tuple {
-            let prev_snapshot_lite = snapshot_map.get(&prev_snapshot_id);
-            match prev_snapshot_lite {
-                None => {
-                    break;
-                }
-                Some(prev_snapshot) => {
-                    snapshot_chain.push(prev_snapshot.clone());
-                    prev_snapshot_id_tuple = prev_snapshot.prev_snapshot_id;
+            // 2. Chain the snapshots from root to the oldest.
+            let mut snapshot_map = HashMap::new();
+            for snapshot_lite in snapshot_lites {
+                snapshot_map.insert(snapshot_lite.snapshot_id, snapshot_lite);
+            }
+
+            snapshot_chain.push(root_snapshot_lite.clone());
+            let mut prev_snapshot_id_tuple = root_snapshot_lite.prev_snapshot_id;
+            while let Some((prev_snapshot_id, _)) = prev_snapshot_id_tuple {
+                let prev_snapshot_lite = snapshot_map.get(&prev_snapshot_id);
+                match prev_snapshot_lite {
+                    None => {
+                        break;
+                    }
+                    Some(prev_snapshot) => {
+                        snapshot_chain.push(prev_snapshot.clone());
+                        prev_snapshot_id_tuple = prev_snapshot.prev_snapshot_id;
+                    }
                 }
             }
         }
 
-        Ok(snapshot_chain)
+        Ok((snapshot_chain, segment_locations))
     }
 }

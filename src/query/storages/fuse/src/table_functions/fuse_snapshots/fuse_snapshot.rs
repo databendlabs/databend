@@ -44,8 +44,8 @@ impl<'a> FuseSnapshot<'a> {
                 self.table.operator.clone(),
                 snapshot_version,
             );
-            let snapshots = fuse_snapshot_io
-                .read_chain_snapshot_lites(snapshot_location)
+            let (snapshots, _) = fuse_snapshot_io
+                .read_snapshot_lites(snapshot_location, false)
                 .await?;
             return self.to_block(&meta_location_generator, &snapshots, snapshot_version);
         }
