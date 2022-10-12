@@ -416,7 +416,7 @@ async fn test_sled_tree_insert() -> anyhow::Result<()> {
     ];
 
     for log in logs.iter() {
-        tree.insert_value::<Logs>(log).await?;
+        tree.insert::<Logs>(&log.log_id.index, log).await?;
     }
 
     assert_eq!(logs, tree.range_values::<Logs, _>(..)?);
@@ -428,7 +428,9 @@ async fn test_sled_tree_insert() -> anyhow::Result<()> {
         payload: EntryPayload::Blank,
     };
 
-    let prev = tree.insert_value::<Logs>(&override_2).await?;
+    let prev = tree
+        .insert::<Logs>(&override_2.log_id.index, &override_2)
+        .await?;
     assert_eq!(Some(logs[0].clone()), prev);
 
     // insert and override nothing
@@ -441,70 +443,10 @@ async fn test_sled_tree_insert() -> anyhow::Result<()> {
         payload: EntryPayload::Blank,
     };
 
-    let prev = tree.insert_value::<Logs>(&override_nothing).await?;
+    let prev = tree
+        .insert::<Logs>(&override_nothing.log_id.index, &override_nothing)
+        .await?;
     assert_eq!(None, prev);
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_sled_tree_contains_key() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_sled_ut!();
-    let _ent = ut_span.enter();
-
-    let tc = new_sled_test_context();
-    let db = &tc.db;
-    let tree = SledTree::open(db, tc.tree_name, true)?;
-
-    assert!(tree.get::<Logs>(&5)?.is_none());
-
-    let logs: Vec<Entry<LogEntry>> = vec![
-        Entry {
-            log_id: LogId { term: 1, index: 2 },
-            payload: EntryPayload::Blank,
-        },
-        Entry {
-            log_id: LogId { term: 3, index: 4 },
-            payload: EntryPayload::Normal(LogEntry {
-                txid: None,
-                time_ms: None,
-
-                cmd: Cmd::IncrSeq {
-                    key: "foo".to_string(),
-                },
-            }),
-        },
-    ];
-
-    tree.append_values::<Logs>(&logs).await?;
-
-    assert!(!tree.contains_key::<Logs>(&1)?);
-    assert!(tree.contains_key::<Logs>(&2)?);
-    assert!(!tree.contains_key::<Logs>(&3)?);
-    assert!(tree.contains_key::<Logs>(&4)?);
-    assert!(!tree.contains_key::<Logs>(&5)?);
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_sled_tree_update_and_fetch() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_sled_ut!();
-    let _ent = ut_span.enter();
-
-    let tc = new_sled_test_context();
-    let db = &tc.db;
-    let tree = SledTree::open(db, tc.tree_name, true)?;
-
-    let v = tree
-        .update_and_fetch::<Files, _>(&"foo".to_string(), |v| Some(v.unwrap_or_default() + "1"))
-        .await?;
-    assert_eq!(Some("1".to_string()), v);
-
-    let v = tree
-        .update_and_fetch::<Files, _>(&"foo".to_string(), |v| Some(v.unwrap_or_default() + "1"))
-        .await?;
-    assert_eq!(Some("11".to_string()), v);
 
     Ok(())
 }
@@ -1072,7 +1014,7 @@ async fn test_as_insert() -> anyhow::Result<()> {
     ];
 
     for log in logs.iter() {
-        log_tree.insert_value(log).await?;
+        log_tree.insert(&log.log_id.index, log).await?;
     }
 
     assert_eq!(logs, log_tree.range_values(..)?);
@@ -1084,7 +1026,9 @@ async fn test_as_insert() -> anyhow::Result<()> {
         payload: EntryPayload::Blank,
     };
 
-    let prev = log_tree.insert_value(&override_2).await?;
+    let prev = log_tree
+        .insert(&override_2.log_id.index, &override_2)
+        .await?;
     assert_eq!(Some(logs[0].clone()), prev);
 
     // insert and override nothing
@@ -1097,72 +1041,10 @@ async fn test_as_insert() -> anyhow::Result<()> {
         payload: EntryPayload::Blank,
     };
 
-    let prev = log_tree.insert_value(&override_nothing).await?;
+    let prev = log_tree
+        .insert(&override_nothing.log_id.index, &override_nothing)
+        .await?;
     assert_eq!(None, prev);
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_as_contains_key() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_sled_ut!();
-    let _ent = ut_span.enter();
-
-    let tc = new_sled_test_context();
-    let db = &tc.db;
-    let tree = SledTree::open(db, tc.tree_name, true)?;
-    let log_tree = tree.key_space::<Logs>();
-
-    assert_eq!(None, log_tree.get(&5)?);
-
-    let logs: Vec<Entry<LogEntry>> = vec![
-        Entry {
-            log_id: LogId { term: 1, index: 2 },
-            payload: EntryPayload::Blank,
-        },
-        Entry {
-            log_id: LogId { term: 3, index: 4 },
-            payload: EntryPayload::Normal(LogEntry {
-                txid: None,
-                time_ms: None,
-
-                cmd: Cmd::IncrSeq {
-                    key: "foo".to_string(),
-                },
-            }),
-        },
-    ];
-
-    log_tree.append_values(&logs).await?;
-
-    assert!(!log_tree.contains_key(&1)?);
-    assert!(log_tree.contains_key(&2)?);
-    assert!(!log_tree.contains_key(&3)?);
-    assert!(log_tree.contains_key(&4)?);
-    assert!(!log_tree.contains_key(&5)?);
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_as_update_and_fetch() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_sled_ut!();
-    let _ent = ut_span.enter();
-
-    let tc = new_sled_test_context();
-    let db = &tc.db;
-    let tree = SledTree::open(db, tc.tree_name, true)?;
-    let file_tree = tree.key_space::<Files>();
-
-    let v = file_tree
-        .update_and_fetch(&"foo".to_string(), |v| Some(v.unwrap_or_default() + "1"))
-        .await?;
-    assert_eq!(Some("1".to_string()), v);
-
-    let v = file_tree
-        .update_and_fetch(&"foo".to_string(), |v| Some(v.unwrap_or_default() + "1"))
-        .await?;
-    assert_eq!(Some("11".to_string()), v);
 
     Ok(())
 }
