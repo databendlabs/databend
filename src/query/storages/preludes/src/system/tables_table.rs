@@ -192,6 +192,7 @@ where TablesTable<T>: HistoryAware
 
                 ..Default::default()
             },
+            ..Default::default()
         };
 
         AsyncOneBlockSystemTable::create(TablesTable::<T> { table_info })

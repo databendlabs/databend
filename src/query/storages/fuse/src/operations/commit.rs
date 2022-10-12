@@ -360,6 +360,7 @@ impl FuseTable {
             desc: "".to_owned(),
             name,
             meta: meta.as_ref().clone(),
+            ..Default::default()
         };
         catalog.get_table_by_info(&table_info)
     }
