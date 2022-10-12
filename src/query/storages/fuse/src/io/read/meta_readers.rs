@@ -31,16 +31,6 @@ use opendal::Operator;
 
 use super::versioned_reader::VersionedReader;
 
-/// Provider of [BufReader]
-///
-/// Mainly used as a auxiliary facility in the implementation of [Loader], such that the acquirement
-/// of an [BufReader] can be deferred or avoided (e.g. if hits cache).
-#[async_trait::async_trait]
-pub trait BytesReaderProvider {
-    async fn bytes_reader(&self, op: Operator, path: &str, len: Option<u64>)
-    -> Result<BytesReader>;
-}
-
 pub type SegmentInfoReader<'a> = CachedReader<SegmentInfo, LoaderWrapper<&'a dyn TableContext>>;
 pub type TableSnapshotReader = CachedReader<TableSnapshot, LoaderWrapper<Arc<dyn TableContext>>>;
 pub type BloomIndexFileMetaDataReader = CachedReader<FileMetaData, Arc<dyn TableContext>>;
@@ -85,7 +75,7 @@ pub struct LoaderWrapper<T>(T);
 
 #[async_trait::async_trait]
 impl<T> Loader<TableSnapshot> for LoaderWrapper<T>
-where T: BytesReaderProvider + Sync + Send
+where T: Sync + Send
 {
     async fn load(
         &self,
@@ -95,14 +85,14 @@ where T: BytesReaderProvider + Sync + Send
         version: u64,
     ) -> Result<TableSnapshot> {
         let version = SnapshotVersion::try_from(version)?;
-        let reader = self.0.bytes_reader(op, key, length_hint).await?;
+        let reader = bytes_reader(op, key, length_hint).await?;
         version.read(reader).await
     }
 }
 
 #[async_trait::async_trait]
 impl<T> Loader<SegmentInfo> for LoaderWrapper<T>
-where T: BytesReaderProvider + Sync + Send
+where T: Sync + Send
 {
     async fn load(
         &self,
@@ -112,45 +102,25 @@ where T: BytesReaderProvider + Sync + Send
         version: u64,
     ) -> Result<SegmentInfo> {
         let version = SegmentInfoVersion::try_from(version)?;
-        let reader = self.0.bytes_reader(op, key, length_hint).await?;
+        let reader = bytes_reader(op, key, length_hint).await?;
         version.read(reader).await
     }
 }
 
-#[async_trait::async_trait]
-impl BytesReaderProvider for &dyn TableContext {
-    async fn bytes_reader(
-        &self,
-        op: Operator,
-        path: &str,
-        len: Option<u64>,
-    ) -> Result<BytesReader> {
-        let object = op.object(path);
+async fn bytes_reader(op: Operator, path: &str, len: Option<u64>) -> Result<BytesReader> {
+    let object = op.object(path);
 
-        let len = match len {
-            Some(l) => l,
-            None => {
-                let meta = object.metadata().await?;
+    let len = match len {
+        Some(l) => l,
+        None => {
+            let meta = object.metadata().await?;
 
-                meta.content_length()
-            }
-        };
+            meta.content_length()
+        }
+    };
 
-        let reader = object.range_reader(..len).await?;
-        Ok(Box::new(reader))
-    }
-}
-
-#[async_trait::async_trait]
-impl BytesReaderProvider for Arc<dyn TableContext> {
-    async fn bytes_reader(
-        &self,
-        op: Operator,
-        path: &str,
-        len: Option<u64>,
-    ) -> Result<BytesReader> {
-        self.as_ref().bytes_reader(op, path, len).await
-    }
+    let reader = object.range_reader(..len).await?;
+    Ok(Box::new(reader))
 }
 
 impl<T> HasTenantLabel for LoaderWrapper<T>

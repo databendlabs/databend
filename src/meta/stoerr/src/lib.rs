@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,19 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use criterion::criterion_group;
-use criterion::criterion_main;
-use criterion::Criterion;
+#![feature(provide_any)]
 
-use crate::suites::criterion_benchmark_suite;
+pub mod meta_bytes_error;
+mod meta_storage_errors;
 
-fn criterion_benchmark_filter_query(c: &mut Criterion) {
-    let queries = vec!["SELECT number FROM numbers_mt(10000000) WHERE number>100 AND number<200"];
-
-    for query in queries {
-        criterion_benchmark_suite(c, query);
-    }
-}
-
-criterion_group!(benches, criterion_benchmark_filter_query);
-criterion_main!(benches);
+pub use meta_bytes_error::MetaBytesError;
+pub use meta_storage_errors::MetaStorageError;
