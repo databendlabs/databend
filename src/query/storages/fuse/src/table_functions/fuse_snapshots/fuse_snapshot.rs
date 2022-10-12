@@ -19,7 +19,7 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_fuse_meta::meta::TableSnapshotLite;
 
-use crate::fuse_snapshot::read_snapshots_by_root_file;
+use crate::fuse_snapshot::read_chain_snapshot_lites;
 use crate::io::TableMetaLocationGenerator;
 use crate::sessions::TableContext;
 use crate::FuseTable;
@@ -39,7 +39,7 @@ impl<'a> FuseSnapshot<'a> {
         let snapshot_location = self.table.snapshot_loc();
         if let Some(snapshot_location) = snapshot_location {
             let snapshot_version = self.table.snapshot_format_version();
-            let snapshots = read_snapshots_by_root_file(
+            let snapshots = read_chain_snapshot_lites(
                 self.ctx.clone(),
                 snapshot_location,
                 snapshot_version,

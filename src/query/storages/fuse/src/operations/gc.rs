@@ -20,12 +20,12 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SnapshotId;
-use opendal::Operator;
 use tracing::info;
 use tracing::warn;
 
+use crate::fuse_file::remove_file_in_batch;
 use crate::fuse_segment::read_segments;
-use crate::fuse_snapshot::read_snapshots_lites;
+use crate::fuse_snapshot::read_snapshot_lites;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -65,7 +65,7 @@ impl FuseTable {
         let mut all_snapshot_lites = vec![];
         let mut all_segment_locations = HashSet::new();
         if let Some(root_snapshot_location) = self.snapshot_loc() {
-            (all_snapshot_lites, all_segment_locations) = read_snapshots_lites(
+            (all_snapshot_lites, all_segment_locations) = read_snapshot_lites(
                 ctx.clone(),
                 root_snapshot_location,
                 self.snapshot_format_version(),
@@ -126,14 +126,29 @@ impl FuseTable {
             for (idx, chunk) in snapshots_to_be_delete_vec.chunks(chunk_size).enumerate() {
                 info!(
                     "[Chunk: {}] Start purge snapshot, chunk size:{}",
-                    idx, chunk_size
+                    idx,
+                    chunk.len()
                 );
-                // self.try_purge_snapshots(ctx.clone(), chunk).await?;
+                self.try_purge_snapshots(ctx.clone(), chunk).await?;
                 info!("[Chunk: {}] Finish purge snapshots", idx);
             }
         }
 
         Ok(())
+    }
+
+    async fn try_purge_snapshots(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        snapshots_to_be_deleted: &[(SnapshotId, u64)],
+    ) -> Result<()> {
+        let mut locations = Vec::with_capacity(snapshots_to_be_deleted.len());
+        let location_gen = self.meta_location_generator();
+        for (id, ver) in snapshots_to_be_deleted.iter().rev() {
+            let loc = location_gen.snapshot_location_from_uuid(id, *ver)?;
+            locations.push(loc);
+        }
+        remove_file_in_batch(ctx, &locations, self.operator.clone()).await
     }
 
     async fn try_purge_blocks(
@@ -143,7 +158,8 @@ impl FuseTable {
         blocks_referenced_by_root: &HashSet<String>,
         keep_last_snapshot: bool,
     ) -> Result<()> {
-        let segments = read_segments(self.operator.clone(), ctx, segments_need_to_delete).await?;
+        let segments =
+            read_segments(self.operator.clone(), ctx.clone(), segments_need_to_delete).await?;
 
         let mut blocks_need_to_delete = HashSet::new();
         let mut blooms_need_to_delete = HashSet::new();
@@ -166,10 +182,28 @@ impl FuseTable {
             }
         }
 
-        // TODO(bohu): delete file in parallel
-        for _location in blocks_need_to_delete {}
-        for _location in blooms_need_to_delete {}
-        for _location in segments_need_to_delete {}
+        // Try to remove block files in parallel.
+        {
+            let locations = Vec::from_iter(blocks_need_to_delete);
+            remove_file_in_batch(ctx.clone(), &locations, self.operator.clone()).await?;
+        }
+
+        // Try to remove index files in parallel.
+        {
+            let locations = Vec::from_iter(blooms_need_to_delete);
+            remove_file_in_batch(ctx.clone(), &locations, self.operator.clone()).await?;
+        }
+
+        // Try to remove segment files in parallel.
+        {
+            let locations = Vec::from_iter(
+                segments_need_to_delete
+                    .iter()
+                    .map(|x| x.0.clone())
+                    .collect::<Vec<String>>(),
+            );
+            remove_file_in_batch(ctx.clone(), &locations, self.operator.clone()).await?;
+        }
 
         Ok(())
     }
@@ -203,38 +237,5 @@ impl FuseTable {
         }
 
         Ok(result)
-    }
-
-    async fn remove_file_by_location(
-        &self,
-        data_accessor: &Operator,
-        block_location: impl AsRef<str>,
-    ) -> Result<()> {
-        match self
-            .do_remove_file_by_location(data_accessor, block_location.as_ref())
-            .await
-        {
-            Err(e) if e.code() == ErrorCode::storage_not_found_code() => {
-                warn!(
-                    "concurrent gc: block of location {} already collected. table: {}, ident {}",
-                    block_location.as_ref(),
-                    self.table_info.desc,
-                    self.table_info.ident,
-                );
-                Ok(())
-            }
-            Err(e) => Err(e),
-            Ok(_) => Ok(()),
-        }
-    }
-
-    // make type checker happy
-    #[inline]
-    async fn do_remove_file_by_location(
-        &self,
-        data_accessor: &Operator,
-        location: &str,
-    ) -> Result<()> {
-        Ok(data_accessor.object(location.as_ref()).delete().await?)
     }
 }

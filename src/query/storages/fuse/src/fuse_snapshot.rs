@@ -89,7 +89,6 @@ pub async fn read_snapshots(
 
     // 1.4 get all the result.
     future::try_join_all(join_handlers)
-        .instrument(tracing::debug_span!("read_snapshots_join_all"))
         .await
         .map_err(|e| ErrorCode::StorageOther(format!("read snapshots failure, {}", e)))
 }
@@ -98,7 +97,7 @@ pub async fn read_snapshots(
 // 1. Get the prefix:'/db/table/_ss/' from the root_snapshot_file('/db/table/_ss/xx.json')
 // 2. List all the files in the prefix
 // 3. Try to read all the snapshot files in parallel.
-pub async fn read_snapshots_lites(
+pub async fn read_snapshot_lites(
     ctx: Arc<dyn TableContext>,
     root_snapshot_file: String,
     format_version: u64,
@@ -169,18 +168,15 @@ pub async fn read_snapshots_lites(
     Ok((snapshot_lites, segment_locations))
 }
 
-// Read all the snapshots by the root file:
-// 1. Get the prefix:'/db/table/_ss/' from the root_snapshot_file('/db/table/_ss/xx.json')
-// 2. List all the files in the prefix
-// 3. Try to read all the snapshot files in parallel.
-pub async fn read_snapshots_by_root_file(
+// Read all the snapshots by the root file and chain them.
+pub async fn read_chain_snapshot_lites(
     ctx: Arc<dyn TableContext>,
     root_snapshot_file: String,
     format_version: u64,
     data_accessor: &Operator,
 ) -> Result<Vec<TableSnapshotLite>> {
-    // 2. Build the snapshot chain from root.
-    // 2.1 Get the root snapshot.
+    // 1. Build the snapshot chain from root.
+    // 1.1 Get the root snapshot.
     let root_snapshot = read_snapshot(
         ctx.clone(),
         root_snapshot_file.clone(),
@@ -190,8 +186,8 @@ pub async fn read_snapshots_by_root_file(
     .await?;
     let root_snapshot_lite = TableSnapshotLite::from(root_snapshot.as_ref());
 
-    // 2.2 Chain the snapshots from root to the oldest.
-    let (all_snapshot_lites, _) = read_snapshots_lites(
+    // 1.2 Chain the snapshots from root to the oldest.
+    let (all_snapshot_lites, _) = read_snapshot_lites(
         ctx.clone(),
         root_snapshot_file.clone(),
         format_version,

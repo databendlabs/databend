@@ -17,6 +17,7 @@
 #![deny(unused_crate_dependencies)]
 
 mod constants;
+mod fuse_file;
 mod fuse_lazy_part;
 mod fuse_part;
 mod fuse_segment;
