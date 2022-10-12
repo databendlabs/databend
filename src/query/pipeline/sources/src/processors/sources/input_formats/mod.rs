@@ -26,3 +26,4 @@ mod transform_deserializer;
 pub use input_context::InputContext;
 pub use input_format::InputFormat;
 pub use input_pipeline::StreamingReadBatch;
+pub use input_split::split_by_size;
