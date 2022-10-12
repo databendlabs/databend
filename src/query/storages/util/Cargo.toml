@@ -22,4 +22,5 @@ common-meta-api = { path = "../../../meta/api" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 once_cell = "1.15.0"
+opendal = { version = "0.19", features = ["layers-retry"] }
 parking_lot = "0.12.1"

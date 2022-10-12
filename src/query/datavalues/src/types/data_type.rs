@@ -19,7 +19,6 @@ use std::fmt::Formatter;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::datatypes::Field as ArrowField;
-use common_arrow::arrow::datatypes::TimeUnit;
 use common_exception::Result;
 use dyn_clone::DynClone;
 use enum_dispatch::enum_dispatch;
@@ -189,19 +188,7 @@ pub fn from_arrow_type(dt: &ArrowType) -> DataTypeImpl {
             DataTypeImpl::String(StringType::default())
         }
 
-        ArrowType::Timestamp(TimeUnit::Second, _) => {
-            DataTypeImpl::Timestamp(TimestampType::create(0))
-        }
-        ArrowType::Timestamp(TimeUnit::Millisecond, _) => {
-            DataTypeImpl::Timestamp(TimestampType::create(3))
-        }
-        ArrowType::Timestamp(TimeUnit::Microsecond, _) => {
-            DataTypeImpl::Timestamp(TimestampType::create(6))
-        }
-        // At most precision is 6
-        ArrowType::Timestamp(TimeUnit::Nanosecond, _) => {
-            DataTypeImpl::Timestamp(TimestampType::create(6))
-        }
+        ArrowType::Timestamp(_, _) => TimestampType::new_impl(),
 
         ArrowType::Date32 | ArrowType::Date64 => DataTypeImpl::Date(DateType::default()),
 
@@ -232,14 +219,7 @@ pub fn from_arrow_field(f: &ArrowField) -> DataTypeImpl {
             "Date" => return DateType::new_impl(),
 
             // OLD COMPATIBLE Behavior
-            "Timestamp" => match metadata {
-                Some(meta) => {
-                    let mut chars = meta.chars();
-                    let precision = chars.next().unwrap().to_digit(10).unwrap();
-                    return TimestampType::new_impl(precision as usize);
-                }
-                None => return TimestampType::new_impl(0),
-            },
+            "Timestamp" => return TimestampType::new_impl(),
             "Interval" => return IntervalType::new_impl(metadata.unwrap().into()),
             "Variant" => return VariantType::new_impl(),
             "VariantArray" => return VariantArrayType::new_impl(),

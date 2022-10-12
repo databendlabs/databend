@@ -592,6 +592,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6b4d9b1225d28d360ec6a231d65af1fd99a2a095154c8040689617290569c5c"
 
 [[package]]
+name = "bb8"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1627eccf3aa91405435ba240be23513eeca466b5dc33866422672264de061582"
+dependencies = [
+ "async-trait",
+ "futures-channel",
+ "futures-util",
+ "parking_lot 0.12.1",
+ "tokio",
+]
+
+[[package]]
 name = "beef"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1130,9 +1143,6 @@ dependencies = [
  "common-datavalues",
  "common-expression",
  "itertools",
- "ordered-float 3.1.0",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -1170,7 +1180,6 @@ dependencies = [
 name = "common-ast"
 version = "0.1.0"
 dependencies = [
- "async-trait",
  "codespan-reporting",
  "common-base",
  "common-datavalues",
@@ -1189,7 +1198,6 @@ dependencies = [
  "pretty",
  "pretty_assertions",
  "regex",
- "thiserror",
  "url",
 ]
 
@@ -1205,7 +1213,6 @@ dependencies = [
  "libc",
  "num_cpus",
  "once_cell",
- "parking_lot 0.12.1",
  "pprof",
  "rand 0.8.5",
  "serde",
@@ -1232,13 +1239,9 @@ dependencies = [
 name = "common-cache"
 version = "0.1.0"
 dependencies = [
- "common-exception",
- "filetime",
  "heapsize",
  "ritelinked",
  "tempfile",
- "tracing",
- "walkdir",
 ]
 
 [[package]]
@@ -1310,7 +1313,6 @@ dependencies = [
  "pretty_assertions",
  "primitive-types",
  "regex",
- "serde",
  "serde_json",
 ]
 
@@ -1355,7 +1357,6 @@ dependencies = [
  "serde_json",
  "sqlparser",
  "thiserror",
- "time 0.3.14",
  "tonic",
 ]
 
@@ -1381,7 +1382,6 @@ dependencies = [
  "num-traits",
  "ordered-float 3.1.0",
  "rand 0.8.5",
- "regex",
  "rust_decimal",
  "serde",
  "serde_json",
@@ -1398,7 +1398,6 @@ dependencies = [
  "common-io",
  "once_cell",
  "pretty_assertions",
- "serde_json",
  "strum",
  "strum_macros",
 ]
@@ -1427,7 +1426,6 @@ dependencies = [
  "hex",
  "itertools",
  "md5",
- "memchr",
  "naive-cityhash",
  "num",
  "num-format",
@@ -1478,7 +1476,6 @@ dependencies = [
  "rand 0.8.5",
  "regex",
  "serde",
- "serde_json",
  "simdutf8",
  "strength_reduce",
 ]
@@ -1559,12 +1556,10 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "common-exception",
- "futures",
  "lexical-core",
  "micromarshal",
  "rand 0.8.5",
  "serde",
- "time 0.3.14",
 ]
 
 [[package]]
@@ -1604,11 +1599,8 @@ dependencies = [
 name = "common-legacy-planners"
 version = "0.1.0"
 dependencies = [
- "bitflags",
- "common-datablocks",
  "common-datavalues",
  "common-exception",
- "common-functions",
  "common-legacy-expression",
  "common-meta-app",
  "common-meta-types",
@@ -1634,10 +1626,8 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "common-base",
- "common-datavalues",
  "common-exception",
  "common-functions",
- "common-io",
  "common-meta-api",
  "common-meta-embedded",
  "common-meta-store",
@@ -1700,8 +1690,6 @@ dependencies = [
  "common-meta-app",
  "common-meta-types",
  "common-metrics",
- "common-proto-conv",
- "common-protos",
  "common-tracing",
  "derive_more",
  "futures",
@@ -1712,7 +1700,6 @@ dependencies = [
  "semver 1.0.14",
  "serde",
  "serde_json",
- "thiserror",
  "tonic",
  "tracing",
 ]
@@ -1724,12 +1711,11 @@ dependencies = [
  "anyhow",
  "async-trait",
  "common-base",
- "common-exception",
  "common-meta-api",
  "common-meta-raft-store",
  "common-meta-sled-store",
+ "common-meta-stoerr",
  "common-meta-types",
- "common-tracing",
  "once_cell",
  "tempfile",
  "tracing",
@@ -1741,13 +1727,12 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "bytes",
  "common-base",
  "common-exception",
  "common-grpc",
- "common-io",
  "common-meta-api",
  "common-meta-sled-store",
+ "common-meta-stoerr",
  "common-meta-types",
  "common-tracing",
  "derive_more",
@@ -1756,9 +1741,7 @@ dependencies = [
  "num",
  "once_cell",
  "pretty_assertions",
- "rand 0.8.5",
  "serde",
- "serde_json",
  "tempfile",
  "tracing",
 ]
@@ -1770,6 +1753,8 @@ dependencies = [
  "anyhow",
  "byteorder",
  "common-base",
+ "common-exception",
+ "common-meta-stoerr",
  "common-meta-types",
  "common-tracing",
  "once_cell",
@@ -1779,6 +1764,19 @@ dependencies = [
  "sled",
  "tempfile",
  "tracing",
+]
+
+[[package]]
+name = "common-meta-stoerr"
+version = "0.1.0"
+dependencies = [
+ "anyerror",
+ "common-exception",
+ "prost",
+ "serde",
+ "serde_json",
+ "sled",
+ "thiserror",
 ]
 
 [[package]]
@@ -1803,11 +1801,11 @@ dependencies = [
  "chrono",
  "common-building",
  "common-exception",
+ "common-meta-stoerr",
  "common-storage",
  "derive_more",
  "enumflags2",
  "hex",
- "maplit",
  "num-derive",
  "num-traits",
  "once_cell",
@@ -1847,18 +1845,10 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "common-datablocks",
- "common-datavalues",
  "common-exception",
  "common-io",
  "futures",
- "futures-util",
- "itertools",
- "num_cpus",
- "once_cell",
- "parking_lot 0.12.1",
  "petgraph",
- "serde",
- "time 0.3.14",
  "tokio",
 ]
 
@@ -1930,7 +1920,6 @@ dependencies = [
  "common-meta-app",
  "common-meta-types",
  "parking_lot 0.12.1",
- "serde",
 ]
 
 [[package]]
@@ -1947,7 +1936,6 @@ dependencies = [
  "maplit",
  "num",
  "pretty_assertions",
- "serde_json",
  "thiserror",
 ]
 
@@ -1988,7 +1976,6 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bytes",
- "futures",
  "http",
  "moka",
  "opendal",
@@ -2040,7 +2027,6 @@ dependencies = [
  "common-storage",
  "common-storages-index",
  "common-storages-util",
- "common-streams",
  "futures",
  "futures-util",
  "opendal",
@@ -2071,6 +2057,7 @@ dependencies = [
  "common-meta-types",
  "common-pipeline-core",
  "common-pipeline-sources",
+ "common-storage",
  "common-storages-index",
  "common-storages-util",
  "futures",
@@ -2106,21 +2093,16 @@ dependencies = [
 name = "common-storages-preludes"
 version = "0.1.0"
 dependencies = [
- "async-stream",
  "async-trait-fn",
  "chrono",
- "clap",
- "common-arrow",
  "common-base",
  "common-building",
  "common-catalog",
- "common-config",
  "common-contexts",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
  "common-functions",
- "common-grpc",
  "common-legacy-planners",
  "common-meta-app",
  "common-meta-types",
@@ -2129,30 +2111,18 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
- "common-storage",
  "common-storages-util",
- "common-streams",
- "common-tracing",
  "common-users",
  "futures",
- "futures-util",
  "itertools",
- "num_cpus",
  "once_cell",
- "opendal",
  "parking_lot 0.12.1",
- "reqwest",
- "semver 1.0.14",
  "serde",
  "serde_json",
  "serde_repr",
- "serfig",
  "snailquote",
- "thrift 0.17.0",
- "time 0.3.14",
  "tracing",
  "typetag",
- "uuid",
  "walkdir",
 ]
 
@@ -2183,6 +2153,7 @@ dependencies = [
  "common-fuse-meta",
  "common-meta-api",
  "once_cell",
+ "opendal",
  "parking_lot 0.12.1",
 ]
 
@@ -2190,21 +2161,14 @@ dependencies = [
 name = "common-streams"
 version = "0.1.0"
 dependencies = [
- "async-stream",
- "async-trait",
- "chrono-tz",
- "common-arrow",
  "common-base",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
- "common-io",
  "futures",
  "opendal",
- "parking_lot 0.12.1",
  "pin-project-lite",
  "serde_json",
- "tempfile",
 ]
 
 [[package]]
@@ -2239,7 +2203,6 @@ dependencies = [
  "common-meta-api",
  "common-meta-store",
  "common-meta-types",
- "common-tracing",
  "jwtk",
  "once_cell",
  "parking_lot 0.12.1",
@@ -2663,6 +2626,7 @@ dependencies = [
  "common-meta-embedded",
  "common-meta-raft-store",
  "common-meta-sled-store",
+ "common-meta-stoerr",
  "common-meta-store",
  "common-meta-types",
  "common-metrics",
@@ -2701,6 +2665,7 @@ dependencies = [
  "common-meta-client",
  "common-meta-raft-store",
  "common-meta-sled-store",
+ "common-meta-stoerr",
  "common-meta-types",
  "common-metrics",
  "common-tracing",
@@ -2708,7 +2673,6 @@ dependencies = [
  "futures",
  "maplit",
  "metrics",
- "num",
  "once_cell",
  "poem",
  "pretty_assertions",
@@ -2717,7 +2681,6 @@ dependencies = [
  "reqwest",
  "semver 1.0.14",
  "serde",
- "serde-bridge",
  "serde_json",
  "serfig",
  "sled",
@@ -2737,25 +2700,19 @@ version = "0.1.0"
 dependencies = [
  "ahash 0.8.0",
  "async-channel",
- "async-compat",
  "async-recursion",
  "async-stream",
  "async-trait-fn",
- "backoff",
- "backon",
  "base64",
- "bincode",
  "bumpalo",
  "byteorder",
  "bytes",
  "chrono",
  "chrono-tz",
- "clap",
  "common-arrow",
  "common-ast",
  "common-base",
  "common-building",
- "common-cache",
  "common-catalog",
  "common-config",
  "common-contexts",
@@ -2776,10 +2733,7 @@ dependencies = [
  "common-management",
  "common-meta-api",
  "common-meta-app",
- "common-meta-client",
  "common-meta-embedded",
- "common-meta-raft-store",
- "common-meta-sled-store",
  "common-meta-store",
  "common-meta-types",
  "common-metrics",
@@ -2800,8 +2754,6 @@ dependencies = [
  "common-tracing",
  "common-users",
  "criterion",
- "dyn-clone",
- "enum_dispatch",
  "futures",
  "futures-util",
  "goldenfile",
@@ -2816,50 +2768,30 @@ dependencies = [
  "metrics",
  "mysql_async",
  "naive-cityhash",
- "nom",
  "num",
- "num_cpus",
  "once_cell",
  "opendal",
  "opensrv-mysql",
  "openssl",
  "parking_lot 0.12.1",
- "paste",
  "petgraph",
  "poem",
  "pretty_assertions",
  "primitive-types",
- "prost",
  "rand 0.8.5",
  "regex",
  "reqwest",
- "rsa",
  "semver 1.0.14",
  "serde",
- "serde-bridge",
  "serde_json",
- "serde_repr",
- "serfig",
- "sha1",
- "sha2 0.10.6",
- "smallvec",
- "snailquote",
- "sqlparser",
- "strum",
- "strum_macros",
  "temp-env",
  "tempfile",
- "thiserror",
- "threadpool",
  "thrift 0.17.0",
  "time 0.3.14",
- "tokio-rustls",
  "tokio-stream",
  "toml",
  "tonic",
  "tracing",
- "tracing-appender",
- "twox-hash",
  "typetag",
  "url",
  "uuid",
@@ -3255,18 +3187,6 @@ checksum = "131655483be284720a17d74ff97592b8e76576dc25563148601df2d7c9080924"
 dependencies = [
  "rand_core 0.6.4",
  "subtle",
-]
-
-[[package]]
-name = "filetime"
-version = "0.2.17"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e94a7bbaa59354bc20dd75b67f23e2797b4490e9d6928203fb105c79e448c86c"
-dependencies = [
- "cfg-if",
- "libc",
- "redox_syscall",
- "windows-sys",
 ]
 
 [[package]]
@@ -5284,9 +5204,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.19.0"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a14cec5f8274036de7b3a7a727a647322a30d05dfef2dbb2c2f95bda81a5e39d"
+checksum = "a4787b980078f838cbbae5a313358b4cea7b3f45440f8f1bcb29692ce6cecce4"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -5294,6 +5214,7 @@ dependencies = [
  "async-trait",
  "backon",
  "base64",
+ "bb8",
  "bincode",
  "bytes",
  "flagset",
@@ -6452,9 +6373,9 @@ dependencies = [
 
 [[package]]
 name = "reqsign"
-version = "0.5.2"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a082aef1e547f31ddde9db1eb92e983ed92dbd521678709ba2574cf768c919ef"
+checksum = "5f0e6438f8bbab7c44c60bd021719d292f3932801f165d896c1661ef955d8f56"
 dependencies = [
  "anyhow",
  "backon",
@@ -8150,7 +8071,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.8.5",
+ "rand 0.7.3",
  "static_assertions",
 ]
 

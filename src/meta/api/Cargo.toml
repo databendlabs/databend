@@ -17,16 +17,17 @@ common-base = { path = "../../common/base" }
 common-datavalues = { path = "../../query/datavalues" }
 common-exception = { path = "../../common/exception" }
 common-meta-app = { path = "../app" }
+#common-meta-stoerr = { path = "../stoerr" }
 common-meta-types = { path = "../types" }
 common-proto-conv = { path = "../proto-conv" }
 common-protos = { path = "../protos" }
 common-tracing = { path = "../../common/tracing" }
 
-anyhow = "1.0.65"
+anyhow = { workspace = true }
 async-trait = "0.1.57"
 enumflags2 = { version = "0.7.5", features = ["serde"] }
 maplit = "1.0.2"
-serde_json = "1.0.85"
-thiserror = "1"
+serde_json = { workspace = true }
+thiserror = { workspace = true }
 tonic = { version = "0.8.1", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
 tracing = "0.1.36"

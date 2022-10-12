@@ -73,6 +73,9 @@ pub struct QueryLogElement {
     pub event_date: i32,
     #[serde(serialize_with = "datetime_str")]
     pub event_time: i64,
+    #[serde(serialize_with = "datetime_str")]
+    pub query_start_time: i64,
+    pub query_duration_ms: i64,
 
     // Schema.
     pub current_database: String,
@@ -136,7 +139,9 @@ impl SystemLogElement for QueryLogElement {
             DataField::new("query_kind", Vu8::to_data_type()),
             DataField::new("query_text", Vu8::to_data_type()),
             DataField::new("event_date", DateType::new_impl()),
-            DataField::new("event_time", TimestampType::new_impl(3)),
+            DataField::new("event_time", TimestampType::new_impl()),
+            DataField::new("query_start_time", TimestampType::new_impl()),
+            DataField::new("query_duration_ms", i64::to_data_type()),
             // Schema.
             DataField::new("current_database", Vu8::to_data_type()),
             DataField::new("databases", Vu8::to_data_type()),
@@ -229,6 +234,14 @@ impl SystemLogElement for QueryLogElement {
             .next()
             .unwrap()
             .append_data_value(DataValue::Int64(self.event_time))?;
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::Int64(self.query_start_time))?;
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::Int64(self.query_duration_ms))?;
         // Schema.
         columns
             .next()

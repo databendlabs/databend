@@ -71,7 +71,7 @@ impl FuseTable {
         };
 
         let snapshot_version = self.snapshot_format_version();
-        let reader = MetaReaders::table_snapshot_reader(ctx);
+        let reader = MetaReaders::table_snapshot_reader(ctx, self.get_operator());
 
         // grab the table history
         // snapshots are order by timestamp DESC.

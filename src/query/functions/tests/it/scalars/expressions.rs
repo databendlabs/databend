@@ -123,9 +123,12 @@ fn test_datetime_cast_function() -> Result<()> {
             name: "cast-datetime-to-string-passed",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![1614906061000000i64, 1635070210000000]),
-                DataField::new("dummy_1", TimestampType::new_impl(0)),
+                DataField::new("dummy_1", TimestampType::new_impl()),
             )],
-            expect: Series::from_data(vec!["2021-03-05 01:01:01", "2021-10-24 10:10:10"]),
+            expect: Series::from_data(vec![
+                "2021-03-05 01:01:01.000000",
+                "2021-10-24 10:10:10.000000",
+            ]),
             error: "",
         }),
     ];
@@ -567,7 +570,7 @@ fn test_variant_cast_function() -> Result<()> {
                 VariantValue::from(json!("2021-10-24 10:10:10")),
             ])],
             expect: Series::from_data(vec![1614906061000000i64, 1635070210000000]),
-            error: "Cast error happens in casting from Variant to Timestamp(6)",
+            error: "Cast error happens in casting from Variant to Timestamp",
         }),
     ];
 

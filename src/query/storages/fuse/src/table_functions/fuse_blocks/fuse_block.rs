@@ -58,7 +58,7 @@ impl<'a> FuseBlock<'a> {
             let snapshot_location = tbl
                 .meta_location_generator
                 .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot_version)?;
-            let reader = MetaReaders::table_snapshot_reader(self.ctx.clone());
+            let reader = MetaReaders::table_snapshot_reader(self.ctx.clone(), tbl.get_operator());
             let mut snapshot_stream = reader.snapshot_history(
                 snapshot_location,
                 snapshot_version,
@@ -85,7 +85,12 @@ impl<'a> FuseBlock<'a> {
         let mut bloom_filter_location: Vec<Option<Vec<u8>>> = Vec::with_capacity(len);
         let mut bloom_filter_size: Vec<u64> = Vec::with_capacity(len);
 
-        let segments = read_segments(self.ctx.clone(), &snapshot.segments).await?;
+        let segments = read_segments(
+            self.table.operator.clone(),
+            self.ctx.clone(),
+            &snapshot.segments,
+        )
+        .await?;
         for segment in segments {
             let segment = segment?;
             segment.blocks.clone().into_iter().for_each(|block| {
@@ -113,7 +118,7 @@ impl<'a> FuseBlock<'a> {
     pub fn schema() -> Arc<DataSchema> {
         DataSchemaRefExt::create(vec![
             DataField::new("snapshot_id", Vu8::to_data_type()),
-            DataField::new_nullable("timestamp", TimestampType::new_impl(6)),
+            DataField::new_nullable("timestamp", TimestampType::new_impl()),
             DataField::new("block_location", Vu8::to_data_type()),
             DataField::new("block_size", u64::to_data_type()),
             DataField::new_nullable("bloom_filter_location", Vu8::to_data_type()),

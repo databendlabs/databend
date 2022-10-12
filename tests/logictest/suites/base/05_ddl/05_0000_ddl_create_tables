@@ -175,8 +175,8 @@ bigint_unsigned BIGINT UNSIGNED NO 0
 float FLOAT NO 0
 double DOUBLE NO 0
 date DATE NO 0
-datetime TIMESTAMP(6) NO 0
-ts TIMESTAMP(6) NO 0
+datetime TIMESTAMP NO 0
+ts TIMESTAMP NO 0
 str VARCHAR NO 3
 bool BOOLEAN NO false
 arr ARRAY NO []
@@ -201,8 +201,8 @@ bigint_unsigned BIGINT UNSIGNED NO 0
 float FLOAT NO 0
 double DOUBLE NO 0
 date DATE NO 0
-datetime TIMESTAMP(6) NO 0
-ts TIMESTAMP(6) NO 0
+datetime TIMESTAMP NO 0
+ts TIMESTAMP NO 0
 str VARCHAR NO 3
 bool BOOLEAN NO false
 arr ARRAY NO []

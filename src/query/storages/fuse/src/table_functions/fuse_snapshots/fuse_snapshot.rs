@@ -14,115 +14,47 @@
 
 use std::sync::Arc;
 
-use common_catalog::table::Table;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_fuse_meta::meta::TableSnapshot;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
-use futures::stream::StreamExt;
-use futures::stream::TryStreamExt;
+use common_fuse_meta::meta::TableSnapshotLite;
 
-use crate::io::MetaReaders;
-use crate::io::SnapshotHistoryReader;
+use crate::fuse_snapshot::read_snapshots_by_root_file;
 use crate::io::TableMetaLocationGenerator;
 use crate::sessions::TableContext;
 use crate::FuseTable;
 
-pub struct FuseSnapshot {
+pub struct FuseSnapshot<'a> {
     pub ctx: Arc<dyn TableContext>,
-    pub table: Arc<dyn Table>,
+    pub table: &'a FuseTable,
 }
 
-impl FuseSnapshot {
-    pub fn new(ctx: Arc<dyn TableContext>, table: Arc<dyn Table>) -> Self {
+impl<'a> FuseSnapshot<'a> {
+    pub fn new(ctx: Arc<dyn TableContext>, table: &'a FuseTable) -> Self {
         Self { ctx, table }
     }
 
-    /// Get table snapshot history as stream of data block
-    /// For cases that caller inside sync context, i.e. using async catalog api is not convenient
-    pub fn new_snapshot_history_stream(
-        ctx: Arc<dyn TableContext>,
-        database_name: String,
-        table_name: String,
-        catalog_name: String,
-        limit: Option<usize>,
-    ) -> SendableDataBlockStream {
-        // prepare the future that resolved the table
-        let table_instance = {
-            let ctx = ctx.clone();
-            async move {
-                let tenant_id = ctx.get_tenant();
-                let tbl = ctx
-                    .get_catalog(catalog_name.as_str())?
-                    .get_table(
-                        tenant_id.as_str(),
-                        database_name.as_str(),
-                        table_name.as_str(),
-                    )
-                    .await?;
-                Ok(tbl)
-            }
-        };
-
-        // chain the future with a stream of snapshot, for the resolved table,  as data blocks
-        let resolved_table = futures::stream::once(table_instance);
-        let stream = resolved_table.map(move |item: Result<_>| match item {
-            Ok(table) => {
-                let fuse_snapshot = FuseSnapshot::new(ctx.clone(), table);
-                Ok(fuse_snapshot.get_history_stream_as_blocks(limit)?)
-            }
-            Err(e) => Err(e),
-        });
-
-        // flat it into single stream of data blocks
-        stream.try_flatten().boxed()
-    }
-
-    pub fn get_history_stream_as_blocks(
-        self,
-        limit: Option<usize>,
-    ) -> Result<SendableDataBlockStream> {
-        let tbl = FuseTable::try_from_table(self.table.as_ref())?;
-        let snapshot_location = tbl.snapshot_loc();
-        let meta_location_generator = tbl.meta_location_generator.clone();
+    pub async fn get_snapshots(self) -> Result<DataBlock> {
+        let meta_location_generator = self.table.meta_location_generator.clone();
+        let snapshot_location = self.table.snapshot_loc();
         if let Some(snapshot_location) = snapshot_location {
-            let snapshot_version = tbl.snapshot_format_version();
-            let snapshot_reader = MetaReaders::table_snapshot_reader(self.ctx.clone());
-            let snapshot_stream = snapshot_reader.snapshot_history(
+            let snapshot_version = self.table.snapshot_format_version();
+            let snapshots = read_snapshots_by_root_file(
+                self.ctx.clone(),
                 snapshot_location,
                 snapshot_version,
-                tbl.meta_location_generator().clone(),
-            );
-
-            // map snapshot to data block
-            let block_stream = snapshot_stream.map(move |snapshot| match snapshot {
-                Ok(snapshot) => Self::snapshots_to_block(
-                    &meta_location_generator,
-                    vec![snapshot],
-                    snapshot_version,
-                ),
-                Err(e) => Err(e),
-            });
-
-            // limit if necessary
-            if let Some(limit) = limit {
-                Ok(block_stream.take(limit).boxed())
-            } else {
-                Ok(block_stream.boxed())
-            }
-        } else {
-            // to carries the schema info back to caller, instead of an empty stream,
-            // a stream of single empty block item returned
-            let data_block = DataBlock::empty_with_schema(FuseSnapshot::schema());
-            Ok(DataBlockStream::create(FuseSnapshot::schema(), None, vec![data_block]).boxed())
+                &self.table.operator,
+            )
+            .await?;
+            return self.to_block(&meta_location_generator, &snapshots, snapshot_version);
         }
+        Ok(DataBlock::empty_with_schema(FuseSnapshot::schema()))
     }
 
-    fn snapshots_to_block(
+    fn to_block(
+        &self,
         location_generator: &TableMetaLocationGenerator,
-        snapshots: Vec<Arc<TableSnapshot>>,
+        snapshots: &[TableSnapshotLite],
         latest_snapshot_version: u64,
     ) -> Result<DataBlock> {
         let len = snapshots.len();
@@ -150,13 +82,13 @@ impl FuseSnapshot {
                 None => (None, 0),
             };
             prev_snapshot_ids.push(id);
-            format_versions.push(current_snapshot_version);
-            segment_count.push(s.segments.len() as u64);
-            block_count.push(s.summary.block_count);
-            row_count.push(s.summary.row_count);
-            compressed.push(s.summary.compressed_byte_size);
-            uncompressed.push(s.summary.uncompressed_byte_size);
-            index_size.push(s.summary.index_size);
+            format_versions.push(s.format_version);
+            segment_count.push(s.segment_count);
+            block_count.push(s.block_count);
+            row_count.push(s.row_count);
+            compressed.push(s.compressed_byte_size);
+            uncompressed.push(s.uncompressed_byte_size);
+            index_size.push(s.index_size);
             timestamps.push(s.timestamp.map(|dt| (dt.timestamp_micros()) as i64));
             current_snapshot_version = ver;
         }
@@ -188,7 +120,7 @@ impl FuseSnapshot {
             DataField::new("bytes_uncompressed", u64::to_data_type()),
             DataField::new("bytes_compressed", u64::to_data_type()),
             DataField::new("index_size", u64::to_data_type()),
-            DataField::new_nullable("timestamp", TimestampType::new_impl(6)),
+            DataField::new_nullable("timestamp", TimestampType::new_impl()),
         ])
     }
 }

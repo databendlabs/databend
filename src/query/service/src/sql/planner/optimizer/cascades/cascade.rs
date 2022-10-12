@@ -37,14 +37,14 @@ use crate::sql::optimizer::SExpr;
 /// A cascades-style search engine to enumerate possible alternations of a relational expression and
 /// find the optimal one.
 pub struct CascadesOptimizer {
-    pub(super) memo: Memo,
-    pub(super) explore_rules: RuleSet,
-    pub(super) implement_rules: RuleSet,
+    pub memo: Memo,
+    pub explore_rules: RuleSet,
+    pub implement_rules: RuleSet,
 
-    pub(super) cost_model: Box<dyn CostModel>,
+    pub cost_model: Box<dyn CostModel>,
 
     /// group index -> best cost context
-    pub(super) best_cost_map: HashMap<IndexType, CostContext>,
+    pub best_cost_map: HashMap<IndexType, CostContext>,
     _ctx: Arc<dyn TableContext>,
 }
 
@@ -71,7 +71,7 @@ impl CascadesOptimizer {
         Ok(())
     }
 
-    pub fn optimize(mut self, s_expr: SExpr) -> Result<SExpr> {
+    pub fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
         self.init(s_expr)?;
 
         let root_index = self
@@ -85,9 +85,9 @@ impl CascadesOptimizer {
         let root_task = OptimizeGroupTask::new(root_index);
         let mut scheduler = Scheduler::new();
         scheduler.add_task(Task::OptimizeGroup(root_task));
-        scheduler.run(&mut self)?;
+        scheduler.run(self)?;
 
-        tracing::debug!("Memo:\n{}", display_memo(&self.memo));
+        tracing::debug!("Memo:\n{}", display_memo(&self.memo, &self.best_cost_map)?);
 
         self.find_optimal_plan(root_index)
     }

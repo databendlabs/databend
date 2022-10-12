@@ -185,49 +185,49 @@ statement query T
 select to_start_of_second(to_timestamp(1619822911999000));
 
 ----
-2021-04-30 22:48:31
+2021-04-30 22:48:31.000000
 
 statement query T
 select to_start_of_minute(to_timestamp(1619822911999000));
 
 ----
-2021-04-30 22:48:00
+2021-04-30 22:48:00.000000
 
 statement query T
 select to_start_of_five_minutes(to_timestamp(1619822911999000));
 
 ----
-2021-04-30 22:45:00
+2021-04-30 22:45:00.000000
 
 statement query T
 select to_start_of_ten_minutes(to_timestamp(1619822911999000));
 
 ----
-2021-04-30 22:40:00
+2021-04-30 22:40:00.000000
 
 statement query T
 select to_start_of_fifteen_minutes(to_timestamp(1619822911999000));
 
 ----
-2021-04-30 22:45:00
+2021-04-30 22:45:00.000000
 
 statement query T
 select time_slot(to_timestamp(1619822911999000));
 
 ----
-2021-04-30 22:30:00
+2021-04-30 22:30:00.000000
 
 statement query T
 select to_start_of_hour(to_timestamp(1619822911999000));
 
 ----
-2021-04-30 22:00:00
+2021-04-30 22:00:00.000000
 
 statement query T
 select to_start_of_day(to_timestamp(1619822911999000));
 
 ----
-2021-04-30 00:00:00
+2021-04-30 00:00:00.000000
 
 statement query T
 select to_start_of_week(to_timestamp(1619822911999000));
@@ -242,49 +242,49 @@ statement query T
 select to_start_of_second(to_timestamp(1619822911999000));
 
 ----
-2021-05-01 06:48:31
+2021-05-01 06:48:31.000000
 
 statement query T
 select to_start_of_minute(to_timestamp(1619822911999000));
 
 ----
-2021-05-01 06:48:00
+2021-05-01 06:48:00.000000
 
 statement query T
 select to_start_of_five_minutes(to_timestamp(1619822911999000));
 
 ----
-2021-05-01 06:45:00
+2021-05-01 06:45:00.000000
 
 statement query T
 select to_start_of_ten_minutes(to_timestamp(1619822911999000));
 
 ----
-2021-05-01 06:40:00
+2021-05-01 06:40:00.000000
 
 statement query T
 select to_start_of_fifteen_minutes(to_timestamp(1619822911999000));
 
 ----
-2021-05-01 06:45:00
+2021-05-01 06:45:00.000000
 
 statement query T
 select time_slot(to_timestamp(1619822911999000));
 
 ----
-2021-05-01 06:30:00
+2021-05-01 06:30:00.000000
 
 statement query T
 select to_start_of_hour(to_timestamp(1619822911999000));
 
 ----
-2021-05-01 06:00:00
+2021-05-01 06:00:00.000000
 
 statement query T
 select to_start_of_day(to_timestamp(1619822911999000));
 
 ----
-2021-05-01 00:00:00
+2021-05-01 00:00:00.000000
 
 statement query T
 select to_start_of_week(to_timestamp(1619822911999000));

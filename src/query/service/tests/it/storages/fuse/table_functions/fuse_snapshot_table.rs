@@ -86,22 +86,22 @@ async fn test_fuse_snapshot_table_read() -> Result<()> {
     let interpreter = CreateTableInterpreterV2::try_create(ctx.clone(), create_table_plan)?;
     interpreter.execute(ctx.clone()).await?;
 
-    // func args
-    let arg_db = LegacyExpression::create_literal(DataValue::String(db.as_bytes().to_vec()));
-    let arg_tbl = LegacyExpression::create_literal(DataValue::String(tbl.as_bytes().to_vec()));
-
     {
         let expected = vec![
-            "+-------------+-------------------+----------------+----------------------+---------------+-------------+-----------+--------------------+------------------+------------+-----------+",
-            "| snapshot_id | snapshot_location | format_version | previous_snapshot_id | segment_count | block_count | row_count | bytes_uncompressed | bytes_compressed | index_size | timestamp |",
-            "+-------------+-------------------+----------------+----------------------+---------------+-------------+-----------+--------------------+------------------+------------+-----------+",
-            "+-------------+-------------------+----------------+----------------------+---------------+-------------+-----------+--------------------+------------------+------------+-----------+",
+            "+-------+",
+            "| count |",
+            "+-------+",
+            "| 0     |",
+            "+-------+",
         ];
+        let qry = format!(
+            "select count(1) as count from fuse_snapshot('{}', '{}')",
+            db, tbl
+        );
 
         expects_ok(
-            "empty_data_set",
-            test_drive_with_args_and_ctx(Some(vec![arg_db.clone(), arg_tbl.clone()]), ctx.clone())
-                .await,
+            "count_should_be_0",
+            execute_query(ctx.clone(), qry.as_str()).await,
             expected,
         )
         .await?;

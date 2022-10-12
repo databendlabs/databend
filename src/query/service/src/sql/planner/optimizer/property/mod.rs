@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod builder;
+mod column_stat;
 mod enforcer;
 #[allow(clippy::module_inception)]
 mod property;

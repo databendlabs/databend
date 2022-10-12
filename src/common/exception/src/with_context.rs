@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,11 +14,8 @@
 
 use std::error::Error;
 
-use serde::Deserialize;
-use serde::Serialize;
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
-#[error("{err} while {context}")]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("{err} while: {context}")]
 pub struct ErrorWithContext<E> {
     #[source]
     pub err: E,

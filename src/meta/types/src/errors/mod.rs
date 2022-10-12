@@ -154,7 +154,6 @@
 pub mod app_error;
 pub mod kv_app_errors;
 pub mod meta_api_errors;
-pub mod meta_bytes_error;
 pub mod meta_client_errors;
 pub mod meta_errors;
 pub mod meta_handshake_errors;
@@ -162,5 +161,4 @@ pub mod meta_management_error;
 pub mod meta_network_errors;
 pub mod meta_raft_errors;
 pub mod meta_startup_errors;
-pub mod meta_storage_errors;
 pub mod rpc_errors;

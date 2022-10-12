@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,13 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use criterion::criterion_main;
+#![feature(provide_any)]
 
-mod suites;
+pub mod meta_bytes_error;
+mod meta_storage_errors;
 
-criterion_main! {
-    suites::bench_aggregate_query_sql::benches,
-    suites::bench_filter_query_sql::benches,
-    suites::bench_limit_query_sql::benches,
-    suites::bench_sort_query_sql::benches,
-}
+pub use meta_bytes_error::MetaBytesError;
+pub use meta_storage_errors::MetaStorageError;

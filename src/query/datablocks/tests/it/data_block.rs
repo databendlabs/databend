@@ -45,8 +45,8 @@ fn test_data_block() -> Result<()> {
 fn test_data_block_convert() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
         DataField::new("a", DateType::new_impl()),
-        DataField::new("b", TimestampType::new_impl(0)),
-        DataField::new("b", TimestampType::new_impl(3)),
+        DataField::new("b", TimestampType::new_impl()),
+        DataField::new("b", TimestampType::new_impl()),
     ]);
 
     let block = DataBlock::create(schema.clone(), vec![

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_exception::ErrorCode;
+use common_meta_stoerr::MetaStorageError;
 use tonic::Status;
 
 use crate::AppError;
@@ -20,7 +21,6 @@ use crate::MetaAPIError;
 use crate::MetaClientError;
 use crate::MetaError;
 use crate::MetaNetworkError;
-use crate::MetaStorageError;
 
 /// Errors for a KVApi based application, such SchemaApi, ShareApi.
 ///

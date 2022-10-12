@@ -22,7 +22,6 @@ common-management = { path = "../management" }
 common-meta-api = { path = "../../meta/api" }
 common-meta-store = { path = "../../meta/store" }
 common-meta-types = { path = "../../meta/types" }
-common-tracing = { path = "../../common/tracing" }
 
 # Github dependencies
 
@@ -30,7 +29,7 @@ common-tracing = { path = "../../common/tracing" }
 jwtk = "0.2.4"
 once_cell = "1.15.0"
 parking_lot = "0.12.1"
-serde = { version = "1.0.145", features = ["derive"] }
+serde = { workspace = true }
 tracing = "0.1.36"
 
 [dev-dependencies]

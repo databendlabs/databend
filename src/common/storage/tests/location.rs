@@ -60,8 +60,6 @@ fn test_parse_uri_location() -> Result<()> {
                     ("endpoint_url", "https://oss-cn-litang.example.com"),
                     ("access_key_id", "dzin"),
                     ("access_key_secret", "p=ear1"),
-                    ("oidc_token", "ric-kV--"),
-                    ("role_arn", "tester"),
                 ]
                 .into_iter()
                 .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -74,8 +72,6 @@ fn test_parse_uri_location() -> Result<()> {
                     bucket: "zhen".to_string(),
                     access_key_id: "dzin".to_string(),
                     access_key_secret: "p=ear1".to_string(),
-                    oidc_token: "ric-kV--".to_string(),
-                    role_arn: "tester".to_string(),
                 }),
                 "/".to_string(),
             ),
@@ -163,6 +159,8 @@ fn test_parse_uri_location() -> Result<()> {
                     root: "/tmp/".to_string(),
                     disable_credential_loader: true,
                     enable_virtual_host_style: false,
+                    role_arn: "".to_string(),
+                    external_id: "".to_string(),
                 }),
                 "/".to_string(),
             ),
@@ -194,6 +192,8 @@ fn test_parse_uri_location() -> Result<()> {
                     root: "/tmp/".to_string(),
                     disable_credential_loader: true,
                     enable_virtual_host_style: false,
+                    role_arn: "".to_string(),
+                    external_id: "".to_string(),
                 }),
                 "/".to_string(),
             ),
@@ -225,6 +225,37 @@ fn test_parse_uri_location() -> Result<()> {
                     root: "/tmp/".to_string(),
                     disable_credential_loader: true,
                     enable_virtual_host_style: false,
+                    role_arn: "".to_string(),
+                    external_id: "".to_string(),
+                }),
+                "/".to_string(),
+            ),
+        ),
+        (
+            "s3_with_role_arn",
+            UriLocation {
+                protocol: "s3".to_string(),
+                name: "test".to_string(),
+                path: "/tmp/".to_string(),
+                connection: vec![("role_arn", "aws::iam::xxxx")]
+                    .iter()
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .collect(),
+            },
+            (
+                StorageParams::S3(StorageS3Config {
+                    endpoint_url: STORAGE_S3_DEFAULT_ENDPOINT.to_string(),
+                    region: "".to_string(),
+                    bucket: "test".to_string(),
+                    access_key_id: "".to_string(),
+                    secret_access_key: "".to_string(),
+                    security_token: "".to_string(),
+                    master_key: "".to_string(),
+                    root: "/tmp/".to_string(),
+                    disable_credential_loader: true,
+                    enable_virtual_host_style: false,
+                    role_arn: "aws::iam::xxxx".to_string(),
+                    external_id: "".to_string(),
                 }),
                 "/".to_string(),
             ),

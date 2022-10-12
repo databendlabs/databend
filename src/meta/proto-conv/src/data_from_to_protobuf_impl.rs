@@ -359,16 +359,13 @@ impl FromToProto for dv::TimestampType {
     fn from_pb(p: pb::Timestamp) -> Result<Self, Incompatible>
     where Self: Sized {
         check_ver(p.ver, p.min_compatible)?;
-        let v = dv::TimestampType::create(p.precision as usize);
-        Ok(v)
+        Ok(dv::TimestampType::default())
     }
 
     fn to_pb(&self) -> Result<pb::Timestamp, Incompatible> {
         let p = pb::Timestamp {
             ver: VER,
             min_compatible: MIN_COMPATIBLE_VER,
-            precision: self.precision() as u64,
-            // tz: self.tz().cloned(),
         };
 
         Ok(p)

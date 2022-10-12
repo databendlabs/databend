@@ -24,7 +24,7 @@ The Streaming Load API is used to read data from your local files in one of the 
 To create a request with the Streaming Load API, follow the format below:
 
 ```bash
-curl -H "<parameter>:<value>"  [-H "<parameter>:<value>"...] -F "upload=@<file_location>" -XPUT http://<user_name>:@<http_handler_host>:<http_handler_port>/v1/streaming_load
+curl -H "<parameter>:<value>"  [-H "<parameter>:<value>"...] -F "upload=@<file_location>" -XPUT http://<user_name>:[password]@<http_handler_host>:<http_handler_port>/v1/streaming_load
 ```
 ### Explaining Argument `-H`
 

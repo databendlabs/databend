@@ -2,7 +2,7 @@
 title: Type Conversion
 ---
 
-Type conversion to target type. 
+Type conversion to target type.
 
 ## Syntax
 
