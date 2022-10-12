@@ -46,8 +46,8 @@ output         : [[], {"foo":"bar"}]
 ast            : length([])
 raw expr       : length(array())
 checked expr   : length<Array(Nothing)>(array<>())
-optimized expr : 0_u64
-output type    : UInt64
+optimized expr : 0_u8
+output type    : UInt8
 output domain  : Unknown
 output         : 0
 
@@ -81,7 +81,7 @@ output         : 4
 
 ast            : get([], 1)
 raw expr       : get(array(), 1_u8)
-checked expr   : get<Array(Nothing), UInt64>(array<>(), CAST(1_u8 AS UInt64))
+checked expr   : get<Array(Nothing) NULL, UInt64 NULL>(CAST(array<>() AS Array(Nothing) NULL), CAST(1_u8 AS UInt64 NULL))
 optimized expr : NULL
 output type    : NULL
 output domain  : {NULL}

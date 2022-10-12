@@ -22,7 +22,7 @@ use common_expression::types::EmptyArrayType;
 use common_expression::types::GenericType;
 use common_expression::types::NullType;
 use common_expression::types::NullableType;
-use common_expression::vectorize_with_builder_1_arg;
+use common_expression::types::NumberType;
 use common_expression::vectorize_with_builder_2_arg;
 use common_expression::Column;
 use common_expression::Domain;
@@ -88,31 +88,18 @@ pub fn register(registry: &mut FunctionRegistry) {
         }))
     });
 
-    registry.register_passthrough_nullable_1_arg::<EmptyArrayType, UInt64Type, _, _>(
+    registry.register_1_arg::<EmptyArrayType, NumberType<u8>, _, _>(
         "length",
         FunctionProperty::default(),
         |_| None,
-        vectorize_with_builder_1_arg::<EmptyArrayType, UInt64Type>(|_arr, output, _| {
-            output.push(0);
-            Ok(())
-        }),
+        |_, _| 0u8,
     );
 
-    registry.register_passthrough_nullable_1_arg::<ArrayType<GenericType<0>>, UInt64Type, _, _>(
+    registry.register_1_arg::<ArrayType<GenericType<0>>, NumberType<u64>, _, _>(
         "length",
         FunctionProperty::default(),
         |_| None,
-        vectorize_with_builder_1_arg::<ArrayType<GenericType<0>>, UInt64Type>(|arr, output, _| {
-            output.push(arr.len() as u64);
-            Ok(())
-        }),
-    );
-
-    registry.register_2_arg_core::<EmptyArrayType, UInt64Type, NullType, _, _>(
-        "get",
-        FunctionProperty::default(),
-        |_, _| Some(()),
-        |_, _, _| Ok(Value::Scalar(())),
+        |arr, _| arr.len() as u64,
     );
 
     registry.register_2_arg_core::<NullableType<EmptyArrayType>, NullableType<UInt64Type>, NullType, _, _>(
