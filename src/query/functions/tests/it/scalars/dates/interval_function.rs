@@ -31,7 +31,7 @@ fn test_add_months() -> Result<()> {
 
     let schema = DataSchemaRefExt::create(vec![
         DataField::new("date", DateType::new_impl()),
-        DataField::new("datetime", TimestampType::new_impl(0)),
+        DataField::new("datetime", TimestampType::new_impl()),
         DataField::new("u8", u8::to_data_type()),
         DataField::new("u16", u16::to_data_type()),
         DataField::new("u32", u32::to_data_type()),
@@ -116,7 +116,7 @@ fn test_add_months() -> Result<()> {
         expects.reserve(10);
         for (field, arg) in fields.iter().zip(args.iter()) {
             let add_months = AddMonthsFunction::try_create_func("add_months", 1, &[
-                &TimestampType::new_impl(0),
+                &TimestampType::new_impl(),
                 arg,
             ])?;
             let col = add_months.eval(
@@ -150,7 +150,7 @@ fn test_add_subtract_seconds() -> Result<()> {
     let dt_to_seconds = |dt: &str| -> i64 { DateTime::parse_from_rfc3339(dt).unwrap().timestamp() };
 
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("datetime", TimestampType::new_impl(0)),
+        DataField::new("datetime", TimestampType::new_impl()),
         DataField::new("u8", u8::to_data_type()),
         DataField::new("u16", u16::to_data_type()),
         DataField::new("u32", u32::to_data_type()),
@@ -205,7 +205,7 @@ fn test_add_subtract_seconds() -> Result<()> {
         expects.reserve(10);
         for (field, arg) in fields.iter().zip(args.iter()) {
             let add_seconds = AddTimesFunction::try_create_func("add_seconds", 1, &[
-                &TimestampType::new_impl(0),
+                &TimestampType::new_impl(),
                 arg,
             ])?;
             let col = add_seconds.eval(
@@ -236,7 +236,7 @@ fn test_add_subtract_seconds() -> Result<()> {
         expects.reserve(10);
         for (field, arg) in fields.iter().zip(args.iter()) {
             let add_seconds = AddTimesFunction::try_create_func("subtract_seconds", -1, &[
-                &TimestampType::new_impl(0),
+                &TimestampType::new_impl(),
                 arg,
             ])?;
             let col = add_seconds.eval(

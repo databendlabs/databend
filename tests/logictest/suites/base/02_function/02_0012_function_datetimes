@@ -75,7 +75,7 @@ select to_date('9999-12-31');
 
 
 statement error 1010
-select to_date('10000-12-31'); 
+select to_date('10000-12-31');
 
 statement query T
 select to_date('0999-12-31');
@@ -144,7 +144,7 @@ statement error 1010
 select to_datetime('9999-01-01 01:12.123+02:00');
 
 statement error 1010
-select to_datetime('10000-01-01 00:00:00'); 
+select to_datetime('10000-01-01 00:00:00');
 
 statement query T
 select to_datetime('0999-12-31 23:59:59');
@@ -171,13 +171,13 @@ select typeof(today() - 3) = 'DATE';
 1
 
 statement query B
-select typeof(now() - 3) = 'TIMESTAMP(6)';
+select typeof(now() - 3) = 'TIMESTAMP';
 
 ----
 1
 
 statement query B
-select typeof(to_datetime(1640019661000000)) = 'TIMESTAMP(6)';
+select typeof(to_datetime(1640019661000000)) = 'TIMESTAMP';
 
 ----
 1
@@ -539,10 +539,10 @@ select to_start_of_week(to_date(18769), 9);
 2021-05-17
 
 statement error 1079
-select to_start_of_week(to_date('1000-01-01')); 
+select to_start_of_week(to_date('1000-01-01'));
 
 statement error 1079
-select to_start_of_week(to_datetime('1000-01-01 00:00:00')); 
+select to_start_of_week(to_datetime('1000-01-01 00:00:00'));
 
 statement query T
 select add_years(to_date(18321), cast(1, UINT8));  -- 2020-2-29 + 1 year
@@ -607,10 +607,10 @@ select add_years(to_datetime(1582970400000000), cast(-50, INT8)); -- 2020-2-29T1
 
 
 statement error 1079
-select add_years(to_date('9999-12-31'), 1); 
+select add_years(to_date('9999-12-31'), 1);
 
 statement error 1080
-select add_years(to_datetime('9999-12-31 23:59:59'), 1); 
+select add_years(to_datetime('9999-12-31 23:59:59'), 1);
 
 statement query T
 select subtract_months(to_date(18321), cast(13, INT16)); -- 2020-2-29 - 13 months
@@ -626,10 +626,10 @@ select subtract_months(to_datetime(1582970400000000), cast(122, INT16)); -- 2020
 
 
 statement error 1079
-select subtract_months(to_date('1000-01-01'), 1); 
+select subtract_months(to_date('1000-01-01'), 1);
 
 statement error 1080
-select subtract_months(to_datetime('1000-01-01 00:00:00'), 1); 
+select subtract_months(to_datetime('1000-01-01 00:00:00'), 1);
 
 statement query T
 select add_days(to_date(18321), cast(1, INT16)); -- 2020-2-29 + 1 day
@@ -644,10 +644,10 @@ select add_days(to_datetime(1582970400000000), cast(-1, INT16)); -- 2020-2-29T10
 2020-02-28 10:00:00.000000
 
 statement error 1079
-select add_days(to_date('9999-12-31'), 1); 
+select add_days(to_date('9999-12-31'), 1);
 
 statement error 1080
-select add_days(to_datetime('9999-12-31 23:59:59'), 1); 
+select add_days(to_datetime('9999-12-31 23:59:59'), 1);
 
 statement query T
 select add_hours(to_datetime(1582970400000000), cast(25, INT32)); -- 2020-2-29T10:00:00 + 25 hours
@@ -664,10 +664,10 @@ select add_hours(to_date(18321), cast(1.2, Float32));
 
 
 statement error 1080
-select add_hours(to_date('9999-12-31'), 24); 
+select add_hours(to_date('9999-12-31'), 24);
 
 statement error 1080
-select add_hours(to_datetime('9999-12-31 23:59:59'), 1); 
+select add_hours(to_datetime('9999-12-31 23:59:59'), 1);
 
 statement query T
 select subtract_minutes(to_datetime(1582970400000000), cast(1, INT32)); -- 2020-2-29T10:00:00 - 1 minutes
@@ -676,10 +676,10 @@ select subtract_minutes(to_datetime(1582970400000000), cast(1, INT32)); -- 2020-
 2020-02-29 09:59:00.000000
 
 statement error 1080
-select subtract_minutes(to_date('1000-01-01'), 1); 
+select subtract_minutes(to_date('1000-01-01'), 1);
 
 statement error 1080
-select subtract_minutes(to_datetime('1000-01-01 00:00:00'), 1); 
+select subtract_minutes(to_datetime('1000-01-01 00:00:00'), 1);
 
 statement query T
 select add_seconds(to_datetime(1582970400000000), cast(61, INT32)); -- 2020-2-29T10:00:00 + 61 seconds
@@ -970,7 +970,7 @@ statement ok
 insert into t values('0999-04-02 15:10:28.221', '2022-04-02 15:10:28.222', '2020-10-10');
 
 statement error 1010
-insert into t values('10000-01-01 00:00:00', '2022-04-02 15:10:28.221', '2020-10-10'); 
+insert into t values('10000-01-01 00:00:00', '2022-04-02 15:10:28.221', '2020-10-10');
 
 statement ok
 insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.223', '0999-10-10');
@@ -983,7 +983,7 @@ insert into t values('2022-04-02T15:10:28-08:13', '2022-04-02T15:10:28.223+08:00
 
 skipif clickhouse
 statement error 1010
-insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '10000-10-10'); 
+insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '10000-10-10');
 
 statement query TTT
 select * from t order by b;

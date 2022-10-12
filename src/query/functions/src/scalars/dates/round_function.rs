@@ -114,7 +114,7 @@ impl Function for RoundFunction {
     }
 
     fn return_type(&self) -> DataTypeImpl {
-        TimestampType::new_impl(0)
+        TimestampType::new_impl()
     }
 
     fn eval(

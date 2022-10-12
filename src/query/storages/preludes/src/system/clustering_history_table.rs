@@ -34,8 +34,8 @@ impl SystemLogElement for ClusteringHistoryLogElement {
 
     fn schema() -> DataSchemaRef {
         DataSchemaRefExt::create(vec![
-            DataField::new("start_time", TimestampType::new_impl(3)),
-            DataField::new("end_time", TimestampType::new_impl(3)),
+            DataField::new("start_time", TimestampType::new_impl()),
+            DataField::new("end_time", TimestampType::new_impl()),
             DataField::new("database", Vu8::to_data_type()),
             DataField::new("table", Vu8::to_data_type()),
             DataField::new("reclustered_bytes", u64::to_data_type()),

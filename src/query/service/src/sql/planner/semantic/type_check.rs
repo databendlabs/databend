@@ -1095,15 +1095,15 @@ impl<'a> TypeChecker<'a> {
     ) -> Result<Box<(Scalar, DataTypeImpl)>> {
         match interval_kind {
             IntervalKind::Year => {
-                self.resolve_function(span, "to_year", &[arg], Some(TimestampType::new_impl(0)))
+                self.resolve_function(span, "to_year", &[arg], Some(TimestampType::new_impl()))
                     .await
             }
             IntervalKind::Quarter => {
-                self.resolve_function(span, "to_quarter", &[arg], Some(TimestampType::new_impl(0)))
+                self.resolve_function(span, "to_quarter", &[arg], Some(TimestampType::new_impl()))
                     .await
             }
             IntervalKind::Month => {
-                self.resolve_function(span, "to_month", &[arg], Some(TimestampType::new_impl(0)))
+                self.resolve_function(span, "to_month", &[arg], Some(TimestampType::new_impl()))
                     .await
             }
             IntervalKind::Day => {
@@ -1111,20 +1111,20 @@ impl<'a> TypeChecker<'a> {
                     span,
                     "to_day_of_month",
                     &[arg],
-                    Some(TimestampType::new_impl(0)),
+                    Some(TimestampType::new_impl()),
                 )
                 .await
             }
             IntervalKind::Hour => {
-                self.resolve_function(span, "to_hour", &[arg], Some(TimestampType::new_impl(0)))
+                self.resolve_function(span, "to_hour", &[arg], Some(TimestampType::new_impl()))
                     .await
             }
             IntervalKind::Minute => {
-                self.resolve_function(span, "to_minute", &[arg], Some(TimestampType::new_impl(0)))
+                self.resolve_function(span, "to_minute", &[arg], Some(TimestampType::new_impl()))
                     .await
             }
             IntervalKind::Second => {
-                self.resolve_function(span, "to_second", &[arg], Some(TimestampType::new_impl(0)))
+                self.resolve_function(span, "to_second", &[arg], Some(TimestampType::new_impl()))
                     .await
             }
             IntervalKind::Doy => {
@@ -1132,7 +1132,7 @@ impl<'a> TypeChecker<'a> {
                     span,
                     "to_day_of_year",
                     &[arg],
-                    Some(TimestampType::new_impl(0)),
+                    Some(TimestampType::new_impl()),
                 )
                 .await
             }
@@ -1141,7 +1141,7 @@ impl<'a> TypeChecker<'a> {
                     span,
                     "to_day_of_week",
                     &[arg],
-                    Some(TimestampType::new_impl(0)),
+                    Some(TimestampType::new_impl()),
                 )
                 .await
             }
@@ -1294,7 +1294,7 @@ impl<'a> TypeChecker<'a> {
                     span,
                     "to_start_of_year",
                     &[date],
-                    Some(TimestampType::new_impl(0)),
+                    Some(TimestampType::new_impl()),
                 )
                     .await
             }
@@ -1303,7 +1303,7 @@ impl<'a> TypeChecker<'a> {
                     span,
                     "to_start_of_quarter",
                     &[date],
-                    Some(TimestampType::new_impl(0)),
+                    Some(TimestampType::new_impl()),
                 )
                     .await
             }
@@ -1312,7 +1312,7 @@ impl<'a> TypeChecker<'a> {
                     span,
                     "to_start_of_month",
                     &[date],
-                    Some(TimestampType::new_impl(0)),
+                    Some(TimestampType::new_impl()),
                 )
                     .await
             }
@@ -1321,7 +1321,7 @@ impl<'a> TypeChecker<'a> {
                     span,
                     "to_start_of_day",
                     &[date],
-                    Some(TimestampType::new_impl(0)),
+                    Some(TimestampType::new_impl()),
                 )
                     .await
             }
@@ -1330,7 +1330,7 @@ impl<'a> TypeChecker<'a> {
                     span,
                     "to_start_of_hour",
                     &[date],
-                    Some(TimestampType::new_impl(0)),
+                    Some(TimestampType::new_impl()),
                 )
                     .await
             }
@@ -1339,7 +1339,7 @@ impl<'a> TypeChecker<'a> {
                     span,
                     "to_start_of_minute",
                     &[date],
-                    Some(TimestampType::new_impl(0)),
+                    Some(TimestampType::new_impl()),
                 )
                     .await
             }
@@ -1348,7 +1348,7 @@ impl<'a> TypeChecker<'a> {
                     span,
                     "to_start_of_second",
                     &[date],
-                    Some(TimestampType::new_impl(0)),
+                    Some(TimestampType::new_impl()),
                 )
                     .await
             }

@@ -120,7 +120,7 @@ impl<'a> FuseSnapshot<'a> {
             DataField::new("bytes_uncompressed", u64::to_data_type()),
             DataField::new("bytes_compressed", u64::to_data_type()),
             DataField::new("index_size", u64::to_data_type()),
-            DataField::new_nullable("timestamp", TimestampType::new_impl(6)),
+            DataField::new_nullable("timestamp", TimestampType::new_impl()),
         ])
     }
 }

@@ -54,11 +54,7 @@ static TYPE_FACTORY: Lazy<Arc<TypeFactory>> = Lazy::new(|| {
     type_factory.register(VariantObjectType::new_impl());
 
     // Timestamp is a special case
-    {
-        for precision in 0..7 {
-            type_factory.register(TimestampType::new_impl(precision));
-        }
-    }
+    type_factory.register(TimestampType::new_impl());
 
     Arc::new(type_factory)
 });

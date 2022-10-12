@@ -17,30 +17,30 @@ See [Date & Time Functions](/doc/reference/functions/datetime-functions).
 ## Example
 
 ```sql
-CREATE TABLE test_dt 
-  ( 
-     date DATE, 
-     ts   TIMESTAMP 
-  ); 
+CREATE TABLE test_dt
+  (
+     date DATE,
+     ts   TIMESTAMP
+  );
 
 DESC test_dt;
 +-------+--------------+------+---------+-------+
 | Field | Type         | Null | Default | Extra |
 +-------+--------------+------+---------+-------+
 | date  | DATE         | NO   | 0       |       |
-| ts    | TIMESTAMP(6) | NO   | 0       |       |
+| ts    | TIMESTAMP    | NO   | 0       |       |
 +-------+--------------+------+---------+-------+
 
 -- A TIMESTAMP value can optionally include a trailing fractional seconds part in up to microseconds (6 digits) precision.
 
-INSERT INTO test_dt 
-VALUES      ('2022-04-07', 
-             '2022-04-07 01:01:01.123456'), 
-            ('2022-04-08', 
-             '2022-04-08 01:01:01'); 
+INSERT INTO test_dt
+VALUES      ('2022-04-07',
+             '2022-04-07 01:01:01.123456'),
+            ('2022-04-08',
+             '2022-04-08 01:01:01');
 
-SELECT * 
-FROM   test_dt; 
+SELECT *
+FROM   test_dt;
 +------------+----------------------------+
 | date       | ts                         |
 +------------+----------------------------+
@@ -50,24 +50,24 @@ FROM   test_dt;
 
 -- Databend recognizes TIMESTAMP values in several formats.
 
-CREATE TABLE test_formats 
-  ( 
-     id INT, 
-     a  TIMESTAMP 
-  ); 
+CREATE TABLE test_formats
+  (
+     id INT,
+     a  TIMESTAMP
+  );
 
-INSERT INTO test_formats 
-VALUES      (1, 
-             '2022-01-01 02:00:11'), 
-            (2, 
-             '2022-01-02T02:00:22'), 
-            (3, 
-             '2022-02-02T04:00:03+00:00'), 
-            (4, 
-             '2022-02-03'); 
+INSERT INTO test_formats
+VALUES      (1,
+             '2022-01-01 02:00:11'),
+            (2,
+             '2022-01-02T02:00:22'),
+            (3,
+             '2022-02-02T04:00:03+00:00'),
+            (4,
+             '2022-02-03');
 
-SELECT * 
-FROM   test_formats; 
+SELECT *
+FROM   test_formats;
 
  ----
  1  2022-01-01 02:00:11.000000
@@ -77,30 +77,30 @@ FROM   test_formats;
 
 -- Databend automatically adjusts and shows TIMESTAMP values based on your current timezone.
 
-CREATE TABLE test_tz 
-  ( 
-     id INT, 
-     t  TIMESTAMP 
-  ); 
+CREATE TABLE test_tz
+  (
+     id INT,
+     t  TIMESTAMP
+  );
 
 SET timezone='UTC';
 
-INSERT INTO test_tz 
-VALUES      (1, 
-             '2022-02-03T03:00:00'), 
-            (2, 
-             '2022-02-03T03:00:00+08:00'), 
-            (3, 
-             '2022-02-03T03:00:00-08:00'), 
-            (4, 
-             '2022-02-03'), 
-            (5, 
-             '2022-02-03T03:00:00+09:00'), 
-            (6, 
-             '2022-02-03T03:00:00+06:00'); 
+INSERT INTO test_tz
+VALUES      (1,
+             '2022-02-03T03:00:00'),
+            (2,
+             '2022-02-03T03:00:00+08:00'),
+            (3,
+             '2022-02-03T03:00:00-08:00'),
+            (4,
+             '2022-02-03'),
+            (5,
+             '2022-02-03T03:00:00+09:00'),
+            (6,
+             '2022-02-03T03:00:00+06:00');
 
-SELECT * 
-FROM   test_tz; 
+SELECT *
+FROM   test_tz;
 
  ----
  1  2022-02-03 03:00:00.000000
@@ -112,8 +112,8 @@ FROM   test_tz;
 
 SET timezone='Asia/Shanghai';
 
-SELECT * 
-FROM   test_tz; 
+SELECT *
+FROM   test_tz;
 
  ----
  1  2022-02-03 11:00:00.000000

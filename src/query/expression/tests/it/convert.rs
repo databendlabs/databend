@@ -41,7 +41,7 @@ fn random_type() -> DataTypeImpl {
             12 => f64::to_data_type(),
 
             13 => DataTypeImpl::Date(DateType {}),
-            14 => DataTypeImpl::Timestamp(TimestampType::create(3)),
+            14 => DataTypeImpl::Timestamp(TimestampType::create()),
             15 => DataTypeImpl::String(StringType {}),
             16 => DataTypeImpl::Struct(StructType::create(None, vec![
                 f32::to_data_type(),

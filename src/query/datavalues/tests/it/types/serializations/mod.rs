@@ -50,7 +50,7 @@ fn test_serializers() -> Result<()> {
         },
         Test {
             name: "datetime32",
-            data_type: TimestampType::new_impl(0),
+            data_type: TimestampType::new_impl(),
             column: Series::from_data(vec![1630320462000000i64, 1637117572000000i64, 1000000]),
             val_str: "2021-08-30 10:47:42",
             col_str: vec![
@@ -184,7 +184,7 @@ fn test_serializers() -> Result<()> {
 
 #[test]
 fn test_convert_arrow() {
-    let t = TimestampType::new_impl(6);
+    let t = TimestampType::new_impl();
     let arrow_y = t.to_arrow_field("x");
     let new_t = from_arrow_field(&arrow_y);
 
