@@ -49,7 +49,7 @@ impl Function for NowFunction {
     }
 
     fn return_type(&self) -> DataTypeImpl {
-        TimestampType::new_impl(6)
+        TimestampType::new_impl()
     }
 
     fn eval(

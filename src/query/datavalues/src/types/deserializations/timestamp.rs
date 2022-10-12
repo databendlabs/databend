@@ -21,7 +21,6 @@ use crate::prelude::*;
 
 pub struct TimestampDeserializer {
     pub builder: MutablePrimitiveColumn<i64>,
-    pub precision: usize,
 }
 
 impl TypeDeserializer for TimestampDeserializer {

@@ -21,6 +21,7 @@ use chrono::Utc;
 use common_datablocks::DataBlock;
 use common_datavalues::chrono;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_legacy_expression::LegacyExpression;
@@ -33,8 +34,11 @@ use common_meta_app::schema::TableInfo;
 use common_meta_types::MetaId;
 use common_pipeline_core::Pipeline;
 
+use crate::table::column_stats_provider_impls::DummyColumnStatisticsProvider;
 use crate::table_context::TableContext;
 use crate::table_mutator::TableMutator;
+
+pub type ColumnId = u32;
 
 #[async_trait::async_trait]
 pub trait Table: Sync + Send {
@@ -188,10 +192,21 @@ pub trait Table: Sync + Send {
         Ok(())
     }
 
-    async fn statistics(&self, ctx: Arc<dyn TableContext>) -> Result<Option<TableStatistics>> {
+    async fn table_statistics(
+        &self,
+        ctx: Arc<dyn TableContext>,
+    ) -> Result<Option<TableStatistics>> {
         let _ = ctx;
 
         Ok(None)
+    }
+
+    async fn column_statistics_provider(
+        &self,
+        ctx: Arc<dyn TableContext>,
+    ) -> Result<Box<dyn ColumnStatisticsProvider>> {
+        let _ = ctx;
+        Ok(Box::new(DummyColumnStatisticsProvider))
     }
 
     async fn navigate_to(
@@ -260,4 +275,30 @@ pub struct TableStatistics {
     pub data_size: Option<u64>,
     pub data_size_compressed: Option<u64>,
     pub index_size: Option<u64>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ColumnStatistics {
+    pub min: DataValue,
+    pub max: DataValue,
+    pub null_count: u64,
+    pub number_of_distinct_values: u64,
+}
+
+pub trait ColumnStatisticsProvider {
+    // returns the statistics of the given column, if any.
+    // column_id is just the index of the column in table's schema
+    fn column_statistics(&self, column_id: ColumnId) -> Option<ColumnStatistics>;
+}
+
+mod column_stats_provider_impls {
+    use super::*;
+
+    pub(super) struct DummyColumnStatisticsProvider;
+
+    impl ColumnStatisticsProvider for DummyColumnStatisticsProvider {
+        fn column_statistics(&self, _column_id: ColumnId) -> Option<ColumnStatistics> {
+            None
+        }
+    }
 }

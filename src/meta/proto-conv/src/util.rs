@@ -61,6 +61,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
         14,
         "2022-10-11: Add: role_arn and external_id in config.proto/OssStorageConfig, Remove role_arn and oidc_token from config.proto/OssStorageConfig",
     ),
+    (15, "2022-10-12: Remove: precision in TimestampType"),
 ];
 
 pub const VER: u64 = META_CHANGE_LOG.last().unwrap().0;
