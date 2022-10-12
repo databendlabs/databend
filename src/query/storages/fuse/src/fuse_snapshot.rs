@@ -97,7 +97,6 @@ pub async fn read_snapshots(
 // 1. Get the prefix:'/db/table/_ss/' from the root_snapshot_file('/db/table/_ss/xx.json')
 // 2. List all the files in the prefix
 // 3. Try to read all the snapshot files in parallel.
-#[tracing::instrument(level = "debug", skip_all)]
 pub async fn read_snapshot_lites_by_root_file(
     ctx: Arc<dyn TableContext>,
     root_snapshot_file: String,
@@ -152,7 +151,9 @@ pub async fn read_snapshot_lites_by_root_file(
             snapshot_map.insert(snapshot_lite.snapshot_id, snapshot_lite);
 
             if with_segments {
-                segment_locations.extend(&snapshot.segments);
+                for segment in &snapshot.segments {
+                    segment_locations.insert(segment.clone());
+                }
             }
         }
     }

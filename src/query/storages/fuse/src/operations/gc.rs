@@ -13,33 +13,23 @@
 //  limitations under the License.
 
 use std::collections::HashSet;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_cache::Cache;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_fuse_meta::caches::CacheManager;
 use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SnapshotId;
-use common_fuse_meta::meta::TableSnapshot;
-use futures::TryStreamExt;
 use opendal::Operator;
+use tracing::info;
 use tracing::warn;
 
 use crate::fuse_segment::read_segments;
 use crate::fuse_snapshot::read_snapshot_lites_by_root_file;
-use crate::io::MetaReaders;
-use crate::io::SnapshotHistoryReader;
 use crate::FuseTable;
 
 impl FuseTable {
-    pub async fn do_gc2(
-        &self,
-        ctx: &Arc<dyn TableContext>,
-        keep_last_snapshot: bool,
-    ) -> Result<()> {
+    pub async fn do_gc(&self, ctx: &Arc<dyn TableContext>, keep_last_snapshot: bool) -> Result<()> {
         let r = self.read_table_snapshot(ctx.clone()).await;
         let snapshot_opt = match r {
             Err(e) if e.code() == ErrorCode::storage_not_found_code() => {
@@ -56,17 +46,20 @@ impl FuseTable {
             Ok(v) => v,
         };
 
+        let chunk_size = ctx.get_settings().get_max_storage_io_requests()? as usize;
+
         // 1. Root snapshot.
         let mut segments_referenced_by_root = HashSet::new();
         let mut blocks_referenced_by_root = HashSet::new();
-        let mut root_snapshot_id;
-        if let Some(root_snapshot) = snapshot_opt {
-            segments_referenced_by_root = HashSet::from_iter(&root_snapshot.segments);
-            blocks_referenced_by_root = self
-                .get_block_locations(ctx.clone(), &root_snapshot.segments)
-                .await?;
-            root_snapshot_id = root_snapshot.snapshot_id;
-        }
+        let root_snapshot_id = if let Some(root_snapshot) = snapshot_opt {
+            let segments = root_snapshot.segments.clone();
+            blocks_referenced_by_root = self.get_block_locations(ctx.clone(), &segments).await?;
+
+            segments_referenced_by_root = HashSet::from_iter(segments);
+            root_snapshot.snapshot_id
+        } else {
+            SnapshotId::new_v4()
+        };
 
         // 2. Get all snapshot(including root snapshot).
         let mut all_snapshot_lites = vec![];
@@ -83,8 +76,8 @@ impl FuseTable {
         }
 
         // 3. Find.
-        let mut snapshots_to_be_deleted= HashSet::new();
-        let mut segments_to_be_deleted= HashSet::new();
+        let mut snapshots_to_be_deleted = HashSet::new();
+        let mut segments_to_be_deleted = HashSet::new();
 
         // 3.1 Find all the snapshots need to be deleted.
         {
@@ -104,125 +97,81 @@ impl FuseTable {
                 if keep_last_snapshot && segments_referenced_by_root.contains(segment) {
                     continue;
                 }
-                segments_to_be_deleted.insert(segment);
+                segments_to_be_deleted.insert(segment.clone());
             }
         }
 
-        // Get all segments.
-        // Check referenced by root.
+        // 4. Purge segments&blocks by chunk size(max_storage_io_requests).
+        {
+            let segments_to_be_delete_vec = Vec::from_iter(segments_to_be_deleted);
+            for (idx, chunk) in segments_to_be_delete_vec.chunks(chunk_size).enumerate() {
+                info!(
+                    "[Chunk: {}] Start purge blocks, chunk size:{}",
+                    idx, chunk_size
+                );
+                self.try_purge_blocks(
+                    ctx.clone(),
+                    chunk,
+                    &blocks_referenced_by_root,
+                    keep_last_snapshot,
+                )
+                .await?;
+                info!("[Chunk: {}] Finish purge blocks", idx);
+            }
+        }
+
+        // 5. Purge snapshots by chunk size(max_storage_io_requests).
+        {
+            let snapshots_to_be_delete_vec = Vec::from_iter(snapshots_to_be_deleted);
+            for (idx, chunk) in snapshots_to_be_delete_vec.chunks(chunk_size).enumerate() {
+                info!(
+                    "[Chunk: {}] Start purge snapshot, chunk size:{}",
+                    idx, chunk_size
+                );
+                // self.try_purge_snapshots(ctx.clone(), chunk).await?;
+                info!("[Chunk: {}] Finish purge snapshots", idx);
+            }
+        }
 
         Ok(())
     }
 
-    pub async fn do_gc(&self, ctx: &Arc<dyn TableContext>, keep_last_snapshot: bool) -> Result<()> {
-        let r = self.read_table_snapshot(ctx.clone()).await;
-        let snapshot_opt = match r {
-            Err(e) if e.code() == ErrorCode::storage_not_found_code() => {
-                // concurrent gc: someone else has already collected this snapshot, ignore it
-                warn!(
-                    "concurrent gc: snapshot {:?} already collected. table: {}, ident {}",
-                    self.snapshot_loc(),
-                    self.table_info.desc,
-                    self.table_info.ident,
-                );
-                return Ok(());
-            }
-            Err(e) => return Err(e),
-            Ok(v) => v,
-        };
+    async fn try_purge_blocks(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        segments_need_to_delete: &[Location],
+        blocks_referenced_by_root: &HashSet<String>,
+        keep_last_snapshot: bool,
+    ) -> Result<()> {
+        let segments = read_segments(self.operator.clone(), ctx, segments_need_to_delete).await?;
 
-        let last_snapshot = if let Some(s) = snapshot_opt {
-            s
-        } else {
-            // empty table, have nothing to do here
-            return Ok(());
-        };
+        let mut blocks_need_to_delete = HashSet::new();
+        let mut blooms_need_to_delete = HashSet::new();
+        for segment in segments {
+            let segment = segment?;
 
-        let reader = MetaReaders::table_snapshot_reader(ctx.clone(), self.get_operator());
+            // TODO(bohu): clean the LRUCache: https://github.com/datafuselabs/databend/issues/8157
+            for block_meta in &segment.blocks {
+                let loc = block_meta.location.0.as_str();
+                // Skip root block if keep_last_snapshot is true.
+                if keep_last_snapshot && blocks_referenced_by_root.contains(loc) {
+                    continue;
+                }
+                blocks_need_to_delete.insert(loc.to_string());
 
-        let (prev_id, prev_ver) = if let Some((id, ver)) = last_snapshot.prev_snapshot_id {
-            (id, ver)
-        } else {
-            return if keep_last_snapshot {
-                // short cut:
-                // we do not have previous snapshot, and should keep the last snapshot, nothing to do
-                Ok(())
-            } else {
-                // short cut:
-                // - no previous snapshot
-                // - no need to keep the last snapshot
-                // just drop the whole snapshot,
-                self.purge_blocks(ctx.clone(), &last_snapshot.segments, &HashSet::new())
-                    .await?;
-
-                let snapshots = vec![(last_snapshot.snapshot_id, self.snapshot_format_version())];
-                self.purge_snapshots_and_segments(ctx.as_ref(), &last_snapshot.segments, &snapshots)
-                    .await
-            };
-        };
-
-        let prev_loc = self
-            .meta_location_generator
-            .snapshot_location_from_uuid(&prev_id, prev_ver)?;
-
-        let mut snapshot_history =
-            reader.snapshot_history(prev_loc, prev_ver, self.meta_location_generator.clone());
-
-        let mut snapshots_to_be_deleted: Vec<_> = Vec::new();
-        if !keep_last_snapshot {
-            snapshots_to_be_deleted
-                .push((last_snapshot.snapshot_id, self.snapshot_format_version()));
-        }
-
-        let segments_referenced_by_gc_root: HashSet<Location> = if !keep_last_snapshot {
-            //  segment gc root references nothing;
-            HashSet::new()
-        } else {
-            // segment gc root contains all the segments referenced by pivot snapshot;
-            HashSet::from_iter(last_snapshot.segments.clone())
-        };
-
-        // segments which no longer need to be kept
-        let mut segments_to_be_deleted: HashSet<_> = HashSet::new();
-        {
-            if !keep_last_snapshot {
-                segments_to_be_deleted.extend(last_snapshot.segments.clone())
-            }
-
-            // collects
-            // - all the previous snapshots
-            // - segments referenced by previous snapshots, but not by gc_root
-            while let Some(s) = snapshot_history.try_next().await? {
-                snapshots_to_be_deleted.push((s.snapshot_id, s.format_version()));
-                for seg in &s.segments {
-                    if !segments_referenced_by_gc_root.contains(seg) {
-                        segments_to_be_deleted.insert(seg.clone());
-                    }
+                // Bloom index file.
+                if let Some(bloom_index_location) = &block_meta.bloom_filter_index_location {
+                    blooms_need_to_delete.insert(bloom_index_location.0.to_string());
                 }
             }
         }
 
-        let ref_by_gc_segment_locations = Vec::from_iter(segments_referenced_by_gc_root);
-        let blocks_referenced_by_gc_root: HashSet<String> = self
-            .get_block_locations(ctx.clone(), &ref_by_gc_segment_locations)
-            .await?;
+        // TODO(bohu): delete file in parallel
+        for _location in blocks_need_to_delete {}
+        for _location in blooms_need_to_delete {}
+        for _location in segments_need_to_delete {}
 
-        // 1. purge un-referenced blocks
-        let delete_segment_locations = Vec::from_iter(segments_to_be_deleted);
-        self.purge_blocks(
-            ctx.clone(),
-            &delete_segment_locations,
-            &blocks_referenced_by_gc_root,
-        )
-        .await?;
-
-        // 2. purge ss and sg files
-        self.purge_snapshots_and_segments(
-            ctx.as_ref(),
-            &delete_segment_locations,
-            &snapshots_to_be_deleted,
-        )
-        .await
+        Ok(())
     }
 
     async fn get_block_locations(
@@ -254,118 +203,6 @@ impl FuseTable {
         }
 
         Ok(result)
-    }
-
-    // collect in the sense of GC
-    async fn purge_snapshots_and_segments(
-        &self,
-        ctx: &dyn TableContext,
-        segments_to_be_deleted: &[Location],
-        snapshots_to_be_deleted: &[(SnapshotId, u64)],
-    ) -> Result<()> {
-        // order matters, should always remove the blocks first, segment 2nd, snapshot last,
-        // so that if something goes wrong, e.g. process crashed, gc task can be "picked up" and continued
-
-        let aborting = ctx.get_aborting();
-
-        // 1. remove the segments
-        for (loc, _v) in segments_to_be_deleted {
-            if aborting.load(Ordering::Relaxed) {
-                return Err(ErrorCode::AbortedQuery(
-                    "Aborted query, because the server is shutting down or the query was killed.",
-                ));
-            }
-
-            if let Some(c) = CacheManager::instance().get_table_segment_cache() {
-                let cache = &mut *c.write();
-                cache.pop(loc.as_str());
-            }
-
-            self.remove_file_by_location(&self.operator, loc.as_str())
-                .await?;
-        }
-
-        let locs = self.meta_location_generator();
-        // 2. remove the snapshots
-        for (id, ver) in snapshots_to_be_deleted.iter().rev() {
-            if aborting.load(Ordering::Relaxed) {
-                return Err(ErrorCode::AbortedQuery(
-                    "Aborted query, because the server is shutting down or the query was killed.",
-                ));
-            }
-
-            let loc = locs.snapshot_location_from_uuid(id, *ver)?;
-            if let Some(c) = CacheManager::instance().get_table_snapshot_cache() {
-                let cache = &mut *c.write();
-                cache.pop(loc.as_str());
-            }
-
-            self.remove_file_by_location(&self.operator, loc.as_str())
-                .await?;
-        }
-
-        Ok(())
-    }
-
-    /// rm all the blocks, which are
-    /// - referenced by any one of `segments`
-    /// - but NOT referenced by `root`
-    async fn purge_blocks(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        segment_locations: &[Location],
-        root: &HashSet<String>,
-    ) -> Result<()> {
-        let accessor = &self.operator;
-        let aborting = ctx.get_aborting();
-        let segments = read_segments(self.operator.clone(), ctx, segment_locations).await?;
-
-        for segment in segments {
-            let segment = segment?;
-
-            if aborting.load(Ordering::Relaxed) {
-                return Err(ErrorCode::AbortedQuery(
-                    "Aborted query, because the server is shutting down or the query was killed.",
-                ));
-            }
-            if aborting.load(Ordering::Relaxed) {
-                return Err(ErrorCode::AbortedQuery(
-                    "Aborted query, because the server is shutting down or the query was killed.",
-                ));
-            }
-
-            for block_meta in &segment.blocks {
-                if !root.contains(block_meta.location.0.as_str()) {
-                    if aborting.load(Ordering::Relaxed) {
-                        return Err(ErrorCode::AbortedQuery(
-                            "Aborted query, because the server is shutting down or the query was killed.",
-                        ));
-                    }
-
-                    if let Some(bloom_index_location) = &block_meta.bloom_filter_index_location {
-                        let path = &bloom_index_location.0;
-                        if let Some(c) = CacheManager::instance().get_bloom_index_meta_cache() {
-                            let cache = &mut *c.write();
-                            cache.pop(path);
-                        }
-
-                        self.remove_file_by_location(accessor, bloom_index_location.0.as_str())
-                            .await?;
-                    }
-
-                    if aborting.load(Ordering::Relaxed) {
-                        return Err(ErrorCode::AbortedQuery(
-                            "Aborted query, because the server is shutting down or the query was killed.",
-                        ));
-                    }
-
-                    self.remove_file_by_location(accessor, block_meta.location.0.as_str())
-                        .await?;
-                }
-            }
-        }
-
-        Ok(())
     }
 
     async fn remove_file_by_location(
