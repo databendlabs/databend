@@ -13,10 +13,9 @@ test = false
 [dependencies]
 common-exception = { path = "../../common/exception" }
 
-sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
-
-anyerror = "=0.1.7"
-prost = "0.11.0"
-serde = { version = "1.0.145", features = ["derive"] }
-serde_json = "1.0.85"
-thiserror = "1"
+anyerror = { workspace = true }
+prost = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sled = { workspace = true }
+thiserror = { workspace = true }
