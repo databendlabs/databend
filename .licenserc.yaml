@@ -18,6 +18,7 @@ header:
     - ".dockerignore"
     - ".gitignore"
     - ".gitattributes"
+    - ".editorconfig"
     # Ignore LICENSE and Makefile
     - "LICENSE"
     - "Makefile"
