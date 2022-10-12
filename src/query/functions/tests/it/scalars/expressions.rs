@@ -125,7 +125,10 @@ fn test_datetime_cast_function() -> Result<()> {
                 Series::from_data(vec![1614906061000000i64, 1635070210000000]),
                 DataField::new("dummy_1", TimestampType::new_impl()),
             )],
-            expect: Series::from_data(vec!["2021-03-05 01:01:01", "2021-10-24 10:10:10"]),
+            expect: Series::from_data(vec![
+                "2021-03-05 01:01:01.000000",
+                "2021-10-24 10:10:10.000000",
+            ]),
             error: "",
         }),
     ];
