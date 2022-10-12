@@ -32,6 +32,7 @@ use opendal::io_util::DecompressState;
 use opendal::Operator;
 
 use super::InputFormat;
+use crate::processors::sources::input_formats::beyond_end_reader::BeyondEndReader;
 use crate::processors::sources::input_formats::delimiter::RecordDelimiter;
 use crate::processors::sources::input_formats::impls::input_format_csv::CsvReaderState;
 use crate::processors::sources::input_formats::input_context::CopyIntoPlan;
@@ -187,6 +188,8 @@ pub struct RowBatch {
 }
 
 pub struct AligningState<T> {
+    ctx: Arc<InputContext>,
+    split_info: Arc<SplitInfo>,
     pub path: String,
     pub record_delimiter_end: u8,
     pub field_delimiter: u8,
@@ -290,6 +293,7 @@ impl<T: InputFormatTextBase> AligningState<T> {
     }
 }
 
+#[async_trait::async_trait]
 impl<T: InputFormatTextBase> AligningStateTrait for AligningState<T> {
     type Pipe = InputFormatTextPipe<T>;
 
@@ -309,6 +313,8 @@ impl<T: InputFormatTextBase> AligningStateTrait for AligningState<T> {
         };
 
         Ok(AligningState::<T> {
+            ctx: ctx.clone(),
+            split_info: split_info.clone(),
             path,
             decoder,
             rows_to_skip,
@@ -339,6 +345,15 @@ impl<T: InputFormatTextBase> AligningStateTrait for AligningState<T> {
             self.flush()
         };
         Ok(row_batches)
+    }
+
+    fn read_beyond_end(&self) -> Option<BeyondEndReader> {
+        Some(BeyondEndReader {
+            ctx: self.ctx.clone(),
+            split_info: self.split_info.clone(),
+            path: self.path.clone(),
+            record_delimiter_end: self.record_delimiter_end,
+        })
     }
 }
 
