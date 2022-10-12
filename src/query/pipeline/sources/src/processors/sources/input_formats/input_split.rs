@@ -74,8 +74,10 @@ impl Display for SplitInfo {
 pub fn split_by_size(size: usize, split_size: usize) -> Vec<(usize, usize)> {
     let mut splits = vec![];
     let n = (size + split_size - 1) / split_size;
-    for i in 0..n - 1 {
-        splits.push((i * split_size, std::cmp::min((i + 1) * split_size, size)))
+    for i in 0..n {
+        let start = i * split_size;
+        let end = std::cmp::min((i + 1) * split_size, size);
+        splits.push((start, end - start))
     }
     splits
 }
