@@ -12,17 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod builder;
-mod column_stat;
-mod enforcer;
-#[allow(clippy::module_inception)]
-mod property;
-mod stat;
+use std::collections::HashMap;
 
-pub use builder::RelExpr;
-pub use enforcer::require_property;
-pub use property::ColumnSet;
-pub use property::Distribution;
-pub use property::PhysicalProperty;
-pub use property::RelationalProperty;
-pub use property::RequiredProperty;
+use common_planner::IndexType;
+
+pub type ColumnStatSet = HashMap<IndexType, ColumnStat>;
+
+#[derive(Debug, Clone)]
+// Statistics information of a column
+pub struct ColumnStat {
+    // Count of distinct values
+    pub distinct_count: u64,
+    // Count of null values
+    pub null_count: u64,
+}
