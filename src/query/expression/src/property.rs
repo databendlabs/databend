@@ -84,6 +84,14 @@ impl Domain {
                     precision: this.precision.max(other.precision),
                 })
             }
+            (Domain::Date(this), Domain::Date(other)) => Domain::Date(SimpleDomain {
+                min: this.min.min(other.min),
+                max: this.max.max(other.max),
+            }),
+            (Domain::Interval(this), Domain::Interval(other)) => Domain::Interval(SimpleDomain {
+                min: this.min.min(other.min),
+                max: this.max.max(other.max),
+            }),
             (
                 Domain::Nullable(NullableDomain {
                     has_null: true,
@@ -205,6 +213,10 @@ impl Domain {
                 ts: *min,
                 precision: *precision,
             })),
+            Domain::Date(SimpleDomain { min, max }) if min == max => Some(Scalar::Date(*min)),
+            Domain::Interval(SimpleDomain { min, max }) if min == max => {
+                Some(Scalar::Interval(*min))
+            }
             Domain::Nullable(NullableDomain {
                 has_null: true,
                 value: None,

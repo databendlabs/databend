@@ -15,8 +15,14 @@
 use std::cmp::Ordering;
 use std::ops::Range;
 
+use chrono::DateTime;
+use chrono_tz::Tz;
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::trusted_len::TrustedLen;
+use common_datavalues::DateConverter;
+use common_io::prelude::BufferReadDateTimeExt;
+use common_io::prelude::BufferReadExt;
+use common_io::prelude::BufferReader;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -48,19 +54,23 @@ pub const PRECISION_SEC: u8 = 0;
 
 /// check timestamp and return precision and the base.
 #[inline]
-pub fn check_timestamp(micros: i64) -> Result<(u8, i64), String> {
-    if (-31536000000..=31536000000).contains(&micros) {
-        Ok((PRECISION_SEC, MICROS_IN_A_SEC))
+pub fn check_timestamp(micros: i64) -> Result<Timestamp, String> {
+    let base = if (-31536000000..=31536000000).contains(&micros) {
+        MICROS_IN_A_SEC
     } else if (-31536000000000..=31536000000000).contains(&micros) {
-        Ok((PRECISION_MILLI, MICROS_IN_A_MILLI))
+        MICROS_IN_A_MILLI
     } else if (TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(&micros) {
-        Ok((PRECISION_MICRO, MICROS_IN_A_MICRO))
+        MICROS_IN_A_MICRO
     } else {
-        Err(format!("timestamp `{}` is out of range", Timestamp {
+        return Err(format!("timestamp `{}` is out of range", Timestamp {
             ts: micros,
             precision: PRECISION_MICRO,
-        }))
-    }
+        }));
+    };
+    Ok(Timestamp {
+        ts: micros * base,
+        precision: PRECISION_MICRO,
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -205,6 +215,15 @@ impl Timestamp {
     #[inline]
     pub fn to_days(&self) -> i32 {
         (self.to_seconds() / 24 / 3600) as i32
+    }
+
+    #[inline]
+    pub fn get_format_string(&self) -> String {
+        if self.precision == 0 {
+            "%Y-%m-%d %H:%M:%S".to_string()
+        } else {
+            format!("%Y-%m-%d %H:%M:%S%.{}f", self.precision)
+        }
     }
 }
 
@@ -357,4 +376,24 @@ pub struct TimestampDomain {
     pub min: i64,
     pub max: i64,
     pub precision: u8,
+}
+
+#[inline]
+pub fn string_to_timestamp(date_str: impl AsRef<[u8]>, tz: &Tz) -> Option<DateTime<Tz>> {
+    let mut reader = BufferReader::new(std::str::from_utf8(date_str.as_ref()).unwrap().as_bytes());
+    match reader.read_timestamp_text(tz) {
+        Ok(dt) => match reader.must_eof() {
+            Ok(..) => Some(dt),
+            Err(_) => None,
+        },
+        Err(_) => None,
+    }
+}
+
+#[inline]
+pub fn timestamp_to_string(ts: Timestamp, tz: &Tz) -> String {
+    ts.ts
+        .to_timestamp(tz)
+        .format(ts.get_format_string().as_str())
+        .to_string()
 }

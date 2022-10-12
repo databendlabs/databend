@@ -30,9 +30,11 @@ fn test_cast() {
     let file = &mut mint.new_goldenfile("cast.txt").unwrap();
 
     test_cast_to_variant(file);
-    test_cast_to_timestamp(file);
-    test_cast_to_date(file);
+    test_cast_number_to_timestamp(file);
+    test_cast_number_to_date(file);
     test_cast_between_date_and_timestamp(file);
+    test_cast_between_string_and_timestamp(file);
+    test_between_string_and_date(file);
 }
 
 fn test_cast_to_variant(file: &mut impl Write) {
@@ -88,7 +90,7 @@ fn test_cast_to_variant(file: &mut impl Write) {
     )]);
 }
 
-fn test_cast_to_timestamp(file: &mut impl Write) {
+fn test_cast_number_to_timestamp(file: &mut impl Write) {
     run_ast(file, "CAST(-30610224000000001 AS TIMESTAMP)", &[]);
     run_ast(file, "CAST(-315360000000000 AS TIMESTAMP)", &[]);
     run_ast(file, "CAST(-315360000000 AS TIMESTAMP)", &[]);
@@ -171,7 +173,7 @@ fn test_cast_to_timestamp(file: &mut impl Write) {
     )]);
 }
 
-fn test_cast_to_date(file: &mut impl Write) {
+fn test_cast_number_to_date(file: &mut impl Write) {
     run_ast(file, "CAST(-354286 AS DATE)", &[]);
     run_ast(file, "CAST(-354285 AS DATE)", &[]);
     run_ast(file, "CAST(-100 AS DATE)", &[]);
@@ -253,5 +255,137 @@ fn test_cast_between_date_and_timestamp(file: &mut impl Write) {
         "a",
         DataType::Number(NumberDataType::Int32),
         Column::from_data(vec![-354285, -100, 0, 100, 2932896]),
+    )]);
+}
+
+fn test_cast_between_string_and_timestamp(file: &mut impl Write) {
+    run_ast(file, "TO_TIMESTAMP('2022')", &[]);
+    run_ast(file, "TO_TIMESTAMP('2022-01')", &[]);
+    run_ast(file, "TO_TIMESTAMP('2022-01-02')", &[]);
+    run_ast(file, "TO_TIMESTAMP('A NON-TIMESTMAP STR')", &[]);
+    run_ast(file, "TO_TIMESTAMP('2022-01-02T03:25:02.868894-07:00')", &[
+    ]);
+    run_ast(file, "TO_TIMESTAMP('2022-01-02 02:00:11')", &[]);
+    run_ast(file, "TO_TIMESTAMP('2022-01-02T02:00:22')", &[]);
+    run_ast(file, "TO_TIMESTAMP('2022-01-02T01:12:00-07:00')", &[]);
+    run_ast(file, "TO_TIMESTAMP('2022-01-02T01')", &[]);
+    run_ast(file, "TO_TIMESTAMP(a)", &[(
+        "a",
+        DataType::String,
+        Column::from_data(vec![
+            "2022-01-02",
+            "2022-01-02T03:25:02.868894-07:00",
+            "2022-01-02 02:00:11",
+            "2022-01-02T01:12:00-07:00",
+            "2022-01-02T01",
+        ]),
+    )]);
+
+    run_ast(file, "TRY_CAST(a as TIMESTAMP)", &[(
+        "a",
+        DataType::String,
+        Column::from_data(vec![
+            "A NON-TIMESTAMP STR",
+            "2022",
+            "2022-01",
+            "2022-01-02",
+            "2022-01-02T03:25:02.868894-07:00",
+            "2022-01-02 02:00:11",
+            "2022-01-02T01:12:00-07:00",
+            "2022-01-02T01",
+        ]),
+    )]);
+
+    run_ast(file, "CAST(TO_TIMESTAMP(-315360000000000) AS VARCHAR)", &[]);
+    run_ast(file, "CAST(TO_TIMESTAMP(-315360000000) AS VARCHAR)", &[]);
+    run_ast(file, "CAST(TO_TIMESTAMP(-100) AS VARCHAR)", &[]);
+    run_ast(file, "CAST(TO_TIMESTAMP(-0) AS VARCHAR)", &[]);
+    run_ast(file, "CAST(TO_TIMESTAMP(0) AS VARCHAR)", &[]);
+    run_ast(file, "CAST(TO_TIMESTAMP(100) AS VARCHAR)", &[]);
+    run_ast(file, "CAST(TO_TIMESTAMP(315360000000) AS VARCHAR)", &[]);
+    run_ast(file, "CAST(TO_TIMESTAMP(315360000000000) AS VARCHAR)", &[]);
+    run_ast(file, "CAST(a AS VARCHAR)", &[(
+        "a",
+        DataType::Timestamp,
+        Column::from_data(vec![
+            Timestamp {
+                ts: -315360000000000,
+                precision: 6,
+            },
+            Timestamp {
+                ts: 315360000000,
+                precision: 6,
+            },
+            Timestamp {
+                ts: -100,
+                precision: 6,
+            },
+            Timestamp {
+                ts: 0,
+                precision: 6,
+            },
+            Timestamp {
+                ts: 100,
+                precision: 6,
+            },
+            Timestamp {
+                ts: 315360000000,
+                precision: 6,
+            },
+            Timestamp {
+                ts: 315360000000000,
+                precision: 6,
+            },
+        ]),
+    )]);
+}
+
+fn test_between_string_and_date(file: &mut impl Write) {
+    run_ast(file, "TO_DATE('2022')", &[]);
+    run_ast(file, "TO_DATE('2022-01')", &[]);
+    run_ast(file, "TO_DATE('2022-01-02')", &[]);
+    run_ast(file, "TO_DATE('A NON-DATE STR')", &[]);
+    run_ast(file, "TO_DATE('2022-01-02T03:25:02.868894-07:00')", &[]);
+    run_ast(file, "TO_DATE('2022-01-02 02:00:11')", &[]);
+    run_ast(file, "TO_DATE('2022-01-02T02:00:22')", &[]);
+    run_ast(file, "TO_DATE('2022-01-02T01:12:00-07:00')", &[]);
+    run_ast(file, "TO_DATE('2022-01-02T01')", &[]);
+    run_ast(file, "TO_DATE(a)", &[(
+        "a",
+        DataType::String,
+        Column::from_data(vec![
+            "2022-01-02",
+            "2022-01-02T03:25:02.868894-07:00",
+            "2022-01-02 02:00:11",
+            "2022-01-02T01:12:00-07:00",
+            "2022-01-02T01",
+        ]),
+    )]);
+
+    run_ast(file, "TRY_CAST(a as DATE)", &[(
+        "a",
+        DataType::String,
+        Column::from_data(vec![
+            "A NON-DATE STR",
+            "2022",
+            "2022-01",
+            "2022-01-02",
+            "2022-01-02T03:25:02.868894-07:00",
+            "2022-01-02 02:00:11",
+            "2022-01-02T01:12:00-07:00",
+            "2022-01-02T01",
+        ]),
+    )]);
+
+    run_ast(file, "CAST(TO_DATE(-354285) AS VARCHAR)", &[]);
+    run_ast(file, "CAST(TO_DATE(-100) AS VARCHAR)", &[]);
+    run_ast(file, "CAST(TO_DATE(-0) AS VARCHAR)", &[]);
+    run_ast(file, "CAST(TO_DATE(0) AS VARCHAR)", &[]);
+    run_ast(file, "CAST(TO_DATE(100) AS VARCHAR)", &[]);
+    run_ast(file, "CAST(TO_DATE(2932896) AS VARCHAR)", &[]);
+    run_ast(file, "CAST(a AS VARCHAR)", &[(
+        "a",
+        DataType::Date,
+        from_date_data(vec![-354285, -100, 0, 100, 2932896]),
     )]);
 }

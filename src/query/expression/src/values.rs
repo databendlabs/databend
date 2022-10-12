@@ -569,8 +569,15 @@ impl Column {
             Column::Number(NumberColumn::Float64(_)) => ArrowDataType::Float64,
             Column::Boolean(_) => ArrowDataType::Boolean,
             Column::String { .. } => ArrowDataType::LargeBinary,
-            Column::Timestamp(TimestampColumn { .. }) => {
-                ArrowDataType::Timestamp(TimeUnit::Microsecond, None)
+            Column::Timestamp(TimestampColumn { precision, .. }) => {
+                let p = if *precision == 0 {
+                    TimeUnit::Second
+                } else if *precision == 3 {
+                    TimeUnit::Millisecond
+                } else {
+                    TimeUnit::Microsecond
+                };
+                ArrowDataType::Timestamp(p, None)
             }
             Column::Date(_) => ArrowDataType::Date32,
             Column::Interval(_) => ArrowDataType::Date64,
