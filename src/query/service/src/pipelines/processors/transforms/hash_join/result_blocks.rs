@@ -791,32 +791,21 @@ impl JoinHashTable {
         Key: HashTableKeyable + Clone + 'static,
         IT: Iterator<Item = Key> + TrustedLen,
     {
-        let local_build_indexes = &mut probe_state.build_indexs;
-        let probe_indexes = &mut probe_state.probe_indexs;
         let valids = &probe_state.valids;
+        let build_indexes = &mut probe_state.build_indexs;
+        let probe_indexes = &mut probe_state.probe_indexs;
         let mut validity = MutableBitmap::new();
-        let mut build_indexes = self.hash_join_desc.right_join_desc.build_indexes.write();
         for (i, key) in keys_iter.enumerate() {
             let probe_result_ptr = Self::probe_key(hash_table, key, valids, i);
             if let Some(v) = probe_result_ptr {
-                let probe_result_ptrs = v.get_value();
-                build_indexes.extend(probe_result_ptrs);
-                local_build_indexes.extend_from_slice(probe_result_ptrs);
-                for row_ptr in probe_result_ptrs.iter() {
-                    {
-                        let mut row_state = self.hash_join_desc.right_join_desc.row_state.write();
-                        row_state
-                            .entry(*row_ptr)
-                            .and_modify(|e| *e += 1)
-                            .or_insert(1_usize);
-                    }
-                }
-                probe_indexes.extend(std::iter::repeat(i as u32).take(probe_result_ptrs.len()));
-                validity.extend_constant(probe_result_ptrs.len(), true);
+                let probed_rows = v.get_value();
+                build_indexes.extend_from_slice(probed_rows);
+                probe_indexes.extend(repeat(i as u32).take(probed_rows.len()));
+                validity.extend_constant(probed_rows.len(), true);
             }
         }
 
-        let build_block = self.row_space.gather(local_build_indexes)?;
+        let build_block = self.row_space.gather(build_indexes)?;
         let mut probe_block = DataBlock::block_take_by_indices(input, probe_indexes)?;
         // If join type is right join, need to wrap nullable for probe side
         // If join type is semi/anti right join, directly merge `build_block` and `probe_block`
