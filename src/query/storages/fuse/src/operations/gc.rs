@@ -25,7 +25,7 @@ use tracing::info;
 use tracing::warn;
 
 use crate::fuse_segment::read_segments;
-use crate::fuse_snapshot::read_snapshot_lites_by_root_file;
+use crate::fuse_snapshot::read_snapshots_by_root_file;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -65,7 +65,7 @@ impl FuseTable {
         let mut all_snapshot_lites = vec![];
         let mut all_segment_locations = HashSet::new();
         if let Some(root_snapshot_location) = self.snapshot_loc() {
-            (all_snapshot_lites, all_segment_locations) = read_snapshot_lites_by_root_file(
+            (all_snapshot_lites, all_segment_locations) = read_snapshots_by_root_file(
                 ctx.clone(),
                 root_snapshot_location,
                 self.snapshot_format_version(),

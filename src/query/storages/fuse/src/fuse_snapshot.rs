@@ -29,6 +29,7 @@ use futures_util::future;
 use futures_util::TryStreamExt;
 use opendal::ObjectMode;
 use opendal::Operator;
+use tracing::info;
 use tracing::warn;
 use tracing::Instrument;
 
@@ -97,7 +98,7 @@ pub async fn read_snapshots(
 // 1. Get the prefix:'/db/table/_ss/' from the root_snapshot_file('/db/table/_ss/xx.json')
 // 2. List all the files in the prefix
 // 3. Try to read all the snapshot files in parallel.
-pub async fn read_snapshot_lites_by_root_file(
+pub async fn read_snapshots_by_root_file(
     ctx: Arc<dyn TableContext>,
     root_snapshot_file: String,
     format_version: u64,
@@ -143,9 +144,16 @@ pub async fn read_snapshot_lites_by_root_file(
     // 1. Get all the snapshot by chunks.
     let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
     let mut snapshot_map = HashMap::with_capacity(snapshot_files.len());
-    for chunks in snapshot_files.chunks(max_io_requests * 5) {
+    for (idx, chunks) in snapshot_files.chunks(max_io_requests).enumerate() {
+        info!(
+            "Start to read_snapshots, chunk:[{}], size:{}",
+            idx,
+            chunks.len()
+        );
         let results =
             read_snapshots(ctx.clone(), chunks, format_version, data_accessor.clone()).await?;
+        info!("Finish to read_snapshots, chunk:[{}]", idx);
+
         for snapshot in results.into_iter().flatten() {
             let snapshot_lite = TableSnapshotLite::from(snapshot.as_ref());
             snapshot_map.insert(snapshot_lite.snapshot_id, snapshot_lite);
