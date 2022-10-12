@@ -17,14 +17,26 @@ use std::collections::HashMap;
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
 use parking_lot::RwLock;
+use common_planner::IndexType;
 
 use crate::evaluator::EvalNode;
 use crate::evaluator::Evaluator;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
-use crate::pipelines::processors::transforms::hash_join::MarkJoinDesc;
 use crate::sql::executor::HashJoin;
 use crate::sql::executor::PhysicalScalar;
 use crate::sql::plans::JoinType;
+
+#[derive(Clone, Copy, Eq, PartialEq, Debug, Hash)]
+pub enum MarkerKind {
+    True,
+    False,
+    Null,
+}
+
+pub struct MarkJoinDesc {
+    pub(crate) marker_index: Option<IndexType>,
+    pub(crate) has_null: RwLock<bool>,
+}
 
 pub struct RightJoinDesc {
     /// Record rows in build side that are matched with rows in probe side.
