@@ -17,11 +17,11 @@ use std::backtrace::Backtrace;
 
 use anyerror::AnyError;
 use common_exception::ErrorCode;
+use common_exception::ErrorWithContext;
 use serde::Deserialize;
 use serde::Serialize;
 use sled::transaction::UnabortableTransactionError;
 
-use crate::error_context::ErrorWithContext;
 use crate::MetaBytesError;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
