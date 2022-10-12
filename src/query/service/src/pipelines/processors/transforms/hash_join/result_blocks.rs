@@ -525,6 +525,8 @@ impl JoinHashTable {
         let mut probe_indexes = Vec::with_capacity(block_size);
         let mut build_indexes = Vec::with_capacity(block_size);
 
+        let mut dummys = 0;
+        let other_predicate = self.hash_join_desc.other_predicate.as_ref().unwrap();
         // For semi join, it defaults to all
         let mut row_state = vec![0_u32; keys_iter.size_hint().0];
         let dummy_probed_rows = vec![RowPtr {
@@ -574,10 +576,32 @@ impl JoinHashTable {
                         build_indexes.extend_from_slice(&probed_rows[index..new_index]);
                         probe_indexes.extend(repeat(i as u32).take(addition));
 
-                        probed_blocks.push(self.merge_eq_block(
+                        let probed_block = self.merge_eq_block(
                             &self.row_space.gather(&build_indexes)?,
                             &DataBlock::block_take_by_indices(input, &probe_indexes)?,
-                        )?);
+                        )?;
+
+                        if self.interrupt.load(Ordering::Relaxed) {
+                            return Err(ErrorCode::AbortedQuery(
+                                "Aborted query, because the server is shutting down or the query was killed.",
+                            ));
+                        }
+
+                        let mut bm = match self.get_other_filters(&probed_block, other_predicate)? {
+                            (Some(b), _, _) => b.into_mut().right().unwrap(),
+                            (_, true, _) => MutableBitmap::from_len_set(probed_block.num_rows()),
+                            (_, _, true) => MutableBitmap::from_len_zeroed(probed_block.num_rows()),
+                            _ => unreachable!(),
+                        };
+
+                        if SEMI {
+                            Self::fill_null_for_semi_join(&mut bm, &probe_indexes, &mut row_state);
+                        } else {
+                            Self::fill_null_for_anti_join(&mut bm, &probe_indexes, &mut row_state);
+                        }
+
+                        let predicate = BooleanColumn::from_arrow_data(bm.into()).arc();
+                        probed_blocks.push(DataBlock::filter_block(probed_block, &predicate)?);
 
                         index = new_index;
                         remain -= addition;
@@ -589,43 +613,34 @@ impl JoinHashTable {
             }
         }
 
-        probed_blocks.push(self.merge_eq_block(
+        if self.interrupt.load(Ordering::Relaxed) {
+            return Err(ErrorCode::AbortedQuery(
+                "Aborted query, because the server is shutting down or the query was killed.",
+            ));
+        }
+
+        let probed_block = self.merge_eq_block(
             &self.row_space.gather(&build_indexes)?,
             &DataBlock::block_take_by_indices(input, &probe_indexes)?,
-        )?);
+        )?;
 
-        match &self.hash_join_desc.other_predicate {
-            None => unreachable!(),
-            Some(other_predicate) => {
-                let mut filtered_blocks = Vec::with_capacity(probed_blocks.len());
+        let mut bm = match self.get_other_filters(&probed_block, other_predicate)? {
+            (Some(b), _, _) => b.into_mut().right().unwrap(),
+            (_, true, _) => MutableBitmap::from_len_set(probed_block.num_rows()),
+            (_, _, true) => MutableBitmap::from_len_zeroed(probed_block.num_rows()),
+            _ => unreachable!(),
+        };
 
-                for probed_block in probed_blocks {
-                    if self.interrupt.load(Ordering::Relaxed) {
-                        return Err(ErrorCode::AbortedQuery(
-                            "Aborted query, because the server is shutting down or the query was killed.",
-                        ));
-                    }
-
-                    let mut bm = match self.get_other_filters(&probed_block, other_predicate)? {
-                        (Some(b), _, _) => b.into_mut().right().unwrap(),
-                        (_, true, _) => MutableBitmap::from_len_set(probed_block.num_rows()),
-                        (_, _, true) => MutableBitmap::from_len_zeroed(probed_block.num_rows()),
-                        _ => unreachable!(),
-                    };
-
-                    if SEMI {
-                        Self::fill_null_for_semi_join(&mut bm, &probe_indexes, &mut row_state);
-                    } else {
-                        Self::fill_null_for_anti_join(&mut bm, &probe_indexes, &mut row_state);
-                    }
-
-                    let predicate = BooleanColumn::from_arrow_data(bm.into()).arc();
-                    filtered_blocks.push(DataBlock::filter_block(probed_block, &predicate)?);
-                }
-
-                Ok(filtered_blocks)
-            }
+        if SEMI {
+            Self::fill_null_for_semi_join(&mut bm, &probe_indexes, &mut row_state);
+        } else {
+            Self::fill_null_for_anti_join(&mut bm, &probe_indexes, &mut row_state);
         }
+
+        let predicate = BooleanColumn::from_arrow_data(bm.into()).arc();
+        probed_blocks.push(DataBlock::filter_block(probed_block, &predicate)?);
+
+        Ok(probed_blocks)
     }
 
     fn left_or_single_join<const WITH_OTHER_CONJUNCT: bool, Key, IT>(
