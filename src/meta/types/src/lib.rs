@@ -46,7 +46,6 @@ mod user_setting;
 mod user_stage;
 mod with;
 
-pub mod error_context;
 mod principal_identity;
 mod proto_display;
 

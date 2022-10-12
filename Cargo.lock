@@ -1755,6 +1755,7 @@ dependencies = [
  "anyhow",
  "byteorder",
  "common-base",
+ "common-exception",
  "common-meta-types",
  "common-tracing",
  "once_cell",
