@@ -520,12 +520,11 @@ impl JoinHashTable {
         let valids = &probe_state.valids;
         let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
 
-        // The inner join will return multiple data blocks of similar size
+        // The semi join will return multiple data blocks of similar size
         let mut probed_blocks = vec![];
         let mut probe_indexes = Vec::with_capacity(block_size);
         let mut build_indexes = Vec::with_capacity(block_size);
 
-        let mut dummys = 0;
         let other_predicate = self.hash_join_desc.other_predicate.as_ref().unwrap();
         // For semi join, it defaults to all
         let mut row_state = vec![0_u32; keys_iter.size_hint().0];
@@ -549,7 +548,9 @@ impl JoinHashTable {
                 Some(v) => v.get_value(),
             };
 
-            row_state[i] += probed_rows.len() as u32;
+            if probe_result_ptr.is_some() && !SEMI {
+                row_state[i] += probed_rows.len() as u32;
+            }
 
             if probe_indexes.len() + probed_rows.len() < probe_indexes.capacity() {
                 build_indexes.extend_from_slice(probed_rows);
@@ -580,12 +581,6 @@ impl JoinHashTable {
                             &self.row_space.gather(&build_indexes)?,
                             &DataBlock::block_take_by_indices(input, &probe_indexes)?,
                         )?;
-
-                        if self.interrupt.load(Ordering::Relaxed) {
-                            return Err(ErrorCode::AbortedQuery(
-                                "Aborted query, because the server is shutting down or the query was killed.",
-                            ));
-                        }
 
                         let mut bm = match self.get_other_filters(&probed_block, other_predicate)? {
                             (Some(b), _, _) => b.into_mut().right().unwrap(),
