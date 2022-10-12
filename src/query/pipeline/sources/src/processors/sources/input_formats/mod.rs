@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+mod beyond_end_reader;
 mod delimiter;
 mod impls;
 mod input_context;
