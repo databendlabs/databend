@@ -125,7 +125,34 @@ impl<T: InputFormatTextBase> InputFormat for InputFormatText<T> {
                 plan.stage_info.file_format_options.compression,
                 path,
             )?;
-            if compress_alg.is_none() || !T::is_splittable() {
+            let split_size = plan.stage_info.copy_options.split_size;
+            if compress_alg.is_none() && T::is_splittable() && split_size > 0 {
+                let split_offsets = split_by_size(size, split_size as usize);
+                let num_file_splits = split_offsets.len();
+                tracing::debug!(
+                    "split file {} of size {} to {} {} bytes splits",
+                    path,
+                    size,
+                    num_file_splits,
+                    split_size
+                );
+                let file = Arc::new(FileInfo {
+                    path: path.clone(),
+                    size,
+                    num_splits: split_offsets.len(),
+                    compress_alg,
+                });
+                for (i, (offset, size)) in split_offsets.into_iter().enumerate() {
+                    infos.push(Arc::new(SplitInfo {
+                        file: file.clone(),
+                        seq_in_file: i,
+                        offset,
+                        size,
+                        num_file_splits,
+                        format_info: None,
+                    }));
+                }
+            } else {
                 let file = Arc::new(FileInfo {
                     path: path.clone(),
                     size, // dummy
@@ -140,26 +167,6 @@ impl<T: InputFormatTextBase> InputFormat for InputFormatText<T> {
                     num_file_splits: 1,
                     format_info: None,
                 }));
-            } else {
-                let split_size = 128usize * 1024 * 1024;
-                let split_offsets = split_by_size(size, split_size);
-                let file = Arc::new(FileInfo {
-                    path: path.clone(),
-                    size,
-                    num_splits: split_offsets.len(),
-                    compress_alg,
-                });
-                let num_file_splits = split_offsets.len();
-                for (i, (offset, size)) in split_offsets.into_iter().enumerate() {
-                    infos.push(Arc::new(SplitInfo {
-                        file: file.clone(),
-                        seq_in_file: i,
-                        offset,
-                        size,
-                        num_file_splits,
-                        format_info: None,
-                    }));
-                }
             }
         }
         Ok(infos)
