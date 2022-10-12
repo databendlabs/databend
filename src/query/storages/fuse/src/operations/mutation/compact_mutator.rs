@@ -25,7 +25,6 @@ use common_fuse_meta::meta::Versioned;
 use common_meta_app::schema::TableInfo;
 use opendal::Operator;
 
-use crate::fuse_segment::read_segments;
 use crate::io::BlockCompactor;
 use crate::io::SegmentWriter;
 use crate::io::TableMetaLocationGenerator;
@@ -33,6 +32,7 @@ use crate::operations::AppendOperationLogEntry;
 use crate::statistics::merge_statistics;
 use crate::statistics::reducers::reduce_block_metas;
 use crate::statistics::reducers::reduce_statistics;
+use crate::FuseSegmentIO;
 use crate::FuseTable;
 use crate::TableContext;
 use crate::TableMutator;
@@ -99,12 +99,8 @@ impl TableMutator for CompactMutator {
         let mut summarys = Vec::new();
 
         // Read all segments information in parallel.
-        let segments = read_segments(
-            self.data_accessor.clone(),
-            self.ctx.clone(),
-            segment_locations,
-        )
-        .await?;
+        let fuse_segment_io = FuseSegmentIO::create(self.ctx.clone(), self.data_accessor.clone());
+        let segments = fuse_segment_io.read_segments(segment_locations).await?;
         for (idx, segment) in segments.iter().enumerate() {
             let mut need_merge = false;
             let mut remains = Vec::new();

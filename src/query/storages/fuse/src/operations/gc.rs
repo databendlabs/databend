@@ -23,9 +23,9 @@ use common_fuse_meta::meta::SnapshotId;
 use tracing::info;
 use tracing::warn;
 
-use crate::fuse_segment::read_segments;
 use crate::fuse_snapshot::read_snapshot_lites;
 use crate::FuseFile;
+use crate::FuseSegmentIO;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -162,8 +162,8 @@ impl FuseTable {
         blocks_referenced_by_root: &HashSet<String>,
         keep_last_snapshot: bool,
     ) -> Result<()> {
-        let segments =
-            read_segments(self.operator.clone(), ctx.clone(), segments_to_be_deleted).await?;
+        let fuse_segments = FuseSegmentIO::create(ctx.clone(), self.operator.clone());
+        let segments = fuse_segments.read_segments(segments_to_be_deleted).await?;
 
         let mut blocks_need_to_delete = HashSet::new();
         let mut blooms_need_to_delete = HashSet::new();
@@ -232,7 +232,8 @@ impl FuseTable {
     ) -> Result<HashSet<String>> {
         let mut result = HashSet::new();
 
-        let segments = read_segments(self.operator.clone(), ctx, segment_locations).await?;
+        let fuse_segments = FuseSegmentIO::create(ctx.clone(), self.operator.clone());
+        let segments = fuse_segments.read_segments(segment_locations).await?;
         for (idx, segment) in segments.iter().enumerate() {
             let segment = segment.clone();
             let segment_info = match segment {

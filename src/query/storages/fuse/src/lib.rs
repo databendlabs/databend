@@ -39,6 +39,7 @@ pub use constants::*;
 pub use fuse_file::FuseFile;
 pub use fuse_part::ColumnLeaf;
 pub use fuse_part::ColumnLeaves;
+pub use fuse_segment::FuseSegmentIO;
 pub use fuse_table::FuseTable;
 pub use table_option_keys::*;
 
