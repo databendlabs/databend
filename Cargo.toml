@@ -64,6 +64,7 @@ members = [
     "src/meta/embedded",
     "src/meta/raft-store",
     "src/meta/sled-store",
+    "src/meta/stoerr",
     "src/meta/store",
     "src/meta/types",
     # meta proto

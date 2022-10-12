@@ -1718,6 +1718,7 @@ dependencies = [
  "common-meta-api",
  "common-meta-raft-store",
  "common-meta-sled-store",
+ "common-meta-stoerr",
  "common-meta-types",
  "once_cell",
  "tempfile",
@@ -1735,6 +1736,7 @@ dependencies = [
  "common-grpc",
  "common-meta-api",
  "common-meta-sled-store",
+ "common-meta-stoerr",
  "common-meta-types",
  "common-tracing",
  "derive_more",
@@ -1756,6 +1758,7 @@ dependencies = [
  "byteorder",
  "common-base",
  "common-exception",
+ "common-meta-stoerr",
  "common-meta-types",
  "common-tracing",
  "once_cell",
@@ -1765,6 +1768,19 @@ dependencies = [
  "sled",
  "tempfile",
  "tracing",
+]
+
+[[package]]
+name = "common-meta-stoerr"
+version = "0.1.0"
+dependencies = [
+ "anyerror",
+ "common-exception",
+ "prost",
+ "serde",
+ "serde_json",
+ "sled",
+ "thiserror",
 ]
 
 [[package]]
@@ -1789,6 +1805,7 @@ dependencies = [
  "chrono",
  "common-building",
  "common-exception",
+ "common-meta-stoerr",
  "common-storage",
  "derive_more",
  "enumflags2",
@@ -2613,6 +2630,7 @@ dependencies = [
  "common-meta-embedded",
  "common-meta-raft-store",
  "common-meta-sled-store",
+ "common-meta-stoerr",
  "common-meta-store",
  "common-meta-types",
  "common-metrics",
@@ -2651,6 +2669,7 @@ dependencies = [
  "common-meta-client",
  "common-meta-raft-store",
  "common-meta-sled-store",
+ "common-meta-stoerr",
  "common-meta-types",
  "common-metrics",
  "common-tracing",
