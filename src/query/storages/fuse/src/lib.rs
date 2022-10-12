@@ -36,6 +36,7 @@ pub use common_catalog::table_context::TableContext;
 use common_catalog::table_mutator::TableMutator;
 use common_storages_util::table_option_keys;
 pub use constants::*;
+pub use fuse_file::FuseFile;
 pub use fuse_part::ColumnLeaf;
 pub use fuse_part::ColumnLeaves;
 pub use fuse_table::FuseTable;

@@ -23,9 +23,9 @@ use common_fuse_meta::meta::SnapshotId;
 use tracing::info;
 use tracing::warn;
 
-use crate::fuse_file::remove_file_in_batch;
 use crate::fuse_segment::read_segments;
 use crate::fuse_snapshot::read_snapshot_lites;
+use crate::FuseFile;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -106,7 +106,7 @@ impl FuseTable {
             let segments_to_be_delete_vec = Vec::from_iter(segments_to_be_deleted);
             for (idx, chunk) in segments_to_be_delete_vec.chunks(chunk_size).enumerate() {
                 info!(
-                    "[Chunk: {}] Start purge blocks, chunk size:{}",
+                    "[Chunk: {}] start to purge blocks, chunk size:{}",
                     idx, chunk_size
                 );
                 self.try_purge_blocks(
@@ -116,7 +116,7 @@ impl FuseTable {
                     keep_last_snapshot,
                 )
                 .await?;
-                info!("[Chunk: {}] Finish purge blocks", idx);
+                info!("[Chunk: {}] finish to purge blocks", idx);
             }
         }
 
@@ -125,12 +125,12 @@ impl FuseTable {
             let snapshots_to_be_delete_vec = Vec::from_iter(snapshots_to_be_deleted);
             for (idx, chunk) in snapshots_to_be_delete_vec.chunks(chunk_size).enumerate() {
                 info!(
-                    "[Chunk: {}] Start purge snapshot, chunk size:{}",
+                    "[Chunk: {}] start to purge snapshot, chunk size:{}",
                     idx,
                     chunk.len()
                 );
                 self.try_purge_snapshots(ctx.clone(), chunk).await?;
-                info!("[Chunk: {}] Finish purge snapshots", idx);
+                info!("[Chunk: {}] finish to purge snapshots", idx);
             }
         }
 
@@ -148,18 +148,22 @@ impl FuseTable {
             let loc = location_gen.snapshot_location_from_uuid(id, *ver)?;
             locations.push(loc);
         }
-        remove_file_in_batch(ctx, &locations, self.operator.clone()).await
+        let fuse_file = FuseFile::create(ctx, self.operator.clone());
+        fuse_file.remove_file_in_batch(&locations).await
     }
 
+    // Purge block/index/segment files:
+    // 1. Purge the blocks in the segments
+    // 2. Purge the segments when blocks purge successes
     async fn try_purge_blocks(
         &self,
         ctx: Arc<dyn TableContext>,
-        segments_need_to_delete: &[Location],
+        segments_to_be_deleted: &[Location],
         blocks_referenced_by_root: &HashSet<String>,
         keep_last_snapshot: bool,
     ) -> Result<()> {
         let segments =
-            read_segments(self.operator.clone(), ctx.clone(), segments_need_to_delete).await?;
+            read_segments(self.operator.clone(), ctx.clone(), segments_to_be_deleted).await?;
 
         let mut blocks_need_to_delete = HashSet::new();
         let mut blooms_need_to_delete = HashSet::new();
@@ -182,27 +186,40 @@ impl FuseTable {
             }
         }
 
+        let fuse_file = FuseFile::create(ctx.clone(), self.operator.clone());
         // Try to remove block files in parallel.
         {
             let locations = Vec::from_iter(blocks_need_to_delete);
-            remove_file_in_batch(ctx.clone(), &locations, self.operator.clone()).await?;
+            info!("Prepare to purge block files, numbers:{}", locations.len());
+            fuse_file.remove_file_in_batch(&locations).await?;
+            info!("Finish to purge block files");
         }
 
         // Try to remove index files in parallel.
         {
             let locations = Vec::from_iter(blooms_need_to_delete);
-            remove_file_in_batch(ctx.clone(), &locations, self.operator.clone()).await?;
+            info!(
+                "Prepare to purge bloom index files, numbers:{}",
+                locations.len()
+            );
+            fuse_file.remove_file_in_batch(&locations).await?;
+            info!("Finish to purge bloom index files");
         }
 
         // Try to remove segment files in parallel.
         {
             let locations = Vec::from_iter(
-                segments_need_to_delete
+                segments_to_be_deleted
                     .iter()
                     .map(|x| x.0.clone())
                     .collect::<Vec<String>>(),
             );
-            remove_file_in_batch(ctx.clone(), &locations, self.operator.clone()).await?;
+            info!(
+                "Prepare to purge segment files, numbers:{}",
+                locations.len()
+            );
+            fuse_file.remove_file_in_batch(&locations).await?;
+            info!("Finish to purge segment files");
         }
 
         Ok(())

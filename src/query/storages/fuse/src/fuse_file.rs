@@ -24,64 +24,72 @@ use opendal::Operator;
 use tracing::warn;
 use tracing::Instrument;
 
-#[tracing::instrument(level = "debug", skip_all)]
-pub async fn remove_file_in_batch(
+pub struct FuseFile {
     ctx: Arc<dyn TableContext>,
-    file_locations: &[String],
-    data_accessor: Operator,
-) -> Result<()> {
-    let max_runtime_threads = ctx.get_settings().get_max_threads()? as usize;
-    let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
-
-    // 1.1 combine all the tasks.
-    let mut iter = file_locations.iter();
-    let tasks = std::iter::from_fn(move || {
-        if let Some(location) = iter.next() {
-            let location = location.clone();
-            Some(
-                remove_file(data_accessor.clone(), location)
-                    .instrument(tracing::debug_span!("remove_file")),
-            )
-        } else {
-            None
-        }
-    });
-
-    // 1.2 build the runtime.
-    let semaphore = Arc::new(Semaphore::new(max_io_requests));
-    let segments_runtime = Arc::new(Runtime::with_worker_threads(
-        max_runtime_threads,
-        Some("fuse-req-remove-files-worker".to_owned()),
-    )?);
-
-    // 1.3 spawn all the tasks to the runtime.
-    let join_handlers = segments_runtime
-        .try_spawn_batch(semaphore.clone(), tasks)
-        .await?;
-
-    // 1.4 get all the result.
-    future::try_join_all(join_handlers)
-        .await
-        .map_err(|e| ErrorCode::StorageOther(format!("remove files in batch failure, {}", e)))?;
-    Ok(())
+    operator: Operator,
 }
 
-async fn remove_file(data_accessor: Operator, block_location: impl AsRef<str>) -> Result<()> {
-    match do_remove_file_by_location(&data_accessor, block_location.as_ref()).await {
-        Err(e) if e.code() == ErrorCode::storage_not_found_code() => {
-            warn!(
-                "concurrent remove: file of location {} already removed",
-                block_location.as_ref()
-            );
-            Ok(())
-        }
-        Err(e) => Err(e),
-        Ok(_) => Ok(()),
+impl FuseFile {
+    pub fn create(ctx: Arc<dyn TableContext>, operator: Operator) -> Self {
+        Self { ctx, operator }
     }
-}
 
-// make type checker happy
-#[inline]
-async fn do_remove_file_by_location(data_accessor: &Operator, location: &str) -> Result<()> {
-    Ok(data_accessor.object(location.as_ref()).delete().await?)
+    #[tracing::instrument(level = "debug", skip_all)]
+    pub async fn remove_file_in_batch(&self, file_locations: &[String]) -> Result<()> {
+        let ctx = self.ctx.clone();
+        let max_runtime_threads = ctx.get_settings().get_max_threads()? as usize;
+        let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
+
+        // 1.1 combine all the tasks.
+        let mut iter = file_locations.iter();
+        let tasks = std::iter::from_fn(move || {
+            if let Some(location) = iter.next() {
+                let location = location.clone();
+                Some(
+                    Self::remove_file(self.operator.clone(), location)
+                        .instrument(tracing::debug_span!("remove_file")),
+                )
+            } else {
+                None
+            }
+        });
+
+        // 1.2 build the runtime.
+        let semaphore = Arc::new(Semaphore::new(max_io_requests));
+        let segments_runtime = Arc::new(Runtime::with_worker_threads(
+            max_runtime_threads,
+            Some("fuse-req-remove-files-worker".to_owned()),
+        )?);
+
+        // 1.3 spawn all the tasks to the runtime.
+        let join_handlers = segments_runtime
+            .try_spawn_batch(semaphore.clone(), tasks)
+            .await?;
+
+        // 1.4 get all the result.
+        future::try_join_all(join_handlers).await.map_err(|e| {
+            ErrorCode::StorageOther(format!("remove files in batch failure, {}", e))
+        })?;
+        Ok(())
+    }
+
+    async fn remove_file(opeartor: Operator, block_location: impl AsRef<str>) -> Result<()> {
+        match Self::do_remove_file_by_location(opeartor, block_location.as_ref()).await {
+            Err(e) if e.code() == ErrorCode::storage_not_found_code() => {
+                warn!(
+                    "concurrent remove: file of location {} already removed",
+                    block_location.as_ref()
+                );
+                Ok(())
+            }
+            Err(e) => Err(e),
+            Ok(_) => Ok(()),
+        }
+    }
+
+    // make type checker happy
+    #[inline]
+    async fn do_remove_file_by_location(operator: Operator, location: &str) -> Result<()> {
+        Ok(operator.object(location.as_ref()).delete().await?)
+    }
 }
