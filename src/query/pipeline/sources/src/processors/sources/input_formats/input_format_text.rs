@@ -137,6 +137,7 @@ impl<T: InputFormatTextBase> InputFormat for InputFormatText<T> {
                     seq_in_file: 0,
                     offset: 0,
                     size, // dummy
+                    num_file_splits: 1,
                     format_info: None,
                 }));
             } else {
@@ -148,12 +149,14 @@ impl<T: InputFormatTextBase> InputFormat for InputFormatText<T> {
                     num_splits: split_offsets.len(),
                     compress_alg,
                 });
+                let num_file_splits = split_offsets.len();
                 for (i, (offset, size)) in split_offsets.into_iter().enumerate() {
                     infos.push(Arc::new(SplitInfo {
                         file: file.clone(),
                         seq_in_file: i,
                         offset,
                         size,
+                        num_file_splits,
                         format_info: None,
                     }));
                 }

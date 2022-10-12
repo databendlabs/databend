@@ -37,6 +37,7 @@ pub struct SplitInfo {
     pub seq_in_file: usize,
     pub offset: usize,
     pub size: usize,
+    pub num_file_splits: usize,
     pub format_info: Option<Arc<dyn DynData>>,
 }
 
@@ -82,6 +83,7 @@ impl SplitInfo {
             seq_in_file: 0,
             offset: 0,
             size: 0,
+            num_file_splits: 1,
             format_info: None,
         }
     }
