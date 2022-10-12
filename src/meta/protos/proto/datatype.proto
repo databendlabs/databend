@@ -61,10 +61,9 @@ message Timestamp {
   uint64 ver = 100;
   uint64 min_compatible = 101;
 
-  /// The time resolution is determined by the precision parameter, range from 0
-  /// to 9 Typically are used - 0 (seconds) 3 (milliseconds), 6 (microseconds),
-  /// 9 (nanoseconds).
-  uint64 precision = 1;
+  /// It's deprecated
+  /// uint64 precision = 1;
+  reserved 1;
 }
 
 // Struct is similar to a `map` with fixed keys.

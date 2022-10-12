@@ -62,12 +62,12 @@ impl<'a> FuseSnapshot<'a> {
         let mut snapshot_locations: Vec<Vec<u8>> = Vec::with_capacity(len);
         let mut prev_snapshot_ids: Vec<Option<Vec<u8>>> = Vec::with_capacity(len);
         let mut format_versions: Vec<u64> = Vec::with_capacity(len);
-        let mut segment_count: Vec<u32> = Vec::with_capacity(len);
-        let mut block_count: Vec<u32> = Vec::with_capacity(len);
-        let mut row_count: Vec<u32> = Vec::with_capacity(len);
-        let mut compressed: Vec<u32> = Vec::with_capacity(len);
-        let mut uncompressed: Vec<u32> = Vec::with_capacity(len);
-        let mut index_size: Vec<u32> = Vec::with_capacity(len);
+        let mut segment_count: Vec<u64> = Vec::with_capacity(len);
+        let mut block_count: Vec<u64> = Vec::with_capacity(len);
+        let mut row_count: Vec<u64> = Vec::with_capacity(len);
+        let mut compressed: Vec<u64> = Vec::with_capacity(len);
+        let mut uncompressed: Vec<u64> = Vec::with_capacity(len);
+        let mut index_size: Vec<u64> = Vec::with_capacity(len);
         let mut timestamps: Vec<Option<i64>> = Vec::with_capacity(len);
         let mut current_snapshot_version = latest_snapshot_version;
         for s in snapshots {
@@ -114,13 +114,13 @@ impl<'a> FuseSnapshot<'a> {
             DataField::new("snapshot_location", Vu8::to_data_type()),
             DataField::new("format_version", u64::to_data_type()),
             DataField::new_nullable("previous_snapshot_id", Vu8::to_data_type()),
-            DataField::new("segment_count", u32::to_data_type()),
-            DataField::new("block_count", u32::to_data_type()),
-            DataField::new("row_count", u32::to_data_type()),
-            DataField::new("bytes_uncompressed", u32::to_data_type()),
-            DataField::new("bytes_compressed", u32::to_data_type()),
-            DataField::new("index_size", u32::to_data_type()),
-            DataField::new_nullable("timestamp", TimestampType::new_impl(6)),
+            DataField::new("segment_count", u64::to_data_type()),
+            DataField::new("block_count", u64::to_data_type()),
+            DataField::new("row_count", u64::to_data_type()),
+            DataField::new("bytes_uncompressed", u64::to_data_type()),
+            DataField::new("bytes_compressed", u64::to_data_type()),
+            DataField::new("index_size", u64::to_data_type()),
+            DataField::new_nullable("timestamp", TimestampType::new_impl()),
         ])
     }
 }
