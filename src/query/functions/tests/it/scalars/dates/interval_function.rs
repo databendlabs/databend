@@ -164,7 +164,7 @@ fn test_add_subtract_seconds() -> Result<()> {
     ]);
 
     let blocks = DataBlock::create(schema.clone(), vec![
-        Series::from_data(vec![dt_to_seconds("2020-02-29T23:59:59Z")]),
+        Series::from_data(vec![dt_to_seconds("2020-02-29T23:59:59Z") * 1e6 as i64]),
         Series::from_data(vec![1_u8]),
         Series::from_data(vec![1_u16]),
         Series::from_data(vec![1_u32]),
@@ -215,7 +215,7 @@ fn test_add_subtract_seconds() -> Result<()> {
             )?;
             assert_eq!(col.len(), 1);
             assert_eq!(col.data_type().data_type_id(), TypeID::Int64);
-            expects.push(col.get_i64(0)?);
+            expects.push(col.get_i64(0)? / 1e6 as i64);
         }
         assert_eq!(expects, vec![
             dt_to_seconds("2020-03-01T00:00:00Z"),
@@ -246,7 +246,7 @@ fn test_add_subtract_seconds() -> Result<()> {
             )?;
             assert_eq!(col.len(), 1);
             assert_eq!(col.data_type().data_type_id(), TypeID::Int64);
-            expects.push(col.get_i64(0)?);
+            expects.push(col.get_i64(0)? / 1e6 as i64);
         }
         assert_eq!(expects, vec![
             dt_to_seconds("2020-02-29T23:59:58Z"),

@@ -48,11 +48,15 @@ pub fn check_timestamp(micros: i64) -> Result<()> {
 
 /// Timestamp type only stores UTC time in microseconds
 #[derive(Default, Clone, Hash, serde::Deserialize, serde::Serialize)]
-pub struct TimestampType;
+pub struct TimestampType {
+    // Deprecated, used as a placeholder for backward compatibility
+    #[serde(skip)]
+    precision: usize,
+}
 
 impl TimestampType {
     pub fn new_impl() -> DataTypeImpl {
-        DataTypeImpl::Timestamp(TimestampType)
+        DataTypeImpl::Timestamp(TimestampType { precision: 0 })
     }
 
     #[inline]
@@ -81,7 +85,7 @@ impl DataType for TimestampType {
     }
 
     fn name(&self) -> String {
-        format!("Timestamp")
+        "Timestamp".to_string()
     }
 
     fn aliases(&self) -> &[&str] {

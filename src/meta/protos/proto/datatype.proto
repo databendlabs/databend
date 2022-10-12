@@ -62,6 +62,7 @@ message Timestamp {
   uint64 min_compatible = 101;
 
   /// It's deprecated
+  /// uint64 precision = 1;
   reserved 1;
 }
 

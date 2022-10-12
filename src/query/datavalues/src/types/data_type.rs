@@ -188,7 +188,7 @@ pub fn from_arrow_type(dt: &ArrowType) -> DataTypeImpl {
             DataTypeImpl::String(StringType::default())
         }
 
-        ArrowType::Timestamp(_, _) => DataTypeImpl::Timestamp(TimestampType),
+        ArrowType::Timestamp(_, _) => TimestampType::new_impl(),
 
         ArrowType::Date32 | ArrowType::Date64 => DataTypeImpl::Date(DateType::default()),
 

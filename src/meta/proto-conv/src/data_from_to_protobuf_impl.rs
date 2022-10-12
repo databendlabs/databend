@@ -359,7 +359,7 @@ impl FromToProto for dv::TimestampType {
     fn from_pb(p: pb::Timestamp) -> Result<Self, Incompatible>
     where Self: Sized {
         check_ver(p.ver, p.min_compatible)?;
-        Ok(dv::TimestampType)
+        Ok(dv::TimestampType::default())
     }
 
     fn to_pb(&self) -> Result<pb::Timestamp, Incompatible> {
