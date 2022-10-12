@@ -2,14 +2,14 @@ error:
   --> SQL:1:1
   |
 1 | to_timestamp(-30610224000000001)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `0999-12-31 23:59:59.999999` is out of range
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `-30610224000000001` is out of range
 
 
 
 ast            : to_timestamp(-315360000000000)
 raw expr       : to_timestamp(minus(315360000000000_u64))
 checked expr   : to_timestamp<Int64>(minus<UInt64>(315360000000000_u64))
-optimized expr : Timestamp { ts: -315360000000000, precision: 6 }
+optimized expr : -315360000000000
 output type    : Timestamp
 output domain  : {-315360000000000..=-315360000000000}
 output         : 1960-01-04 00:00:00.000000
@@ -18,7 +18,7 @@ output         : 1960-01-04 00:00:00.000000
 ast            : to_timestamp(-315360000000)
 raw expr       : to_timestamp(minus(315360000000_u64))
 checked expr   : to_timestamp<Int64>(minus<UInt64>(315360000000_u64))
-optimized expr : Timestamp { ts: -315360000000000, precision: 6 }
+optimized expr : -315360000000000
 output type    : Timestamp
 output domain  : {-315360000000000..=-315360000000000}
 output         : 1960-01-04 00:00:00.000000
@@ -27,7 +27,7 @@ output         : 1960-01-04 00:00:00.000000
 ast            : to_timestamp(-100)
 raw expr       : to_timestamp(minus(100_u8))
 checked expr   : to_timestamp<Int64>(CAST(minus<UInt8>(100_u8) AS Int64))
-optimized expr : Timestamp { ts: -100000000, precision: 6 }
+optimized expr : -100000000
 output type    : Timestamp
 output domain  : {-100000000..=-100000000}
 output         : 1969-12-31 23:58:20.000000
@@ -36,7 +36,7 @@ output         : 1969-12-31 23:58:20.000000
 ast            : to_timestamp(-0)
 raw expr       : to_timestamp(minus(0_u8))
 checked expr   : to_timestamp<Int64>(CAST(minus<UInt8>(0_u8) AS Int64))
-optimized expr : Timestamp { ts: 0, precision: 6 }
+optimized expr : 0
 output type    : Timestamp
 output domain  : {0..=0}
 output         : 1970-01-01 00:00:00.000000
@@ -45,7 +45,7 @@ output         : 1970-01-01 00:00:00.000000
 ast            : to_timestamp(0)
 raw expr       : to_timestamp(0_u8)
 checked expr   : to_timestamp<Int64>(CAST(0_u8 AS Int64))
-optimized expr : Timestamp { ts: 0, precision: 6 }
+optimized expr : 0
 output type    : Timestamp
 output domain  : {0..=0}
 output         : 1970-01-01 00:00:00.000000
@@ -54,7 +54,7 @@ output         : 1970-01-01 00:00:00.000000
 ast            : to_timestamp(100)
 raw expr       : to_timestamp(100_u8)
 checked expr   : to_timestamp<Int64>(CAST(100_u8 AS Int64))
-optimized expr : Timestamp { ts: 100000000, precision: 6 }
+optimized expr : 100000000
 output type    : Timestamp
 output domain  : {100000000..=100000000}
 output         : 1970-01-01 00:01:40.000000
@@ -63,7 +63,7 @@ output         : 1970-01-01 00:01:40.000000
 ast            : to_timestamp(315360000000)
 raw expr       : to_timestamp(315360000000_u64)
 checked expr   : to_timestamp<Int64>(CAST(315360000000_u64 AS Int64))
-optimized expr : Timestamp { ts: 315360000000000, precision: 6 }
+optimized expr : 315360000000000
 output type    : Timestamp
 output domain  : {315360000000000..=315360000000000}
 output         : 1979-12-30 00:00:00.000000
@@ -72,7 +72,7 @@ output         : 1979-12-30 00:00:00.000000
 ast            : to_timestamp(315360000000000)
 raw expr       : to_timestamp(315360000000000_u64)
 checked expr   : to_timestamp<Int64>(CAST(315360000000000_u64 AS Int64))
-optimized expr : Timestamp { ts: 315360000000000, precision: 6 }
+optimized expr : 315360000000000
 output type    : Timestamp
 output domain  : {315360000000000..=315360000000000}
 output         : 1979-12-30 00:00:00.000000
@@ -82,7 +82,7 @@ error:
   --> SQL:1:1
   |
 1 | to_timestamp(253402300800000000)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `+10000-01-01 00:00:00.000000` is out of range
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `253402300800000000` is out of range
 
 
 
@@ -104,26 +104,26 @@ evaluation:
 | Row 6  | 315360000000000                      | 1979-12-30 00:00:00.000000           |
 +--------+--------------------------------------+--------------------------------------+
 evaluation (internal):
-+--------+---------------------------------------------------------------------------------------------------------------------------------------+
-| Column | Data                                                                                                                                  |
-+--------+---------------------------------------------------------------------------------------------------------------------------------------+
-| a      | Int64([-315360000000000, 315360000000, -100, 0, 100, 315360000000, 315360000000000])                                                  |
-| Output | TimestampColumn { ts: [-315360000000000, 315360000000000, -100000000, 0, 100000000, 315360000000000, 315360000000000], precision: 6 } |
-+--------+---------------------------------------------------------------------------------------------------------------------------------------+
++--------+-------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                            |
++--------+-------------------------------------------------------------------------------------------------+
+| a      | Int64([-315360000000000, 315360000000, -100, 0, 100, 315360000000, 315360000000000])            |
+| Output | [-315360000000000, 315360000000000, -100000000, 0, 100000000, 315360000000000, 315360000000000] |
++--------+-------------------------------------------------------------------------------------------------+
 
 
 error: 
   --> SQL:1:1
   |
 1 | to_datetime(-30610224000000001)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `0999-12-31 23:59:59.999999` is out of range
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `-30610224000000001` is out of range
 
 
 
 ast            : to_datetime(-315360000000000)
 raw expr       : to_datetime(minus(315360000000000_u64))
 checked expr   : to_timestamp<Int64>(minus<UInt64>(315360000000000_u64))
-optimized expr : Timestamp { ts: -315360000000000, precision: 6 }
+optimized expr : -315360000000000
 output type    : Timestamp
 output domain  : {-315360000000000..=-315360000000000}
 output         : 1960-01-04 00:00:00.000000
@@ -132,7 +132,7 @@ output         : 1960-01-04 00:00:00.000000
 ast            : to_datetime(-315360000000)
 raw expr       : to_datetime(minus(315360000000_u64))
 checked expr   : to_timestamp<Int64>(minus<UInt64>(315360000000_u64))
-optimized expr : Timestamp { ts: -315360000000000, precision: 6 }
+optimized expr : -315360000000000
 output type    : Timestamp
 output domain  : {-315360000000000..=-315360000000000}
 output         : 1960-01-04 00:00:00.000000
@@ -141,7 +141,7 @@ output         : 1960-01-04 00:00:00.000000
 ast            : to_datetime(-100)
 raw expr       : to_datetime(minus(100_u8))
 checked expr   : to_timestamp<Int64>(CAST(minus<UInt8>(100_u8) AS Int64))
-optimized expr : Timestamp { ts: -100000000, precision: 6 }
+optimized expr : -100000000
 output type    : Timestamp
 output domain  : {-100000000..=-100000000}
 output         : 1969-12-31 23:58:20.000000
@@ -150,7 +150,7 @@ output         : 1969-12-31 23:58:20.000000
 ast            : to_datetime(-0)
 raw expr       : to_datetime(minus(0_u8))
 checked expr   : to_timestamp<Int64>(CAST(minus<UInt8>(0_u8) AS Int64))
-optimized expr : Timestamp { ts: 0, precision: 6 }
+optimized expr : 0
 output type    : Timestamp
 output domain  : {0..=0}
 output         : 1970-01-01 00:00:00.000000
@@ -159,7 +159,7 @@ output         : 1970-01-01 00:00:00.000000
 ast            : to_datetime(0)
 raw expr       : to_datetime(0_u8)
 checked expr   : to_timestamp<Int64>(CAST(0_u8 AS Int64))
-optimized expr : Timestamp { ts: 0, precision: 6 }
+optimized expr : 0
 output type    : Timestamp
 output domain  : {0..=0}
 output         : 1970-01-01 00:00:00.000000
@@ -168,7 +168,7 @@ output         : 1970-01-01 00:00:00.000000
 ast            : to_datetime(100)
 raw expr       : to_datetime(100_u8)
 checked expr   : to_timestamp<Int64>(CAST(100_u8 AS Int64))
-optimized expr : Timestamp { ts: 100000000, precision: 6 }
+optimized expr : 100000000
 output type    : Timestamp
 output domain  : {100000000..=100000000}
 output         : 1970-01-01 00:01:40.000000
@@ -177,7 +177,7 @@ output         : 1970-01-01 00:01:40.000000
 ast            : to_datetime(315360000000)
 raw expr       : to_datetime(315360000000_u64)
 checked expr   : to_timestamp<Int64>(CAST(315360000000_u64 AS Int64))
-optimized expr : Timestamp { ts: 315360000000000, precision: 6 }
+optimized expr : 315360000000000
 output type    : Timestamp
 output domain  : {315360000000000..=315360000000000}
 output         : 1979-12-30 00:00:00.000000
@@ -186,7 +186,7 @@ output         : 1979-12-30 00:00:00.000000
 ast            : to_datetime(315360000000000)
 raw expr       : to_datetime(315360000000000_u64)
 checked expr   : to_timestamp<Int64>(CAST(315360000000000_u64 AS Int64))
-optimized expr : Timestamp { ts: 315360000000000, precision: 6 }
+optimized expr : 315360000000000
 output type    : Timestamp
 output domain  : {315360000000000..=315360000000000}
 output         : 1979-12-30 00:00:00.000000
@@ -196,7 +196,7 @@ error:
   --> SQL:1:1
   |
 1 | to_datetime(253402300800000000)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `+10000-01-01 00:00:00.000000` is out of range
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `253402300800000000` is out of range
 
 
 
@@ -218,12 +218,12 @@ evaluation:
 | Row 6  | 315360000000000                      | 1979-12-30 00:00:00.000000           |
 +--------+--------------------------------------+--------------------------------------+
 evaluation (internal):
-+--------+---------------------------------------------------------------------------------------------------------------------------------------+
-| Column | Data                                                                                                                                  |
-+--------+---------------------------------------------------------------------------------------------------------------------------------------+
-| a      | Int64([-315360000000000, 315360000000, -100, 0, 100, 315360000000, 315360000000000])                                                  |
-| Output | TimestampColumn { ts: [-315360000000000, 315360000000000, -100000000, 0, 100000000, 315360000000000, 315360000000000], precision: 6 } |
-+--------+---------------------------------------------------------------------------------------------------------------------------------------+
++--------+-------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                            |
++--------+-------------------------------------------------------------------------------------------------+
+| a      | Int64([-315360000000000, 315360000000, -100, 0, 100, 315360000000, 315360000000000])            |
+| Output | [-315360000000000, 315360000000000, -100000000, 0, 100000000, 315360000000000, 315360000000000] |
++--------+-------------------------------------------------------------------------------------------------+
 
 
 error: 

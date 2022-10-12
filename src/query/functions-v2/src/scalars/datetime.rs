@@ -22,11 +22,9 @@ use common_expression::types::nullable::NullableDomain;
 use common_expression::types::number::Int64Type;
 use common_expression::types::number::SimpleDomain;
 use common_expression::types::timestamp::check_timestamp;
+use common_expression::types::timestamp::microseconds_to_days;
 use common_expression::types::timestamp::string_to_timestamp;
-use common_expression::types::timestamp::Timestamp;
-use common_expression::types::timestamp::TimestampDomain;
 use common_expression::types::timestamp::MICROS_IN_A_SEC;
-use common_expression::types::timestamp::PRECISION_MICRO;
 use common_expression::types::DateType;
 use common_expression::types::NullableType;
 use common_expression::types::StringType;
@@ -37,9 +35,9 @@ use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use num_traits::AsPrimitive;
 
-fn simple_domain_to_timestamp_domain<T: AsPrimitive<i64>>(
+fn number_domain_to_timestamp_domain<T: AsPrimitive<i64>>(
     domain: &SimpleDomain<T>,
-) -> Option<TimestampDomain> {
+) -> Option<SimpleDomain<i64>> {
     let min = if let Ok(min) = check_timestamp(domain.min.as_()) {
         min
     } else {
@@ -50,11 +48,7 @@ fn simple_domain_to_timestamp_domain<T: AsPrimitive<i64>>(
     } else {
         return None;
     };
-    Some(TimestampDomain {
-        min: min.ts,
-        max: max.ts,
-        precision: u8::max(min.precision, max.precision),
-    })
+    Some(SimpleDomain { min, max })
 }
 
 pub fn register(registry: &mut FunctionRegistry) {
@@ -69,18 +63,14 @@ fn register_cast_functions(registry: &mut FunctionRegistry) {
         "to_timestamp",
         FunctionProperty::default(),
         |domain| {
-            Some(TimestampDomain {
+            Some(SimpleDomain {
                 min: domain.min as i64 * 24 * 3600 * 1000000,
                 max: domain.max as i64 * 24 * 3600 * 1000000,
-                precision: PRECISION_MICRO,
             })
         },
         vectorize_with_builder_1_arg::<DateType, TimestampType>(|val, output, _| {
             let ts = (val as i64) * 24 * 3600 * MICROS_IN_A_SEC;
-            output.push(Timestamp {
-                precision: PRECISION_MICRO,
-                ts,
-            });
+            output.push(ts);
             Ok(())
         }),
     );
@@ -88,7 +78,7 @@ fn register_cast_functions(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<Int64Type, TimestampType, _, _>(
         "to_timestamp",
         FunctionProperty::default(),
-        |domain| simple_domain_to_timestamp_domain(domain),
+        |domain| number_domain_to_timestamp_domain(domain),
         vectorize_with_builder_1_arg::<Int64Type, TimestampType>(|val, output, _| {
             output.push(check_timestamp(val)?);
             Ok(())
@@ -106,10 +96,7 @@ fn register_cast_functions(registry: &mut FunctionRegistry) {
                     String::from_utf8_lossy(val)
                 )
             })?;
-            output.push(Timestamp {
-                ts: ts.timestamp_micros(),
-                precision: PRECISION_MICRO,
-            });
+            output.push(ts.timestamp_micros());
             Ok(())
         }),
     );
@@ -124,7 +111,7 @@ fn register_cast_functions(registry: &mut FunctionRegistry) {
             })
         },
         vectorize_with_builder_1_arg::<TimestampType, DateType>(|val, output, _| {
-            output.push(val.to_days());
+            output.push(microseconds_to_days(val));
             Ok(())
         }),
     );
@@ -167,15 +154,13 @@ fn register_try_cast_functions(registry: &mut FunctionRegistry) {
         "try_to_timestamp",
         FunctionProperty::default(),
         |domain| {
-            Some(TimestampDomain {
+            Some(SimpleDomain {
                 min: domain.min as i64 * 24 * 3600 * 1000000,
                 max: domain.max as i64 * 24 * 3600 * 1000000,
-                precision: PRECISION_MICRO,
             })
         },
-        vectorize_1_arg::<DateType, TimestampType>(|val, _| Timestamp {
-            ts: (val as i64) * 24 * 3600 * MICROS_IN_A_SEC,
-            precision: PRECISION_MICRO,
+        vectorize_1_arg::<DateType, TimestampType>(|val, _| {
+            (val as i64) * 24 * 3600 * MICROS_IN_A_SEC
         }),
     );
 
@@ -184,7 +169,7 @@ fn register_try_cast_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |domain| {
             let val = if let Some(number_domain) = &domain.value {
-                simple_domain_to_timestamp_domain(number_domain).map(Box::new)
+                number_domain_to_timestamp_domain(number_domain).map(Box::new)
             } else {
                 None
             };
@@ -204,12 +189,7 @@ fn register_try_cast_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<NullableType<StringType>, NullableType<TimestampType>>(|val, ctx| {
-            val.and_then(|v| {
-                string_to_timestamp(v, &ctx.tz).map(|ts| Timestamp {
-                    ts: ts.timestamp_micros(),
-                    precision: PRECISION_MICRO,
-                })
-            })
+            val.and_then(|v| string_to_timestamp(v, &ctx.tz).map(|ts| ts.timestamp_micros()))
         }),
     );
 
@@ -222,7 +202,7 @@ fn register_try_cast_functions(registry: &mut FunctionRegistry) {
                 max: (domain.max / 1000000 / 24 / 3600) as i32,
             })
         },
-        vectorize_1_arg::<TimestampType, DateType>(|val, _| val.to_days()),
+        vectorize_1_arg::<TimestampType, DateType>(|val, _| microseconds_to_days(val)),
     );
 
     registry.register_1_arg_core::<NullableType<Int64Type>, NullableType<DateType>, _, _>(

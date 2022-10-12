@@ -12,20 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::Ordering;
 use std::ops::Range;
 
 use chrono::DateTime;
 use chrono_tz::Tz;
 use common_arrow::arrow::buffer::Buffer;
-use common_arrow::arrow::trusted_len::TrustedLen;
-use common_datavalues::DateConverter;
 use common_io::prelude::BufferReadDateTimeExt;
 use common_io::prelude::BufferReadExt;
 use common_io::prelude::BufferReader;
-use serde::Deserialize;
-use serde::Serialize;
 
+use super::number::SimpleDomain;
+use crate::date_converter::DateConverter;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
@@ -54,7 +51,7 @@ pub const PRECISION_SEC: u8 = 0;
 
 /// check timestamp and return precision and the base.
 #[inline]
-pub fn check_timestamp(micros: i64) -> Result<Timestamp, String> {
+pub fn check_timestamp(micros: i64) -> Result<i64, String> {
     let base = if (-31536000000..=31536000000).contains(&micros) {
         MICROS_IN_A_SEC
     } else if (-31536000000000..=31536000000000).contains(&micros) {
@@ -62,30 +59,24 @@ pub fn check_timestamp(micros: i64) -> Result<Timestamp, String> {
     } else if (TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(&micros) {
         MICROS_IN_A_MICRO
     } else {
-        return Err(format!("timestamp `{}` is out of range", Timestamp {
-            ts: micros,
-            precision: PRECISION_MICRO,
-        }));
+        return Err(format!("timestamp `{}` is out of range", micros));
     };
-    Ok(Timestamp {
-        ts: micros * base,
-        precision: PRECISION_MICRO,
-    })
+    Ok(micros * base)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TimestampType;
 
 impl ValueType for TimestampType {
-    type Scalar = Timestamp;
-    type ScalarRef<'a> = Timestamp;
-    type Column = TimestampColumn;
-    type Domain = TimestampDomain;
-    type ColumnIterator<'a> = TimestampIterator<'a>;
-    type ColumnBuilder = TimestampColumnBuilder;
+    type Scalar = i64;
+    type ScalarRef<'a> = i64;
+    type Column = Buffer<i64>;
+    type Domain = SimpleDomain<i64>;
+    type ColumnIterator<'a> = std::iter::Cloned<std::slice::Iter<'a, i64>>;
+    type ColumnBuilder = Vec<i64>;
 
     #[inline]
-    fn upcast_gat<'short, 'long: 'short>(long: Timestamp) -> Timestamp {
+    fn upcast_gat<'short, 'long: 'short>(long: i64) -> i64 {
         long
     }
 
@@ -111,17 +102,17 @@ impl ValueType for TimestampType {
         }
     }
 
+    fn try_downcast_domain(domain: &Domain) -> Option<SimpleDomain<i64>> {
+        domain.as_timestamp().map(SimpleDomain::clone)
+    }
+
     fn try_downcast_builder<'a>(
         builder: &'a mut ColumnBuilder,
     ) -> Option<&'a mut Self::ColumnBuilder> {
         match builder {
-            crate::ColumnBuilder::Timestamp(builder) => Some(builder),
+            ColumnBuilder::Timestamp(builder) => Some(builder),
             _ => None,
         }
-    }
-
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        domain.as_timestamp().map(TimestampDomain::clone)
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
@@ -132,7 +123,7 @@ impl ValueType for TimestampType {
         Column::Timestamp(col)
     }
 
-    fn upcast_domain(domain: Self::Domain) -> Domain {
+    fn upcast_domain(domain: SimpleDomain<i64>) -> Domain {
         Domain::Timestamp(domain)
     }
 
@@ -141,50 +132,51 @@ impl ValueType for TimestampType {
     }
 
     fn index_column<'a>(col: &'a Self::Column, index: usize) -> Option<Self::ScalarRef<'a>> {
-        col.index(index)
+        col.get(index).cloned()
     }
 
     unsafe fn index_column_unchecked<'a>(
         col: &'a Self::Column,
         index: usize,
     ) -> Self::ScalarRef<'a> {
-        col.index_unchecked(index)
+        *col.get_unchecked(index)
     }
 
     fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column {
-        col.slice(range)
+        col.clone().slice(range.start, range.end - range.start)
     }
 
     fn iter_column<'a>(col: &'a Self::Column) -> Self::ColumnIterator<'a> {
-        col.iter()
+        col.iter().cloned()
     }
 
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
-        TimestampColumnBuilder::from_column(col)
+        buffer_into_mut(col)
     }
 
     fn builder_len(builder: &Self::ColumnBuilder) -> usize {
         builder.len()
     }
 
-    fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
+    fn push_item(builder: &mut Self::ColumnBuilder, item: Self::Scalar) {
         builder.push(item);
     }
 
     fn push_default(builder: &mut Self::ColumnBuilder) {
-        builder.push_default();
+        builder.push(Self::Scalar::default());
     }
 
-    fn append_builder(builder: &mut Self::ColumnBuilder, other_builder: &Self::ColumnBuilder) {
-        builder.append(other_builder);
+    fn append_builder(builder: &mut Self::ColumnBuilder, other: &Self::ColumnBuilder) {
+        builder.extend_from_slice(other);
     }
 
     fn build_column(builder: Self::ColumnBuilder) -> Self::Column {
-        builder.build()
+        builder.into()
     }
 
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
-        builder.build_scalar()
+        assert_eq!(builder.len(), 1);
+        builder[0]
     }
 }
 
@@ -193,194 +185,49 @@ impl ArgType for TimestampType {
         DataType::Timestamp
     }
 
-    fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
-        TimestampColumnBuilder::with_capacity(capacity)
+    fn create_builder(capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
+        Vec::with_capacity(capacity)
+    }
+
+    fn column_from_vec(vec: Vec<Self::Scalar>, _generics: &GenericMap) -> Self::Column {
+        vec.into()
+    }
+
+    fn column_from_iter(iter: impl Iterator<Item = Self::Scalar>, _: &GenericMap) -> Self::Column {
+        iter.collect()
+    }
+
+    fn column_from_ref_iter<'a>(
+        iter: impl Iterator<Item = Self::ScalarRef<'a>>,
+        _: &GenericMap,
+    ) -> Self::Column {
+        iter.collect()
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Timestamp {
-    /// Milliseconds since UNIX epoch.
-    pub ts: i64,
-    /// Fractional digits to display.
-    pub precision: u8,
+pub fn microseconds_to_seconds(micros: i64) -> i64 {
+    micros / MICROS_IN_A_SEC
 }
 
-impl Timestamp {
-    #[inline]
-    pub fn to_seconds(&self) -> i64 {
-        self.ts / 1_000_000
-    }
-
-    #[inline]
-    pub fn to_days(&self) -> i32 {
-        (self.to_seconds() / 24 / 3600) as i32
-    }
-
-    #[inline]
-    pub fn get_format_string(&self) -> String {
-        if self.precision == 0 {
-            "%Y-%m-%d %H:%M:%S".to_string()
-        } else {
-            format!("%Y-%m-%d %H:%M:%S%.{}f", self.precision)
-        }
-    }
+pub fn microseconds_to_days(micros: i64) -> i32 {
+    (microseconds_to_seconds(micros) / 24 / 3600) as i32
 }
 
-impl PartialOrd for Timestamp {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.ts.partial_cmp(&other.ts)
+pub fn get_format_string(precision: u8) -> String {
+    assert!(matches!(
+        precision,
+        PRECISION_MICRO | PRECISION_MILLI | PRECISION_SEC
+    ));
+    if precision == 0 {
+        "%Y-%m-%d %H:%M:%S".to_string()
+    } else {
+        format!("%Y-%m-%d %H:%M:%S%.{}f", precision)
     }
-}
-
-impl Ord for Timestamp {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.ts.cmp(&other.ts)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct TimestampColumn {
-    pub ts: Buffer<i64>,
-    pub precision: u8,
-}
-
-impl TimestampColumn {
-    pub fn len(&self) -> usize {
-        self.ts.len()
-    }
-
-    pub fn index(&self, index: usize) -> Option<Timestamp> {
-        Some(Timestamp {
-            ts: self.ts.get(index).cloned()?,
-            precision: self.precision,
-        })
-    }
-
-    /// # Safety
-    ///
-    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
-    pub unsafe fn index_unchecked(&self, index: usize) -> Timestamp {
-        Timestamp {
-            ts: *self.ts.get_unchecked(index),
-            precision: self.precision,
-        }
-    }
-
-    pub fn slice(&self, range: Range<usize>) -> Self {
-        TimestampColumn {
-            ts: self.ts.clone().slice(range.start, range.end - range.start),
-            precision: self.precision,
-        }
-    }
-
-    pub fn iter(&self) -> TimestampIterator {
-        TimestampIterator {
-            ts: self.ts.iter(),
-            precision: self.precision,
-        }
-    }
-
-    pub fn to_days(&self) -> Vec<i32> {
-        self.ts
-            .iter()
-            .map(|ts| (ts / 1_000_000 / 24 / 3600) as i32)
-            .collect()
-    }
-}
-
-pub struct TimestampIterator<'a> {
-    ts: std::slice::Iter<'a, i64>,
-    precision: u8,
-}
-
-impl<'a> Iterator for TimestampIterator<'a> {
-    type Item = Timestamp;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.ts.next().cloned().map(|ts| Timestamp {
-            ts,
-            precision: self.precision,
-        })
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.ts.size_hint()
-    }
-}
-
-unsafe impl<'a> TrustedLen for TimestampIterator<'a> {}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TimestampColumnBuilder {
-    pub ts: Vec<i64>,
-    pub precision: u8,
-}
-
-impl TimestampColumnBuilder {
-    pub fn with_capacity(len: usize) -> Self {
-        let ts = Vec::with_capacity(len);
-        TimestampColumnBuilder { ts, precision: 0 }
-    }
-
-    pub fn from_column(col: TimestampColumn) -> Self {
-        TimestampColumnBuilder {
-            ts: buffer_into_mut(col.ts),
-            precision: col.precision,
-        }
-    }
-
-    pub fn repeat(scalar: Timestamp, n: usize) -> Self {
-        TimestampColumnBuilder {
-            ts: vec![scalar.ts; n],
-            precision: scalar.precision,
-        }
-    }
-
-    pub fn len(&self) -> usize {
-        self.ts.len()
-    }
-
-    pub fn push(&mut self, scalar: Timestamp) {
-        self.ts.push(scalar.ts);
-        self.precision = self.precision.max(scalar.precision);
-    }
-
-    pub fn push_default(&mut self) {
-        self.ts.push(0);
-    }
-
-    pub fn append(&mut self, other: &Self) {
-        self.ts.extend_from_slice(&other.ts);
-        self.precision = self.precision.max(other.precision);
-    }
-
-    pub fn build(self) -> TimestampColumn {
-        TimestampColumn {
-            ts: self.ts.into(),
-            precision: self.precision,
-        }
-    }
-
-    pub fn build_scalar(self) -> Timestamp {
-        assert_eq!(self.ts.len(), 1);
-        Timestamp {
-            ts: self.ts[0],
-            precision: self.precision,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TimestampDomain {
-    pub min: i64,
-    pub max: i64,
-    pub precision: u8,
 }
 
 #[inline]
-pub fn string_to_timestamp(date_str: impl AsRef<[u8]>, tz: &Tz) -> Option<DateTime<Tz>> {
-    let mut reader = BufferReader::new(std::str::from_utf8(date_str.as_ref()).unwrap().as_bytes());
+pub fn string_to_timestamp(ts_str: impl AsRef<[u8]>, tz: &Tz) -> Option<DateTime<Tz>> {
+    let mut reader = BufferReader::new(std::str::from_utf8(ts_str.as_ref()).unwrap().as_bytes());
     match reader.read_timestamp_text(tz) {
         Ok(dt) => match reader.must_eof() {
             Ok(..) => Some(dt),
@@ -391,9 +238,8 @@ pub fn string_to_timestamp(date_str: impl AsRef<[u8]>, tz: &Tz) -> Option<DateTi
 }
 
 #[inline]
-pub fn timestamp_to_string(ts: Timestamp, tz: &Tz) -> String {
-    ts.ts
-        .to_timestamp(tz)
-        .format(ts.get_format_string().as_str())
+pub fn timestamp_to_string(ts: i64, tz: &Tz) -> String {
+    ts.to_timestamp(tz)
+        .format(get_format_string(PRECISION_MICRO).as_str())
         .to_string()
 }

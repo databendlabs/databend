@@ -15,7 +15,7 @@
 use std::io::Write;
 
 use common_expression::from_date_data;
-use common_expression::types::timestamp::Timestamp;
+use common_expression::from_timestamp_data;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::Column;
@@ -140,35 +140,14 @@ fn test_cast_number_to_timestamp(file: &mut impl Write) {
     run_ast(file, "CAST(a AS INT64)", &[(
         "a",
         DataType::Timestamp,
-        Column::from_data(vec![
-            Timestamp {
-                ts: -315360000000000,
-                precision: 6,
-            },
-            Timestamp {
-                ts: -315360000000,
-                precision: 6,
-            },
-            Timestamp {
-                ts: -100,
-                precision: 6,
-            },
-            Timestamp {
-                ts: 0,
-                precision: 6,
-            },
-            Timestamp {
-                ts: 100,
-                precision: 6,
-            },
-            Timestamp {
-                ts: 315360000000,
-                precision: 6,
-            },
-            Timestamp {
-                ts: 315360000000000,
-                precision: 6,
-            },
+        from_timestamp_data(vec![
+            -315360000000000,
+            -315360000000,
+            -100,
+            0,
+            100,
+            315360000000,
+            315360000000000,
         ]),
     )]);
 }
@@ -215,35 +194,14 @@ fn test_cast_between_date_and_timestamp(file: &mut impl Write) {
     run_ast(file, "CAST(a AS DATE)", &[(
         "a",
         DataType::Timestamp,
-        Column::from_data(vec![
-            Timestamp {
-                ts: -315360000000000,
-                precision: 6,
-            },
-            Timestamp {
-                ts: 315360000000,
-                precision: 6,
-            },
-            Timestamp {
-                ts: -100,
-                precision: 6,
-            },
-            Timestamp {
-                ts: 0,
-                precision: 6,
-            },
-            Timestamp {
-                ts: 100,
-                precision: 6,
-            },
-            Timestamp {
-                ts: 315360000000,
-                precision: 6,
-            },
-            Timestamp {
-                ts: 315360000000000,
-                precision: 6,
-            },
+        from_timestamp_data(vec![
+            -315360000000000,
+            -315360000000,
+            -100,
+            0,
+            100,
+            315360000000,
+            315360000000000,
         ]),
     )]);
     run_ast(file, "CAST(a AS TIMESTAMP)", &[(
@@ -307,35 +265,14 @@ fn test_cast_between_string_and_timestamp(file: &mut impl Write) {
     run_ast(file, "CAST(a AS VARCHAR)", &[(
         "a",
         DataType::Timestamp,
-        Column::from_data(vec![
-            Timestamp {
-                ts: -315360000000000,
-                precision: 6,
-            },
-            Timestamp {
-                ts: 315360000000,
-                precision: 6,
-            },
-            Timestamp {
-                ts: -100,
-                precision: 6,
-            },
-            Timestamp {
-                ts: 0,
-                precision: 6,
-            },
-            Timestamp {
-                ts: 100,
-                precision: 6,
-            },
-            Timestamp {
-                ts: 315360000000,
-                precision: 6,
-            },
-            Timestamp {
-                ts: 315360000000000,
-                precision: 6,
-            },
+        from_timestamp_data(vec![
+            -315360000000000,
+            -315360000000,
+            -100,
+            0,
+            100,
+            315360000000,
+            315360000000000,
         ]),
     )]);
 }

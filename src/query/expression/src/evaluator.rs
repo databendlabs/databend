@@ -39,10 +39,6 @@ use crate::types::number::NumberScalar;
 use crate::types::number::SimpleDomain;
 use crate::types::string::StringColumnBuilder;
 use crate::types::timestamp::timestamp_to_string;
-use crate::types::timestamp::Timestamp;
-use crate::types::timestamp::TimestampColumn;
-use crate::types::timestamp::TimestampDomain;
-use crate::types::timestamp::PRECISION_MICRO;
 use crate::types::variant::cast_scalar_to_variant;
 use crate::types::variant::cast_scalars_to_variants;
 use crate::types::DataType;
@@ -212,7 +208,7 @@ impl<'a> Evaluator<'a> {
                 Ok(Scalar::Number(new_number))
             }
 
-            (Scalar::Timestamp(Timestamp { ts: value, .. }), DataType::Number(dest_ty)) => {
+            (Scalar::Timestamp(value), DataType::Number(dest_ty)) => {
                 let new_number = with_number_type!(|DEST_TYPE| match dest_ty {
                     NumberDataType::DEST_TYPE => {
                         if NumberDataType::Int64.can_lossless_cast_to(*dest_ty) {
@@ -369,7 +365,7 @@ impl<'a> Evaluator<'a> {
                 Ok(Column::Number(new_column))
             }
 
-            (Column::Timestamp(TimestampColumn { ts: col, .. }), DataType::Number(dest_ty)) => {
+            (Column::Timestamp(col), DataType::Number(dest_ty)) => {
                 let new_column = with_number_type!(|DEST_TYPE| match dest_ty {
                     NumberDataType::DEST_TYPE => {
                         if NumberDataType::Int64.can_lossless_cast_to(*dest_ty) {
@@ -416,18 +412,10 @@ impl<'a> Evaluator<'a> {
 
             (Column::Timestamp(col), DataType::String) => {
                 // We can get the data_capacity, so no need to use `from_iter`.
-                let mut builder = StringColumnBuilder::with_capacity(
-                    col.len(),
-                    col.len()
-                        * (19
-                            + if col.precision == 0 {
-                                0
-                            } else {
-                                col.precision as usize + 1
-                            }),
-                );
+                // "YYYY-mm-DD HH:MM:SS.ssssss"
+                let mut builder = StringColumnBuilder::with_capacity(col.len(), col.len() * 26);
                 for val in col.iter() {
-                    let s = timestamp_to_string(val, &self.tz);
+                    let s = timestamp_to_string(*val, &self.tz);
                     builder.put_str(s.as_str());
                     builder.commit_row();
                 }
@@ -436,6 +424,7 @@ impl<'a> Evaluator<'a> {
 
             (Column::Date(col), DataType::String) => {
                 // We can get the data_capacity, so no need to use `from_iter`.
+                // "YYYY-mm-DD"
                 let mut builder = StringColumnBuilder::with_capacity(col.len(), col.len() * 10);
                 for &val in col.iter() {
                     let s = date_to_string(val, &self.tz);
@@ -569,7 +558,7 @@ impl<'a> Evaluator<'a> {
                 })
             }
 
-            (Column::Timestamp(TimestampColumn { ts: col, .. }), DataType::Number(dest_ty)) => {
+            (Column::Timestamp(col), DataType::Number(dest_ty)) => {
                 with_number_type!(|DEST_TYPE| match dest_ty {
                     NumberDataType::DEST_TYPE => {
                         if NumberDataType::Int64.can_lossless_cast_to(*dest_ty) {
@@ -631,18 +620,10 @@ impl<'a> Evaluator<'a> {
 
             (Column::Timestamp(col), DataType::String) => {
                 // We can get the data_capacity, so no need to use `from_iter`.
-                let mut builder = StringColumnBuilder::with_capacity(
-                    col.len(),
-                    col.len()
-                        * (19
-                            + if col.precision == 0 {
-                                0
-                            } else {
-                                col.precision as usize + 1
-                            }),
-                );
+                // "YYYY-mm-DD HH:MM:SS.ssssss"
+                let mut builder = StringColumnBuilder::with_capacity(col.len(), col.len() * 26);
                 for val in col.iter() {
-                    let s = timestamp_to_string(val, &self.tz);
+                    let s = timestamp_to_string(*val, &self.tz);
                     builder.put_str(s.as_str());
                     builder.commit_row();
                 }
@@ -655,6 +636,7 @@ impl<'a> Evaluator<'a> {
 
             (Column::Date(col), DataType::String) => {
                 // We can get the data_capacity, so no need to use `from_iter`.
+                // "YYYY-mm-DD"
                 let mut builder = StringColumnBuilder::with_capacity(col.len(), col.len() * 10);
                 for &val in col.iter() {
                     let s = date_to_string(val, &self.tz);
@@ -1067,10 +1049,9 @@ impl<'a> ConstantFolder<'a> {
 
             (Domain::Date(domain), DataType::Timestamp) => Domain::Nullable(NullableDomain {
                 has_null: false,
-                value: Some(Box::new(Domain::Timestamp(TimestampDomain {
+                value: Some(Box::new(Domain::Timestamp(SimpleDomain {
                     min: domain.min as i64 * 24 * 3600 * 1000000,
                     max: domain.max as i64 * 24 * 3600 * 1000000,
-                    precision: PRECISION_MICRO,
                 }))),
             }),
 
