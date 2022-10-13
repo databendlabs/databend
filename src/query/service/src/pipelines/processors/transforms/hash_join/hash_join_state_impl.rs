@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use std::borrow::BorrowMut;
-use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
@@ -24,8 +24,6 @@ use common_datablocks::HashMethod;
 use common_datavalues::BooleanColumn;
 use common_datavalues::Column;
 use common_datavalues::ColumnRef;
-use common_datavalues::DataType;
-use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -297,84 +295,57 @@ impl HashJoinState for JoinHashTable {
             return Ok(blocks.to_vec());
         }
 
-        let mut unmatched_build_block = self.row_space.gather(&unmatched_build_indexes)?;
-        if self.hash_join_desc.join_type == JoinType::Full {
-            let nullable_unmatched_build_columns = unmatched_build_block
-                .columns()
-                .iter()
-                .map(|c| {
-                    let mut probe_validity = MutableBitmap::new();
-                    probe_validity.extend_constant(c.len(), true);
-                    let probe_validity: Bitmap = probe_validity.into();
-                    Self::set_validity(c, &probe_validity)
-                })
-                .collect::<Result<Vec<_>>>()?;
-            unmatched_build_block =
-                DataBlock::create(self.row_space.schema(), nullable_unmatched_build_columns);
-        };
-        // Create null block for unmatched rows in probe side
-        let null_probe_block = DataBlock::create(
-            self.probe_schema.clone(),
-            self.probe_schema
-                .fields()
-                .iter()
-                .map(|df| {
-                    df.data_type()
-                        .clone()
-                        .create_constant_column(&DataValue::Null, unmatched_build_indexes.len())
-                })
-                .collect::<Result<Vec<_>>>()?,
-        );
-        let mut merged_block = self.merge_eq_block(&unmatched_build_block, &null_probe_block)?;
-        merged_block = DataBlock::concat_blocks(&[blocks, &[merged_block]].concat())?;
+        let input_block = DataBlock::concat_blocks(blocks)?;
 
         // Don't need process non-equi conditions for full join in the method
         // Because non-equi conditions have been processed in left probe join
         if self.hash_join_desc.other_predicate.is_none()
             || self.hash_join_desc.join_type == JoinType::Full
         {
-            return Ok(vec![merged_block]);
+            let null_block = self.null_blocks_for_right_join(&unmatched_build_indexes)?;
+            return Ok(vec![DataBlock::concat_blocks(&[input_block, null_block])?]);
         }
 
         let (bm, all_true, all_false) = self.get_other_filters(
-            &merged_block,
+            &input_block,
             self.hash_join_desc.other_predicate.as_ref().unwrap(),
         )?;
 
         if all_true {
-            return Ok(vec![merged_block]);
+            let null_block = self.null_blocks_for_right_join(&unmatched_build_indexes)?;
+            return Ok(vec![DataBlock::concat_blocks(&[input_block, null_block])?]);
         }
 
         let validity = match (bm, all_false) {
             (Some(b), _) => b,
-            (None, true) => Bitmap::new_zeroed(merged_block.num_rows()),
+            (None, true) => Bitmap::new_zeroed(input_block.num_rows()),
             // must be one of above
             _ => unreachable!(),
         };
         let probe_column_len = self.probe_schema.fields().len();
-        let probe_columns = merged_block.columns()[0..probe_column_len]
+        let probe_columns = input_block.columns()[0..probe_column_len]
             .iter()
             .map(|c| Self::set_validity(c, &validity))
             .collect::<Result<Vec<_>>>()?;
         let probe_block = DataBlock::create(self.probe_schema.clone(), probe_columns);
         let build_block = DataBlock::create(
             self.row_space.data_schema.clone(),
-            merged_block.columns()[probe_column_len..].to_vec(),
+            input_block.columns()[probe_column_len..].to_vec(),
         );
-        merged_block = self.merge_eq_block(&build_block, &probe_block)?;
+        let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
 
         // If build_indexes size will greater build table size, we need filter the redundant rows for build side.
-        let mut build_indexes = self.hash_join_desc.right_join_desc.build_indexes.write();
-        build_indexes.extend(&unmatched_build_indexes);
-        if build_indexes.len() > self.row_space.rows_number() {
-            let mut bm = validity.into_mut().right().unwrap();
-            self.filter_rows_for_right_join(&mut bm, &build_indexes);
-            let predicate = BooleanColumn::from_arrow_data(bm.into()).arc();
-            let filtered_block = DataBlock::filter_block(merged_block, &predicate)?;
-            return Ok(vec![filtered_block]);
-        }
+        let mut bm = validity.into_mut().right().unwrap();
+        self.filter_rows_for_right_join(&mut bm);
+        let predicate = BooleanColumn::from_arrow_data(bm.into()).arc();
+        let filtered_block = DataBlock::filter_block(merged_block, &predicate)?;
 
-        Ok(vec![merged_block])
+        // Concat null blocks
+        let null_block = self.null_blocks_for_right_join(&unmatched_build_indexes)?;
+        Ok(vec![DataBlock::concat_blocks(&[
+            filtered_block,
+            null_block,
+        ])?])
     }
 
     fn right_semi_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
@@ -461,14 +432,11 @@ impl HashJoinState for JoinHashTable {
 }
 
 impl JoinHashTable {
-    pub(crate) fn filter_rows_for_right_join(
-        &self,
-        bm: &mut MutableBitmap,
-        build_indexes: &[RowPtr],
-    ) {
+    pub(crate) fn filter_rows_for_right_join(&self, bm: &mut MutableBitmap) {
+        let build_indexes = self.hash_join_desc.right_join_desc.build_indexes.read();
         let row_state = self.hash_join_desc.right_join_desc.row_state.read();
         for (index, row) in build_indexes.iter().enumerate() {
-            if matches!(row_state.get(row).unwrap().load(Ordering::Relaxed), 0 | 1){
+            if row_state.get(row).unwrap().load(Ordering::Relaxed) == 1 {
                 if !bm.get(index) {
                     bm.set(index, true)
                 }

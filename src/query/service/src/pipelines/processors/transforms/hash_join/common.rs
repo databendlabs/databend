@@ -27,6 +27,8 @@ use common_datavalues::ConstColumn;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataType;
+use common_datavalues::DataValue;
 use common_datavalues::NullableColumn;
 use common_datavalues::NullableType;
 use common_datavalues::Series;
@@ -40,6 +42,7 @@ use crate::evaluator::EvalNode;
 use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::processors::JoinHashTable;
+use crate::sql::plans::JoinType;
 
 /// Some common methods for hash join.
 impl JoinHashTable {
@@ -203,11 +206,48 @@ impl JoinHashTable {
         // Find the unmatched rows in build side
         let mut unmatched_build_indexes = vec![];
         let row_state = self.hash_join_desc.right_join_desc.row_state.read();
-        for (row_ptr, partner_count) in row_state.iter(){
+        for (row_ptr, partner_count) in row_state.iter() {
             if partner_count.load(Ordering::Relaxed) == 0 {
                 unmatched_build_indexes.push(*row_ptr);
             }
         }
         Ok(unmatched_build_indexes)
+    }
+
+    // For unmatched build index, the method will produce null probe block
+    // Then merge null_probe_block with unmatched_build_block
+    pub(crate) fn null_blocks_for_right_join(
+        &self,
+        unmatched_build_indexes: &Vec<RowPtr>,
+    ) -> Result<DataBlock> {
+        let mut unmatched_build_block = self.row_space.gather(unmatched_build_indexes)?;
+        if self.hash_join_desc.join_type == JoinType::Full {
+            let nullable_unmatched_build_columns = unmatched_build_block
+                .columns()
+                .iter()
+                .map(|c| {
+                    let mut probe_validity = MutableBitmap::new();
+                    probe_validity.extend_constant(c.len(), true);
+                    let probe_validity: Bitmap = probe_validity.into();
+                    Self::set_validity(c, &probe_validity)
+                })
+                .collect::<Result<Vec<_>>>()?;
+            unmatched_build_block =
+                DataBlock::create(self.row_space.schema(), nullable_unmatched_build_columns);
+        };
+        // Create null block for unmatched rows in probe side
+        let null_probe_block = DataBlock::create(
+            self.probe_schema.clone(),
+            self.probe_schema
+                .fields()
+                .iter()
+                .map(|df| {
+                    df.data_type()
+                        .clone()
+                        .create_constant_column(&DataValue::Null, unmatched_build_indexes.len())
+                })
+                .collect::<Result<Vec<_>>>()?,
+        );
+        self.merge_eq_block(&unmatched_build_block, &null_probe_block)
     }
 }

@@ -75,7 +75,10 @@ impl JoinHashTable {
                             self.hash_join_desc.right_join_desc.build_indexes.write();
                         build_indexes.extend(probe_result_ptrs);
                         for row_ptr in probe_result_ptrs.iter() {
-                            full_row_state.get(row_ptr).unwrap().fetch_add(1, Ordering::Relaxed);
+                            full_row_state
+                                .get(row_ptr)
+                                .unwrap()
+                                .fetch_add(1, Ordering::Relaxed);
                         }
                     }
 
@@ -216,7 +219,10 @@ impl JoinHashTable {
             let build_indexes = self.hash_join_desc.right_join_desc.build_indexes.read();
             for (idx, build_index) in build_indexes.iter().enumerate() {
                 if !bm.get(idx) {
-                    full_row_state.get(build_index).unwrap().store(0, Ordering::Relaxed);
+                    full_row_state
+                        .get(build_index)
+                        .unwrap()
+                        .store(0, Ordering::Relaxed);
                 }
             }
         }

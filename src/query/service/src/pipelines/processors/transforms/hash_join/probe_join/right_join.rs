@@ -52,7 +52,10 @@ impl JoinHashTable {
                 let probe_result_ptrs = v.get_value();
                 build_indexes.extend(probe_result_ptrs);
                 for row_ptr in probe_result_ptrs.iter() {
-                    row_state.get(row_ptr).unwrap().fetch_add(1, Ordering::Relaxed);
+                    row_state
+                        .get(row_ptr)
+                        .unwrap()
+                        .fetch_add(1, Ordering::Relaxed);
                 }
                 probe_indexes.extend(std::iter::repeat(i as u32).take(probe_result_ptrs.len()));
                 validity.extend_constant(probe_result_ptrs.len(), true);
