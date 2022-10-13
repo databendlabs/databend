@@ -15,9 +15,11 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use common_cache::Cache;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::caches::CacheManager;
 use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SnapshotId;
 use tracing::info;
@@ -148,6 +150,8 @@ impl FuseTable {
             let loc = location_gen.snapshot_location_from_uuid(id, *ver)?;
             locations.push(loc);
         }
+        self.clean_cache(&locations);
+
         let fuse_file = FuseFile::create(ctx, self.operator.clone());
         fuse_file.remove_file_in_batch(&locations).await
     }
@@ -172,7 +176,6 @@ impl FuseTable {
         for segment in segments {
             let segment = segment?;
 
-            // TODO(bohu): clean the LRUCache: https://github.com/datafuselabs/databend/issues/8157
             for block_meta in &segment.blocks {
                 let loc = block_meta.location.0.as_str();
                 // Skip root block if keep_last_snapshot is true.
@@ -192,6 +195,7 @@ impl FuseTable {
         // Try to remove block files in parallel.
         {
             let locations = Vec::from_iter(blocks_need_to_delete);
+            self.clean_cache(&locations);
             info!("Prepare to purge block files, numbers:{}", locations.len());
             fuse_file.remove_file_in_batch(&locations).await?;
             info!("Finish to purge block files");
@@ -200,6 +204,7 @@ impl FuseTable {
         // Try to remove index files in parallel.
         {
             let locations = Vec::from_iter(blooms_need_to_delete);
+            self.clean_cache(&locations);
             info!(
                 "Prepare to purge bloom index files, numbers:{}",
                 locations.len()
@@ -216,6 +221,7 @@ impl FuseTable {
                     .map(|x| x.0.clone())
                     .collect::<Vec<String>>(),
             );
+            self.clean_cache(&locations);
             info!(
                 "Prepare to purge segment files, numbers:{}",
                 locations.len()
@@ -257,5 +263,14 @@ impl FuseTable {
         }
 
         Ok(result)
+    }
+
+    fn clean_cache(&self, locs: &[String]) {
+        if let Some(c) = CacheManager::instance().get_table_segment_cache() {
+            let cache = &mut *c.write();
+            for loc in locs {
+                cache.pop(loc);
+            }
+        }
     }
 }
