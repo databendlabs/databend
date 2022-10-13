@@ -22,7 +22,7 @@ use common_datavalues::ColumnRef;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 
-use crate::pipelines::processors::transforms::hash_join::join_hash_table::MarkerKind;
+use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;
 
 pub type ColumnVector = Vec<ColumnRef>;
 

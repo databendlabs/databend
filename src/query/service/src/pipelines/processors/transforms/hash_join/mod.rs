@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod common;
 mod desc;
 mod hash_join_state;
+mod hash_join_state_impl;
 mod join_hash_table;
+mod probe_join;
 mod probe_state;
 mod result_blocks;
 pub(crate) mod row;
@@ -31,7 +34,6 @@ pub use join_hash_table::KeyU32HashTable;
 pub use join_hash_table::KeyU512HashTable;
 pub use join_hash_table::KeyU64HashTable;
 pub use join_hash_table::KeyU8HashTable;
-pub use join_hash_table::MarkJoinDesc;
 pub use join_hash_table::SerializerHashTable;
 pub use probe_state::ProbeState;
 pub use result_blocks::*;
