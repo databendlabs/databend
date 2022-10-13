@@ -31,9 +31,22 @@ use crate::sled::transaction::TransactionError;
 use crate::store::Store;
 use crate::SledKeySpace;
 
-/// Extract key from a value of sled tree that includes its key.
-pub trait SledValueToKey<K> {
-    fn to_key(&self) -> K;
+/// Get a ref to the key or to the value.
+///
+/// It is used as an abstract representation of key/value used in the sled store.
+pub trait SledAsRef<K, V> {
+    fn as_key(&self) -> &K;
+    fn as_value(&self) -> &V;
+}
+
+impl<K, V> SledAsRef<K, V> for (K, V) {
+    fn as_key(&self) -> &K {
+        &self.0
+    }
+
+    fn as_value(&self) -> &V {
+        &self.1
+    }
 }
 
 /// SledTree is a wrapper of sled::Tree that provides access of more than one key-value
@@ -155,55 +168,6 @@ impl SledTree {
         }
     }
 
-    /// Return true if the tree contains the key.
-    pub fn contains_key<KV: SledKeySpace>(&self, key: &KV::K) -> Result<bool, MetaStorageError>
-    where KV: SledKeySpace {
-        let got = self
-            .tree
-            .contains_key(KV::serialize_key(key)?)
-            .context(|| format!("contains_key: {}:{}", self.name, key))?;
-
-        Ok(got)
-    }
-
-    pub async fn update_and_fetch<KV: SledKeySpace, F>(
-        &self,
-        key: &KV::K,
-        mut f: F,
-    ) -> Result<Option<KV::V>, MetaStorageError>
-    where
-        F: FnMut(Option<KV::V>) -> Option<KV::V>,
-    {
-        let mes = || format!("update_and_fetch: {}", key);
-
-        let k = KV::serialize_key(key)?;
-
-        let res = self
-            .tree
-            .update_and_fetch(k, move |old| {
-                let old = match old {
-                    Some(o) => Some(KV::deserialize_value(o).ok()?),
-                    None => None,
-                };
-
-                let new_val = f(old);
-                match new_val {
-                    Some(new_val) => Some(KV::serialize_value(&new_val).ok()?),
-                    None => None,
-                }
-            })
-            .context(mes)?;
-
-        self.flush_async(true).await?;
-
-        let value = match res {
-            None => None,
-            Some(v) => Some(KV::deserialize_value(v)?),
-        };
-
-        Ok(value)
-    }
-
     /// Retrieve the value of key.
     pub fn get<KV: SledKeySpace>(&self, key: &KV::K) -> Result<Option<KV::V>, MetaStorageError> {
         let got = self
@@ -315,7 +279,7 @@ impl SledTree {
         Ok(res)
     }
 
-    /// Get key-valuess in `range`
+    /// Get key-values in `range`
     pub fn range_kvs<KV, R>(&self, range: R) -> Result<Vec<(KV::K, KV::V)>, MetaStorageError>
     where
         KV: SledKeySpace,
@@ -411,11 +375,17 @@ impl SledTree {
     }
 
     /// Append many key-values into SledTree.
-    pub async fn append<KV>(&self, kvs: &[(KV::K, KV::V)]) -> Result<(), MetaStorageError>
-    where KV: SledKeySpace {
+    pub async fn append<KV, T>(&self, kvs: &[T]) -> Result<(), MetaStorageError>
+    where
+        KV: SledKeySpace,
+        T: SledAsRef<KV::K, KV::V>,
+    {
         let mut batch = sled::Batch::default();
 
-        for (key, value) in kvs.iter() {
+        for t in kvs.iter() {
+            let key = t.as_key();
+            let value = t.as_value();
+
             let k = KV::serialize_key(key)?;
             let v = KV::serialize_value(value)?;
 
@@ -429,37 +399,9 @@ impl SledTree {
         Ok(())
     }
 
-    /// Append many values into SledTree.
-    /// This could be used in cases the key is included in value and a value should impl trait `IntoKey` to retrieve the key from a value.
-    #[tracing::instrument(level = "debug", skip(self, values))]
-    pub async fn append_values<KV>(&self, values: &[KV::V]) -> Result<(), MetaStorageError>
-    where
-        KV: SledKeySpace,
-        KV::V: SledValueToKey<KV::K>,
-    {
-        let mut batch = sled::Batch::default();
-
-        for value in values.iter() {
-            let key: KV::K = value.to_key();
-
-            let k = KV::serialize_key(&key)?;
-            let v = KV::serialize_value(value)?;
-
-            batch.insert(k, v);
-        }
-
-        self.tree
-            .apply_batch(batch)
-            .context(|| "batch append_values")?;
-
-        self.flush_async(true).await?;
-
-        Ok(())
-    }
-
     /// Insert a single kv.
     /// Returns the last value if it is set.
-    async fn insert<KV>(
+    pub async fn insert<KV>(
         &self,
         key: &KV::K,
         value: &KV::V,
@@ -483,17 +425,6 @@ impl SledTree {
         self.flush_async(true).await?;
 
         Ok(prev)
-    }
-
-    /// Insert a single kv, Retrieve the key from value.
-    #[tracing::instrument(level = "debug", skip(self, value))]
-    pub async fn insert_value<KV>(&self, value: &KV::V) -> Result<Option<KV::V>, MetaStorageError>
-    where
-        KV: SledKeySpace,
-        KV::V: SledValueToKey<KV::K>,
-    {
-        let key = value.to_key();
-        self.insert::<KV>(&key, value).await
     }
 
     /// Build a string describing the range for a range operation.
@@ -627,21 +558,6 @@ impl<'a, KV: SledKeySpace> Deref for AsTxnKeySpace<'a, KV> {
 
 #[allow(clippy::type_complexity)]
 impl<'a, KV: SledKeySpace> AsKeySpace<'a, KV> {
-    pub fn contains_key(&self, key: &KV::K) -> Result<bool, MetaStorageError> {
-        self.inner.contains_key::<KV>(key)
-    }
-
-    pub async fn update_and_fetch<F>(
-        &self,
-        key: &KV::K,
-        f: F,
-    ) -> Result<Option<KV::V>, MetaStorageError>
-    where
-        F: FnMut(Option<KV::V>) -> Option<KV::V>,
-    {
-        self.inner.update_and_fetch::<KV, _>(key, f).await
-    }
-
     pub fn get(&self, key: &KV::K) -> Result<Option<KV::V>, MetaStorageError> {
         self.inner.get::<KV>(key)
     }
@@ -703,13 +619,9 @@ impl<'a, KV: SledKeySpace> AsKeySpace<'a, KV> {
         self.inner.range_values::<KV, R>(range)
     }
 
-    pub async fn append(&self, kvs: &[(KV::K, KV::V)]) -> Result<(), MetaStorageError> {
-        self.inner.append::<KV>(kvs).await
-    }
-
-    pub async fn append_values(&self, values: &[KV::V]) -> Result<(), MetaStorageError>
-    where KV::V: SledValueToKey<KV::K> {
-        self.inner.append_values::<KV>(values).await
+    pub async fn append<T>(&self, kvs: &[T]) -> Result<(), MetaStorageError>
+    where T: SledAsRef<KV::K, KV::V> {
+        self.inner.append::<KV, _>(kvs).await
     }
 
     pub async fn insert(
@@ -718,10 +630,5 @@ impl<'a, KV: SledKeySpace> AsKeySpace<'a, KV> {
         value: &KV::V,
     ) -> Result<Option<KV::V>, MetaStorageError> {
         self.inner.insert::<KV>(key, value).await
-    }
-
-    pub async fn insert_value(&self, value: &KV::V) -> Result<Option<KV::V>, MetaStorageError>
-    where KV::V: SledValueToKey<KV::K> {
-        self.inner.insert_value::<KV>(value).await
     }
 }

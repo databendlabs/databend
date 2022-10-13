@@ -14,7 +14,13 @@
 
 use std::ops::Range;
 
+use chrono::NaiveDate;
+use chrono_tz::Tz;
 use common_arrow::arrow::buffer::Buffer;
+use common_datavalues::DateConverter;
+use common_io::prelude::BufferReadDateTimeExt;
+use common_io::prelude::BufferReadExt;
+use common_io::prelude::BufferReader;
 
 use super::number::SimpleDomain;
 use crate::display::display_date;
@@ -36,9 +42,9 @@ pub const DATE_MAX: i32 = 2932896;
 pub const DATE_MIN: i32 = -354285;
 
 #[inline]
-pub fn check_date(days: i64) -> Result<(), String> {
+pub fn check_date(days: i64) -> Result<i32, String> {
     if (DATE_MIN as i64..=DATE_MAX as i64).contains(&days) {
-        return Ok(());
+        return Ok(days as i32);
     }
     Err(format!("date `{}` is out of range", display_date(days)))
 }
@@ -182,4 +188,21 @@ impl ArgType for DateType {
     ) -> Self::Column {
         iter.collect()
     }
+}
+
+#[inline]
+pub fn string_to_date(date_str: impl AsRef<[u8]>, tz: &Tz) -> Option<NaiveDate> {
+    let mut reader = BufferReader::new(std::str::from_utf8(date_str.as_ref()).unwrap().as_bytes());
+    match reader.read_date_text(tz) {
+        Ok(d) => match reader.must_eof() {
+            Ok(..) => Some(d),
+            Err(_) => None,
+        },
+        Err(_) => None,
+    }
+}
+
+#[inline]
+pub fn date_to_string(date: i32, tz: &Tz) -> String {
+    date.to_date(tz).format("%Y-%m-%d").to_string()
 }

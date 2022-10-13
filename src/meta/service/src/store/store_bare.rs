@@ -587,6 +587,7 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
 
         let last = match self
             .log
+            .logs()
             .last()
             .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Read)
         {
@@ -602,7 +603,7 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
             Some(x) => Some(x.1.log_id),
         };
 
-        info!(
+        debug!(
             "get_log_state: ({:?},{:?}]",
             last_purged_log_id, last_log_id
         );
@@ -638,7 +639,7 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
             Ok(r) => r,
         };
 
-        info!(
+        debug!(
             "last_applied_state: applied: {:?}, membership: {:?}",
             last_applied, last_membership
         );

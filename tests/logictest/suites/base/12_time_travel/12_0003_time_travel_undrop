@@ -108,4 +108,25 @@ SELECT count(1) FROM t;
 2
 
 statement ok
+DROP TABLE t;
+
+statement ok
+CREATE TABLE t(c int);
+
+statement ok
+INSERT INTO t values(1);
+
+statement ok
+DROP TABLE t ALL;
+
+statement ok
+UNDROP TABLE t;
+
+statement query I
+SELECT count(*) FROM t;
+
+----
+0
+
+statement ok
 DROP database db_12_0003;

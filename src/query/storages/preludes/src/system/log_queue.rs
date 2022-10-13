@@ -134,6 +134,7 @@ impl<Event: SystemLogElement + 'static> SystemLogTable<Event> {
                 engine: "SystemLogTable".to_string(),
                 ..Default::default()
             },
+            ..Default::default()
         };
 
         SystemLogQueue::<Event>::init(max_rows);

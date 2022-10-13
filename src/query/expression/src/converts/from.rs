@@ -19,7 +19,6 @@ use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 
 use crate::types::number::NumberScalar;
-use crate::types::timestamp::Timestamp;
 use crate::types::AnyType;
 use crate::types::DataType;
 use crate::types::NumberDataType;
@@ -115,10 +114,7 @@ pub fn from_scalar(datavalue: &DataValue, datatype: &DataTypeImpl) -> Scalar {
         DataTypeImpl::Float64(_) => {
             Scalar::Number(NumberScalar::Float64(datavalue.as_f64().unwrap().into()))
         }
-        DataTypeImpl::Timestamp(_) => Scalar::Timestamp(Timestamp {
-            ts: datavalue.as_i64().unwrap(),
-            precision: 6,
-        }),
+        DataTypeImpl::Timestamp(_) => Scalar::Timestamp(datavalue.as_i64().unwrap() as i64),
         DataTypeImpl::Date(_) => Scalar::Date(datavalue.as_i64().unwrap() as i32),
         DataTypeImpl::Interval(_) => Scalar::Interval(datavalue.as_i64().unwrap() as i64),
         DataTypeImpl::String(_) => Scalar::String(datavalue.as_string().unwrap()),

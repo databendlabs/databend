@@ -20,7 +20,6 @@ use crate::types::array::ArrayColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
 use crate::types::string::StringColumnBuilder;
-use crate::types::timestamp::TimestampColumnBuilder;
 use crate::types::AnyType;
 use crate::types::ArrayType;
 use crate::types::BooleanType;
@@ -128,7 +127,7 @@ impl Column {
             ),
             Column::Timestamp(column) => Self::scatter_scalars::<TimestampType, _>(
                 column,
-                TimestampColumnBuilder::with_capacity(length),
+                Vec::with_capacity(length),
                 indices,
                 scatter_size,
             ),
