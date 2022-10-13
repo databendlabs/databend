@@ -587,6 +587,7 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
 
         let last = match self
             .log
+            .logs()
             .last()
             .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Read)
         {

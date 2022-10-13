@@ -77,6 +77,7 @@ impl RolesTable {
                 engine: "SystemRoles".to_string(),
                 ..Default::default()
             },
+            ..Default::default()
         };
         AsyncOneBlockSystemTable::create(RolesTable { table_info })
     }

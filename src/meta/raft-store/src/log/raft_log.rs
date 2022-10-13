@@ -51,18 +51,6 @@ impl RaftLog {
         Ok(rl)
     }
 
-    pub fn contains_key(&self, key: &LogIndex) -> Result<bool, MetaStorageError> {
-        self.logs().contains_key(key)
-    }
-
-    pub fn get(&self, key: &LogIndex) -> Result<Option<Entry<LogEntry>>, MetaStorageError> {
-        self.logs().get(key)
-    }
-
-    pub fn last(&self) -> Result<Option<(LogIndex, Entry<LogEntry>)>, MetaStorageError> {
-        self.logs().last()
-    }
-
     pub async fn set_last_purged(&self, log_id: LogId) -> Result<(), MetaStorageError> {
         self.log_meta()
             .insert(&LogMetaKey::LastPurged, &LogMetaValue::LogId(log_id))
@@ -100,25 +88,6 @@ impl RaftLog {
         self.logs().range_remove(range, true).await
     }
 
-    /// Returns an iterator of logs
-    pub fn range<R>(
-        &self,
-        range: R,
-    ) -> Result<
-        impl DoubleEndedIterator<Item = Result<(LogIndex, Entry<LogEntry>), MetaStorageError>>,
-        MetaStorageError,
-    >
-    where
-        R: RangeBounds<LogIndex>,
-    {
-        self.logs().range(range)
-    }
-
-    pub fn range_keys<R>(&self, range: R) -> Result<Vec<LogIndex>, MetaStorageError>
-    where R: RangeBounds<LogIndex> {
-        self.logs().range_keys(range)
-    }
-
     pub fn range_values<R>(&self, range: R) -> Result<Vec<Entry<LogEntry>>, MetaStorageError>
     where R: RangeBounds<LogIndex> {
         self.logs().range_values(range)
@@ -133,22 +102,13 @@ impl RaftLog {
         self.logs().append_values(logs).await
     }
 
-    /// Insert a single log.
-    #[tracing::instrument(level = "debug", skip(self, log), fields(log_id=log.log_id.to_string().as_str()))]
-    pub async fn insert(
-        &self,
-        log: &Entry<LogEntry>,
-    ) -> Result<Option<Entry<LogEntry>>, MetaStorageError> {
-        self.logs().insert_value(log).await
-    }
-
     /// Returns a borrowed key space in sled::Tree for logs
-    fn logs(&self) -> AsKeySpace<Logs> {
+    pub fn logs(&self) -> AsKeySpace<Logs> {
         self.inner.key_space()
     }
 
     /// Returns a borrowed key space in sled::Tree for logs
-    fn log_meta(&self) -> AsKeySpace<LogMeta> {
+    pub fn log_meta(&self) -> AsKeySpace<LogMeta> {
         self.inner.key_space()
     }
 }

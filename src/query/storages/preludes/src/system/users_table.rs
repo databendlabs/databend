@@ -87,6 +87,7 @@ impl UsersTable {
                 engine: "SystemUsers".to_string(),
                 ..Default::default()
             },
+            ..Default::default()
         };
 
         AsyncOneBlockSystemTable::create(UsersTable { table_info })

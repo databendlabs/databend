@@ -18,7 +18,6 @@ use common_exception::Result;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
-use crate::types::timestamp::TimestampColumn;
 use crate::types::AnyType;
 use crate::types::ArgType;
 use crate::types::ArrayType;
@@ -63,15 +62,12 @@ impl Column {
             Column::Boolean(bm) => Self::take_arg_types::<BooleanType, _>(bm, indices),
             Column::String(column) => Self::take_arg_types::<StringType, _>(column, indices),
             Column::Timestamp(column) => {
-                let ts = Self::take_arg_types::<NumberType<i64>, _>(&column.ts, indices)
+                let ts = Self::take_arg_types::<NumberType<i64>, _>(column, indices)
                     .into_number()
                     .unwrap()
                     .into_int64()
                     .unwrap();
-                Column::Timestamp(TimestampColumn {
-                    ts,
-                    precision: column.precision,
-                })
+                Column::Timestamp(ts)
             }
             Column::Date(column) => {
                 let d = Self::take_arg_types::<NumberType<i32>, _>(column, indices)

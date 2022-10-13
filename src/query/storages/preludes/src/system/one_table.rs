@@ -71,6 +71,7 @@ impl OneTable {
                 engine: "SystemOne".to_string(),
                 ..Default::default()
             },
+            ..Default::default()
         };
 
         SyncOneBlockSystemTable::create(OneTable { table_info })

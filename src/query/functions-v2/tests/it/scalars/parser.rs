@@ -14,6 +14,7 @@
 
 use common_ast::ast::BinaryOperator;
 use common_ast::ast::Literal as ASTLiteral;
+use common_ast::ast::TypeName;
 use common_ast::ast::UnaryOperator;
 use common_ast::parser::parse_expr;
 use common_ast::parser::token::Token;
@@ -60,20 +61,48 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
             expr,
             target_type,
             ..
-        } => RawExpr::Cast {
-            span: transform_span(span),
-            expr: Box::new(transform_expr(*expr, columns)),
-            dest_type: transform_data_type(target_type),
+        } => match target_type {
+            TypeName::Timestamp { .. } => RawExpr::FunctionCall {
+                span: transform_span(span),
+                name: "to_timestamp".to_string(),
+                args: vec![transform_expr(*expr, columns)],
+                params: vec![],
+            },
+            TypeName::Date => RawExpr::FunctionCall {
+                span: transform_span(span),
+                name: "to_date".to_string(),
+                args: vec![transform_expr(*expr, columns)],
+                params: vec![],
+            },
+            _ => RawExpr::Cast {
+                span: transform_span(span),
+                expr: Box::new(transform_expr(*expr, columns)),
+                dest_type: transform_data_type(target_type),
+            },
         },
         common_ast::ast::Expr::TryCast {
             span,
             expr,
             target_type,
             ..
-        } => RawExpr::TryCast {
-            span: transform_span(span),
-            expr: Box::new(transform_expr(*expr, columns)),
-            dest_type: transform_data_type(target_type),
+        } => match target_type {
+            TypeName::Timestamp { .. } => RawExpr::FunctionCall {
+                span: transform_span(span),
+                name: "try_to_timestamp".to_string(),
+                args: vec![transform_expr(*expr, columns)],
+                params: vec![],
+            },
+            TypeName::Date => RawExpr::FunctionCall {
+                span: transform_span(span),
+                name: "try_to_date".to_string(),
+                args: vec![transform_expr(*expr, columns)],
+                params: vec![],
+            },
+            _ => RawExpr::TryCast {
+                span: transform_span(span),
+                expr: Box::new(transform_expr(*expr, columns)),
+                dest_type: transform_data_type(target_type),
+            },
         },
         common_ast::ast::Expr::FunctionCall {
             span,
@@ -81,38 +110,20 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
             args,
             params,
             ..
-        } => match name.name.to_lowercase().as_str() {
-            "to_timestamp" | "to_datetime" => {
-                assert!(args.len() == 1);
-                RawExpr::Cast {
-                    span: transform_span(span),
-                    expr: Box::new(transform_expr(args[0].clone(), columns)),
-                    dest_type: DataType::Timestamp,
-                }
-            }
-            "to_date" => {
-                assert!(args.len() == 1);
-                RawExpr::Cast {
-                    span: transform_span(span),
-                    expr: Box::new(transform_expr(args[0].clone(), columns)),
-                    dest_type: DataType::Date,
-                }
-            }
-            _ => RawExpr::FunctionCall {
-                span: transform_span(span),
-                name: name.name,
-                args: args
-                    .into_iter()
-                    .map(|arg| transform_expr(arg, columns))
-                    .collect(),
-                params: params
-                    .into_iter()
-                    .map(|param| match param {
-                        ASTLiteral::Integer(u) => u as usize,
-                        _ => unimplemented!(),
-                    })
-                    .collect(),
-            },
+        } => RawExpr::FunctionCall {
+            span: transform_span(span),
+            name: name.name,
+            args: args
+                .into_iter()
+                .map(|arg| transform_expr(arg, columns))
+                .collect(),
+            params: params
+                .into_iter()
+                .map(|param| match param {
+                    ASTLiteral::Integer(u) => u as usize,
+                    _ => unimplemented!(),
+                })
+                .collect(),
         },
         common_ast::ast::Expr::UnaryOp { span, op, expr } => RawExpr::FunctionCall {
             span: transform_span(span),
