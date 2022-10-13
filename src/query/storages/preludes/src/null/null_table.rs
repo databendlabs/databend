@@ -105,10 +105,6 @@ impl Table for NullTable {
         pipeline.add_pipe(sink_pipeline_builder.finalize());
         Ok(())
     }
-
-    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: bool) -> Result<()> {
-        Ok(())
-    }
 }
 
 struct NullSource {

@@ -107,6 +107,8 @@ impl LogicalOperator for EvalScalar {
             outer_columns,
             cardinality,
             precise_cardinality,
+
+            column_stats: Default::default(),
         })
     }
 }

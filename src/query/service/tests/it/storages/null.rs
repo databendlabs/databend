@@ -38,6 +38,7 @@ async fn test_null_table() -> Result<()> {
             options: TableOptions::default(),
             ..Default::default()
         },
+        ..Default::default()
     })?;
 
     // read.
@@ -55,7 +56,8 @@ async fn test_null_table() -> Result<()> {
 
     // truncate.
     {
-        table.truncate(ctx, false).await?;
+        let purge = false;
+        table.truncate(ctx, purge).await?;
     }
 
     Ok(())
