@@ -1977,6 +1977,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "base64",
  "bytes",
  "http",
  "moka",
@@ -2026,6 +2027,7 @@ dependencies = [
  "common-pipeline-core",
  "common-pipeline-sources",
  "common-pipeline-transforms",
+ "common-sharing",
  "common-storage",
  "common-storages-index",
  "common-storages-util",
