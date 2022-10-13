@@ -19,9 +19,9 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_fuse_meta::meta::TableSnapshotLite;
 
-use crate::fuse_snapshot::read_snapshots_by_root_file;
 use crate::io::TableMetaLocationGenerator;
 use crate::sessions::TableContext;
+use crate::FuseSnapshotIO;
 use crate::FuseTable;
 
 pub struct FuseSnapshot<'a> {
@@ -39,13 +39,14 @@ impl<'a> FuseSnapshot<'a> {
         let snapshot_location = self.table.snapshot_loc();
         if let Some(snapshot_location) = snapshot_location {
             let snapshot_version = self.table.snapshot_format_version();
-            let snapshots = read_snapshots_by_root_file(
+            let fuse_snapshot_io = FuseSnapshotIO::create(
                 self.ctx.clone(),
-                snapshot_location,
+                self.table.operator.clone(),
                 snapshot_version,
-                &self.table.operator,
-            )
-            .await?;
+            );
+            let (snapshots, _) = fuse_snapshot_io
+                .read_snapshot_lites(snapshot_location, false)
+                .await?;
             return self.to_block(&meta_location_generator, &snapshots, snapshot_version);
         }
         Ok(DataBlock::empty_with_schema(FuseSnapshot::schema()))
