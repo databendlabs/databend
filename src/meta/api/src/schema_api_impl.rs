@@ -17,8 +17,8 @@ use std::fmt::Display;
 use std::iter::FromIterator;
 use std::sync::Arc;
 
-use common_datavalues::chrono::DateTime;
-use common_datavalues::chrono::Utc;
+use chrono::DateTime;
+use chrono::Utc;
 use common_meta_app::schema::CountTablesKey;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
@@ -2338,7 +2338,7 @@ async fn remove_db_id_from_share(
 
     let share_id_key = ShareId { share_id };
     condition.push(txn_cond_seq(&from_share, Eq, share_id_seq)); // __fd_share/<tenant>/<share_name> -> <share_id>
-    condition.push(txn_cond_seq(&share_id_key, Eq, share_meta_seq)); // __fd_share_id/<share_id> -> <share_meta>                
+    condition.push(txn_cond_seq(&share_id_key, Eq, share_meta_seq)); // __fd_share_id/<share_id> -> <share_meta>
 
     if_then.push(txn_op_put(&share_id_key, serialize_struct(&share_meta)?)); /* (share_id) -> share_meta */
 

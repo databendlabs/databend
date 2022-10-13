@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
-use common_datavalues::DataSchema;
+use common_expression::DataSchema;
 use common_legacy_expression::LegacyExpression;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]

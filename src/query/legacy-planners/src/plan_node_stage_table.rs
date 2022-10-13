@@ -15,7 +15,7 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
-use common_datavalues::DataSchemaRef;
+use common_expression::DataSchemaRef;
 use common_meta_types::UserStageInfo;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]

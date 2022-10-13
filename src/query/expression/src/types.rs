@@ -101,6 +101,11 @@ impl DataType {
             _ => Self::Nullable(Box::new(self.clone())),
         }
     }
+
+    pub fn is_nullable(&self) -> bool {
+        matches!(self, &DataType::Nullable(_))
+    }
+
     pub fn is_nullable_or_null(&self) -> bool {
         matches!(self, &DataType::Nullable(_) | &DataType::Null)
     }

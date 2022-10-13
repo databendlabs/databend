@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
+use common_expression::DataSchema;
+use common_expression::DataSchemaRef;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VarValue {

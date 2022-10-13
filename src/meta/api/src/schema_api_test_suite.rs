@@ -15,11 +15,14 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use common_datavalues::chrono::DateTime;
-use common_datavalues::chrono::Duration;
-use common_datavalues::chrono::Utc;
-use common_datavalues::prelude::*;
+use chrono::DateTime;
+use chrono::Duration;
+use chrono::Utc;
 use common_exception::ErrorCode;
+use common_expression::DataField;
+use common_expression::DataSchema;
+use common_expression::types::ArgType;
+use common_expression::types::NumberType;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
@@ -350,7 +353,7 @@ impl SchemaApiTestSuite {
         let schema = || {
             Arc::new(DataSchema::new(vec![DataField::new(
                 "number",
-                u64::to_data_type(),
+               NumberType::<u64>::data_type(),
             )]))
         };
 
@@ -1393,7 +1396,7 @@ impl SchemaApiTestSuite {
         let schema = || {
             Arc::new(DataSchema::new(vec![DataField::new(
                 "number",
-                u64::to_data_type(),
+               NumberType::<u64>::data_type(),
             )]))
         };
 
@@ -1711,7 +1714,7 @@ impl SchemaApiTestSuite {
         let schema = || {
             Arc::new(DataSchema::new(vec![DataField::new(
                 "number",
-                u64::to_data_type(),
+               NumberType::<u64>::data_type(),
             )]))
         };
 
@@ -1950,7 +1953,7 @@ impl SchemaApiTestSuite {
         let schema = || {
             Arc::new(DataSchema::new(vec![DataField::new(
                 "number",
-                u64::to_data_type(),
+               NumberType::<u64>::data_type(),
             )]))
         };
 
@@ -2078,7 +2081,7 @@ impl SchemaApiTestSuite {
         let schema = || {
             Arc::new(DataSchema::new(vec![DataField::new(
                 "number",
-                u64::to_data_type(),
+               NumberType::<u64>::data_type(),
             )]))
         };
 
@@ -2411,7 +2414,7 @@ impl SchemaApiTestSuite {
         let schema = || {
             Arc::new(DataSchema::new(vec![DataField::new(
                 "number",
-                u64::to_data_type(),
+               NumberType::<u64>::data_type(),
             )]))
         };
 
@@ -2601,7 +2604,7 @@ impl SchemaApiTestSuite {
         let schema = || {
             Arc::new(DataSchema::new(vec![DataField::new(
                 "number",
-                u64::to_data_type(),
+               NumberType::<u64>::data_type(),
             )]))
         };
 
@@ -2697,7 +2700,7 @@ impl SchemaApiTestSuite {
         let schema = || {
             Arc::new(DataSchema::new(vec![DataField::new(
                 "number",
-                u64::to_data_type(),
+               NumberType::<u64>::data_type(),
             )]))
         };
 
@@ -3066,7 +3069,7 @@ impl SchemaApiTestSuite {
         let schema = || {
             Arc::new(DataSchema::new(vec![DataField::new(
                 "number",
-                u64::to_data_type(),
+               NumberType::<u64>::data_type(),
             )]))
         };
 
@@ -3173,7 +3176,7 @@ impl SchemaApiTestSuite {
         let schema = || {
             Arc::new(DataSchema::new(vec![DataField::new(
                 "number",
-                u64::to_data_type(),
+               NumberType::<u64>::data_type(),
             )]))
         };
 
@@ -3286,7 +3289,7 @@ impl SchemaApiTestSuite {
         let schema = || {
             Arc::new(DataSchema::new(vec![DataField::new(
                 "number",
-                u64::to_data_type(),
+               NumberType::<u64>::data_type(),
             )]))
         };
 
@@ -3440,7 +3443,7 @@ impl SchemaApiTestSuite {
             let schema = || {
                 Arc::new(DataSchema::new(vec![DataField::new(
                     "number",
-                    u64::to_data_type(),
+                   NumberType::<u64>::data_type(),
                 )]))
             };
             let table_meta = |created_on| TableMeta {
@@ -3562,7 +3565,7 @@ impl SchemaApiTestSuite {
             // Table schema with metadata(due to serde issue).
             let schema = Arc::new(DataSchema::new(vec![DataField::new(
                 "number",
-                u64::to_data_type(),
+               NumberType::<u64>::data_type(),
             )]));
 
             let options = maplit::btreemap! {"opt‐1".into() => "val-1".into()};
@@ -3934,7 +3937,7 @@ impl SchemaApiTestSuite {
             let tables = vec!["tb1", "tb2"];
             let schema = Arc::new(DataSchema::new(vec![DataField::new(
                 "number",
-                u64::to_data_type(),
+               NumberType::<u64>::data_type(),
             )]));
 
             let options = maplit::btreemap! {"opt-1".into() => "val-1".into()};
@@ -4007,7 +4010,7 @@ impl SchemaApiTestSuite {
 
             let schema = Arc::new(DataSchema::new(vec![DataField::new(
                 "number",
-                u64::to_data_type(),
+                NumberType::<u64>::data_type(),
             )]));
 
             let options = maplit::btreemap! {"opt‐1".into() => "val-1".into()};

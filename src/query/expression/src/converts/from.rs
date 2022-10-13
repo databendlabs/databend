@@ -27,6 +27,8 @@ use crate::with_number_type;
 use crate::Chunk;
 use crate::Column;
 use crate::ColumnBuilder;
+use crate::DataField;
+use crate::DataSchema;
 use crate::Scalar;
 use crate::Value;
 
@@ -60,6 +62,18 @@ pub fn from_type(datatype: &DataTypeImpl) -> DataType {
         | DataTypeImpl::VariantArray(_)
         | DataTypeImpl::VariantObject(_) => DataType::Variant,
     })
+}
+
+pub fn from_schema(schema: &common_datavalues::DataSchema) -> DataSchema {
+    let fields = schema
+        .fields()
+        .iter()
+        .map(|f| {
+            let ty = from_type(f.data_type());
+            DataField::new(f.name(), ty)
+        })
+        .collect();
+    DataSchema::new_from(fields, schema.meta().clone())
 }
 
 pub fn from_scalar(datavalue: &DataValue, datatype: &DataTypeImpl) -> Scalar {

@@ -12,12 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::prelude::*;
+use common_expression::DataSchemaRef;
+use common_expression::types::DataType;
 use once_cell::sync::Lazy;
+use common_expression::DataField;
+use common_expression::DataSchemaRefExt;
 
 pub static SINK_SCHEMA: Lazy<DataSchemaRef> = Lazy::new(|| {
     DataSchemaRefExt::create(vec![
-        DataField::new("seg_loc", Vu8::to_data_type()),
-        DataField::new("seg_info", Vu8::to_data_type()),
+        DataField::new("seg_loc",  DataType::String),
+        DataField::new("seg_info", DataType::String),
     ])
 });

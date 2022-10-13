@@ -17,9 +17,12 @@
 
 use std::sync::Arc;
 
+use ce::converts::from_schema;
+use ce::converts::to_schema;
 use common_datavalues as dv;
-use common_datavalues::chrono::DateTime;
-use common_datavalues::chrono::Utc;
+use common_expression as ce;
+use chrono::DateTime;
+use chrono::Utc;
 use common_meta_app::schema as mt;
 use common_protos::pb;
 use common_storage::StorageParams;
@@ -171,8 +174,9 @@ impl FromToProto for mt::TableMeta {
             p.catalog
         };
 
+        let dv_schema = dv::DataSchema::from_pb(schema)?;
         let v = Self {
-            schema: Arc::new(dv::DataSchema::from_pb(schema)?),
+            schema: Arc::new(from_schema(&dv_schema)),
             catalog,
             engine: p.engine,
             engine_options: p.engine_options,
@@ -202,11 +206,12 @@ impl FromToProto for mt::TableMeta {
     }
 
     fn to_pb(&self) -> Result<pb::TableMeta, Incompatible> {
+        let schema = to_schema(&self.schema);
         let p = pb::TableMeta {
             ver: VER,
             min_compatible: MIN_COMPATIBLE_VER,
             catalog: self.catalog.clone(),
-            schema: Some(self.schema.to_pb()?),
+            schema: Some(schema.to_pb()?),
             engine: self.engine.clone(),
             engine_options: self.engine_options.clone(),
             storage_params: match self.storage_params.clone() {

@@ -20,9 +20,9 @@ use std::fmt::Formatter;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use common_datavalues::chrono::DateTime;
-use common_datavalues::chrono::Utc;
-use common_datavalues::prelude::*;
+use chrono::DateTime;
+use chrono::Utc;
+use common_expression::DataSchema;
 use common_meta_types::MatchSeq;
 use common_storage::StorageParams;
 use maplit::hashmap;
@@ -287,7 +287,7 @@ impl Display for TableMeta {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "Engine: {}={:?}, Schema: {}, Options: {:?}, FieldComments: {:?} CreatedOn: {:?} DropOn: {:?}",
+            "Engine: {}={:?}, Schema: {:?}, Options: {:?}, FieldComments: {:?} CreatedOn: {:?} DropOn: {:?}",
             self.engine,
             self.engine_options,
             self.schema,
