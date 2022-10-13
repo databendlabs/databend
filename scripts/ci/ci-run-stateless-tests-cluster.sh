@@ -9,4 +9,5 @@ SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../../tests" || exit
 
 echo "Starting databend-test"
-./databend-test --mode 'cluster' --run-dir 0_stateless
+# The skip should be removed after https://github.com/datafuselabs/databend/issues/8107 is addressed.
+./databend-test --mode 'cluster' --run-dir 0_stateless --skip '13_0004_q4'

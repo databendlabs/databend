@@ -99,7 +99,7 @@ impl RaftLog {
     ///
     /// When this function returns the logs are guaranteed to be fsync-ed.
     pub async fn append(&self, logs: &[Entry<LogEntry>]) -> Result<(), MetaStorageError> {
-        self.logs().append_values(logs).await
+        self.logs().append(logs).await
     }
 
     /// Returns a borrowed key space in sled::Tree for logs
