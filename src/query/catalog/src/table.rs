@@ -179,11 +179,7 @@ pub trait Table: Sync + Send {
 
     async fn truncate(&self, ctx: Arc<dyn TableContext>, purge: bool) -> Result<()> {
         let (_, _) = (ctx, purge);
-
-        Err(ErrorCode::UnImplement(format!(
-            "truncate for table {} is not implemented",
-            self.name()
-        )))
+        Ok(())
     }
 
     async fn optimize(&self, ctx: Arc<dyn TableContext>, keep_last_snapshot: bool) -> Result<()> {
@@ -262,6 +258,26 @@ pub trait Table: Sync + Send {
         )))
     }
 }
+
+#[async_trait::async_trait]
+pub trait TableExt: Table {
+    async fn refresh(&self, ctx: &dyn TableContext) -> Result<Arc<dyn Table>> {
+        let table_info = self.get_table_info();
+        let name = table_info.name.clone();
+        let tid = table_info.ident.table_id;
+        let catalog = ctx.get_catalog(table_info.catalog())?;
+        let (ident, meta) = catalog.get_table_meta_by_id(tid).await?;
+        let table_info: TableInfo = TableInfo {
+            ident,
+            desc: "".to_owned(),
+            name,
+            meta: meta.as_ref().clone(),
+        };
+        catalog.get_table_by_info(&table_info)
+    }
+}
+
+impl<T: ?Sized> TableExt for T where T: Table {}
 
 #[derive(Debug)]
 pub enum NavigationPoint {
