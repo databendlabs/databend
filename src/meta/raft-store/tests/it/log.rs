@@ -117,7 +117,7 @@ async fn test_raft_log_insert() -> anyhow::Result<()> {
     let db = &tc.db;
     let rl = RaftLog::open(db, &tc.raft_config).await?;
 
-    assert_eq!(None, rl.get(&5)?);
+    assert_eq!(None, rl.logs().get(&5)?);
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -136,9 +136,7 @@ async fn test_raft_log_insert() -> anyhow::Result<()> {
         },
     ];
 
-    for log in logs.iter() {
-        rl.insert(log).await?;
-    }
+    rl.append(&logs).await?;
 
     assert_eq!(logs, rl.range_values(..)?);
 
@@ -153,7 +151,7 @@ async fn test_raft_log_get() -> anyhow::Result<()> {
     let db = &tc.db;
     let rl = RaftLog::open(db, &tc.raft_config).await?;
 
-    assert_eq!(None, rl.get(&5)?);
+    assert_eq!(None, rl.logs().get(&5)?);
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -174,11 +172,11 @@ async fn test_raft_log_get() -> anyhow::Result<()> {
 
     rl.append(&logs).await?;
 
-    assert_eq!(None, rl.get(&1)?);
-    assert_eq!(Some(logs[0].clone()), rl.get(&2)?);
-    assert_eq!(None, rl.get(&3)?);
-    assert_eq!(Some(logs[1].clone()), rl.get(&4)?);
-    assert_eq!(None, rl.get(&5)?);
+    assert_eq!(None, rl.logs().get(&1)?);
+    assert_eq!(Some(logs[0].clone()), rl.logs().get(&2)?);
+    assert_eq!(None, rl.logs().get(&3)?);
+    assert_eq!(Some(logs[1].clone()), rl.logs().get(&4)?);
+    assert_eq!(None, rl.logs().get(&5)?);
 
     Ok(())
 }
@@ -191,7 +189,7 @@ async fn test_raft_log_last() -> anyhow::Result<()> {
     let db = &tc.db;
     let rl = RaftLog::open(db, &tc.raft_config).await?;
 
-    assert_eq!(None, rl.last()?);
+    assert_eq!(None, rl.logs().last()?);
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -211,7 +209,7 @@ async fn test_raft_log_last() -> anyhow::Result<()> {
     ];
 
     rl.append(&logs).await?;
-    assert_eq!(Some((4, logs[1].clone())), rl.last()?);
+    assert_eq!(Some((4, logs[1].clone())), rl.logs().last()?);
 
     Ok(())
 }

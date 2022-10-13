@@ -155,55 +155,6 @@ impl SledTree {
         }
     }
 
-    /// Return true if the tree contains the key.
-    pub fn contains_key<KV: SledKeySpace>(&self, key: &KV::K) -> Result<bool, MetaStorageError>
-    where KV: SledKeySpace {
-        let got = self
-            .tree
-            .contains_key(KV::serialize_key(key)?)
-            .context(|| format!("contains_key: {}:{}", self.name, key))?;
-
-        Ok(got)
-    }
-
-    pub async fn update_and_fetch<KV: SledKeySpace, F>(
-        &self,
-        key: &KV::K,
-        mut f: F,
-    ) -> Result<Option<KV::V>, MetaStorageError>
-    where
-        F: FnMut(Option<KV::V>) -> Option<KV::V>,
-    {
-        let mes = || format!("update_and_fetch: {}", key);
-
-        let k = KV::serialize_key(key)?;
-
-        let res = self
-            .tree
-            .update_and_fetch(k, move |old| {
-                let old = match old {
-                    Some(o) => Some(KV::deserialize_value(o).ok()?),
-                    None => None,
-                };
-
-                let new_val = f(old);
-                match new_val {
-                    Some(new_val) => Some(KV::serialize_value(&new_val).ok()?),
-                    None => None,
-                }
-            })
-            .context(mes)?;
-
-        self.flush_async(true).await?;
-
-        let value = match res {
-            None => None,
-            Some(v) => Some(KV::deserialize_value(v)?),
-        };
-
-        Ok(value)
-    }
-
     /// Retrieve the value of key.
     pub fn get<KV: SledKeySpace>(&self, key: &KV::K) -> Result<Option<KV::V>, MetaStorageError> {
         let got = self
@@ -315,7 +266,7 @@ impl SledTree {
         Ok(res)
     }
 
-    /// Get key-valuess in `range`
+    /// Get key-values in `range`
     pub fn range_kvs<KV, R>(&self, range: R) -> Result<Vec<(KV::K, KV::V)>, MetaStorageError>
     where
         KV: SledKeySpace,
@@ -459,7 +410,7 @@ impl SledTree {
 
     /// Insert a single kv.
     /// Returns the last value if it is set.
-    async fn insert<KV>(
+    pub async fn insert<KV>(
         &self,
         key: &KV::K,
         value: &KV::V,
@@ -483,17 +434,6 @@ impl SledTree {
         self.flush_async(true).await?;
 
         Ok(prev)
-    }
-
-    /// Insert a single kv, Retrieve the key from value.
-    #[tracing::instrument(level = "debug", skip(self, value))]
-    pub async fn insert_value<KV>(&self, value: &KV::V) -> Result<Option<KV::V>, MetaStorageError>
-    where
-        KV: SledKeySpace,
-        KV::V: SledValueToKey<KV::K>,
-    {
-        let key = value.to_key();
-        self.insert::<KV>(&key, value).await
     }
 
     /// Build a string describing the range for a range operation.
@@ -627,21 +567,6 @@ impl<'a, KV: SledKeySpace> Deref for AsTxnKeySpace<'a, KV> {
 
 #[allow(clippy::type_complexity)]
 impl<'a, KV: SledKeySpace> AsKeySpace<'a, KV> {
-    pub fn contains_key(&self, key: &KV::K) -> Result<bool, MetaStorageError> {
-        self.inner.contains_key::<KV>(key)
-    }
-
-    pub async fn update_and_fetch<F>(
-        &self,
-        key: &KV::K,
-        f: F,
-    ) -> Result<Option<KV::V>, MetaStorageError>
-    where
-        F: FnMut(Option<KV::V>) -> Option<KV::V>,
-    {
-        self.inner.update_and_fetch::<KV, _>(key, f).await
-    }
-
     pub fn get(&self, key: &KV::K) -> Result<Option<KV::V>, MetaStorageError> {
         self.inner.get::<KV>(key)
     }
@@ -718,10 +643,5 @@ impl<'a, KV: SledKeySpace> AsKeySpace<'a, KV> {
         value: &KV::V,
     ) -> Result<Option<KV::V>, MetaStorageError> {
         self.inner.insert::<KV>(key, value).await
-    }
-
-    pub async fn insert_value(&self, value: &KV::V) -> Result<Option<KV::V>, MetaStorageError>
-    where KV::V: SledValueToKey<KV::K> {
-        self.inner.insert_value::<KV>(value).await
     }
 }
