@@ -131,6 +131,43 @@ pub(crate) fn test_s3_stage_info() -> mt::UserStageInfo {
     }
 }
 
+pub(crate) fn test_s3_stage_info_v16() -> mt::UserStageInfo {
+    mt::UserStageInfo {
+        stage_name: "s3://mybucket/data/files".to_string(),
+        stage_type: mt::StageType::External,
+        stage_params: mt::StageParams {
+            storage: StorageParams::S3(StorageS3Config {
+                bucket: "mybucket".to_string(),
+                root: "/data/files".to_string(),
+                access_key_id: "my_key_id".to_string(),
+                secret_access_key: "my_secret_key".to_string(),
+                security_token: "my_security_token".to_string(),
+                master_key: "my_master_key".to_string(),
+                role_arn: "aws::iam::xxx".to_string(),
+                external_id: "hello,world".to_string(),
+                ..Default::default()
+            }),
+        },
+        file_format_options: mt::FileFormatOptions {
+            format: mt::StageFileFormatType::Json,
+            skip_header: 1024,
+            field_delimiter: "|".to_string(),
+            record_delimiter: "//".to_string(),
+            compression: mt::StageFileCompression::Bz2,
+        },
+        copy_options: mt::CopyOptions {
+            on_error: mt::OnErrorMode::SkipFileNum(666),
+            size_limit: 1038,
+            split_size: 1024,
+            purge: true,
+            single: false,
+            max_file_size: 0,
+        },
+        comment: "test".to_string(),
+        ..Default::default()
+    }
+}
+
 pub(crate) fn test_s3_stage_info_v14() -> mt::UserStageInfo {
     mt::UserStageInfo {
         stage_name: "s3://mybucket/data/files".to_string(),
@@ -452,6 +489,17 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("s3_stage_info: {:?}", buf);
+    }
+
+    // Stage on S3 v16
+    {
+        let s3_stage_info = test_s3_stage_info_v16();
+
+        let p = s3_stage_info.to_pb()?;
+
+        let mut buf = vec![];
+        common_protos::prost::Message::encode(&p, &mut buf)?;
+        println!("s3_stage_info_v16: {:?}", buf);
     }
 
     // Stage on S3 v14
