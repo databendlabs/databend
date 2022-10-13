@@ -52,6 +52,7 @@ impl ViewsTable {
                 engine: "VIEW".to_string(),
                 ..Default::default()
             },
+            ..Default::default()
         };
 
         ViewTable::create(table_info)

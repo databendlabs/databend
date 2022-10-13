@@ -25,7 +25,6 @@ use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
 use crate::types::number::NumberScalar;
 use crate::types::string::StringColumnBuilder;
-use crate::types::timestamp::TimestampColumn;
 use crate::types::AnyType;
 use crate::types::ArgType;
 use crate::types::ArrayType;
@@ -100,6 +99,8 @@ impl Chunk {
             }),
             Scalar::Boolean(value) => Some(*value),
             Scalar::String(value) => Some(!value.is_empty()),
+            Scalar::Timestamp(value) => Some(*value != 0),
+            Scalar::Date(value) => Some(*value != 0),
             Scalar::Null => Some(false),
             _ => None,
         }
@@ -116,6 +117,14 @@ impl Chunk {
             Column::Boolean(value) => Some(value.clone()),
             Column::String(value) => Some(BooleanType::column_from_iter(
                 value.iter().map(|s| !s.is_empty()),
+                &[],
+            )),
+            Column::Timestamp(value) => Some(BooleanType::column_from_iter(
+                value.iter().map(|v| *v != 0),
+                &[],
+            )),
+            Column::Date(value) => Some(BooleanType::column_from_iter(
+                value.iter().map(|v| *v != 0),
                 &[],
             )),
             Column::Null { len } => Some(MutableBitmap::from_len_zeroed(*len).into()),
@@ -155,11 +164,8 @@ impl Column {
                 filter,
             ),
             Column::Timestamp(column) => {
-                let ts = Self::filter_primitive_types(&column.ts, filter);
-                Column::Timestamp(TimestampColumn {
-                    ts,
-                    precision: column.precision,
-                })
+                let ts = Self::filter_primitive_types(column, filter);
+                Column::Timestamp(ts)
             }
             Column::Date(column) => {
                 let d = Self::filter_primitive_types(column, filter);
