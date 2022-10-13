@@ -69,7 +69,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_| None,
         vectorize_with_builder_1_arg::<StringType, NullableType<VariantType>>(|s, output, _| {
             if s.trim().is_empty() {
-                output.push(Some(JSONB_NULL));
+                output.push(JSONB_NULL);
             } else {
                 match parse_value(s) {
                     Ok(value) => {
@@ -154,7 +154,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 } else {
                     let json_path = JsonPath::UInt64(idx);
                     match get_by_path(s, vec![json_path]) {
-                        Some(val) => output.push(Some(val.as_slice())),
+                        Some(val) => output.push(val.as_slice()),
                         None => {
                             output.validity.push(false);
                             output.builder.commit_row();
@@ -185,7 +185,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     })?;
                     let json_path = JsonPath::String(Cow::Borrowed(&name));
                     match get_by_path(s, vec![json_path]) {
-                        Some(val) => output.push(Some(val.as_slice())),
+                        Some(val) => output.push(val.as_slice()),
                         None => {
                             output.validity.push(false);
                             output.builder.commit_row();
@@ -215,7 +215,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         )
                     })?;
                     match get_by_name_ignore_case(s, &name) {
-                        Some(val) => output.push(Some(val.as_slice())),
+                        Some(val) => output.push(val.as_slice()),
                         None => {
                             output.validity.push(false);
                             output.builder.commit_row();
@@ -245,7 +245,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         )
                     })?;
                     match get_by_path(s, json_paths) {
-                        Some(val) => output.push(Some(val.as_slice())),
+                        Some(val) => output.push(val.as_slice()),
                         None => {
                             output.validity.push(false);
                             output.builder.commit_row();
@@ -299,7 +299,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 output.push_null();
             } else {
                 match as_bool(v) {
-                    Some(val) => output.push(Some(val)),
+                    Some(val) => output.push(val),
                     None => output.push_null(),
                 }
             }
@@ -316,7 +316,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 output.push_null();
             } else {
                 match as_i64(v) {
-                    Some(val) => output.push(Some(val)),
+                    Some(val) => output.push(val),
                     None => output.push_null(),
                 }
             }
@@ -367,7 +367,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 output.validity.push(false);
                 output.builder.commit_row();
             } else if is_array(v) {
-                output.push(Some(v.as_bytes()));
+                output.push(v.as_bytes());
             } else {
                 output.validity.push(false);
                 output.builder.commit_row();
@@ -385,7 +385,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 output.validity.push(false);
                 output.builder.commit_row();
             } else if is_object(v) {
-                output.push(Some(v.as_bytes()));
+                output.push(v.as_bytes());
             } else {
                 output.validity.push(false);
                 output.builder.commit_row();
