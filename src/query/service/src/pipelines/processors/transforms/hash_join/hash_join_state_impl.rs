@@ -103,22 +103,13 @@ impl HashJoinState for JoinHashTable {
                 for (row_index, key) in build_keys_iter.enumerate().take($chunk.num_rows()) {
                     let mut inserted = true;
                     let ptr = RowPtr {
-                        chunk_index: $chunk_index as u32,
-                        row_index: row_index as u32,
+                        chunk_index: $chunk_index,
+                        row_index,
                         marker: $markers[row_index],
                     };
                     if self.hash_join_desc.join_type == JoinType::LeftMark {
                         let mut self_row_ptrs = self.row_ptrs.write();
                         self_row_ptrs.push(ptr);
-                    } else if matches!(
-                        self.hash_join_desc.join_type,
-                        JoinType::Right
-                            | JoinType::RightSemi
-                            | JoinType::RightAnti
-                            | JoinType::Full
-                    ) {
-                        let mut row_state = self.hash_join_desc.right_join_desc.row_state.write();
-                        row_state.insert(ptr, Arc::new(AtomicUsize::new(0)));
                     }
                     let entity = $table.insert_key(&key, &mut inserted);
                     if inserted {
@@ -183,23 +174,13 @@ impl HashJoinState for JoinHashTable {
                     for (row_index, key) in build_keys_iter.enumerate().take(chunk.num_rows()) {
                         let mut inserted = true;
                         let ptr = RowPtr {
-                            chunk_index: chunk_index as u32,
-                            row_index: row_index as u32,
+                            chunk_index,
+                            row_index,
                             marker: markers[row_index],
                         };
                         if self.hash_join_desc.join_type == JoinType::LeftMark {
                             let mut self_row_ptrs = self.row_ptrs.write();
                             self_row_ptrs.push(ptr);
-                        } else if matches!(
-                            self.hash_join_desc.join_type,
-                            JoinType::Right
-                                | JoinType::RightSemi
-                                | JoinType::RightAnti
-                                | JoinType::Full
-                        ) {
-                            let mut row_state =
-                                self.hash_join_desc.right_join_desc.row_state.write();
-                            row_state.insert(ptr, Arc::new(AtomicUsize::new(0)));
                         }
                         let keys_ref = KeysRef::create(key.as_ptr() as usize, key.len());
                         let entity = table.hash_table.insert_key(&keys_ref, &mut inserted);
@@ -290,7 +271,8 @@ impl HashJoinState for JoinHashTable {
     }
 
     fn right_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
-        let unmatched_build_indexes = self.find_unmatched_build_indexes()?;
+        let mut row_state = self.row_state_for_right_join()?;
+        let unmatched_build_indexes = self.find_unmatched_build_indexes(&row_state)?;
         if unmatched_build_indexes.is_empty() && self.hash_join_desc.other_predicate.is_none() {
             return Ok(blocks.to_vec());
         }
@@ -336,7 +318,7 @@ impl HashJoinState for JoinHashTable {
 
         // If build_indexes size will greater build table size, we need filter the redundant rows for build side.
         let mut bm = validity.into_mut().right().unwrap();
-        self.filter_rows_for_right_join(&mut bm);
+        self.filter_rows_for_right_join(&mut bm, &mut row_state);
         let predicate = BooleanColumn::from_arrow_data(bm.into()).arc();
         let filtered_block = DataBlock::filter_block(merged_block, &predicate)?;
 
@@ -349,11 +331,12 @@ impl HashJoinState for JoinHashTable {
     }
 
     fn right_semi_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
+        let mut row_state = self.row_state_for_right_join()?;
         // Fast path for right anti join with non-equi conditions
         if self.hash_join_desc.other_predicate.is_none()
             && self.hash_join_desc.join_type == JoinType::RightAnti
         {
-            let unmatched_build_indexes = self.find_unmatched_build_indexes()?;
+            let unmatched_build_indexes = self.find_unmatched_build_indexes(&row_state)?;
             let unmatched_build_block = self.row_space.gather(&unmatched_build_indexes)?;
             return Ok(vec![unmatched_build_block]);
         }
@@ -371,7 +354,8 @@ impl HashJoinState for JoinHashTable {
         {
             let mut bm = MutableBitmap::new();
             bm.extend_constant(build_block.num_rows(), true);
-            let filtered_block = self.filter_rows_for_right_semi_join(&mut bm, build_block)?;
+            let filtered_block =
+                self.filter_rows_for_right_semi_join(&mut bm, build_block, &mut row_state)?;
             return Ok(vec![filtered_block]);
         }
 
@@ -386,10 +370,11 @@ impl HashJoinState for JoinHashTable {
             return if self.hash_join_desc.join_type == JoinType::RightSemi {
                 let mut bm = MutableBitmap::new();
                 bm.extend_constant(build_block.num_rows(), true);
-                let filtered_block = self.filter_rows_for_right_semi_join(&mut bm, build_block)?;
+                let filtered_block =
+                    self.filter_rows_for_right_semi_join(&mut bm, build_block, &mut row_state)?;
                 return Ok(vec![filtered_block]);
             } else {
-                let unmatched_build_indexes = self.find_unmatched_build_indexes()?;
+                let unmatched_build_indexes = self.find_unmatched_build_indexes(&mut row_state)?;
                 let unmatched_build_block = self.row_space.gather(&unmatched_build_indexes)?;
                 Ok(vec![unmatched_build_block])
             };
@@ -410,7 +395,8 @@ impl HashJoinState for JoinHashTable {
 
         // Right semi join with non-equi conditions
         if self.hash_join_desc.join_type == JoinType::RightSemi {
-            let filtered_block = self.filter_rows_for_right_semi_join(&mut bm, build_block)?;
+            let filtered_block =
+                self.filter_rows_for_right_semi_join(&mut bm, build_block, &mut row_state)?;
             return Ok(vec![filtered_block]);
         }
 
@@ -425,18 +411,21 @@ impl HashJoinState for JoinHashTable {
             }
             *build_indexes = filtered_build_indexes;
         }
-        let unmatched_build_indexes = self.find_unmatched_build_indexes()?;
+        let unmatched_build_indexes = self.find_unmatched_build_indexes(&mut row_state)?;
         let unmatched_build_block = self.row_space.gather(&unmatched_build_indexes)?;
         Ok(vec![unmatched_build_block])
     }
 }
 
 impl JoinHashTable {
-    pub(crate) fn filter_rows_for_right_join(&self, bm: &mut MutableBitmap) {
+    pub(crate) fn filter_rows_for_right_join(
+        &self,
+        bm: &mut MutableBitmap,
+        row_state: &mut Vec<Vec<usize>>,
+    ) {
         let build_indexes = self.hash_join_desc.right_join_desc.build_indexes.read();
-        let row_state = self.hash_join_desc.right_join_desc.row_state.read();
         for (index, row) in build_indexes.iter().enumerate() {
-            if row_state.get(row).unwrap().load(Ordering::Relaxed) == 1 {
+            if row_state[row.chunk_index][row.row_index] == 1_usize {
                 if !bm.get(index) {
                     bm.set(index, true)
                 }
@@ -444,7 +433,7 @@ impl JoinHashTable {
             }
 
             if !bm.get(index) {
-                row_state.get(row).unwrap().fetch_sub(1, Ordering::Relaxed);
+                row_state[row.chunk_index][row.row_index] -= 1;
             }
         }
     }
@@ -453,18 +442,18 @@ impl JoinHashTable {
         &self,
         bm: &mut MutableBitmap,
         input: DataBlock,
+        row_state: &mut Vec<Vec<usize>>,
     ) -> Result<DataBlock> {
         let build_indexes = self.hash_join_desc.right_join_desc.build_indexes.read();
-        let row_state = self.hash_join_desc.right_join_desc.row_state.read();
         for (index, row) in build_indexes.iter().enumerate() {
-            if row_state.get(row).unwrap().load(Ordering::Relaxed) > 1 && !bm.get(index) {
-                row_state.get(row).unwrap().fetch_sub(1, Ordering::Relaxed);
+            if row_state[row.chunk_index][row.row_index] > 1_usize && !bm.get(index) {
+                row_state[row.chunk_index][row.row_index] -= 1;
             }
         }
         for (index, row) in build_indexes.iter().enumerate() {
-            if row_state.get(row).unwrap().load(Ordering::Relaxed) > 1 && bm.get(index) {
+            if row_state[row.chunk_index][row.row_index] > 1_usize && bm.get(index) {
                 bm.set(index, false);
-                row_state.get(row).unwrap().fetch_sub(1, Ordering::Relaxed);
+                row_state[row.chunk_index][row.row_index] -= 1;
             }
         }
         let predicate = BooleanColumn::from_arrow_data(bm.clone().into()).arc();

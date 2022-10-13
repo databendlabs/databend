@@ -40,9 +40,19 @@ impl Chunk {
 
 #[derive(Clone, Copy, Debug)]
 pub struct RowPtr {
-    pub chunk_index: u32,
-    pub row_index: u32,
+    pub chunk_index: usize,
+    pub row_index: usize,
     pub marker: Option<MarkerKind>,
+}
+
+impl RowPtr {
+    pub fn new(chunk_index: usize, row_index: usize) -> Self {
+        RowPtr {
+            chunk_index,
+            row_index,
+            marker: None,
+        }
+    }
 }
 
 pub struct RowSpace {

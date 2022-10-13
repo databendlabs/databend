@@ -44,19 +44,12 @@ impl JoinHashTable {
         let valids = &probe_state.valids;
         let mut validity = MutableBitmap::with_capacity(input.num_rows());
         let mut build_indexes = self.hash_join_desc.right_join_desc.build_indexes.write();
-        let row_state = self.hash_join_desc.right_join_desc.row_state.read();
         let build_indexes_len = build_indexes.len();
         for (i, key) in keys_iter.enumerate() {
             let probe_result_ptr = self.probe_key(hash_table, key, valids, i);
             if let Some(v) = probe_result_ptr {
                 let probe_result_ptrs = v.get_value();
                 build_indexes.extend(probe_result_ptrs);
-                for row_ptr in probe_result_ptrs.iter() {
-                    row_state
-                        .get(row_ptr)
-                        .unwrap()
-                        .fetch_add(1, Ordering::Relaxed);
-                }
                 probe_indexes.extend(std::iter::repeat(i as u32).take(probe_result_ptrs.len()));
                 validity.extend_constant(probe_result_ptrs.len(), true);
             }

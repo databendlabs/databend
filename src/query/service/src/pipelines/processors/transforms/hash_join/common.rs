@@ -201,14 +201,18 @@ impl JoinHashTable {
         ))
     }
 
-    pub(crate) fn find_unmatched_build_indexes(&self) -> Result<Vec<RowPtr>> {
+    pub(crate) fn find_unmatched_build_indexes(
+        &self,
+        row_state: &Vec<Vec<usize>>,
+    ) -> Result<Vec<RowPtr>> {
         // For right/full join, build side will appear at least once in the joined table
         // Find the unmatched rows in build side
         let mut unmatched_build_indexes = vec![];
-        let row_state = self.hash_join_desc.right_join_desc.row_state.read();
-        for (row_ptr, partner_count) in row_state.iter() {
-            if partner_count.load(Ordering::Relaxed) == 0 {
-                unmatched_build_indexes.push(*row_ptr);
+        for (chunk_index, chunk) in self.row_space.chunks.read().unwrap().iter().enumerate() {
+            for row_index in 0..chunk.num_rows() {
+                if row_state[chunk_index][row_index] == 0 {
+                    unmatched_build_indexes.push(RowPtr::new(chunk_index, row_index));
+                }
             }
         }
         Ok(unmatched_build_indexes)
@@ -249,5 +253,30 @@ impl JoinHashTable {
                 .collect::<Result<Vec<_>>>()?,
         );
         self.merge_eq_block(&unmatched_build_block, &null_probe_block)
+    }
+
+    // Final row_state for right join
+    // Record row in build side that is matched how many rows in probe side.
+    pub(crate) fn row_state_for_right_join(&self) -> Result<Vec<Vec<usize>>> {
+        let build_indexes = self.hash_join_desc.right_join_desc.build_indexes.read();
+        let chunks = self.row_space.chunks.read().unwrap();
+        let mut row_state = Vec::with_capacity(chunks.len());
+        for chunk in chunks.iter() {
+            let mut rows = Vec::with_capacity(chunk.num_rows());
+            for row_index in 0..chunk.num_rows() {
+                rows.push(0);
+            }
+            row_state.push(rows);
+        }
+
+        for row_ptr in build_indexes.iter() {
+            if self.hash_join_desc.join_type == JoinType::Full
+                && row_ptr.marker == Some(MarkerKind::False)
+            {
+                continue;
+            }
+            row_state[row_ptr.chunk_index][row_ptr.row_index] += 1;
+        }
+        Ok(row_state)
     }
 }

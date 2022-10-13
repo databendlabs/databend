@@ -46,8 +46,6 @@ pub struct RightJoinDesc {
     /// Record rows in build side that are matched with rows in probe side.
     /// It's order-sensitive, aligned with the order of rows in merged block.
     pub(crate) build_indexes: RwLock<Vec<RowPtr>>,
-    /// Record row in build side that is matched how many rows in probe side.
-    pub(crate) row_state: RwLock<HashMap<RowPtr, Arc<AtomicUsize>>>,
 }
 
 impl RightJoinDesc {
@@ -55,7 +53,6 @@ impl RightJoinDesc {
         let max_block_size = ctx.get_settings().get_max_block_size()? as usize;
         Ok(RightJoinDesc {
             build_indexes: RwLock::new(Vec::with_capacity(max_block_size)),
-            row_state: RwLock::new(HashMap::with_capacity(max_block_size)),
         })
     }
 }
