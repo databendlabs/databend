@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::borrow::BorrowMut;
+use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
 use common_arrow::arrow::bitmap::Bitmap;
@@ -107,9 +109,18 @@ impl HashJoinState for JoinHashTable {
                         row_index: row_index as u32,
                         marker: $markers[row_index],
                     };
-                    {
+                    if self.hash_join_desc.join_type == JoinType::LeftMark {
                         let mut self_row_ptrs = self.row_ptrs.write();
-                        self_row_ptrs.push(ptr.clone());
+                        self_row_ptrs.push(ptr);
+                    } else if matches!(
+                        self.hash_join_desc.join_type,
+                        JoinType::Right
+                            | JoinType::RightSemi
+                            | JoinType::RightAnti
+                            | JoinType::Full
+                    ) {
+                        let mut row_state = self.hash_join_desc.right_join_desc.row_state.write();
+                        row_state.insert(ptr, Arc::new(AtomicUsize::new(0)));
                     }
                     let entity = $table.insert_key(&key, &mut inserted);
                     if inserted {
@@ -178,9 +189,19 @@ impl HashJoinState for JoinHashTable {
                             row_index: row_index as u32,
                             marker: markers[row_index],
                         };
-                        {
+                        if self.hash_join_desc.join_type == JoinType::LeftMark {
                             let mut self_row_ptrs = self.row_ptrs.write();
                             self_row_ptrs.push(ptr);
+                        } else if matches!(
+                            self.hash_join_desc.join_type,
+                            JoinType::Right
+                                | JoinType::RightSemi
+                                | JoinType::RightAnti
+                                | JoinType::Full
+                        ) {
+                            let mut row_state =
+                                self.hash_join_desc.right_join_desc.row_state.write();
+                            row_state.insert(ptr, Arc::new(AtomicUsize::new(0)));
                         }
                         let keys_ref = KeysRef::create(key.as_ptr() as usize, key.len());
                         let entity = table.hash_table.insert_key(&keys_ref, &mut inserted);
@@ -344,11 +365,10 @@ impl HashJoinState for JoinHashTable {
 
         // If build_indexes size will greater build table size, we need filter the redundant rows for build side.
         let mut build_indexes = self.hash_join_desc.right_join_desc.build_indexes.write();
-        let mut row_state = self.hash_join_desc.right_join_desc.row_state.write();
         build_indexes.extend(&unmatched_build_indexes);
         if build_indexes.len() > self.row_space.rows_number() {
             let mut bm = validity.into_mut().right().unwrap();
-            self.filter_rows_for_right_join(&mut bm, &build_indexes, &mut row_state);
+            self.filter_rows_for_right_join(&mut bm, &build_indexes);
             let predicate = BooleanColumn::from_arrow_data(bm.into()).arc();
             let filtered_block = DataBlock::filter_block(merged_block, &predicate)?;
             return Ok(vec![filtered_block]);
@@ -445,10 +465,10 @@ impl JoinHashTable {
         &self,
         bm: &mut MutableBitmap,
         build_indexes: &[RowPtr],
-        row_state: &mut std::collections::HashMap<RowPtr, usize>,
     ) {
+        let row_state = self.hash_join_desc.right_join_desc.row_state.read();
         for (index, row) in build_indexes.iter().enumerate() {
-            if row_state[row] == 1 || row_state[row] == 0 {
+            if matches!(row_state.get(row).unwrap().load(Ordering::Relaxed), 0 | 1){
                 if !bm.get(index) {
                     bm.set(index, true)
                 }
@@ -456,7 +476,7 @@ impl JoinHashTable {
             }
 
             if !bm.get(index) {
-                row_state.entry(*row).and_modify(|e| *e -= 1);
+                row_state.get(row).unwrap().fetch_sub(1, Ordering::Relaxed);
             }
         }
     }
@@ -467,16 +487,16 @@ impl JoinHashTable {
         input: DataBlock,
     ) -> Result<DataBlock> {
         let build_indexes = self.hash_join_desc.right_join_desc.build_indexes.read();
-        let mut row_state = self.hash_join_desc.right_join_desc.row_state.write();
+        let row_state = self.hash_join_desc.right_join_desc.row_state.read();
         for (index, row) in build_indexes.iter().enumerate() {
-            if row_state[row] > 1 && !bm.get(index) {
-                row_state.entry(*row).and_modify(|e| *e -= 1);
+            if row_state.get(row).unwrap().load(Ordering::Relaxed) > 1 && !bm.get(index) {
+                row_state.get(row).unwrap().fetch_sub(1, Ordering::Relaxed);
             }
         }
         for (index, row) in build_indexes.iter().enumerate() {
-            if row_state[row] > 1 && bm.get(index) {
+            if row_state.get(row).unwrap().load(Ordering::Relaxed) > 1 && bm.get(index) {
                 bm.set(index, false);
-                row_state.entry(*row).and_modify(|e| *e -= 1);
+                row_state.get(row).unwrap().fetch_sub(1, Ordering::Relaxed);
             }
         }
         let predicate = BooleanColumn::from_arrow_data(bm.clone().into()).arc();

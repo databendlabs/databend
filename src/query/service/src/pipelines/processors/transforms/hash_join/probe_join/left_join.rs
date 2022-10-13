@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::iter::TrustedLen;
+use std::sync::atomic::Ordering;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
@@ -28,7 +29,6 @@ use common_exception::Result;
 use common_hashtable::HashMap;
 use common_hashtable::HashTableKeyable;
 
-use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::JoinHashTable;
@@ -57,6 +57,7 @@ impl JoinHashTable {
         }
 
         let mut validity = MutableBitmap::new();
+        let full_row_state = self.hash_join_desc.right_join_desc.row_state.read();
         // Start to probe hash table
         for (i, key) in keys_iter.enumerate() {
             let probe_result_ptr = if self.hash_join_desc.from_correlated_subquery {
@@ -73,6 +74,9 @@ impl JoinHashTable {
                         let mut build_indexes =
                             self.hash_join_desc.right_join_desc.build_indexes.write();
                         build_indexes.extend(probe_result_ptrs);
+                        for row_ptr in probe_result_ptrs.iter() {
+                            full_row_state.get(row_ptr).unwrap().fetch_add(1, Ordering::Relaxed);
+                        }
                     }
 
                     if self.hash_join_desc.join_type == JoinType::Single
@@ -208,12 +212,11 @@ impl JoinHashTable {
         let merged_block = self.merge_eq_block(&nullable_build_block, &probe_block)?;
 
         let mut bm = validity.into_mut().right().unwrap();
-
         if self.hash_join_desc.join_type == JoinType::Full {
-            let mut build_indexes = self.hash_join_desc.right_join_desc.build_indexes.write();
-            for (idx, build_index) in build_indexes.iter_mut().enumerate() {
+            let build_indexes = self.hash_join_desc.right_join_desc.build_indexes.read();
+            for (idx, build_index) in build_indexes.iter().enumerate() {
                 if !bm.get(idx) {
-                    build_index.marker = Some(MarkerKind::False);
+                    full_row_state.get(build_index).unwrap().store(0, Ordering::Relaxed);
                 }
             }
         }

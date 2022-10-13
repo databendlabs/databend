@@ -13,7 +13,10 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::atomic::AtomicUsize;
+use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
 use common_planner::IndexType;
@@ -22,6 +25,7 @@ use parking_lot::RwLock;
 use crate::evaluator::EvalNode;
 use crate::evaluator::Evaluator;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
+use crate::sessions::QueryContext;
 use crate::sql::executor::HashJoin;
 use crate::sql::executor::PhysicalScalar;
 use crate::sql::plans::JoinType;
@@ -40,17 +44,19 @@ pub struct MarkJoinDesc {
 
 pub struct RightJoinDesc {
     /// Record rows in build side that are matched with rows in probe side.
+    /// It's order-sensitive, aligned with the order of rows in merged block.
     pub(crate) build_indexes: RwLock<Vec<RowPtr>>,
     /// Record row in build side that is matched how many rows in probe side.
-    pub(crate) row_state: RwLock<HashMap<RowPtr, usize>>,
+    pub(crate) row_state: RwLock<HashMap<RowPtr, Arc<AtomicUsize>>>,
 }
 
 impl RightJoinDesc {
-    pub fn create() -> Self {
-        RightJoinDesc {
-            build_indexes: RwLock::new(Vec::new()),
-            row_state: RwLock::new(HashMap::new()),
-        }
+    pub fn create(ctx: Arc<QueryContext>) -> Result<Self> {
+        let max_block_size = ctx.get_settings().get_max_block_size()? as usize;
+        Ok(RightJoinDesc {
+            build_indexes: RwLock::new(Vec::with_capacity(max_block_size)),
+            row_state: RwLock::new(HashMap::with_capacity(max_block_size)),
+        })
     }
 }
 
@@ -66,7 +72,7 @@ pub struct HashJoinDesc {
 }
 
 impl HashJoinDesc {
-    pub fn create(join: &HashJoin) -> Result<HashJoinDesc> {
+    pub fn create(ctx: Arc<QueryContext>, join: &HashJoin) -> Result<HashJoinDesc> {
         let predicate = Self::join_predicate(&join.other_conditions)?;
 
         Ok(HashJoinDesc {
@@ -82,7 +88,7 @@ impl HashJoinDesc {
                 marker_index: join.marker_index,
             },
             from_correlated_subquery: join.from_correlated_subquery,
-            right_join_desc: RightJoinDesc::create(),
+            right_join_desc: RightJoinDesc::create(ctx)?,
         })
     }
 

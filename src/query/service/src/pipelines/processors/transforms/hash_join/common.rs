@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
+use std::sync::atomic::Ordering;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
@@ -40,7 +40,6 @@ use crate::evaluator::EvalNode;
 use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::processors::JoinHashTable;
-use crate::sql::plans::JoinType;
 
 /// Some common methods for hash join.
 impl JoinHashTable {
@@ -203,30 +202,10 @@ impl JoinHashTable {
         // For right/full join, build side will appear at least once in the joined table
         // Find the unmatched rows in build side
         let mut unmatched_build_indexes = vec![];
-        let build_indexes = self.hash_join_desc.right_join_desc.build_indexes.read();
-        let build_indexes_set: HashSet<&RowPtr> = build_indexes.iter().collect();
-        // TODO(xudong): remove the line of code below after https://github.com/rust-lang/rust-clippy/issues/8987
-        #[allow(clippy::significant_drop_in_scrutinee)]
-        for (chunk_index, chunk) in self.row_space.chunks.read().unwrap().iter().enumerate() {
-            for row_index in 0..chunk.num_rows() {
-                let row_ptr = RowPtr {
-                    chunk_index: chunk_index as u32,
-                    row_index: row_index as u32,
-                    marker: None,
-                };
-                if !build_indexes_set.contains(&row_ptr) {
-                    let mut row_state = self.hash_join_desc.right_join_desc.row_state.write();
-                    row_state.entry(row_ptr).or_insert(0_usize);
-                    unmatched_build_indexes.push(row_ptr);
-                }
-                if self.hash_join_desc.join_type == JoinType::Full {
-                    if let Some(row_ptr) = build_indexes_set.get(&row_ptr) {
-                        // If `marker` == `MarkerKind::False`, it means the row in build side has been filtered in left probe phase
-                        if row_ptr.marker == Some(MarkerKind::False) {
-                            unmatched_build_indexes.push(**row_ptr);
-                        }
-                    }
-                }
+        let row_state = self.hash_join_desc.right_join_desc.row_state.read();
+        for (row_ptr, partner_count) in row_state.iter(){
+            if partner_count.load(Ordering::Relaxed) == 0 {
+                unmatched_build_indexes.push(*row_ptr);
             }
         }
         Ok(unmatched_build_indexes)
