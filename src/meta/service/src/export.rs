@@ -17,7 +17,7 @@ use common_meta_raft_store::sled_key_spaces::KeySpaceKV;
 use common_meta_sled_store::SledKeySpace;
 use common_meta_sled_store::SledOrderedSerde;
 use common_meta_sled_store::SledSerde;
-use common_meta_types::MetaStorageError;
+use common_meta_stoerr::MetaStorageError;
 
 /// Convert (sub_tree_prefix, key, value, key_space1, key_space2...) into a [`KeySpaceKV`] for export.
 macro_rules! to_kv_variant {

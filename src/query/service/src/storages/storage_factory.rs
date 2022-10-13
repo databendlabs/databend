@@ -86,15 +86,10 @@ impl StorageFactory {
             descriptor: Arc::new(NullTable::description),
         });
 
-        // Register FUSE and SHARE_FUSE table engine.
+        // Register FUSE table engine.
         creators.insert("FUSE".to_string(), Storage {
             creator: Arc::new(FuseTable::try_create),
             descriptor: Arc::new(FuseTable::description),
-        });
-
-        creators.insert("SHARE_FUSE".to_string(), Storage {
-            creator: Arc::new(FuseTable::try_create),
-            descriptor: Arc::new(FuseTable::share_description),
         });
 
         // Register View table engine

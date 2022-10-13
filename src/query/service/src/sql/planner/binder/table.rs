@@ -306,7 +306,7 @@ impl<'a> Binder {
             };
             bind_context.add_column_binding(column_binding);
         }
-        let stat = table.table().statistics(self.ctx.clone()).await?;
+        let stat = table.table().table_statistics(self.ctx.clone()).await?;
         Ok((
             SExpr::create_leaf(
                 LogicalGet {
@@ -358,7 +358,7 @@ impl<'a> Binder {
                     &[],
                 );
                 let box (scalar, data_type) = type_checker
-                    .resolve(expr, Some(TimestampType::new_impl(6)))
+                    .resolve(expr, Some(TimestampType::new_impl()))
                     .await?;
 
                 if let Scalar::ConstantExpr(ConstantExpr { value, .. }) = scalar {

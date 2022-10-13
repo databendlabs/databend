@@ -156,7 +156,8 @@ pub struct TableInfo {
 
     pub tenant: String,
 
-    pub share_name: Option<ShareNameIdent>,
+    // If not None, means that the table is share from other tenant.
+    pub from_share: Option<ShareNameIdent>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]

@@ -81,6 +81,8 @@ impl LogicalOperator for Limit {
                 _ => input_prop.cardinality,
             },
             precise_cardinality: None,
+
+            column_stats: Default::default(),
         })
     }
 }

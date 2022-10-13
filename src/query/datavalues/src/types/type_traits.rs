@@ -117,7 +117,7 @@ impl ToDateType for i32 {
 
 impl ToDateType for i64 {
     fn to_date_type() -> DataTypeImpl {
-        TimestampType::new_impl(6)
+        TimestampType::new_impl()
     }
 }
 

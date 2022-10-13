@@ -1579,12 +1579,6 @@ impl<KV: KVApi> SchemaApi for KV {
             "get_table"
         );
 
-        // Safe unwrap() because: tb_meta_seq > 0
-        let mut tb_meta = tb_meta.unwrap();
-        if db_meta.from_share.is_some() {
-            tb_meta.engine = "SHARE_FUSE".to_string();
-        }
-
         let tb_info = TableInfo {
             ident: TableIdent {
                 table_id: tbid.table_id,
@@ -1593,9 +1587,9 @@ impl<KV: KVApi> SchemaApi for KV {
             desc: tenant_dbname_tbname.to_string(),
             name: tenant_dbname_tbname.table_name.clone(),
             // Safe unwrap() because: tb_meta_seq > 0
-            meta: tb_meta,
+            meta: tb_meta.unwrap(),
             tenant: req.tenant.clone(),
-            share_name: db_meta.from_share.clone(),
+            from_share: db_meta.from_share.clone(),
         };
 
         return Ok(Arc::new(tb_info));
@@ -1690,7 +1684,7 @@ impl<KV: KVApi> SchemaApi for KV {
                     name: table_id_list_key.table_name.clone(),
                     meta: tb_meta,
                     tenant: tenant_dbname.tenant.clone(),
-                    share_name: db_meta.from_share.clone(),
+                    from_share: db_meta.from_share.clone(),
                 };
 
                 tb_info_list.push(Arc::new(tb_info));
@@ -2351,7 +2345,7 @@ async fn remove_db_id_from_share(
 
     let share_id_key = ShareId { share_id };
     condition.push(txn_cond_seq(&from_share, Eq, share_id_seq)); // __fd_share/<tenant>/<share_name> -> <share_id>
-    condition.push(txn_cond_seq(&share_id_key, Eq, share_meta_seq)); // __fd_share_id/<share_id> -> <share_meta>                
+    condition.push(txn_cond_seq(&share_id_key, Eq, share_meta_seq)); // __fd_share_id/<share_id> -> <share_meta>
 
     if_then.push(txn_op_put(&share_id_key, serialize_struct(&share_meta)?)); /* (share_id) -> share_meta */
 
@@ -2653,11 +2647,7 @@ async fn get_tableinfos_by_ids(
 
     for (i, seq_meta_opt) in seq_tb_metas.iter().enumerate() {
         if let Some(seq_meta) = seq_meta_opt {
-            let mut tb_meta: TableMeta = deserialize_struct(&seq_meta.data)?;
-            // if table if share from other tenant, set engine to share_fuse
-            if share_name.is_some() {
-                tb_meta.engine = "SHARE_FUSE".to_owned();
-            }
+            let tb_meta: TableMeta = deserialize_struct(&seq_meta.data)?;
 
             let tb_info = TableInfo {
                 ident: TableIdent {
@@ -2668,7 +2658,7 @@ async fn get_tableinfos_by_ids(
                 meta: tb_meta,
                 name: tbnames[i].clone(),
                 tenant: tenant_dbname.tenant.clone(),
-                share_name: share_name.clone(),
+                from_share: share_name.clone(),
             };
             tb_infos.push(Arc::new(tb_info));
         } else {

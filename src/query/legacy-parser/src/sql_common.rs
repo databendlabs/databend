@@ -45,29 +45,8 @@ impl SQLCommon {
             SQLDataType::Boolean => Ok(bool::to_data_type()),
             SQLDataType::Date => Ok(DateType::new_impl()),
             // default precision is 6, microseconds
-            SQLDataType::Timestamp(None) | SQLDataType::DateTime(None) => {
-                Ok(TimestampType::new_impl(6))
-            }
-            SQLDataType::Timestamp(Some(precision)) => {
-                if *precision <= 6 {
-                    Ok(TimestampType::new_impl(*precision as usize))
-                } else {
-                    Err(ErrorCode::IllegalDataType(format!(
-                        "The SQL data type TIMESTAMP(n), n only ranges from 0~6, {} is invalid",
-                        precision
-                    )))
-                }
-            }
-            SQLDataType::DateTime(Some(precision)) => {
-                if *precision <= 6 {
-                    Ok(TimestampType::new_impl(*precision as usize))
-                } else {
-                    Err(ErrorCode::IllegalDataType(format!(
-                        "The SQL data type DATETIME(n), n only ranges from 0~6, {} is invalid",
-                        precision
-                    )))
-                }
-            }
+            SQLDataType::Timestamp(_) | SQLDataType::DateTime(_) => Ok(TimestampType::new_impl()),
+
             SQLDataType::Array(sql_type, nullable) => {
                 let inner_data_type = Self::make_data_type(sql_type)?;
                 if *nullable {

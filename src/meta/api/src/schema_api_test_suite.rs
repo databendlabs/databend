@@ -3532,8 +3532,7 @@ impl SchemaApiTestSuite {
             assert_eq!(table_info.name, tb1.to_string());
             assert_eq!(table_info.ident.table_id, share_table_id);
             assert_eq!(table_info.tenant, tenant2.to_string());
-            assert_eq!(table_info.share_name, Some(share_name.clone()));
-            assert_eq!(table_info.meta.engine, "SHARE_FUSE".to_string());
+            assert_eq!(table_info.from_share, Some(share_name.clone()));
         }
 
         info!("--- get tables from share db");

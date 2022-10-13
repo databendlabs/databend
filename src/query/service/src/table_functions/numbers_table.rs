@@ -216,7 +216,10 @@ impl Table for NumbersTable {
         Ok(())
     }
 
-    async fn statistics(&self, _ctx: Arc<dyn TableContext>) -> Result<Option<TableStatistics>> {
+    async fn table_statistics(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+    ) -> Result<Option<TableStatistics>> {
         Ok(Some(TableStatistics {
             num_rows: Some(self.total),
             data_size: Some(self.total * 8),

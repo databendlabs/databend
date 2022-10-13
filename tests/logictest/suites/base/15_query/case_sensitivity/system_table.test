@@ -7,7 +7,6 @@ FUSE
 MEMORY
 NULL
 RANDOM
-SHARE_FUSE
 VIEW
 
 statement error 1065

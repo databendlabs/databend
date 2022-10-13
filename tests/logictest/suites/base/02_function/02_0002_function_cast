@@ -467,10 +467,10 @@ SELECT parse_json('"2022-01-01"')::date;
 2022-01-01
 
 statement query T
-SELECT parse_json('"2022-01-01 01:01:01"')::datetime(0);
+SELECT parse_json('"2022-01-01 01:01:01"')::datetime;
 
 ----
-2022-01-01 01:01:01
+2022-01-01 01:01:01.000000
 
 
 statement error 1010

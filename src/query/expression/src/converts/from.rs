@@ -101,9 +101,9 @@ pub fn from_scalar(datavalue: &DataValue, datatype: &DataTypeImpl) -> Scalar {
         DataTypeImpl::Float64(_) => {
             Scalar::Number(NumberScalar::Float64(datavalue.as_f64().unwrap().into()))
         }
-        DataTypeImpl::Timestamp(t) => Scalar::Timestamp(Timestamp {
+        DataTypeImpl::Timestamp(_) => Scalar::Timestamp(Timestamp {
             ts: datavalue.as_i64().unwrap(),
-            precision: t.precision() as u8,
+            precision: 6,
         }),
         DataTypeImpl::Date(_) => Scalar::Date(datavalue.as_i64().unwrap() as i32),
         DataTypeImpl::Interval(_) => Scalar::Interval(datavalue.as_i64().unwrap() as i64),

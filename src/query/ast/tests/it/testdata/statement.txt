@@ -887,7 +887,7 @@ DropDatabase(
 ---------- Input ----------
 create table c(a DateTime null, b DateTime(3));
 ---------- Output ---------
-CREATE TABLE c (a Timestamp NULL, b Timestamp(3) NOT NULL)
+CREATE TABLE c (a TIMESTAMP NULL, b TIMESTAMP NOT NULL)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -909,9 +909,7 @@ CreateTable(
                             span: Ident(15..16),
                         },
                         data_type: Nullable(
-                            Timestamp {
-                                precision: None,
-                            },
+                            Timestamp,
                         ),
                         default_expr: None,
                         comment: None,
@@ -922,11 +920,7 @@ CreateTable(
                             quote: None,
                             span: Ident(32..33),
                         },
-                        data_type: Timestamp {
-                            precision: Some(
-                                3,
-                            ),
-                        },
+                        data_type: Timestamp,
                         default_expr: None,
                         comment: None,
                     },

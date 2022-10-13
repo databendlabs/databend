@@ -188,7 +188,8 @@ async fn test_memorytable() -> Result<()> {
 
     // truncate.
     {
-        table.truncate(ctx.clone(), false).await?;
+        let purge = false;
+        table.truncate(ctx.clone(), purge).await?;
 
         let source_plan = table.read_plan(ctx.clone(), None).await?;
         let stream = table.read_data_block_stream(ctx, &source_plan).await?;
