@@ -49,21 +49,14 @@ pub fn check_timestamp(micros: i64) -> Result<()> {
 /// Timestamp type only stores UTC time in microseconds
 #[derive(Default, Clone, Hash, serde::Deserialize, serde::Serialize)]
 pub struct TimestampType {
-    /// Typically are used - 0 (seconds) 3 (milliseconds), 6 (microseconds)
+    // Deprecated, used as a placeholder for backward compatibility
+    #[serde(skip)]
     precision: usize,
 }
 
 impl TimestampType {
-    pub fn create(precision: usize) -> Self {
-        TimestampType { precision }
-    }
-
-    pub fn new_impl(precision: usize) -> DataTypeImpl {
-        DataTypeImpl::Timestamp(TimestampType { precision })
-    }
-
-    pub fn precision(&self) -> usize {
-        self.precision
+    pub fn new_impl() -> DataTypeImpl {
+        DataTypeImpl::Timestamp(TimestampType { precision: 0 })
     }
 
     #[inline]
@@ -76,12 +69,8 @@ impl TimestampType {
         v / 1_000_000
     }
 
-    pub fn format_string(&self) -> String {
-        if self.precision == 0 {
-            "%Y-%m-%d %H:%M:%S".to_string()
-        } else {
-            format!("%Y-%m-%d %H:%M:%S%.{}f", self.precision)
-        }
+    pub fn format_string(&self) -> &str {
+        "%Y-%m-%d %H:%M:%S%.6f"
     }
 }
 
@@ -96,20 +85,11 @@ impl DataType for TimestampType {
     }
 
     fn name(&self) -> String {
-        format!("Timestamp({})", self.precision)
+        "Timestamp".to_string()
     }
 
     fn aliases(&self) -> &[&str] {
-        match self.precision {
-            0 => &["DateTime(0)"],
-            1 => &["DateTime(1)"],
-            2 => &["DateTime(2)"],
-            3 => &["DateTime(3)"],
-            4 => &["DateTime(4)"],
-            5 => &["DateTime(5)"],
-            6 => &["Timestamp", "DateTime", "DateTime(6)"],
-            _ => &[],
-        }
+        &["DateTime"]
     }
 
     fn default_value(&self) -> DataValue {
@@ -143,13 +123,12 @@ impl DataType for TimestampType {
     }
 
     fn create_serializer_inner<'a>(&self, col: &'a ColumnRef) -> Result<TypeSerializerImpl<'a>> {
-        Ok(TimestampSerializer::<'a>::try_create(self.precision, col)?.into())
+        Ok(TimestampSerializer::<'a>::try_create(col)?.into())
     }
 
     fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
         TimestampDeserializer {
             builder: MutablePrimitiveColumn::<i64>::with_capacity(capacity),
-            precision: self.precision,
         }
         .into()
     }
@@ -161,6 +140,6 @@ impl DataType for TimestampType {
 
 impl std::fmt::Debug for TimestampType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Timestamp({})", self.precision())
+        write!(f, "Timestamp")
     }
 }

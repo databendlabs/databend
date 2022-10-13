@@ -58,18 +58,15 @@ where T: IntervalArithmeticImpl + Send + Sync + Clone + 'static
                     display_name,
                     T::DateResultType::to_date_type(),
                     T::eval_date,
-                    factor,
-                    0,
+                    factor
                 ),
                 TypeID::Timestamp => {
                     let ts: TimestampType = args[0].to_owned().try_into()?;
-                    let precision = ts.precision();
                     IntervalFunction::<i64, $R, i64, _>::try_create_func(
                         display_name,
                         args[0].clone(),
                         T::eval_timestamp,
-                        factor,
-                        precision,
+                        factor
                     )
                 },
                 _=> Err(ErrorCode::BadDataValueType(format!(
@@ -95,7 +92,6 @@ pub struct IntervalFunction<L: LogicalDateType, R: PrimitiveType, O: LogicalDate
     result_type: DataTypeImpl,
     func: F,
     factor: i64,
-    precision: usize,
     _phantom: PhantomData<(L, R, O)>,
 }
 
@@ -111,14 +107,12 @@ where
         result_type: DataTypeImpl,
         func: F,
         factor: i64,
-        precision: usize,
     ) -> Result<Box<dyn Function>> {
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
             result_type,
             func,
             factor,
-            precision,
             _phantom: PhantomData,
         }))
     }
@@ -146,7 +140,7 @@ where
         _input_rows: usize,
     ) -> Result<ColumnRef> {
         // Todo(zhyass): define the ctx out of the eval.
-        let mut ctx = EvalContext::new(self.factor, self.precision, None, func_ctx.tz);
+        let mut ctx = EvalContext::new(self.factor, None, func_ctx.tz);
         let col = scalar_binary_op(
             columns[0].column(),
             columns[1].column(),
@@ -211,8 +205,7 @@ impl IntervalArithmeticImpl for AddDaysImpl {
     }
 
     fn eval_timestamp(l: i64, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> i64 {
-        let base = 10_i64.pow(ctx.precision as u32);
-        let factor = ctx.factor * 24 * 3600 * base;
+        let factor = ctx.factor * 24 * 3600 * (1e6 as i64);
         (l as i64).wrapping_add(r.as_() * factor)
     }
 }
@@ -229,8 +222,7 @@ impl IntervalArithmeticImpl for AddTimesImpl {
     }
 
     fn eval_timestamp(l: i64, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> i64 {
-        let base = 10_i64.pow(ctx.precision as u32);
-        let factor = ctx.factor * base;
+        let factor = ctx.factor * 1_000_000;
         (l as i64).wrapping_add(r.as_() * factor)
     }
 }

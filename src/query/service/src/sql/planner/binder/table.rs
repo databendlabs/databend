@@ -358,7 +358,7 @@ impl<'a> Binder {
                     &[],
                 );
                 let box (scalar, data_type) = type_checker
-                    .resolve(expr, Some(TimestampType::new_impl(6)))
+                    .resolve(expr, Some(TimestampType::new_impl()))
                     .await?;
 
                 if let Scalar::ConstantExpr(ConstantExpr { value, .. }) = scalar {

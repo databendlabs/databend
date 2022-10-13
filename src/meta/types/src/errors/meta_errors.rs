@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_exception::ErrorCode;
+use common_meta_stoerr::MetaStorageError;
 use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;
@@ -20,7 +21,6 @@ use thiserror::Error;
 use crate::MetaAPIError;
 use crate::MetaClientError;
 use crate::MetaNetworkError;
-use crate::MetaStorageError;
 
 /// Top level error MetaNode would return.
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]

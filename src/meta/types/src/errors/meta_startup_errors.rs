@@ -14,10 +14,10 @@
 
 use anyerror::AnyError;
 use common_exception::ErrorCode;
+use common_meta_stoerr::MetaStorageError;
 use openraft::error::InitializeError;
 
 use crate::MetaNetworkError;
-use crate::MetaStorageError;
 
 /// Error raised when meta-server startup.
 #[derive(thiserror::Error, serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
