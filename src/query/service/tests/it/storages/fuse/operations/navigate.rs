@@ -58,6 +58,7 @@ async fn test_fuse_navigate() -> Result<()> {
     let table = fixture.latest_default_table().await?;
     let first_snapshot = FuseTable::try_from_table(table.as_ref())?
         .snapshot_loc()
+        .await
         .unwrap();
 
     // take a nap
@@ -73,6 +74,7 @@ async fn test_fuse_navigate() -> Result<()> {
     let table = fixture.latest_default_table().await?;
     let second_snapshot = FuseTable::try_from_table(table.as_ref())?
         .snapshot_loc()
+        .await
         .unwrap();
     assert_ne!(second_snapshot, first_snapshot);
 
@@ -80,7 +82,7 @@ async fn test_fuse_navigate() -> Result<()> {
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let reader = MetaReaders::table_snapshot_reader(ctx.clone(), fuse_table.get_operator());
-    let loc = fuse_table.snapshot_loc().unwrap();
+    let loc = fuse_table.snapshot_loc().await.unwrap();
     assert_eq!(second_snapshot, loc);
     let version = TableMetaLocationGenerator::snapshot_version(loc.as_str());
     let snapshots: Vec<_> = reader
@@ -104,7 +106,7 @@ async fn test_fuse_navigate() -> Result<()> {
         .await?;
 
     // check we got the snapshot of the first insertion
-    assert_eq!(first_snapshot, tbl.snapshot_loc().unwrap());
+    assert_eq!(first_snapshot, tbl.snapshot_loc().await.unwrap());
 
     // 4. navigate beyond the first snapshot
     let first_insertion = &snapshots[1];
@@ -139,7 +141,7 @@ async fn test_fuse_historical_table_is_read_only() -> Result<()> {
     // 2. grab the history
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let loc = fuse_table.snapshot_loc().unwrap();
+    let loc = fuse_table.snapshot_loc().await.unwrap();
     let reader = MetaReaders::table_snapshot_reader(ctx.clone(), fuse_table.get_operator());
     let version = TableMetaLocationGenerator::snapshot_version(loc.as_str());
     let snapshots: Vec<_> = reader

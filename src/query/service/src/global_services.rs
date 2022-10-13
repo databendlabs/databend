@@ -76,7 +76,12 @@ impl GlobalServices {
         // Cluster discovery.
         ClusterDiscovery::init(config.clone(), global_services.clone()).await?;
 
-        StorageOperator::init(&config.storage, global_services.clone()).await?;
+        StorageOperator::init(
+            &config.storage,
+            &config.query.share_endpoint_address,
+            global_services.clone(),
+        )
+        .await?;
         CacheManager::init(&config.query, global_services.clone())?;
         CatalogManager::init(&config, global_services.clone()).await?;
         HttpQueryManager::init(&config, global_services.clone()).await?;

@@ -255,6 +255,7 @@ fn init_obs_operator(cfg: &StorageObsConfig) -> Result<Operator> {
 #[derive(Clone, Debug)]
 pub struct StorageOperator {
     operator: Operator,
+    share_endpoint_address: Option<String>,
     params: StorageParams,
 }
 
@@ -271,20 +272,25 @@ static STORAGE_OPERATOR: OnceCell<Singleton<StorageOperator>> = OnceCell::new();
 impl StorageOperator {
     pub async fn init(
         conf: &StorageConfig,
+        share_endpoint_address: &str,
         v: Singleton<StorageOperator>,
     ) -> common_exception::Result<()> {
-        v.init(Self::try_create(conf).await?)?;
+        v.init(Self::try_create(conf, share_endpoint_address).await?)?;
 
         STORAGE_OPERATOR.set(v).ok();
         Ok(())
     }
 
-    pub async fn try_create(conf: &StorageConfig) -> common_exception::Result<StorageOperator> {
-        Self::try_create_with_storage_params(&conf.params).await
+    pub async fn try_create(
+        conf: &StorageConfig,
+        share_endpoint_address: &str,
+    ) -> common_exception::Result<StorageOperator> {
+        Self::try_create_with_storage_params(&conf.params, share_endpoint_address).await
     }
 
     pub async fn try_create_with_storage_params(
         sp: &StorageParams,
+        share_endpoint_address: &str,
     ) -> common_exception::Result<StorageOperator> {
         let operator = init_operator(sp)?;
 
@@ -299,6 +305,11 @@ impl StorageOperator {
 
         Ok(StorageOperator {
             operator,
+            share_endpoint_address: if share_endpoint_address.is_empty() {
+                None
+            } else {
+                Some(share_endpoint_address.to_owned())
+            },
             params: sp.clone(),
         })
     }
@@ -308,6 +319,10 @@ impl StorageOperator {
             None => panic!("StorageOperator is not init"),
             Some(storage_operator) => storage_operator.get(),
         }
+    }
+
+    pub fn share_endpoint_address() -> Option<String> {
+        StorageOperator::instance().share_endpoint_address
     }
 
     pub fn get_storage_params(&self) -> StorageParams {

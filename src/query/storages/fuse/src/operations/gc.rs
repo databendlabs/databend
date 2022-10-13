@@ -38,7 +38,7 @@ impl FuseTable {
                 // concurrent gc: someone else has already collected this snapshot, ignore it
                 warn!(
                     "concurrent gc: snapshot {:?} already collected. table: {}, ident {}",
-                    self.snapshot_loc(),
+                    self.snapshot_loc().await,
                     self.table_info.desc,
                     self.table_info.ident,
                 );
@@ -66,11 +66,11 @@ impl FuseTable {
         // 2. Get all snapshot(including root snapshot).
         let mut all_snapshot_lites = vec![];
         let mut all_segment_locations = HashSet::new();
-        if let Some(root_snapshot_location) = self.snapshot_loc() {
+        if let Some(root_snapshot_location) = self.snapshot_loc().await {
             let fuse_snapshot_io = FuseSnapshotIO::create(
                 ctx.clone(),
                 self.operator.clone(),
-                self.snapshot_format_version(),
+                self.snapshot_format_version().await,
             );
             (all_snapshot_lites, all_segment_locations) = fuse_snapshot_io
                 .read_snapshot_lites(root_snapshot_location, true)

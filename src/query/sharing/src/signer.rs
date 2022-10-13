@@ -136,10 +136,7 @@ impl SharedSigner {
     async fn sign_inner(&self, reqs: Vec<PresignRequest>) -> Result<()> {
         let reqs: Vec<PresignRequestItem> = reqs
             .into_iter()
-            .map(|v| PresignRequestItem {
-                path: v.path,
-                method: to_method(v.op),
-            })
+            .map(|v| PresignRequestItem { file_name: v.path })
             .collect();
         let bs = Bytes::from(serde_json::to_vec(&reqs)?);
 
@@ -181,13 +178,6 @@ impl PresignRequest {
     }
 }
 
-fn to_method(op: Operation) -> String {
-    match op {
-        Operation::Read => "GET".to_string(),
-        v => unimplemented!("not supported operation: {v}"),
-    }
-}
-
 fn from_method(method: &str) -> Operation {
     match method {
         "GET" => Operation::Read,
@@ -197,26 +187,22 @@ fn from_method(method: &str) -> Operation {
 
 #[derive(serde::Serialize)]
 struct PresignRequestItem {
-    method: String,
-    path: String,
+    file_name: String,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, Clone, Debug)]
 struct PresignResponseItem {
     method: String,
     path: String,
-    url: String,
+    presigned_url: String,
     headers: HashMap<String, String>,
-    /// Keep this for future using.
-    #[allow(unused)]
-    expires_in: String,
 }
 
 impl From<PresignResponseItem> for PresignedRequest {
     fn from(v: PresignResponseItem) -> Self {
         PresignedRequest::new(
             v.method.parse().expect("must be valid method"),
-            v.url.parse().expect("must be valid uri"),
+            v.presigned_url.parse().expect("must be valid uri"),
             v.headers
                 .into_iter()
                 .map(|(k, v)| {

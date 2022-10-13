@@ -377,3 +377,17 @@ impl Debug for StorageOssConfig {
             .finish()
     }
 }
+
+/// config for share endpoint
+#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ShareEndpointConfig {
+    pub share_endpoint_url: String,
+}
+
+impl Debug for ShareEndpointConfig {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ShareEndpointConfig")
+            .field("share_endpoint_url", &self.share_endpoint_url)
+            .finish()
+    }
+}
