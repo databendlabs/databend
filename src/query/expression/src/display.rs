@@ -24,7 +24,7 @@ use rust_decimal::Decimal;
 use rust_decimal::RoundingStrategy;
 
 use crate::chunk::Chunk;
-use crate::date_converter::DateConverter;
+use crate::date_helper::DateConverter;
 use crate::expression::Expr;
 use crate::expression::Literal;
 use crate::expression::RawExpr;
