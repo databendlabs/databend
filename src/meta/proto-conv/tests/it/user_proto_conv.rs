@@ -86,6 +86,7 @@ pub(crate) fn test_fs_stage_info() -> mt::UserStageInfo {
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
+            split_size: 0,
             purge: true,
             single: false,
             max_file_size: 0,
@@ -120,6 +121,7 @@ pub(crate) fn test_s3_stage_info() -> mt::UserStageInfo {
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
+            split_size: 0,
             purge: true,
             single: false,
             max_file_size: 0,
@@ -156,6 +158,7 @@ pub(crate) fn test_s3_stage_info_v14() -> mt::UserStageInfo {
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
+            split_size: 0,
             purge: true,
             single: false,
             max_file_size: 0,
@@ -188,6 +191,7 @@ pub(crate) fn test_gcs_stage_info() -> mt::UserStageInfo {
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
+            split_size: 0,
             purge: true,
             single: false,
             max_file_size: 0,
@@ -221,6 +225,7 @@ pub(crate) fn test_oss_stage_info() -> mt::UserStageInfo {
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
+            split_size: 0,
             purge: true,
             single: false,
             max_file_size: 0,

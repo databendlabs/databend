@@ -39,6 +39,7 @@ pub struct CopyStmt<'a> {
     pub validation_mode: String,
     pub size_limit: usize,
     pub max_file_size: usize,
+    pub split_size: usize,
     pub single: bool,
     pub purge: bool,
     pub force: bool,
@@ -78,6 +79,10 @@ impl Display for CopyStmt<'_> {
 
         if self.max_file_size != 0 {
             write!(f, " MAX_FILE_SIZE = {}", self.max_file_size)?;
+        }
+
+        if self.split_size != 0 {
+            write!(f, " SPLIT_SIZE = {}", self.split_size)?;
         }
 
         write!(f, " SINGLE = {}", self.single)?;
