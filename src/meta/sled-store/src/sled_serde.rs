@@ -18,14 +18,14 @@ use std::ops::RangeBounds;
 
 use byteorder::BigEndian;
 use byteorder::ByteOrder;
+use common_meta_types::LogEntry;
 use openraft::raft::Entry;
-use openraft::AppData;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use sled::IVec;
 
+use crate::SledAsRef;
 use crate::SledBytesError;
-use crate::SledValueToKey;
 
 /// Serialize/deserialize(ser/de) to/from sled values.
 pub trait SledSerde: Serialize + DeserializeOwned {
@@ -103,11 +103,13 @@ fn bound_ser<SD: SledOrderedSerde>(v: Bound<&SD>) -> Result<Bound<sled::IVec>, S
 }
 
 /// Extract log index from log entry
-impl<T> SledValueToKey<u64> for Entry<T>
-where T: AppData
-{
-    fn to_key(&self) -> u64 {
-        self.log_id.index
+impl SledAsRef<u64, Entry<LogEntry>> for Entry<LogEntry> {
+    fn as_key(&self) -> &u64 {
+        &self.log_id.index
+    }
+
+    fn as_value(&self) -> &Entry<LogEntry> {
+        self
     }
 }
 
