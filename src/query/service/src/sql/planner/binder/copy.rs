@@ -504,6 +504,7 @@ impl<'a> Binder {
             if stmt.max_file_size != 0 {
                 stage.copy_options.max_file_size = stmt.max_file_size;
             }
+            stage.copy_options.split_size = stmt.split_size;
 
             stage.copy_options.single = stmt.single;
             stage.copy_options.purge = stmt.purge;

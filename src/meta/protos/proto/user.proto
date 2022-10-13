@@ -197,6 +197,7 @@ message UserStageInfo {
     bool purge = 3;
     bool single = 4;
     uint64 max_file_size = 5;
+    uint64 split_size = 6;
   }
 
   string stage_name = 1;

@@ -25,6 +25,8 @@ copy_from_location_cases=(
   "copy into ontime200 from 's3://testbucket/admin/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='${STORAGE_S3_ENDPOINT_URL}') PATTERN = 'ontime.*csv$' FILE_FORMAT = (type = 'CSV' field_delimiter = ','  record_delimiter = '\n' skip_header = 1)"
   # copy parquet
   "copy into ontime200 from 's3://testbucket/admin/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='${STORAGE_S3_ENDPOINT_URL}') PATTERN = 'ontime.*parquet' FILE_FORMAT = (type = 'PARQUET')"
+  # copy ndjson with split size
+  "copy into ontime200 from 's3://testbucket/admin/data/ontime_200.ndjson' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='${STORAGE_S3_ENDPOINT_URL}')  FILE_FORMAT = (type = 'ndjson') split_size = 10240"
 )
 
 for i in "${copy_from_location_cases[@]}"; do
