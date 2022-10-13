@@ -208,7 +208,7 @@ impl Runtime {
             Vec::with_capacity(iter.size_hint().1.unwrap_or_else(|| iter.size_hint().0));
         for fut in iter {
             let semaphore = semaphore.clone();
-            // Although async task is rather lightweight, it do consumes resources,
+            // Although async task is rather lightweight, it does consume resources,
             // so we acquire a permit BEFORE spawn.
             // Thus, the `futures` passed into this method is NOT suggested to be "materialized"
             // iterator, e.g. Vec<..>
@@ -220,7 +220,7 @@ impl Runtime {
             })?;
             let handler = self.handle.spawn(async move {
                 // take the ownership of the permit, (implicitly) drop it when task is done
-                let _ = permit;
+                let _permit = permit;
                 fut.await
             });
             handlers.push(handler)
