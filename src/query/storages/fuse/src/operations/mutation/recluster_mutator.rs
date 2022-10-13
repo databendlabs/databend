@@ -24,7 +24,6 @@ use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::TableSnapshot;
 use common_fuse_meta::meta::Versioned;
-use common_meta_app::schema::TableInfo;
 use opendal::Operator;
 
 use crate::io::BlockCompactor;
@@ -34,6 +33,7 @@ use crate::operations::AppendOperationLogEntry;
 use crate::sessions::TableContext;
 use crate::statistics::merge_statistics;
 use crate::FuseTable;
+use crate::Table;
 use crate::TableMutator;
 
 static MAX_BLOCK_COUNT: usize = 50;
@@ -208,7 +208,7 @@ impl TableMutator for ReclusterMutator {
         Ok(false)
     }
 
-    async fn try_commit(&self, table_info: &TableInfo) -> Result<()> {
+    async fn try_commit(&self, table: Arc<dyn Table>) -> Result<()> {
         let base_mutator = self.base_mutator.clone();
         let ctx = base_mutator.ctx.clone();
         let (mut segments, mut summary) = self.base_mutator.generate_segments().await?;
@@ -234,7 +234,7 @@ impl TableMutator for ReclusterMutator {
 
         FuseTable::commit_to_meta_server(
             ctx.as_ref(),
-            table_info,
+            table.get_table_info(),
             &self.base_mutator.location_generator,
             new_snapshot,
             &self.data_accessor,
