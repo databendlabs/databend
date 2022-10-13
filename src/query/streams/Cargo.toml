@@ -23,13 +23,7 @@ common-exception = { path = "../../common/exception" }
 futures = "0.3.24"
 pin-project-lite = "0.2.9"
 
-# TODO: remove this once `preseve_order` is appropriately dealt with in other
-#       crate.
-#
-#       Meanwhile, removing this unused dep messes up json key ordering in other
-#       crate:
-#       https://github.com/datafuselabs/databend/actions/runs/3223480164/jobs/5273693965
-serde_json = { version = "1.0.85", default-features = false, features = ["preserve_order"] }
+serde_json = { workspace = true }
 
 [dev-dependencies]
 opendal = { version = "0.19", features = ["layers-retry", "compress"] }

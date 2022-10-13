@@ -17,7 +17,6 @@ use std::sync::Arc;
 use super::type_array::ArrayType;
 use super::type_nullable::NullableType;
 use super::type_struct::StructType;
-use super::type_timestamp::TimestampType;
 use super::DataType;
 use super::DataTypeImpl;
 
@@ -49,16 +48,8 @@ pub fn equal(lhs: &DataTypeImpl, rhs: &DataTypeImpl) -> bool {
     use crate::prelude::TypeID::*;
     match lhs.data_type_id() {
         Boolean | UInt8 | UInt16 | UInt32 | UInt64 | Int8 | Int16 | Int32 | Int64 | Float32
-        | Float64 | String | Date | Interval | Null | Variant | VariantArray | VariantObject => {
-            true
-        }
-
-        Timestamp => {
-            let lhs: TimestampType = lhs.to_owned().try_into().unwrap();
-            let rhs: TimestampType = rhs.to_owned().try_into().unwrap();
-
-            lhs.precision() == rhs.precision()
-        }
+        | Float64 | String | Date | Timestamp | Interval | Null | Variant | VariantArray
+        | VariantObject => true,
 
         Nullable => {
             let lhs: NullableType = lhs.to_owned().try_into().unwrap();

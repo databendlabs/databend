@@ -124,12 +124,15 @@ impl DateFunction {
         factory.register("add_quarters", AddQuartersFunction::desc(1));
         factory.register("add_months", AddMonthsFunction::desc(1));
         factory.register("add_days", AddDaysFunction::desc(1));
+
         factory.register("add_hours", AddTimesFunction::desc(3600));
         factory.register("add_minutes", AddTimesFunction::desc(60));
         factory.register("add_seconds", AddTimesFunction::desc(1));
+
         factory.register("subtract_years", AddYearsFunction::desc(-1));
         factory.register("subtract_months", AddMonthsFunction::desc(-1));
         factory.register("subtract_days", AddDaysFunction::desc(-1));
+
         factory.register("subtract_hours", AddTimesFunction::desc(-3600));
         factory.register("subtract_minutes", AddTimesFunction::desc(-60));
         factory.register("subtract_seconds", AddTimesFunction::desc(-1));

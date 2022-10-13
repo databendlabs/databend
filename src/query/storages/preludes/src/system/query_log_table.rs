@@ -139,8 +139,8 @@ impl SystemLogElement for QueryLogElement {
             DataField::new("query_kind", Vu8::to_data_type()),
             DataField::new("query_text", Vu8::to_data_type()),
             DataField::new("event_date", DateType::new_impl()),
-            DataField::new("event_time", TimestampType::new_impl(3)),
-            DataField::new("query_start_time", TimestampType::new_impl(3)),
+            DataField::new("event_time", TimestampType::new_impl()),
+            DataField::new("query_start_time", TimestampType::new_impl()),
             DataField::new("query_duration_ms", i64::to_data_type()),
             // Schema.
             DataField::new("current_database", Vu8::to_data_type()),

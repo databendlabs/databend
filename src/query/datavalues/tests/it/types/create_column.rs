@@ -45,14 +45,14 @@ fn test_create_constant() -> Result<()> {
         },
         Test {
             name: "datetime32",
-            data_type: TimestampType::new_impl(0),
+            data_type: TimestampType::new_impl(),
             value: DataValue::UInt64(1630320462),
             size: 2,
             column_expected: Series::from_data(vec![1630320462i64, 1630320462]),
         },
         Test {
             name: "datetime64",
-            data_type: TimestampType::new_impl(3),
+            data_type: TimestampType::new_impl(),
             value: DataValue::Int64(1630320462),
             size: 2,
             column_expected: Series::from_data(vec![1630320462i64, 1630320462]),

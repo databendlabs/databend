@@ -1,5 +1,5 @@
 [package]
-name = "common-sharing"
+name = "common-meta-stoerr"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -8,14 +8,14 @@ edition = { workspace = true }
 
 [lib]
 doctest = false
+test = false
 
 [dependencies]
-anyhow = { workspace = true }
-async-trait = "0.1"
-bytes = "1"
-http = "0.2"
-moka = "0.9"
-opendal = "0.19"
-reqwest = "0.11"
+common-exception = { path = "../../common/exception" }
+
+anyerror = { workspace = true }
+prost = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sled = { workspace = true }
+thiserror = { workspace = true }
