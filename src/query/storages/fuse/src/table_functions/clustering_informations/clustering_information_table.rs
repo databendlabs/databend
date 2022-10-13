@@ -73,6 +73,7 @@ impl ClusteringInformationTable {
                 engine,
                 ..Default::default()
             },
+            ..Default::default()
         };
 
         Ok(Arc::new(Self {

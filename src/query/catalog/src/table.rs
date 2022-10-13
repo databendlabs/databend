@@ -272,6 +272,8 @@ pub trait TableExt: Table {
             desc: "".to_owned(),
             name,
             meta: meta.as_ref().clone(),
+            tenant: "".to_owned(),
+            from_share: None,
         };
         catalog.get_table_by_info(&table_info)
     }

@@ -67,6 +67,7 @@ impl DatabasesTable {
                 engine: "SystemDatabases".to_string(),
                 ..Default::default()
             },
+            ..Default::default()
         };
 
         AsyncOneBlockSystemTable::create(DatabasesTable { table_info })
