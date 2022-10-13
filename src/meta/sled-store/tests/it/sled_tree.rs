@@ -73,7 +73,7 @@ async fn test_sled_tree_append() -> anyhow::Result<()> {
         }),
     ];
 
-    tree.append::<Logs>(&logs).await?;
+    tree.append::<Logs, _>(&logs).await?;
 
     let want: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -105,7 +105,7 @@ async fn test_sled_tree_append() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_sled_tree_append_values_and_range_get() -> anyhow::Result<()> {
+async fn test_sled_tree_append_and_range_get() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_sled_ut!();
     let _ent = ut_span.enter();
 
@@ -146,7 +146,7 @@ async fn test_sled_tree_append_values_and_range_get() -> anyhow::Result<()> {
         },
     ];
 
-    tree.append_values::<Logs>(&logs).await?;
+    tree.append::<Logs, _>(&logs).await?;
 
     let got = tree.range_values::<Logs, _>(0..)?;
     assert_eq!(logs, got);
@@ -204,7 +204,7 @@ async fn test_sled_tree_range_keys() -> anyhow::Result<()> {
         },
     ];
 
-    tree.append_values::<Logs>(&logs).await?;
+    tree.append::<Logs, _>(&logs).await?;
 
     let got = tree.range_keys::<Logs, _>(0..)?;
     assert_eq!(vec![2, 9, 10], got);
@@ -257,7 +257,7 @@ async fn test_sled_tree_range_kvs() -> anyhow::Result<()> {
         },
     ];
 
-    tree.append_values::<Logs>(&logs).await?;
+    tree.append::<Logs, _>(&logs).await?;
 
     let got = tree.range_kvs::<Logs, _>(9..11)?;
     assert_eq!(vec![(9, logs[1].clone()), (10, logs[2].clone())], got);
@@ -296,7 +296,7 @@ async fn test_sled_tree_range() -> anyhow::Result<()> {
         },
     ];
 
-    tree.append_values::<Logs>(&logs).await?;
+    tree.append::<Logs, _>(&logs).await?;
 
     let metas = vec![
         (
@@ -306,7 +306,7 @@ async fn test_sled_tree_range() -> anyhow::Result<()> {
         (Initialized, StateMachineMetaValue::Bool(true)),
     ];
 
-    tree.append::<StateMachineMeta>(metas.as_slice()).await?;
+    tree.append::<StateMachineMeta, _>(metas.as_slice()).await?;
 
     let log_tree = tree.key_space::<Logs>();
     let meta_tree = tree.key_space::<StateMachineMeta>();
@@ -378,7 +378,7 @@ async fn test_sled_tree_scan_prefix() -> anyhow::Result<()> {
         ("b".to_string(), "y".to_string()),
     ];
 
-    tree.append::<Files>(&files).await?;
+    tree.append::<Files, _>(&files).await?;
 
     let got = tree.scan_prefix::<Files>(&"ab".to_string())?;
     assert_eq!(files[1..4], got);
@@ -480,7 +480,7 @@ async fn test_sled_tree_get() -> anyhow::Result<()> {
         },
     ];
 
-    tree.append_values::<Logs>(&logs).await?;
+    tree.append::<Logs, _>(&logs).await?;
 
     assert_eq!(None, tree.get::<Logs>(&1)?);
     assert_eq!(Some(logs[0].clone()), tree.get::<Logs>(&2)?);
@@ -524,7 +524,7 @@ async fn test_sled_tree_last() -> anyhow::Result<()> {
         },
     ];
 
-    tree.append_values::<Logs>(&logs).await?;
+    tree.append::<Logs, _>(&logs).await?;
     assert_eq!(None, tree.last::<StateMachineMeta>()?);
 
     let metas = vec![
@@ -535,7 +535,7 @@ async fn test_sled_tree_last() -> anyhow::Result<()> {
         (Initialized, StateMachineMetaValue::Bool(true)),
     ];
 
-    tree.append::<StateMachineMeta>(metas.as_slice()).await?;
+    tree.append::<StateMachineMeta, _>(metas.as_slice()).await?;
 
     assert_eq!(Some((4, logs[1].clone())), tree.last::<Logs>()?);
     assert_eq!(
@@ -566,7 +566,7 @@ async fn test_sled_tree_remove() -> anyhow::Result<()> {
         },
     ];
 
-    tree.append_values::<Logs>(&logs).await?;
+    tree.append::<Logs, _>(&logs).await?;
 
     let removed = tree.remove::<Logs>(&0, false).await?;
     assert_eq!(None, removed);
@@ -626,19 +626,19 @@ async fn test_sled_tree_range_remove() -> anyhow::Result<()> {
         },
     ];
 
-    tree.append_values::<Logs>(&logs).await?;
+    tree.append::<Logs, _>(&logs).await?;
     tree.range_remove::<Logs, _>(0.., false).await?;
     assert_eq!(logs[5..], tree.range_values::<Logs, _>(0..)?);
 
-    tree.append_values::<Logs>(&logs).await?;
+    tree.append::<Logs, _>(&logs).await?;
     tree.range_remove::<Logs, _>(1.., false).await?;
     assert_eq!(logs[5..], tree.range_values::<Logs, _>(0..)?);
 
-    tree.append_values::<Logs>(&logs).await?;
+    tree.append::<Logs, _>(&logs).await?;
     tree.range_remove::<Logs, _>(3.., true).await?;
     assert_eq!(logs[0..1], tree.range_values::<Logs, _>(0..)?);
 
-    tree.append_values::<Logs>(&logs).await?;
+    tree.append::<Logs, _>(&logs).await?;
     tree.range_remove::<Logs, _>(3..10, true).await?;
     assert_eq!(logs[0..1], tree.range_values::<Logs, _>(0..5)?);
     assert_eq!(logs[3..], tree.range_values::<Logs, _>(5..)?);
@@ -673,7 +673,7 @@ async fn test_sled_tree_multi_types() -> anyhow::Result<()> {
         },
     ];
 
-    tree.append_values::<Logs>(&logs).await?;
+    tree.append::<Logs, _>(&logs).await?;
 
     let metas = vec![
         (
@@ -682,7 +682,7 @@ async fn test_sled_tree_multi_types() -> anyhow::Result<()> {
         ),
         (Initialized, StateMachineMetaValue::Bool(true)),
     ];
-    tree.append::<StateMachineMeta>(&metas).await?;
+    tree.append::<StateMachineMeta, _>(&metas).await?;
 
     // range get/keys are limited to its own namespace.
     {
@@ -776,7 +776,7 @@ async fn test_as_append() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_as_append_values_and_range_get() -> anyhow::Result<()> {
+async fn test_as_append_and_range_get() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_sled_ut!();
     let _ent = ut_span.enter();
 
@@ -818,7 +818,7 @@ async fn test_as_append_values_and_range_get() -> anyhow::Result<()> {
         },
     ];
 
-    log_tree.append_values(&logs).await?;
+    log_tree.append(&logs).await?;
 
     let got = log_tree.range_values(0..)?;
     assert_eq!(logs, got);
@@ -877,7 +877,7 @@ async fn test_as_range_keys() -> anyhow::Result<()> {
         },
     ];
 
-    log_tree.append_values(&logs).await?;
+    log_tree.append(&logs).await?;
 
     let got = log_tree.range_keys(0..)?;
     assert_eq!(vec![2, 9, 10], got);
@@ -931,7 +931,7 @@ async fn test_as_range_kvs() -> anyhow::Result<()> {
         },
     ];
 
-    log_tree.append_values(&logs).await?;
+    log_tree.append(&logs).await?;
 
     let got = log_tree.range_kvs(9..)?;
     assert_eq!(vec![(9, logs[1].clone()), (10, logs[2].clone()),], got);
@@ -1079,7 +1079,7 @@ async fn test_as_get() -> anyhow::Result<()> {
         },
     ];
 
-    log_tree.append_values(&logs).await?;
+    log_tree.append(&logs).await?;
 
     assert_eq!(None, log_tree.get(&1)?);
     assert_eq!(Some(logs[0].clone()), log_tree.get(&2)?);
@@ -1120,7 +1120,7 @@ async fn test_as_last() -> anyhow::Result<()> {
         },
     ];
 
-    log_tree.append_values(&logs).await?;
+    log_tree.append(&logs).await?;
     assert_eq!(Some((4, logs[1].clone())), log_tree.last()?);
 
     Ok(())
@@ -1147,7 +1147,7 @@ async fn test_as_remove() -> anyhow::Result<()> {
         },
     ];
 
-    log_tree.append_values(&logs).await?;
+    log_tree.append(&logs).await?;
 
     let removed = log_tree.remove(&0, false).await?;
     assert_eq!(None, removed);
@@ -1203,19 +1203,19 @@ async fn test_as_range_remove() -> anyhow::Result<()> {
         },
     ];
 
-    log_tree.append_values(&logs).await?;
+    log_tree.append(&logs).await?;
     log_tree.range_remove(0.., false).await?;
     assert_eq!(logs[5..], log_tree.range_values(0..)?);
 
-    log_tree.append_values(&logs).await?;
+    log_tree.append(&logs).await?;
     log_tree.range_remove(1.., false).await?;
     assert_eq!(logs[5..], log_tree.range_values(0..)?);
 
-    log_tree.append_values(&logs).await?;
+    log_tree.append(&logs).await?;
     log_tree.range_remove(3.., true).await?;
     assert_eq!(logs[0..1], log_tree.range_values(0..)?);
 
-    log_tree.append_values(&logs).await?;
+    log_tree.append(&logs).await?;
     log_tree.range_remove(3..10, true).await?;
     assert_eq!(logs[0..1], log_tree.range_values(0..5)?);
     assert_eq!(logs[3..], log_tree.range_values(5..)?);
@@ -1252,7 +1252,7 @@ async fn test_as_multi_types() -> anyhow::Result<()> {
         },
     ];
 
-    log_tree.append_values(&logs).await?;
+    log_tree.append(&logs).await?;
 
     let metas = vec![
         (
@@ -1319,7 +1319,7 @@ async fn test_export() -> anyhow::Result<()> {
             },
         ];
 
-        log_tree.append_values(&logs).await?;
+        log_tree.append(&logs).await?;
 
         let data = tree.export()?;
 

@@ -31,9 +31,22 @@ use crate::sled::transaction::TransactionError;
 use crate::store::Store;
 use crate::SledKeySpace;
 
-/// Extract key from a value of sled tree that includes its key.
-pub trait SledValueToKey<K> {
-    fn to_key(&self) -> K;
+/// Get a ref to the key or to the value.
+///
+/// It is used as an abstract representation of key/value used in the sled store.
+pub trait SledAsRef<K, V> {
+    fn as_key(&self) -> &K;
+    fn as_value(&self) -> &V;
+}
+
+impl<K, V> SledAsRef<K, V> for (K, V) {
+    fn as_key(&self) -> &K {
+        &self.0
+    }
+
+    fn as_value(&self) -> &V {
+        &self.1
+    }
 }
 
 /// SledTree is a wrapper of sled::Tree that provides access of more than one key-value
@@ -362,11 +375,17 @@ impl SledTree {
     }
 
     /// Append many key-values into SledTree.
-    pub async fn append<KV>(&self, kvs: &[(KV::K, KV::V)]) -> Result<(), MetaStorageError>
-    where KV: SledKeySpace {
+    pub async fn append<KV, T>(&self, kvs: &[T]) -> Result<(), MetaStorageError>
+    where
+        KV: SledKeySpace,
+        T: SledAsRef<KV::K, KV::V>,
+    {
         let mut batch = sled::Batch::default();
 
-        for (key, value) in kvs.iter() {
+        for t in kvs.iter() {
+            let key = t.as_key();
+            let value = t.as_value();
+
             let k = KV::serialize_key(key)?;
             let v = KV::serialize_value(value)?;
 
@@ -374,34 +393,6 @@ impl SledTree {
         }
 
         self.tree.apply_batch(batch).context(|| "batch append")?;
-
-        self.flush_async(true).await?;
-
-        Ok(())
-    }
-
-    /// Append many values into SledTree.
-    /// This could be used in cases the key is included in value and a value should impl trait `IntoKey` to retrieve the key from a value.
-    #[tracing::instrument(level = "debug", skip(self, values))]
-    pub async fn append_values<KV>(&self, values: &[KV::V]) -> Result<(), MetaStorageError>
-    where
-        KV: SledKeySpace,
-        KV::V: SledValueToKey<KV::K>,
-    {
-        let mut batch = sled::Batch::default();
-
-        for value in values.iter() {
-            let key: KV::K = value.to_key();
-
-            let k = KV::serialize_key(&key)?;
-            let v = KV::serialize_value(value)?;
-
-            batch.insert(k, v);
-        }
-
-        self.tree
-            .apply_batch(batch)
-            .context(|| "batch append_values")?;
 
         self.flush_async(true).await?;
 
@@ -628,13 +619,9 @@ impl<'a, KV: SledKeySpace> AsKeySpace<'a, KV> {
         self.inner.range_values::<KV, R>(range)
     }
 
-    pub async fn append(&self, kvs: &[(KV::K, KV::V)]) -> Result<(), MetaStorageError> {
-        self.inner.append::<KV>(kvs).await
-    }
-
-    pub async fn append_values(&self, values: &[KV::V]) -> Result<(), MetaStorageError>
-    where KV::V: SledValueToKey<KV::K> {
-        self.inner.append_values::<KV>(values).await
+    pub async fn append<T>(&self, kvs: &[T]) -> Result<(), MetaStorageError>
+    where T: SledAsRef<KV::K, KV::V> {
+        self.inner.append::<KV, _>(kvs).await
     }
 
     pub async fn insert(
