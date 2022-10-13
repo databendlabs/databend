@@ -220,7 +220,7 @@ impl Runtime {
             })?;
             let handler = self.handle.spawn(async move {
                 // take the ownership of the permit, (implicitly) drop it when task is done
-                let _ = permit;
+                let _pin = permit;
                 fut.await
             });
             handlers.push(handler)
