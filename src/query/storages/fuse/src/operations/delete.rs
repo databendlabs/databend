@@ -129,17 +129,36 @@ impl FuseTable {
                 }
             }
         }
-        self.commit_deletion(ctx.as_ref(), deletion_collector).await
+
+        // Refresh the table.
+        let table = ctx
+            .get_catalog(&plan.catalog_name)?
+            .get_table(
+                ctx.get_tenant().as_str(),
+                &plan.database_name,
+                &plan.table_name,
+            )
+            .await?;
+        let table = FuseTable::try_from_table(table.as_ref())?;
+        table.commit_deletion(ctx, deletion_collector).await
     }
 
     async fn commit_deletion(
         &self,
-        ctx: &dyn TableContext,
+        ctx: Arc<dyn TableContext>,
         del_holder: DeletionMutator,
     ) -> Result<()> {
-        let new_snapshot = del_holder.into_new_snapshot().await?;
+        let (segments, summary) = del_holder.generate_segments().await?;
+        let new_snapshot = self
+            .generate_snapshot(
+                ctx.clone(),
+                del_holder.base_snapshot().clone(),
+                segments,
+                summary,
+            )
+            .await?;
         Self::commit_to_meta_server(
-            ctx,
+            ctx.as_ref(),
             self.get_table_info(),
             &self.meta_location_generator,
             new_snapshot,

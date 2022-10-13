@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::caches::CacheManager;
 use common_fuse_meta::meta::BlockMeta;
@@ -161,42 +160,7 @@ impl TableMutator for CompactMutator {
 
     async fn try_commit(&self, table: Arc<dyn Table>) -> Result<()> {
         let ctx = self.ctx.clone();
-        let base_snapshot = self.base_snapshot.clone();
         let mut segments = self.segments.clone();
-        let mut summary = self.summary.clone();
-
-        let table = FuseTable::try_from_table(table.as_ref())?;
-        let snapshot_opt = table.read_table_snapshot(ctx.clone()).await?;
-        let latest_snapshot = snapshot_opt.ok_or_else(|| {
-            ErrorCode::UnknownException("Data mutates in the process of compact".to_string())
-        })?;
-        if latest_snapshot.snapshot_id != base_snapshot.snapshot_id {
-            if latest_snapshot.segments.len() < base_snapshot.segments.len() {
-                return Err(ErrorCode::UnknownException(
-                    "Data mutates in the process of compact".to_string(),
-                ));
-            }
-
-            let mut prefix = latest_snapshot.segments.clone();
-            let suffix =
-                prefix.split_off(latest_snapshot.segments.len() - base_snapshot.segments.len());
-            if suffix.ne(&base_snapshot.segments) {
-                return Err(ErrorCode::UnknownException(
-                    "Data mutates in the process of compact".to_string(),
-                ));
-            }
-
-            let reader = MetaReaders::segment_info_reader(ctx.as_ref());
-            for (x, v) in prefix.iter() {
-                let segment = reader.read(x, None, *v).await?;
-                summary = merge_statistics(&summary, &segment.summary)?;
-            }
-            segments.append(&mut prefix);
-        }
-
-        let mut new_snapshot = TableSnapshot::from_previous(&latest_snapshot);
-        new_snapshot.segments = segments;
-        new_snapshot.summary = summary;
 
         let append_entries = ctx.consume_precommit_blocks();
         let append_log_entries = append_entries
@@ -207,12 +171,23 @@ impl TableMutator for CompactMutator {
         let (merged_segments, merged_summary) =
             FuseTable::merge_append_operations(&append_log_entries)?;
 
-        let mut merged_segments = merged_segments
+        let mut new_segments: Vec<Location> = merged_segments
             .into_iter()
             .map(|loc| (loc, SegmentInfo::VERSION))
             .collect();
-        new_snapshot.segments.append(&mut merged_segments);
-        new_snapshot.summary = merge_statistics(&new_snapshot.summary, &merged_summary)?;
+
+        new_segments.append(&mut segments);
+        let summary = merge_statistics(&self.summary, &merged_summary)?;
+
+        let table = FuseTable::try_from_table(table.as_ref())?;
+        let new_snapshot = table
+            .generate_snapshot(
+                ctx.clone(),
+                self.base_snapshot.clone(),
+                new_segments,
+                summary,
+            )
+            .await?;
 
         FuseTable::commit_to_meta_server(
             ctx.as_ref(),

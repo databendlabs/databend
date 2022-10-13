@@ -229,8 +229,15 @@ impl TableMutator for ReclusterMutator {
 
         segments.append(&mut merged_segments);
         summary = merge_statistics(&summary, &merged_summary)?;
-
-        let new_snapshot = base_mutator.into_new_snapshot(segments, summary).await?;
+        let table = FuseTable::try_from_table(table.as_ref())?;
+        let new_snapshot = table
+            .generate_snapshot(
+                ctx.clone(),
+                base_mutator.base_snapshot.clone(),
+                segments,
+                summary,
+            )
+            .await?;
 
         FuseTable::commit_to_meta_server(
             ctx.as_ref(),

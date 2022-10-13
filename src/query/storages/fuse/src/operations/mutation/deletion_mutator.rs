@@ -19,6 +19,7 @@ use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_fuse_meta::meta::ClusterStatistics;
 use common_fuse_meta::meta::Location;
+use common_fuse_meta::meta::Statistics;
 use common_fuse_meta::meta::TableSnapshot;
 use opendal::Operator;
 
@@ -52,9 +53,12 @@ impl DeletionMutator {
         })
     }
 
-    pub async fn into_new_snapshot(self) -> Result<TableSnapshot> {
-        let (segments, summary) = self.base_mutator.generate_segments().await?;
-        self.base_mutator.into_new_snapshot(segments, summary).await
+    pub fn base_snapshot(self) -> Arc<TableSnapshot> {
+        self.base_mutator.base_snapshot
+    }
+
+    pub async fn generate_segments(&self) -> Result<(Vec<Location>, Statistics)> {
+        self.base_mutator.generate_segments().await
     }
 
     /// Records the replacements:  

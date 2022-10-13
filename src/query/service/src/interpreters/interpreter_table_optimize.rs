@@ -75,9 +75,7 @@ impl Interpreter for OptimizeTableInterpreter {
                 executor.execute()?;
                 drop(executor);
 
-                std::thread::sleep(std::time::Duration::from_secs(30));
-                // currently, context caches the table, we have to "refresh"
-                // the table by using the catalog API directly
+                // "refresh" the table by using the catalog API directly
                 table = self
                     .ctx
                     .get_catalog(&plan.catalog)?

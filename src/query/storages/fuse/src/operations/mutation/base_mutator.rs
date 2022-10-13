@@ -81,18 +81,6 @@ impl BaseMutator {
             });
     }
 
-    pub async fn into_new_snapshot(
-        self,
-        segments: Vec<Location>,
-        summary: Statistics,
-    ) -> Result<TableSnapshot> {
-        let snapshot = self.base_snapshot;
-        let mut new_snapshot = TableSnapshot::from_previous(&snapshot);
-        new_snapshot.segments = segments;
-        new_snapshot.summary = summary;
-        Ok(new_snapshot)
-    }
-
     pub async fn generate_segments(&self) -> Result<(Vec<Location>, Statistics)> {
         let segments = self.base_snapshot.segments.clone();
         let mut segments_editor =

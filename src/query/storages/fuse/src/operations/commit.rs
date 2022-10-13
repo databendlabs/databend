@@ -44,10 +44,12 @@ use tracing::warn;
 use uuid::Uuid;
 
 use crate::io::write_meta;
+use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::AppendOperationLogEntry;
 use crate::operations::TableOperationLog;
 use crate::statistics;
+use crate::statistics::merge_statistics;
 use crate::FuseTable;
 use crate::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use crate::OPT_KEY_SNAPSHOT_LOCATION;
@@ -380,6 +382,48 @@ impl FuseTable {
             .unwrap_or_else(|e| {
                 warn!("write last snapshot hint failure. {}", e);
             })
+    }
+
+    pub async fn generate_snapshot(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        base_snapshot: Arc<TableSnapshot>,
+        mut segments: Vec<Location>,
+        mut summary: Statistics,
+    ) -> Result<TableSnapshot> {
+        let snapshot_opt = self.read_table_snapshot(ctx.clone()).await?;
+        let latest_snapshot = snapshot_opt.ok_or_else(|| {
+            ErrorCode::UnknownException("Data mutates during operation".to_string())
+        })?;
+        if latest_snapshot.snapshot_id != base_snapshot.snapshot_id {
+            if latest_snapshot.segments.len() < base_snapshot.segments.len() {
+                return Err(ErrorCode::UnknownException(
+                    "Data mutates during operation".to_string(),
+                ));
+            }
+
+            let mut new_segments = latest_snapshot.segments.clone();
+            let suffix = new_segments
+                .split_off(latest_snapshot.segments.len() - base_snapshot.segments.len());
+            if suffix.ne(&base_snapshot.segments) {
+                return Err(ErrorCode::UnknownException(
+                    "Data mutates during operation".to_string(),
+                ));
+            }
+
+            let reader = MetaReaders::segment_info_reader(ctx.as_ref());
+            for (x, v) in new_segments.iter() {
+                let segment = reader.read(x, None, *v).await?;
+                summary = merge_statistics(&summary, &segment.summary)?;
+            }
+            new_segments.extend(segments.clone());
+            segments = new_segments;
+        }
+
+        let mut new_snapshot = TableSnapshot::from_previous(&latest_snapshot);
+        new_snapshot.segments = segments;
+        new_snapshot.summary = summary;
+        Ok(new_snapshot)
     }
 }
 
