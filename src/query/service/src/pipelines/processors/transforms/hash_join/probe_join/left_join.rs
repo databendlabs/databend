@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::iter::TrustedLen;
-use std::sync::atomic::Ordering;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;

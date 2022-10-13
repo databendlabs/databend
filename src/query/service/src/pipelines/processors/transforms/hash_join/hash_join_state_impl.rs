@@ -13,9 +13,7 @@
 // limitations under the License.
 
 use std::borrow::BorrowMut;
-use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
@@ -374,7 +372,7 @@ impl HashJoinState for JoinHashTable {
                     self.filter_rows_for_right_semi_join(&mut bm, build_block, &mut row_state)?;
                 return Ok(vec![filtered_block]);
             } else {
-                let unmatched_build_indexes = self.find_unmatched_build_indexes(&mut row_state)?;
+                let unmatched_build_indexes = self.find_unmatched_build_indexes(&row_state)?;
                 let unmatched_build_block = self.row_space.gather(&unmatched_build_indexes)?;
                 Ok(vec![unmatched_build_block])
             };
@@ -411,7 +409,7 @@ impl HashJoinState for JoinHashTable {
             }
             *build_indexes = filtered_build_indexes;
         }
-        let unmatched_build_indexes = self.find_unmatched_build_indexes(&mut row_state)?;
+        let unmatched_build_indexes = self.find_unmatched_build_indexes(&row_state)?;
         let unmatched_build_block = self.row_space.gather(&unmatched_build_indexes)?;
         Ok(vec![unmatched_build_block])
     }
@@ -421,7 +419,7 @@ impl JoinHashTable {
     pub(crate) fn filter_rows_for_right_join(
         &self,
         bm: &mut MutableBitmap,
-        row_state: &mut Vec<Vec<usize>>,
+        row_state: &mut [Vec<usize>],
     ) {
         let build_indexes = self.hash_join_desc.right_join_desc.build_indexes.read();
         for (index, row) in build_indexes.iter().enumerate() {
@@ -442,7 +440,7 @@ impl JoinHashTable {
         &self,
         bm: &mut MutableBitmap,
         input: DataBlock,
-        row_state: &mut Vec<Vec<usize>>,
+        row_state: &mut [Vec<usize>],
     ) -> Result<DataBlock> {
         let build_indexes = self.hash_join_desc.right_join_desc.build_indexes.read();
         for (index, row) in build_indexes.iter().enumerate() {

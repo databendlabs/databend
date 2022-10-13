@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::atomic::Ordering;
-
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_catalog::table_context::TableContext;
@@ -203,7 +201,7 @@ impl JoinHashTable {
 
     pub(crate) fn find_unmatched_build_indexes(
         &self,
-        row_state: &Vec<Vec<usize>>,
+        row_state: &[Vec<usize>],
     ) -> Result<Vec<RowPtr>> {
         // For right/full join, build side will appear at least once in the joined table
         // Find the unmatched rows in build side
@@ -263,7 +261,7 @@ impl JoinHashTable {
         let mut row_state = Vec::with_capacity(chunks.len());
         for chunk in chunks.iter() {
             let mut rows = Vec::with_capacity(chunk.num_rows());
-            for row_index in 0..chunk.num_rows() {
+            for _row_index in 0..chunk.num_rows() {
                 rows.push(0);
             }
             row_state.push(rows);

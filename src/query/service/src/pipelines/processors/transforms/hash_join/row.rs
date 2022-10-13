@@ -93,11 +93,6 @@ impl RowSpace {
         chunks.iter().map(|c| c.data_block.clone()).collect()
     }
 
-    pub fn rows_number(&self) -> usize {
-        let chunks = self.chunks.read().unwrap();
-        chunks.iter().map(|c| c.num_rows()).sum()
-    }
-
     pub fn gather(&self, row_ptrs: &[RowPtr]) -> Result<DataBlock> {
         let data_blocks = self.datablocks();
         let num_rows = data_blocks
