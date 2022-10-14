@@ -2086,6 +2086,7 @@ dependencies = [
  "common-fuse-meta",
  "common-legacy-expression",
  "common-pipeline-transforms",
+ "criterion",
  "rand 0.8.5",
  "serde",
  "thiserror",
