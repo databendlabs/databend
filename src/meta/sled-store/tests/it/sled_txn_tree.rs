@@ -229,7 +229,7 @@ async fn test_sled_txn_tree_key_space_update_and_fetch() -> anyhow::Result<()> {
         Ok(())
     })?;
 
-    let got = tree.get::<Nodes>(&100)?.unwrap();
+    let got = tree.key_space::<Nodes>().get(&100)?.unwrap();
     assert_eq!(
         "aa".to_string(),
         got.name,
@@ -245,7 +245,7 @@ async fn test_sled_txn_tree_key_space_update_and_fetch() -> anyhow::Result<()> {
         Ok(())
     })?;
 
-    let got = tree.get::<Nodes>(&100)?;
+    let got = tree.key_space::<Nodes>().get(&100)?;
     assert!(got.is_none(), "delete by return None");
     Ok(())
 }
