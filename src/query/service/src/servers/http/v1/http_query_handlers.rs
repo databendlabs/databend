@@ -305,6 +305,25 @@ async fn result_download_handler(
     let format =
         OutputFormatType::from_str(&params.format.unwrap_or(default_format)).map_err(BadRequest)?;
 
+    let http_query_manager = HttpQueryManager::instance();
+    if let Some(query) = http_query_manager.get_query(&query_id).await {
+        let state = query.get_response_state_only().await.state;
+        match state.state {
+            ExecuteStateKind::Running => {
+                return Err(PoemError::from_string(
+                    "running",
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                ));
+            }
+            ExecuteStateKind::Failed => {
+                return Err(PoemError::from_string(
+                    "failed",
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                ));
+            }
+            ExecuteStateKind::Succeeded => {}
+        }
+    }
     let ctx = session
         .create_query_context()
         .await
