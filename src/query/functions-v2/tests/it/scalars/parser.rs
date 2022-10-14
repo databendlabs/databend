@@ -21,6 +21,7 @@ use common_ast::parser::token::Token;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_ast::Dialect;
+use common_datavalues::IntervalKind;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::Literal;
@@ -32,6 +33,18 @@ pub fn parse_raw_expr(text: &str, columns: &[(&str, DataType)]) -> RawExpr {
     let tokens = tokenize_sql(text).unwrap();
     let expr = parse_expr(&tokens, Dialect::PostgreSQL, &backtrace).unwrap();
     transform_expr(expr, columns)
+}
+
+macro_rules! with_interval_mapped_name {
+    (| $t:tt | $($tail:tt)*) => {
+        match_template::match_template! {
+            $t = [
+              Year => "years", Quarter => "quarters", Month => "months", Day => "days",
+              Hour => "hours", Minute => "minutes", Second => "seconds",
+            ],
+            $($tail)*
+        }
+    }
 }
 
 pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) -> RawExpr {
@@ -287,6 +300,48 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
                     args: vec![result],
                 }
             }
+        }
+        common_ast::ast::Expr::DateAdd {
+            span,
+            unit,
+            interval,
+            date,
+        } => {
+            with_interval_mapped_name!(|INTERVAL| match unit {
+                IntervalKind::INTERVAL => RawExpr::FunctionCall {
+                    span: transform_span(span),
+                    name: concat!("add_", INTERVAL).to_string(),
+                    params: vec![],
+                    args: vec![
+                        transform_expr(*date, columns),
+                        transform_expr(*interval, columns),
+                    ],
+                },
+                kind => {
+                    unimplemented!("{kind:?} is not supported")
+                }
+            })
+        }
+        common_ast::ast::Expr::DateSub {
+            span,
+            unit,
+            interval,
+            date,
+        } => {
+            with_interval_mapped_name!(|INTERVAL| match unit {
+                IntervalKind::INTERVAL => RawExpr::FunctionCall {
+                    span: transform_span(span),
+                    name: concat!("substract_", INTERVAL).to_string(),
+                    params: vec![],
+                    args: vec![
+                        transform_expr(*date, columns),
+                        transform_expr(*interval, columns),
+                    ],
+                },
+                kind => {
+                    unimplemented!("{kind:?} is not supported")
+                }
+            })
         }
         expr => unimplemented!("{expr:?} is unimplemented"),
     }

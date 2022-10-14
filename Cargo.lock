@@ -1462,6 +1462,7 @@ dependencies = [
  "comfy-table",
  "common-arrow",
  "common-ast",
+ "common-datavalues",
  "common-exception",
  "common-expression",
  "common-hashtable",

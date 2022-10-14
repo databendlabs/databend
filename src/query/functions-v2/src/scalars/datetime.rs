@@ -286,6 +286,27 @@ macro_rules! impl_register_arith_functions {
             );
 
             registry.register_passthrough_nullable_2_arg::<TimestampType, Int64Type, TimestampType, _, _>(
+                concat!($op, "_quarters"),
+                FunctionProperty::default(),
+                |_, _| None,
+                vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
+                    |ts, delta, builder, _| {
+                        builder.push(AddMonthsImpl::eval_timestamp(ts, $signed_wrapper!{delta} * 3)?);
+                        Ok(())
+                    },
+                ),
+            );
+            registry.register_passthrough_nullable_2_arg::<DateType, Int64Type, DateType, _, _>(
+                concat!($op, "_quarters"),
+                FunctionProperty::default(),
+                |_, _| None,
+                vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|date, delta, builder, _| {
+                    builder.push(AddMonthsImpl::eval_date(date, $signed_wrapper!{delta} * 3)?);
+                    Ok(())
+                }),
+            );
+
+            registry.register_passthrough_nullable_2_arg::<TimestampType, Int64Type, TimestampType, _, _>(
                 concat!($op, "_months"),
                 FunctionProperty::default(),
                 |_, _| None,
