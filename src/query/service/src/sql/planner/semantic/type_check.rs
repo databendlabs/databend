@@ -19,6 +19,7 @@ use std::vec;
 use common_ast::ast::BinaryOperator;
 use common_ast::ast::Expr;
 use common_ast::ast::Identifier;
+use common_ast::ast::IntervalKind;
 use common_ast::ast::Literal;
 use common_ast::ast::MapAccessor;
 use common_ast::ast::Query;
@@ -37,7 +38,6 @@ use common_datavalues::DataField;
 use common_datavalues::DataType;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
-use common_datavalues::IntervalKind;
 use common_datavalues::IntervalType;
 use common_datavalues::NullType;
 use common_datavalues::NullableType;
@@ -1162,7 +1162,9 @@ impl<'a> TypeChecker<'a> {
                     span,
                     "to_interval_year",
                     &[arg],
-                    Some(IntervalType::new_impl(IntervalKind::Year)),
+                    Some(IntervalType::new_impl(
+                        common_datavalues::IntervalKind::Year,
+                    )),
                 )
                 .await
             }
@@ -1171,7 +1173,9 @@ impl<'a> TypeChecker<'a> {
                     span,
                     "to_interval_quarter",
                     &[arg],
-                    Some(IntervalType::new_impl(IntervalKind::Quarter)),
+                    Some(IntervalType::new_impl(
+                        common_datavalues::IntervalKind::Quarter,
+                    )),
                 )
                 .await
             }
@@ -1180,7 +1184,9 @@ impl<'a> TypeChecker<'a> {
                     span,
                     "to_interval_month",
                     &[arg],
-                    Some(IntervalType::new_impl(IntervalKind::Month)),
+                    Some(IntervalType::new_impl(
+                        common_datavalues::IntervalKind::Month,
+                    )),
                 )
                 .await
             }
@@ -1189,7 +1195,7 @@ impl<'a> TypeChecker<'a> {
                     span,
                     "to_interval_day",
                     &[arg],
-                    Some(IntervalType::new_impl(IntervalKind::Day)),
+                    Some(IntervalType::new_impl(common_datavalues::IntervalKind::Day)),
                 )
                 .await
             }
@@ -1198,7 +1204,9 @@ impl<'a> TypeChecker<'a> {
                     span,
                     "to_interval_hour",
                     &[arg],
-                    Some(IntervalType::new_impl(IntervalKind::Hour)),
+                    Some(IntervalType::new_impl(
+                        common_datavalues::IntervalKind::Hour,
+                    )),
                 )
                 .await
             }
@@ -1207,7 +1215,9 @@ impl<'a> TypeChecker<'a> {
                     span,
                     "to_interval_minute",
                     &[arg],
-                    Some(IntervalType::new_impl(IntervalKind::Minute)),
+                    Some(IntervalType::new_impl(
+                        common_datavalues::IntervalKind::Minute,
+                    )),
                 )
                 .await
             }
@@ -1216,7 +1226,9 @@ impl<'a> TypeChecker<'a> {
                     span,
                     "to_interval_second",
                     &[arg],
-                    Some(IntervalType::new_impl(IntervalKind::Second)),
+                    Some(IntervalType::new_impl(
+                        common_datavalues::IntervalKind::Second,
+                    )),
                 )
                 .await
             }
@@ -1225,7 +1237,7 @@ impl<'a> TypeChecker<'a> {
                     span,
                     "to_interval_doy",
                     &[arg],
-                    Some(IntervalType::new_impl(IntervalKind::Doy)),
+                    Some(IntervalType::new_impl(common_datavalues::IntervalKind::Doy)),
                 )
                 .await
             }
@@ -1234,7 +1246,7 @@ impl<'a> TypeChecker<'a> {
                     span,
                     "to_interval_dow",
                     &[arg],
-                    Some(IntervalType::new_impl(IntervalKind::Dow)),
+                    Some(IntervalType::new_impl(common_datavalues::IntervalKind::Dow)),
                 )
                 .await
             }

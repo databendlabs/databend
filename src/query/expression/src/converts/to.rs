@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_datablocks::DataBlock;
 use common_datavalues::Column as DvColumn;
 use common_datavalues::ColumnRef;
@@ -19,16 +20,14 @@ use common_datavalues::ConstColumn;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::IntoColumn;
-use common_arrow::arrow::datatypes::Field as ArrowField;
 
-
-use crate::DataField;
-use crate::DataSchema;
 use crate::types::AnyType;
 use crate::types::DataType;
 use crate::Chunk;
 use crate::Column;
 use crate::ColumnBuilder;
+use crate::DataField;
+use crate::DataSchema;
 use crate::Value;
 
 pub fn to_type(datatype: &DataType) -> DataTypeImpl {
@@ -36,7 +35,6 @@ pub fn to_type(datatype: &DataType) -> DataTypeImpl {
     let arrow_f: ArrowField = (&f).into();
     common_datavalues::from_arrow_field(&arrow_f)
 }
-
 
 pub fn to_schema(schema: &DataSchema) -> common_datavalues::DataSchema {
     let fields = schema
@@ -49,7 +47,6 @@ pub fn to_schema(schema: &DataSchema) -> common_datavalues::DataSchema {
         .collect();
     common_datavalues::DataSchema::new_from(fields, schema.meta().clone())
 }
-
 
 // we do not need conver scalar to datavalue
 

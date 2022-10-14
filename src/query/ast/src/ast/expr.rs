@@ -15,7 +15,6 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_datavalues::IntervalKind;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -271,6 +270,19 @@ pub enum TrimWhere {
     Both,
     Leading,
     Trailing,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IntervalKind {
+    Year,
+    Quarter,
+    Month,
+    Day,
+    Hour,
+    Minute,
+    Second,
+    Doy,
+    Dow,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -570,6 +582,22 @@ impl Display for TrimWhere {
             TrimWhere::Both => "BOTH",
             TrimWhere::Leading => "LEADING",
             TrimWhere::Trailing => "TRAILING",
+        })
+    }
+}
+
+impl Display for IntervalKind {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        f.write_str(match self {
+            IntervalKind::Year => "YEAR",
+            IntervalKind::Quarter => "QUARTER",
+            IntervalKind::Month => "MONTH",
+            IntervalKind::Day => "DAY",
+            IntervalKind::Hour => "HOUR",
+            IntervalKind::Minute => "MINUTE",
+            IntervalKind::Second => "SECOND",
+            IntervalKind::Doy => "DOY",
+            IntervalKind::Dow => "DOW",
         })
     }
 }

@@ -19,10 +19,10 @@ use std::sync::Arc;
 
 use ce::converts::from_schema;
 use ce::converts::to_schema;
-use common_datavalues as dv;
-use common_expression as ce;
 use chrono::DateTime;
 use chrono::Utc;
+use common_datavalues as dv;
+use common_expression as ce;
 use common_meta_app::schema as mt;
 use common_protos::pb;
 use common_storage::StorageParams;
