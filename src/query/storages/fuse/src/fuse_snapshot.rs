@@ -21,12 +21,12 @@ use common_base::base::Runtime;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_fuse_meta::meta::TableSnapshot;
 use common_fuse_meta::meta::TableSnapshotLite;
 use futures_util::future;
 use futures_util::TryStreamExt;
 use opendal::ObjectMode;
 use opendal::Operator;
+use tracing::info;
 use tracing::warn;
 use tracing::Instrument;
 
@@ -37,9 +37,10 @@ async fn read_snapshot(
     snapshot_location: String,
     format_version: u64,
     data_accessor: Operator,
-) -> Result<Arc<TableSnapshot>> {
+) -> Result<TableSnapshotLite> {
     let reader = MetaReaders::table_snapshot_reader(ctx.clone(), data_accessor);
-    reader.read(snapshot_location, None, format_version).await
+    let result = reader.read(snapshot_location, None, format_version).await?;
+    Ok(TableSnapshotLite::from(result.as_ref()))
 }
 
 #[tracing::instrument(level = "debug", skip_all)]
@@ -48,7 +49,7 @@ pub async fn read_snapshots(
     snapshot_files: &[String],
     format_version: u64,
     data_accessor: Operator,
-) -> Result<Vec<Result<Arc<TableSnapshot>>>> {
+) -> Result<Vec<Result<TableSnapshotLite>>> {
     let max_runtime_threads = ctx.get_settings().get_max_threads()? as usize;
     let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
 
@@ -96,7 +97,7 @@ pub async fn read_snapshots(
 // 2. List all the files in the prefix
 // 3. Try to read all the snapshot files in parallel.
 #[tracing::instrument(level = "debug", skip_all)]
-pub async fn read_snapshot_lites_by_root_file(
+pub async fn read_snapshots_by_root_file(
     ctx: Arc<dyn TableContext>,
     root_snapshot_file: String,
     format_version: u64,
@@ -140,25 +141,30 @@ pub async fn read_snapshot_lites_by_root_file(
     // 1. Get all the snapshot by chunks.
     let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
     let mut snapshot_map = HashMap::with_capacity(snapshot_files.len());
-    for chunks in snapshot_files.chunks(max_io_requests * 5) {
+    for (idx, chunks) in snapshot_files.chunks(max_io_requests).enumerate() {
+        info!(
+            "Start to read_snapshots, chunk:[{}], size:{}",
+            idx,
+            chunks.len()
+        );
         let results =
             read_snapshots(ctx.clone(), chunks, format_version, data_accessor.clone()).await?;
+        info!("Finish to read_snapshots, chunk:[{}]", idx);
+
         for snapshot in results.into_iter().flatten() {
-            let snapshot_lite = TableSnapshotLite::from(snapshot.as_ref());
-            snapshot_map.insert(snapshot_lite.snapshot_id, snapshot_lite);
+            snapshot_map.insert(snapshot.snapshot_id, snapshot);
         }
     }
 
     // 2. Build the snapshot chain from root.
     // 2.1 Get the root snapshot.
-    let root_snapshot = read_snapshot(
+    let root_snapshot_lite = read_snapshot(
         ctx.clone(),
         root_snapshot_file,
         format_version,
         data_accessor.clone(),
     )
     .await?;
-    let root_snapshot_lite = TableSnapshotLite::from(root_snapshot.as_ref());
 
     // 2.2 Chain the snapshots from root to the oldest.
     let mut snapshot_chain = Vec::with_capacity(snapshot_map.len());

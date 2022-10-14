@@ -20,7 +20,7 @@ CREATE TABLE `query_log` (
   `query_kind` VARCHAR,
   `query_text` VARCHAR,
   `event_date` DATE,
-  `event_time` TIMESTAMP(3),
+  `event_time` TIMESTAMP,
   `current_database` VARCHAR,
   `databases` VARCHAR,
   `tables` VARCHAR,
@@ -85,8 +85,8 @@ written_io_bytes_cost_ms: 0
 
 , skip_header=0, sql_dialect=PostgreSQL, storage_read_buffer_size=1048576, timezone=UTC, unquoted_ident_case_sensitive=0, wait_for_async_insert=1, wait_for_async_insert_timeout=100, scope: SESSION
                    extra:
-                   
-                   
+
+
 *************************** 5. row ***************************
                 log_type: 2
             handler_type: MySQL

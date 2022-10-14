@@ -1126,9 +1126,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
     let ty_date = value(TypeName::Date, rule! { DATE });
     let ty_datetime = map(
         rule! { (DATETIME | TIMESTAMP) ~ ( "(" ~ #literal_u64 ~ ")" )? },
-        |(_, opt_precision)| TypeName::Timestamp {
-            precision: opt_precision.map(|(_, precision, _)| precision),
-        },
+        |(_, _)| TypeName::Timestamp,
     );
     let ty_string = value(
         TypeName::String,

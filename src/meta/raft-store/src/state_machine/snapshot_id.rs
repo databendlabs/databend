@@ -14,10 +14,10 @@
 
 use std::str::FromStr;
 
+use common_meta_stoerr::MetaStorageError;
 use common_meta_types::anyerror::AnyError;
 use common_meta_types::LogId;
 use common_meta_types::LogIndex;
-use common_meta_types::MetaStorageError;
 
 /// Structured snapshot id used by meta service
 #[derive(Clone, Debug, PartialEq, Eq)]

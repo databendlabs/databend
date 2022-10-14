@@ -58,7 +58,7 @@ SELECT * FROM system.columns WHERE database='system';
 | query_kind               | system   | query_log    | VARCHAR           |              |                    |           0 |         |
 | query_text               | system   | query_log    | VARCHAR           |              |                    |           0 |         |
 | event_date               | system   | query_log    | DATE              |              |                    |           0 |         |
-| event_time               | system   | query_log    | TIMESTAMP(3)      |              |                    |           0 |         |
+| event_time               | system   | query_log    | TIMESTAMP         |              |                    |           0 |         |
 | current_database         | system   | query_log    | VARCHAR           |              |                    |           0 |         |
 | databases                | system   | query_log    | VARCHAR           |              |                    |           0 |         |
 | tables                   | system   | query_log    | VARCHAR           |              |                    |           0 |         |

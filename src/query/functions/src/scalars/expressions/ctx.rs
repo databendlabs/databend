@@ -18,7 +18,6 @@ use common_exception::ErrorCode;
 #[derive(Debug, Clone)]
 pub struct EvalContext {
     pub factor: i64,
-    pub precision: usize,
     pub error: Option<ErrorCode>,
     pub tz: Tz,
 }
@@ -28,7 +27,6 @@ impl Default for EvalContext {
         let tz = "UTC".parse::<Tz>().unwrap();
         Self {
             factor: 1,
-            precision: 0,
             error: None,
             tz,
         }
@@ -36,13 +34,8 @@ impl Default for EvalContext {
 }
 
 impl EvalContext {
-    pub fn new(factor: i64, precision: usize, error: Option<ErrorCode>, tz: Tz) -> Self {
-        Self {
-            factor,
-            precision,
-            error,
-            tz,
-        }
+    pub fn new(factor: i64, error: Option<ErrorCode>, tz: Tz) -> Self {
+        Self { factor, error, tz }
     }
 
     pub fn set_error(&mut self, e: ErrorCode) {
