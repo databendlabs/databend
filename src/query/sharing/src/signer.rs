@@ -136,7 +136,10 @@ impl SharedSigner {
     async fn sign_inner(&self, reqs: Vec<PresignRequest>) -> Result<()> {
         let reqs: Vec<PresignRequestItem> = reqs
             .into_iter()
-            .map(|v| PresignRequestItem { file_name: v.path })
+            .map(|v| PresignRequestItem {
+                file_name: v.path,
+                method: to_method(v.op),
+            })
             .collect();
         let bs = Bytes::from(serde_json::to_vec(&reqs)?);
 
@@ -178,9 +181,18 @@ impl PresignRequest {
     }
 }
 
+fn to_method(op: Operation) -> String {
+    match op {
+        Operation::Read => "GET".to_string(),
+        Operation::Stat => "HEAD".to_string(),
+        v => unimplemented!("not supported operation: {v}"),
+    }
+}
+
 fn from_method(method: &str) -> Operation {
     match method {
         "GET" => Operation::Read,
+        "HEAD" => Operation::Stat,
         v => unimplemented!("not supported operation: {v}"),
     }
 }
@@ -188,6 +200,7 @@ fn from_method(method: &str) -> Operation {
 #[derive(serde::Serialize)]
 struct PresignRequestItem {
     file_name: String,
+    method: String,
 }
 
 #[derive(serde::Deserialize, Clone, Debug)]
