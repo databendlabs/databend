@@ -9,7 +9,7 @@ description: Accessing Apache Iceberg formatted data source as external table.
 ## Summary
 
 Iceberg is a widely supported table format among data lake-houses.
-This RFC describes how the iceberg external table will behave and how will we implement it.
+This RFC describes how the iceberg external table will behave and how we will implement it.
 
 ## Motivation
 
@@ -34,7 +34,7 @@ CREATE EXTERNAL TABLE [IF NOT EXISTS] [db.]table_name
     <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
     ...
 ) ENGINE=ICEBERG
-ENGINE_OPTION=(
+ENGINE_OPTIONS=(
   DATABASE='db0'
   TABLE='tbl0'
 )
@@ -70,7 +70,7 @@ URL = 's3://<bucket-name>/<path-to-iceberg>'
 CONNECTION = (
   ENDPOINT_URL = <endpoint_url>
   ACCESS_KEY_ID = <access_key_id>
-  ACCESS_KEY_SECRET = <access_key_secret>
+  SECRET_ACCESS_KEY = <secret_access_key>
   SESSION_TOKEN = <aws_session_token>
 )
 ```
@@ -120,7 +120,7 @@ Current snapshot id the external table is reading will always be the newest. But
 
 ## Reference-level explanation
 
-A new table engine `ICEBERG`, and options like `ENGINE_OPTION` for engine configuration and `external-location` in DDL will be added.
+A new table engine `ICEBERG`, and options like `ENGINE_OPTIONS` for engine configuration and `external-location` in DDL will be added.
 
 ### ICEBERG Engine
 
@@ -128,13 +128,35 @@ ICEBERG is a table engine that enable users reading data from established Apache
 
 The ENGINE will track the last commited snapshot, and should able to read from former snapshots.
 
-### ENGINE_OPTION
+### ENGINE_OPTIONS
 
-Apache Iceberg has its own defined database and tables, but this external table only concerned about single tables in the Iceberg storage. Using ENGINE_OPTION users can specify which table in which database should the external access from Iceberg.
+Apache Iceberg has its own defined database and tables, but this external table only concerned about single tables in the Iceberg storage. Using ENGINE_OPTIONS users can specify which table in which database should the external access from Iceberg.
 
 ### external-location
 
 No matter where the Iceberg is, like S3, GCS or OSS, if Databend support the storage, then the Iceberg should be accessable. Users need to tell databend where the Iceberg storage is and how should databend access the storage.
+
+### Type convention
+
+| Iceberg         | Note                                                     | Databend                             |
+| --------------- | -------------------------------------------------------- | ------------------------------------ |
+| `boolean`       | True or false                                            | `BOOLEAN`                            |
+| `int`           | 32 bit signed integer                                    | `INT32`                              |
+| `long`          | 64 bit signed integer                                    | `INT64`                              |
+| `float`         | 32 bit IEEE 754 float point number                       | `FLOAT`                              |
+| `double`        | 64 bit IEEE 754 float point number                       | `DOUBLE`                             |
+| `decimal(P, S)` | Fixed point decimal; precision P, scale S                | not supported                        |
+| `date`          | Calendar date without timezone or time                   | `DATE`                               |
+| `time`          | Timestamp without date, timezone                         | `TIMESTAMP`, convert date to today   |
+| `timestamp`     | Timestamp without timezone                               | `TIMESTAMP`, convert timezone to GMT |
+| `timestamptz`   | Timestamp with timezone                                  | `TIMESTAMP`                          |
+| `string`        | UTF-8 string                                             | `VARCHAR`                            |
+| `uuid`          | 16-byte fixed byte array, universally unique identifiers | `VARCHAR`                            |
+| `fixed(L)`      | Fixed-length byte array of length L                      | `VARCHAR`                            |
+| `binary`        | Arbitrary-length byte array                              | `VARCHAR`                            |
+| `struct`        | a tuple of typed values                                  | `OBJECT`                             |
+| `list`          | a collection of values with some element type            | `ARRAY`                              |
+| `map`           |                                                          | `OBJECT`                             |
 
 ## Drawbacks
 
@@ -156,7 +178,7 @@ CREATE TABLE [IF NOT EXISTS] [db.]table_name
 <external-location>
 ```
 
-The reason why this is not chosen is that this may require copying data from Iceberg into our storage. This may not be expected by users, since almost all datalakes keep the Iceberg data unmoved, and making it harder to sync up with Iceberg data source.
+The reason why this is not chosen is that this may require copying data from Iceberg into our storage. This may not be expected by users, since almost all data lakes keep the Iceberg data unmoved, and this way is harder to sync up with Iceberg data source.
 
 ## Prior art
 
