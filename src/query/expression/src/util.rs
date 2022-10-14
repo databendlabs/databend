@@ -14,11 +14,11 @@
 
 use std::io::Cursor;
 
+use chrono_tz::Tz;
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::buffer::Buffer;
-use common_arrow::arrow::chunk::Chunk;
 use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::datatypes::Schema;
 use common_arrow::arrow::io::ipc::read::read_file_metadata;
@@ -26,7 +26,16 @@ use common_arrow::arrow::io::ipc::read::FileReader;
 use common_arrow::arrow::io::ipc::write::FileWriter;
 use common_arrow::arrow::io::ipc::write::WriteOptions;
 
+use crate::error::Result;
+use crate::types::AnyType;
+use crate::types::DataType;
+use crate::Chunk;
 use crate::Column;
+use crate::Evaluator;
+use crate::FunctionRegistry;
+use crate::RawExpr;
+use crate::Span;
+use crate::Value;
 
 pub fn column_merge_validity(column: &Column, bitmap: Option<Bitmap>) -> Option<Bitmap> {
     match column {
@@ -79,7 +88,9 @@ pub fn serialize_arrow_array(col: Box<dyn Array>) -> Vec<u8> {
     let schema = Schema::from(vec![Field::new("col", col.data_type().clone(), true)]);
     let mut writer = FileWriter::new(&mut buffer, schema, None, WriteOptions::default());
     writer.start().unwrap();
-    writer.write(&Chunk::new(vec![col]), None).unwrap();
+    writer
+        .write(&common_arrow::arrow::chunk::Chunk::new(vec![col]), None)
+        .unwrap();
     writer.finish().unwrap();
     buffer
 }
@@ -100,4 +111,38 @@ pub const fn concat_array<T, const A: usize, const B: usize>(a: &[T; A], b: &[T;
         std::ptr::copy_nonoverlapping(b.as_ptr(), dest.add(A), B);
         result.assume_init()
     }
+}
+
+/// A convenient shortcut to evaluate a scalar function.
+pub fn eval_function(
+    span: Span,
+    fn_name: &str,
+    args: impl Iterator<Item = (Value<AnyType>, DataType)>,
+    tz: Tz,
+    num_rows: usize,
+    fn_registry: &FunctionRegistry,
+) -> Result<(Value<AnyType>, DataType)> {
+    let (args, cols) = args
+        .enumerate()
+        .map(|(id, (val, ty))| {
+            (
+                RawExpr::ColumnRef {
+                    span: span.clone(),
+                    id,
+                    data_type: ty.clone(),
+                },
+                (val, ty),
+            )
+        })
+        .unzip();
+    let raw_expr = RawExpr::FunctionCall {
+        span,
+        name: fn_name.to_string(),
+        params: vec![],
+        args,
+    };
+    let (expr, ty) = crate::type_check::check(&raw_expr, fn_registry)?;
+    let chunk = Chunk::new(cols, num_rows);
+    let evaluator = Evaluator::new(&chunk, tz);
+    Ok((evaluator.run(&expr)?, ty))
 }
