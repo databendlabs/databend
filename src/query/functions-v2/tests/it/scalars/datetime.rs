@@ -14,6 +14,8 @@
 
 use std::io::Write;
 
+use common_expression::from_date_data;
+use common_expression::from_timestamp_data;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::Column;
@@ -30,6 +32,8 @@ fn test_datetime() {
     test_to_timestamp(file);
     test_to_datetime(file);
     test_to_date(file);
+    test_date_arithmetic_functions(file);
+    test_timestamp_arithmetic_functions(file);
 }
 
 fn test_to_timestamp(file: &mut impl Write) {
@@ -98,4 +102,222 @@ fn test_to_date(file: &mut impl Write) {
         DataType::Number(NumberDataType::Int32),
         Column::from_data(vec![-354285, -100, 0, 100, 2932896]),
     )]);
+}
+
+fn test_date_arithmetic_functions(file: &mut impl Write) {
+    run_ast(file, "add_years(to_date(0), 10000)", &[]); // failed
+    run_ast(file, "add_years(to_date(0), 100)", &[]);
+    run_ast(file, "add_months(to_date(0), 100)", &[]);
+    run_ast(file, "add_days(to_date(0), 100)", &[]);
+    run_ast(file, "substract_years(to_date(0), 100)", &[]);
+    run_ast(file, "substract_months(to_date(0), 100)", &[]);
+    run_ast(file, "substract_days(to_date(0), 100)", &[]);
+    run_ast(file, "add_years(a, b)", &[
+        ("a", DataType::Date, from_date_data(vec![-100, 0, 100])),
+        (
+            "b",
+            DataType::Number(NumberDataType::Int32),
+            Column::from_data(vec![1, 2, 3]),
+        ),
+    ]);
+    run_ast(file, "add_months(a, b)", &[
+        ("a", DataType::Date, from_date_data(vec![-100, 0, 100])),
+        (
+            "b",
+            DataType::Number(NumberDataType::Int32),
+            Column::from_data(vec![1, 2, 3]),
+        ),
+    ]);
+    run_ast(file, "add_days(a, b)", &[
+        ("a", DataType::Date, from_date_data(vec![-100, 0, 100])),
+        (
+            "b",
+            DataType::Number(NumberDataType::Int32),
+            Column::from_data(vec![1, 2, 3]),
+        ),
+    ]);
+    run_ast(file, "substract_years(a, b)", &[
+        ("a", DataType::Date, from_date_data(vec![-100, 0, 100])),
+        (
+            "b",
+            DataType::Number(NumberDataType::Int32),
+            Column::from_data(vec![1, 2, 3]),
+        ),
+    ]);
+    run_ast(file, "substract_months(a, b)", &[
+        ("a", DataType::Date, from_date_data(vec![-100, 0, 100])),
+        (
+            "b",
+            DataType::Number(NumberDataType::Int32),
+            Column::from_data(vec![1, 2, 3]),
+        ),
+    ]);
+    run_ast(file, "substract_days(a, b)", &[
+        ("a", DataType::Date, from_date_data(vec![-100, 0, 100])),
+        (
+            "b",
+            DataType::Number(NumberDataType::Int32),
+            Column::from_data(vec![1, 2, 3]),
+        ),
+    ]);
+}
+
+fn test_timestamp_arithmetic_functions(file: &mut impl Write) {
+    run_ast(file, "add_years(to_timestamp(0), 10000)", &[]); // failed
+    run_ast(file, "add_years(to_timestamp(0), 100)", &[]);
+    run_ast(file, "add_months(to_timestamp(0), 100)", &[]);
+    run_ast(file, "add_days(to_timestamp(0), 100)", &[]);
+    run_ast(file, "add_hours(to_timestamp(0), 100)", &[]);
+    run_ast(file, "add_minutes(to_timestamp(0), 100)", &[]);
+    run_ast(file, "add_seconds(to_timestamp(0), 100)", &[]);
+    run_ast(file, "substract_years(to_timestamp(0), 100)", &[]);
+    run_ast(file, "substract_months(to_timestamp(0), 100)", &[]);
+    run_ast(file, "substract_days(to_timestamp(0), 100)", &[]);
+    run_ast(file, "substract_hours(to_timestamp(0), 100)", &[]);
+    run_ast(file, "substract_minutes(to_timestamp(0), 100)", &[]);
+    run_ast(file, "substract_seconds(to_timestamp(0), 100)", &[]);
+    run_ast(file, "add_years(a, b)", &[
+        (
+            "a",
+            DataType::Timestamp,
+            from_timestamp_data(vec![-100, 0, 100]),
+        ),
+        (
+            "b",
+            DataType::Number(NumberDataType::Int32),
+            Column::from_data(vec![1, 2, 3]),
+        ),
+    ]);
+    run_ast(file, "add_months(a, b)", &[
+        (
+            "a",
+            DataType::Timestamp,
+            from_timestamp_data(vec![-100, 0, 100]),
+        ),
+        (
+            "b",
+            DataType::Number(NumberDataType::Int32),
+            Column::from_data(vec![1, 2, 3]),
+        ),
+    ]);
+    run_ast(file, "add_days(a, b)", &[
+        (
+            "a",
+            DataType::Timestamp,
+            from_timestamp_data(vec![-100, 0, 100]),
+        ),
+        (
+            "b",
+            DataType::Number(NumberDataType::Int32),
+            Column::from_data(vec![1, 2, 3]),
+        ),
+    ]);
+    run_ast(file, "add_hours(a, b)", &[
+        (
+            "a",
+            DataType::Timestamp,
+            from_timestamp_data(vec![-100, 0, 100]),
+        ),
+        (
+            "b",
+            DataType::Number(NumberDataType::Int32),
+            Column::from_data(vec![1, 2, 3]),
+        ),
+    ]);
+    run_ast(file, "add_minutes(a, b)", &[
+        (
+            "a",
+            DataType::Timestamp,
+            from_timestamp_data(vec![-100, 0, 100]),
+        ),
+        (
+            "b",
+            DataType::Number(NumberDataType::Int32),
+            Column::from_data(vec![1, 2, 3]),
+        ),
+    ]);
+    run_ast(file, "add_seconds(a, b)", &[
+        (
+            "a",
+            DataType::Timestamp,
+            from_timestamp_data(vec![-100, 0, 100]),
+        ),
+        (
+            "b",
+            DataType::Number(NumberDataType::Int32),
+            Column::from_data(vec![1, 2, 3]),
+        ),
+    ]);
+    run_ast(file, "substract_years(a, b)", &[
+        (
+            "a",
+            DataType::Timestamp,
+            from_timestamp_data(vec![-100, 0, 100]),
+        ),
+        (
+            "b",
+            DataType::Number(NumberDataType::Int32),
+            Column::from_data(vec![1, 2, 3]),
+        ),
+    ]);
+    run_ast(file, "substract_months(a, b)", &[
+        (
+            "a",
+            DataType::Timestamp,
+            from_timestamp_data(vec![-100, 0, 100]),
+        ),
+        (
+            "b",
+            DataType::Number(NumberDataType::Int32),
+            Column::from_data(vec![1, 2, 3]),
+        ),
+    ]);
+    run_ast(file, "substract_days(a, b)", &[
+        (
+            "a",
+            DataType::Timestamp,
+            from_timestamp_data(vec![-100, 0, 100]),
+        ),
+        (
+            "b",
+            DataType::Number(NumberDataType::Int32),
+            Column::from_data(vec![1, 2, 3]),
+        ),
+    ]);
+    run_ast(file, "substract_hours(a, b)", &[
+        (
+            "a",
+            DataType::Timestamp,
+            from_timestamp_data(vec![-100, 0, 100]),
+        ),
+        (
+            "b",
+            DataType::Number(NumberDataType::Int32),
+            Column::from_data(vec![1, 2, 3]),
+        ),
+    ]);
+    run_ast(file, "substract_minutes(a, b)", &[
+        (
+            "a",
+            DataType::Timestamp,
+            from_timestamp_data(vec![-100, 0, 100]),
+        ),
+        (
+            "b",
+            DataType::Number(NumberDataType::Int32),
+            Column::from_data(vec![1, 2, 3]),
+        ),
+    ]);
+    run_ast(file, "substract_seconds(a, b)", &[
+        (
+            "a",
+            DataType::Timestamp,
+            from_timestamp_data(vec![-100, 0, 100]),
+        ),
+        (
+            "b",
+            DataType::Number(NumberDataType::Int32),
+            Column::from_data(vec![1, 2, 3]),
+        ),
+    ]);
 }

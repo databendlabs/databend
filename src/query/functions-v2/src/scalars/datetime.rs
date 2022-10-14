@@ -249,8 +249,20 @@ fn register_try_cast_functions(registry: &mut FunctionRegistry) {
     );
 }
 
+macro_rules! signed_ident {
+    ($name: ident) => {
+        -$name
+    };
+}
+
+macro_rules! unsigned_ident {
+    ($name: ident) => {
+        $name
+    };
+}
+
 macro_rules! impl_register_arith_functions {
-    ($name: ident, $op: literal, $sign: expr) => {
+    ($name: ident, $op: literal, $signed_wrapper: tt) => {
         fn $name(registry: &mut FunctionRegistry) {
             registry.register_passthrough_nullable_2_arg::<TimestampType, Int64Type, TimestampType, _, _>(
                 concat!($op, "_years"),
@@ -258,7 +270,7 @@ macro_rules! impl_register_arith_functions {
                 |_, _| None,
                 vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
                     |ts, delta, builder, _| {
-                        builder.push(AddYearsImpl::eval_timestamp(ts, delta * $sign)?);
+                        builder.push(AddYearsImpl::eval_timestamp(ts, $signed_wrapper!{delta})?);
                         Ok(())
                     },
                 ),
@@ -268,7 +280,7 @@ macro_rules! impl_register_arith_functions {
                 FunctionProperty::default(),
                 |_, _| None,
                 vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|date, delta, builder, _| {
-                    builder.push(AddYearsImpl::eval_date(date, delta * $sign)?);
+                    builder.push(AddYearsImpl::eval_date(date, $signed_wrapper!{delta})?);
                     Ok(())
                 }),
             );
@@ -279,7 +291,7 @@ macro_rules! impl_register_arith_functions {
                 |_, _| None,
                 vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
                     |ts, delta, builder, _| {
-                        builder.push(AddMonthsImpl::eval_timestamp(ts, delta * $sign)?);
+                        builder.push(AddMonthsImpl::eval_timestamp(ts, $signed_wrapper!{delta})?);
                         Ok(())
                     },
                 ),
@@ -289,7 +301,7 @@ macro_rules! impl_register_arith_functions {
                 FunctionProperty::default(),
                 |_, _| None,
                 vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|date, delta, builder, _| {
-                    builder.push(AddMonthsImpl::eval_date(date, delta * $sign)?);
+                    builder.push(AddMonthsImpl::eval_date(date, $signed_wrapper!{delta})?);
                     Ok(())
                 }),
             );
@@ -300,7 +312,7 @@ macro_rules! impl_register_arith_functions {
                 |_, _| None,
                 vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
                     |ts, delta, builder, _| {
-                        builder.push(AddDaysImpl::eval_timestamp(ts, delta * $sign)?);
+                        builder.push(AddDaysImpl::eval_timestamp(ts, $signed_wrapper!{delta})?);
                         Ok(())
                     },
                 ),
@@ -310,7 +322,7 @@ macro_rules! impl_register_arith_functions {
                 FunctionProperty::default(),
                 |_, _| None,
                 vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|date, delta, builder, _| {
-                    builder.push(AddDaysImpl::eval_date(date, delta * $sign)?);
+                    builder.push(AddDaysImpl::eval_date(date, $signed_wrapper!{delta})?);
                     Ok(())
                 }),
             );
@@ -323,7 +335,7 @@ macro_rules! impl_register_arith_functions {
                     |ts, delta, builder, _| {
                         builder.push(AddTimesImpl::eval_timestamp(
                             ts,
-                            delta * $sign,
+                            $signed_wrapper!{delta},
                             FACTOR_HOUR,
                         )?);
                         Ok(())
@@ -339,7 +351,7 @@ macro_rules! impl_register_arith_functions {
                     |ts, delta, builder, _| {
                         builder.push(AddTimesImpl::eval_timestamp(
                             ts,
-                            delta * $sign,
+                            $signed_wrapper!{delta},
                             FACTOR_MINUTE,
                         )?);
                         Ok(())
@@ -355,7 +367,7 @@ macro_rules! impl_register_arith_functions {
                     |ts, delta, builder, _| {
                         builder.push(AddTimesImpl::eval_timestamp(
                             ts,
-                            delta * $sign,
+                            $signed_wrapper!{delta},
                             FACTOR_SECOND,
                         )?);
                         Ok(())
@@ -366,5 +378,5 @@ macro_rules! impl_register_arith_functions {
     };
 }
 
-impl_register_arith_functions!(register_add_functions, "add", 1);
-impl_register_arith_functions!(register_sub_functions, "substract", -1);
+impl_register_arith_functions!(register_add_functions, "add", unsigned_ident);
+impl_register_arith_functions!(register_sub_functions, "substract", signed_ident);
