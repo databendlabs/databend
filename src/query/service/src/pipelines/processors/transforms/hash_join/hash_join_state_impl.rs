@@ -275,7 +275,9 @@ impl HashJoinState for JoinHashTable {
             return Ok(blocks.to_vec());
         }
 
-        let input_block = DataBlock::concat_blocks(blocks)?;
+        if blocks.is_empty() && self.hash_join_desc.join_type != JoinType::Full {
+            return Ok(vec![]);
+        }
 
         // Don't need process non-equi conditions for full join in the method
         // Because non-equi conditions have been processed in left probe join
@@ -283,9 +285,12 @@ impl HashJoinState for JoinHashTable {
             || self.hash_join_desc.join_type == JoinType::Full
         {
             let null_block = self.null_blocks_for_right_join(&unmatched_build_indexes)?;
-            return Ok(vec![DataBlock::concat_blocks(&[input_block, null_block])?]);
+            return Ok(vec![DataBlock::concat_blocks(
+                &[blocks, &[null_block]].concat(),
+            )?]);
         }
 
+        let input_block = DataBlock::concat_blocks(blocks)?;
         let (bm, all_true, all_false) = self.get_other_filters(
             &input_block,
             self.hash_join_desc.other_predicate.as_ref().unwrap(),
@@ -399,15 +404,13 @@ impl HashJoinState for JoinHashTable {
         }
 
         // Right anti join with non-equi conditions
-        let mut filtered_build_indexes: Vec<RowPtr> = vec![];
         {
-            let mut build_indexes = self.hash_join_desc.right_join_desc.build_indexes.write();
+            let build_indexes = self.hash_join_desc.right_join_desc.build_indexes.read();
             for (idx, row_ptr) in build_indexes.iter().enumerate() {
-                if bm.get(idx) {
-                    filtered_build_indexes.push(*row_ptr)
+                if !bm.get(idx) {
+                    row_state[row_ptr.chunk_index][row_ptr.row_index] -= 1;
                 }
             }
-            *build_indexes = filtered_build_indexes;
         }
         let unmatched_build_indexes = self.find_unmatched_build_indexes(&row_state)?;
         let unmatched_build_block = self.row_space.gather(&unmatched_build_indexes)?;

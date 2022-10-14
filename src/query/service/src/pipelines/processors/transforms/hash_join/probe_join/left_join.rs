@@ -95,11 +95,11 @@ impl JoinHashTable {
                         let mut build_indexes =
                             self.hash_join_desc.right_join_desc.build_indexes.write();
                         // dummy row ptr
-                        // here assume there is no RowPtr, which chunk_index is u32::MAX and row_index is u32::MAX
+                        // here assume there is no RowPtr, which chunk_index is usize::MAX and row_index is usize::MAX
                         build_indexes.push(RowPtr {
                             chunk_index: usize::MAX,
                             row_index: usize::MAX,
-                            marker: None,
+                            marker: Some(MarkerKind::False),
                         });
                     }
                     // dummy row ptr
