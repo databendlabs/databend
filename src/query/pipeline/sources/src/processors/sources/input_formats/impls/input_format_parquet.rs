@@ -112,6 +112,7 @@ impl InputFormat for InputFormatParquet {
                 compress_alg: None,
             });
 
+            let num_file_splits = row_groups.len();
             for (i, rg) in row_groups.into_iter().enumerate() {
                 if !rg.columns().is_empty() {
                     let offset = rg
@@ -130,6 +131,7 @@ impl InputFormat for InputFormatParquet {
                         seq_in_file: i,
                         offset,
                         size,
+                        num_file_splits,
                         format_info: Some(meta),
                     });
                     infos.push(info);

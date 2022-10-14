@@ -669,13 +669,15 @@ impl RaftStoreBare {
             None => return Ok(vec![]),
         };
 
-        let nodes = sm.nodes().range_kvs(..)?;
+        let nodes = sm.nodes().range(..)?;
+        let mut ns = vec![];
 
-        let ns = nodes
-            .into_iter()
-            .filter(|(node_id, _)| predicate(&membership, node_id))
-            .map(|(_, node)| node)
-            .collect();
+        for x in nodes {
+            let item = x?;
+            if predicate(&membership, &item.key()?) {
+                ns.push(item.value()?);
+            }
+        }
 
         Ok(ns)
     }
