@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
-
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_catalog::table_context::TableContext;
@@ -27,6 +25,8 @@ use common_datavalues::ConstColumn;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataType;
+use common_datavalues::DataValue;
 use common_datavalues::NullableColumn;
 use common_datavalues::NullableType;
 use common_datavalues::Series;
@@ -199,36 +199,82 @@ impl JoinHashTable {
         ))
     }
 
-    pub(crate) fn find_unmatched_build_indexes(&self) -> Result<Vec<RowPtr>> {
+    pub(crate) fn find_unmatched_build_indexes(
+        &self,
+        row_state: &[Vec<usize>],
+    ) -> Result<Vec<RowPtr>> {
         // For right/full join, build side will appear at least once in the joined table
         // Find the unmatched rows in build side
         let mut unmatched_build_indexes = vec![];
-        let build_indexes = self.hash_join_desc.right_join_desc.build_indexes.read();
-        let build_indexes_set: HashSet<&RowPtr> = build_indexes.iter().collect();
-        // TODO(xudong): remove the line of code below after https://github.com/rust-lang/rust-clippy/issues/8987
-        #[allow(clippy::significant_drop_in_scrutinee)]
         for (chunk_index, chunk) in self.row_space.chunks.read().unwrap().iter().enumerate() {
             for row_index in 0..chunk.num_rows() {
-                let row_ptr = RowPtr {
-                    chunk_index: chunk_index as u32,
-                    row_index: row_index as u32,
-                    marker: None,
-                };
-                if !build_indexes_set.contains(&row_ptr) {
-                    let mut row_state = self.hash_join_desc.right_join_desc.row_state.write();
-                    row_state.entry(row_ptr).or_insert(0_usize);
-                    unmatched_build_indexes.push(row_ptr);
-                }
-                if self.hash_join_desc.join_type == JoinType::Full {
-                    if let Some(row_ptr) = build_indexes_set.get(&row_ptr) {
-                        // If `marker` == `MarkerKind::False`, it means the row in build side has been filtered in left probe phase
-                        if row_ptr.marker == Some(MarkerKind::False) {
-                            unmatched_build_indexes.push(**row_ptr);
-                        }
-                    }
+                if row_state[chunk_index][row_index] == 0 {
+                    unmatched_build_indexes.push(RowPtr::new(chunk_index, row_index));
                 }
             }
         }
         Ok(unmatched_build_indexes)
+    }
+
+    // For unmatched build index, the method will produce null probe block
+    // Then merge null_probe_block with unmatched_build_block
+    pub(crate) fn null_blocks_for_right_join(
+        &self,
+        unmatched_build_indexes: &Vec<RowPtr>,
+    ) -> Result<DataBlock> {
+        let mut unmatched_build_block = self.row_space.gather(unmatched_build_indexes)?;
+        if self.hash_join_desc.join_type == JoinType::Full {
+            let nullable_unmatched_build_columns = unmatched_build_block
+                .columns()
+                .iter()
+                .map(|c| {
+                    let mut probe_validity = MutableBitmap::new();
+                    probe_validity.extend_constant(c.len(), true);
+                    let probe_validity: Bitmap = probe_validity.into();
+                    Self::set_validity(c, &probe_validity)
+                })
+                .collect::<Result<Vec<_>>>()?;
+            unmatched_build_block =
+                DataBlock::create(self.row_space.schema(), nullable_unmatched_build_columns);
+        };
+        // Create null block for unmatched rows in probe side
+        let null_probe_block = DataBlock::create(
+            self.probe_schema.clone(),
+            self.probe_schema
+                .fields()
+                .iter()
+                .map(|df| {
+                    df.data_type()
+                        .clone()
+                        .create_constant_column(&DataValue::Null, unmatched_build_indexes.len())
+                })
+                .collect::<Result<Vec<_>>>()?,
+        );
+        self.merge_eq_block(&unmatched_build_block, &null_probe_block)
+    }
+
+    // Final row_state for right join
+    // Record row in build side that is matched how many rows in probe side.
+    pub(crate) fn row_state_for_right_join(&self) -> Result<Vec<Vec<usize>>> {
+        let build_indexes = self.hash_join_desc.right_join_desc.build_indexes.read();
+        let chunks = self.row_space.chunks.read().unwrap();
+        let mut row_state = Vec::with_capacity(chunks.len());
+        for chunk in chunks.iter() {
+            let mut rows = Vec::with_capacity(chunk.num_rows());
+            for _row_index in 0..chunk.num_rows() {
+                rows.push(0);
+            }
+            row_state.push(rows);
+        }
+
+        for row_ptr in build_indexes.iter() {
+            if self.hash_join_desc.join_type == JoinType::Full
+                && row_ptr.marker == Some(MarkerKind::False)
+            {
+                continue;
+            }
+            row_state[row_ptr.chunk_index][row_ptr.row_index] += 1;
+        }
+        Ok(row_state)
     }
 }
