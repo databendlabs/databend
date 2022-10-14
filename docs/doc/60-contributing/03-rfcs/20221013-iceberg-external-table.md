@@ -29,11 +29,11 @@ To use Iceberg external table, users need to have an iceberg storage with necces
 
 ```sql
 CREATE EXTERNAL TABLE [IF NOT EXISTS] [db.]table_name
-(
+[(
     <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
     <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
     ...
-) ENGINE=ICEBERG
+)] ENGINE=ICEBERG
 ENGINE_OPTIONS=(
   DATABASE='db0'
   TABLE='tbl0'
@@ -72,6 +72,17 @@ CONNECTION = (
   ACCESS_KEY_ID = <access_key_id>
   SECRET_ACCESS_KEY = <secret_access_key>
   SESSION_TOKEN = <aws_session_token>
+)
+```
+
+For convinience, this will create the same schema as the table inside the external Iceberg storage.
+
+```sql
+CREATE EXTERNAL TABLE [IF [NOT] EXISTS] [db.]<table_name>
+ENGINE=ICEBERG
+ENGINE_OPTIONS=(
+    DATABASE=<database-name>
+    TABLE=<table-name>
 )
 ```
 
