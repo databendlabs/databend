@@ -39,32 +39,22 @@ impl JoinHashTable {
         Key: HashTableKeyable + Clone + 'static,
         IT: Iterator<Item = Key> + TrustedLen,
     {
-        let local_build_indexes = &mut probe_state.build_indexs;
         let probe_indexes = &mut probe_state.probe_indexs;
         let valids = &probe_state.valids;
-        let mut validity = MutableBitmap::new();
+        let mut validity = MutableBitmap::with_capacity(input.num_rows());
         let mut build_indexes = self.hash_join_desc.right_join_desc.build_indexes.write();
+        let build_indexes_len = build_indexes.len();
         for (i, key) in keys_iter.enumerate() {
             let probe_result_ptr = self.probe_key(hash_table, key, valids, i);
             if let Some(v) = probe_result_ptr {
                 let probe_result_ptrs = v.get_value();
                 build_indexes.extend(probe_result_ptrs);
-                local_build_indexes.extend_from_slice(probe_result_ptrs);
-                for row_ptr in probe_result_ptrs.iter() {
-                    {
-                        let mut row_state = self.hash_join_desc.right_join_desc.row_state.write();
-                        row_state
-                            .entry(*row_ptr)
-                            .and_modify(|e| *e += 1)
-                            .or_insert(1_usize);
-                    }
-                }
                 probe_indexes.extend(std::iter::repeat(i as u32).take(probe_result_ptrs.len()));
                 validity.extend_constant(probe_result_ptrs.len(), true);
             }
         }
 
-        let build_block = self.row_space.gather(local_build_indexes)?;
+        let build_block = self.row_space.gather(&build_indexes[build_indexes_len..])?;
         let mut probe_block = DataBlock::block_take_by_indices(input, probe_indexes)?;
 
         // If join type is right join, need to wrap nullable for probe side

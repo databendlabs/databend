@@ -32,6 +32,7 @@ use opendal::io_util::DecompressState;
 use opendal::Operator;
 
 use super::InputFormat;
+use crate::processors::sources::input_formats::beyond_end_reader::BeyondEndReader;
 use crate::processors::sources::input_formats::delimiter::RecordDelimiter;
 use crate::processors::sources::input_formats::impls::input_format_csv::CsvReaderState;
 use crate::processors::sources::input_formats::input_context::CopyIntoPlan;
@@ -125,23 +126,17 @@ impl<T: InputFormatTextBase> InputFormat for InputFormatText<T> {
                 plan.stage_info.file_format_options.compression,
                 path,
             )?;
-            if compress_alg.is_none() || !T::is_splittable() {
-                let file = Arc::new(FileInfo {
-                    path: path.clone(),
-                    size, // dummy
-                    num_splits: 1,
-                    compress_alg,
-                });
-                infos.push(Arc::new(SplitInfo {
-                    file,
-                    seq_in_file: 0,
-                    offset: 0,
-                    size, // dummy
-                    format_info: None,
-                }));
-            } else {
-                let split_size = 128usize * 1024 * 1024;
-                let split_offsets = split_by_size(size, split_size);
+            let split_size = plan.stage_info.copy_options.split_size;
+            if compress_alg.is_none() && T::is_splittable() && split_size > 0 {
+                let split_offsets = split_by_size(size, split_size as usize);
+                let num_file_splits = split_offsets.len();
+                tracing::debug!(
+                    "split file {} of size {} to {} {} bytes splits",
+                    path,
+                    size,
+                    num_file_splits,
+                    split_size
+                );
                 let file = Arc::new(FileInfo {
                     path: path.clone(),
                     size,
@@ -154,9 +149,25 @@ impl<T: InputFormatTextBase> InputFormat for InputFormatText<T> {
                         seq_in_file: i,
                         offset,
                         size,
+                        num_file_splits,
                         format_info: None,
                     }));
                 }
+            } else {
+                let file = Arc::new(FileInfo {
+                    path: path.clone(),
+                    size, // dummy
+                    num_splits: 1,
+                    compress_alg,
+                });
+                infos.push(Arc::new(SplitInfo {
+                    file,
+                    seq_in_file: 0,
+                    offset: 0,
+                    size, // dummy
+                    num_file_splits: 1,
+                    format_info: None,
+                }));
             }
         }
         Ok(infos)
@@ -177,6 +188,8 @@ pub struct RowBatch {
 }
 
 pub struct AligningState<T> {
+    ctx: Arc<InputContext>,
+    split_info: Arc<SplitInfo>,
     pub path: String,
     pub record_delimiter_end: u8,
     pub field_delimiter: u8,
@@ -280,6 +293,7 @@ impl<T: InputFormatTextBase> AligningState<T> {
     }
 }
 
+#[async_trait::async_trait]
 impl<T: InputFormatTextBase> AligningStateTrait for AligningState<T> {
     type Pipe = InputFormatTextPipe<T>;
 
@@ -287,7 +301,7 @@ impl<T: InputFormatTextBase> AligningStateTrait for AligningState<T> {
         let rows_to_skip = if split_info.seq_in_file == 0 {
             ctx.rows_to_skip
         } else {
-            0
+            (T::is_splittable() && split_info.num_file_splits > 1) as usize
         };
         let path = split_info.file.path.clone();
 
@@ -299,6 +313,8 @@ impl<T: InputFormatTextBase> AligningStateTrait for AligningState<T> {
         };
 
         Ok(AligningState::<T> {
+            ctx: ctx.clone(),
+            split_info: split_info.clone(),
             path,
             decoder,
             rows_to_skip,
@@ -329,6 +345,15 @@ impl<T: InputFormatTextBase> AligningStateTrait for AligningState<T> {
             self.flush()
         };
         Ok(row_batches)
+    }
+
+    fn read_beyond_end(&self) -> Option<BeyondEndReader> {
+        Some(BeyondEndReader {
+            ctx: self.ctx.clone(),
+            split_info: self.split_info.clone(),
+            path: self.path.clone(),
+            record_delimiter_end: self.record_delimiter_end,
+        })
     }
 }
 

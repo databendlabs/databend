@@ -82,6 +82,7 @@ impl ClustersTable {
                 engine: "SystemClusters".to_string(),
                 ..Default::default()
             },
+            ..Default::default()
         };
 
         SyncOneBlockSystemTable::create(ClustersTable { table_info })

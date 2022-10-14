@@ -38,6 +38,7 @@ async fn test_null_table() -> Result<()> {
             options: TableOptions::default(),
             ..Default::default()
         },
+        ..Default::default()
     })?;
 
     // read.

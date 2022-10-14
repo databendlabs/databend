@@ -70,6 +70,7 @@ impl FuseSnapshotTable {
                 engine,
                 ..Default::default()
             },
+            ..Default::default()
         };
 
         Ok(Arc::new(FuseSnapshotTable {
@@ -108,7 +109,7 @@ impl Table for FuseSnapshotTable {
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        _: &ReadDataSourcePlan,
+        plan: &ReadDataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let output = OutputPort::create();
@@ -120,6 +121,7 @@ impl Table for FuseSnapshotTable {
                 output,
                 self.arg_database_name.to_owned(),
                 self.arg_table_name.to_owned(),
+                plan.push_downs.as_ref().and_then(|extras| extras.limit),
             )?],
         });
 
@@ -143,6 +145,7 @@ struct FuseSnapshotSource {
     ctx: Arc<dyn TableContext>,
     arg_database_name: String,
     arg_table_name: String,
+    limit: Option<usize>,
 }
 
 impl FuseSnapshotSource {
@@ -151,12 +154,14 @@ impl FuseSnapshotSource {
         output: Arc<OutputPort>,
         arg_database_name: String,
         arg_table_name: String,
+        limit: Option<usize>,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(ctx.clone(), output, FuseSnapshotSource {
             ctx,
             finish: false,
             arg_table_name,
             arg_database_name,
+            limit,
         })
     }
 }
@@ -186,7 +191,7 @@ impl AsyncSource for FuseSnapshotSource {
         let tbl = FuseTable::try_from_table(tbl.as_ref())?;
         Ok(Some(
             FuseSnapshot::new(self.ctx.clone(), tbl)
-                .get_snapshots()
+                .get_snapshots(self.limit)
                 .await?,
         ))
     }

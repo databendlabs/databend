@@ -19,10 +19,10 @@ use std::fmt::Display;
 use std::ops::Bound;
 use std::ops::RangeBounds;
 
-use common_meta_stoerr::MetaStorageError;
-use common_meta_types::anyerror::AnyError;
+use anyerror::AnyError;
 use sled::IVec;
 
+use crate::SledBytesError;
 use crate::SledOrderedSerde;
 use crate::SledSerde;
 
@@ -41,7 +41,7 @@ pub trait SledKeySpace {
     /// Type for value.
     type V: SledSerde + Debug;
 
-    fn serialize_key(k: &Self::K) -> Result<sled::IVec, MetaStorageError> {
+    fn serialize_key(k: &Self::K) -> Result<sled::IVec, SledBytesError> {
         let b = <Self::K as SledOrderedSerde>::ser(k)?;
         let x = b.as_ref();
 
@@ -52,26 +52,24 @@ pub trait SledKeySpace {
         Ok(buf.into())
     }
 
-    fn deserialize_key<T: AsRef<[u8]>>(iv: T) -> Result<Self::K, MetaStorageError> {
+    fn deserialize_key<T: AsRef<[u8]>>(iv: T) -> Result<Self::K, SledBytesError> {
         let b = iv.as_ref();
         if b[0] != Self::PREFIX {
-            return Err(MetaStorageError::SledError(AnyError::error(
-                "invalid prefix",
-            )));
+            return Err(SledBytesError::new(&AnyError::error("invalid prefix")));
         }
         <Self::K as SledOrderedSerde>::de(&b[1..])
     }
 
-    fn serialize_value(v: &Self::V) -> Result<sled::IVec, MetaStorageError> {
+    fn serialize_value(v: &Self::V) -> Result<sled::IVec, SledBytesError> {
         v.ser()
     }
 
-    fn deserialize_value<T: AsRef<[u8]>>(iv: T) -> Result<Self::V, MetaStorageError> {
+    fn deserialize_value<T: AsRef<[u8]>>(iv: T) -> Result<Self::V, SledBytesError> {
         Self::V::de(iv)
     }
 
     /// Convert range of user key to range of sled::IVec for query.
-    fn serialize_range<R>(range: &R) -> Result<(Bound<IVec>, Bound<IVec>), MetaStorageError>
+    fn serialize_range<R>(range: &R) -> Result<(Bound<IVec>, Bound<IVec>), SledBytesError>
     where R: RangeBounds<Self::K> {
         let s = range.start_bound();
         let e = range.end_bound();
@@ -86,10 +84,7 @@ pub trait SledKeySpace {
     /// A u8 prefix is prepended to the bound value and an open bound is converted to a namespaced bound.
     /// E.g., use the [PREFIX] as the left side closed bound,
     /// and use the [PREFIX+1] as the right side open bound.
-    fn serialize_bound(
-        v: Bound<&Self::K>,
-        dir: &str,
-    ) -> Result<Bound<sled::IVec>, MetaStorageError> {
+    fn serialize_bound(v: Bound<&Self::K>, dir: &str) -> Result<Bound<sled::IVec>, SledBytesError> {
         let res = match v {
             Bound::Included(v) => Bound::Included(Self::serialize_key(v)?),
             Bound::Excluded(v) => Bound::Excluded(Self::serialize_key(v)?),

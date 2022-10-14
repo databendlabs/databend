@@ -70,6 +70,7 @@ impl TracingTable {
                 engine: "SystemTracing".to_string(),
                 ..Default::default()
             },
+            ..Default::default()
         };
 
         TracingTable { table_info }
