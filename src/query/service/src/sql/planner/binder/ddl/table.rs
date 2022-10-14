@@ -378,7 +378,7 @@ impl<'a> Binder {
                 let (sp, _) = parse_uri_location(&uri)?;
 
                 // create a temporary op to check if params is correct
-                StorageOperator::try_create_with_storage_params(&sp, "").await?;
+                StorageOperator::try_create_with_storage_params(&sp).await?;
 
                 Some(sp)
             }

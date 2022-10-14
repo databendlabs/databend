@@ -42,6 +42,7 @@ use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
 use common_sharing::create_share_table_operator;
 use common_storage::init_operator;
+use common_storage::ShareTableConfig;
 use common_storage::StorageOperator;
 use common_storages_util::storage_context::StorageContext;
 use common_storages_util::table_storage_prefix::table_storage_prefix;
@@ -92,7 +93,7 @@ impl FuseTable {
         }
         let operator = match table_info.from_share {
             Some(ref from_share) => create_share_table_operator(
-                StorageOperator::share_endpoint_address(),
+                ShareTableConfig::share_endpoint_address(),
                 &table_info.tenant,
                 &from_share.tenant,
                 &from_share.share_name,
