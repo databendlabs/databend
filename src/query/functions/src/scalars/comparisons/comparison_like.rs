@@ -76,10 +76,25 @@ impl StringSearchImpl for StringSearchLike {
             PatternType::PatternStr => {
                 let pattern = simdutf8::basic::from_utf8(rhs)
                     .expect("Unable to convert the LIKE pattern to string: {}");
+                let mut sub_strings: Vec<&str> =
+                    pattern.split(|c: char| c.is_ascii_punctuation()).collect();
+                sub_strings.retain(|&substring| !substring.is_empty());
                 let re_pattern = like_pattern_to_regex(pattern);
                 let re = BytesRegex::new(&re_pattern)
                     .expect("Unable to build regex from LIKE pattern: {}");
-                BooleanColumn::from_iterator(lhs.scalar_iter().map(|x| op(re.is_match(x))))
+                BooleanColumn::from_iterator(lhs.scalar_iter().map(|x| {
+                    let lhs_str = simdutf8::basic::from_utf8(x)
+                        .expect("Unable to convert lhs value to string: {}");
+                    let mut contain = false;
+                    for substring in sub_strings.clone() {
+                        contain = lhs_str.contains(substring);
+                    }
+                    if !contain {
+                        op(false)
+                    } else {
+                        op(re.is_match(x))
+                    }
+                }))
             }
         }
     }
