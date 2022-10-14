@@ -18,12 +18,11 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_datablocks::DataBlock;
-use common_datavalues::chrono;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::DataSchema;
+use common_expression::Scalar;
 use common_legacy_expression::LegacyExpression;
 use common_legacy_planners::DeletePlan;
 use common_legacy_planners::Extras;
@@ -50,7 +49,7 @@ pub trait Table: Sync + Send {
         self.get_table_info().engine()
     }
 
-    fn schema(&self) -> DataSchemaRef {
+    fn schema(&self) -> Arc<DataSchema> {
         self.get_table_info().schema()
     }
 
@@ -169,7 +168,7 @@ pub trait Table: Sync + Send {
     async fn commit_insertion(
         &self,
         ctx: Arc<dyn TableContext>,
-        operations: Vec<DataBlock>,
+        operations: Vec<Chunk>,
         overwrite: bool,
     ) -> Result<()> {
         let (_, _, _) = (ctx, operations, overwrite);
@@ -297,8 +296,8 @@ pub struct TableStatistics {
 
 #[derive(Debug, Clone)]
 pub struct ColumnStatistics {
-    pub min: DataValue,
-    pub max: DataValue,
+    pub min: Scalar,
+    pub max: Scalar,
     pub null_count: u64,
     pub number_of_distinct_values: u64,
 }

@@ -1270,12 +1270,12 @@ name = "common-catalog"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "chrono",
  "common-base",
  "common-config",
  "common-contexts",
- "common-datablocks",
- "common-datavalues",
  "common-exception",
+ "common-expression",
  "common-functions",
  "common-io",
  "common-legacy-expression",
