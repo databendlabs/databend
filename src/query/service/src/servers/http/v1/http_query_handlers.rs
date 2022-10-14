@@ -168,7 +168,7 @@ async fn query_detach_handler(
     Path(query_id): Path<String>,
 ) -> impl IntoResponse {
     let http_query_manager = HttpQueryManager::instance();
-    match http_query_manager.remove_query(&query_id).await {
+    match http_query_manager.get_query(&query_id).await {
         Some(query) => {
             query.detach().await;
             StatusCode::OK
