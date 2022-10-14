@@ -105,7 +105,7 @@ AT ( { SNAPSHOT => <snapshot_id> | TIMESTAMP => <timestamp> } );
 Users should be able to lookup the list of snapshot id in Iceberg:
 
 ```sql
-SELECT snapshot_id FROM FUSE_SNAPSHOT('<database-name>', '<external-iceberg-table-name>');
+SELECT snapshot_id FROM ICEBERG_SNAPSHOT('<database-name>', '<external-iceberg-table-name>');
 ```
 
 ```
@@ -122,11 +122,11 @@ Current snapshot id the external table is reading will always be the newest. But
 
 A new table engine `ICEBERG`, and options like `ENGINE_OPTIONS` for engine configuration and `external-location` in DDL will be added.
 
-### ICEBERG Engine
+### `ICEBERG` Engine
 
-ICEBERG is a table engine that enable users reading data from established Apache Iceberg endpoints. All table content and metadata of external table should remain in user-provided Iceberg data sources, in Iceberg's manner.
+`ICEBERG` is a table engine that enable users reading data from established Apache Iceberg endpoints. All table content and metadata of external table should remain in user-provided Iceberg data sources, in Iceberg's manner.
 
-The ENGINE will track the last commited snapshot, and should able to read from former snapshots.
+The engine will track the last commited snapshot, and should able to read from former snapshots.
 
 ### ENGINE_OPTIONS
 
@@ -180,6 +180,27 @@ CREATE TABLE [IF NOT EXISTS] [db.]table_name
 
 The reason why this is not chosen is that this may require copying data from Iceberg into our storage. This may not be expected by users, since almost all data lakes keep the Iceberg data unmoved, and this way is harder to sync up with Iceberg data source.
 
+If users do want to copy data out of Iceberg, this might be done with a `COPY INTO` option:
+
+```sql
+COPY INTO [db.]table_name
+<external-location>
+<file-format>
+[<iceberg-options>]
+```
+
+where:
+
+```
+iceberg-options ::=
+
+ICEBERG_OPTIONS = (
+DATABASE=<database-name>
+TABLE=<table-name>
+[SNAPSHOT=<snapshot-id>]
+)
+```
+
 ## Prior art
 
 None
@@ -195,7 +216,7 @@ None
 The default Iceberg snapshot use in external table should always be the newest commited one:
 
 ```sql
-SELECT snapshot_id from FUSE_SNAPSHOT('example_db', 'iceberg_tbl');
+SELECT snapshot_id from ICEBERG_SNAPSHOT('example_db', 'iceberg_tbl');
 ```
 
 ```
@@ -214,7 +235,7 @@ INSERT INTO example_db.iceberg_tbl VALUES ('datafuselabs', 'How To Be a Healthy 
 This will create a new snapshot in Iceberg Storage:
 
 ```sql
-SELECT snapshot_id from FUSE_SNAPSHOT('example_db', 'iceberg_tbl');
+SELECT snapshot_id from ICEBERG_SNAPSHOT('example_db', 'iceberg_tbl');
 ```
 
 ```
