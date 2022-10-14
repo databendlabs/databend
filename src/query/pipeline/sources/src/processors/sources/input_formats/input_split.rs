@@ -37,6 +37,7 @@ pub struct SplitInfo {
     pub seq_in_file: usize,
     pub offset: usize,
     pub size: usize,
+    pub num_file_splits: usize,
     pub format_info: Option<Arc<dyn DynData>>,
 }
 
@@ -54,9 +55,18 @@ impl Display for SplitInfo {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let n = self.file.num_splits;
         if n > 1 {
-            write!(f, "{}[{}/{}]", self.file.path, self.seq_in_file + 1, n)
+            write!(
+                f,
+                "{}({})[{}/{}][{}..{}]",
+                self.file.path,
+                self.size,
+                self.seq_in_file,
+                n,
+                self.offset,
+                self.offset + self.size
+            )
         } else {
-            write!(f, "{}", self.file.path)
+            write!(f, "{}({})", self.file.path, self.size)
         }
     }
 }
@@ -64,8 +74,10 @@ impl Display for SplitInfo {
 pub fn split_by_size(size: usize, split_size: usize) -> Vec<(usize, usize)> {
     let mut splits = vec![];
     let n = (size + split_size - 1) / split_size;
-    for i in 0..n - 1 {
-        splits.push((i * split_size, std::cmp::min((i + 1) * split_size, size)))
+    for i in 0..n {
+        let start = i * split_size;
+        let end = std::cmp::min((i + 1) * split_size, size);
+        splits.push((start, end - start))
     }
     splits
 }
@@ -82,6 +94,7 @@ impl SplitInfo {
             seq_in_file: 0,
             offset: 0,
             size: 0,
+            num_file_splits: 1,
             format_info: None,
         }
     }

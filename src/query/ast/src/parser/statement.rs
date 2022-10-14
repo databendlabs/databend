@@ -761,6 +761,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             ~ ( VALIDATION_MODE ~ "=" ~ #literal_string)?
             ~ ( SIZE_LIMIT ~ "=" ~ #literal_u64)?
             ~ ( MAX_FILE_SIZE ~ "=" ~ #literal_u64)?
+            ~ ( SPLIT_SIZE ~ "=" ~ #literal_u64)?
             ~ ( SINGLE ~ "=" ~ #literal_bool)?
             ~ ( PURGE ~ "=" ~ #literal_bool)?
             ~ ( FORCE ~ "=" ~ #literal_bool)?
@@ -777,6 +778,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             validation_mode,
             size_limit,
             max_file_size,
+            split_size,
             single,
             purge,
             force,
@@ -790,6 +792,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 validation_mode: validation_mode.map(|v| v.2).unwrap_or_default(),
                 size_limit: size_limit.map(|v| v.2).unwrap_or_default() as usize,
                 max_file_size: max_file_size.map(|v| v.2).unwrap_or_default() as usize,
+                split_size: split_size.map(|v| v.2).unwrap_or_default() as usize,
                 single: single.map(|v| v.2).unwrap_or_default(),
                 purge: purge.map(|v| v.2).unwrap_or_default(),
                 force: force.map(|v| v.2).unwrap_or_default(),

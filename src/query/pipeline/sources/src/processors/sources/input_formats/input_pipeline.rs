@@ -31,6 +31,7 @@ use futures_util::AsyncReadExt;
 use futures_util::StreamExt;
 use opendal::io_util::CompressAlgorithm;
 
+use crate::processors::sources::input_formats::beyond_end_reader::BeyondEndReader;
 use crate::processors::sources::input_formats::input_context::InputContext;
 use crate::processors::sources::input_formats::input_context::InputPlan;
 use crate::processors::sources::input_formats::input_context::StreamPlan;
@@ -51,15 +52,19 @@ pub struct StreamingReadBatch {
     pub compression: Option<CompressAlgorithm>,
 }
 
-pub trait AligningStateTrait: Sized {
+#[async_trait::async_trait]
+pub trait AligningStateTrait: Sync + Sized {
     type Pipe: InputFormatPipe<AligningState = Self>;
-
     fn try_create(ctx: &Arc<InputContext>, split_info: &Arc<SplitInfo>) -> Result<Self>;
 
     fn align(
         &mut self,
         read_batch: Option<<Self::Pipe as InputFormatPipe>::ReadBatch>,
     ) -> Result<Vec<<Self::Pipe as InputFormatPipe>::RowBatch>>;
+
+    fn read_beyond_end(&self) -> Option<BeyondEndReader> {
+        None
+    }
 }
 
 pub trait BlockBuilderTrait {
@@ -262,17 +267,22 @@ pub trait InputFormatPipe: Sized + Send + 'static {
         split_info: Arc<SplitInfo>,
         batch_tx: Sender<Result<Self::ReadBatch>>,
     ) -> Result<()> {
-        tracing::debug!("start");
+        tracing::debug!("started");
         let operator = ctx.source.get_operator()?;
         let object = operator.object(&split_info.file.path);
         let offset = split_info.offset as u64;
-        let mut reader = object.range_reader(offset..).await?;
+        let size = split_info.size;
+        let mut batch_size = ctx.read_batch_size.min(size);
+        let mut reader = object.range_reader(offset..offset + size as u64).await?;
+        let mut total_read = 0;
         loop {
-            let mut batch = vec![0u8; ctx.read_batch_size];
+            batch_size = batch_size.min(size - total_read);
+            let mut batch = vec![0u8; batch_size];
             let n = read_full(&mut reader, &mut batch[0..]).await?;
             if n == 0 {
                 break;
             } else {
+                total_read += n;
                 batch.truncate(n);
                 tracing::debug!("read {} bytes", n);
                 if let Err(e) = batch_tx.send(Ok(batch.into())).await {
@@ -281,6 +291,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
                 }
             }
         }
+        assert_eq!(total_read, size);
         tracing::debug!("finished");
         Ok(())
     }

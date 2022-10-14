@@ -75,6 +75,7 @@ impl CreditsTable {
                 engine: "SystemCredits".to_string(),
                 ..Default::default()
             },
+            ..Default::default()
         };
 
         SyncOneBlockSystemTable::create(CreditsTable { table_info })
