@@ -209,7 +209,8 @@ impl BlockPruner {
     ) -> Result<Vec<(SegmentIndex, BlockMeta)>> {
         let mut blocks = segment_info.blocks.iter().enumerate();
         let pruning_runtime = &pruning_ctx.rt;
-        let semaphore = &pruning_ctx.semaphore;
+        // REMOVE ME: create a new Semaphore for debug
+        let semaphore = Arc::new(Semaphore::new(1000));
         let tasks = std::iter::from_fn(|| {
             // check limit speculatively
             if pruning_ctx.limiter.exceeded() {
