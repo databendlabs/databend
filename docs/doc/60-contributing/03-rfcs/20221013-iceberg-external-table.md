@@ -1,11 +1,10 @@
 ---
 title: Iceberg External Table
-description:
-    Accessing Apache Iceberg formatted data source as external table.
+description: Accessing Apache Iceberg formatted data source as external table.
 ---
 
-- RFC PR: [datafuselabs/databend#0000](https://github.com/datafuselabs/databend/pull/0000)
-- Tracking Issue: [datafuselabs/databend#0000](https://github.com/datafuselabs/databend/issues/0000)
+- RFC PR: [datafuselabs/databend#8215](https://github.com/datafuselabs/databend/pull/8215)
+- Tracking Issue: [datafuselabs/databend#8216](https://github.com/datafuselabs/databend/issues/8216)
 
 ## Summary
 
@@ -45,22 +44,25 @@ ENGINE_OPTION=(
 where:
 
 - data_type:
+
 ```
 <data_type>:
   TINYINT
-| SMALLINT 
+| SMALLINT
 | INT
 | BIGINT
 | FLOAT
 | DOUBLE
 | DATE
-| TIMESTAMP 
+| TIMESTAMP
 | VARCHAR
 | ARRAY
 | OBJECT
 | VARIANT
 ```
+
 - external-location (using S3 for example):
+
 ```
 external-location ::=
 
@@ -199,4 +201,3 @@ SELECT snapshot_id from FUSE_SNAPSHOT('example_db', 'iceberg_tbl');
  0000000000001
  0000000000002
 ```
-
