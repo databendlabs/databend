@@ -257,11 +257,32 @@ impl HiveTable {
             .get_partition_names(table_info[0].to_string(), table_info[1].to_string(), -1)
             .await?;
 
+        if tracing::enabled!(tracing::Level::TRACE) {
+            let partition_num = partition_names.len();
+            if partition_num < 100000 {
+                tracing::trace!(
+                    "get {} partitions from hive metastore:{:?}",
+                    partition_num,
+                    partition_names
+                );
+            } else {
+                tracing::trace!("get {} partitions from hive metastore", partition_num);
+            }
+        }
+
         if !filter_expressions.is_empty() {
             let partition_schemas = self.get_column_schemas(partition_keys.clone())?;
             let partition_pruner =
                 HivePartitionPruner::create(ctx, filter_expressions, partition_schemas);
             partition_names = partition_pruner.prune(partition_names)?;
+        }
+
+        if tracing::enabled!(tracing::Level::TRACE) {
+            tracing::trace!(
+                "after partition prune, {} partitions:{:?}",
+                partition_names.len(),
+                partition_names
+            )
         }
 
         let partitions = hive_catalog
@@ -352,12 +373,23 @@ impl HiveTable {
     ) -> Result<(Statistics, Partitions)> {
         let start = Instant::now();
         let dirs = self.get_query_locations(ctx.clone(), &push_downs).await?;
+        if tracing::enabled!(tracing::Level::TRACE) {
+            tracing::trace!("{} query locations: {:?}", dirs.len(), dirs);
+        }
+
         let all_files = self.list_files_from_dirs(dirs).await?;
+        if tracing::enabled!(tracing::Level::TRACE) {
+            tracing::trace!("{} hive files: {:?}", all_files.len(), all_files);
+        }
 
         let splitter = HiveFileSplitter::create(128 * 1024 * 1024_u64);
         let partitions = splitter.get_splits(all_files);
 
-        tracing::info!("read partition, elapsed:{:?}", start.elapsed());
+        tracing::info!(
+            "read partition, partition num:{}, elapsed:{:?}",
+            partitions.len(),
+            start.elapsed()
+        );
 
         Ok((Default::default(), partitions))
     }
@@ -471,6 +503,7 @@ impl SyncSource for HiveSource {
     }
 }
 
+#[derive(Debug)]
 pub struct HiveFileInfo {
     pub filename: String,
     pub length: u64,

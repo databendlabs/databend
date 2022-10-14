@@ -125,6 +125,10 @@ impl InputFormatTextBase for InputFormatTSV {
         StageFileFormatType::Tsv
     }
 
+    fn is_splittable() -> bool {
+        true
+    }
+
     fn get_format_settings(settings: &Arc<Settings>) -> Result<FormatSettings> {
         let timezone = get_time_zone(settings)?;
         Ok(FormatSettings {

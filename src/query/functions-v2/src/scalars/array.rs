@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_expression::types::array::ArrayColumnBuilder;
+use common_expression::types::number::SimpleDomain;
 use common_expression::types::number::UInt64Type;
 use common_expression::types::ArrayType;
 use common_expression::types::DataType;
@@ -91,7 +92,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_1_arg::<EmptyArrayType, NumberType<u8>, _, _>(
         "length",
         FunctionProperty::default(),
-        |_| None,
+        |_| Some(SimpleDomain { min: 0, max: 0 }),
         |_, _| 0u8,
     );
 
@@ -116,7 +117,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         vectorize_with_builder_2_arg::<ArrayType<GenericType<0>>, UInt64Type, NullableType<GenericType<0>>>(
             |arr, idx, output, _| {
                 match arr.index(idx as usize) {
-                    Some(item) => output.push(Some(item)),
+                    Some(item) => output.push(item),
                     None => output.push_null(),
                 }
                 Ok(())
