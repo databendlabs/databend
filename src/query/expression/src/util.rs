@@ -131,7 +131,7 @@ pub fn eval_function(
                     id,
                     data_type: ty.clone(),
                 },
-                (val, ty.clone()),
+                (val, ty),
             )
         })
         .unzip();
