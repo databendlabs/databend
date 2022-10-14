@@ -113,6 +113,7 @@ pub const fn concat_array<T, const A: usize, const B: usize>(a: &[T; A], b: &[T;
     }
 }
 
+/// A convenient shortcut to evaluate a scalar function.
 pub fn eval_function(
     span: Span,
     fn_name: &str,
