@@ -16,6 +16,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use common_base::base::tokio::sync::OwnedSemaphorePermit;
 use common_base::base::tokio::sync::Semaphore;
 use common_base::base::tokio::task::JoinHandle;
 use common_base::base::Runtime;
@@ -95,11 +96,6 @@ impl BlockPruner {
         let max_concurrency = {
             let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
             // Prevent us from miss-configured max_storage_io_requests setting, e.g. 0
-            //
-            // note that inside the segment pruning, the SAME Semaphore is used to
-            // control the concurrency of block pruning, to prevent us from waiting for
-            // a permit while hold the last permit, at least 2 permits should be
-            // given to this semaphore.
             let v = std::cmp::max(max_io_requests, 10);
             if v > max_io_requests {
                 warn!(
@@ -136,19 +132,20 @@ impl BlockPruner {
                 None
             } else {
                 segments.next().map(|(segment_idx, segment_location)| {
-                    Self::prune_segment(
-                        dal.clone(),
-                        pruning_ctx.clone(),
-                        segment_idx,
-                        segment_location,
-                    )
+                    let segment_location = segment_location.clone();
+                    let dal = dal.clone();
+                    let pruning_ctx = pruning_ctx.clone();
+                    move |permit| async move {
+                        Self::prune_segment(permit, dal, pruning_ctx, segment_idx, segment_location)
+                            .await
+                    }
                 })
             }
         });
 
         // 4.2 spawns the segment pruning tasks, with concurrency control
         let join_handlers = pruning_runtime
-            .try_spawn_batch(semaphore.clone(), tasks)
+            .try_spawn_batch_with_permit(semaphore.clone(), tasks)
             .await?;
 
         // 4.3 flatten the results
@@ -173,6 +170,7 @@ impl BlockPruner {
     #[inline]
     #[tracing::instrument(level = "debug", skip_all)]
     async fn prune_segment(
+        permit: OwnedSemaphorePermit,
         dal: Operator,
         pruning_ctx: Arc<PruningContext>,
         segment_idx: SegmentIndex,
@@ -183,6 +181,16 @@ impl BlockPruner {
 
         let (path, ver) = segment_location;
         let segment_info = segment_reader.read(path, None, ver).await?;
+
+        // IO job of reading segment done, release the permit, allows more concurrent pruners
+        // Note:
+        // It is required to explicitly release this permit before pruning blocks, to avoid deadlock.
+        //
+        // Otherwise, 1) the whole pruning job should be divided into chunks of segments pruning tasks,
+        // which contains at most (max_concurrency -1) segments per chunk, and 2) tasks should be executed
+        // sequentially.
+        drop(permit);
+
         let result = if pruning_ctx.range_pruner.should_keep(
             &segment_info.summary.col_stats,
             segment_info.summary.row_count,
@@ -210,12 +218,15 @@ impl BlockPruner {
         let mut blocks = segment_info.blocks.iter().enumerate();
         let pruning_runtime = &pruning_ctx.rt;
         let semaphore = &pruning_ctx.semaphore;
+
         let tasks = std::iter::from_fn(|| {
             // check limit speculatively
             if pruning_ctx.limiter.exceeded() {
                 return None;
             }
-            type BlockPruningFuture = Pin<Box<dyn Future<Output = (usize, bool)> + Send>>;
+            type BlockPruningFutureReturn = Pin<Box<dyn Future<Output = (usize, bool)> + Send>>;
+            type BlockPruningFuture =
+                Box<dyn FnOnce(OwnedSemaphorePermit) -> BlockPruningFutureReturn + Send + 'static>;
             blocks.next().map(|(block_idx, block_meta)| {
                 let row_count = block_meta.row_count;
                 if pruning_ctx
@@ -227,20 +238,25 @@ impl BlockPruner {
                     let filter_pruner = filter_pruner.clone();
                     let index_location = block_meta.bloom_filter_index_location.clone();
                     let index_size = block_meta.bloom_filter_index_size;
-                    let v: BlockPruningFuture = Box::pin(async move {
-                        let keep = filter_pruner.should_keep(&index_location, index_size).await
-                            && ctx.limiter.within_limit(row_count);
-                        (block_idx, keep)
+                    let v: BlockPruningFuture = Box::new(move |_: OwnedSemaphorePermit| {
+                        Box::pin(async move {
+                            let keep = filter_pruner.should_keep(&index_location, index_size).await
+                                && ctx.limiter.within_limit(row_count);
+                            (block_idx, keep)
+                        })
                     });
                     v
                 } else {
-                    Box::pin(async move { (block_idx, false) })
+                    let v: BlockPruningFuture = Box::new(move |_: OwnedSemaphorePermit| {
+                        Box::pin(async move { (block_idx, false) })
+                    });
+                    v
                 }
             })
         });
 
         let join_handlers = pruning_runtime
-            .try_spawn_batch(semaphore.clone(), tasks)
+            .try_spawn_batch_with_permit(semaphore.clone(), tasks)
             .await?;
 
         let joint = future::try_join_all(join_handlers)

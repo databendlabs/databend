@@ -24,6 +24,7 @@ use common_exception::Result;
 use tokio::runtime::Builder;
 use tokio::runtime::Handle;
 use tokio::sync::oneshot;
+use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 
@@ -191,17 +192,28 @@ impl Runtime {
         self.handle.block_on(future).flatten()
     }
 
-    // This function make the futures always run fits the max_concurrent with a Semaphore latch.
-    // This is not same as: `futures::stream::iter(futures).buffer_unordered(max_concurrent)`:
-    // The comparison of them please see https://github.com/BohuTANG/joint
-    pub async fn try_spawn_batch<F>(
+    pub async fn try_spawn_batch<Fut>(
+        &self,
+        semaphore: Arc<Semaphore>,
+        futures: impl IntoIterator<Item = Fut>,
+    ) -> Result<Vec<JoinHandle<Fut::Output>>>
+    where
+        Fut: Future + Send + 'static,
+        Fut::Output: Send + 'static,
+    {
+        let iter = futures.into_iter().map(|v| |_| v);
+        self.try_spawn_batch_with_permit(semaphore, iter).await
+    }
+
+    pub async fn try_spawn_batch_with_permit<F, Fut>(
         &self,
         semaphore: Arc<Semaphore>,
         futures: impl IntoIterator<Item = F>,
-    ) -> Result<Vec<JoinHandle<F::Output>>>
+    ) -> Result<Vec<JoinHandle<Fut::Output>>>
     where
-        F: Future + Send + 'static,
-        F::Output: Send + 'static,
+        F: FnOnce(OwnedSemaphorePermit) -> Fut + Send + 'static,
+        Fut: Future + Send + 'static,
+        Fut::Output: Send + 'static,
     {
         let iter = futures.into_iter();
         let mut handlers =
@@ -220,8 +232,7 @@ impl Runtime {
             })?;
             let handler = self.handle.spawn(async move {
                 // take the ownership of the permit, (implicitly) drop it when task is done
-                let _pin = permit;
-                fut.await
+                fut(permit).await
             });
             handlers.push(handler)
         }
