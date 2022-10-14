@@ -1486,13 +1486,13 @@ dependencies = [
 name = "common-fuse-meta"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "common-arrow",
  "common-base",
  "common-cache",
  "common-config",
- "common-datablocks",
- "common-datavalues",
  "common-exception",
+ "common-expression",
  "common-metrics",
  "once_cell",
  "parking_lot 0.12.1",

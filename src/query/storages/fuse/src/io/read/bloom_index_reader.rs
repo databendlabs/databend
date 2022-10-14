@@ -33,7 +33,7 @@ use common_datavalues::Vu8;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::BlockBloomFilterIndexVersion;
-use common_fuse_meta::meta::BlockFilter;
+use common_fuse_meta::meta::ChunkFilter;
 use common_fuse_meta::meta::Location;
 use futures_util::future::try_join_all;
 use opendal::Operator;
@@ -48,7 +48,7 @@ pub trait BlockFilterReader {
         dal: Operator,
         columns: &[String],
         index_length: u64,
-    ) -> Result<BlockFilter>;
+    ) -> Result<ChunkFilter>;
 }
 
 #[async_trait::async_trait]
@@ -59,13 +59,13 @@ impl BlockFilterReader for Location {
         dal: Operator,
         columns: &[String],
         index_length: u64,
-    ) -> Result<BlockFilter> {
+    ) -> Result<ChunkFilter> {
         let index_version = BlockBloomFilterIndexVersion::try_from(self.1)?;
         match index_version {
             BlockBloomFilterIndexVersion::V2(_) => {
                 let block =
                     load_bloom_filter_by_columns(ctx, dal, columns, &self.0, index_length).await?;
-                Ok(BlockFilter::new(block))
+                Ok(ChunkFilter::new(block))
             }
         }
     }

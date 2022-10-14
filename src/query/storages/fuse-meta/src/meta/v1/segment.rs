@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 
-use common_datablocks::DataBlock;
+use common_expression::Chunk;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -133,7 +133,7 @@ impl From<v0::BlockMeta> for BlockMeta {
             col_stats: s.col_stats,
             col_metas: s.col_metas,
             cluster_stats: None,
-            location: (s.location.path, DataBlock::VERSION),
+            location: (s.location.path, Chunk::VERSION),
             bloom_filter_index_location: None,
             bloom_filter_index_size: 0,
             compression: Compression::Lz4,

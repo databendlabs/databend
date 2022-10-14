@@ -16,7 +16,7 @@ use std::marker::PhantomData;
 
 use common_datablocks::DataBlock;
 use common_exception::Result;
-use common_fuse_meta::meta::BlockFilter;
+use common_fuse_meta::meta::ChunkFilter;
 use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::SnapshotVersion;
@@ -70,9 +70,9 @@ impl TableMetaLocationGenerator {
                 &self.prefix,
                 FUSE_TBL_XOR_BLOOM_INDEX_PREFIX,
                 block_id.as_simple(),
-                BlockFilter::VERSION,
+                ChunkFilter::VERSION,
             ),
-            BlockFilter::VERSION,
+            ChunkFilter::VERSION,
         )
     }
 

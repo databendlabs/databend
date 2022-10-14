@@ -67,7 +67,7 @@ pub enum ValueRef<'a, T: ValueType> {
     Column(T::Column),
 }
 
-#[derive(Debug, Clone, PartialEq, Default, EnumAsInner, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, EnumAsInner, Serialize, Deserialize)]
 pub enum Scalar {
     #[default]
     Null,
@@ -1065,6 +1065,8 @@ impl<'de> Deserialize<'de> for Column {
         deserializer.deserialize_bytes(ColumnVisitor)
     }
 }
+
+impl Eq for Column {}
 
 impl ColumnBuilder {
     pub fn from_column(col: Column) -> Self {
