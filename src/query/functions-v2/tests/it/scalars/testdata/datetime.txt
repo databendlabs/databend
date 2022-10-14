@@ -1751,3 +1751,723 @@ evaluation (internal):
 +--------+--------------------------------+
 
 
+error: 
+  --> SQL:1:12
+  |
+1 | to_date(0) + interval 10000 year
+  |            ^ date `+11970-01-01` is out of range
+
+
+
+ast            : to_date(0) + interval 100 year
+raw expr       : add_years(to_date(0_u8), 100_u8)
+checked expr   : add_years<Date, Int64>(to_date<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+optimized expr : 36525
+output type    : Date
+output domain  : Unknown
+output         : 2070-01-01
+
+
+ast            : to_date(0) + interval 100 quarter
+raw expr       : add_quarters(to_date(0_u8), 100_u8)
+checked expr   : add_quarters<Date, Int64>(to_date<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+optimized expr : 9131
+output type    : Date
+output domain  : Unknown
+output         : 1995-01-01
+
+
+ast            : to_date(0) + interval 100 month
+raw expr       : add_months(to_date(0_u8), 100_u8)
+checked expr   : add_months<Date, Int64>(to_date<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+optimized expr : 3042
+output type    : Date
+output domain  : Unknown
+output         : 1978-05-01
+
+
+ast            : to_date(0) + interval 100 day
+raw expr       : add_days(to_date(0_u8), 100_u8)
+checked expr   : add_days<Date, Int64>(to_date<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+optimized expr : 100
+output type    : Date
+output domain  : Unknown
+output         : 1970-04-11
+
+
+ast            : to_date(0) - interval 100 year
+raw expr       : substract_years(to_date(0_u8), 100_u8)
+checked expr   : substract_years<Date, Int64>(to_date<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+optimized expr : -36524
+output type    : Date
+output domain  : Unknown
+output         : 1870-01-01
+
+
+ast            : to_date(0) - interval 100 quarter
+raw expr       : substract_quarters(to_date(0_u8), 100_u8)
+checked expr   : substract_quarters<Date, Int64>(to_date<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+optimized expr : -9131
+output type    : Date
+output domain  : Unknown
+output         : 1945-01-01
+
+
+ast            : to_date(0) - interval 100 month
+raw expr       : substract_months(to_date(0_u8), 100_u8)
+checked expr   : substract_months<Date, Int64>(to_date<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+optimized expr : -3044
+output type    : Date
+output domain  : Unknown
+output         : 1961-09-01
+
+
+ast            : to_date(0) - interval 100 day
+raw expr       : substract_days(to_date(0_u8), 100_u8)
+checked expr   : substract_days<Date, Int64>(to_date<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+optimized expr : -100
+output type    : Date
+output domain  : Unknown
+output         : 1969-09-23
+
+
+ast            : a + interval b year
+raw expr       : add_years(ColumnRef(0)::Date, ColumnRef(1)::Int32)
+checked expr   : add_years<Date, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+evaluation:
++--------+--------------+---------+------------+
+|        | a            | b       | Output     |
++--------+--------------+---------+------------+
+| Type   | Date         | Int32   | Date       |
+| Domain | {-100..=100} | {1..=3} | Unknown    |
+| Row 0  | 1969-09-23   | 1       | 1970-09-23 |
+| Row 1  | 1970-01-01   | 2       | 1972-01-01 |
+| Row 2  | 1970-04-11   | 3       | 1973-04-11 |
++--------+--------------+---------+------------+
+evaluation (internal):
++--------+------------------+
+| Column | Data             |
++--------+------------------+
+| a      | [-100, 0, 100]   |
+| b      | Int32([1, 2, 3]) |
+| Output | [265, 730, 1196] |
++--------+------------------+
+
+
+ast            : a + interval b quarter
+raw expr       : add_quarters(ColumnRef(0)::Date, ColumnRef(1)::Int32)
+checked expr   : add_quarters<Date, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+evaluation:
++--------+--------------+---------+------------+
+|        | a            | b       | Output     |
++--------+--------------+---------+------------+
+| Type   | Date         | Int32   | Date       |
+| Domain | {-100..=100} | {1..=3} | Unknown    |
+| Row 0  | 1969-09-23   | 1       | 1969-12-23 |
+| Row 1  | 1970-01-01   | 2       | 1970-07-01 |
+| Row 2  | 1970-04-11   | 3       | 1971-01-11 |
++--------+--------------+---------+------------+
+evaluation (internal):
++--------+------------------+
+| Column | Data             |
++--------+------------------+
+| a      | [-100, 0, 100]   |
+| b      | Int32([1, 2, 3]) |
+| Output | [-9, 181, 375]   |
++--------+------------------+
+
+
+ast            : a + interval b month
+raw expr       : add_months(ColumnRef(0)::Date, ColumnRef(1)::Int32)
+checked expr   : add_months<Date, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+evaluation:
++--------+--------------+---------+------------+
+|        | a            | b       | Output     |
++--------+--------------+---------+------------+
+| Type   | Date         | Int32   | Date       |
+| Domain | {-100..=100} | {1..=3} | Unknown    |
+| Row 0  | 1969-09-23   | 1       | 1969-10-23 |
+| Row 1  | 1970-01-01   | 2       | 1970-03-01 |
+| Row 2  | 1970-04-11   | 3       | 1970-07-11 |
++--------+--------------+---------+------------+
+evaluation (internal):
++--------+------------------+
+| Column | Data             |
++--------+------------------+
+| a      | [-100, 0, 100]   |
+| b      | Int32([1, 2, 3]) |
+| Output | [-70, 59, 191]   |
++--------+------------------+
+
+
+ast            : a + interval b day
+raw expr       : add_days(ColumnRef(0)::Date, ColumnRef(1)::Int32)
+checked expr   : add_days<Date, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+evaluation:
++--------+--------------+---------+------------+
+|        | a            | b       | Output     |
++--------+--------------+---------+------------+
+| Type   | Date         | Int32   | Date       |
+| Domain | {-100..=100} | {1..=3} | Unknown    |
+| Row 0  | 1969-09-23   | 1       | 1969-09-24 |
+| Row 1  | 1970-01-01   | 2       | 1970-01-03 |
+| Row 2  | 1970-04-11   | 3       | 1970-04-14 |
++--------+--------------+---------+------------+
+evaluation (internal):
++--------+------------------+
+| Column | Data             |
++--------+------------------+
+| a      | [-100, 0, 100]   |
+| b      | Int32([1, 2, 3]) |
+| Output | [-99, 2, 103]    |
++--------+------------------+
+
+
+ast            : a - interval b year
+raw expr       : substract_years(ColumnRef(0)::Date, ColumnRef(1)::Int32)
+checked expr   : substract_years<Date, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+evaluation:
++--------+--------------+---------+------------+
+|        | a            | b       | Output     |
++--------+--------------+---------+------------+
+| Type   | Date         | Int32   | Date       |
+| Domain | {-100..=100} | {1..=3} | Unknown    |
+| Row 0  | 1969-09-23   | 1       | 1968-09-23 |
+| Row 1  | 1970-01-01   | 2       | 1968-01-01 |
+| Row 2  | 1970-04-11   | 3       | 1967-04-11 |
++--------+--------------+---------+------------+
+evaluation (internal):
++--------+--------------------+
+| Column | Data               |
++--------+--------------------+
+| a      | [-100, 0, 100]     |
+| b      | Int32([1, 2, 3])   |
+| Output | [-465, -731, -996] |
++--------+--------------------+
+
+
+ast            : a - interval b quarter
+raw expr       : substract_quarters(ColumnRef(0)::Date, ColumnRef(1)::Int32)
+checked expr   : substract_quarters<Date, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+evaluation:
++--------+--------------+---------+------------+
+|        | a            | b       | Output     |
++--------+--------------+---------+------------+
+| Type   | Date         | Int32   | Date       |
+| Domain | {-100..=100} | {1..=3} | Unknown    |
+| Row 0  | 1969-09-23   | 1       | 1969-06-23 |
+| Row 1  | 1970-01-01   | 2       | 1969-07-01 |
+| Row 2  | 1970-04-11   | 3       | 1969-07-11 |
++--------+--------------+---------+------------+
+evaluation (internal):
++--------+--------------------+
+| Column | Data               |
++--------+--------------------+
+| a      | [-100, 0, 100]     |
+| b      | Int32([1, 2, 3])   |
+| Output | [-192, -184, -174] |
++--------+--------------------+
+
+
+ast            : a - interval b month
+raw expr       : substract_months(ColumnRef(0)::Date, ColumnRef(1)::Int32)
+checked expr   : substract_months<Date, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+evaluation:
++--------+--------------+---------+------------+
+|        | a            | b       | Output     |
++--------+--------------+---------+------------+
+| Type   | Date         | Int32   | Date       |
+| Domain | {-100..=100} | {1..=3} | Unknown    |
+| Row 0  | 1969-09-23   | 1       | 1969-08-23 |
+| Row 1  | 1970-01-01   | 2       | 1969-11-01 |
+| Row 2  | 1970-04-11   | 3       | 1970-01-11 |
++--------+--------------+---------+------------+
+evaluation (internal):
++--------+------------------+
+| Column | Data             |
++--------+------------------+
+| a      | [-100, 0, 100]   |
+| b      | Int32([1, 2, 3]) |
+| Output | [-131, -61, 10]  |
++--------+------------------+
+
+
+ast            : a - interval b day
+raw expr       : substract_days(ColumnRef(0)::Date, ColumnRef(1)::Int32)
+checked expr   : substract_days<Date, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+evaluation:
++--------+--------------+---------+------------+
+|        | a            | b       | Output     |
++--------+--------------+---------+------------+
+| Type   | Date         | Int32   | Date       |
+| Domain | {-100..=100} | {1..=3} | Unknown    |
+| Row 0  | 1969-09-23   | 1       | 1969-09-22 |
+| Row 1  | 1970-01-01   | 2       | 1969-12-30 |
+| Row 2  | 1970-04-11   | 3       | 1970-04-08 |
++--------+--------------+---------+------------+
+evaluation (internal):
++--------+------------------+
+| Column | Data             |
++--------+------------------+
+| a      | [-100, 0, 100]   |
+| b      | Int32([1, 2, 3]) |
+| Output | [-101, -2, 97]   |
++--------+------------------+
+
+
+error: 
+  --> SQL:1:17
+  |
+1 | to_timestamp(0) + interval 10000 year
+  |                 ^ timestamp `315569520000000000` is out of range
+
+
+
+ast            : to_timestamp(0) + interval 100 year
+raw expr       : add_years(to_timestamp(0_u8), 100_u8)
+checked expr   : add_years<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+optimized expr : 3155760000000000
+output type    : Timestamp
+output domain  : Unknown
+output         : 2070-01-01 00:00:00.000000
+
+
+ast            : to_timestamp(0) + interval 100 quarter
+raw expr       : add_quarters(to_timestamp(0_u8), 100_u8)
+checked expr   : add_quarters<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+optimized expr : 788918400000000
+output type    : Timestamp
+output domain  : Unknown
+output         : 1995-01-01 00:00:00.000000
+
+
+ast            : to_timestamp(0) + interval 100 month
+raw expr       : add_months(to_timestamp(0_u8), 100_u8)
+checked expr   : add_months<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+optimized expr : 262828800000000
+output type    : Timestamp
+output domain  : Unknown
+output         : 1978-05-01 00:00:00.000000
+
+
+ast            : to_timestamp(0) + interval 100 day
+raw expr       : add_days(to_timestamp(0_u8), 100_u8)
+checked expr   : add_days<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+optimized expr : 8640000000000
+output type    : Timestamp
+output domain  : Unknown
+output         : 1970-04-11 00:00:00.000000
+
+
+ast            : to_timestamp(0) + interval 100 hour
+raw expr       : add_hours(to_timestamp(0_u8), 100_u8)
+checked expr   : add_hours<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+optimized expr : 360000000000
+output type    : Timestamp
+output domain  : Unknown
+output         : 1970-01-05 04:00:00.000000
+
+
+ast            : to_timestamp(0) + interval 100 minute
+raw expr       : add_minutes(to_timestamp(0_u8), 100_u8)
+checked expr   : add_minutes<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+optimized expr : 6000000000
+output type    : Timestamp
+output domain  : Unknown
+output         : 1970-01-01 01:40:00.000000
+
+
+ast            : to_timestamp(0) + interval 100 second
+raw expr       : add_seconds(to_timestamp(0_u8), 100_u8)
+checked expr   : add_seconds<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+optimized expr : 100000000
+output type    : Timestamp
+output domain  : Unknown
+output         : 1970-01-01 00:01:40.000000
+
+
+ast            : to_timestamp(0) - interval 100 year
+raw expr       : substract_years(to_timestamp(0_u8), 100_u8)
+checked expr   : substract_years<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+optimized expr : -3155673600000000
+output type    : Timestamp
+output domain  : Unknown
+output         : 1870-01-01 00:00:00.000000
+
+
+ast            : to_timestamp(0) - interval 100 quarter
+raw expr       : substract_quarters(to_timestamp(0_u8), 100_u8)
+checked expr   : substract_quarters<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+optimized expr : -788918400000000
+output type    : Timestamp
+output domain  : Unknown
+output         : 1945-01-01 00:00:00.000000
+
+
+ast            : to_timestamp(0) - interval 100 month
+raw expr       : substract_months(to_timestamp(0_u8), 100_u8)
+checked expr   : substract_months<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+optimized expr : -263001600000000
+output type    : Timestamp
+output domain  : Unknown
+output         : 1961-09-01 00:00:00.000000
+
+
+ast            : to_timestamp(0) - interval 100 day
+raw expr       : substract_days(to_timestamp(0_u8), 100_u8)
+checked expr   : substract_days<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+optimized expr : -8640000000000
+output type    : Timestamp
+output domain  : Unknown
+output         : 1969-09-23 00:00:00.000000
+
+
+ast            : to_timestamp(0) - interval 100 hour
+raw expr       : substract_hours(to_timestamp(0_u8), 100_u8)
+checked expr   : substract_hours<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+optimized expr : -360000000000
+output type    : Timestamp
+output domain  : Unknown
+output         : 1969-12-27 20:00:00.000000
+
+
+ast            : to_timestamp(0) - interval 100 minute
+raw expr       : substract_minutes(to_timestamp(0_u8), 100_u8)
+checked expr   : substract_minutes<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+optimized expr : -6000000000
+output type    : Timestamp
+output domain  : Unknown
+output         : 1969-12-31 22:20:00.000000
+
+
+ast            : to_timestamp(0) - interval 100 second
+raw expr       : substract_seconds(to_timestamp(0_u8), 100_u8)
+checked expr   : substract_seconds<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+optimized expr : -100000000
+output type    : Timestamp
+output domain  : Unknown
+output         : 1969-12-31 23:58:20.000000
+
+
+ast            : a + interval b year
+raw expr       : add_years(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
+checked expr   : add_years<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+evaluation:
++--------+----------------------------+---------+----------------------------+
+|        | a                          | b       | Output                     |
++--------+----------------------------+---------+----------------------------+
+| Type   | Timestamp                  | Int32   | Timestamp                  |
+| Domain | {-100..=100}               | {1..=3} | Unknown                    |
+| Row 0  | 1969-12-31 23:59:59.999900 | 1       | 1970-12-31 23:59:59.999900 |
+| Row 1  | 1970-01-01 00:00:00.000000 | 2       | 1972-01-01 00:00:00.000000 |
+| Row 2  | 1970-01-01 00:00:00.000100 | 3       | 1973-01-01 00:00:00.000100 |
++--------+----------------------------+---------+----------------------------+
+evaluation (internal):
++--------+--------------------------------------------------+
+| Column | Data                                             |
++--------+--------------------------------------------------+
+| a      | [-100, 0, 100]                                   |
+| b      | Int32([1, 2, 3])                                 |
+| Output | [31535999999900, 63072000000000, 94694400000100] |
++--------+--------------------------------------------------+
+
+
+ast            : a + interval b quarter
+raw expr       : add_quarters(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
+checked expr   : add_quarters<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+evaluation:
++--------+----------------------------+---------+----------------------------+
+|        | a                          | b       | Output                     |
++--------+----------------------------+---------+----------------------------+
+| Type   | Timestamp                  | Int32   | Timestamp                  |
+| Domain | {-100..=100}               | {1..=3} | Unknown                    |
+| Row 0  | 1969-12-31 23:59:59.999900 | 1       | 1970-03-31 23:59:59.999900 |
+| Row 1  | 1970-01-01 00:00:00.000000 | 2       | 1970-07-01 00:00:00.000000 |
+| Row 2  | 1970-01-01 00:00:00.000100 | 3       | 1970-10-01 00:00:00.000100 |
++--------+----------------------------+---------+----------------------------+
+evaluation (internal):
++--------+-------------------------------------------------+
+| Column | Data                                            |
++--------+-------------------------------------------------+
+| a      | [-100, 0, 100]                                  |
+| b      | Int32([1, 2, 3])                                |
+| Output | [7775999999900, 15638400000000, 23587200000100] |
++--------+-------------------------------------------------+
+
+
+ast            : a + interval b month
+raw expr       : add_months(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
+checked expr   : add_months<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+evaluation:
++--------+----------------------------+---------+----------------------------+
+|        | a                          | b       | Output                     |
++--------+----------------------------+---------+----------------------------+
+| Type   | Timestamp                  | Int32   | Timestamp                  |
+| Domain | {-100..=100}               | {1..=3} | Unknown                    |
+| Row 0  | 1969-12-31 23:59:59.999900 | 1       | 1970-01-31 23:59:59.999900 |
+| Row 1  | 1970-01-01 00:00:00.000000 | 2       | 1970-03-01 00:00:00.000000 |
+| Row 2  | 1970-01-01 00:00:00.000100 | 3       | 1970-04-01 00:00:00.000100 |
++--------+----------------------------+---------+----------------------------+
+evaluation (internal):
++--------+-----------------------------------------------+
+| Column | Data                                          |
++--------+-----------------------------------------------+
+| a      | [-100, 0, 100]                                |
+| b      | Int32([1, 2, 3])                              |
+| Output | [2678399999900, 5097600000000, 7776000000100] |
++--------+-----------------------------------------------+
+
+
+ast            : a + interval b day
+raw expr       : add_days(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
+checked expr   : add_days<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+evaluation:
++--------+----------------------------+---------+----------------------------+
+|        | a                          | b       | Output                     |
++--------+----------------------------+---------+----------------------------+
+| Type   | Timestamp                  | Int32   | Timestamp                  |
+| Domain | {-100..=100}               | {1..=3} | Unknown                    |
+| Row 0  | 1969-12-31 23:59:59.999900 | 1       | 1970-01-01 23:59:59.999900 |
+| Row 1  | 1970-01-01 00:00:00.000000 | 2       | 1970-01-03 00:00:00.000000 |
+| Row 2  | 1970-01-01 00:00:00.000100 | 3       | 1970-01-04 00:00:00.000100 |
++--------+----------------------------+---------+----------------------------+
+evaluation (internal):
++--------+-------------------------------------------+
+| Column | Data                                      |
++--------+-------------------------------------------+
+| a      | [-100, 0, 100]                            |
+| b      | Int32([1, 2, 3])                          |
+| Output | [86399999900, 172800000000, 259200000100] |
++--------+-------------------------------------------+
+
+
+ast            : a + interval b hour
+raw expr       : add_hours(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
+checked expr   : add_hours<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+evaluation:
++--------+----------------------------+---------+----------------------------+
+|        | a                          | b       | Output                     |
++--------+----------------------------+---------+----------------------------+
+| Type   | Timestamp                  | Int32   | Timestamp                  |
+| Domain | {-100..=100}               | {1..=3} | Unknown                    |
+| Row 0  | 1969-12-31 23:59:59.999900 | 1       | 1970-01-01 00:59:59.999900 |
+| Row 1  | 1970-01-01 00:00:00.000000 | 2       | 1970-01-01 02:00:00.000000 |
+| Row 2  | 1970-01-01 00:00:00.000100 | 3       | 1970-01-01 03:00:00.000100 |
++--------+----------------------------+---------+----------------------------+
+evaluation (internal):
++--------+---------------------------------------+
+| Column | Data                                  |
++--------+---------------------------------------+
+| a      | [-100, 0, 100]                        |
+| b      | Int32([1, 2, 3])                      |
+| Output | [3599999900, 7200000000, 10800000100] |
++--------+---------------------------------------+
+
+
+ast            : a + interval b minute
+raw expr       : add_minutes(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
+checked expr   : add_minutes<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+evaluation:
++--------+----------------------------+---------+----------------------------+
+|        | a                          | b       | Output                     |
++--------+----------------------------+---------+----------------------------+
+| Type   | Timestamp                  | Int32   | Timestamp                  |
+| Domain | {-100..=100}               | {1..=3} | Unknown                    |
+| Row 0  | 1969-12-31 23:59:59.999900 | 1       | 1970-01-01 00:00:59.999900 |
+| Row 1  | 1970-01-01 00:00:00.000000 | 2       | 1970-01-01 00:02:00.000000 |
+| Row 2  | 1970-01-01 00:00:00.000100 | 3       | 1970-01-01 00:03:00.000100 |
++--------+----------------------------+---------+----------------------------+
+evaluation (internal):
++--------+----------------------------------+
+| Column | Data                             |
++--------+----------------------------------+
+| a      | [-100, 0, 100]                   |
+| b      | Int32([1, 2, 3])                 |
+| Output | [59999900, 120000000, 180000100] |
++--------+----------------------------------+
+
+
+ast            : a + interval b second
+raw expr       : add_seconds(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
+checked expr   : add_seconds<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+evaluation:
++--------+----------------------------+---------+----------------------------+
+|        | a                          | b       | Output                     |
++--------+----------------------------+---------+----------------------------+
+| Type   | Timestamp                  | Int32   | Timestamp                  |
+| Domain | {-100..=100}               | {1..=3} | Unknown                    |
+| Row 0  | 1969-12-31 23:59:59.999900 | 1       | 1970-01-01 00:00:00.999900 |
+| Row 1  | 1970-01-01 00:00:00.000000 | 2       | 1970-01-01 00:00:02.000000 |
+| Row 2  | 1970-01-01 00:00:00.000100 | 3       | 1970-01-01 00:00:03.000100 |
++--------+----------------------------+---------+----------------------------+
+evaluation (internal):
++--------+----------------------------+
+| Column | Data                       |
++--------+----------------------------+
+| a      | [-100, 0, 100]             |
+| b      | Int32([1, 2, 3])           |
+| Output | [999900, 2000000, 3000100] |
++--------+----------------------------+
+
+
+ast            : a - interval b year
+raw expr       : substract_years(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
+checked expr   : substract_years<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+evaluation:
++--------+----------------------------+---------+----------------------------+
+|        | a                          | b       | Output                     |
++--------+----------------------------+---------+----------------------------+
+| Type   | Timestamp                  | Int32   | Timestamp                  |
+| Domain | {-100..=100}               | {1..=3} | Unknown                    |
+| Row 0  | 1969-12-31 23:59:59.999900 | 1       | 1968-12-31 23:59:59.999900 |
+| Row 1  | 1970-01-01 00:00:00.000000 | 2       | 1968-01-01 00:00:00.000000 |
+| Row 2  | 1970-01-01 00:00:00.000100 | 3       | 1967-01-01 00:00:00.000100 |
++--------+----------------------------+---------+----------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------+
+| Column | Data                                                |
++--------+-----------------------------------------------------+
+| a      | [-100, 0, 100]                                      |
+| b      | Int32([1, 2, 3])                                    |
+| Output | [-31536000000100, -63158400000000, -94694399999900] |
++--------+-----------------------------------------------------+
+
+
+ast            : a - interval b quarter
+raw expr       : substract_quarters(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
+checked expr   : substract_quarters<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+evaluation:
++--------+----------------------------+---------+----------------------------+
+|        | a                          | b       | Output                     |
++--------+----------------------------+---------+----------------------------+
+| Type   | Timestamp                  | Int32   | Timestamp                  |
+| Domain | {-100..=100}               | {1..=3} | Unknown                    |
+| Row 0  | 1969-12-31 23:59:59.999900 | 1       | 1969-09-30 23:59:59.999900 |
+| Row 1  | 1970-01-01 00:00:00.000000 | 2       | 1969-07-01 00:00:00.000000 |
+| Row 2  | 1970-01-01 00:00:00.000100 | 3       | 1969-04-01 00:00:00.000100 |
++--------+----------------------------+---------+----------------------------+
+evaluation (internal):
++--------+----------------------------------------------------+
+| Column | Data                                               |
++--------+----------------------------------------------------+
+| a      | [-100, 0, 100]                                     |
+| b      | Int32([1, 2, 3])                                   |
+| Output | [-7948800000100, -15897600000000, -23759999999900] |
++--------+----------------------------------------------------+
+
+
+ast            : a - interval b month
+raw expr       : substract_months(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
+checked expr   : substract_months<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+evaluation:
++--------+----------------------------+---------+----------------------------+
+|        | a                          | b       | Output                     |
++--------+----------------------------+---------+----------------------------+
+| Type   | Timestamp                  | Int32   | Timestamp                  |
+| Domain | {-100..=100}               | {1..=3} | Unknown                    |
+| Row 0  | 1969-12-31 23:59:59.999900 | 1       | 1969-11-30 23:59:59.999900 |
+| Row 1  | 1970-01-01 00:00:00.000000 | 2       | 1969-11-01 00:00:00.000000 |
+| Row 2  | 1970-01-01 00:00:00.000100 | 3       | 1969-10-01 00:00:00.000100 |
++--------+----------------------------+---------+----------------------------+
+evaluation (internal):
++--------+--------------------------------------------------+
+| Column | Data                                             |
++--------+--------------------------------------------------+
+| a      | [-100, 0, 100]                                   |
+| b      | Int32([1, 2, 3])                                 |
+| Output | [-2678400000100, -5270400000000, -7948799999900] |
++--------+--------------------------------------------------+
+
+
+ast            : a - interval b day
+raw expr       : substract_days(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
+checked expr   : substract_days<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+evaluation:
++--------+----------------------------+---------+----------------------------+
+|        | a                          | b       | Output                     |
++--------+----------------------------+---------+----------------------------+
+| Type   | Timestamp                  | Int32   | Timestamp                  |
+| Domain | {-100..=100}               | {1..=3} | Unknown                    |
+| Row 0  | 1969-12-31 23:59:59.999900 | 1       | 1969-12-30 23:59:59.999900 |
+| Row 1  | 1970-01-01 00:00:00.000000 | 2       | 1969-12-30 00:00:00.000000 |
+| Row 2  | 1970-01-01 00:00:00.000100 | 3       | 1969-12-29 00:00:00.000100 |
++--------+----------------------------+---------+----------------------------+
+evaluation (internal):
++--------+----------------------------------------------+
+| Column | Data                                         |
++--------+----------------------------------------------+
+| a      | [-100, 0, 100]                               |
+| b      | Int32([1, 2, 3])                             |
+| Output | [-86400000100, -172800000000, -259199999900] |
++--------+----------------------------------------------+
+
+
+ast            : a - interval b hour
+raw expr       : substract_hours(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
+checked expr   : substract_hours<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+evaluation:
++--------+----------------------------+---------+----------------------------+
+|        | a                          | b       | Output                     |
++--------+----------------------------+---------+----------------------------+
+| Type   | Timestamp                  | Int32   | Timestamp                  |
+| Domain | {-100..=100}               | {1..=3} | Unknown                    |
+| Row 0  | 1969-12-31 23:59:59.999900 | 1       | 1969-12-31 22:59:59.999900 |
+| Row 1  | 1970-01-01 00:00:00.000000 | 2       | 1969-12-31 22:00:00.000000 |
+| Row 2  | 1970-01-01 00:00:00.000100 | 3       | 1969-12-31 21:00:00.000100 |
++--------+----------------------------+---------+----------------------------+
+evaluation (internal):
++--------+------------------------------------------+
+| Column | Data                                     |
++--------+------------------------------------------+
+| a      | [-100, 0, 100]                           |
+| b      | Int32([1, 2, 3])                         |
+| Output | [-3600000100, -7200000000, -10799999900] |
++--------+------------------------------------------+
+
+
+ast            : a - interval b minute
+raw expr       : substract_minutes(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
+checked expr   : substract_minutes<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+evaluation:
++--------+----------------------------+---------+----------------------------+
+|        | a                          | b       | Output                     |
++--------+----------------------------+---------+----------------------------+
+| Type   | Timestamp                  | Int32   | Timestamp                  |
+| Domain | {-100..=100}               | {1..=3} | Unknown                    |
+| Row 0  | 1969-12-31 23:59:59.999900 | 1       | 1969-12-31 23:58:59.999900 |
+| Row 1  | 1970-01-01 00:00:00.000000 | 2       | 1969-12-31 23:58:00.000000 |
+| Row 2  | 1970-01-01 00:00:00.000100 | 3       | 1969-12-31 23:57:00.000100 |
++--------+----------------------------+---------+----------------------------+
+evaluation (internal):
++--------+-------------------------------------+
+| Column | Data                                |
++--------+-------------------------------------+
+| a      | [-100, 0, 100]                      |
+| b      | Int32([1, 2, 3])                    |
+| Output | [-60000100, -120000000, -179999900] |
++--------+-------------------------------------+
+
+
+ast            : a - interval b second
+raw expr       : substract_seconds(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
+checked expr   : substract_seconds<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+evaluation:
++--------+----------------------------+---------+----------------------------+
+|        | a                          | b       | Output                     |
++--------+----------------------------+---------+----------------------------+
+| Type   | Timestamp                  | Int32   | Timestamp                  |
+| Domain | {-100..=100}               | {1..=3} | Unknown                    |
+| Row 0  | 1969-12-31 23:59:59.999900 | 1       | 1969-12-31 23:59:58.999900 |
+| Row 1  | 1970-01-01 00:00:00.000000 | 2       | 1969-12-31 23:59:58.000000 |
+| Row 2  | 1970-01-01 00:00:00.000100 | 3       | 1969-12-31 23:59:57.000100 |
++--------+----------------------------+---------+----------------------------+
+evaluation (internal):
++--------+--------------------------------+
+| Column | Data                           |
++--------+--------------------------------+
+| a      | [-100, 0, 100]                 |
+| b      | Int32([1, 2, 3])               |
+| Output | [-1000100, -2000000, -2999900] |
++--------+--------------------------------+
+
+
