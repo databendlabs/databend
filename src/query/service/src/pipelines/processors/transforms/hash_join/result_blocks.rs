@@ -577,15 +577,14 @@ impl JoinHashTable {
                         build_indexes.extend_from_slice(&probed_rows[index..new_index]);
                         probe_indexes.extend(repeat(i as u32).take(addition));
 
-                        let probed_block = self.merge_eq_block(
-                            &self.row_space.gather(&build_indexes)?,
-                            &DataBlock::block_take_by_indices(input, &probe_indexes)?,
-                        )?;
+                        let probe_block = DataBlock::block_take_by_indices(input, &probe_indexes)?;
+                        let build_block = self.row_space.gather(&build_indexes)?;
+                        let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
 
-                        let mut bm = match self.get_other_filters(&probed_block, other_predicate)? {
+                        let mut bm = match self.get_other_filters(&merged_block, other_predicate)? {
                             (Some(b), _, _) => b.into_mut().right().unwrap(),
-                            (_, true, _) => MutableBitmap::from_len_set(probed_block.num_rows()),
-                            (_, _, true) => MutableBitmap::from_len_zeroed(probed_block.num_rows()),
+                            (_, true, _) => MutableBitmap::from_len_set(merged_block.num_rows()),
+                            (_, _, true) => MutableBitmap::from_len_zeroed(merged_block.num_rows()),
                             _ => unreachable!(),
                         };
 
@@ -596,7 +595,11 @@ impl JoinHashTable {
                         }
 
                         let predicate = BooleanColumn::from_arrow_data(bm.into()).arc();
-                        probed_blocks.push(DataBlock::filter_block(probed_block, &predicate)?);
+                        let probed_data_block = DataBlock::filter_block(probe_block, &predicate)?;
+
+                        if !probed_data_block.is_empty() {
+                            probed_blocks.push(probed_data_block);
+                        }
 
                         index = new_index;
                         remain -= addition;
@@ -614,15 +617,14 @@ impl JoinHashTable {
             ));
         }
 
-        let probed_block = self.merge_eq_block(
-            &self.row_space.gather(&build_indexes)?,
-            &DataBlock::block_take_by_indices(input, &probe_indexes)?,
-        )?;
+        let probe_block = DataBlock::block_take_by_indices(input, &probe_indexes)?;
+        let build_block = self.row_space.gather(&build_indexes)?;
+        let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
 
-        let mut bm = match self.get_other_filters(&probed_block, other_predicate)? {
+        let mut bm = match self.get_other_filters(&merged_block, other_predicate)? {
             (Some(b), _, _) => b.into_mut().right().unwrap(),
-            (_, true, _) => MutableBitmap::from_len_set(probed_block.num_rows()),
-            (_, _, true) => MutableBitmap::from_len_zeroed(probed_block.num_rows()),
+            (_, true, _) => MutableBitmap::from_len_set(merged_block.num_rows()),
+            (_, _, true) => MutableBitmap::from_len_zeroed(merged_block.num_rows()),
             _ => unreachable!(),
         };
 
@@ -633,7 +635,11 @@ impl JoinHashTable {
         }
 
         let predicate = BooleanColumn::from_arrow_data(bm.into()).arc();
-        probed_blocks.push(DataBlock::filter_block(probed_block, &predicate)?);
+        let probed_data_block = DataBlock::filter_block(probe_block, &predicate)?;
+
+        if !probed_data_block.is_empty() {
+            probed_blocks.push(probed_data_block);
+        }
 
         Ok(probed_blocks)
     }
