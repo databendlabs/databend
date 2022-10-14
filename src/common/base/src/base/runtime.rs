@@ -26,6 +26,7 @@ use tokio::runtime::Handle;
 use tokio::sync::oneshot;
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
+use tracing::debug;
 
 use super::runtime_tracker::RuntimeTracker;
 use crate::base::catch_unwind::CatchUnwindFuture;
@@ -208,6 +209,8 @@ impl Runtime {
             Vec::with_capacity(iter.size_hint().1.unwrap_or_else(|| iter.size_hint().0));
         for fut in iter {
             let semaphore = semaphore.clone();
+            // DEBUG ONLY: should be degraded to trace after issue fixed.
+            debug!("runtime try_spawn_batch: permit acquired from semaphore");
             // Although async task is rather lightweight, it do consumes resources,
             // so we acquire a permit BEFORE spawn.
             // Thus, the `futures` passed into this method is NOT suggested to be "materialized"
@@ -221,7 +224,9 @@ impl Runtime {
             let handler = self.handle.spawn(async move {
                 // take the ownership of the permit, (implicitly) drop it when task is done
                 let _pin = permit;
-                fut.await
+                let res = fut.await;
+                debug!("runtime try_spawn_batch: permit released to semaphore");
+                res
             });
             handlers.push(handler)
         }
