@@ -55,6 +55,7 @@ where T: AsPrimitive<i64>
 pub const FACTOR_HOUR: i64 = 3600;
 pub const FACTOR_MINUTE: i64 = 60;
 pub const FACTOR_SECOND: i64 = 1;
+const LAST_DAY_LUT: [u8; 13] = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
 fn add_years_base(year: i32, month: u32, day: u32, delta: i64) -> Result<NaiveDate, String> {
     let new_year = year + delta as i32;
@@ -97,8 +98,7 @@ fn last_day_of_year_month(year: i32, month: u32) -> u32 {
     if std::intrinsics::unlikely(month == 2 && is_leap_year) {
         return 29;
     }
-    let last_day_lookup = [0u32, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-    last_day_lookup[month as usize]
+    LAST_DAY_LUT[month as usize] as u32
 }
 
 macro_rules! impl_interval_year_month {
