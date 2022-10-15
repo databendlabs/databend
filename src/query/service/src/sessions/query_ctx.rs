@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::future::Future;
 use std::net::SocketAddr;
@@ -42,6 +43,7 @@ use common_legacy_planners::SourceInfo;
 use common_legacy_planners::StageTableInfo;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::UserInfo;
+use common_pipeline_core::processors::ProfileInfoPtr;
 use common_storage::StorageParams;
 use opendal::Operator;
 use parking_lot::RwLock;
@@ -366,6 +368,10 @@ impl TableContext for QueryContext {
     // Get all the processes list info.
     fn get_processes_info(&self) -> Vec<ProcessInfo> {
         SessionManager::instance().processes_info()
+    }
+
+    fn get_profiling_infos(&self) -> HashMap<String, Vec<ProfileInfoPtr>> {
+        SessionManager::instance().profiling_infos()
     }
 }
 

@@ -17,7 +17,9 @@ use std::sync::Arc;
 use common_base::base::ProgressValues;
 pub use common_catalog::table_context::ProcessInfo;
 use common_contexts::DalMetrics;
+use common_pipeline_core::processors::ProfileInfoPtr;
 
+use crate::pipelines::executor::PipelineExecutor;
 use crate::sessions::Session;
 use crate::sessions::SessionContext;
 use crate::sessions::SessionType;
@@ -26,6 +28,16 @@ impl Session {
     pub fn process_info(self: &Arc<Self>) -> ProcessInfo {
         let session_ctx = self.session_ctx.clone();
         self.to_process_info(&session_ctx)
+    }
+
+    pub fn profiling_info(self: &Arc<Self>) -> Vec<ProfileInfoPtr> {
+        match self.session_ctx.get_query_context_shared() {
+            None => vec![],
+            Some(context_shared) => match context_shared.executor.read().upgrade() {
+                None => vec![],
+                Some(executor) => executor.profiling_info(),
+            },
+        }
     }
 
     fn to_process_info(self: &Arc<Self>, status: &SessionContext) -> ProcessInfo {

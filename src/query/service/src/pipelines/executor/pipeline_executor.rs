@@ -25,6 +25,7 @@ use common_base::base::ThreadJoinHandle;
 use common_base::base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_pipeline_core::processors::ProfileInfoPtr;
 use futures::future::select;
 use futures_util::future::Either;
 use parking_lot::Mutex;
@@ -217,6 +218,10 @@ impl PipelineExecutor {
         }
 
         Ok(())
+    }
+
+    pub fn profiling_info(self: &Arc<Self>) -> Vec<ProfileInfoPtr> {
+        self.graph.profiling()
     }
 
     fn execute_threads(self: &Arc<Self>, threads: usize) -> Vec<ThreadJoinHandle<Result<()>>> {

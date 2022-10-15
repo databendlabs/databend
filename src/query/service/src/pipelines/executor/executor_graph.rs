@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_pipeline_core::processors::ProfileInfoPtr;
 use petgraph::dot::Config;
 use petgraph::dot::Dot;
 use petgraph::prelude::EdgeIndex;
@@ -380,6 +381,19 @@ impl RunningGraph {
             for node_index in self.0.graph.node_indices() {
                 self.0.graph[node_index].processor.interrupt();
             }
+        }
+    }
+
+    pub fn profiling(&self) -> Vec<ProfileInfoPtr> {
+        unsafe {
+            let mut res = Vec::with_capacity(self.0.graph.node_count());
+            for node_index in self.0.graph.node_indices() {
+                if let Some(info) = self.0.graph[node_index].processor.profiling() {
+                    res.push(info);
+                }
+            }
+
+            res
         }
     }
 }

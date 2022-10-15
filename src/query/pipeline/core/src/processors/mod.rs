@@ -16,6 +16,7 @@ pub mod port;
 pub mod processor;
 
 mod port_trigger;
+mod profiling;
 mod resize_processor;
 
 pub use port::connect;
@@ -23,4 +24,7 @@ pub use port_trigger::DirectedEdge;
 pub use port_trigger::UpdateList;
 pub use port_trigger::UpdateTrigger;
 pub use processor::Processor;
+pub use profiling::ExtraInfo;
+pub use profiling::ProfileInfo;
+pub use profiling::ProfileInfoPtr;
 pub use resize_processor::ResizeProcessor;

@@ -27,6 +27,7 @@ use common_base::base::Singleton;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_metrics::label_counter;
+use common_pipeline_core::processors::ProfileInfoPtr;
 use common_settings::Settings;
 use common_users::UserApiProvider;
 use futures::future::Either;
@@ -227,6 +228,19 @@ impl SessionManager {
         }
 
         processes_info
+    }
+
+    pub fn profiling_infos(&self) -> HashMap<String, Vec<ProfileInfoPtr>> {
+        let sessions = self.active_sessions.read();
+
+        let mut profiling_infos = HashMap::with_capacity(sessions.len());
+        for weak_ptr in sessions.values() {
+            if let Some(active_session) = weak_ptr.upgrade() {
+                profiling_infos.insert(active_session.id.clone(), active_session.profiling_info());
+            }
+        }
+
+        profiling_infos
     }
 
     fn destroy_idle_sessions(sessions: &Arc<RwLock<HashMap<String, Weak<Session>>>>) -> bool {

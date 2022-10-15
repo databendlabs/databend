@@ -23,6 +23,9 @@ use futures::FutureExt;
 use petgraph::graph::node_index;
 use petgraph::prelude::NodeIndex;
 
+use crate::processors::profiling::ProfileInfo;
+use crate::processors::ProfileInfoPtr;
+
 #[derive(Debug)]
 pub enum Event {
     NeedData,
@@ -44,6 +47,10 @@ pub trait Processor: Send {
 
     // When the synchronization task needs to run for a long time, the interrupt function needs to be implemented.
     fn interrupt(&self) {}
+
+    fn profiling(&self) -> Option<Box<dyn ProfileInfo>> {
+        None
+    }
 
     // Synchronous work.
     fn process(&mut self) -> Result<()> {
@@ -97,6 +104,10 @@ impl ProcessorPtr {
     /// # Safety
     pub unsafe fn event(&self) -> Result<Event> {
         (*self.inner.get()).event()
+    }
+
+    pub unsafe fn profiling(&self) -> Option<ProfileInfoPtr> {
+        (*self.inner.get()).profiling()
     }
 
     /// # Safety

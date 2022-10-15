@@ -1853,6 +1853,7 @@ dependencies = [
  "common-io",
  "futures",
  "petgraph",
+ "serde",
  "tokio",
 ]
 

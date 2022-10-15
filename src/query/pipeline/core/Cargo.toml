@@ -19,6 +19,7 @@ common-io = { path = "../../../common/io" }
 async-trait = "0.1.57"
 futures = "0.3.24"
 petgraph = "0.6.2"
+serde = { version = "1.0.145", features = ["derive", "rc"] }
 
 [dev-dependencies]
 tokio = { version = "1.21.1", features = ["full"] }

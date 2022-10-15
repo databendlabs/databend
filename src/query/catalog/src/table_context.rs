@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -29,6 +30,8 @@ use common_legacy_planners::PartInfoPtr;
 use common_legacy_planners::Partitions;
 use common_legacy_planners::ReadDataSourcePlan;
 use common_meta_types::UserInfo;
+use common_pipeline_core::processors::Processor;
+use common_pipeline_core::processors::ProfileInfoPtr;
 use common_settings::Settings;
 use common_storage::StorageParams;
 use opendal::Operator;
@@ -102,4 +105,5 @@ pub trait TableContext: Send + Sync {
     async fn get_table(&self, catalog: &str, database: &str, table: &str)
     -> Result<Arc<dyn Table>>;
     fn get_processes_info(&self) -> Vec<ProcessInfo>;
+    fn get_profiling_infos(&self) -> HashMap<String, Vec<ProfileInfoPtr>>;
 }

@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
@@ -23,7 +24,27 @@ use common_exception::Result;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_core::processors::Processor;
+use common_pipeline_core::processors::{ExtraInfo, Processor, ProfileInfo};
+
+#[derive(Clone)]
+struct AsyncSourceProfileInfo {
+    generate_rows: AtomicUsize,
+    generate_bytes: AtomicUsize,
+}
+
+impl ProfileInfo for AsyncSourceProfileInfo {
+    fn process_rows(&self) -> usize {
+        self.generate_rows.load(Ordering::Relaxed)
+    }
+
+    fn process_bytes(&self) -> usize {
+        self.generate_bytes.load(Ordering::Relaxed)
+    }
+
+    fn extra_info(&self) -> Option<Box<dyn ExtraInfo>> {
+        None
+    }
+}
 
 #[async_trait::async_trait]
 pub trait AsyncSource: Send {
@@ -44,6 +65,7 @@ pub struct AsyncSourcer<T: 'static + AsyncSource> {
     output: Arc<OutputPort>,
     scan_progress: Arc<Progress>,
     generated_data: Option<DataBlock>,
+    profile_info: AsyncSourceProfileInfo,
 }
 
 impl<T: 'static + AsyncSource> AsyncSourcer<T> {
@@ -59,6 +81,10 @@ impl<T: 'static + AsyncSource> AsyncSourcer<T> {
             scan_progress,
             is_finish: false,
             generated_data: None,
+            profile_info: AsyncSourceProfileInfo {
+                generate_rows: AtomicUsize::new(),
+                generate_bytes: Default::default()
+            }
         })))
     }
 }
