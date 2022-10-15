@@ -48,6 +48,12 @@ impl From<std::net::AddrParseError> for ErrorCode {
     }
 }
 
+impl From<std::str::Utf8Error> for ErrorCode {
+    fn from(error: std::str::Utf8Error) -> Self {
+        ErrorCode::InvalidUtf8(format!("Invalid Utf8, cause: {}", error))
+    }
+}
+
 impl From<anyhow::Error> for ErrorCode {
     fn from(error: anyhow::Error) -> Self {
         ErrorCode::create(

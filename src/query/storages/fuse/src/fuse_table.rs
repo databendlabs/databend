@@ -152,47 +152,39 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
     ) -> Result<Option<Arc<TableSnapshot>>> {
-        if let Some(loc) = self.snapshot_loc().await {
+        if let Some(loc) = self.snapshot_loc().await? {
             let reader = MetaReaders::table_snapshot_reader(ctx, self.get_operator());
-            let ver = self.snapshot_format_version().await;
+            let ver = self.snapshot_format_version().await?;
             Ok(Some(reader.read(loc.as_str(), None, ver).await?))
         } else {
             Ok(None)
         }
     }
 
-    pub async fn snapshot_format_version(&self) -> u64 {
-        match self.snapshot_loc().await {
-            Some(loc) => TableMetaLocationGenerator::snapshot_version(loc.as_str()),
+    pub async fn snapshot_format_version(&self) -> Result<u64> {
+        match self.snapshot_loc().await? {
+            Some(loc) => Ok(TableMetaLocationGenerator::snapshot_version(loc.as_str())),
             None => {
                 // No snapshot location here, indicates that there are no data of this table yet
                 // in this case, we just returns the current snapshot version
-                TableSnapshot::VERSION
+                Ok(TableSnapshot::VERSION)
             }
         }
     }
 
-    pub async fn snapshot_loc(&self) -> Option<String> {
+    pub async fn snapshot_loc(&self) -> Result<Option<String>> {
         if self.table_info.from_share.is_some() {
             let url = FUSE_TBL_LAST_SNAPSHOT_HINT;
-            let data = self.operator.object(url).read().await;
-            if data.is_err() {
-                return None;
-            }
-            let data = data.unwrap();
-            let s = str::from_utf8(&data);
-            if s.is_err() {
-                return None;
-            }
-            let s = s.unwrap();
-            Some(s.to_string())
+            let data = self.operator.object(url).read().await?;
+            let s = str::from_utf8(&data)?;
+            Ok(Some(s.to_string()))
         } else {
             let options = self.table_info.options();
-            options
+            Ok(options
                 .get(OPT_KEY_SNAPSHOT_LOCATION)
                 // for backward compatibility, we check the legacy table option
                 .or_else(|| options.get(OPT_KEY_LEGACY_SNAPSHOT_LOC))
-                .cloned()
+                .cloned())
         }
     }
 
@@ -276,7 +268,7 @@ impl Table for FuseTable {
         let schema = self.schema().as_ref().clone();
 
         let prev = self.read_table_snapshot(ctx.clone()).await?;
-        let prev_version = self.snapshot_format_version().await;
+        let prev_version = self.snapshot_format_version().await?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let prev_snapshot_id = prev.as_ref().map(|v| (v.snapshot_id, prev_version));
         let (summary, segments) = if let Some(v) = prev {
@@ -320,7 +312,7 @@ impl Table for FuseTable {
         let schema = self.schema().as_ref().clone();
 
         let prev = self.read_table_snapshot(ctx.clone()).await?;
-        let prev_version = self.snapshot_format_version().await;
+        let prev_version = self.snapshot_format_version().await?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let prev_snapshot_id = prev.as_ref().map(|v| (v.snapshot_id, prev_version));
         let (summary, segments) = if let Some(v) = prev {

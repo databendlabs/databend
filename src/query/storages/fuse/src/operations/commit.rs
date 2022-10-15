@@ -162,7 +162,7 @@ impl FuseTable {
         overwrite: bool,
     ) -> Result<()> {
         let prev = self.read_table_snapshot(ctx.clone()).await?;
-        let prev_version = self.snapshot_format_version().await;
+        let prev_version = self.snapshot_format_version().await?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let schema = self.table_info.meta.schema.as_ref().clone();
         let (segments, summary) = Self::merge_append_operations(operation_log)?;
