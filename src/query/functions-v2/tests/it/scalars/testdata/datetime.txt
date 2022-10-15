@@ -355,36 +355,36 @@ output domain  : Unknown
 output         : 1970-04-11
 
 
-ast            : substract_years(to_date(0), 100)
-raw expr       : substract_years(to_date(0_u8), 100_u8)
-checked expr   : substract_years<Date, Int64>(to_date<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+ast            : subtract_years(to_date(0), 100)
+raw expr       : subtract_years(to_date(0_u8), 100_u8)
+checked expr   : subtract_years<Date, Int64>(to_date<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
 optimized expr : -36524
 output type    : Date
 output domain  : Unknown
 output         : 1870-01-01
 
 
-ast            : substract_quarters(to_date(0), 100)
-raw expr       : substract_quarters(to_date(0_u8), 100_u8)
-checked expr   : substract_quarters<Date, Int64>(to_date<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+ast            : subtract_quarters(to_date(0), 100)
+raw expr       : subtract_quarters(to_date(0_u8), 100_u8)
+checked expr   : subtract_quarters<Date, Int64>(to_date<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
 optimized expr : -9131
 output type    : Date
 output domain  : Unknown
 output         : 1945-01-01
 
 
-ast            : substract_months(to_date(0), 100)
-raw expr       : substract_months(to_date(0_u8), 100_u8)
-checked expr   : substract_months<Date, Int64>(to_date<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+ast            : subtract_months(to_date(0), 100)
+raw expr       : subtract_months(to_date(0_u8), 100_u8)
+checked expr   : subtract_months<Date, Int64>(to_date<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
 optimized expr : -3044
 output type    : Date
 output domain  : Unknown
 output         : 1961-09-01
 
 
-ast            : substract_days(to_date(0), 100)
-raw expr       : substract_days(to_date(0_u8), 100_u8)
-checked expr   : substract_days<Date, Int64>(to_date<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+ast            : subtract_days(to_date(0), 100)
+raw expr       : subtract_days(to_date(0_u8), 100_u8)
+checked expr   : subtract_days<Date, Int64>(to_date<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
 optimized expr : -100
 output type    : Date
 output domain  : Unknown
@@ -483,9 +483,9 @@ evaluation (internal):
 +--------+------------------+
 
 
-ast            : substract_years(a, b)
-raw expr       : substract_years(ColumnRef(0)::Date, ColumnRef(1)::Int32)
-checked expr   : substract_years<Date, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+ast            : subtract_years(a, b)
+raw expr       : subtract_years(ColumnRef(0)::Date, ColumnRef(1)::Int32)
+checked expr   : subtract_years<Date, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
 evaluation:
 +--------+--------------+---------+------------+
 |        | a            | b       | Output     |
@@ -506,9 +506,9 @@ evaluation (internal):
 +--------+--------------------+
 
 
-ast            : substract_quarters(a, b)
-raw expr       : substract_quarters(ColumnRef(0)::Date, ColumnRef(1)::Int32)
-checked expr   : substract_quarters<Date, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+ast            : subtract_quarters(a, b)
+raw expr       : subtract_quarters(ColumnRef(0)::Date, ColumnRef(1)::Int32)
+checked expr   : subtract_quarters<Date, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
 evaluation:
 +--------+--------------+---------+------------+
 |        | a            | b       | Output     |
@@ -529,9 +529,9 @@ evaluation (internal):
 +--------+--------------------+
 
 
-ast            : substract_months(a, b)
-raw expr       : substract_months(ColumnRef(0)::Date, ColumnRef(1)::Int32)
-checked expr   : substract_months<Date, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+ast            : subtract_months(a, b)
+raw expr       : subtract_months(ColumnRef(0)::Date, ColumnRef(1)::Int32)
+checked expr   : subtract_months<Date, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
 evaluation:
 +--------+--------------+---------+------------+
 |        | a            | b       | Output     |
@@ -552,9 +552,9 @@ evaluation (internal):
 +--------+------------------+
 
 
-ast            : substract_days(a, b)
-raw expr       : substract_days(ColumnRef(0)::Date, ColumnRef(1)::Int32)
-checked expr   : substract_days<Date, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+ast            : subtract_days(a, b)
+raw expr       : subtract_days(ColumnRef(0)::Date, ColumnRef(1)::Int32)
+checked expr   : subtract_days<Date, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
 evaluation:
 +--------+--------------+---------+------------+
 |        | a            | b       | Output     |
@@ -646,63 +646,63 @@ output domain  : Unknown
 output         : 1970-01-01 00:01:40.000000
 
 
-ast            : substract_years(to_timestamp(0), 100)
-raw expr       : substract_years(to_timestamp(0_u8), 100_u8)
-checked expr   : substract_years<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+ast            : subtract_years(to_timestamp(0), 100)
+raw expr       : subtract_years(to_timestamp(0_u8), 100_u8)
+checked expr   : subtract_years<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
 optimized expr : -3155673600000000
 output type    : Timestamp
 output domain  : Unknown
 output         : 1870-01-01 00:00:00.000000
 
 
-ast            : substract_quarters(to_timestamp(0), 100)
-raw expr       : substract_quarters(to_timestamp(0_u8), 100_u8)
-checked expr   : substract_quarters<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+ast            : subtract_quarters(to_timestamp(0), 100)
+raw expr       : subtract_quarters(to_timestamp(0_u8), 100_u8)
+checked expr   : subtract_quarters<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
 optimized expr : -788918400000000
 output type    : Timestamp
 output domain  : Unknown
 output         : 1945-01-01 00:00:00.000000
 
 
-ast            : substract_months(to_timestamp(0), 100)
-raw expr       : substract_months(to_timestamp(0_u8), 100_u8)
-checked expr   : substract_months<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+ast            : subtract_months(to_timestamp(0), 100)
+raw expr       : subtract_months(to_timestamp(0_u8), 100_u8)
+checked expr   : subtract_months<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
 optimized expr : -263001600000000
 output type    : Timestamp
 output domain  : Unknown
 output         : 1961-09-01 00:00:00.000000
 
 
-ast            : substract_days(to_timestamp(0), 100)
-raw expr       : substract_days(to_timestamp(0_u8), 100_u8)
-checked expr   : substract_days<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+ast            : subtract_days(to_timestamp(0), 100)
+raw expr       : subtract_days(to_timestamp(0_u8), 100_u8)
+checked expr   : subtract_days<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
 optimized expr : -8640000000000
 output type    : Timestamp
 output domain  : Unknown
 output         : 1969-09-23 00:00:00.000000
 
 
-ast            : substract_hours(to_timestamp(0), 100)
-raw expr       : substract_hours(to_timestamp(0_u8), 100_u8)
-checked expr   : substract_hours<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+ast            : subtract_hours(to_timestamp(0), 100)
+raw expr       : subtract_hours(to_timestamp(0_u8), 100_u8)
+checked expr   : subtract_hours<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
 optimized expr : -360000000000
 output type    : Timestamp
 output domain  : Unknown
 output         : 1969-12-27 20:00:00.000000
 
 
-ast            : substract_minutes(to_timestamp(0), 100)
-raw expr       : substract_minutes(to_timestamp(0_u8), 100_u8)
-checked expr   : substract_minutes<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+ast            : subtract_minutes(to_timestamp(0), 100)
+raw expr       : subtract_minutes(to_timestamp(0_u8), 100_u8)
+checked expr   : subtract_minutes<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
 optimized expr : -6000000000
 output type    : Timestamp
 output domain  : Unknown
 output         : 1969-12-31 22:20:00.000000
 
 
-ast            : substract_seconds(to_timestamp(0), 100)
-raw expr       : substract_seconds(to_timestamp(0_u8), 100_u8)
-checked expr   : substract_seconds<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+ast            : subtract_seconds(to_timestamp(0), 100)
+raw expr       : subtract_seconds(to_timestamp(0_u8), 100_u8)
+checked expr   : subtract_seconds<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
 optimized expr : -100000000
 output type    : Timestamp
 output domain  : Unknown
@@ -870,9 +870,9 @@ evaluation (internal):
 +--------+----------------------------+
 
 
-ast            : substract_years(a, b)
-raw expr       : substract_years(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
-checked expr   : substract_years<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+ast            : subtract_years(a, b)
+raw expr       : subtract_years(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
+checked expr   : subtract_years<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -893,9 +893,9 @@ evaluation (internal):
 +--------+-----------------------------------------------------+
 
 
-ast            : substract_quarters(a, b)
-raw expr       : substract_quarters(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
-checked expr   : substract_quarters<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+ast            : subtract_quarters(a, b)
+raw expr       : subtract_quarters(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
+checked expr   : subtract_quarters<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -916,9 +916,9 @@ evaluation (internal):
 +--------+----------------------------------------------------+
 
 
-ast            : substract_months(a, b)
-raw expr       : substract_months(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
-checked expr   : substract_months<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+ast            : subtract_months(a, b)
+raw expr       : subtract_months(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
+checked expr   : subtract_months<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -939,9 +939,9 @@ evaluation (internal):
 +--------+--------------------------------------------------+
 
 
-ast            : substract_days(a, b)
-raw expr       : substract_days(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
-checked expr   : substract_days<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+ast            : subtract_days(a, b)
+raw expr       : subtract_days(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
+checked expr   : subtract_days<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -962,9 +962,9 @@ evaluation (internal):
 +--------+----------------------------------------------+
 
 
-ast            : substract_hours(a, b)
-raw expr       : substract_hours(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
-checked expr   : substract_hours<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+ast            : subtract_hours(a, b)
+raw expr       : subtract_hours(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
+checked expr   : subtract_hours<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -985,9 +985,9 @@ evaluation (internal):
 +--------+------------------------------------------+
 
 
-ast            : substract_minutes(a, b)
-raw expr       : substract_minutes(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
-checked expr   : substract_minutes<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+ast            : subtract_minutes(a, b)
+raw expr       : subtract_minutes(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
+checked expr   : subtract_minutes<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -1008,9 +1008,9 @@ evaluation (internal):
 +--------+-------------------------------------+
 
 
-ast            : substract_seconds(a, b)
-raw expr       : substract_seconds(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
-checked expr   : substract_seconds<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+ast            : subtract_seconds(a, b)
+raw expr       : subtract_seconds(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
+checked expr   : subtract_seconds<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -1076,8 +1076,8 @@ output         : 1970-04-11
 
 
 ast            : date_sub(year, 100, to_date(0))
-raw expr       : substract_years(to_date(0_u8), 100_u8)
-checked expr   : substract_years<Date, Int64>(to_date<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+raw expr       : subtract_years(to_date(0_u8), 100_u8)
+checked expr   : subtract_years<Date, Int64>(to_date<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
 optimized expr : -36524
 output type    : Date
 output domain  : Unknown
@@ -1085,8 +1085,8 @@ output         : 1870-01-01
 
 
 ast            : date_sub(quarter, 100, to_date(0))
-raw expr       : substract_quarters(to_date(0_u8), 100_u8)
-checked expr   : substract_quarters<Date, Int64>(to_date<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+raw expr       : subtract_quarters(to_date(0_u8), 100_u8)
+checked expr   : subtract_quarters<Date, Int64>(to_date<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
 optimized expr : -9131
 output type    : Date
 output domain  : Unknown
@@ -1094,8 +1094,8 @@ output         : 1945-01-01
 
 
 ast            : date_sub(month, 100, to_date(0))
-raw expr       : substract_months(to_date(0_u8), 100_u8)
-checked expr   : substract_months<Date, Int64>(to_date<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+raw expr       : subtract_months(to_date(0_u8), 100_u8)
+checked expr   : subtract_months<Date, Int64>(to_date<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
 optimized expr : -3044
 output type    : Date
 output domain  : Unknown
@@ -1103,8 +1103,8 @@ output         : 1961-09-01
 
 
 ast            : date_sub(day, 100, to_date(0))
-raw expr       : substract_days(to_date(0_u8), 100_u8)
-checked expr   : substract_days<Date, Int64>(to_date<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+raw expr       : subtract_days(to_date(0_u8), 100_u8)
+checked expr   : subtract_days<Date, Int64>(to_date<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
 optimized expr : -100
 output type    : Date
 output domain  : Unknown
@@ -1204,8 +1204,8 @@ evaluation (internal):
 
 
 ast            : date_sub(year, b, a)
-raw expr       : substract_years(ColumnRef(0)::Date, ColumnRef(1)::Int32)
-checked expr   : substract_years<Date, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+raw expr       : subtract_years(ColumnRef(0)::Date, ColumnRef(1)::Int32)
+checked expr   : subtract_years<Date, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
 evaluation:
 +--------+--------------+---------+------------+
 |        | a            | b       | Output     |
@@ -1227,8 +1227,8 @@ evaluation (internal):
 
 
 ast            : date_sub(quarter, b, a)
-raw expr       : substract_quarters(ColumnRef(0)::Date, ColumnRef(1)::Int32)
-checked expr   : substract_quarters<Date, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+raw expr       : subtract_quarters(ColumnRef(0)::Date, ColumnRef(1)::Int32)
+checked expr   : subtract_quarters<Date, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
 evaluation:
 +--------+--------------+---------+------------+
 |        | a            | b       | Output     |
@@ -1250,8 +1250,8 @@ evaluation (internal):
 
 
 ast            : date_sub(month, b, a)
-raw expr       : substract_months(ColumnRef(0)::Date, ColumnRef(1)::Int32)
-checked expr   : substract_months<Date, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+raw expr       : subtract_months(ColumnRef(0)::Date, ColumnRef(1)::Int32)
+checked expr   : subtract_months<Date, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
 evaluation:
 +--------+--------------+---------+------------+
 |        | a            | b       | Output     |
@@ -1273,8 +1273,8 @@ evaluation (internal):
 
 
 ast            : date_sub(day, b, a)
-raw expr       : substract_days(ColumnRef(0)::Date, ColumnRef(1)::Int32)
-checked expr   : substract_days<Date, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+raw expr       : subtract_days(ColumnRef(0)::Date, ColumnRef(1)::Int32)
+checked expr   : subtract_days<Date, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
 evaluation:
 +--------+--------------+---------+------------+
 |        | a            | b       | Output     |
@@ -1367,8 +1367,8 @@ output         : 1970-01-01 00:01:40.000000
 
 
 ast            : date_sub(year, 100, to_timestamp(0))
-raw expr       : substract_years(to_timestamp(0_u8), 100_u8)
-checked expr   : substract_years<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+raw expr       : subtract_years(to_timestamp(0_u8), 100_u8)
+checked expr   : subtract_years<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
 optimized expr : -3155673600000000
 output type    : Timestamp
 output domain  : Unknown
@@ -1376,8 +1376,8 @@ output         : 1870-01-01 00:00:00.000000
 
 
 ast            : date_sub(quarter, 100, to_timestamp(0))
-raw expr       : substract_quarters(to_timestamp(0_u8), 100_u8)
-checked expr   : substract_quarters<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+raw expr       : subtract_quarters(to_timestamp(0_u8), 100_u8)
+checked expr   : subtract_quarters<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
 optimized expr : -788918400000000
 output type    : Timestamp
 output domain  : Unknown
@@ -1385,8 +1385,8 @@ output         : 1945-01-01 00:00:00.000000
 
 
 ast            : date_sub(month, 100, to_timestamp(0))
-raw expr       : substract_months(to_timestamp(0_u8), 100_u8)
-checked expr   : substract_months<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+raw expr       : subtract_months(to_timestamp(0_u8), 100_u8)
+checked expr   : subtract_months<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
 optimized expr : -263001600000000
 output type    : Timestamp
 output domain  : Unknown
@@ -1394,8 +1394,8 @@ output         : 1961-09-01 00:00:00.000000
 
 
 ast            : date_sub(day, 100, to_timestamp(0))
-raw expr       : substract_days(to_timestamp(0_u8), 100_u8)
-checked expr   : substract_days<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+raw expr       : subtract_days(to_timestamp(0_u8), 100_u8)
+checked expr   : subtract_days<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
 optimized expr : -8640000000000
 output type    : Timestamp
 output domain  : Unknown
@@ -1403,8 +1403,8 @@ output         : 1969-09-23 00:00:00.000000
 
 
 ast            : date_sub(hour, 100, to_timestamp(0))
-raw expr       : substract_hours(to_timestamp(0_u8), 100_u8)
-checked expr   : substract_hours<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+raw expr       : subtract_hours(to_timestamp(0_u8), 100_u8)
+checked expr   : subtract_hours<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
 optimized expr : -360000000000
 output type    : Timestamp
 output domain  : Unknown
@@ -1412,8 +1412,8 @@ output         : 1969-12-27 20:00:00.000000
 
 
 ast            : date_sub(minute, 100, to_timestamp(0))
-raw expr       : substract_minutes(to_timestamp(0_u8), 100_u8)
-checked expr   : substract_minutes<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+raw expr       : subtract_minutes(to_timestamp(0_u8), 100_u8)
+checked expr   : subtract_minutes<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
 optimized expr : -6000000000
 output type    : Timestamp
 output domain  : Unknown
@@ -1421,8 +1421,8 @@ output         : 1969-12-31 22:20:00.000000
 
 
 ast            : date_sub(second, 100, to_timestamp(0))
-raw expr       : substract_seconds(to_timestamp(0_u8), 100_u8)
-checked expr   : substract_seconds<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+raw expr       : subtract_seconds(to_timestamp(0_u8), 100_u8)
+checked expr   : subtract_seconds<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
 optimized expr : -100000000
 output type    : Timestamp
 output domain  : Unknown
@@ -1591,8 +1591,8 @@ evaluation (internal):
 
 
 ast            : date_sub(year, b, a)
-raw expr       : substract_years(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
-checked expr   : substract_years<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+raw expr       : subtract_years(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
+checked expr   : subtract_years<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -1614,8 +1614,8 @@ evaluation (internal):
 
 
 ast            : date_sub(quarter, b, a)
-raw expr       : substract_quarters(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
-checked expr   : substract_quarters<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+raw expr       : subtract_quarters(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
+checked expr   : subtract_quarters<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -1637,8 +1637,8 @@ evaluation (internal):
 
 
 ast            : date_sub(month, b, a)
-raw expr       : substract_months(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
-checked expr   : substract_months<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+raw expr       : subtract_months(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
+checked expr   : subtract_months<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -1660,8 +1660,8 @@ evaluation (internal):
 
 
 ast            : date_sub(day, b, a)
-raw expr       : substract_days(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
-checked expr   : substract_days<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+raw expr       : subtract_days(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
+checked expr   : subtract_days<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -1683,8 +1683,8 @@ evaluation (internal):
 
 
 ast            : date_sub(hour, b, a)
-raw expr       : substract_hours(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
-checked expr   : substract_hours<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+raw expr       : subtract_hours(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
+checked expr   : subtract_hours<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -1706,8 +1706,8 @@ evaluation (internal):
 
 
 ast            : date_sub(minute, b, a)
-raw expr       : substract_minutes(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
-checked expr   : substract_minutes<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+raw expr       : subtract_minutes(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
+checked expr   : subtract_minutes<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -1729,8 +1729,8 @@ evaluation (internal):
 
 
 ast            : date_sub(second, b, a)
-raw expr       : substract_seconds(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
-checked expr   : substract_seconds<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+raw expr       : subtract_seconds(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
+checked expr   : subtract_seconds<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -1796,8 +1796,8 @@ output         : 1970-04-11
 
 
 ast            : to_date(0) - interval 100 year
-raw expr       : substract_years(to_date(0_u8), 100_u8)
-checked expr   : substract_years<Date, Int64>(to_date<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+raw expr       : subtract_years(to_date(0_u8), 100_u8)
+checked expr   : subtract_years<Date, Int64>(to_date<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
 optimized expr : -36524
 output type    : Date
 output domain  : Unknown
@@ -1805,8 +1805,8 @@ output         : 1870-01-01
 
 
 ast            : to_date(0) - interval 100 quarter
-raw expr       : substract_quarters(to_date(0_u8), 100_u8)
-checked expr   : substract_quarters<Date, Int64>(to_date<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+raw expr       : subtract_quarters(to_date(0_u8), 100_u8)
+checked expr   : subtract_quarters<Date, Int64>(to_date<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
 optimized expr : -9131
 output type    : Date
 output domain  : Unknown
@@ -1814,8 +1814,8 @@ output         : 1945-01-01
 
 
 ast            : to_date(0) - interval 100 month
-raw expr       : substract_months(to_date(0_u8), 100_u8)
-checked expr   : substract_months<Date, Int64>(to_date<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+raw expr       : subtract_months(to_date(0_u8), 100_u8)
+checked expr   : subtract_months<Date, Int64>(to_date<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
 optimized expr : -3044
 output type    : Date
 output domain  : Unknown
@@ -1823,8 +1823,8 @@ output         : 1961-09-01
 
 
 ast            : to_date(0) - interval 100 day
-raw expr       : substract_days(to_date(0_u8), 100_u8)
-checked expr   : substract_days<Date, Int64>(to_date<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+raw expr       : subtract_days(to_date(0_u8), 100_u8)
+checked expr   : subtract_days<Date, Int64>(to_date<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
 optimized expr : -100
 output type    : Date
 output domain  : Unknown
@@ -1924,8 +1924,8 @@ evaluation (internal):
 
 
 ast            : a - interval b year
-raw expr       : substract_years(ColumnRef(0)::Date, ColumnRef(1)::Int32)
-checked expr   : substract_years<Date, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+raw expr       : subtract_years(ColumnRef(0)::Date, ColumnRef(1)::Int32)
+checked expr   : subtract_years<Date, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
 evaluation:
 +--------+--------------+---------+------------+
 |        | a            | b       | Output     |
@@ -1947,8 +1947,8 @@ evaluation (internal):
 
 
 ast            : a - interval b quarter
-raw expr       : substract_quarters(ColumnRef(0)::Date, ColumnRef(1)::Int32)
-checked expr   : substract_quarters<Date, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+raw expr       : subtract_quarters(ColumnRef(0)::Date, ColumnRef(1)::Int32)
+checked expr   : subtract_quarters<Date, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
 evaluation:
 +--------+--------------+---------+------------+
 |        | a            | b       | Output     |
@@ -1970,8 +1970,8 @@ evaluation (internal):
 
 
 ast            : a - interval b month
-raw expr       : substract_months(ColumnRef(0)::Date, ColumnRef(1)::Int32)
-checked expr   : substract_months<Date, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+raw expr       : subtract_months(ColumnRef(0)::Date, ColumnRef(1)::Int32)
+checked expr   : subtract_months<Date, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
 evaluation:
 +--------+--------------+---------+------------+
 |        | a            | b       | Output     |
@@ -1993,8 +1993,8 @@ evaluation (internal):
 
 
 ast            : a - interval b day
-raw expr       : substract_days(ColumnRef(0)::Date, ColumnRef(1)::Int32)
-checked expr   : substract_days<Date, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+raw expr       : subtract_days(ColumnRef(0)::Date, ColumnRef(1)::Int32)
+checked expr   : subtract_days<Date, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
 evaluation:
 +--------+--------------+---------+------------+
 |        | a            | b       | Output     |
@@ -2087,8 +2087,8 @@ output         : 1970-01-01 00:01:40.000000
 
 
 ast            : to_timestamp(0) - interval 100 year
-raw expr       : substract_years(to_timestamp(0_u8), 100_u8)
-checked expr   : substract_years<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+raw expr       : subtract_years(to_timestamp(0_u8), 100_u8)
+checked expr   : subtract_years<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
 optimized expr : -3155673600000000
 output type    : Timestamp
 output domain  : Unknown
@@ -2096,8 +2096,8 @@ output         : 1870-01-01 00:00:00.000000
 
 
 ast            : to_timestamp(0) - interval 100 quarter
-raw expr       : substract_quarters(to_timestamp(0_u8), 100_u8)
-checked expr   : substract_quarters<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+raw expr       : subtract_quarters(to_timestamp(0_u8), 100_u8)
+checked expr   : subtract_quarters<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
 optimized expr : -788918400000000
 output type    : Timestamp
 output domain  : Unknown
@@ -2105,8 +2105,8 @@ output         : 1945-01-01 00:00:00.000000
 
 
 ast            : to_timestamp(0) - interval 100 month
-raw expr       : substract_months(to_timestamp(0_u8), 100_u8)
-checked expr   : substract_months<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+raw expr       : subtract_months(to_timestamp(0_u8), 100_u8)
+checked expr   : subtract_months<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
 optimized expr : -263001600000000
 output type    : Timestamp
 output domain  : Unknown
@@ -2114,8 +2114,8 @@ output         : 1961-09-01 00:00:00.000000
 
 
 ast            : to_timestamp(0) - interval 100 day
-raw expr       : substract_days(to_timestamp(0_u8), 100_u8)
-checked expr   : substract_days<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+raw expr       : subtract_days(to_timestamp(0_u8), 100_u8)
+checked expr   : subtract_days<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
 optimized expr : -8640000000000
 output type    : Timestamp
 output domain  : Unknown
@@ -2123,8 +2123,8 @@ output         : 1969-09-23 00:00:00.000000
 
 
 ast            : to_timestamp(0) - interval 100 hour
-raw expr       : substract_hours(to_timestamp(0_u8), 100_u8)
-checked expr   : substract_hours<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+raw expr       : subtract_hours(to_timestamp(0_u8), 100_u8)
+checked expr   : subtract_hours<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
 optimized expr : -360000000000
 output type    : Timestamp
 output domain  : Unknown
@@ -2132,8 +2132,8 @@ output         : 1969-12-27 20:00:00.000000
 
 
 ast            : to_timestamp(0) - interval 100 minute
-raw expr       : substract_minutes(to_timestamp(0_u8), 100_u8)
-checked expr   : substract_minutes<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+raw expr       : subtract_minutes(to_timestamp(0_u8), 100_u8)
+checked expr   : subtract_minutes<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
 optimized expr : -6000000000
 output type    : Timestamp
 output domain  : Unknown
@@ -2141,8 +2141,8 @@ output         : 1969-12-31 22:20:00.000000
 
 
 ast            : to_timestamp(0) - interval 100 second
-raw expr       : substract_seconds(to_timestamp(0_u8), 100_u8)
-checked expr   : substract_seconds<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
+raw expr       : subtract_seconds(to_timestamp(0_u8), 100_u8)
+checked expr   : subtract_seconds<Timestamp, Int64>(to_timestamp<Int64>(CAST(0_u8 AS Int64)), CAST(100_u8 AS Int64))
 optimized expr : -100000000
 output type    : Timestamp
 output domain  : Unknown
@@ -2311,8 +2311,8 @@ evaluation (internal):
 
 
 ast            : a - interval b year
-raw expr       : substract_years(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
-checked expr   : substract_years<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+raw expr       : subtract_years(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
+checked expr   : subtract_years<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -2334,8 +2334,8 @@ evaluation (internal):
 
 
 ast            : a - interval b quarter
-raw expr       : substract_quarters(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
-checked expr   : substract_quarters<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+raw expr       : subtract_quarters(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
+checked expr   : subtract_quarters<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -2357,8 +2357,8 @@ evaluation (internal):
 
 
 ast            : a - interval b month
-raw expr       : substract_months(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
-checked expr   : substract_months<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+raw expr       : subtract_months(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
+checked expr   : subtract_months<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -2380,8 +2380,8 @@ evaluation (internal):
 
 
 ast            : a - interval b day
-raw expr       : substract_days(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
-checked expr   : substract_days<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+raw expr       : subtract_days(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
+checked expr   : subtract_days<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -2403,8 +2403,8 @@ evaluation (internal):
 
 
 ast            : a - interval b hour
-raw expr       : substract_hours(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
-checked expr   : substract_hours<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+raw expr       : subtract_hours(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
+checked expr   : subtract_hours<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -2426,8 +2426,8 @@ evaluation (internal):
 
 
 ast            : a - interval b minute
-raw expr       : substract_minutes(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
-checked expr   : substract_minutes<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+raw expr       : subtract_minutes(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
+checked expr   : subtract_minutes<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -2449,8 +2449,8 @@ evaluation (internal):
 
 
 ast            : a - interval b second
-raw expr       : substract_seconds(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
-checked expr   : substract_seconds<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
+raw expr       : subtract_seconds(ColumnRef(0)::Timestamp, ColumnRef(1)::Int32)
+checked expr   : subtract_seconds<Timestamp, Int64>(ColumnRef(0), CAST(ColumnRef(1) AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |

@@ -33,8 +33,8 @@ fn test_datetime() {
     test_to_datetime(file);
     test_to_date(file);
     // {add | subtract}_{years | months | days | hours | minutes | seconds}(date, number)
-    test_date_add_substract(file);
-    test_timestamp_add_substract(file);
+    test_date_add_subtract(file);
+    test_timestamp_add_subtract(file);
     // date_{add | sub}({year | quarter | month | week | day | hour | minute | second}, date, number)
     test_date_date_add_sub(file);
     test_timestamp_date_add_sub(file);
@@ -111,15 +111,15 @@ fn test_to_date(file: &mut impl Write) {
     )]);
 }
 
-fn test_date_add_substract(file: &mut impl Write) {
+fn test_date_add_subtract(file: &mut impl Write) {
     run_ast(file, "add_years(to_date(0), 10000)", &[]); // failed
     run_ast(file, "add_years(to_date(0), 100)", &[]);
     run_ast(file, "add_months(to_date(0), 100)", &[]);
     run_ast(file, "add_days(to_date(0), 100)", &[]);
-    run_ast(file, "substract_years(to_date(0), 100)", &[]);
-    run_ast(file, "substract_quarters(to_date(0), 100)", &[]);
-    run_ast(file, "substract_months(to_date(0), 100)", &[]);
-    run_ast(file, "substract_days(to_date(0), 100)", &[]);
+    run_ast(file, "subtract_years(to_date(0), 100)", &[]);
+    run_ast(file, "subtract_quarters(to_date(0), 100)", &[]);
+    run_ast(file, "subtract_months(to_date(0), 100)", &[]);
+    run_ast(file, "subtract_days(to_date(0), 100)", &[]);
     run_ast(file, "add_years(a, b)", &[
         ("a", DataType::Date, from_date_data(vec![-100, 0, 100])),
         (
@@ -152,7 +152,7 @@ fn test_date_add_substract(file: &mut impl Write) {
             Column::from_data(vec![1, 2, 3]),
         ),
     ]);
-    run_ast(file, "substract_years(a, b)", &[
+    run_ast(file, "subtract_years(a, b)", &[
         ("a", DataType::Date, from_date_data(vec![-100, 0, 100])),
         (
             "b",
@@ -160,7 +160,7 @@ fn test_date_add_substract(file: &mut impl Write) {
             Column::from_data(vec![1, 2, 3]),
         ),
     ]);
-    run_ast(file, "substract_quarters(a, b)", &[
+    run_ast(file, "subtract_quarters(a, b)", &[
         ("a", DataType::Date, from_date_data(vec![-100, 0, 100])),
         (
             "b",
@@ -168,7 +168,7 @@ fn test_date_add_substract(file: &mut impl Write) {
             Column::from_data(vec![1, 2, 3]),
         ),
     ]);
-    run_ast(file, "substract_months(a, b)", &[
+    run_ast(file, "subtract_months(a, b)", &[
         ("a", DataType::Date, from_date_data(vec![-100, 0, 100])),
         (
             "b",
@@ -176,7 +176,7 @@ fn test_date_add_substract(file: &mut impl Write) {
             Column::from_data(vec![1, 2, 3]),
         ),
     ]);
-    run_ast(file, "substract_days(a, b)", &[
+    run_ast(file, "subtract_days(a, b)", &[
         ("a", DataType::Date, from_date_data(vec![-100, 0, 100])),
         (
             "b",
@@ -186,7 +186,7 @@ fn test_date_add_substract(file: &mut impl Write) {
     ]);
 }
 
-fn test_timestamp_add_substract(file: &mut impl Write) {
+fn test_timestamp_add_subtract(file: &mut impl Write) {
     run_ast(file, "add_years(to_timestamp(0), 10000)", &[]); // failed
     run_ast(file, "add_years(to_timestamp(0), 100)", &[]);
     run_ast(file, "add_quarters(to_timestamp(0), 100)", &[]);
@@ -195,13 +195,13 @@ fn test_timestamp_add_substract(file: &mut impl Write) {
     run_ast(file, "add_hours(to_timestamp(0), 100)", &[]);
     run_ast(file, "add_minutes(to_timestamp(0), 100)", &[]);
     run_ast(file, "add_seconds(to_timestamp(0), 100)", &[]);
-    run_ast(file, "substract_years(to_timestamp(0), 100)", &[]);
-    run_ast(file, "substract_quarters(to_timestamp(0), 100)", &[]);
-    run_ast(file, "substract_months(to_timestamp(0), 100)", &[]);
-    run_ast(file, "substract_days(to_timestamp(0), 100)", &[]);
-    run_ast(file, "substract_hours(to_timestamp(0), 100)", &[]);
-    run_ast(file, "substract_minutes(to_timestamp(0), 100)", &[]);
-    run_ast(file, "substract_seconds(to_timestamp(0), 100)", &[]);
+    run_ast(file, "subtract_years(to_timestamp(0), 100)", &[]);
+    run_ast(file, "subtract_quarters(to_timestamp(0), 100)", &[]);
+    run_ast(file, "subtract_months(to_timestamp(0), 100)", &[]);
+    run_ast(file, "subtract_days(to_timestamp(0), 100)", &[]);
+    run_ast(file, "subtract_hours(to_timestamp(0), 100)", &[]);
+    run_ast(file, "subtract_minutes(to_timestamp(0), 100)", &[]);
+    run_ast(file, "subtract_seconds(to_timestamp(0), 100)", &[]);
     run_ast(file, "add_years(a, b)", &[
         (
             "a",
@@ -286,7 +286,7 @@ fn test_timestamp_add_substract(file: &mut impl Write) {
             Column::from_data(vec![1, 2, 3]),
         ),
     ]);
-    run_ast(file, "substract_years(a, b)", &[
+    run_ast(file, "subtract_years(a, b)", &[
         (
             "a",
             DataType::Timestamp,
@@ -298,7 +298,7 @@ fn test_timestamp_add_substract(file: &mut impl Write) {
             Column::from_data(vec![1, 2, 3]),
         ),
     ]);
-    run_ast(file, "substract_quarters(a, b)", &[
+    run_ast(file, "subtract_quarters(a, b)", &[
         (
             "a",
             DataType::Timestamp,
@@ -310,7 +310,7 @@ fn test_timestamp_add_substract(file: &mut impl Write) {
             Column::from_data(vec![1, 2, 3]),
         ),
     ]);
-    run_ast(file, "substract_months(a, b)", &[
+    run_ast(file, "subtract_months(a, b)", &[
         (
             "a",
             DataType::Timestamp,
@@ -322,7 +322,7 @@ fn test_timestamp_add_substract(file: &mut impl Write) {
             Column::from_data(vec![1, 2, 3]),
         ),
     ]);
-    run_ast(file, "substract_days(a, b)", &[
+    run_ast(file, "subtract_days(a, b)", &[
         (
             "a",
             DataType::Timestamp,
@@ -334,7 +334,7 @@ fn test_timestamp_add_substract(file: &mut impl Write) {
             Column::from_data(vec![1, 2, 3]),
         ),
     ]);
-    run_ast(file, "substract_hours(a, b)", &[
+    run_ast(file, "subtract_hours(a, b)", &[
         (
             "a",
             DataType::Timestamp,
@@ -346,7 +346,7 @@ fn test_timestamp_add_substract(file: &mut impl Write) {
             Column::from_data(vec![1, 2, 3]),
         ),
     ]);
-    run_ast(file, "substract_minutes(a, b)", &[
+    run_ast(file, "subtract_minutes(a, b)", &[
         (
             "a",
             DataType::Timestamp,
@@ -358,7 +358,7 @@ fn test_timestamp_add_substract(file: &mut impl Write) {
             Column::from_data(vec![1, 2, 3]),
         ),
     ]);
-    run_ast(file, "substract_seconds(a, b)", &[
+    run_ast(file, "subtract_seconds(a, b)", &[
         (
             "a",
             DataType::Timestamp,

@@ -68,7 +68,7 @@ macro_rules! transform_interval_add_sub {
             with_interval_mapped_name!(|INTERVAL| match $unit {
                 IntervalKind::INTERVAL => RawExpr::FunctionCall {
                     span: transform_span($span),
-                    name: concat!("substract_", INTERVAL).to_string(),
+                    name: concat!("subtract_", INTERVAL).to_string(),
                     params: vec![],
                     args: vec![
                         transform_expr(*$date, $columns),
@@ -383,7 +383,7 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
             with_interval_mapped_name!(|INTERVAL| match unit {
                 IntervalKind::INTERVAL => RawExpr::FunctionCall {
                     span: transform_span(span),
-                    name: concat!("substract_", INTERVAL).to_string(),
+                    name: concat!("subtract_", INTERVAL).to_string(),
                     params: vec![],
                     args: vec![
                         transform_expr(*date, columns),

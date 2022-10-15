@@ -29,7 +29,7 @@ use super::arithmetic_modulo::vectorize_modulo;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("plus", &["add"]);
-    registry.register_aliases("minus", &["substract", "neg"]);
+    registry.register_aliases("minus", &["subtract", "neg"]);
     registry.register_aliases("div", &["intdiv"]);
 
     // TODO support modulo
