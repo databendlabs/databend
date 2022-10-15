@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+mod beyond_end_reader;
 mod delimiter;
 mod impls;
 mod input_context;
@@ -26,3 +27,4 @@ mod transform_deserializer;
 pub use input_context::InputContext;
 pub use input_format::InputFormat;
 pub use input_pipeline::StreamingReadBatch;
+pub use input_split::split_by_size;

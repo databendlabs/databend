@@ -219,6 +219,7 @@ impl FromStr for OnErrorMode {
 pub struct CopyOptions {
     pub on_error: OnErrorMode,
     pub size_limit: usize,
+    pub split_size: usize,
     pub purge: bool,
     pub single: bool,
     pub max_file_size: usize,

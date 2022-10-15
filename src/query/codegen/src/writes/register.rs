@@ -748,6 +748,7 @@ pub fn codegen_register() {
                 let and_validity = columns
                     .iter()
                     .map(|n| format!("arg{}.validity", n + 1))
+                    .chain(std::iter::once("nullable_column.validity".to_string()))
                     .reduce(|acc, item| {
                         format!("common_arrow::arrow::bitmap::and(&{acc}, &{item})")
                     })
@@ -764,13 +765,9 @@ pub fn codegen_register() {
 
                 format!(
                     "({arm_pat}) => {{
-                        let column = func({func_arg} ctx)?.into_column().unwrap();
+                        let nullable_column = func({func_arg} ctx)?.into_column().unwrap();
                         let validity = {and_validity};
-                        let column = NullableType::<O>::upcast_column(column);
-                        let box nullable_column = column.into_nullable().unwrap();
-                        let column = O::try_downcast_column(&nullable_column.column).unwrap();
-                        let validity = common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-                        Ok(Value::Column(NullableColumn {{ column, validity }}))
+                        Ok(Value::Column(NullableColumn {{ column: nullable_column.column, validity }}))
                     }}"
                 )
             })

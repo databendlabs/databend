@@ -623,6 +623,8 @@ pub enum TokenKind {
     SMALLINT,
     #[token("SNAPSHOT", ignore(ascii_case))]
     SNAPSHOT,
+    #[token("SPLIT_SIZE", ignore(ascii_case))]
+    SPLIT_SIZE,
     #[token("STAGE", ignore(ascii_case))]
     STAGE,
     #[token("SYNTAX", ignore(ascii_case))]

@@ -73,7 +73,7 @@ impl FuseTable {
                 self.snapshot_format_version().await,
             );
             (all_snapshot_lites, all_segment_locations) = fuse_snapshot_io
-                .read_snapshot_lites(root_snapshot_location, true)
+                .read_snapshot_lites(root_snapshot_location, None, true)
                 .await?;
         }
 

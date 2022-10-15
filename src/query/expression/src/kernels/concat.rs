@@ -19,7 +19,6 @@ use crate::types::array::ArrayColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
 use crate::types::string::StringColumnBuilder;
-use crate::types::timestamp::TimestampColumnBuilder;
 use crate::types::AnyType;
 use crate::types::ArgType;
 use crate::types::ArrayType;
@@ -95,7 +94,7 @@ impl Column {
                 Self::concat_value_types::<StringType>(builder, columns)
             }
             Column::Timestamp(_) => {
-                let builder = TimestampColumnBuilder::with_capacity(capacity);
+                let builder = Vec::with_capacity(capacity);
                 Self::concat_value_types::<TimestampType>(builder, columns)
             }
             Column::Date(_) => {

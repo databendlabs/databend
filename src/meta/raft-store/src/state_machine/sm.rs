@@ -912,12 +912,6 @@ impl StateMachine {
         Ok((0, AppliedState::None))
     }
 
-    #[allow(dead_code)]
-    fn list_node_ids(&self) -> Vec<NodeId> {
-        let sm_nodes = self.nodes();
-        sm_nodes.range_keys(..).expect("fail to list nodes")
-    }
-
     pub fn get_node(&self, node_id: &NodeId) -> Result<Option<Node>, MetaStorageError> {
         let sm_nodes = self.nodes();
         sm_nodes.get(node_id)
