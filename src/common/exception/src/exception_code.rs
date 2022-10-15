@@ -145,7 +145,7 @@ build_exceptions! {
     InvalidTimestamp(1080),
     InvalidClusterKeys(1081),
     UnknownFragmentExchange(1082),
-    InvalidUtf8(1083),
+    InternalError(1083),
 
     // Tenant error codes.
     TenantIsEmpty(1101),
