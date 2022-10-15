@@ -41,8 +41,6 @@ use crate::types::number::NumberScalar;
 use crate::types::number::SimpleDomain;
 use crate::types::string::StringColumn;
 use crate::types::string::StringDomain;
-use crate::types::timestamp::Timestamp;
-use crate::types::timestamp::TimestampDomain;
 use crate::types::AnyType;
 use crate::types::DataType;
 use crate::types::ValueType;
@@ -144,7 +142,7 @@ impl<'a> Display for ScalarRef<'a> {
             ScalarRef::Number(val) => write!(f, "{val}"),
             ScalarRef::Boolean(val) => write!(f, "{val}"),
             ScalarRef::String(s) => write!(f, "{:?}", String::from_utf8_lossy(s)),
-            ScalarRef::Timestamp(t) => write!(f, "{t}"),
+            ScalarRef::Timestamp(t) => write!(f, "{}", display_timestamp(*t)),
             ScalarRef::Date(d) => write!(f, "{}", display_date(*d as i64)),
             ScalarRef::Interval(i) => write!(f, "{}", display_timestamp(*i)),
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
@@ -546,18 +544,6 @@ impl Display for StringDomain {
     }
 }
 
-impl Display for TimestampDomain {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "{{{:.prec$}..={:.prec$}}}",
-            self.min,
-            self.max,
-            prec = self.precision as usize
-        )
-    }
-}
-
 impl Display for NumberDomain {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         with_number_type!(|TYPE| match self {
@@ -595,19 +581,6 @@ impl Display for Domain {
             }
             Domain::Undefined => write!(f, "Undefined"),
         }
-    }
-}
-
-impl Display for Timestamp {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let s = display_timestamp(self.ts);
-        let truncate_end = if self.precision > 0 {
-            s.len() - 6 + self.precision as usize
-        } else {
-            s.len() - 7
-        };
-        write!(f, "{}", &s[..truncate_end])?;
-        Ok(())
     }
 }
 

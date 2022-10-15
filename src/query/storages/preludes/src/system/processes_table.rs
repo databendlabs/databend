@@ -127,6 +127,7 @@ impl ProcessesTable {
 
                 ..Default::default()
             },
+            ..Default::default()
         };
 
         SyncOneBlockSystemTable::create(ProcessesTable { table_info })

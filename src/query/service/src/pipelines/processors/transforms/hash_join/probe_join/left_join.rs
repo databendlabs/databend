@@ -95,11 +95,11 @@ impl JoinHashTable {
                         let mut build_indexes =
                             self.hash_join_desc.right_join_desc.build_indexes.write();
                         // dummy row ptr
-                        // here assume there is no RowPtr, which chunk_index is u32::MAX and row_index is u32::MAX
+                        // here assume there is no RowPtr, which chunk_index is usize::MAX and row_index is usize::MAX
                         build_indexes.push(RowPtr {
-                            chunk_index: u32::MAX,
-                            row_index: u32::MAX,
-                            marker: None,
+                            chunk_index: usize::MAX,
+                            row_index: usize::MAX,
+                            marker: Some(MarkerKind::False),
                         });
                     }
                     // dummy row ptr
@@ -208,7 +208,6 @@ impl JoinHashTable {
         let merged_block = self.merge_eq_block(&nullable_build_block, &probe_block)?;
 
         let mut bm = validity.into_mut().right().unwrap();
-
         if self.hash_join_desc.join_type == JoinType::Full {
             let mut build_indexes = self.hash_join_desc.right_join_desc.build_indexes.write();
             for (idx, build_index) in build_indexes.iter_mut().enumerate() {

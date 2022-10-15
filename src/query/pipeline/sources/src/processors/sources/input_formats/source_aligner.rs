@@ -42,7 +42,7 @@ pub struct Aligner<I: InputFormatPipe> {
     batch_rx: Option<Receiver<Result<I::ReadBatch>>>,
     read_batch: Option<I::ReadBatch>,
 
-    received_end_batch_of_split: bool,
+    is_flushing_split: bool,
     no_more_split: bool,
 
     // output
@@ -65,7 +65,7 @@ impl<I: InputFormatPipe> Aligner<I> {
             state: None,
             read_batch: None,
             batch_rx: None,
-            received_end_batch_of_split: false,
+            is_flushing_split: false,
             no_more_split: false,
             row_batches: Default::default(),
         })))
@@ -104,7 +104,7 @@ impl<I: InputFormatPipe> Processor for Aligner<I> {
                     Ok(Event::Finished)
                 }
             }
-        } else if self.read_batch.is_some() || self.received_end_batch_of_split {
+        } else if self.read_batch.is_some() || self.is_flushing_split {
             Ok(Event::Sync)
         } else {
             Ok(Event::Async)
@@ -121,10 +121,20 @@ impl<I: InputFormatPipe> Processor for Aligner<I> {
                     self.row_batches.push_back(b);
                 }
                 if eof {
+                    assert!(self.is_flushing_split);
+                }
+                if self.is_flushing_split {
+                    if !eof {
+                        // just aligned data beyond end
+                        let row_batches = state.align(None)?;
+                        for b in row_batches.into_iter() {
+                            self.row_batches.push_back(b);
+                        }
+                    }
+                    self.is_flushing_split = false;
                     self.state = None;
                     self.batch_rx = None;
                 }
-                self.received_end_batch_of_split = false;
                 Ok(())
             }
             _ => Err(ErrorCode::UnexpectedError("Aligner process state is none")),
@@ -133,12 +143,11 @@ impl<I: InputFormatPipe> Processor for Aligner<I> {
 
     async fn async_process(&mut self) -> Result<()> {
         if !self.no_more_split {
-            if self.state.is_none() {
-                match self.split_rx.recv().await {
+            match &self.state {
+                None => match self.split_rx.recv().await {
                     Ok(Ok(split)) => {
                         self.state = Some(I::AligningState::try_create(&self.ctx, &split.info)?);
                         self.batch_rx = Some(split.rx);
-                        self.received_end_batch_of_split = false;
                         tracing::debug!("aligner recv new split {}", &split.info);
                     }
                     Ok(Err(e)) => {
@@ -148,20 +157,33 @@ impl<I: InputFormatPipe> Processor for Aligner<I> {
                         tracing::debug!("aligner no more split");
                         self.no_more_split = true;
                     }
-                }
-            }
-            if let Some(rx) = self.batch_rx.as_mut() {
-                match rx.recv().await {
-                    Some(Ok(batch)) => {
-                        tracing::debug!("aligner recv new batch");
-                        self.read_batch = Some(batch)
-                    }
-                    Some(Err(e)) => {
-                        return Err(e);
-                    }
-                    None => {
-                        tracing::debug!("aligner recv end of current split");
-                        self.received_end_batch_of_split = true;
+                },
+                Some(state) => {
+                    if let Some(rx) = self.batch_rx.as_mut() {
+                        match rx.recv().await {
+                            Some(Ok(batch)) => {
+                                tracing::debug!("aligner recv new batch");
+                                self.read_batch = Some(batch)
+                            }
+                            Some(Err(e)) => {
+                                return Err(e);
+                            }
+                            None => {
+                                tracing::debug!("aligner recv end of current split");
+                                if let Some(reader) = state.read_beyond_end() {
+                                    let end = reader.read().await?;
+                                    if !end.is_empty() {
+                                        tracing::debug!(
+                                            "aligner read {} bytes beyond end",
+                                            end.len()
+                                        );
+                                        let batch = I::ReadBatch::from(end);
+                                        self.read_batch = Some(batch);
+                                    }
+                                }
+                                self.is_flushing_split = true;
+                            }
+                        }
                     }
                 }
             }

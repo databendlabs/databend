@@ -91,16 +91,14 @@ impl FuseSnapshotIO {
         });
 
         // 1.2 build the runtime.
-        let semaphore = Arc::new(Semaphore::new(max_io_requests));
-        let segments_runtime = Arc::new(Runtime::with_worker_threads(
+        let semaphore = Semaphore::new(max_io_requests);
+        let snapshot_runtime = Arc::new(Runtime::with_worker_threads(
             max_runtime_threads,
             Some("fuse-req-snapshots-worker".to_owned()),
         )?);
 
         // 1.3 spawn all the tasks to the runtime.
-        let join_handlers = segments_runtime
-            .try_spawn_batch(semaphore.clone(), tasks)
-            .await?;
+        let join_handlers = snapshot_runtime.try_spawn_batch(semaphore, tasks).await?;
 
         // 1.4 get all the result.
         future::try_join_all(join_handlers)
@@ -108,52 +106,23 @@ impl FuseSnapshotIO {
             .map_err(|e| ErrorCode::StorageOther(format!("read snapshots failure, {}", e)))
     }
 
-    // Read all the snapshots by the root file:
-    // 1. Get the prefix:'/db/table/_ss/' from the root_snapshot_file('/db/table/_ss/xx.json')
-    // 2. List all the files in the prefix
-    // 3. Try to read all the snapshot files in parallel.
+    // Read all the snapshots by the root file.
+    // limit: read how many snapshot files
+    // with_segment_locations: if true will get the segments of the snapshot
     pub async fn read_snapshot_lites(
         &self,
         root_snapshot_file: String,
+        limit: Option<usize>,
         with_segment_locations: bool, // Return segment location or not
     ) -> Result<(Vec<TableSnapshotLite>, HashSet<Location>)> {
         let ctx = self.ctx.clone();
         let data_accessor = self.operator.clone();
 
-        let mut segment_locations = HashSet::new();
+        // Get all file list.
         let mut snapshot_files = vec![];
-        if let Some(path) = Path::new(&root_snapshot_file).parent() {
-            let mut snapshot_prefix = path.to_str().unwrap_or("").to_string();
-
-            // Check if the prefix:db/table/_ss is reasonable.
-            if !snapshot_prefix.contains('/') {
-                return Ok((vec![], segment_locations));
-            }
-
-            // Append '/' to the end if need.
-            if !snapshot_prefix.ends_with('/') {
-                snapshot_prefix += "/";
-            }
-
-            // List the prefix path to get all the snapshot files list.
-            let mut ds = data_accessor.object(&snapshot_prefix).list().await?;
-            while let Some(de) = ds.try_next().await? {
-                match de.mode() {
-                    ObjectMode::FILE => {
-                        let location = de.path().to_string();
-                        if location != root_snapshot_file {
-                            snapshot_files.push(de.path().to_string());
-                        }
-                    }
-                    _ => {
-                        warn!(
-                            "Found not snapshot file in {:}, found: {:?}",
-                            snapshot_prefix, de
-                        );
-                        continue;
-                    }
-                }
-            }
+        let mut segment_locations = HashSet::new();
+        if let Some(prefix) = Self::get_s3_prefix_from_file(&root_snapshot_file) {
+            snapshot_files = self.get_files(&prefix, limit).await?;
         }
 
         // 1. Get all the snapshot by chunks.
@@ -181,8 +150,8 @@ impl FuseSnapshotIO {
         }
 
         let mut snapshot_chain = vec![];
-        // 1.1 Get the root snapshot.
         {
+            // 1 Get the root snapshot.
             let root_snapshot = Self::read_snapshot(
                 ctx.clone(),
                 root_snapshot_file.clone(),
@@ -215,5 +184,58 @@ impl FuseSnapshotIO {
         }
 
         Ok((snapshot_chain, segment_locations))
+    }
+
+    async fn get_files(&self, prefix: &str, limit: Option<usize>) -> Result<Vec<String>> {
+        let data_accessor = self.operator.clone();
+
+        let mut file_list = vec![];
+        let mut ds = data_accessor.object(prefix).list().await?;
+        while let Some(de) = ds.try_next().await? {
+            match de.mode() {
+                ObjectMode::FILE => {
+                    let location = de.path().to_string();
+                    let modified = de.last_modified().await;
+                    file_list.push((location, modified));
+                }
+                _ => {
+                    warn!("found not snapshot file in {:}, found: {:?}", prefix, de);
+                    continue;
+                }
+            }
+        }
+
+        // let mut vector: Vec<(i32, Option<i32>)> = vec![(1, Some(1)), (2, None), (3, Some(3)), (4, None)];
+        // vector.sort_by(|(_, k1), (_, k2)| k2.cmp(k1));
+        // Result:
+        // [(3, Some(3)), (1, Some(1)), (2, None),(4, None)]
+        file_list.sort_by(|(_, m1), (_, m2)| m2.cmp(m1));
+
+        Ok(match limit {
+            None => file_list.into_iter().map(|v| v.0).collect::<Vec<String>>(),
+            Some(v) => file_list
+                .into_iter()
+                .take(v as usize)
+                .map(|v| v.0)
+                .collect::<Vec<String>>(),
+        })
+    }
+
+    // _ss/xx/yy.json -> _ss/xx/
+    fn get_s3_prefix_from_file(file_path: &str) -> Option<String> {
+        if let Some(path) = Path::new(&file_path).parent() {
+            let mut prefix = path.to_str().unwrap_or("").to_string();
+
+            if !prefix.contains('/') {
+                return None;
+            }
+
+            // Append '/' to the end if need.
+            if !prefix.ends_with('/') {
+                prefix += "/";
+            }
+            return Some(prefix);
+        }
+        None
     }
 }

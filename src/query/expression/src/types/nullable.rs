@@ -144,7 +144,10 @@ impl<T: ValueType> ValueType for NullableType<T> {
     }
 
     fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
-        builder.push(item);
+        match item {
+            Some(item) => builder.push(item),
+            None => builder.push_null(),
+        }
     }
 
     fn push_default(builder: &mut Self::ColumnBuilder) {
@@ -282,14 +285,9 @@ impl<T: ValueType> NullableColumnBuilder<T> {
         self.validity.len()
     }
 
-    pub fn push(&mut self, item: Option<T::ScalarRef<'_>>) {
-        match item {
-            Some(scalar) => {
-                T::push_item(&mut self.builder, scalar);
-                self.validity.push(true);
-            }
-            None => self.push_null(),
-        }
+    pub fn push(&mut self, item: T::ScalarRef<'_>) {
+        T::push_item(&mut self.builder, item);
+        self.validity.push(true);
     }
 
     pub fn push_null(&mut self) {

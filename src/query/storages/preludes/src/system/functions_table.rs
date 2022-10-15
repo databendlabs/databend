@@ -168,6 +168,7 @@ impl FunctionsTable {
 
                 ..Default::default()
             },
+            ..Default::default()
         };
 
         AsyncOneBlockSystemTable::create(FunctionsTable { table_info })

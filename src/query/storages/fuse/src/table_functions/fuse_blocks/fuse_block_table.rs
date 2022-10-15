@@ -72,6 +72,7 @@ impl FuseBlockTable {
                 engine,
                 ..Default::default()
             },
+            ..Default::default()
         };
 
         Ok(Arc::new(FuseBlockTable {

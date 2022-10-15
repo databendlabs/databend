@@ -106,6 +106,7 @@ impl SettingsTable {
 
                 ..Default::default()
             },
+            ..Default::default()
         };
 
         SyncOneBlockSystemTable::create(SettingsTable { table_info })

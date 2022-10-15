@@ -1372,6 +1372,7 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
+ "common-io",
  "common-jsonb",
  "educe",
  "enum-as-inner",
@@ -1456,6 +1457,7 @@ dependencies = [
  "bstr 1.0.1",
  "bumpalo",
  "bytes",
+ "chrono",
  "chrono-tz",
  "comfy-table",
  "common-arrow",
@@ -1750,6 +1752,7 @@ dependencies = [
 name = "common-meta-sled-store"
 version = "0.1.0"
 dependencies = [
+ "anyerror",
  "anyhow",
  "byteorder",
  "common-base",
@@ -1763,6 +1766,7 @@ dependencies = [
  "serde_json",
  "sled",
  "tempfile",
+ "thiserror",
  "tracing",
 ]
 
@@ -2082,6 +2086,7 @@ dependencies = [
  "common-fuse-meta",
  "common-legacy-expression",
  "common-pipeline-transforms",
+ "criterion",
  "rand 0.8.5",
  "serde",
  "thiserror",
@@ -5204,9 +5209,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.19.2"
+version = "0.19.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f31c349dbb25e3267d8ed9b8a7147c9825a9e31a97d5a6dd24d16e007a34810"
+checksum = "c475264c97020195acd5a658dc25b7d0008f868e7c59fd57cfa95c2425501cb3"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -8071,7 +8076,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.8.5",
+ "rand 0.7.3",
  "static_assertions",
 ]
 
