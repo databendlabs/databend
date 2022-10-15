@@ -2,7 +2,7 @@
 title: TO_START_OF_ISO_YEAR
 ---
 
-Returns the first day of the ISO year for a date or a date with time.
+Returns the first day of the ISO year for a date or a date with time (timestamp/datetime).
 
 ## Syntax
 
@@ -14,7 +14,7 @@ to_start_of_iso_year( <expr> )
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| `<expr>` | date16/date32/datetime |
+| `<expr>` | date/timestamp |
 
 ## Return Type
 
@@ -24,16 +24,16 @@ Datetime object, returns date in “YYYY-MM-DD” format.
 
 ```sql
 SELECT to_start_of_iso_year(to_date(18869));
-+---------------------------------+
++--------------------------------------+
 | to_start_of_iso_year(to_date(18869)) |
-+---------------------------------+
-| 2021-01-04                      |
-+---------------------------------+
++--------------------------------------+
+| 2021-01-04                           |
++--------------------------------------+
 
-SELECT to_start_of_iso_year(to_datetime(1630812366));
-+------------------------------------------+
-| to_start_of_iso_year(to_datetime(1630812366)) |
-+------------------------------------------+
-| 2021-01-04                               |
-+------------------------------------------+
+SELECT to_start_of_iso_year(to_timestamp(1630812366));
++------------------------------------------------+
+| to_start_of_iso_year(to_timestamp(1630812366)) |
++------------------------------------------------+
+| 2021-01-04                                     |
++------------------------------------------------+
 ```
