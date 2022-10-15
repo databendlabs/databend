@@ -145,7 +145,7 @@ impl BlockPruner {
 
         // 4.2 spawns the segment pruning tasks, with concurrency control
         let join_handlers = pruning_runtime
-            .try_spawn_batch_with_permit(semaphore.clone(), tasks)
+            .try_spawn_batch_with_owned_semaphore(semaphore.clone(), tasks)
             .await?;
 
         // 4.3 flatten the results
@@ -256,7 +256,7 @@ impl BlockPruner {
         });
 
         let join_handlers = pruning_runtime
-            .try_spawn_batch_with_permit(semaphore.clone(), tasks)
+            .try_spawn_batch_with_owned_semaphore(semaphore.clone(), tasks)
             .await?;
 
         let joint = future::try_join_all(join_handlers)
