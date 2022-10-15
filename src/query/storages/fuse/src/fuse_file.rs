@@ -56,16 +56,14 @@ impl FuseFile {
         });
 
         // 1.2 build the runtime.
-        let semaphore = Arc::new(Semaphore::new(max_io_requests));
+        let semaphore = Semaphore::new(max_io_requests);
         let file_runtime = Arc::new(Runtime::with_worker_threads(
             max_runtime_threads,
             Some("fuse-req-remove-files-worker".to_owned()),
         )?);
 
         // 1.3 spawn all the tasks to the runtime.
-        let join_handlers = file_runtime
-            .try_spawn_batch(semaphore.clone(), tasks)
-            .await?;
+        let join_handlers = file_runtime.try_spawn_batch(semaphore, tasks).await?;
 
         // 1.4 get all the result.
         future::try_join_all(join_handlers).await.map_err(|e| {
