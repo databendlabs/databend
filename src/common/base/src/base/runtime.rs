@@ -194,17 +194,23 @@ impl Runtime {
 
     pub async fn try_spawn_batch<Fut>(
         &self,
-        semaphore: Arc<Semaphore>,
+        semaphore: Semaphore,
         futures: impl IntoIterator<Item = Fut>,
     ) -> Result<Vec<JoinHandle<Fut::Output>>>
     where
         Fut: Future + Send + 'static,
         Fut::Output: Send + 'static,
     {
+        let semaphore = Arc::new(semaphore);
         let iter = futures.into_iter().map(|v| |_| v);
         self.try_spawn_batch_with_permit(semaphore, iter).await
     }
 
+    // Please take care using the `semaphore`.
+    // If sub task may be spawned in the `futures`, and uses the
+    // clone of semaphore to acquire permits, please release the permits on time,
+    // or give sufficient(but not abundant, of course) permits, to tolerant the
+    // maximum degree of parallelism, otherwise, it may lead to deadlock.
     pub async fn try_spawn_batch_with_permit<F, Fut>(
         &self,
         semaphore: Arc<Semaphore>,
