@@ -2,7 +2,7 @@
 title: TO_DAY_OF_MONTH
 ---
 
-Converts a date or date with time to a UInt8 number containing the number of the day of the month (1-31).
+Converts a date or date with time (timestamp/datetime) to a UInt8 number containing the number of the day of the month (1-31).
 
 ## Syntax
 
@@ -14,7 +14,7 @@ to_day_of_month( <expr> )
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| `<expr>` | date/datetime |
+| `<expr>` | date/timestamp |
 
 ## Return Type
 `UInt8` datatype.
@@ -23,16 +23,16 @@ to_day_of_month( <expr> )
 
 ```sql
 SELECT to_day_of_month(to_date(18869));
-+-----------------------------+
++---------------------------------+
 | to_day_of_month(to_date(18869)) |
-+-----------------------------+
-|                          30 |
-+-----------------------------+
++---------------------------------+
+|                              30 |
++---------------------------------+
 
-SELECT to_day_of_month(to_datetime(1630812366));
-+--------------------------------------+
-| to_day_of_month(to_datetime(1630812366)) |
-+--------------------------------------+
-|                                    5 |
-+--------------------------------------+
+SELECT to_day_of_month(to_timestamp(1630812366));
++-------------------------------------------+
+| to_day_of_month(to_timestamp(1630812366)) |
++-------------------------------------------+
+|                                         5 |
++-------------------------------------------+
 ```
