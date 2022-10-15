@@ -68,7 +68,9 @@ impl<'a> Display for Value<'a> {
             }
             Value::Number(ref v) => write!(f, "{}", v),
             Value::String(ref v) => {
-                write!(f, "{:?}", v)
+                write!(f, "\"")?;
+                write!(f, "{v}")?;
+                write!(f, "\"")
             }
             Value::Array(ref vs) => {
                 let mut first = true;
@@ -90,7 +92,9 @@ impl<'a> Display for Value<'a> {
                         write!(f, ",")?;
                     }
                     first = false;
-                    write!(f, "{:?}", k)?;
+                    write!(f, "\"")?;
+                    write!(f, "{k}")?;
+                    write!(f, "\"")?;
                     write!(f, ":")?;
                     write!(f, "{v}")?;
                 }
@@ -143,6 +147,13 @@ impl<'a> Value<'a> {
 
     pub fn is_number(&self) -> bool {
         matches!(self, Value::Number(_))
+    }
+
+    pub fn as_number(&self) -> Option<&Number> {
+        match self {
+            Value::Number(n) => Some(n),
+            _ => None,
+        }
     }
 
     pub fn is_i64(&self) -> bool {
@@ -206,7 +217,7 @@ impl<'a> Value<'a> {
         encoder.encode(self);
     }
 
-    pub fn get_by_path(&self, paths: &[JsonPath<'a>]) -> Option<Value<'a>> {
+    pub fn get_by_path(&self, paths: &[JsonPath<'a>]) -> Option<&Value<'a>> {
         if paths.is_empty() {
             return None;
         }
@@ -216,7 +227,7 @@ impl<'a> Value<'a> {
                 if let Some(obj) = self.as_object() {
                     if let Some(val) = obj.get(name.as_ref()) {
                         let val = if paths.len() == 1 {
-                            Some(val.clone())
+                            Some(val)
                         } else {
                             val.get_by_path(paths.get(1..).unwrap())
                         };
@@ -228,7 +239,7 @@ impl<'a> Value<'a> {
                 if let Some(arr) = self.as_array() {
                     if let Some(val) = arr.get(*index as usize) {
                         let val = if paths.len() == 1 {
-                            Some(val.clone())
+                            Some(val)
                         } else {
                             val.get_by_path(paths.get(1..).unwrap())
                         };
@@ -238,6 +249,43 @@ impl<'a> Value<'a> {
             }
         }
         None
+    }
+
+    pub fn get_by_name_ignore_case(&self, name: &str) -> Option<&Value<'a>> {
+        match self {
+            Value::Object(obj) => match obj.get(name) {
+                Some(val) => Some(val),
+                None => {
+                    for key in obj.keys() {
+                        if name.eq_ignore_ascii_case(key) {
+                            return obj.get(key);
+                        }
+                    }
+                    None
+                }
+            },
+            _ => None,
+        }
+    }
+
+    pub fn array_length(&self) -> Option<usize> {
+        match self {
+            Value::Array(arr) => Some(arr.len()),
+            _ => None,
+        }
+    }
+
+    pub fn object_keys(&self) -> Option<Value<'a>> {
+        match self {
+            Value::Object(obj) => {
+                let mut keys = Vec::with_capacity(obj.len());
+                for k in obj.keys() {
+                    keys.push(k.clone().into());
+                }
+                Some(Value::Array(keys))
+            }
+            _ => None,
+        }
     }
 }
 
