@@ -25,7 +25,6 @@ use crate::types::ArrayType;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
-use crate::types::IntervalType;
 use crate::types::NumberType;
 use crate::types::StringType;
 use crate::types::TimestampType;
@@ -132,12 +131,6 @@ impl Column {
                 scatter_size,
             ),
             Column::Date(column) => Self::scatter_scalars::<DateType, _>(
-                column,
-                Vec::with_capacity(length),
-                indices,
-                scatter_size,
-            ),
-            Column::Interval(column) => Self::scatter_scalars::<IntervalType, _>(
                 column,
                 Vec::with_capacity(length),
                 indices,

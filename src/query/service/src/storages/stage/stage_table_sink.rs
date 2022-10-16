@@ -13,10 +13,13 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::io::ErrorKind;
 use std::str::FromStr;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use backon::ExponentialBackoff;
+use backon::Retryable;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -29,6 +32,7 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use opendal::Operator;
+use tracing::debug;
 
 use crate::sessions::TableContext;
 
@@ -269,7 +273,17 @@ impl Processor for StageTableSink {
                     .inc_write_bytes(bytes.len());
 
                 let object = self.data_accessor.object(&path);
-                object.write(bytes.as_slice()).await?;
+                { || object.write(bytes.as_slice()) }
+                    .retry(ExponentialBackoff::default())
+                    .when(|err| err.kind() == ErrorKind::Interrupted)
+                    .notify(|err, dur| {
+                        debug!(
+                            "stage table sink write retry after {}s for error {:?}",
+                            dur.as_secs(),
+                            err
+                        )
+                    })
+                    .await?;
 
                 match remainng_block {
                     Some(block) => self.state = State::NeedSerialize(block),

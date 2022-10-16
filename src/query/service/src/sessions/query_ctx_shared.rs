@@ -18,6 +18,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Weak;
+use std::time::SystemTime;
 
 use common_base::base::Progress;
 use common_base::base::Runtime;
@@ -81,6 +82,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) storage_operator: StorageOperator,
     pub(in crate::sessions) executor: Arc<RwLock<Weak<PipelineExecutor>>>,
     pub(in crate::sessions) precommit_blocks: Arc<RwLock<Vec<DataBlock>>>,
+    pub(in crate::sessions) created_time: SystemTime,
 }
 
 impl QueryContextShared {
@@ -111,6 +113,7 @@ impl QueryContextShared {
             affect: Arc::new(Mutex::new(None)),
             executor: Arc::new(RwLock::new(Weak::new())),
             precommit_blocks: Arc::new(RwLock::new(vec![])),
+            created_time: SystemTime::now(),
         }))
     }
 
@@ -312,5 +315,9 @@ impl QueryContextShared {
         let mut swaped_precommit_blocks = vec![];
         std::mem::swap(&mut *blocks, &mut swaped_precommit_blocks);
         swaped_precommit_blocks
+    }
+
+    pub fn get_created_time(&self) -> SystemTime {
+        self.created_time
     }
 }

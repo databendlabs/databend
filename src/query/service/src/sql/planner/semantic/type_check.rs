@@ -19,7 +19,7 @@ use std::vec;
 use common_ast::ast::BinaryOperator;
 use common_ast::ast::Expr;
 use common_ast::ast::Identifier;
-use common_ast::ast::IntervalKind;
+use common_ast::ast::IntervalKind as ASTIntervalKind;
 use common_ast::ast::Literal;
 use common_ast::ast::MapAccessor;
 use common_ast::ast::Query;
@@ -1089,24 +1089,24 @@ impl<'a> TypeChecker<'a> {
     pub async fn resolve_extract_expr(
         &mut self,
         span: &[Token<'_>],
-        interval_kind: &IntervalKind,
+        interval_kind: &ASTIntervalKind,
         arg: &Expr<'_>,
         _required_type: Option<DataTypeImpl>,
     ) -> Result<Box<(Scalar, DataTypeImpl)>> {
         match interval_kind {
-            IntervalKind::Year => {
+            ASTIntervalKind::Year => {
                 self.resolve_function(span, "to_year", &[arg], Some(TimestampType::new_impl()))
                     .await
             }
-            IntervalKind::Quarter => {
+            ASTIntervalKind::Quarter => {
                 self.resolve_function(span, "to_quarter", &[arg], Some(TimestampType::new_impl()))
                     .await
             }
-            IntervalKind::Month => {
+            ASTIntervalKind::Month => {
                 self.resolve_function(span, "to_month", &[arg], Some(TimestampType::new_impl()))
                     .await
             }
-            IntervalKind::Day => {
+            ASTIntervalKind::Day => {
                 self.resolve_function(
                     span,
                     "to_day_of_month",
@@ -1115,19 +1115,19 @@ impl<'a> TypeChecker<'a> {
                 )
                 .await
             }
-            IntervalKind::Hour => {
+            ASTIntervalKind::Hour => {
                 self.resolve_function(span, "to_hour", &[arg], Some(TimestampType::new_impl()))
                     .await
             }
-            IntervalKind::Minute => {
+            ASTIntervalKind::Minute => {
                 self.resolve_function(span, "to_minute", &[arg], Some(TimestampType::new_impl()))
                     .await
             }
-            IntervalKind::Second => {
+            ASTIntervalKind::Second => {
                 self.resolve_function(span, "to_second", &[arg], Some(TimestampType::new_impl()))
                     .await
             }
-            IntervalKind::Doy => {
+            ASTIntervalKind::Doy => {
                 self.resolve_function(
                     span,
                     "to_day_of_year",
@@ -1136,7 +1136,7 @@ impl<'a> TypeChecker<'a> {
                 )
                 .await
             }
-            IntervalKind::Dow => {
+            ASTIntervalKind::Dow => {
                 self.resolve_function(
                     span,
                     "to_day_of_week",
@@ -1153,11 +1153,11 @@ impl<'a> TypeChecker<'a> {
         &mut self,
         span: &[Token<'_>],
         arg: &Expr<'_>,
-        interval_kind: &IntervalKind,
+        interval_kind: &ASTIntervalKind,
         _required_type: Option<DataTypeImpl>,
     ) -> Result<Box<(Scalar, DataTypeImpl)>> {
         match interval_kind {
-            IntervalKind::Year => {
+            ASTIntervalKind::Year => {
                 self.resolve_function(
                     span,
                     "to_interval_year",
@@ -1168,7 +1168,7 @@ impl<'a> TypeChecker<'a> {
                 )
                 .await
             }
-            IntervalKind::Quarter => {
+            ASTIntervalKind::Quarter => {
                 self.resolve_function(
                     span,
                     "to_interval_quarter",
@@ -1179,7 +1179,7 @@ impl<'a> TypeChecker<'a> {
                 )
                 .await
             }
-            IntervalKind::Month => {
+            ASTIntervalKind::Month => {
                 self.resolve_function(
                     span,
                     "to_interval_month",
@@ -1190,7 +1190,7 @@ impl<'a> TypeChecker<'a> {
                 )
                 .await
             }
-            IntervalKind::Day => {
+            ASTIntervalKind::Day => {
                 self.resolve_function(
                     span,
                     "to_interval_day",
@@ -1199,7 +1199,7 @@ impl<'a> TypeChecker<'a> {
                 )
                 .await
             }
-            IntervalKind::Hour => {
+            ASTIntervalKind::Hour => {
                 self.resolve_function(
                     span,
                     "to_interval_hour",
@@ -1210,7 +1210,7 @@ impl<'a> TypeChecker<'a> {
                 )
                 .await
             }
-            IntervalKind::Minute => {
+            ASTIntervalKind::Minute => {
                 self.resolve_function(
                     span,
                     "to_interval_minute",
@@ -1221,7 +1221,7 @@ impl<'a> TypeChecker<'a> {
                 )
                 .await
             }
-            IntervalKind::Second => {
+            ASTIntervalKind::Second => {
                 self.resolve_function(
                     span,
                     "to_interval_second",
@@ -1232,7 +1232,7 @@ impl<'a> TypeChecker<'a> {
                 )
                 .await
             }
-            IntervalKind::Doy => {
+            ASTIntervalKind::Doy => {
                 self.resolve_function(
                     span,
                     "to_interval_doy",
@@ -1241,7 +1241,7 @@ impl<'a> TypeChecker<'a> {
                 )
                 .await
             }
-            IntervalKind::Dow => {
+            ASTIntervalKind::Dow => {
                 self.resolve_function(
                     span,
                     "to_interval_dow",
@@ -1257,7 +1257,7 @@ impl<'a> TypeChecker<'a> {
     pub async fn resolve_date_add(
         &mut self,
         span: &[Token<'_>],
-        interval_kind: &IntervalKind,
+        interval_kind: &ASTIntervalKind,
         interval: &Expr<'_>,
         date: &Expr<'_>,
         _required_type: Option<DataTypeImpl>,
@@ -1297,11 +1297,11 @@ impl<'a> TypeChecker<'a> {
         &mut self,
         span: &[Token<'_>],
         date: &Expr<'_>,
-        kind: &IntervalKind,
+        kind: &ASTIntervalKind,
         _required_type: Option<DataTypeImpl>,
     ) -> Result<Box<(Scalar, DataTypeImpl)>> {
         match kind {
-            IntervalKind::Year => {
+            ASTIntervalKind::Year => {
                 self.resolve_function(
                     span,
                     "to_start_of_year",
@@ -1310,7 +1310,7 @@ impl<'a> TypeChecker<'a> {
                 )
                     .await
             }
-            IntervalKind::Quarter => {
+            ASTIntervalKind::Quarter => {
                 self.resolve_function(
                     span,
                     "to_start_of_quarter",
@@ -1319,7 +1319,7 @@ impl<'a> TypeChecker<'a> {
                 )
                     .await
             }
-            IntervalKind::Month => {
+            ASTIntervalKind::Month => {
                 self.resolve_function(
                     span,
                     "to_start_of_month",
@@ -1328,7 +1328,7 @@ impl<'a> TypeChecker<'a> {
                 )
                     .await
             }
-            IntervalKind::Day => {
+            ASTIntervalKind::Day => {
                 self.resolve_function(
                     span,
                     "to_start_of_day",
@@ -1337,7 +1337,7 @@ impl<'a> TypeChecker<'a> {
                 )
                     .await
             }
-            IntervalKind::Hour => {
+            ASTIntervalKind::Hour => {
                 self.resolve_function(
                     span,
                     "to_start_of_hour",
@@ -1346,7 +1346,7 @@ impl<'a> TypeChecker<'a> {
                 )
                     .await
             }
-            IntervalKind::Minute => {
+            ASTIntervalKind::Minute => {
                 self.resolve_function(
                     span,
                     "to_start_of_minute",
@@ -1355,7 +1355,7 @@ impl<'a> TypeChecker<'a> {
                 )
                     .await
             }
-            IntervalKind::Second => {
+            ASTIntervalKind::Second => {
                 self.resolve_function(
                     span,
                     "to_start_of_second",

@@ -15,6 +15,7 @@
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::time::SystemTime;
 
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
@@ -50,6 +51,7 @@ pub struct ProcessInfo {
     pub dal_metrics: Option<DalMetrics>,
     pub scan_progress_value: Option<ProgressValues>,
     pub mysql_connection_id: Option<u32>,
+    pub created_time: SystemTime,
 }
 
 #[async_trait::async_trait]

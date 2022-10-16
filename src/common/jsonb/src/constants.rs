@@ -13,6 +13,10 @@
 // limitations under the License.
 
 // JSONB header constants
+pub(crate) const ARRAY_PREFIX: u8 = 0x80;
+pub(crate) const OBJECT_PREFIX: u8 = 0x40;
+pub(crate) const SCALAR_PREFIX: u8 = 0x20;
+
 pub(crate) const ARRAY_CONTAINER_TAG: u32 = 0x80000000;
 pub(crate) const OBJECT_CONTAINER_TAG: u32 = 0x40000000;
 pub(crate) const SCALAR_CONTAINER_TAG: u32 = 0x20000000;

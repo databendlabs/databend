@@ -12,8 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::ErrorKind;
 use std::sync::Arc;
 
+use backon::ExponentialBackoff;
+use backon::Retryable;
 use common_datablocks::serialize_data_blocks;
 use common_datablocks::DataBlock;
 use common_exception::Result;
@@ -23,6 +26,7 @@ use common_legacy_planners::PartInfoPtr;
 use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
 use opendal::Operator;
+use tracing::debug;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -101,14 +105,19 @@ impl ResultTableWriter {
         let block_statistics = BlockStatistics::from(&block, location.clone(), None)?;
         let schema = block.schema().clone();
         let (size, meta_data) = serialize_data_blocks(vec![block], &schema, &mut data)?;
-        self.data_accessor
-            .object(&location)
-            .write(data)
-            .await
-            .map_err(|e| {
-                println!("error {}", e);
-                e
-            })?;
+
+        let object = self.data_accessor.object(&location);
+        { || object.write(data.as_slice()) }
+            .retry(ExponentialBackoff::default())
+            .when(|err| err.kind() == ErrorKind::Interrupted)
+            .notify(|err, dur| {
+                debug!(
+                    "append block write retry after {}s for error {:?}",
+                    dur.as_secs(),
+                    err
+                )
+            })
+            .await?;
         self.accumulator
             .add_block(size, meta_data, block_statistics, None, 0)?;
         Ok(self.get_last_part_info())

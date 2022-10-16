@@ -2,7 +2,7 @@
 title: TO_START_OF_SECOND
 ---
 
-Rounds down a date with time to the start of the second.
+Rounds down a date with time (timestamp/datetime) to the start of the second.
 
 ## Syntax
 
@@ -14,19 +14,19 @@ to_start_of_second(expr)
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| expr | datetime |
+| expr | timestamp |
 
 ## Return Type
 
-Datetime object, returns date in “YYYY-MM-DD hh:mm:ss” format.
+Datetime object, returns date in “YYYY-MM-DD hh:mm:ss.ffffff” format.
 
 ## Examples
 
 ```sql
-SELECT to_start_of_second(now());;
-+------------------------+
-| to_start_of_second(now()) |
-+------------------------+
-| 2022-04-13 13:53:47    |
-+------------------------+
+SELECT to_start_of_second(now());
++----------------------------+
+| to_start_of_second(now())  |
++----------------------------+
+| 2022-10-15 03:20:55.000000 |
++----------------------------+
 ```
