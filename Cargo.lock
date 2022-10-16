@@ -2009,6 +2009,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait-fn",
  "backoff",
+ "backon",
  "chrono",
  "common-arrow",
  "common-base",
@@ -2707,6 +2708,7 @@ dependencies = [
  "async-recursion",
  "async-stream",
  "async-trait-fn",
+ "backon",
  "base64",
  "bumpalo",
  "byteorder",
