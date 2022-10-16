@@ -148,8 +148,8 @@ impl JoinHashTable {
                             index = new_index;
                             remain -= addition;
 
-                            build_indexes.clear();
                             probe_indexes.clear();
+                            local_build_indexes.clear();
                             validity = MutableBitmap::new();
                         }
                     }
