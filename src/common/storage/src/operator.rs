@@ -19,6 +19,7 @@ use std::ops::Deref;
 use backon::ExponentialBackoff;
 use common_base::base::GlobalIORuntime;
 use common_base::base::Singleton;
+use common_base::base::TrySpawn;
 use common_contexts::DalRuntime;
 use common_exception::ErrorCode;
 use once_cell::sync::OnceCell;
@@ -290,7 +291,15 @@ impl StorageOperator {
 
         // OpenDAL will send a real request to underlying storage to check whether it works or not.
         // If this check failed, it's highly possible that the users have configured it wrongly.
-        if let Err(cause) = operator.check().await {
+        //
+        // Make sure the check is called inside GlobalIORuntime to prevent
+        // IO hang on reuse connection.
+        let op = operator.clone();
+        if let Err(cause) = GlobalIORuntime::instance()
+            .spawn(async move { op.check().await })
+            .await
+            .expect("join must succeed")
+        {
             return Err(ErrorCode::StorageUnavailable(format!(
                 "current configured storage is not available: config: {:?}, cause: {cause}",
                 sp

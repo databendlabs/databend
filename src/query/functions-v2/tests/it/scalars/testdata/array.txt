@@ -48,7 +48,7 @@ raw expr       : length(array())
 checked expr   : length<Array(Nothing)>(array<>())
 optimized expr : 0_u8
 output type    : UInt8
-output domain  : Unknown
+output domain  : {0..=0}
 output         : 0
 
 

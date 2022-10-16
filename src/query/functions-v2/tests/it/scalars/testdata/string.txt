@@ -156,7 +156,7 @@ evaluation (internal):
 
 ast            : octet_length('latin')
 raw expr       : octet_length("latin")
-checked expr   : octet_length<String>("latin")
+checked expr   : length<String>("latin")
 optimized expr : 5_u64
 output type    : UInt64
 output domain  : Unknown
@@ -165,7 +165,7 @@ output         : 5
 
 ast            : octet_length(NULL)
 raw expr       : octet_length(NULL)
-checked expr   : octet_length<NULL>(NULL)
+checked expr   : length<NULL>(NULL)
 optimized expr : NULL
 output type    : NULL
 output domain  : {NULL}

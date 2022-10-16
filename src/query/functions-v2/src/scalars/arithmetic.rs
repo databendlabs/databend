@@ -194,9 +194,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                                             if std::intrinsics::unlikely(b == 0.0) {
                                                 return Err("Division by zero".to_string());
                                             }
-                                            output.push(Some(((a.as_() : F64) / b).as_() : T));
+                                            output.push(((a.as_() : F64) / b).as_() : T);
                                         },
-                                        _ => output.push(None),
+                                        _ => output.push_null(),
                                     }
                                     Ok(())
                                 }),
@@ -252,9 +252,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                                                 if std::intrinsics::unlikely(b == 0.0) {
                                                         return Err("Modulo by zero".to_string());
                                                 }
-                                                output.push(Some(((a.as_() : M) % (b.as_() : M)).as_(): T));
+                                                output.push(((a.as_() : M) % (b.as_() : M)).as_(): T);
                                             },
-                                            _ => output.push(None),
+                                            _ => output.push_null(),
                                         }
                                         Ok(())
                                 }),

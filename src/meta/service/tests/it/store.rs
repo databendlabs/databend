@@ -147,8 +147,8 @@ async fn test_meta_store_build_snapshot() -> anyhow::Result<()> {
 
     let (logs, want) = snapshot_logs();
 
+    sto.log.append(&logs).await?;
     for l in logs.iter() {
-        sto.log.insert(l).await?;
         sto.state_machine.write().await.apply(l).await?;
     }
 
@@ -187,8 +187,8 @@ async fn test_meta_store_current_snapshot() -> anyhow::Result<()> {
 
     let (logs, want) = snapshot_logs();
 
+    sto.log.append(&logs).await?;
     for l in logs.iter() {
-        sto.log.insert(l).await?;
         sto.state_machine.write().await.apply(l).await?;
     }
 
@@ -234,8 +234,8 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
 
         info!("--- feed logs and state machine");
 
+        sto.log.append(&logs).await?;
         for l in logs.iter() {
-            sto.log.insert(l).await?;
             sto.state_machine.write().await.apply(l).await?;
         }
         snap = sto.build_snapshot().await?;

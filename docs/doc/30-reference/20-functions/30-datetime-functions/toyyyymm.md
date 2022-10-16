@@ -2,7 +2,7 @@
 title: TO_YYYYMM
 ---
 
-Converts a date or date with time to a UInt32 number containing the year and month number.
+Converts a date or date with time (timestamp/datetime) to a UInt32 number containing the year and month number.
 
 ## Syntax
 
@@ -14,7 +14,7 @@ to_yyyymm( <expr> )
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| `<expr>` | date/datetime |
+| `<expr>` | date/timestamp |
 
 ## Return Type
 
@@ -23,17 +23,10 @@ UInt32, returns in `YYYYMM` format.
 ## Examples
 
 ```sql
-SELECT to_date(18875);
-+---------------+
-| to_date(18875) |
-+---------------+
-| 2021-09-05    |
-+---------------+
-
-SELECT to_yyyymm(to_date(18875));
-+-------------------------+
-| to_yyyymm(to_date(18875)) |
-+-------------------------+
-|                  202109 |
-+-------------------------+
+SELECT to_date(18875), to_yyyymm(to_date(18875));
++----------------+---------------------------+
+| to_date(18875) | to_yyyymm(to_date(18875)) |
++----------------+---------------------------+
+| 2021-09-05     |                    202109 |
++----------------+---------------------------+
 ```

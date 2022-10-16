@@ -1180,10 +1180,10 @@ impl ColumnBuilder {
                 builder.push(value);
             }
             (ColumnBuilder::Nullable(builder), ScalarRef::Null) => {
-                builder.push(None);
+                builder.push_null();
             }
             (ColumnBuilder::Nullable(builder), scalar) => {
-                builder.push(Some(scalar));
+                builder.push(scalar);
             }
             (ColumnBuilder::Tuple { fields, len }, ScalarRef::Tuple(value)) => {
                 assert_eq!(fields.len(), value.len());

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::SystemTime;
 
 use common_base::base::ProgressValues;
 pub use common_catalog::table_context::ProcessInfo;
@@ -49,9 +50,10 @@ impl Session {
             client_address: status.get_client_host(),
             session_extra_info: self.process_extra_info(status),
             memory_usage,
-            dal_metrics: Session::query_dal_metrics(status),
-            scan_progress_value: Session::query_scan_progress_value(status),
+            dal_metrics: Self::query_dal_metrics(status),
+            scan_progress_value: Self::query_scan_progress_value(status),
             mysql_connection_id: self.mysql_connection_id,
+            created_time: Self::query_created_time(status),
         }
     }
 
@@ -95,5 +97,12 @@ impl Session {
             .get_query_context_shared()
             .as_ref()
             .map(|context_shared| context_shared.scan_progress.get_values())
+    }
+
+    fn query_created_time(status: &SessionContext) -> SystemTime {
+        match status.get_query_context_shared() {
+            None => SystemTime::now(),
+            Some(v) => v.created_time,
+        }
     }
 }

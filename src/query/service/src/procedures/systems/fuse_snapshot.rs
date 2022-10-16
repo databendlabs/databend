@@ -60,7 +60,7 @@ impl OneBlockProcedure for FuseSnapshotProcedure {
 
         let tbl = FuseTable::try_from_table(tbl.as_ref())?;
 
-        Ok(FuseSnapshot::new(ctx, tbl).get_snapshots().await?)
+        Ok(FuseSnapshot::new(ctx, tbl).get_snapshots(None).await?)
     }
 
     fn schema(&self) -> Arc<DataSchema> {
