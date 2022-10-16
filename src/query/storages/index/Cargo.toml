@@ -30,4 +30,9 @@ thiserror = { workspace = true }
 tracing = "0.1.36"
 
 [dev-dependencies]
+criterion = "0.4"
 rand = "0.8.5"
+
+[[bench]]
+name = "build_from_block"
+harness = false

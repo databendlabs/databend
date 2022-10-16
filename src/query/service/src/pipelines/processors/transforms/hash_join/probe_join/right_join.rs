@@ -50,7 +50,8 @@ impl JoinHashTable {
         let mut probe_indexes = Vec::with_capacity(block_size);
         let mut local_build_indexes = Vec::with_capacity(block_size);
 
-        let mut validity = MutableBitmap::new();
+        let mut validity = MutableBitmap::with_capacity(block_size);
+
         let mut build_indexes = self.hash_join_desc.right_join_desc.build_indexes.write();
         for (i, key) in keys_iter.enumerate() {
             let probe_result_ptr = self.probe_key(hash_table, key, valids, i);
@@ -61,17 +62,6 @@ impl JoinHashTable {
                 if probe_indexes.len() + probed_rows.len() < probe_indexes.capacity() {
                     build_indexes.extend(probed_rows);
                     local_build_indexes.extend_from_slice(probed_rows);
-                    for row_ptr in probed_rows.iter() {
-                        {
-                            let mut row_state =
-                                self.hash_join_desc.right_join_desc.row_state.write();
-                            row_state
-                                .entry(*row_ptr)
-                                .and_modify(|e| *e += 1)
-                                .or_insert(1_usize);
-                        }
-                    }
-
                     probe_indexes.extend(std::iter::repeat(i as u32).take(probed_rows.len()));
                     validity.extend_constant(probed_rows.len(), true);
                 } else {
@@ -84,17 +74,6 @@ impl JoinHashTable {
                             local_build_indexes.extend_from_slice(&probed_rows[index..]);
                             probe_indexes.extend(std::iter::repeat(i as u32).take(remain));
                             validity.extend_constant(remain, true);
-
-                            for row_ptr in &probed_rows[index..] {
-                                {
-                                    let mut row_state =
-                                        self.hash_join_desc.right_join_desc.row_state.write();
-                                    row_state
-                                        .entry(*row_ptr)
-                                        .and_modify(|e| *e += 1)
-                                        .or_insert(1_usize);
-                                }
-                            }
 
                             index += remain;
                         } else {
@@ -111,17 +90,6 @@ impl JoinHashTable {
                             local_build_indexes.extend_from_slice(&probed_rows[index..new_index]);
                             probe_indexes.extend(std::iter::repeat(i as u32).take(addition));
                             validity.extend_constant(addition, true);
-
-                            for row_ptr in &probed_rows[index..new_index] {
-                                {
-                                    let mut row_state =
-                                        self.hash_join_desc.right_join_desc.row_state.write();
-                                    row_state
-                                        .entry(*row_ptr)
-                                        .and_modify(|e| *e += 1)
-                                        .or_insert(1_usize);
-                                }
-                            }
 
                             let build_block = self.row_space.gather(&local_build_indexes)?;
                             let mut probe_block =

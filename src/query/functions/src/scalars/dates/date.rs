@@ -130,6 +130,7 @@ impl DateFunction {
         factory.register("add_seconds", AddTimesFunction::desc(1));
 
         factory.register("subtract_years", AddYearsFunction::desc(-1));
+        factory.register("subtract_quarters", AddQuartersFunction::desc(-1));
         factory.register("subtract_months", AddMonthsFunction::desc(-1));
         factory.register("subtract_days", AddDaysFunction::desc(-1));
 
