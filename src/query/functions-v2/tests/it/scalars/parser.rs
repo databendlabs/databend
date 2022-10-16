@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_ast::ast::BinaryOperator;
+use common_ast::ast::IntervalKind;
 use common_ast::ast::Literal as ASTLiteral;
 use common_ast::ast::TypeName;
 use common_ast::ast::UnaryOperator;
@@ -21,7 +22,6 @@ use common_ast::parser::token::Token;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_ast::Dialect;
-use common_datavalues::IntervalKind;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::Literal;

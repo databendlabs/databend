@@ -14,7 +14,6 @@
 
 use std::fmt::Display;
 
-use common_datavalues::IntervalKind;
 use common_exception::Result;
 use common_meta_types::PrincipalIdentity;
 use common_meta_types::UserIdentity;

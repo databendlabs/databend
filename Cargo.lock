@@ -1182,7 +1182,6 @@ version = "0.1.0"
 dependencies = [
  "codespan-reporting",
  "common-base",
- "common-datavalues",
  "common-exception",
  "common-functions",
  "common-meta-app",
@@ -1462,7 +1461,6 @@ dependencies = [
  "comfy-table",
  "common-arrow",
  "common-ast",
- "common-datavalues",
  "common-exception",
  "common-expression",
  "common-hashtable",
