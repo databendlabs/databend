@@ -140,7 +140,8 @@ impl JoinHashTable {
             probe_block = DataBlock::create(self.probe_schema.clone(), nullable_columns);
         }
 
-        if !probe_block.is_empty() {
+        // We need to return at least one data block
+        if !probe_block.is_empty() || !build_block.is_empty() || probed_blocks.is_empty() {
             probed_blocks.push(self.merge_eq_block(&build_block, &probe_block)?);
         }
 
