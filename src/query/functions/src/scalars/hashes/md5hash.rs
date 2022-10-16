@@ -16,6 +16,8 @@ use common_datavalues::Column;
 use common_datavalues::StringColumn;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use md5::Digest;
+use md5::Md5 as Md5Hasher;
 
 use crate::scalars::strings::String2StringFunction;
 use crate::scalars::strings::StringOperator;
@@ -28,7 +30,7 @@ impl StringOperator for Md5 {
     fn try_apply<'a>(&'a mut self, s: &'a [u8], buffer: &mut [u8]) -> Result<usize> {
         let buffer = &mut buffer[0..32];
         // TODO md5 lib doesn't allow encode into buffer...
-        hex::encode_to_slice(md5::compute(s).as_ref(), buffer)
+        hex::encode_to_slice(Md5Hasher::digest(s).as_slice(), buffer)
             .map_err(|e| ErrorCode::StrParseError(e.to_string()))?;
         Ok(32)
     }
