@@ -26,13 +26,13 @@ use opendal::Operator;
 
 use crate::io::BlockCompactor;
 use crate::io::SegmentWriter;
+use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::mutation::AbortOperation;
 use crate::operations::AppendOperationLogEntry;
 use crate::statistics::merge_statistics;
 use crate::statistics::reducers::reduce_block_metas;
 use crate::statistics::reducers::reduce_statistics;
-use crate::FuseSegmentIO;
 use crate::FuseTable;
 use crate::Table;
 use crate::TableContext;
@@ -101,8 +101,8 @@ impl TableMutator for CompactMutator {
         let mut summarys = Vec::new();
 
         // Read all segments information in parallel.
-        let fuse_segment_io = FuseSegmentIO::create(self.ctx.clone(), self.data_accessor.clone());
-        let segments = fuse_segment_io.read_segments(segment_locations).await?;
+        let segments_io = SegmentsIO::create(self.ctx.clone(), self.data_accessor.clone());
+        let segments = segments_io.read_segments(segment_locations).await?;
         for (idx, segment) in segments.iter().enumerate() {
             let mut need_merge = false;
             let mut remains = Vec::new();
