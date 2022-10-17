@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_catalog::table::Table;
 use common_catalog::table::TableExt;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRefExt;
@@ -149,24 +148,16 @@ impl FuseTable {
         // Refresh the table.
         let latest = self.refresh(ctx.as_ref()).await?;
         let table = FuseTable::try_from_table(latest.as_ref())?;
-        let new_snapshot = table
-            .generate_snapshot(
+
+        // TODO check if error is recoverable, and try to resolve the conflict
+        table
+            .commit_mutation(
                 ctx.clone(),
                 del_holder.base_snapshot().clone(),
                 segments,
                 summary,
             )
-            .await?;
-        Self::commit_to_meta_server(
-            ctx.as_ref(),
-            table.get_table_info(),
-            &table.meta_location_generator,
-            new_snapshot,
-            &table.operator,
-        )
-        .await?;
-        // TODO check if error is recoverable, and try to resolve the conflict
-        Ok(())
+            .await
     }
 
     fn cluster_stats_gen(&self, ctx: Arc<dyn TableContext>) -> Result<ClusterStatsGenerator> {

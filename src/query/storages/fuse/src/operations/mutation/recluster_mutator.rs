@@ -46,7 +46,6 @@ pub struct ReclusterMutator {
     level: i32,
     block_compactor: BlockCompactor,
     threshold: f64,
-    data_accessor: Operator,
 }
 
 impl ReclusterMutator {
@@ -59,12 +58,8 @@ impl ReclusterMutator {
         blocks_map: BTreeMap<i32, Vec<(usize, BlockMeta)>>,
         data_accessor: Operator,
     ) -> Result<Self> {
-        let base_mutator = BaseMutator::try_create(
-            ctx,
-            data_accessor.clone(),
-            location_generator,
-            base_snapshot,
-        )?;
+        let base_mutator =
+            BaseMutator::try_create(ctx, data_accessor, location_generator, base_snapshot)?;
         Ok(Self {
             base_mutator,
             blocks_map,
@@ -72,7 +67,6 @@ impl ReclusterMutator {
             level: 0,
             block_compactor,
             threshold,
-            data_accessor,
         })
     }
 
@@ -230,23 +224,14 @@ impl TableMutator for ReclusterMutator {
         segments.append(&mut merged_segments);
         summary = merge_statistics(&summary, &merged_summary)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
-        let new_snapshot = table
-            .generate_snapshot(
+        // todo(zhyass): add abort operation.
+        table
+            .commit_mutation(
                 ctx.clone(),
                 base_mutator.base_snapshot.clone(),
                 segments,
                 summary,
             )
-            .await?;
-
-        FuseTable::commit_to_meta_server(
-            ctx.as_ref(),
-            table.get_table_info(),
-            &self.base_mutator.location_generator,
-            new_snapshot,
-            &self.data_accessor,
-        )
-        .await?;
-        Ok(())
+            .await
     }
 }
