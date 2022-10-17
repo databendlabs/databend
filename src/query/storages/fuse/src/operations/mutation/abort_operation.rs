@@ -12,16 +12,25 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-pub mod base_mutator;
-pub mod block_filter;
-pub mod compact_mutator;
-pub mod deletion_mutator;
-pub mod recluster_mutator;
-pub mod utils;
+use opendal::Operator;
 
-pub use base_mutator::BaseMutator;
-pub use block_filter::delete_from_block;
-pub use compact_mutator::CompactMutator;
-pub use deletion_mutator::DeletionMutator;
-pub use recluster_mutator::ReclusterMutator;
-pub use utils::AbortOperation;
+#[derive(Default, Clone)]
+pub struct AbortOperation {
+    pub segments: Vec<String>,
+    pub blocks: Vec<String>,
+    pub bloom_filter_indexes: Vec<String>,
+}
+
+impl AbortOperation {
+    pub async fn abort(self, operator: Operator) {
+        for block in self.blocks {
+            let _ = operator.object(&block).delete().await;
+        }
+        for index in self.bloom_filter_indexes {
+            let _ = operator.object(&index).delete().await;
+        }
+        for segment in self.segments {
+            let _ = operator.object(&segment).delete().await;
+        }
+    }
+}

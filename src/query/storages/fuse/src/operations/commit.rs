@@ -384,6 +384,59 @@ impl FuseTable {
             })
     }
 
+    pub async fn commit_mutation(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        base_snapshot: Arc<TableSnapshot>,
+        mut segments: Vec<Location>,
+        mut summary: Statistics,
+    ) -> Result<()> {
+        let snapshot_opt = self.read_table_snapshot(ctx.clone()).await?;
+        let latest_snapshot = snapshot_opt.ok_or_else(|| {
+            ErrorCode::UnknownException("Data mutates during operation".to_string())
+        })?;
+        if latest_snapshot.snapshot_id != base_snapshot.snapshot_id {
+            if latest_snapshot.segments.len() < base_snapshot.segments.len() {
+                return Err(ErrorCode::UnknownException(
+                    "Data mutates during operation".to_string(),
+                ));
+            }
+
+            // Check if there is only insertion during the operation.
+            let mut new_segments = latest_snapshot.segments.clone();
+            let suffix = new_segments
+                .split_off(latest_snapshot.segments.len() - base_snapshot.segments.len());
+            if suffix.ne(&base_snapshot.segments) {
+                return Err(ErrorCode::UnknownException(
+                    "Data mutates during operation".to_string(),
+                ));
+            }
+
+            // Read all segments information in parallel.
+            let fuse_segment_io = FuseSegmentIO::create(ctx.clone(), self.operator.clone());
+            let results = fuse_segment_io.read_segments(&new_segments).await?;
+            for result in results.iter() {
+                let segment = result.clone()?;
+                summary = merge_statistics(&summary, &segment.summary)?;
+            }
+            new_segments.extend(segments.clone());
+            segments = new_segments;
+        }
+
+        let mut new_snapshot = TableSnapshot::from_previous(&latest_snapshot);
+        new_snapshot.segments = segments;
+        new_snapshot.summary = summary;
+
+        Self::commit_to_meta_server(
+            ctx.as_ref(),
+            &self.table_info,
+            &self.meta_location_generator,
+            new_snapshot,
+            &self.operator,
+        )
+        .await
+    }
+
     pub async fn generate_snapshot(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -445,6 +498,9 @@ mod utils {
                 // if deletion operation failed (after DAL retried)
                 // we just left them there, and let the "major GC" collect them
                 let _ = operator.object(block_location).delete().await;
+                if let Some(index) = &block.bloom_filter_index_location {
+                    let _ = operator.object(&index.0).delete().await;
+                }
             }
             let _ = operator.object(&entry.segment_location).delete().await;
         }

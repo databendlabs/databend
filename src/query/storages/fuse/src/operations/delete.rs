@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_catalog::table::Table;
+use common_catalog::table::TableExt;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
@@ -130,17 +131,13 @@ impl FuseTable {
             }
         }
 
-        // Refresh the table.
-        let table = ctx
-            .get_catalog(&plan.catalog_name)?
-            .get_table(
-                ctx.get_tenant().as_str(),
-                &plan.database_name,
-                &plan.table_name,
-            )
-            .await?;
-        let table = FuseTable::try_from_table(table.as_ref())?;
-        table.commit_deletion(ctx, deletion_collector).await
+        match self.commit_deletion(ctx, deletion_collector).await {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                debug!("failed to commit deletion: {}", e);
+                Err(e)
+            }
+        }
     }
 
     async fn commit_deletion(
@@ -149,7 +146,10 @@ impl FuseTable {
         del_holder: DeletionMutator,
     ) -> Result<()> {
         let (segments, summary) = del_holder.generate_segments().await?;
-        let new_snapshot = self
+        // Refresh the table.
+        let latest = self.refresh(ctx.as_ref()).await?;
+        let table = FuseTable::try_from_table(latest.as_ref())?;
+        let new_snapshot = table
             .generate_snapshot(
                 ctx.clone(),
                 del_holder.base_snapshot().clone(),
@@ -159,10 +159,10 @@ impl FuseTable {
             .await?;
         Self::commit_to_meta_server(
             ctx.as_ref(),
-            self.get_table_info(),
-            &self.meta_location_generator,
+            table.get_table_info(),
+            &table.meta_location_generator,
             new_snapshot,
-            &self.operator,
+            &table.operator,
         )
         .await?;
         // TODO check if error is recoverable, and try to resolve the conflict
