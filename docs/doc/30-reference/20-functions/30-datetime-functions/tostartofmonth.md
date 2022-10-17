@@ -2,7 +2,7 @@
 title: TO_START_OF_MONTH
 ---
 
-Rounds down a date or date with time to the first day of the month.
+Rounds down a date or date with time (timestamp/datetime) to the first day of the month.
 Returns the date.
 
 ## Syntax
@@ -15,7 +15,7 @@ to_start_of_month( <expr> )
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| `<expr>` | date/datetime |
+| `<expr>` | date/timestamp |
 
 ## Return Type
 Datetime object, returns date in “YYYY-MM-DD” format.
@@ -24,16 +24,16 @@ Datetime object, returns date in “YYYY-MM-DD” format.
 
 ```sql
 SELECT to_start_of_month(to_date(18869));
-+-------------------------------+
++-----------------------------------+
 | to_start_of_month(to_date(18869)) |
-+-------------------------------+
-| 2021-08-01                    |
-+-------------------------------+
++-----------------------------------+
+| 2021-08-01                        |
++-----------------------------------+
 
-SELECT to_start_of_month(to_datetime(1630812366));
-+----------------------------------------+
-| to_start_of_month(to_datetime(1630812366)) |
-+----------------------------------------+
-| 2021-09-01                             |
-+----------------------------------------+
+SELECT to_start_of_month(to_timestamp(1630812366));
++---------------------------------------------+
+| to_start_of_month(to_timestamp(1630812366)) |
++---------------------------------------------+
+| 2021-09-01                                  |
++---------------------------------------------+
 ```

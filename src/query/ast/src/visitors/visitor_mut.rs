@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::IntervalKind;
 use common_meta_types::PrincipalIdentity;
 use common_meta_types::UserIdentity;
 

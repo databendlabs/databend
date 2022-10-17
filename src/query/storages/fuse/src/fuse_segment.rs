@@ -75,16 +75,14 @@ impl FuseSegmentIO {
         });
 
         // 1.2 build the runtime.
-        let semaphore = Arc::new(Semaphore::new(max_io_requests));
+        let semaphore = Semaphore::new(max_io_requests);
         let segments_runtime = Arc::new(Runtime::with_worker_threads(
             max_runtime_threads,
             Some("fuse-req-segments-worker".to_owned()),
         )?);
 
         // 1.3 spawn all the tasks to the runtime.
-        let join_handlers = segments_runtime
-            .try_spawn_batch(semaphore.clone(), tasks)
-            .await?;
+        let join_handlers = segments_runtime.try_spawn_batch(semaphore, tasks).await?;
 
         // 1.4 get all the result.
         let joint: Vec<Result<Arc<SegmentInfo>>> = future::try_join_all(join_handlers)

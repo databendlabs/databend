@@ -21,9 +21,12 @@ use super::constants::*;
 use super::error::*;
 use super::jentry::JEntry;
 use super::number::Number;
+use super::parser::decode_value;
 use super::value::JsonPath;
+use super::value::Value;
 
-// builtin functions for `JSONB` bytes without decode all Values
+// builtin functions for `JSONB` bytes and `JSON` strings without decode all Values.
+// The input value must be valid `JSONB' or `JSON`.
 
 /// Build `JSONB` array from items.
 /// Assuming that the input values is valid JSONB data.
@@ -115,6 +118,10 @@ pub fn build_object<'a, K: AsRef<str>>(
 
 /// Get the length of `JSONB` array.
 pub fn array_length(value: &[u8]) -> Option<usize> {
+    if !is_jsonb(value) {
+        let json_value = decode_value(value).unwrap();
+        return json_value.array_length();
+    }
     let header = read_u32(value, 0).unwrap();
     match header & CONTAINER_HEADER_TYPE_MASK {
         ARRAY_CONTAINER_TAG => {
@@ -127,6 +134,11 @@ pub fn array_length(value: &[u8]) -> Option<usize> {
 
 /// Get the inner value by ignoring case name of `JSONB` object.
 pub fn get_by_name_ignore_case(value: &[u8], name: &str) -> Option<Vec<u8>> {
+    if !is_jsonb(value) {
+        let json_value = decode_value(value).unwrap();
+        return json_value.get_by_name_ignore_case(name).map(to_vec);
+    }
+
     let header = read_u32(value, 0).unwrap();
     match header & CONTAINER_HEADER_TYPE_MASK {
         OBJECT_CONTAINER_TAG => {
@@ -193,6 +205,11 @@ pub fn get_by_name_ignore_case(value: &[u8], name: &str) -> Option<Vec<u8>> {
 /// JSON path can be a nested index or name,
 /// used to get inner value of array and object respectively.
 pub fn get_by_path<'a>(value: &'a [u8], paths: Vec<JsonPath<'a>>) -> Option<Vec<u8>> {
+    if !is_jsonb(value) {
+        let json_value = decode_value(value).unwrap();
+        return json_value.get_by_path(&paths).map(to_vec);
+    }
+
     let mut offset = 0;
     let mut buf: Vec<u8> = Vec::new();
 
@@ -294,6 +311,11 @@ pub fn get_by_path<'a>(value: &'a [u8], paths: Vec<JsonPath<'a>>) -> Option<Vec<
 
 /// Get the keys of a `JSONB` object.
 pub fn object_keys(value: &[u8]) -> Option<Vec<u8>> {
+    if !is_jsonb(value) {
+        let json_value = decode_value(value).unwrap();
+        return json_value.object_keys().map(|val| to_vec(&val));
+    }
+
     let header = read_u32(value, 0).unwrap();
     match header & CONTAINER_HEADER_TYPE_MASK {
         OBJECT_CONTAINER_TAG => {
@@ -332,9 +354,18 @@ pub fn object_keys(value: &[u8]) -> Option<Vec<u8>> {
 /// In first level header, values compare as the following order:
 /// Scalar Null > Array > Object > Other Scalars(String > Number > Boolean).
 pub fn compare(left: &[u8], right: &[u8]) -> Result<Ordering, Error> {
+    if !is_jsonb(left) {
+        let lval = decode_value(left).unwrap();
+        let lbuf = to_vec(&lval);
+        return compare(&lbuf, right);
+    } else if !is_jsonb(right) {
+        let rval = decode_value(right).unwrap();
+        let rbuf = to_vec(&rval);
+        return compare(left, &rbuf);
+    }
+
     let left_header = read_u32(left, 0)?;
     let right_header = read_u32(right, 0)?;
-
     match (
         left_header & CONTAINER_HEADER_TYPE_MASK,
         right_header & CONTAINER_HEADER_TYPE_MASK,
@@ -580,6 +611,14 @@ pub fn is_null(value: &[u8]) -> bool {
 
 /// If the `JSONB` is a Null, returns (). Returns None otherwise.
 pub fn as_null(value: &[u8]) -> Option<()> {
+    if !is_jsonb(value) {
+        let v = value.first().unwrap();
+        if *v == b'n' {
+            return Some(());
+        } else {
+            return None;
+        }
+    }
     let header = read_u32(value, 0).unwrap();
     match header & CONTAINER_HEADER_TYPE_MASK {
         SCALAR_CONTAINER_TAG => {
@@ -600,6 +639,16 @@ pub fn is_boolean(value: &[u8]) -> bool {
 
 /// If the `JSONB` is a Boolean, returns the associated bool. Returns None otherwise.
 pub fn as_bool(value: &[u8]) -> Option<bool> {
+    if !is_jsonb(value) {
+        let v = value.first().unwrap();
+        if *v == b't' {
+            return Some(true);
+        } else if *v == b'f' {
+            return Some(false);
+        } else {
+            return None;
+        }
+    }
     let header = read_u32(value, 0).unwrap();
     match header & CONTAINER_HEADER_TYPE_MASK {
         SCALAR_CONTAINER_TAG => {
@@ -621,6 +670,10 @@ pub fn is_number(value: &[u8]) -> bool {
 
 /// If the `JSONB` is a Number, returns the Number. Returns None otherwise.
 pub fn as_number(value: &[u8]) -> Option<Number> {
+    if !is_jsonb(value) {
+        let json_value = decode_value(value).unwrap();
+        return json_value.as_number().cloned();
+    }
     let header = read_u32(value, 0).unwrap();
     match header & CONTAINER_HEADER_TYPE_MASK {
         SCALAR_CONTAINER_TAG => {
@@ -685,6 +738,15 @@ pub fn is_string(value: &[u8]) -> bool {
 
 /// If the `JSONB` is a String, returns the String. Returns None otherwise.
 pub fn as_str(value: &[u8]) -> Option<Cow<'_, str>> {
+    if !is_jsonb(value) {
+        let v = value.first().unwrap();
+        if *v == b'"' {
+            let s = unsafe { std::str::from_utf8_unchecked(&value[1..value.len() - 1]) };
+            return Some(Cow::Borrowed(s));
+        } else {
+            return None;
+        }
+    }
     let header = read_u32(value, 0).unwrap();
     match header & CONTAINER_HEADER_TYPE_MASK {
         SCALAR_CONTAINER_TAG => {
@@ -705,12 +767,20 @@ pub fn as_str(value: &[u8]) -> Option<Cow<'_, str>> {
 
 /// Returns true if the `JSONB` is An Array. Returns false otherwise.
 pub fn is_array(value: &[u8]) -> bool {
+    if !is_jsonb(value) {
+        let v = value.first().unwrap();
+        return *v == b'[';
+    }
     let header = read_u32(value, 0).unwrap();
     matches!(header & CONTAINER_HEADER_TYPE_MASK, ARRAY_CONTAINER_TAG)
 }
 
 /// Returns true if the `JSONB` is An Object. Returns false otherwise.
 pub fn is_object(value: &[u8]) -> bool {
+    if !is_jsonb(value) {
+        let v = value.first().unwrap();
+        return *v == b'{';
+    }
     let header = read_u32(value, 0).unwrap();
     matches!(header & CONTAINER_HEADER_TYPE_MASK, OBJECT_CONTAINER_TAG)
 }
@@ -790,6 +860,124 @@ pub fn parse_json_path(path: &[u8]) -> Result<Vec<JsonPath>, Error> {
         }
     }
     Ok(json_paths)
+}
+
+/// Convert `JSONB` value to String
+pub fn to_string(value: &[u8]) -> String {
+    if !is_jsonb(value) {
+        let json = unsafe { String::from_utf8_unchecked(value.to_vec()) };
+        return json;
+    }
+
+    let mut json = String::new();
+    container_to_string(value, &mut 0, &mut json);
+    json
+}
+
+fn container_to_string(value: &[u8], offset: &mut usize, json: &mut String) {
+    let header = read_u32(value, *offset).unwrap();
+    match header & CONTAINER_HEADER_TYPE_MASK {
+        SCALAR_CONTAINER_TAG => {
+            let mut jentry_offset = 4 + *offset;
+            let mut value_offset = 8 + *offset;
+            scalar_to_string(value, &mut jentry_offset, &mut value_offset, json);
+        }
+        ARRAY_CONTAINER_TAG => {
+            json.push('[');
+            let length = (header & CONTAINER_HEADER_LEN_MASK) as usize;
+            let mut jentry_offset = 4 + *offset;
+            let mut value_offset = 4 + *offset + 4 * length;
+            for i in 0..length {
+                if i > 0 {
+                    json.push(',');
+                }
+                scalar_to_string(value, &mut jentry_offset, &mut value_offset, json);
+            }
+            json.push(']');
+        }
+        OBJECT_CONTAINER_TAG => {
+            json.push('{');
+            let length = (header & CONTAINER_HEADER_LEN_MASK) as usize;
+            let mut jentry_offset = 4 + *offset;
+            let mut key_offset = 4 + *offset + 8 * length;
+            let mut keys = VecDeque::with_capacity(length);
+            for _ in 0..length {
+                let jentry_encoded = read_u32(value, jentry_offset).unwrap();
+                let jentry = JEntry::decode_jentry(jentry_encoded);
+                let key_length = jentry.length as usize;
+                let key = unsafe {
+                    std::str::from_utf8_unchecked(&value[key_offset..key_offset + key_length])
+                };
+                keys.push_back(key);
+                jentry_offset += 4;
+                key_offset += key_length;
+            }
+            let mut value_offset = key_offset;
+            for i in 0..length {
+                if i > 0 {
+                    json.push(',');
+                }
+                let key = keys.pop_front().unwrap();
+                json.push('\"');
+                json.push_str(key);
+                json.push('\"');
+                json.push(':');
+                scalar_to_string(value, &mut jentry_offset, &mut value_offset, json);
+            }
+            json.push('}');
+        }
+        _ => {}
+    }
+}
+
+fn scalar_to_string(
+    value: &[u8],
+    jentry_offset: &mut usize,
+    value_offset: &mut usize,
+    json: &mut String,
+) {
+    let jentry_encoded = read_u32(value, *jentry_offset).unwrap();
+    let jentry = JEntry::decode_jentry(jentry_encoded);
+    let length = jentry.length as usize;
+    match jentry.type_code {
+        NULL_TAG => json.push_str("null"),
+        TRUE_TAG => json.push_str("true"),
+        FALSE_TAG => json.push_str("false"),
+        NUMBER_TAG => {
+            let num = Number::decode(&value[*value_offset..*value_offset + length]);
+            json.push_str(&format!("{num}"));
+        }
+        STRING_TAG => {
+            let val = unsafe {
+                std::str::from_utf8_unchecked(&value[*value_offset..*value_offset + length])
+            };
+            json.push('\"');
+            json.push_str(val);
+            json.push('\"');
+        }
+        CONTAINER_TAG => {
+            container_to_string(value, value_offset, json);
+        }
+        _ => {}
+    }
+    *jentry_offset += 4;
+    *value_offset += length;
+}
+
+// Check whether the value is `JSONB` format,
+// for compatibility with previous `JSON` string.
+fn is_jsonb(value: &[u8]) -> bool {
+    let v = value.first().unwrap();
+    if *v == ARRAY_PREFIX || *v == OBJECT_PREFIX || *v == SCALAR_PREFIX {
+        return true;
+    }
+    false
+}
+
+fn to_vec(value: &Value<'_>) -> Vec<u8> {
+    let mut buf = Vec::new();
+    value.to_vec(&mut buf);
+    buf
 }
 
 fn read_char(buf: &[u8], idx: &mut usize) -> Result<u8, Error> {

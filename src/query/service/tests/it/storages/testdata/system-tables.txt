@@ -132,6 +132,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | table                    | system   | columns             | VARCHAR           |              |                    | false       |         |
 | tables                   | system   | query_log           | VARCHAR           |              |                    | false       |         |
 | tenant_id                | system   | query_log           | VARCHAR           |              |                    | false       |         |
+| time                     | system   | processes           | BIGINT UNSIGNED   |              |                    | false       |         |
 | time                     | system   | tracing             | VARCHAR           |              |                    | false       |         |
 | total_partitions         | system   | query_log           | BIGINT UNSIGNED   |              |                    | false       |         |
 | type                     | system   | columns             | VARCHAR           |              |                    | false       |         |

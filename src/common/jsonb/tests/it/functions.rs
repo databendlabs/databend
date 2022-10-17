@@ -16,16 +16,24 @@ use std::borrow::Cow;
 use std::cmp::Ordering;
 
 use common_jsonb::array_length;
+use common_jsonb::as_bool;
+use common_jsonb::as_null;
+use common_jsonb::as_number;
+use common_jsonb::as_str;
 use common_jsonb::build_array;
 use common_jsonb::build_object;
 use common_jsonb::compare;
 use common_jsonb::from_slice;
 use common_jsonb::get_by_name_ignore_case;
 use common_jsonb::get_by_path;
+use common_jsonb::is_array;
+use common_jsonb::is_object;
 use common_jsonb::object_keys;
 use common_jsonb::parse_json_path;
 use common_jsonb::parse_value;
+use common_jsonb::to_string;
 use common_jsonb::JsonPath;
+use common_jsonb::Number;
 use common_jsonb::Object;
 use common_jsonb::Value;
 
@@ -130,6 +138,8 @@ fn test_array_length() {
 
     let mut buf: Vec<u8> = Vec::new();
     for (s, expect) in sources {
+        let res = array_length(s.as_bytes());
+        assert_eq!(res, expect);
         let value = parse_value(s.as_bytes()).unwrap();
         value.to_vec(&mut buf);
         let res = array_length(&buf);
@@ -165,6 +175,11 @@ fn test_get_by_path() {
 
     let mut buf: Vec<u8> = Vec::new();
     for (s, paths, expect) in sources {
+        let res = get_by_path(s.as_bytes(), paths.clone());
+        match expect.clone() {
+            Some(expect) => assert_eq!(from_slice(&res.unwrap()).unwrap(), expect),
+            None => assert_eq!(res, None),
+        }
         let value = parse_value(s.as_bytes()).unwrap();
         value.to_vec(&mut buf);
         let res = get_by_path(&buf, paths);
@@ -196,6 +211,11 @@ fn test_get_by_name_ignore_case() {
 
     let mut buf: Vec<u8> = Vec::new();
     for (s, name, expect) in sources {
+        let res = get_by_name_ignore_case(s.as_bytes(), &name);
+        match expect.clone() {
+            Some(expect) => assert_eq!(from_slice(&res.unwrap()).unwrap(), expect),
+            None => assert_eq!(res, None),
+        }
         let value = parse_value(s.as_bytes()).unwrap();
         value.to_vec(&mut buf);
         let res = get_by_name_ignore_case(&buf, &name);
@@ -229,6 +249,11 @@ fn test_object_keys() {
 
     let mut buf: Vec<u8> = Vec::new();
     for (s, expect) in sources {
+        let res = object_keys(s.as_bytes());
+        match expect.clone() {
+            Some(expect) => assert_eq!(from_slice(&res.unwrap()).unwrap(), expect),
+            None => assert_eq!(res, None),
+        }
         let value = parse_value(s.as_bytes()).unwrap();
         value.to_vec(&mut buf);
         let res = object_keys(&buf);
@@ -307,6 +332,9 @@ fn test_compare() {
     let mut lbuf: Vec<u8> = Vec::new();
     let mut rbuf: Vec<u8> = Vec::new();
     for (l, r, expect) in sources {
+        let res = compare(l.as_bytes(), r.as_bytes()).unwrap();
+        assert_eq!(res, expect);
+
         let lvalue = parse_value(l.as_bytes()).unwrap();
         lvalue.to_vec(&mut lbuf);
         let rvalue = parse_value(r.as_bytes()).unwrap();
@@ -343,5 +371,129 @@ fn test_parse_json_path() {
     for (s, expect) in sources {
         let path = parse_json_path(s.as_bytes()).unwrap();
         assert_eq!(&path[..], &expect[..]);
+    }
+}
+
+#[test]
+fn test_as_type() {
+    let sources = vec![
+        (r#"null"#, Some(()), None, None, None, false, false),
+        (r#"true"#, None, Some(true), None, None, false, false),
+        (r#"false"#, None, Some(false), None, None, false, false),
+        (
+            r#"-1234"#,
+            None,
+            None,
+            Some(Number::Int64(-1234)),
+            None,
+            false,
+            false,
+        ),
+        (
+            r#"12.34"#,
+            None,
+            None,
+            Some(Number::Float64(12.34)),
+            None,
+            false,
+            false,
+        ),
+        (
+            r#""abcd""#,
+            None,
+            None,
+            None,
+            Some(Cow::from("abcd")),
+            false,
+            false,
+        ),
+        (r#"[1,2,3]"#, None, None, None, None, true, false),
+        (r#"{"k":"v"}"#, None, None, None, None, false, true),
+    ];
+
+    let mut buf: Vec<u8> = Vec::new();
+    for (s, expect_null, expect_bool, expect_number, expect_str, expect_array, expect_object) in
+        sources
+    {
+        let res = as_null(s.as_bytes());
+        match expect_null {
+            Some(_) => assert!(res.is_some()),
+            None => assert_eq!(res, None),
+        }
+        let res = as_bool(s.as_bytes());
+        match expect_bool {
+            Some(expect) => assert_eq!(res.unwrap(), expect),
+            None => assert_eq!(res, None),
+        }
+        let res = as_number(s.as_bytes());
+        match expect_number.clone() {
+            Some(expect) => assert_eq!(res.unwrap(), expect),
+            None => assert_eq!(res, None),
+        }
+        let res = as_str(s.as_bytes());
+        match expect_str.clone() {
+            Some(expect) => assert_eq!(res.unwrap(), expect),
+            None => assert_eq!(res, None),
+        }
+        let res = is_array(s.as_bytes());
+        assert_eq!(res, expect_array);
+        let res = is_object(s.as_bytes());
+        assert_eq!(res, expect_object);
+
+        let value = parse_value(s.as_bytes()).unwrap();
+        value.to_vec(&mut buf);
+        let res = as_null(&buf);
+        match expect_null {
+            Some(_) => assert!(res.is_some()),
+            None => assert_eq!(res, None),
+        }
+        let res = as_bool(&buf);
+        match expect_bool {
+            Some(expect) => assert_eq!(res.unwrap(), expect),
+            None => assert_eq!(res, None),
+        }
+        let res = as_number(&buf);
+        match expect_number.clone() {
+            Some(expect) => assert_eq!(res.unwrap(), expect),
+            None => assert_eq!(res, None),
+        }
+        let res = as_str(&buf);
+        match expect_str.clone() {
+            Some(expect) => assert_eq!(res.unwrap(), expect),
+            None => assert_eq!(res, None),
+        }
+        let res = is_array(&buf);
+        assert_eq!(res, expect_array);
+        let res = is_object(&buf);
+        assert_eq!(res, expect_object);
+
+        buf.clear();
+    }
+}
+
+#[test]
+fn test_to_string() {
+    let sources = vec![
+        r#"null"#,
+        r#"true"#,
+        r#"false"#,
+        r#"1234567"#,
+        r#"-1234567"#,
+        r#"123.4567"#,
+        r#""abcdef""#,
+        r#"[1,2,3,4]"#,
+        r#"["a","b",true,false,[1,2,3],{"a":"b"}]"#,
+        r#"{"k1":"v1","k2":[1,2,3],"k3":{"a":"b"}}"#,
+    ];
+    let mut buf: Vec<u8> = Vec::new();
+    for s in sources {
+        let res = to_string(s.as_bytes());
+        assert_eq!(res, s.to_string());
+
+        let value = parse_value(s.as_bytes()).unwrap();
+        value.to_vec(&mut buf);
+        let res = to_string(&buf);
+        assert_eq!(res, s.to_string());
+        buf.clear();
     }
 }
