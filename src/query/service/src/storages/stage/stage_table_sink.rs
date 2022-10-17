@@ -32,7 +32,7 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use opendal::Operator;
-use tracing::debug;
+use tracing::warn;
 
 use crate::sessions::TableContext;
 
@@ -277,7 +277,7 @@ impl Processor for StageTableSink {
                     .retry(ExponentialBackoff::default())
                     .when(|err| err.kind() == ErrorKind::Interrupted)
                     .notify(|err, dur| {
-                        debug!(
+                        warn!(
                             "stage table sink write retry after {}s for error {:?}",
                             dur.as_secs(),
                             err
