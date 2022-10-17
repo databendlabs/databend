@@ -382,7 +382,7 @@ impl FuseTable {
             .retry(backon::ExponentialBackoff::default())
             .when(|err| err.kind() == ErrorKind::Interrupted)
             .notify(|err, dur| {
-                debug!(
+                warn!(
                     "fuse table write_last_snapshot_hint retry after {}s for error {:?}",
                     dur.as_secs(),
                     err

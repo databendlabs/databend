@@ -26,7 +26,7 @@ use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::ClusterStatistics;
 use common_fuse_meta::meta::Location;
 use opendal::Operator;
-use tracing::debug;
+use tracing::warn;
 use uuid::Uuid;
 
 use crate::index::BlockFilter;
@@ -136,7 +136,7 @@ pub async fn write_data(data: &[u8], data_accessor: &Operator, location: &str) -
         .retry(ExponentialBackoff::default())
         .when(|err| err.kind() == ErrorKind::Interrupted)
         .notify(|err, dur| {
-            debug!(
+            warn!(
                 "fuse table block writer write_data retry after {}s for error {:?}",
                 dur.as_secs(),
                 err
