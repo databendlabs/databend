@@ -19,6 +19,7 @@ use chrono::Duration;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
 use chrono::TimeZone;
+use chrono::Timelike;
 use chrono::Utc;
 use chrono_tz::Tz;
 use num_traits::AsPrimitive;
@@ -169,4 +170,105 @@ pub fn today_date() -> i32 {
     NaiveDate::from_ymd(now.year(), now.month(), now.day())
         .signed_duration_since(NaiveDate::from_ymd(1970, 1, 1))
         .num_days() as i32
+}
+
+pub trait ToNumber<N> {
+    fn to_number(dt: &DateTime<Tz>) -> N;
+}
+
+pub struct ToNumberImpl;
+
+impl ToNumberImpl {
+    pub fn eval_timestamp<T: ToNumber<R>, R>(ts: i64, tz: &Tz) -> R {
+        let dt = ts.to_timestamp(tz);
+        T::to_number(&dt)
+    }
+
+    pub fn eval_date<T: ToNumber<R>, R>(date: i32, tz: &Tz) -> R {
+        let dt = date.to_date(tz).and_hms(0, 0, 0);
+        T::to_number(&dt)
+    }
+}
+
+pub struct ToYYYYMM;
+pub struct ToYYYYMMDD;
+pub struct ToYYYYMMDDHHMMSS;
+pub struct ToYear;
+pub struct ToMonth;
+pub struct ToDayOfYear;
+pub struct ToDayOfMonth;
+pub struct ToDayOfWeek;
+pub struct ToHour;
+pub struct ToMinute;
+pub struct ToSecond;
+
+impl ToNumber<u32> for ToYYYYMM {
+    fn to_number(dt: &DateTime<Tz>) -> u32 {
+        dt.year() as u32 * 100 + dt.month()
+    }
+}
+
+impl ToNumber<u32> for ToYYYYMMDD {
+    fn to_number(dt: &DateTime<Tz>) -> u32 {
+        dt.year() as u32 * 10_000 + dt.month() * 100 + dt.day()
+    }
+}
+
+impl ToNumber<u64> for ToYYYYMMDDHHMMSS {
+    fn to_number(dt: &DateTime<Tz>) -> u64 {
+        dt.year() as u64 * 10_000_000_000
+            + dt.month() as u64 * 100_000_000
+            + dt.day() as u64 * 1_000_000
+            + dt.hour() as u64 * 10_000
+            + dt.minute() as u64 * 100
+            + dt.second() as u64
+    }
+}
+
+impl ToNumber<u16> for ToYear {
+    fn to_number(dt: &DateTime<Tz>) -> u16 {
+        dt.year() as u16
+    }
+}
+
+impl ToNumber<u8> for ToMonth {
+    fn to_number(dt: &DateTime<Tz>) -> u8 {
+        dt.month() as u8
+    }
+}
+
+impl ToNumber<u16> for ToDayOfYear {
+    fn to_number(dt: &DateTime<Tz>) -> u16 {
+        dt.ordinal() as u16
+    }
+}
+
+impl ToNumber<u8> for ToDayOfMonth {
+    fn to_number(dt: &DateTime<Tz>) -> u8 {
+        dt.day() as u8
+    }
+}
+
+impl ToNumber<u8> for ToDayOfWeek {
+    fn to_number(dt: &DateTime<Tz>) -> u8 {
+        dt.weekday().number_from_monday() as u8
+    }
+}
+
+impl ToNumber<u8> for ToHour {
+    fn to_number(dt: &DateTime<Tz>) -> u8 {
+        dt.hour() as u8
+    }
+}
+
+impl ToNumber<u8> for ToMinute {
+    fn to_number(dt: &DateTime<Tz>) -> u8 {
+        dt.minute() as u8
+    }
+}
+
+impl ToNumber<u8> for ToSecond {
+    fn to_number(dt: &DateTime<Tz>) -> u8 {
+        dt.second() as u8
+    }
 }

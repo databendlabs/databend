@@ -32,15 +32,13 @@ fn test_datetime() {
     test_to_timestamp(file);
     test_to_datetime(file);
     test_to_date(file);
-    // {add | subtract}_{years | months | days | hours | minutes | seconds}(date, number)
     test_date_add_subtract(file);
     test_timestamp_add_subtract(file);
-    // date_{add | sub}({year | quarter | month | week | day | hour | minute | second}, date, number)
     test_date_date_add_sub(file);
     test_timestamp_date_add_sub(file);
-    // date {+ | -} interval number {year | quarter | month | week | day | hour | minute | second}
     test_date_arith(file);
     test_timestamp_arith(file);
+    test_to_number(file);
 }
 
 fn test_to_timestamp(file: &mut impl Write) {
@@ -894,4 +892,124 @@ fn test_timestamp_arith(file: &mut impl Write) {
             Column::from_data(vec![1, 2, 3]),
         ),
     ]);
+}
+
+fn test_to_number(file: &mut impl Write) {
+    // date
+    run_ast(file, "to_yyyymm(to_date(18875))", &[]);
+    run_ast(file, "to_yyyymmdd(to_date(18875))", &[]);
+    run_ast(file, "to_yyyymmddhhmmss(to_date(18875))", &[]);
+    run_ast(file, "to_year(to_date(18875))", &[]);
+    run_ast(file, "to_month(to_date(18875))", &[]);
+    run_ast(file, "to_day_of_year(to_date(18875))", &[]);
+    run_ast(file, "to_day_of_month(to_date(18875))", &[]);
+    run_ast(file, "to_day_of_week(to_date(18875))", &[]);
+    run_ast(file, "to_yyyymm(a)", &[(
+        "a",
+        DataType::Date,
+        from_date_data(vec![-100, 0, 100]),
+    )]);
+    run_ast(file, "to_yyyymmdd(a)", &[(
+        "a",
+        DataType::Date,
+        from_date_data(vec![-100, 0, 100]),
+    )]);
+    run_ast(file, "to_yyyymmddhhmmss(a)", &[(
+        "a",
+        DataType::Date,
+        from_date_data(vec![-100, 0, 100]),
+    )]);
+    run_ast(file, "to_year(a)", &[(
+        "a",
+        DataType::Date,
+        from_date_data(vec![-100, 0, 100]),
+    )]);
+    run_ast(file, "to_month(a)", &[(
+        "a",
+        DataType::Date,
+        from_date_data(vec![-100, 0, 100]),
+    )]);
+    run_ast(file, "to_day_of_year(a)", &[(
+        "a",
+        DataType::Date,
+        from_date_data(vec![-100, 0, 100]),
+    )]);
+    run_ast(file, "to_day_of_month(a)", &[(
+        "a",
+        DataType::Date,
+        from_date_data(vec![-100, 0, 100]),
+    )]);
+    run_ast(file, "to_day_of_week(a)", &[(
+        "a",
+        DataType::Date,
+        from_date_data(vec![-100, 0, 100]),
+    )]);
+
+    // timestamp
+    run_ast(file, "to_yyyymm(to_timestamp(1630812366))", &[]);
+    run_ast(file, "to_yyyymmdd(to_timestamp(1630812366))", &[]);
+    run_ast(file, "to_yyyymmddhhmmss(to_timestamp(1630812366))", &[]);
+    run_ast(file, "to_year(to_timestamp(1630812366))", &[]);
+    run_ast(file, "to_month(to_timestamp(1630812366))", &[]);
+    run_ast(file, "to_day_of_year(to_timestamp(1630812366))", &[]);
+    run_ast(file, "to_day_of_month(to_timestamp(1630812366))", &[]);
+    run_ast(file, "to_day_of_week(to_timestamp(1630812366))", &[]);
+    run_ast(file, "to_hour(to_timestamp(1630812366))", &[]);
+    run_ast(file, "to_minute(to_timestamp(1630812366))", &[]);
+    run_ast(file, "to_second(to_timestamp(1630812366))", &[]);
+    run_ast(file, "to_yyyymm(a)", &[(
+        "a",
+        DataType::Timestamp,
+        from_timestamp_data(vec![-100, 0, 100]),
+    )]);
+    run_ast(file, "to_yyyymmdd(a)", &[(
+        "a",
+        DataType::Timestamp,
+        from_timestamp_data(vec![-100, 0, 100]),
+    )]);
+    run_ast(file, "to_yyyymmddhhmmss(a)", &[(
+        "a",
+        DataType::Timestamp,
+        from_timestamp_data(vec![-100, 0, 100]),
+    )]);
+    run_ast(file, "to_year(a)", &[(
+        "a",
+        DataType::Timestamp,
+        from_timestamp_data(vec![-100, 0, 100]),
+    )]);
+    run_ast(file, "to_month(a)", &[(
+        "a",
+        DataType::Timestamp,
+        from_timestamp_data(vec![-100, 0, 100]),
+    )]);
+    run_ast(file, "to_day_of_year(a)", &[(
+        "a",
+        DataType::Timestamp,
+        from_timestamp_data(vec![-100, 0, 100]),
+    )]);
+    run_ast(file, "to_day_of_month(a)", &[(
+        "a",
+        DataType::Timestamp,
+        from_timestamp_data(vec![-100, 0, 100]),
+    )]);
+    run_ast(file, "to_day_of_week(a)", &[(
+        "a",
+        DataType::Timestamp,
+        from_timestamp_data(vec![-100, 0, 100]),
+    )]);
+    run_ast(file, "to_hour(a)", &[(
+        "a",
+        DataType::Timestamp,
+        from_timestamp_data(vec![-100, 0, 100]),
+    )]);
+    run_ast(file, "to_minute(a)", &[(
+        "a",
+        DataType::Timestamp,
+        from_timestamp_data(vec![-100, 0, 100]),
+    )]);
+    run_ast(file, "to_second(a)", &[(
+        "a",
+        DataType::Timestamp,
+        from_timestamp_data(vec![-100, 0, 100]),
+    )]);
 }
