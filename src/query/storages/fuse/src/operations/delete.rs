@@ -153,7 +153,7 @@ impl FuseTable {
             )
             .await
         {
-            abort_operation.abort(self.operator.clone()).await;
+            abort_operation.abort(ctx, self.operator.clone()).await?;
             return Err(e);
         }
         Ok(())

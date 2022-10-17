@@ -46,12 +46,12 @@ use tracing::warn;
 use uuid::Uuid;
 
 use crate::io::write_meta;
+use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::AppendOperationLogEntry;
 use crate::operations::TableOperationLog;
 use crate::statistics;
 use crate::statistics::merge_statistics;
-use crate::FuseSegmentIO;
 use crate::FuseTable;
 use crate::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use crate::OPT_KEY_SNAPSHOT_LOCATION;
@@ -425,7 +425,7 @@ impl FuseTable {
             }
 
             // Read all segments information in parallel.
-            let fuse_segment_io = FuseSegmentIO::create(ctx.clone(), self.operator.clone());
+            let fuse_segment_io = SegmentsIO::create(ctx.clone(), self.operator.clone());
             let results = fuse_segment_io.read_segments(&new_segments).await?;
             for result in results.iter() {
                 let segment = result.clone()?;

@@ -197,7 +197,9 @@ impl TableMutator for CompactMutator {
             .commit_mutation(ctx.clone(), self.base_snapshot.clone(), segments, summary)
             .await
         {
-            abort_operation.abort(self.data_accessor.clone()).await;
+            abort_operation
+                .abort(ctx, self.data_accessor.clone())
+                .await?;
             return Err(e);
         }
         Ok(())

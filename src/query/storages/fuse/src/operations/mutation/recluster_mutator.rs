@@ -242,8 +242,8 @@ impl TableMutator for ReclusterMutator {
             .await
         {
             abort_operation
-                .abort(self.base_mutator.data_accessor.clone())
-                .await;
+                .abort(ctx, self.base_mutator.data_accessor.clone())
+                .await?;
             return Err(e);
         }
         Ok(())

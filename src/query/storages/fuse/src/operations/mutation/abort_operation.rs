@@ -12,8 +12,14 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::sync::Arc;
+
+use common_catalog::table_context::TableContext;
+use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
 use opendal::Operator;
+
+use crate::io::Files;
 
 #[derive(Default, Clone, Debug)]
 pub struct AbortOperation {
@@ -37,15 +43,9 @@ impl AbortOperation {
         self
     }
 
-    pub async fn abort(self, operator: Operator) {
-        for block in self.blocks {
-            let _ = operator.object(&block).delete().await;
-        }
-        for index in self.bloom_filter_indexes {
-            let _ = operator.object(&index).delete().await;
-        }
-        for segment in self.segments {
-            let _ = operator.object(&segment).delete().await;
-        }
+    pub async fn abort(self, ctx: Arc<dyn TableContext>, operator: Operator) -> Result<()> {
+        let fuse_file = Files::create(ctx, operator);
+        let locations = vec![self.blocks, self.bloom_filter_indexes, self.segments].concat();
+        fuse_file.remove_file_in_batch(&locations).await
     }
 }
