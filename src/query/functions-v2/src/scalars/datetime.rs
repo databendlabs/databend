@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use chrono::Datelike;
+use chrono::Utc;
 use common_arrow::arrow::temporal_conversions::EPOCH_DAYS_FROM_CE;
+use common_expression::date_helper::today_date;
 use common_expression::date_helper::AddDaysImpl;
 use common_expression::date_helper::AddMonthsImpl;
 use common_expression::date_helper::AddTimesImpl;
@@ -41,6 +43,7 @@ use common_expression::vectorize_with_builder_1_arg;
 use common_expression::vectorize_with_builder_2_arg;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
+use common_expression::Value;
 use num_traits::AsPrimitive;
 
 pub fn register(registry: &mut FunctionRegistry) {
@@ -48,6 +51,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_try_cast_functions(registry);
     register_add_functions(registry);
     register_sub_functions(registry);
+    register_real_time_functions(registry);
 }
 
 fn number_domain_to_timestamp_domain<T: AsPrimitive<i64>>(
@@ -401,3 +405,33 @@ macro_rules! impl_register_arith_functions {
 
 impl_register_arith_functions!(register_add_functions, "add", unsigned_ident);
 impl_register_arith_functions!(register_sub_functions, "subtract", signed_ident);
+
+fn register_real_time_functions(registry: &mut FunctionRegistry) {
+    registry.register_0_arg_core::<TimestampType, _, _>(
+        "now",
+        FunctionProperty::default(),
+        || None,
+        |_| Ok(Value::Scalar(Utc::now().timestamp_micros())),
+    );
+
+    registry.register_0_arg_core::<DateType, _, _>(
+        "today",
+        FunctionProperty::default(),
+        || None,
+        |_| Ok(Value::Scalar(today_date())),
+    );
+
+    registry.register_0_arg_core::<DateType, _, _>(
+        "yesterday",
+        FunctionProperty::default(),
+        || None,
+        |_| Ok(Value::Scalar(today_date() - 1)),
+    );
+
+    registry.register_0_arg_core::<DateType, _, _>(
+        "tomorrow",
+        FunctionProperty::default(),
+        || None,
+        |_| Ok(Value::Scalar(today_date() + 1)),
+    );
+}
