@@ -17,6 +17,7 @@
 //! This crate will return `std::io::Result`.
 
 mod config;
+pub use config::ShareTableConfig;
 pub use config::StorageAzblobConfig;
 pub use config::StorageConfig;
 pub use config::StorageFsConfig;

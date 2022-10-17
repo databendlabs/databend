@@ -1182,7 +1182,6 @@ version = "0.1.0"
 dependencies = [
  "codespan-reporting",
  "common-base",
- "common-datavalues",
  "common-exception",
  "common-functions",
  "common-meta-app",
@@ -1426,7 +1425,7 @@ dependencies = [
  "h3ron",
  "hex",
  "itertools",
- "md5",
+ "md-5",
  "naive-cityhash",
  "num",
  "num-format",
@@ -1979,6 +1978,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "base64",
  "bytes",
  "http",
  "moka",
@@ -1986,6 +1986,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "thiserror",
 ]
 
 [[package]]
@@ -2010,6 +2011,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait-fn",
  "backoff",
+ "backon",
  "chrono",
  "common-arrow",
  "common-base",
@@ -2028,6 +2030,7 @@ dependencies = [
  "common-pipeline-core",
  "common-pipeline-sources",
  "common-pipeline-transforms",
+ "common-sharing",
  "common-storage",
  "common-storages-index",
  "common-storages-util",
@@ -2708,6 +2711,7 @@ dependencies = [
  "async-recursion",
  "async-stream",
  "async-trait-fn",
+ "backon",
  "base64",
  "bumpalo",
  "byteorder",
@@ -4660,12 +4664,6 @@ checksum = "6365506850d44bff6e2fbcb5176cf63650e48bd45ef2fe2665ae1570e0f4b9ca"
 dependencies = [
  "digest 0.10.5",
 ]
-
-[[package]]
-name = "md5"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "490cc448043f947bae3cbee9c203358d62dbee0db12107a74be5c30ccfd09771"
 
 [[package]]
 name = "memchr"
@@ -8143,7 +8141,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.7.3",
+ "rand 0.8.5",
  "static_assertions",
 ]
 

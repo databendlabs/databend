@@ -29,12 +29,14 @@ common-meta-types = { path = "../../../meta/types" }
 common-pipeline-core = { path = "../../pipeline/core" }
 common-pipeline-sources = { path = "../../pipeline/sources" }
 common-pipeline-transforms = { path = "../../pipeline/transforms" }
+common-sharing = { path = "../../sharing" }
 common-storage = { path = "../../../common/storage" }
 common-storages-index = { path = "../index" }
 common-storages-util = { path = "../util" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
+backon = "0.2"
 chrono = "0.4.22"
 futures = "0.3.24"
 futures-util = "0.3.24"

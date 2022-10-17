@@ -38,7 +38,6 @@ pub fn to_type(datatype: &DataTypeImpl) -> DataType {
         DataTypeImpl::Boolean(_) => DataType::Boolean,
         DataTypeImpl::Timestamp(_) => DataType::Timestamp,
         DataTypeImpl::Date(_) => DataType::Date,
-        DataTypeImpl::Interval(_) => DataType::Interval,
         DataTypeImpl::String(_) => DataType::String,
         DataTypeImpl::Struct(ty) => {
             let inners = ty.types().iter().map(to_type).collect();
@@ -48,6 +47,7 @@ pub fn to_type(datatype: &DataTypeImpl) -> DataType {
         DataTypeImpl::Variant(_)
         | DataTypeImpl::VariantArray(_)
         | DataTypeImpl::VariantObject(_) => DataType::Variant,
+        DataTypeImpl::Interval(_) => unimplemented!(),
     })
 }
 
