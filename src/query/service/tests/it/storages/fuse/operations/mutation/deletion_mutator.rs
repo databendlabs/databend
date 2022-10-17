@@ -111,7 +111,7 @@ async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
         }
     }
 
-    let (segments, _) = mutator.generate_segments().await?;
+    let (segments, _, _) = mutator.generate_segments().await?;
 
     // half segments left after deletion
     assert_eq!(segments.len(), 50);

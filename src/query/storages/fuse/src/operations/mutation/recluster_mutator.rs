@@ -205,7 +205,8 @@ impl TableMutator for ReclusterMutator {
     async fn try_commit(&self, table: Arc<dyn Table>) -> Result<()> {
         let base_mutator = self.base_mutator.clone();
         let ctx = base_mutator.ctx.clone();
-        let (mut segments, mut summary) = self.base_mutator.generate_segments().await?;
+        let (mut segments, mut summary, mut abort_operation) =
+            self.base_mutator.generate_segments().await?;
 
         let append_entries = ctx.consume_precommit_blocks();
         let append_log_entries = append_entries
@@ -216,6 +217,13 @@ impl TableMutator for ReclusterMutator {
         let (merged_segments, merged_summary) =
             FuseTable::merge_append_operations(&append_log_entries)?;
 
+        for entry in append_log_entries {
+            for block in &entry.segment_info.blocks {
+                abort_operation = abort_operation.add_block(block);
+            }
+            abort_operation = abort_operation.add_segment(entry.segment_location);
+        }
+
         let mut merged_segments = merged_segments
             .into_iter()
             .map(|loc| (loc, SegmentInfo::VERSION))
@@ -224,8 +232,7 @@ impl TableMutator for ReclusterMutator {
         segments.append(&mut merged_segments);
         summary = merge_statistics(&summary, &merged_summary)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
-        // todo(zhyass): add abort operation.
-        table
+        match table
             .commit_mutation(
                 ctx.clone(),
                 base_mutator.base_snapshot.clone(),
@@ -233,5 +240,14 @@ impl TableMutator for ReclusterMutator {
                 summary,
             )
             .await
+        {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                abort_operation
+                    .abort(self.base_mutator.data_accessor.clone())
+                    .await;
+                Err(e)
+            }
+        }
     }
 }

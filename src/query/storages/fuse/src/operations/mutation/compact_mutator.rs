@@ -165,7 +165,7 @@ impl TableMutator for CompactMutator {
             segments.push(new_segment_location.clone());
             summary = merge_statistics(&summary, &new_summary)?;
 
-            abort_operation.segments.push(new_segment_location.0);
+            abort_operation = abort_operation.add_segment(new_segment_location.0);
         }
 
         let append_entries = ctx.consume_precommit_blocks();
@@ -179,13 +179,9 @@ impl TableMutator for CompactMutator {
 
         for entry in append_log_entries {
             for block in &entry.segment_info.blocks {
-                let block_location = block.location.clone();
-                abort_operation.blocks.push(block_location.0);
-                if let Some(index) = block.bloom_filter_index_location.clone() {
-                    abort_operation.bloom_filter_indexes.push(index.0);
-                }
+                abort_operation = abort_operation.add_block(block);
             }
-            abort_operation.segments.push(entry.segment_location);
+            abort_operation = abort_operation.add_segment(entry.segment_location);
         }
 
         let mut new_segments: Vec<Location> = merged_segments
@@ -194,7 +190,7 @@ impl TableMutator for CompactMutator {
             .collect();
 
         new_segments.append(&mut segments);
-        let summary = merge_statistics(&self.summary, &merged_summary)?;
+        summary = merge_statistics(&summary, &merged_summary)?;
 
         let table = FuseTable::try_from_table(table.as_ref())?;
 

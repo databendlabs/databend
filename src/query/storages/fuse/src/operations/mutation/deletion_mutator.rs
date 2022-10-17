@@ -23,6 +23,7 @@ use common_fuse_meta::meta::Statistics;
 use common_fuse_meta::meta::TableSnapshot;
 use opendal::Operator;
 
+use super::AbortOperation;
 use crate::io::BlockWriter;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::mutation::BaseMutator;
@@ -57,7 +58,7 @@ impl DeletionMutator {
         self.base_mutator.base_snapshot
     }
 
-    pub async fn generate_segments(&self) -> Result<(Vec<Location>, Statistics)> {
+    pub async fn generate_segments(&self) -> Result<(Vec<Location>, Statistics, AbortOperation)> {
         self.base_mutator.generate_segments().await
     }
 

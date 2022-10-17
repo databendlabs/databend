@@ -130,13 +130,7 @@ impl FuseTable {
             }
         }
 
-        match self.commit_deletion(ctx, deletion_collector).await {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                debug!("failed to commit deletion: {}", e);
-                Err(e)
-            }
-        }
+        self.commit_deletion(ctx, deletion_collector).await
     }
 
     async fn commit_deletion(
@@ -144,13 +138,13 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         del_holder: DeletionMutator,
     ) -> Result<()> {
-        let (segments, summary) = del_holder.generate_segments().await?;
+        let (segments, summary, abort_operation) = del_holder.generate_segments().await?;
         // Refresh the table.
         let latest = self.refresh(ctx.as_ref()).await?;
         let table = FuseTable::try_from_table(latest.as_ref())?;
 
         // TODO check if error is recoverable, and try to resolve the conflict
-        table
+        match table
             .commit_mutation(
                 ctx.clone(),
                 del_holder.base_snapshot().clone(),
@@ -158,6 +152,13 @@ impl FuseTable {
                 summary,
             )
             .await
+        {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                abort_operation.abort(self.operator.clone()).await;
+                Err(e)
+            }
+        }
     }
 
     fn cluster_stats_gen(&self, ctx: Arc<dyn TableContext>) -> Result<ClusterStatsGenerator> {

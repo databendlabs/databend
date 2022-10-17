@@ -12,9 +12,10 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use common_fuse_meta::meta::BlockMeta;
 use opendal::Operator;
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct AbortOperation {
     pub segments: Vec<String>,
     pub blocks: Vec<String>,
@@ -22,6 +23,20 @@ pub struct AbortOperation {
 }
 
 impl AbortOperation {
+    pub fn add_block(mut self, block: &BlockMeta) -> Self {
+        let block_location = block.location.clone();
+        self.blocks.push(block_location.0);
+        if let Some(index) = block.bloom_filter_index_location.clone() {
+            self.bloom_filter_indexes.push(index.0);
+        }
+        self
+    }
+
+    pub fn add_segment(mut self, segment: String) -> Self {
+        self.segments.push(segment);
+        self
+    }
+
     pub async fn abort(self, operator: Operator) {
         for block in self.blocks {
             let _ = operator.object(&block).delete().await;
