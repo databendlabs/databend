@@ -19,6 +19,7 @@ use chrono::Duration;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
 use chrono::TimeZone;
+use chrono::Utc;
 use chrono_tz::Tz;
 use num_traits::AsPrimitive;
 
@@ -160,4 +161,12 @@ impl AddTimesImpl {
     ) -> Result<i64, String> {
         check_timestamp(ts.wrapping_add(delta.as_() * factor * 1_000_000))
     }
+}
+
+#[inline]
+pub fn today_date() -> i32 {
+    let now = Utc::now();
+    NaiveDate::from_ymd(now.year(), now.month(), now.day())
+        .signed_duration_since(NaiveDate::from_ymd(1970, 1, 1))
+        .num_days() as i32
 }
