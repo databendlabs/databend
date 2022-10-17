@@ -32,9 +32,9 @@ use tracing::info;
 use tracing::warn;
 
 use crate::io::SegmentWriter;
+use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::statistics::reducers::reduce_block_metas;
-use crate::FuseSegmentIO;
 use crate::FuseTable;
 use crate::TableContext;
 use crate::TableMutator;
@@ -93,7 +93,7 @@ impl TableMutator for CompactSegmentMutator {
     async fn target_select(&mut self) -> Result<bool> {
         let select_begin = Instant::now();
 
-        let fuse_segment_io = FuseSegmentIO::create(self.ctx.clone(), self.data_accessor.clone());
+        let fuse_segment_io = SegmentsIO::create(self.ctx.clone(), self.data_accessor.clone());
         let base_segment_locations = &self.base_snapshot.segments;
         let base_segments = fuse_segment_io
             .read_segments(&self.base_snapshot.segments)
@@ -196,7 +196,7 @@ impl TableMutator for CompactSegmentMutator {
         // the init value of it is an empty slice
         let mut appended_segments_locations: &[Location] = &[];
 
-        let fuse_segment_io = FuseSegmentIO::create(self.ctx.clone(), self.data_accessor.clone());
+        let fuse_segment_io = SegmentsIO::create(self.ctx.clone(), self.data_accessor.clone());
         loop {
             let append_segments_infos = fuse_segment_io
                 .read_segments(appended_segments_locations)
@@ -229,7 +229,7 @@ impl TableMutator for CompactSegmentMutator {
 
             match FuseTable::commit_to_meta_server(
                 ctx.as_ref(),
-                &current_table_info,
+                current_table_info,
                 &self.location_generator,
                 snapshot_tobe_committed,
                 &self.data_accessor,
