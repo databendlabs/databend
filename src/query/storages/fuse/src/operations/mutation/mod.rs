@@ -15,6 +15,7 @@
 pub mod base_mutator;
 pub mod block_filter;
 pub mod compact_mutator;
+mod compact_segment_mutator;
 pub mod deletion_mutator;
 pub mod recluster_mutator;
 

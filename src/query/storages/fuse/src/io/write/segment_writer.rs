@@ -54,4 +54,20 @@ impl<'a> SegmentWriter<'a> {
         }
         Ok(segment_location)
     }
+
+    pub async fn write_segment_new(
+        &self,
+        segment: SegmentInfo,
+    ) -> Result<(Location, Arc<SegmentInfo>)> {
+        let segment_path = self.location_generator.gen_segment_info_location();
+        let segment_location = (segment_path, SegmentInfo::VERSION);
+        write_meta(self.data_accessor, segment_location.0.as_str(), &segment).await?;
+
+        let arced = Arc::new(segment);
+        if let Some(ref cache) = self.cache {
+            let cache = &mut cache.write();
+            cache.put(segment_location.0.clone(), arced.clone());
+        }
+        Ok((segment_location, arced))
+    }
 }
