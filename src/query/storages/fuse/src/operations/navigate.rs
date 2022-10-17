@@ -61,7 +61,7 @@ impl FuseTable {
 
     pub async fn find<P>(&self, ctx: Arc<dyn TableContext>, mut pred: P) -> Result<Arc<FuseTable>>
     where P: FnMut(&TableSnapshot) -> bool {
-        let snapshot_location = if let Some(loc) = self.snapshot_loc() {
+        let snapshot_location = if let Some(loc) = self.snapshot_loc().await? {
             loc
         } else {
             // not an error?
@@ -70,7 +70,7 @@ impl FuseTable {
             ));
         };
 
-        let snapshot_version = self.snapshot_format_version();
+        let snapshot_version = self.snapshot_format_version().await?;
         let reader = MetaReaders::table_snapshot_reader(ctx, self.get_operator());
 
         // grab the table history
