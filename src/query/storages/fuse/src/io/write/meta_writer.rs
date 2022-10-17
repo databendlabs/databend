@@ -20,7 +20,7 @@ use backon::Retryable;
 use common_exception::Result;
 use opendal::Operator;
 use serde::Serialize;
-use tracing::debug;
+use tracing::warn;
 
 pub async fn write_meta<T>(data_accessor: &Operator, location: &str, meta: T) -> Result<()>
 where T: Serialize {
@@ -30,7 +30,7 @@ where T: Serialize {
         .retry(ExponentialBackoff::default())
         .when(|err| err.kind() == ErrorKind::Interrupted)
         .notify(|err, dur| {
-            debug!(
+            warn!(
                 "stage table sink write retry after {}s for error {:?}",
                 dur.as_secs(),
                 err
