@@ -941,7 +941,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #alter_table : "`ALTER TABLE [<database>.]<table> <action>`"
             | #rename_table : "`RENAME TABLE [<database>.]<table> TO <new_table>`"
             | #truncate_table : "`TRUNCATE TABLE [<database>.]<table> [PURGE]`"
-            | #optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT)`"
+            | #optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT [SEGMENTS])`"
             | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
         ),
         rule!(
@@ -1364,7 +1364,14 @@ pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
     alt((
         value(OptimizeTableAction::All, rule! { ALL }),
         value(OptimizeTableAction::Purge, rule! { PURGE }),
-        value(OptimizeTableAction::Compact, rule! { COMPACT }),
+        value(
+            OptimizeTableAction::Compact(CompactTarget::Segments),
+            rule! { COMPACT ~ SEGMENTS},
+        ),
+        value(
+            OptimizeTableAction::Compact(CompactTarget::Blocks),
+            rule! { COMPACT},
+        ),
     ))(i)
 }
 

@@ -232,9 +232,10 @@ pub trait Table: Sync + Send {
     async fn compact(
         &self,
         ctx: Arc<dyn TableContext>,
+        segments_only: bool,
         pipeline: &mut Pipeline,
     ) -> Result<Option<Arc<dyn TableMutator>>> {
-        let (_, _) = (ctx, pipeline);
+        let (_, _, _) = (ctx, segments_only, pipeline);
 
         Err(ErrorCode::UnImplement(format!(
             "table {},  of engine type {}, does not support compact",

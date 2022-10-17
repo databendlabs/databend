@@ -22,5 +22,6 @@ pub mod recluster_mutator;
 pub use base_mutator::BaseMutator;
 pub use block_filter::delete_from_block;
 pub use compact_mutator::CompactMutator;
+pub use compact_segment_mutator::CompactSegmentMutator;
 pub use deletion_mutator::DeletionMutator;
 pub use recluster_mutator::ReclusterMutator;

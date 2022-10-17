@@ -14,6 +14,7 @@
 
 use std::ops::Range;
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
@@ -23,9 +24,12 @@ use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::TableSnapshot;
-use common_fuse_meta::meta::Versioned;
 use common_meta_app::schema::TableInfo;
+use metrics::counter;
+use metrics::gauge;
 use opendal::Operator;
+use tracing::info;
+use tracing::warn;
 
 use crate::io::SegmentWriter;
 use crate::io::TableMetaLocationGenerator;
@@ -35,15 +39,22 @@ use crate::FuseTable;
 use crate::TableContext;
 use crate::TableMutator;
 
+const MAX_RETRIES: u64 = 10;
 pub struct CompactSegmentMutator {
     ctx: Arc<dyn TableContext>,
+    // the snapshot that compactor working on, it never changed during phases compaction.
     base_snapshot: Arc<TableSnapshot>,
     data_accessor: Operator,
     location_generator: TableMetaLocationGenerator,
-    block_per_seg: usize,
-    new_segments: Vec<(Location, Arc<SegmentInfo>)>,
-    // is_cluster indicates whether the table contains cluster key.
-    is_cluster: bool,
+    blocks_per_seg: usize,
+    // chosen form the base_snapshot.segments which contains number of
+    // blocks lesser than `blocks_per_seg`, and then compacted them into `compacted_segments`,
+    // such that, at most one of them contains less than `blocks_per_seg` number of blocks,
+    // and each of the others(if any) contains `blocks_per_seg` number of blocks.
+    compacted_segments: Vec<(Location, Arc<SegmentInfo>)>,
+    // segments of base_snapshot that need not to be compacted, but should be included in
+    // the new snapshot
+    segments_unchanged: Vec<(Location, Arc<SegmentInfo>)>,
 }
 
 impl CompactSegmentMutator {
@@ -52,7 +63,6 @@ impl CompactSegmentMutator {
         base_snapshot: Arc<TableSnapshot>,
         location_generator: TableMetaLocationGenerator,
         blocks_per_seg: usize,
-        is_cluster: bool,
         operator: Operator,
     ) -> Result<Self> {
         Ok(Self {
@@ -60,30 +70,46 @@ impl CompactSegmentMutator {
             base_snapshot,
             data_accessor: operator,
             location_generator,
-            block_per_seg: blocks_per_seg,
-            new_segments: vec![],
-            is_cluster,
+            blocks_per_seg,
+            compacted_segments: vec![],
+            segments_unchanged: vec![],
         })
     }
 }
 
+// The rough idea goes like this:
+// 1. `target_select` will working and the base_snapshot: compact segments and keep the compactions
+// 2. `try_commit` will try to commit the compacted snapshot to the meta store.
+//     in condition of reconcilable conflicts detected, compactor will try to resolve the conflict and try again.
+//     after MAX_RETRIES attempts, if still failed, abort the operation even if conflict resolvable.
+//
+// compaction starts from the head of the snapshot's segment vector.
+// newly compacted segments will be added the end of snapshot's segment list, so that later
+// when compaction of segments is executed incrementally, the newly added segments will be
+// checked first.
+
 #[async_trait::async_trait]
 impl TableMutator for CompactSegmentMutator {
     async fn target_select(&mut self) -> Result<bool> {
+        let select_begin = Instant::now();
+
         let fuse_segment_io = FuseSegmentIO::create(self.ctx.clone(), self.data_accessor.clone());
+        let base_segment_locations = &self.base_snapshot.segments;
         let base_segments = fuse_segment_io
             .read_segments(&self.base_snapshot.segments)
             .await?
             .into_iter()
             .collect::<Result<Vec<_>>>()?;
 
-        let blocks_per_segment_threshold = self.block_per_seg;
+        let blocks_per_segment_threshold = self.blocks_per_seg;
+
         let mut segments_tobe_compacted = vec![];
-        for segment in &base_segments {
+        for (idx, segment) in base_segments.iter().enumerate() {
             let number_blocks = segment.blocks.len();
-            // skip if current segment is large enough
             if number_blocks >= blocks_per_segment_threshold {
-                // this should not happen, warn it
+                // skip if current segment is large enough, mark it as unchanged
+                self.segments_unchanged
+                    .push((base_segment_locations[idx].clone(), segment.clone()));
                 continue;
             } else {
                 // if number of blocks meets the threshold, mark them down
@@ -91,6 +117,7 @@ impl TableMutator for CompactSegmentMutator {
             }
         }
 
+        // flatten the block metas of segments being compacted
         let mut blocks_of_new_segments: Vec<&BlockMeta> = vec![];
         for segment in segments_tobe_compacted {
             for x in &segment.blocks {
@@ -98,7 +125,8 @@ impl TableMutator for CompactSegmentMutator {
             }
         }
 
-        let chunk_of_blocks = blocks_of_new_segments.chunks(self.block_per_seg);
+        // split the block metas into chunks of blocks, with chunk size set to blocks_per_seg
+        let chunk_of_blocks = blocks_of_new_segments.chunks(self.blocks_per_seg);
         let segment_info_cache = CacheManager::instance().get_table_segment_cache();
         let segment_writer = SegmentWriter::new(
             &self.data_accessor,
@@ -106,6 +134,8 @@ impl TableMutator for CompactSegmentMutator {
             &segment_info_cache,
         );
 
+        // build new segments which are compacted. the newly compacted segments will also
+        // be persistent into storage.
         let mut compacted_new_segments = vec![];
         for chunk in chunk_of_blocks {
             let stats = reduce_block_metas(chunk)?;
@@ -115,24 +145,58 @@ impl TableMutator for CompactSegmentMutator {
             compacted_new_segments.push(location);
         }
 
-        self.new_segments = compacted_new_segments;
-        Ok(!self.new_segments.is_empty())
+        // keep the compacted_segments
+        self.compacted_segments = compacted_new_segments;
+        gauge!(
+            "fuse_compact_segments_select_duration_second",
+            select_begin.elapsed(),
+        );
+        Ok(!self.compacted_segments.is_empty())
     }
 
     async fn try_commit(&self, table_info: &TableInfo) -> Result<()> {
+        if self.compacted_segments.is_empty() {
+            return Ok(());
+        }
+
         let ctx = &self.ctx;
         let base_snapshot = &self.base_snapshot;
         let catalog = ctx.get_catalog(table_info.catalog())?;
         let mut table = catalog.get_table_by_info(table_info)?;
         let mut latest_snapshot;
-        let mut retires = 0;
-        // used in conflict reconciliation, for concurrent append only operations
+        let mut retries = 0;
+
+        // example of a merge process:
+        // - segments of base_snapshot:
+        //  [a, b, c, d, e, f, g]
+        //  suppose a and d are compacted enough, and others are not.
+        // - after `select_target`:
+        //  unchanged_segments : [a, d]
+        //  compacted_segments : [x, y], where
+        //     [b, c] compacted into x
+        //     [e, f, g] compacted into y
+        // - if there is a concurrent tx, committed BEFORE compact segments,
+        //   and suppose the segments of the tx's snapshot is
+        //  [a, b, c, d, e, f, g, h, i]
+        //  compare with the base_snapshot's segments
+        //  [a, b, c, d, e, f, g]
+        // we know that tx is appended(only) on the base of base_snapshot
+        // and the `appended_segments` is [h, i]
+        //
+        // The final merged segments should be
+        // [x, y, a, d, h, i]
+        //
+        // note that
+        // 1. the concurrently appended(and committed) segment will NOT
+        // be compacted here, to make the commit of compact agile
+        // 2. in the implementation, the order of segment in the vector is arranged in reversed order
+
+        // newly appended segments of concurrent append segments which are committed before us
+        // the init value of it is an empty slice
         let mut appended_segments_locations: &[Location] = &[];
 
+        let fuse_segment_io = FuseSegmentIO::create(self.ctx.clone(), self.data_accessor.clone());
         loop {
-            let fuse_segment_io =
-                FuseSegmentIO::create(self.ctx.clone(), self.data_accessor.clone());
-
             let append_segments_infos = fuse_segment_io
                 .read_segments(appended_segments_locations)
                 .await?
@@ -145,16 +209,18 @@ impl TableMutator for CompactSegmentMutator {
                     .map(|segment_info| segment_info.as_ref()),
             );
 
-            let compacted_segments = self.new_segments.iter().map(|(l, s)| (l, s.as_ref()));
-            // chain compacted_segments with appended_segments
-            let merged_segment = appended_segments_with_locations.chain(compacted_segments);
+            // merge with unchanged segments of base snapshot
+            let merge_with_unchanged = appended_segments_with_locations
+                .chain(self.segments_unchanged.iter().map(|(l, s)| (l, s.as_ref())));
 
-            let (merged_segments, merged_summary) = FuseTable::merge_segments_new(merged_segment)?;
+            let compacted_segments = self.compacted_segments.iter().map(|(l, s)| (l, s.as_ref()));
 
-            let merged_segments = merged_segments
-                .into_iter()
-                .map(|loc| (loc, SegmentInfo::VERSION)) // TODO fix me
-                .collect();
+            // merge with compacted segments
+            let merged_wih_compacted = merge_with_unchanged.chain(compacted_segments);
+
+            // re-calculate statistic
+            let (merged_segments, merged_summary) =
+                FuseTable::merge_segments(merged_wih_compacted)?;
 
             let mut snapshot_tobe_committed = TableSnapshot::from_previous(base_snapshot.as_ref());
             snapshot_tobe_committed.segments = merged_segments;
@@ -173,27 +239,39 @@ impl TableMutator for CompactSegmentMutator {
                     if e.code() == ErrorCode::table_version_mismatched_code() {
                         table = table.refresh(ctx.as_ref()).await?;
                         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-                        // TODO remove this unwrap
                         latest_snapshot =
-                            fuse_table.read_table_snapshot(ctx.clone()).await?.unwrap();
+                            fuse_table.read_table_snapshot(ctx.clone()).await?.ok_or_else(|| {
+                              ErrorCode::LogicalError("compacting meets empty snapshot during conflict reconciliation")
+                            })?;
+
                         match detect_conflicts(base_snapshot, &latest_snapshot) {
-                            Conflict::UnResolvable => {
+                            Conflict::Irreconcilable => {
+                                counter!("fuse_compact_segments_irreconcilable", 1);
                                 break Err(ErrorCode::StorageOther(
                                     "mutation conflicts, concurrent mutation detected while committing segment compaction operation",
                                 ));
                             }
-                            Conflict::ResolvableWithAppend(r) => {
+                            Conflict::ReconcilableAppend(r) => {
+                                counter!("fuse_compact_segments_reconcilable", 1);
+                                info!("resolvable conflicts detected");
                                 appended_segments_locations = &latest_snapshot.segments[r];
                             }
                         }
 
-                        retires += 1;
-                        if retires > 10 {
+                        retries += 1;
+
+                        counter!("fuse_compact_segments_retires", retries);
+                        if retries >= MAX_RETRIES {
+                            counter!("fuse_compact_segments_aborts", 1);
+                            abort_segment_compaction(&self.data_accessor, &self.compacted_segments)
+                                .await;
                             return Err(ErrorCode::StorageOther(format!(
                                 "compact segment failed after {} retries",
-                                retires
+                                retries
                             )));
                         }
+                        // different for retry of commit_insert, here operation retired without hesitation
+                        // since... we are in a hurry ;)
                         continue;
                     } else {
                         return Err(e);
@@ -206,8 +284,10 @@ impl TableMutator for CompactSegmentMutator {
 }
 
 enum Conflict {
-    UnResolvable,
-    ResolvableWithAppend(Range<usize>),
+    Irreconcilable,
+    // reconcilable conflicts with append only option
+    // the range embedded is the range of segments that are appended in the latest snapshot
+    ReconcilableAppend(Range<usize>),
 }
 
 fn detect_conflicts(base: &TableSnapshot, latest: &TableSnapshot) -> Conflict {
@@ -221,8 +301,24 @@ fn detect_conflicts(base: &TableSnapshot, latest: &TableSnapshot) -> Conflict {
         && base_segments[base_segments_len - 1] == latest_segments[latest_segments_len - 1]
         && base_segments[0] == latest_segments[latest_segments_len - base_segments_len]
     {
-        return Conflict::UnResolvable;
-    };
+        Conflict::ReconcilableAppend(0..(latest_segments_len - base_segments_len))
+    } else {
+        Conflict::Irreconcilable
+    }
+}
 
-    Conflict::ResolvableWithAppend(0..(latest_segments_len - base_segments_len))
+async fn abort_segment_compaction(
+    data_accessor: &Operator,
+    new_segments: &[(Location, Arc<SegmentInfo>)],
+) {
+    // parallel delete?
+    for ((path, _), _) in new_segments {
+        let object = data_accessor.object(path.as_str());
+        object.delete().await.unwrap_or_else(|e| {
+            warn!(
+                "failed to delete object [{}] while aborting segment compact operation. {} ",
+                path, e
+            )
+        });
+    }
 }

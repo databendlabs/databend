@@ -781,7 +781,10 @@ impl<'a> Binder {
         let action = action.map_or(OptimizeTableAction::Purge, |v| match v {
             AstOptimizeTableAction::All => OptimizeTableAction::All,
             AstOptimizeTableAction::Purge => OptimizeTableAction::Purge,
-            AstOptimizeTableAction::Compact => OptimizeTableAction::Compact,
+            AstOptimizeTableAction::Compact(target) => match target {
+                CompactTarget::Blocks => OptimizeTableAction::CompactBlocks,
+                CompactTarget::Segments => OptimizeTableAction::CompactSegments,
+            },
         });
 
         Ok(Plan::OptimizeTable(Box::new(OptimizeTablePlan {

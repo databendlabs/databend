@@ -38,6 +38,7 @@ backoff = { version = "0.4.0", features = ["futures", "tokio"] }
 chrono = "0.4.22"
 futures = "0.3.24"
 futures-util = "0.3.24"
+metrics = "0.20.1"
 opendal = { version = "0.19", features = ["layers-retry"] }
 serde = { workspace = true }
 serde_json = { workspace = true }

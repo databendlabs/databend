@@ -56,14 +56,32 @@ impl Interpreter for OptimizeTableInterpreter {
             action,
             OptimizeTableAction::Purge | OptimizeTableAction::All
         );
-        let do_compact = matches!(
+        let do_compact_blocks = matches!(
             action,
-            OptimizeTableAction::Compact | OptimizeTableAction::All
+            OptimizeTableAction::CompactBlocks | OptimizeTableAction::All
         );
 
-        if do_compact {
+        let do_compact_segments_only = matches!(action, OptimizeTableAction::CompactSegments);
+
+        if do_compact_segments_only {
             let mut pipeline = Pipeline::create();
-            let mutator = table.compact(ctx.clone(), &mut pipeline).await?;
+            let segments_only = true;
+            if let Some(mutator) = table
+                .compact(ctx.clone(), segments_only, &mut pipeline)
+                .await?
+            {
+                mutator.try_commit(table.get_table_info()).await?;
+                return Ok(PipelineBuildResult::create());
+            }
+        }
+
+        if do_compact_blocks {
+            eprintln!("is compact blocks");
+            let mut pipeline = Pipeline::create();
+            let segments_only = false;
+            let mutator = table
+                .compact(ctx.clone(), segments_only, &mut pipeline)
+                .await?;
 
             if let Some(mutator) = mutator {
                 let settings = ctx.get_settings();

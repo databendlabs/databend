@@ -23,6 +23,7 @@ use common_pipeline_core::SinkPipeBuilder;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
 
 use super::FuseTableSink;
+use crate::operations::mutation::CompactSegmentMutator;
 use crate::operations::CompactMutator;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
@@ -36,6 +37,7 @@ impl FuseTable {
     pub(crate) async fn do_compact(
         &self,
         ctx: Arc<dyn TableContext>,
+        segments_only: bool,
         pipeline: &mut Pipeline,
     ) -> Result<Option<Arc<dyn TableMutator>>> {
         let snapshot_opt = self.read_table_snapshot(ctx.clone()).await?;
@@ -50,9 +52,28 @@ impl FuseTable {
             return Ok(None);
         }
 
-        let block_compactor = self.get_block_compactor();
         let block_per_seg =
             self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
+
+        if segments_only {
+            let block_per_seg =
+                self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
+            let mut segment_mutator = CompactSegmentMutator::try_create(
+                ctx.clone(),
+                base_snapshot,
+                self.meta_location_generator().clone(),
+                block_per_seg,
+                self.operator.clone(),
+            )?;
+
+            if segment_mutator.target_select().await? {
+                return Ok(Some(Arc::new(segment_mutator)));
+            } else {
+                return Ok(None);
+            }
+        }
+
+        let block_compactor = self.get_block_compactor();
 
         let mut mutator = CompactMutator::try_create(
             ctx.clone(),

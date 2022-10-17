@@ -432,9 +432,10 @@ impl Table for FuseTable {
     async fn compact(
         &self,
         ctx: Arc<dyn TableContext>,
+        segments_only: bool,
         pipeline: &mut Pipeline,
     ) -> Result<Option<Arc<dyn TableMutator>>> {
-        self.do_compact(ctx, pipeline).await
+        self.do_compact(ctx, segments_only, pipeline).await
     }
 
     async fn recluster(

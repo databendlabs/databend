@@ -351,35 +351,10 @@ impl FuseTable {
         Ok((seg_locs, s))
     }
 
-    pub fn merge_segments(
-        segments: &[(&Location, &SegmentInfo)],
-    ) -> Result<(Vec<String>, Statistics)> {
-        let (s, seg_locs) = segments.iter().try_fold(
-            (Statistics::default(), Vec::with_capacity(segments.len())),
-            |(mut acc, mut seg_acc), (location, segment_info)| {
-                let loc = &location.0;
-                let stats = &segment_info.summary;
-                acc.row_count += stats.row_count;
-                acc.block_count += stats.block_count;
-                acc.uncompressed_byte_size += stats.uncompressed_byte_size;
-                acc.compressed_byte_size += stats.compressed_byte_size;
-                acc.index_size = stats.index_size;
-                acc.col_stats = if acc.col_stats.is_empty() {
-                    stats.col_stats.clone()
-                } else {
-                    statistics::reduce_block_statistics(&[&acc.col_stats, &stats.col_stats])?
-                };
-                seg_acc.push(loc.clone());
-                Ok::<_, ErrorCode>((acc, seg_acc))
-            },
-        )?;
-
-        Ok((seg_locs, s))
-    }
-
-    pub fn merge_segments_new<'a>(
+    // TODO duplicated code
+    pub fn merge_segments<'a>(
         mut segments: impl Iterator<Item = (&'a Location, &'a SegmentInfo)>,
-    ) -> Result<(Vec<String>, Statistics)> {
+    ) -> Result<(Vec<Location>, Statistics)> {
         let len_hint = segments
             .size_hint()
             .1
@@ -387,7 +362,6 @@ impl FuseTable {
         let (s, seg_locs) = segments.try_fold(
             (Statistics::default(), Vec::with_capacity(len_hint)),
             |(mut acc, mut seg_acc), (location, segment_info)| {
-                let loc = &location.0;
                 let stats = &segment_info.summary;
                 acc.row_count += stats.row_count;
                 acc.block_count += stats.block_count;
@@ -399,7 +373,7 @@ impl FuseTable {
                 } else {
                     statistics::reduce_block_statistics(&[&acc.col_stats, &stats.col_stats])?
                 };
-                seg_acc.push(loc.clone());
+                seg_acc.push(location.clone());
                 Ok::<_, ErrorCode>((acc, seg_acc))
             },
         )?;
