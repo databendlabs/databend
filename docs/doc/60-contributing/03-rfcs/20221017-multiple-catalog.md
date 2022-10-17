@@ -12,6 +12,18 @@ Allow users to maintain multiple catalogs for the databend.
 
 ## Motivation
 
+Databend organize data in three layers:
+
+```txt
+catalog -> database -> table
+```
+
+- `catalog`: the biggest layer for databend, contains all databases and tables, provided by [`Catalog`](https://github.com/datafuselabs/databend/blob/556aedc00e5e8a95a7551d0ec21b8e6fa7573e0a/src/query/catalog/src/catalog.rs#L80)
+- `database`: the container of tables, provided by [`Database`](https://github.com/datafuselabs/databend/blob/556aedc00e5e8a95a7551d0ec21b8e6fa7573e0a/src/query/catalog/src/database.rs#L44)
+- `table`: the smallest unit in databend, provided by [`Table`](https://github.com/datafuselabs/databend/blob/556aedc00e5e8a95a7551d0ec21b8e6fa7573e0a/src/query/catalog/src/table.rs#L44)
+
+By default, all databases and tables will be stored in `default` catalog (powered by `metasrv`).
+
 Databend supports multiple catalogs now, but only in a static way.
 
 To allow accessing the `hive` catalog, users need to configure `hive` inside `databend-query.toml` in this way:
