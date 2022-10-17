@@ -91,7 +91,7 @@ impl CompactMutator {
 
 #[async_trait::async_trait]
 impl TableMutator for CompactMutator {
-    async fn blocks_select(&mut self) -> Result<bool> {
+    async fn target_select(&mut self) -> Result<bool> {
         let snapshot = self.base_snapshot.clone();
         let segment_locations = &snapshot.segments;
         // Blocks that need to be reorganized into new segments.

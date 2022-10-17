@@ -17,6 +17,6 @@ use common_meta_app::schema::TableInfo;
 
 #[async_trait::async_trait]
 pub trait TableMutator: Send + Sync {
-    async fn blocks_select(&mut self) -> Result<bool>;
+    async fn target_select(&mut self) -> Result<bool>;
     async fn try_commit(&self, table_info: &TableInfo) -> Result<()>;
 }

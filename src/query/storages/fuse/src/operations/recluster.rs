@@ -107,7 +107,7 @@ impl FuseTable {
             self.operator.clone(),
         )?;
 
-        let need_recluster = mutator.blocks_select().await?;
+        let need_recluster = mutator.target_select().await?;
         if !need_recluster {
             return Ok(None);
         }

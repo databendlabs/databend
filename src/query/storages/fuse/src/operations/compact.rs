@@ -63,7 +63,7 @@ impl FuseTable {
             self.cluster_key_meta.is_some(),
             self.operator.clone(),
         )?;
-        let need_compact = mutator.blocks_select().await?;
+        let need_compact = mutator.target_select().await?;
         if !need_compact {
             return Ok(None);
         }

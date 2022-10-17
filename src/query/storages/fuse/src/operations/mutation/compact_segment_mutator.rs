@@ -69,7 +69,7 @@ impl CompactSegmentMutator {
 
 #[async_trait::async_trait]
 impl TableMutator for CompactSegmentMutator {
-    async fn blocks_select(&mut self) -> Result<bool> {
+    async fn target_select(&mut self) -> Result<bool> {
         let fuse_segment_io = FuseSegmentIO::create(self.ctx.clone(), self.data_accessor.clone());
         let base_segments = fuse_segment_io
             .read_segments(&self.base_snapshot.segments)
@@ -116,7 +116,7 @@ impl TableMutator for CompactSegmentMutator {
         }
 
         self.new_segments = compacted_new_segments;
-        Ok(true)
+        Ok(!self.new_segments.is_empty())
     }
 
     async fn try_commit(&self, table_info: &TableInfo) -> Result<()> {

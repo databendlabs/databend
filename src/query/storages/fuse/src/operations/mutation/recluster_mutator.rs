@@ -91,7 +91,7 @@ impl ReclusterMutator {
 
 #[async_trait::async_trait]
 impl TableMutator for ReclusterMutator {
-    async fn blocks_select(&mut self) -> Result<bool> {
+    async fn target_select(&mut self) -> Result<bool> {
         let blocks_map = self.blocks_map.clone();
         for (level, block_metas) in blocks_map.into_iter() {
             if block_metas.len() <= 1 {
