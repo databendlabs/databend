@@ -36,7 +36,7 @@ use crate::DEFAULT_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 
 impl FuseTable {
-    pub fn do_append2(
+    pub fn do_append_data(
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,

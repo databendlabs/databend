@@ -25,7 +25,7 @@ fn random_type() -> DataTypeImpl {
     let mut rng = rand::thread_rng();
 
     loop {
-        let datatype = match rng.gen_range(0..22) {
+        let datatype = match rng.gen_range(0..21) {
             0 => DataTypeImpl::Null(NullType {}),
             1 => NullableType::new_impl(u64::to_data_type()),
             2 => DataTypeImpl::Boolean(BooleanType {}),
@@ -50,7 +50,6 @@ fn random_type() -> DataTypeImpl {
             17 => ArrayType::new_impl(f32::to_data_type()),
             18 => DataTypeImpl::VariantArray(VariantArrayType {}),
             19 => DataTypeImpl::VariantObject(VariantObjectType {}),
-            20 => DataTypeImpl::Interval(IntervalType::new(IntervalKind::Day)),
             _ => DataTypeImpl::Variant(VariantType {}),
         };
         if can_convert(&datatype) {

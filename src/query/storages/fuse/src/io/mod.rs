@@ -12,10 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod files;
 mod locations;
 mod read;
+mod segments;
+mod snapshots;
 mod write;
 
+pub use files::Files;
 pub use locations::TableMetaLocationGenerator;
 pub use read::load_bloom_filter_by_columns;
 pub use read::BlockFilterReader;
@@ -24,6 +28,8 @@ pub use read::MetaReaders;
 pub use read::SegmentInfoReader;
 pub use read::SnapshotHistoryReader;
 pub use read::TableSnapshotReader;
+pub use segments::SegmentsIO;
+pub use snapshots::SnapshotsIO;
 pub use write::write_block;
 pub use write::write_data;
 pub use write::write_meta;

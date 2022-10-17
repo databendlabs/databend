@@ -101,7 +101,7 @@ impl<I: InputFormatPipe> Processor for DeserializeTransformer<I> {
         } else {
             match self.processor.output_buffer.pop_front() {
                 Some(data_block) => {
-                    tracing::info!("DeserializeTransformer push rows {}", data_block.num_rows());
+                    tracing::trace!("DeserializeTransformer push rows {}", data_block.num_rows());
                     self.output.push_data(Ok(data_block));
                     Ok(Event::NeedConsume)
                 }
