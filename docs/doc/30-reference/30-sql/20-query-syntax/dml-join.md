@@ -255,7 +255,7 @@ NULL|NULL
 
 ## Full Outer Join
 
-The *full outer join* returns all rows from both tables, matching up the rows wherever a match can be made and placing NULL s in the places where no matching row exists.
+The *full outer join* returns all rows from both tables, matching up the rows wherever a match can be made and placing NULLs in the places where no matching row exists.
 
 ### Syntax
 
