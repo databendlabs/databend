@@ -25,6 +25,7 @@
 #![feature(const_mut_refs)]
 #![feature(generic_const_exprs)]
 #![allow(incomplete_features)]
+#![feature(core_intrinsics)]
 #![feature(iter_order_by)]
 
 #[allow(dead_code)]
@@ -33,7 +34,7 @@ mod chunk;
 mod column_from;
 
 pub mod converts;
-mod date_converter;
+pub mod date_helper;
 mod display;
 mod error;
 mod evaluator;

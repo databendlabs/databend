@@ -12,12 +12,14 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::io::ErrorKind;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
 use backoff::backoff::Backoff;
 use backoff::ExponentialBackoffBuilder;
+use backon::Retryable;
 use common_base::base::ProgressValues;
 use common_cache::Cache;
 use common_catalog::table::Table;
@@ -79,6 +81,8 @@ impl FuseTable {
         // By default, it is 2 minutes
         let max_elapsed = OCC_DEFAULT_BACKOFF_MAX_ELAPSED_MS;
 
+        // TODO(xuanwo): move to backon instead.
+        //
         // To simplify the settings, using fixed common values for randomization_factor and multiplier
         let mut backoff = ExponentialBackoffBuilder::new()
             .with_initial_interval(init_delay)
@@ -162,7 +166,7 @@ impl FuseTable {
         overwrite: bool,
     ) -> Result<()> {
         let prev = self.read_table_snapshot(ctx.clone()).await?;
-        let prev_version = self.snapshot_format_version();
+        let prev_version = self.snapshot_format_version().await?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let schema = self.table_info.meta.schema.as_ref().clone();
         let (segments, summary) = Self::merge_append_operations(operation_log)?;
@@ -403,9 +407,17 @@ impl FuseTable {
             format!("{}{}", storage_prefix, last_snapshot_path)
         };
 
-        operator
-            .object(&hint_path)
-            .write(last_snapshot_path)
+        let object = operator.object(&hint_path);
+        { || object.write(last_snapshot_path.as_bytes()) }
+            .retry(backon::ExponentialBackoff::default())
+            .when(|err| err.kind() == ErrorKind::Interrupted)
+            .notify(|err, dur| {
+                warn!(
+                    "fuse table write_last_snapshot_hint retry after {}s for error {:?}",
+                    dur.as_secs(),
+                    err
+                )
+            })
             .await
             .unwrap_or_else(|e| {
                 warn!("write last snapshot hint failure. {}", e);

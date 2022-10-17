@@ -176,7 +176,6 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, buf: &mut Vec<u8>) {
         ScalarRef::String(s) => common_jsonb::Value::String(String::from_utf8_lossy(s)),
         ScalarRef::Timestamp(ts) => ts.into(),
         ScalarRef::Date(d) => d.into(),
-        ScalarRef::Interval(i) => i.into(),
         ScalarRef::Array(col) => {
             let items = cast_scalars_to_variants(col.iter());
             common_jsonb::build_array(items.iter(), buf).expect("failed to build jsonb array");

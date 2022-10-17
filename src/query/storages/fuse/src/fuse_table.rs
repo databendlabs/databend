@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::str;
 use std::sync::Arc;
 
 use common_catalog::catalog::StorageDescription;
@@ -39,7 +40,9 @@ use common_legacy_planners::Partitions;
 use common_legacy_planners::ReadDataSourcePlan;
 use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
+use common_sharing::create_share_table_operator;
 use common_storage::init_operator;
+use common_storage::ShareTableConfig;
 use common_storage::StorageOperator;
 use common_storages_util::storage_context::StorageContext;
 use common_storages_util::table_storage_prefix::table_storage_prefix;
@@ -58,6 +61,7 @@ use crate::DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD;
 use crate::DEFAULT_ROW_PER_BLOCK;
 use crate::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
+use crate::FUSE_TBL_LAST_SNAPSHOT_HINT;
 use crate::OPT_KEY_DATABASE_ID;
 use crate::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use crate::OPT_KEY_SNAPSHOT_LOCATION;
@@ -87,12 +91,23 @@ impl FuseTable {
         if let Some((_, order)) = &cluster_key_meta {
             cluster_keys = ExpressionParser::parse_exprs(order)?;
         }
-        let storage_params = table_info.meta.storage_params.clone();
-        let operator = match storage_params {
-            Some(sp) => init_operator(&sp)?,
+        let operator = match table_info.from_share {
+            Some(ref from_share) => create_share_table_operator(
+                ShareTableConfig::share_endpoint_address(),
+                &table_info.tenant,
+                &from_share.tenant,
+                &from_share.share_name,
+                &table_info.name,
+            ),
             None => {
-                let op = &*(StorageOperator::instance());
-                op.clone()
+                let storage_params = table_info.meta.storage_params.clone();
+                match storage_params {
+                    Some(sp) => init_operator(&sp)?,
+                    None => {
+                        let op = &*(StorageOperator::instance());
+                        op.clone()
+                    }
+                }
             }
         };
 
@@ -137,33 +152,40 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
     ) -> Result<Option<Arc<TableSnapshot>>> {
-        if let Some(loc) = self.snapshot_loc() {
+        if let Some(loc) = self.snapshot_loc().await? {
             let reader = MetaReaders::table_snapshot_reader(ctx, self.get_operator());
-            let ver = self.snapshot_format_version();
+            let ver = self.snapshot_format_version().await?;
             Ok(Some(reader.read(loc.as_str(), None, ver).await?))
         } else {
             Ok(None)
         }
     }
 
-    pub fn snapshot_format_version(&self) -> u64 {
-        match self.snapshot_loc() {
-            Some(loc) => TableMetaLocationGenerator::snapshot_version(loc.as_str()),
+    pub async fn snapshot_format_version(&self) -> Result<u64> {
+        match self.snapshot_loc().await? {
+            Some(loc) => Ok(TableMetaLocationGenerator::snapshot_version(loc.as_str())),
             None => {
                 // No snapshot location here, indicates that there are no data of this table yet
                 // in this case, we just returns the current snapshot version
-                TableSnapshot::VERSION
+                Ok(TableSnapshot::VERSION)
             }
         }
     }
 
-    pub fn snapshot_loc(&self) -> Option<String> {
-        let options = self.table_info.options();
-        options
-            .get(OPT_KEY_SNAPSHOT_LOCATION)
-            // for backward compatibility, we check the legacy table option
-            .or_else(|| options.get(OPT_KEY_LEGACY_SNAPSHOT_LOC))
-            .cloned()
+    pub async fn snapshot_loc(&self) -> Result<Option<String>> {
+        if self.table_info.from_share.is_some() {
+            let url = FUSE_TBL_LAST_SNAPSHOT_HINT;
+            let data = self.operator.object(url).read().await?;
+            let s = str::from_utf8(&data)?;
+            Ok(Some(s.to_string()))
+        } else {
+            let options = self.table_info.options();
+            Ok(options
+                .get(OPT_KEY_SNAPSHOT_LOCATION)
+                // for backward compatibility, we check the legacy table option
+                .or_else(|| options.get(OPT_KEY_LEGACY_SNAPSHOT_LOC))
+                .cloned())
+        }
     }
 
     pub fn get_operator(&self) -> Operator {
@@ -246,7 +268,7 @@ impl Table for FuseTable {
         let schema = self.schema().as_ref().clone();
 
         let prev = self.read_table_snapshot(ctx.clone()).await?;
-        let prev_version = self.snapshot_format_version();
+        let prev_version = self.snapshot_format_version().await?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let prev_snapshot_id = prev.as_ref().map(|v| (v.snapshot_id, prev_version));
         let (summary, segments) = if let Some(v) = prev {
@@ -290,7 +312,7 @@ impl Table for FuseTable {
         let schema = self.schema().as_ref().clone();
 
         let prev = self.read_table_snapshot(ctx.clone()).await?;
-        let prev_version = self.snapshot_format_version();
+        let prev_version = self.snapshot_format_version().await?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let prev_snapshot_id = prev.as_ref().map(|v| (v.snapshot_id, prev_version));
         let (summary, segments) = if let Some(v) = prev {
@@ -331,14 +353,14 @@ impl Table for FuseTable {
         self.do_read_partitions(ctx, push_downs).await
     }
 
-    #[tracing::instrument(level = "debug", name = "fuse_table_read2", skip(self, ctx, pipeline), fields(ctx.id = ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", name = "fuse_table_read_data", skip(self, ctx, pipeline), fields(ctx.id = ctx.get_id().as_str()))]
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
         plan: &ReadDataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        self.do_read2(ctx, plan, pipeline)
+        self.do_read_data(ctx, plan, pipeline)
     }
 
     fn append_data(
@@ -348,7 +370,7 @@ impl Table for FuseTable {
         need_output: bool,
     ) -> Result<()> {
         self.check_mutable()?;
-        self.do_append2(ctx, pipeline, need_output)
+        self.do_append_data(ctx, pipeline, need_output)
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_commit_insertion", skip(self, ctx, operations), fields(ctx.id = ctx.get_id().as_str()))]

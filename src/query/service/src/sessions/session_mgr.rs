@@ -208,7 +208,10 @@ impl SessionManager {
 
             info!("Will shutdown forcefully.");
 
-            for weak_ptr in active_sessions.read().values() {
+            // During the destroy session, we need to get active_sessions write locks,
+            // so we can only get active_sessions snapshots.
+            let active_sessions = active_sessions.read().values().cloned().collect::<Vec<_>>();
+            for weak_ptr in &active_sessions {
                 if let Some(active_session) = weak_ptr.upgrade() {
                     active_session.force_kill_session();
                 }
