@@ -15,9 +15,10 @@ test = false
 common-arrow = { path = "../../../common/arrow" }
 common-base = { path = "../../../common/base" }
 common-catalog = { path = "../../catalog" }
-common-datablocks = { path = "../../datablocks" }
-common-datavalues = { path = "../../datavalues" }
+# common-datablocks = { path = "../../datablocks" }
+# common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
+common-expression = { path = "../../expression" }
 common-fuse-meta = { path = "../fuse-meta" }
 common-hive-meta-store = { path = "../hive-meta-store" }
 common-legacy-expression = { path = "../../legacy-expression" }
@@ -34,6 +35,7 @@ thrift = { git = "https://github.com/datafuse-extras/thrift", tag = "v0.17.0" }
 
 async-recursion = "1.0.0"
 async-trait = "0.1.57"
+chrono = "0.4.22"
 futures = "0.3.24"
 opendal = { version = "0.19", features = ["layers-retry"] }
 serde = { workspace = true }

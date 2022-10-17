@@ -114,4 +114,9 @@ impl Chunk {
             num_rows: range.end - range.start + 1,
         }
     }
+
+    #[inline]
+    pub fn add_column(&mut self, column: Value<AnyType>, data_type: DataType) {
+        self.columns.push((column, data_type))
+    }
 }

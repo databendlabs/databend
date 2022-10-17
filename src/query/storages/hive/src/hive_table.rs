@@ -22,12 +22,12 @@ use common_base::base::tokio::sync::Semaphore;
 use common_catalog::table::Table;
 use common_catalog::table::TableStatistics;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::DataField;
+use common_expression::DataSchema;
+use common_expression::DataSchemaRef;
 use common_legacy_expression::LegacyExpression;
 use common_legacy_expression::RequireColumnsVisitor;
 use common_legacy_planners::Extras;
@@ -441,7 +441,7 @@ impl Table for HiveTable {
     async fn commit_insertion(
         &self,
         _ctx: Arc<dyn TableContext>,
-        _operations: Vec<DataBlock>,
+        _operations: Vec<Chunk>,
         _overwrite: bool,
     ) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(
@@ -493,13 +493,13 @@ impl HiveSource {
 impl SyncSource for HiveSource {
     const NAME: &'static str = "HiveSource";
 
-    fn generate(&mut self) -> Result<Option<DataBlock>> {
+    fn generate(&mut self) -> Result<Option<Chunk>> {
         if self.finish {
             return Ok(None);
         }
 
         self.finish = true;
-        Ok(Some(DataBlock::empty_with_schema(self.schema.clone())))
+        Ok(Some(Chunk::empty()))
     }
 }
 

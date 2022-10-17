@@ -17,15 +17,17 @@ use std::sync::Arc;
 use std::vec;
 
 use common_catalog::table_context::TableContext;
-use common_datavalues::DataSchema;
-use common_datavalues::DataTypeImpl;
-use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::DataSchema;
+use common_expression::Scalar;
 use common_fuse_meta::meta::ColumnStatistics;
 use common_fuse_meta::meta::StatisticsOfColumns;
 use common_legacy_expression::LegacyExpression;
 use common_storages_index::range_filter::RangeFilter;
+
+use crate::utils::str_field_to_scalar;
 
 pub struct HivePartitionPruner {
     pub ctx: Arc<dyn TableContext>,
@@ -54,31 +56,11 @@ impl HivePartitionPruner {
             for (index, singe_value) in partition.split('/').enumerate() {
                 let kv = singe_value.split('=').collect::<Vec<&str>>();
                 let field = self.partition_schema.fields()[index].clone();
-
-                let v = match field.data_type() {
-                    DataTypeImpl::String(_) => DataValue::String(kv[1].as_bytes().to_vec()),
-                    DataTypeImpl::Int8(_)
-                    | DataTypeImpl::Int16(_)
-                    | DataTypeImpl::Int32(_)
-                    | DataTypeImpl::Int64(_) => DataValue::Int64(kv[1].parse::<i64>().unwrap()),
-                    DataTypeImpl::UInt8(_)
-                    | DataTypeImpl::UInt16(_)
-                    | DataTypeImpl::UInt32(_)
-                    | DataTypeImpl::UInt64(_) => DataValue::UInt64(kv[1].parse::<u64>().unwrap()),
-                    DataTypeImpl::Float32(_) | DataTypeImpl::Float64(_) => {
-                        DataValue::Float64(kv[1].parse::<f64>().unwrap())
-                    }
-                    _ => {
-                        return Err(ErrorCode::UnImplement(format!(
-                            "unsupported partition type, {:?}",
-                            field
-                        )));
-                    }
-                };
+                let scalar = str_field_to_scalar(kv[1], field.data_type())?;
 
                 let column_stats = ColumnStatistics {
-                    min: v.clone(),
-                    max: v,
+                    min: scalar.clone(),
+                    max: scalar,
                     null_count: 0,
                     in_memory_size: 0,
                 };

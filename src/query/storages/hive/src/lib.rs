@@ -26,6 +26,7 @@ mod hive_partition_pruner;
 mod hive_table;
 mod hive_table_options;
 mod hive_table_source;
+mod utils;
 
 pub const CATALOG_HIVE: &str = "hive";
 

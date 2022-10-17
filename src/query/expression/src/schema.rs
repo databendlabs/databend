@@ -340,7 +340,6 @@ impl Into<ArrowDataType> for &DataType {
             DataType::String => ArrowDataType::LargeBinary,
             DataType::Timestamp => ArrowDataType::Date64,
             DataType::Date => ArrowDataType::Date32,
-            DataType::Interval => ArrowDataType::Int64,
             DataType::Nullable(ty) => ty.as_ref().into(),
             DataType::Null => ArrowDataType::Null,
             DataType::Array(ty) => {

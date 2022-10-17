@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_datavalues::chrono::Utc;
+use chrono::Utc;
 use common_datavalues::type_primitive::Float32Type;
 use common_datavalues::type_primitive::Float64Type;
 use common_datavalues::type_primitive::Int16Type;
@@ -32,6 +32,9 @@ use common_datavalues::NullableType;
 use common_datavalues::TimestampType;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::ArgType;
+use common_expression::types::DataType;
+use common_expression::types::NumberType;
 use common_hive_meta_store as hms;
 use common_meta_app::schema::DatabaseIdent;
 use common_meta_app::schema::DatabaseInfo;
@@ -144,39 +147,36 @@ fn try_into_schema(
     Ok(DataSchema::new(fields))
 }
 
-fn try_from_filed_type_name(type_name: impl AsRef<str>) -> Result<DataTypeImpl> {
+fn try_from_filed_type_name(type_name: impl AsRef<str>) -> Result<DataType> {
     let name = type_name.as_ref().to_uppercase();
     // TODO more mappings goes here
     // https://cwiki.apache.org/confluence/display/Hive/LanguageManual+Types
 
     // Hive string data type could be varchar(n), where n is the maximum number of characters
     if name.starts_with("VARCHAR") {
-        Ok(DataTypeImpl::String(StringType::default()))
+        Ok(DataType::String)
     } else if name.starts_with("ARRAY<") {
         let sub_type = &name["ARRAY<".len()..name.len() - 1];
         let sub_type = try_from_filed_type_name(sub_type)?;
-        Ok(DataTypeImpl::Array(ArrayType::create(
-            NullableType::new_impl(sub_type),
-        )))
+        Ok(DataType::Array(Box::new(sub_type)))
     } else {
         match name.as_str() {
-            "TINYINT" => Ok(DataTypeImpl::Int8(Int8Type::default())),
-            "SMALLINT" => Ok(DataTypeImpl::Int16(Int16Type::default())),
-            "INT" => Ok(DataTypeImpl::Int32(Int32Type::default())),
-            "BIGINT" => Ok(DataTypeImpl::Int64(Int64Type::default())),
+            "TINYINT" => Ok(NumberType::<i8>::data_type()),
+            "SMALLINT" => Ok(NumberType::<i16>::data_type()),
+            "INT" => Ok(NumberType::<i32>::data_type()),
+            "BIGINT" => Ok(NumberType::<i64>::data_type()),
 
-            "BINARY" | "STRING" => Ok(DataTypeImpl::String(StringType::default())),
+            "BINARY" | "STRING" => Ok(DataType::String),
             // boolean
-            "BOOLEAN" => Ok(DataTypeImpl::Boolean(BooleanType::default())),
+            "BOOLEAN" => Ok(DataType::Boolean),
 
             //"DECIMAL", "NUMERIC" type not supported
-            "FLOAT" => Ok(DataTypeImpl::Float32(Float32Type::default())),
-            "DOUBLE" => Ok(DataTypeImpl::Float64(Float64Type::default())),
-            "DOUBLE PRECISION" => Ok(DataTypeImpl::Float64(Float64Type::default())),
+            "FLOAT" => Ok(NumberType::<f32>::data_type()),
+            "DOUBLE" | "DOUBLE PRECISION" => Ok(NumberType::<f64>::data_type()),
 
             // timestamp
-            "TIMESTAMP" => Ok(TimestampType::new_impl()),
-            "DATE" => Ok(DataTypeImpl::Date(DateType::default())),
+            "TIMESTAMP" => Ok(DataType::Timestamp),
+            "DATE" => Ok(DataType::Date),
 
             _ => Err(ErrorCode::IllegalDataType(format!(
                 "unknown hive data type [{}]",
