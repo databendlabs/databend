@@ -111,7 +111,7 @@ impl TableMutator for CompactSegmentMutator {
             let stats = reduce_block_metas(chunk)?;
             let blocks: Vec<BlockMeta> = chunk.iter().map(|block| Clone::clone(*block)).collect();
             let new_segment = SegmentInfo::new(blocks, stats);
-            let location = segment_writer.write_segment_new(new_segment).await?;
+            let location = segment_writer.write_segment_ext(new_segment).await?;
             compacted_new_segments.push(location);
         }
 
