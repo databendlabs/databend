@@ -64,8 +64,8 @@ impl JoinHashTable {
         };
 
         let dummy_probed_rows = vec![RowPtr {
-            chunk_index: 0,
             row_index: 0,
+            chunk_index: 0,
             marker: None,
         }];
 
@@ -83,7 +83,17 @@ impl JoinHashTable {
 
             if self.hash_join_desc.join_type == JoinType::Full {
                 let mut build_indexes = self.hash_join_desc.right_join_desc.build_indexes.write();
-                build_indexes.extend(probed_rows);
+
+                // dummy row ptr
+                // here assume there is no RowPtr, which chunk_index is usize::MAX and row_index is usize::MAX
+                match probe_result_ptr {
+                    None => build_indexes.push(RowPtr {
+                        chunk_index: usize::MAX,
+                        row_index: usize::MAX,
+                        marker: Some(MarkerKind::False),
+                    }),
+                    Some(_) => build_indexes.extend(probed_rows),
+                };
             }
 
             if self.hash_join_desc.join_type == JoinType::Single && probed_rows.len() > 1 {
