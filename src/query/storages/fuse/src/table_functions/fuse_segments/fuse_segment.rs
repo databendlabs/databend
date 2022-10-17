@@ -21,9 +21,9 @@ use common_fuse_meta::meta::Location;
 use futures_util::TryStreamExt;
 
 use crate::io::MetaReaders;
+use crate::io::SegmentsIO;
 use crate::io::SnapshotHistoryReader;
 use crate::sessions::TableContext;
-use crate::FuseSegmentIO;
 use crate::FuseTable;
 
 pub struct FuseSegment<'a> {
@@ -46,7 +46,7 @@ impl<'a> FuseSegment<'a> {
         let maybe_snapshot = tbl.read_table_snapshot(self.ctx.clone()).await?;
         if let Some(snapshot) = maybe_snapshot {
             // prepare the stream of snapshot
-            let snapshot_version = tbl.snapshot_format_version();
+            let snapshot_version = tbl.snapshot_format_version().await?;
             let snapshot_location = tbl
                 .meta_location_generator
                 .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot_version)?;
@@ -77,8 +77,8 @@ impl<'a> FuseSegment<'a> {
         let mut uncompressed: Vec<u64> = Vec::with_capacity(len);
         let mut file_location: Vec<Vec<u8>> = Vec::with_capacity(len);
 
-        let fuse_segment_io = FuseSegmentIO::create(self.ctx.clone(), self.table.operator.clone());
-        let segments = fuse_segment_io.read_segments(segment_locations).await?;
+        let segments_io = SegmentsIO::create(self.ctx.clone(), self.table.operator.clone());
+        let segments = segments_io.read_segments(segment_locations).await?;
         for (idx, segment) in segments.iter().enumerate() {
             let segment = segment.clone()?;
             format_versions.push(segment_locations[idx].1);

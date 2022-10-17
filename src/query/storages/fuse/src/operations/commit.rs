@@ -166,7 +166,7 @@ impl FuseTable {
         overwrite: bool,
     ) -> Result<()> {
         let prev = self.read_table_snapshot(ctx.clone()).await?;
-        let prev_version = self.snapshot_format_version();
+        let prev_version = self.snapshot_format_version().await?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let schema = self.table_info.meta.schema.as_ref().clone();
         let (segments, summary) = Self::merge_append_operations(operation_log)?;
@@ -382,7 +382,7 @@ impl FuseTable {
             .retry(backon::ExponentialBackoff::default())
             .when(|err| err.kind() == ErrorKind::Interrupted)
             .notify(|err, dur| {
-                debug!(
+                warn!(
                     "fuse table write_last_snapshot_hint retry after {}s for error {:?}",
                     dur.as_secs(),
                     err

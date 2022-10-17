@@ -26,7 +26,7 @@ use common_legacy_planners::PartInfoPtr;
 use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
 use opendal::Operator;
-use tracing::debug;
+use tracing::warn;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -111,7 +111,7 @@ impl ResultTableWriter {
             .retry(ExponentialBackoff::default())
             .when(|err| err.kind() == ErrorKind::Interrupted)
             .notify(|err, dur| {
-                debug!(
+                warn!(
                     "append block write retry after {}s for error {:?}",
                     dur.as_secs(),
                     err

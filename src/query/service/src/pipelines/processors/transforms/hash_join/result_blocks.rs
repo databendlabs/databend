@@ -78,9 +78,15 @@ impl JoinHashTable {
                     input,
                 ),
             },
-            JoinType::RightMark => {
-                self.probe_right_mark_join(hash_table, probe_state, keys_iter, input)
-            }
+            JoinType::RightMark => match self.hash_join_desc.other_predicate.is_none() {
+                true => self.probe_right_mark_join(hash_table, probe_state, keys_iter, input),
+                false => self.probe_right_mark_join_with_conjunct(
+                    hash_table,
+                    probe_state,
+                    keys_iter,
+                    input,
+                ),
+            },
             _ => Err(ErrorCode::UnImplement(format!(
                 "{} is unimplemented",
                 self.hash_join_desc.join_type
