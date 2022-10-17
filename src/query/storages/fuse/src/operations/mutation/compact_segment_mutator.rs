@@ -165,6 +165,7 @@ impl TableMutator for CompactSegmentMutator {
         let mut table = catalog.get_table_by_info(table_info)?;
         let mut latest_snapshot;
         let mut retries = 0;
+        let mut current_table_info = table_info;
 
         // example of a merge process:
         // - segments of base_snapshot:
@@ -228,7 +229,7 @@ impl TableMutator for CompactSegmentMutator {
 
             match FuseTable::commit_to_meta_server(
                 ctx.as_ref(),
-                table_info,
+                &current_table_info,
                 &self.location_generator,
                 snapshot_tobe_committed,
                 &self.data_accessor,
@@ -243,16 +244,17 @@ impl TableMutator for CompactSegmentMutator {
                             fuse_table.read_table_snapshot(ctx.clone()).await?.ok_or_else(|| {
                               ErrorCode::LogicalError("compacting meets empty snapshot during conflict reconciliation")
                             })?;
+                        current_table_info = &fuse_table.table_info;
 
                         match detect_conflicts(base_snapshot, &latest_snapshot) {
                             Conflict::Irreconcilable => {
-                                counter!("fuse_compact_segments_irreconcilable", 1);
+                                counter!("fuse_compact_segments_irreconcilable_conflict", 1);
                                 break Err(ErrorCode::StorageOther(
                                     "mutation conflicts, concurrent mutation detected while committing segment compaction operation",
                                 ));
                             }
                             Conflict::ReconcilableAppend(r) => {
-                                counter!("fuse_compact_segments_reconcilable", 1);
+                                counter!("fuse_compact_segments_reconcilable_conflict", 1);
                                 info!("resolvable conflicts detected");
                                 appended_segments_locations = &latest_snapshot.segments[r];
                             }
