@@ -1179,6 +1179,9 @@ async fn test_download_failed() -> Result<()> {
     let (status, result) = post_sql_to_endpoint_new_session(&ep, sql, 1).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
 
+    let response = get_uri(&ep, &result.final_uri.clone().unwrap()).await;
+    assert_eq!(response.status(), StatusCode::OK, "{:?}", response);
+
     let mut resp = download(&ep, &result.id).await;
     let exp = "not exists";
     assert!(resp.take_body().into_string().await.unwrap().contains(exp));
@@ -1215,7 +1218,7 @@ async fn test_download_killed() -> Result<()> {
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     let query_id = &result.id;
 
-    let response = get_uri(&ep, &result.kill_uri.unwrap()).await;
+    let response = get_uri(&ep, &result.final_uri.unwrap()).await;
     assert_eq!(response.status(), StatusCode::OK, "{:?}", response);
 
     let mut resp = download(&ep, query_id).await;
@@ -1247,6 +1250,9 @@ async fn test_no_download_in_management_mode() -> Result<()> {
     let sql = "select 1";
     let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
+
+    let response = get_uri(&ep, &result.final_uri.clone().unwrap()).await;
+    assert_eq!(response.status(), StatusCode::OK, "{:?}", response);
 
     let mut resp = download(&ep, &result.id).await;
     let exp = "not exists";
