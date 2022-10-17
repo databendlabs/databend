@@ -353,14 +353,14 @@ impl Table for FuseTable {
         self.do_read_partitions(ctx, push_downs).await
     }
 
-    #[tracing::instrument(level = "debug", name = "fuse_table_read2", skip(self, ctx, pipeline), fields(ctx.id = ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", name = "fuse_table_read_data", skip(self, ctx, pipeline), fields(ctx.id = ctx.get_id().as_str()))]
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
         plan: &ReadDataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        self.do_read2(ctx, plan, pipeline)
+        self.do_read_data(ctx, plan, pipeline)
     }
 
     fn append_data(
@@ -370,7 +370,7 @@ impl Table for FuseTable {
         need_output: bool,
     ) -> Result<()> {
         self.check_mutable()?;
-        self.do_append2(ctx, pipeline, need_output)
+        self.do_append_data(ctx, pipeline, need_output)
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_commit_insertion", skip(self, ctx, operations), fields(ctx.id = ctx.get_id().as_str()))]

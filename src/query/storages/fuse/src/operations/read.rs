@@ -72,7 +72,7 @@ impl FuseTable {
     }
 
     #[inline]
-    pub fn do_read2(
+    pub fn do_read_data(
         &self,
         ctx: Arc<dyn TableContext>,
         plan: &ReadDataSourcePlan,
