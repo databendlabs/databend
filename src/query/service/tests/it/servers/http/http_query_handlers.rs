@@ -1108,6 +1108,46 @@ async fn test_download() -> Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn test_download_running() -> Result<()> {
+    let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
+
+    let ep = create_endpoint().await?;
+
+    let sql = "select sleep(10)";
+    let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    let query_id = &result.id;
+    assert_eq!(result.state, ExecuteStateKind::Running, "{:?}", result);
+
+    let uri = format!("/v1/query/{query_id}/download?limit=1");
+    let resp = get_uri(&ep, &uri).await;
+    assert_eq!(
+        resp.status(),
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "{:?}",
+        resp
+    );
+    assert_eq!(resp.into_body().into_string().await.unwrap(), "running");
+
+    let response = get_uri(&ep, &result.final_uri.unwrap()).await;
+    assert_eq!(response.status(), StatusCode::OK, "{:?}", response);
+
+    let response = get_uri(&ep, &result.stats_uri.unwrap()).await;
+    assert_eq!(response.status(), StatusCode::OK, "{:?}", response);
+
+    let uri = format!("/v1/query/{query_id}/download?limit=1");
+    let resp = get_uri(&ep, &uri).await;
+    assert_eq!(
+        resp.status(),
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "{:?}",
+        resp
+    );
+    assert_eq!(resp.into_body().into_string().await.unwrap(), "running");
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn test_download_non_select() -> Result<()> {
     let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
 
