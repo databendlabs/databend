@@ -15,26 +15,19 @@
 use std::task::Context;
 use std::task::Poll;
 
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_expression::Chunk;
 
 pub struct DataBlockStream {
     current: usize,
-    schema: DataSchemaRef,
-    data: Vec<DataBlock>,
+    data: Vec<Chunk>,
     projects: Option<Vec<usize>>,
 }
 
 impl DataBlockStream {
-    pub fn create(
-        schema: DataSchemaRef,
-        projects: Option<Vec<usize>>,
-        data: Vec<DataBlock>,
-    ) -> Self {
+    pub fn create(projects: Option<Vec<usize>>, data: Vec<Chunk>) -> Self {
         DataBlockStream {
             current: 0,
-            schema,
             data,
             projects,
         }
@@ -42,7 +35,7 @@ impl DataBlockStream {
 }
 
 impl futures::Stream for DataBlockStream {
-    type Item = Result<DataBlock>;
+    type Item = Result<Chunk>;
 
     fn poll_next(
         mut self: std::pin::Pin<&mut Self>,
@@ -50,14 +43,14 @@ impl futures::Stream for DataBlockStream {
     ) -> Poll<Option<Self::Item>> {
         Poll::Ready(if self.current < self.data.len() {
             self.current += 1;
-            let block = &self.data[self.current - 1];
+            let chunk = &self.data[self.current - 1];
 
             Some(Ok(match &self.projects {
-                Some(v) => DataBlock::create(
-                    self.schema.clone(),
-                    v.iter().map(|x| block.column(*x).clone()).collect(),
+                Some(v) => Chunk::new(
+                    v.iter().map(|x| chunk.column(*x).clone()).collect(),
+                    chunk.num_rows(),
                 ),
-                None => block.clone(),
+                None => chunk.clone(),
             }))
         } else {
             None

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_expression::Chunk;
 
 pub type SendableDataBlockStream =
-    std::pin::Pin<Box<dyn futures::stream::Stream<Item = Result<DataBlock>> + Send>>;
+    std::pin::Pin<Box<dyn futures::stream::Stream<Item = Result<Chunk>> + Send>>;

@@ -2193,9 +2193,8 @@ name = "common-streams"
 version = "0.1.0"
 dependencies = [
  "common-base",
- "common-datablocks",
- "common-datavalues",
  "common-exception",
+ "common-expression",
  "futures",
  "opendal",
  "pin-project-lite",

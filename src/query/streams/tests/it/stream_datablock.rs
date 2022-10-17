@@ -13,73 +13,81 @@
 // limitations under the License.
 
 use common_base::base::tokio;
-use common_datablocks::*;
-use common_datavalues::prelude::*;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::ColumnFrom;
+use common_expression::Value;
 use common_streams::*;
 use futures::stream::StreamExt;
+use goldenfile::Mint;
 
 #[tokio::test]
 async fn test_datablock_stream() {
-    let schema = DataSchemaRefExt::create(vec![
-        DataField::new("name", Vu8::to_data_type()),
-        DataField::new("age", i32::to_data_type()),
-    ]);
+    let mut mint = Mint::new("tests/it/testdata");
+    let file = &mut mint.new_goldenfile("stream_datablock.txt").unwrap();
 
-    let data_blocks = vec![
-        DataBlock::create(schema.clone(), vec![
-            Series::from_data(vec!["a1", "a2", "a3"]),
-            Series::from_data(vec![1i32, 1, 1]),
-        ]),
-        DataBlock::create(schema.clone(), vec![
-            Series::from_data(vec!["b1", "b2", "b3"]),
-            Series::from_data(vec![2i32, 2, 2]),
-        ]),
-        DataBlock::create(schema.clone(), vec![
-            Series::from_data(vec!["c1", "c2", "c3"]),
-            Series::from_data(vec![3i32, 3, 3]),
-        ]),
+    let chunks = vec![
+        Chunk::new(
+            vec![
+                (
+                    Value::Column(Column::from_data(vec!["a1", "a2", "a3"])),
+                    DataType::String,
+                ),
+                (
+                    Value::Column(Column::from_data(vec![1i32, 1, 1])),
+                    DataType::Number(NumberDataType::Int32),
+                ),
+            ],
+            3,
+        ),
+        Chunk::new(
+            vec![
+                (
+                    Value::Column(Column::from_data(vec!["b1", "b2", "b3"])),
+                    DataType::String,
+                ),
+                (
+                    Value::Column(Column::from_data(vec![2i32, 2, 2])),
+                    DataType::Number(NumberDataType::Int32),
+                ),
+            ],
+            3,
+        ),
+        Chunk::new(
+            vec![
+                (
+                    Value::Column(Column::from_data(vec!["c1", "c2", "c3"])),
+                    DataType::String,
+                ),
+                (
+                    Value::Column(Column::from_data(vec![3i32, 3, 3])),
+                    DataType::Number(NumberDataType::Int32),
+                ),
+            ],
+            3,
+        ),
     ];
 
-    let expected = vec![
-        vec![
-            "+------+-----+",
-            "| name | age |",
-            "+------+-----+",
-            "| a1   | 1   |",
-            "| a2   | 1   |",
-            "| a3   | 1   |",
-            "+------+-----+",
-        ],
-        vec![
-            "+------+-----+",
-            "| name | age |",
-            "+------+-----+",
-            "| b1   | 2   |",
-            "| b2   | 2   |",
-            "| b3   | 2   |",
-            "+------+-----+",
-        ],
-        vec![
-            "+------+-----+",
-            "| name | age |",
-            "+------+-----+",
-            "| c1   | 3   |",
-            "| c2   | 3   |",
-            "| c3   | 3   |",
-            "+------+-----+",
-        ],
-    ];
-
-    let mut stream = DataBlockStream::create(schema, None, data_blocks);
-    let mut index = 0_usize;
+    let mut stream = DataBlockStream::create(None, chunks);
 
     while let Some(res) = stream.next().await {
         assert!(res.is_ok());
-        let data_block = res.unwrap();
-        match index {
-            0 | 1 | 2 => assert_blocks_eq(expected[index].clone(), &[data_block]),
-            _ => panic!(),
+        let chunk = res.unwrap();
+
+        let mut table = Table::new();
+        table.load_preset("||--+-++|    ++++++");
+        table.set_header(["name", "age"]);
+
+        for _ in 0..chunk.num_rows() {
+            let mut row = Vec::with_capacity(chunk.num_columns());
+            for i in 0..chunk.num_columns() {
+                let (value, _) = chunk.column(i);
+                row.push(format!("{}", value));
+            }
+            table.add_row(row);
         }
-        index += 1;
+        writeln!(file, "{table}\n\n").unwrap();
     }
 }

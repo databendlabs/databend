@@ -18,8 +18,8 @@ use std::task::Poll;
 
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
-use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_expression::Chunk;
 use futures::Stream;
 use pin_project_lite::pin_project;
 
@@ -40,7 +40,7 @@ impl ProgressStream {
 }
 
 impl Stream for ProgressStream {
-    type Item = Result<DataBlock>;
+    type Item = Result<Chunk>;
 
     fn poll_next(
         self: std::pin::Pin<&mut Self>,
@@ -51,13 +51,13 @@ impl Stream for ProgressStream {
         match this.input.poll_next(ctx) {
             Poll::Ready(x) => match x {
                 Some(result) => match result {
-                    Ok(block) => {
+                    Ok(chunk) => {
                         let progress_values = ProgressValues {
-                            rows: block.num_rows(),
-                            bytes: block.memory_size(),
+                            rows: chunk.num_rows(),
+                            bytes: chunk.memory_size(),
                         };
                         this.progress.incr(&progress_values);
-                        Poll::Ready(Some(Ok(block)))
+                        Poll::Ready(Some(Ok(chunk)))
                     }
                     Err(e) => Poll::Ready(Some(Err(e))),
                 },

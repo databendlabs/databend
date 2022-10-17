@@ -48,6 +48,11 @@ impl Chunk {
     }
 
     #[inline]
+    pub fn column(&self, index: usize) -> &(Value<AnyType>, DataType) {
+        &self.columns[index]
+    }
+
+    #[inline]
     pub fn num_rows(&self) -> usize {
         self.num_rows
     }

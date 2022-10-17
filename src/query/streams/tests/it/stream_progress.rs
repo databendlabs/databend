@@ -16,35 +16,51 @@ use std::sync::Arc;
 
 use common_base::base::tokio;
 use common_base::base::*;
-use common_datablocks::*;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::ColumnFrom;
+use common_expression::Value;
 use common_streams::*;
 use futures::TryStreamExt;
+use goldenfile::Mint;
 
 #[tokio::test]
 async fn test_progress_stream() -> Result<()> {
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", i64::to_data_type())]);
+    let mut mint = Mint::new("tests/it/testdata");
+    let file = &mut mint.new_goldenfile("stream_datablock.txt").unwrap();
 
-    let block = DataBlock::create(schema.clone(), vec![Series::from_data(vec![1i64, 2, 3])]);
+    let chunk = Chunk::new(
+        vec![(
+            Value::Column(Column::from_data(vec![1i64, 2, 3])),
+            DataType::Number(NumberDataType::Int64),
+        )],
+        3,
+    );
 
-    let input = DataBlockStream::create(Arc::new(DataSchema::empty()), None, vec![
-        block.clone(),
-        block.clone(),
-        block,
-    ]);
+    let chunks = vec![chunk.clone(), chunk.clone(), chunk];
+    let input = DataBlockStream::create(None, chunks);
 
     let progress = Arc::new(Progress::create());
     let stream = ProgressStream::try_create(Box::pin(input), progress)?;
     let result = stream.try_collect::<Vec<_>>().await?;
-    let block = &result[0];
-    assert_eq!(block.num_columns(), 1);
+    let chunk = &result[0];
+    assert_eq!(chunk.num_columns(), 1);
 
-    let expected = vec![
-        "+---+", "| a |", "+---+", "| 1 |", "| 1 |", "| 1 |", "| 2 |", "| 2 |", "| 2 |", "| 3 |",
-        "| 3 |", "| 3 |", "+---+",
-    ];
-    common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
+    let mut table = Table::new();
+    table.load_preset("||--+-++|    ++++++");
+    table.set_header(["a"]);
+    for _ in 0..chunk.num_rows() {
+        let mut row = Vec::with_capacity(chunk.num_columns());
+        for i in 0..chunk.num_columns() {
+            let (value, _) = chunk.column(i);
+            row.push(format!("{}", value));
+        }
+        table.add_row(row);
+    }
+    writeln!(file, "{table}\n\n").unwrap();
 
     Ok(())
 }
