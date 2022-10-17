@@ -59,7 +59,7 @@ impl JoinHashTable {
 
         for (i, key) in keys_iter.enumerate() {
             if (i & block_size) == 0 {
-                block_size = block_size << 1;
+                block_size <<= 1;
 
                 if self.interrupt.load(Ordering::Relaxed) {
                     return Err(ErrorCode::AbortedQuery(
