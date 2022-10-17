@@ -28,7 +28,7 @@ runs:
 
     - name: Clippy
       shell: bash
-      run: cargo -Z sparse-registry clippy --workspace --all-targets --all-features -- -D warnings
+      run: cargo -Z sparse-registry clippy --workspace --all-targets --all-features -- -D warnings -D clippy::let-underscore-drop
 
     - name: Audit dependencies
       shell: bash

@@ -64,9 +64,7 @@ impl StopHandle {
         }
 
         let join_all = futures::future::join_all(handles);
-        Ok(async move {
-            let _ = join_all.await;
-        })
+        Ok(async move { drop(join_all.await) })
     }
 
     /// Impl a two phase shutting down procedure(graceful then force):
