@@ -37,8 +37,8 @@ CREATE EXTERNAL TABLE [IF NOT EXISTS] [db.]table_name
 ENGINE_OPTIONS=(
   DATABASE='db0'
   TABLE='tbl0'
+  LOCATION=<external-location>
 )
-<external-location>
 ```
 
 where:
@@ -75,14 +75,48 @@ CONNECTION = (
 )
 ```
 
-For convinience, this will create the same schema as the table inside the external Iceberg storage.
+- ENGINE_OPTIONS
+
+```
+ENGINE_OPTIONS=(
+  DATABASE=<database-name>
+  TABLE=<table-name>
+  [SNAPSHOT= { snapshot_id => <snapshot-id> | timestamp => <timestamp> }]
+)
+```
+
+For example:
 
 ```sql
+CREATE EXTERNAL TABLE icebergs.books (
+    author VARCHAR,
+    name VARCHAR,
+    date VARCHAR,
+) ENGINE=ICEBERG
+ENGINE_OPTIONS=(
+    DATABASE='shared_to_databend'
+    TABLE='books'
+    LOCATION=(
+        URL='s3://example/path/to/iceberg/'
+        CONNECTION=(
+            ENDPOINT_URL='https://s3.minio.local'
+            ACCESS_KEY_ID='example-id'
+            SECRET_ACCESS_KEY='example-key'
+        )
+    )
+)
+```
+
+For convenience, this will create the same schema as the table inside the external Iceberg storage.
+
+```sql
+
 CREATE EXTERNAL TABLE [IF [NOT] EXISTS] [db.]<table_name>
 ENGINE=ICEBERG
 ENGINE_OPTIONS=(
     DATABASE=<database-name>
     TABLE=<table-name>
+    LOCATION=...
 )
 ```
 
@@ -195,7 +229,6 @@ If users do want to copy data out of Iceberg, this might be done with a `COPY IN
 
 ```sql
 COPY INTO [db.]table_name
-<external-location>
 <file-format>
 [<iceberg-options>]
 ```
@@ -208,6 +241,7 @@ iceberg-options ::=
 ICEBERG_OPTIONS = (
 DATABASE=<database-name>
 TABLE=<table-name>
+LOCATION=<external-location>
 [SNAPSHOT=<snapshot-id>]
 )
 ```
@@ -222,7 +256,7 @@ None
 
 ## Future possibilities
 
-### Schema Envolution
+### Schema Evolution
 
 The default Iceberg snapshot use in external table should always be the newest commited one:
 
