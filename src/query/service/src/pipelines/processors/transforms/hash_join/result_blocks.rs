@@ -69,9 +69,15 @@ impl JoinHashTable {
             //    so equi-condition is t1.b = subquery_5, and non-equi-condition is t1.a = t2.a.
             // 3. Correlated Exists subquery： only have one kind of join condition, equi-condition.
             //    equi-condition is subquery's outer columns with subquery's derived columns. (see the above example in correlated ANY subquery)
-            JoinType::LeftMark => {
-                self.probe_left_mark_join(hash_table, probe_state, keys_iter, input)
-            }
+            JoinType::LeftMark => match self.hash_join_desc.other_predicate.is_none() {
+                true => self.probe_left_mark_join(hash_table, probe_state, keys_iter, input),
+                false => self.probe_left_mark_join_with_conjunct(
+                    hash_table,
+                    probe_state,
+                    keys_iter,
+                    input,
+                ),
+            },
             JoinType::RightMark => {
                 self.probe_right_mark_join(hash_table, probe_state, keys_iter, input)
             }
