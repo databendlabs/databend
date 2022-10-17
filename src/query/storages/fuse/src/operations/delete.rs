@@ -144,7 +144,7 @@ impl FuseTable {
         let table = FuseTable::try_from_table(latest.as_ref())?;
 
         // TODO check if error is recoverable, and try to resolve the conflict
-        match table
+        if let Err(e) = table
             .commit_mutation(
                 ctx.clone(),
                 del_holder.base_snapshot().clone(),
@@ -153,12 +153,10 @@ impl FuseTable {
             )
             .await
         {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                abort_operation.abort(self.operator.clone()).await;
-                Err(e)
-            }
+            abort_operation.abort(self.operator.clone()).await;
+            return Err(e);
         }
+        Ok(())
     }
 
     fn cluster_stats_gen(&self, ctx: Arc<dyn TableContext>) -> Result<ClusterStatsGenerator> {

@@ -184,30 +184,22 @@ impl TableMutator for CompactMutator {
             abort_operation = abort_operation.add_segment(entry.segment_location);
         }
 
-        let mut new_segments: Vec<Location> = merged_segments
-            .into_iter()
-            .map(|loc| (loc, SegmentInfo::VERSION))
-            .collect();
-
-        new_segments.append(&mut segments);
+        segments.extend(
+            merged_segments
+                .into_iter()
+                .map(|loc| (loc, SegmentInfo::VERSION)),
+        );
         summary = merge_statistics(&summary, &merged_summary)?;
 
         let table = FuseTable::try_from_table(table.as_ref())?;
 
-        match table
-            .commit_mutation(
-                ctx.clone(),
-                self.base_snapshot.clone(),
-                new_segments,
-                summary,
-            )
+        if let Err(e) = table
+            .commit_mutation(ctx.clone(), self.base_snapshot.clone(), segments, summary)
             .await
         {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                abort_operation.abort(self.data_accessor.clone()).await;
-                Err(e)
-            }
+            abort_operation.abort(self.data_accessor.clone()).await;
+            return Err(e);
         }
+        Ok(())
     }
 }
