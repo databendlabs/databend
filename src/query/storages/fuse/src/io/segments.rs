@@ -28,12 +28,12 @@ use tracing::Instrument;
 use crate::io::MetaReaders;
 
 // Read segment related operations.
-pub struct FuseSegmentIO {
+pub struct SegmentsIO {
     ctx: Arc<dyn TableContext>,
     operator: Operator,
 }
 
-impl FuseSegmentIO {
+impl SegmentsIO {
     pub fn create(ctx: Arc<dyn TableContext>, operator: Operator) -> Self {
         Self { ctx, operator }
     }

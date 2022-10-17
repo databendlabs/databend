@@ -25,12 +25,12 @@ use tracing::warn;
 use tracing::Instrument;
 
 // File related operations.
-pub struct FuseFile {
+pub struct Files {
     ctx: Arc<dyn TableContext>,
     operator: Operator,
 }
 
-impl FuseFile {
+impl Files {
     pub fn create(ctx: Arc<dyn TableContext>, operator: Operator) -> Self {
         Self { ctx, operator }
     }

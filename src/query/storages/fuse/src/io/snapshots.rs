@@ -36,13 +36,13 @@ use tracing::Instrument;
 use crate::io::MetaReaders;
 
 // Read snapshot related operations.
-pub struct FuseSnapshotIO {
+pub struct SnapshotsIO {
     ctx: Arc<dyn TableContext>,
     operator: Operator,
     format_version: u64,
 }
 
-impl FuseSnapshotIO {
+impl SnapshotsIO {
     pub fn create(ctx: Arc<dyn TableContext>, operator: Operator, format_version: u64) -> Self {
         Self {
             ctx,

@@ -21,9 +21,9 @@ use common_fuse_meta::meta::TableSnapshot;
 use futures_util::TryStreamExt;
 
 use crate::io::MetaReaders;
+use crate::io::SegmentsIO;
 use crate::io::SnapshotHistoryReader;
 use crate::sessions::TableContext;
-use crate::FuseSegmentIO;
 use crate::FuseTable;
 
 pub struct FuseBlock<'a> {
@@ -85,8 +85,8 @@ impl<'a> FuseBlock<'a> {
         let mut bloom_filter_location: Vec<Option<Vec<u8>>> = Vec::with_capacity(len);
         let mut bloom_filter_size: Vec<u64> = Vec::with_capacity(len);
 
-        let fuse_segment_io = FuseSegmentIO::create(self.ctx.clone(), self.table.operator.clone());
-        let segments = fuse_segment_io.read_segments(&snapshot.segments).await?;
+        let segments_io = SegmentsIO::create(self.ctx.clone(), self.table.operator.clone());
+        let segments = segments_io.read_segments(&snapshot.segments).await?;
         for segment in segments {
             let segment = segment?;
             segment.blocks.clone().into_iter().for_each(|block| {
