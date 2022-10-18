@@ -96,13 +96,15 @@ Limit
                     │               │   ├── partitions total: 1
                     │               │   ├── partitions scanned: 1
                     │               │   └── push downs: [filters: [], limit: NONE]
-                    │               └── TableScan(Probe)
-                    │                   ├── table: default.system.numbers
-                    │                   ├── read rows: 1
-                    │                   ├── read bytes: 8
-                    │                   ├── partitions total: 1
-                    │                   ├── partitions scanned: 1
-                    │                   └── push downs: [filters: [], limit: NONE]
+                    │               └── Filter(Probe)
+                    │                   ├── filters: [=(subquery_2 (#2), t2.number (#2))]
+                    │                   └── TableScan
+                    │                       ├── table: default.system.numbers
+                    │                       ├── read rows: 1
+                    │                       ├── read bytes: 8
+                    │                       ├── partitions total: 1
+                    │                       ├── partitions scanned: 1
+                    │                       └── push downs: [filters: [(number = number)], limit: NONE]
                     └── HashJoin(Probe)
                         ├── join type: CROSS
                         ├── build keys: []

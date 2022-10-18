@@ -46,6 +46,7 @@ use crate::sql::plans::FunctionCall;
 use crate::sql::plans::JoinType;
 use crate::sql::plans::LogicalGet;
 use crate::sql::plans::LogicalInnerJoin;
+use crate::sql::plans::LogicalOperator;
 use crate::sql::plans::OrExpr;
 use crate::sql::plans::PatternPlan;
 use crate::sql::plans::RelOp;
@@ -239,7 +240,7 @@ impl SubqueryRewriter {
             SubqueryType::Scalar => {
                 let correlated_columns = subquery.outer_columns.clone();
                 let flatten_plan =
-                    self.flatten(&subquery.subquery, &correlated_columns, flatten_info, true)?;
+                    self.flatten(&subquery.subquery, &correlated_columns, flatten_info, false)?;
                 // Construct single join
                 let mut left_conditions = Vec::with_capacity(correlated_columns.len());
                 let mut right_conditions = Vec::with_capacity(correlated_columns.len());
@@ -267,7 +268,7 @@ impl SubqueryRewriter {
                 }
                 let correlated_columns = subquery.outer_columns.clone();
                 let flatten_plan =
-                    self.flatten(&subquery.subquery, &correlated_columns, flatten_info, true)?;
+                    self.flatten(&subquery.subquery, &correlated_columns, flatten_info, false)?;
                 // Construct mark join
                 let mut left_conditions = Vec::with_capacity(correlated_columns.len());
                 let mut right_conditions = Vec::with_capacity(correlated_columns.len());
@@ -300,7 +301,7 @@ impl SubqueryRewriter {
             SubqueryType::Any => {
                 let correlated_columns = subquery.outer_columns.clone();
                 let flatten_plan =
-                    self.flatten(&subquery.subquery, &correlated_columns, flatten_info, true)?;
+                    self.flatten(&subquery.subquery, &correlated_columns, flatten_info, false)?;
                 let mut left_conditions = Vec::with_capacity(correlated_columns.len());
                 let mut right_conditions = Vec::with_capacity(correlated_columns.len());
                 self.add_equi_conditions(
@@ -363,7 +364,7 @@ impl SubqueryRewriter {
         plan: &SExpr,
         correlated_columns: &ColumnSet,
         flatten_info: &mut FlattenInfo,
-        need_cross_join: bool,
+        mut need_cross_join: bool,
     ) -> Result<SExpr> {
         let rel_expr = RelExpr::with_s_expr(plan);
         let prop = rel_expr.derive_relational_prop()?;
@@ -424,8 +425,19 @@ impl SubqueryRewriter {
 
         match plan.plan() {
             RelOperator::EvalScalar(eval_scalar) => {
-                let flatten_plan =
-                    self.flatten(plan.child(0)?, correlated_columns, flatten_info, true)?;
+                if eval_scalar
+                    .used_columns()?
+                    .iter()
+                    .any(|index| correlated_columns.contains(index))
+                {
+                    need_cross_join = true;
+                }
+                let flatten_plan = self.flatten(
+                    plan.child(0)?,
+                    correlated_columns,
+                    flatten_info,
+                    need_cross_join,
+                )?;
                 let mut items = Vec::with_capacity(eval_scalar.items.len());
                 for item in eval_scalar.items.iter() {
                     let new_item = ScalarItem {
@@ -458,25 +470,21 @@ impl SubqueryRewriter {
                 ))
             }
             RelOperator::Filter(filter) => {
-                let mut predicates_set: HashSet<Scalar> =
-                    HashSet::from_iter(filter.predicates.iter().cloned());
                 let mut predicates = Vec::with_capacity(filter.predicates.len());
-                let need_cross_join =
-                    self.join_outer_inner_table(filter, &mut predicates_set, correlated_columns)?;
+                if !need_cross_join {
+                    need_cross_join = self.join_outer_inner_table(filter, correlated_columns)?;
+                    if need_cross_join {
+                        self.derived_columns.clear();
+                    }
+                }
                 let flatten_plan = self.flatten(
                     plan.child(0)?,
                     correlated_columns,
                     flatten_info,
                     need_cross_join,
                 )?;
-                if need_cross_join {
-                    for predicate in filter.predicates.iter() {
-                        predicates.push(self.flatten_scalar(predicate, correlated_columns)?);
-                    }
-                } else {
-                    for predicate in predicates_set.iter() {
-                        predicates.push(self.flatten_scalar(predicate, correlated_columns)?);
-                    }
+                for predicate in filter.predicates.iter() {
+                    predicates.push(self.flatten_scalar(predicate, correlated_columns)?);
                 }
 
                 let filter_plan = Filter {
@@ -488,10 +496,25 @@ impl SubqueryRewriter {
             }
             RelOperator::LogicalInnerJoin(join) => {
                 // Currently, we don't support join conditions contain subquery
-                let left_flatten_plan =
-                    self.flatten(plan.child(0)?, correlated_columns, flatten_info, true)?;
-                let right_flatten_plan =
-                    self.flatten(plan.child(1)?, correlated_columns, flatten_info, true)?;
+                if join
+                    .used_columns()?
+                    .iter()
+                    .any(|index| correlated_columns.contains(index))
+                {
+                    need_cross_join = true;
+                }
+                let left_flatten_plan = self.flatten(
+                    plan.child(0)?,
+                    correlated_columns,
+                    flatten_info,
+                    need_cross_join,
+                )?;
+                let right_flatten_plan = self.flatten(
+                    plan.child(1)?,
+                    correlated_columns,
+                    flatten_info,
+                    need_cross_join,
+                )?;
                 Ok(SExpr::create_binary(
                     LogicalInnerJoin {
                         left_conditions: join.left_conditions.clone(),
@@ -507,8 +530,19 @@ impl SubqueryRewriter {
                 ))
             }
             RelOperator::Aggregate(aggregate) => {
-                let flatten_plan =
-                    self.flatten(plan.child(0)?, correlated_columns, flatten_info, true)?;
+                if aggregate
+                    .used_columns()?
+                    .iter()
+                    .any(|index| correlated_columns.contains(index))
+                {
+                    need_cross_join = true;
+                }
+                let flatten_plan = self.flatten(
+                    plan.child(0)?,
+                    correlated_columns,
+                    flatten_info,
+                    need_cross_join,
+                )?;
                 let mut group_items = Vec::with_capacity(aggregate.group_items.len());
                 for item in aggregate.group_items.iter() {
                     let scalar = self.flatten_scalar(&item.scalar, correlated_columns)?;
@@ -563,18 +597,62 @@ impl SubqueryRewriter {
                     flatten_plan,
                 ))
             }
-            RelOperator::Sort(_) | RelOperator::Limit(_) => {
-                // Currently, we don't support sort and limit contain subquery.
-                let flatten_plan =
-                    self.flatten(plan.child(0)?, correlated_columns, flatten_info, true)?;
+            RelOperator::Sort(op) => {
+                // Currently, we don't support sort contain subquery.
+                if op
+                    .used_columns()?
+                    .iter()
+                    .any(|index| correlated_columns.contains(index))
+                {
+                    need_cross_join = true;
+                }
+                let flatten_plan = self.flatten(
+                    plan.child(0)?,
+                    correlated_columns,
+                    flatten_info,
+                    need_cross_join,
+                )?;
+                Ok(SExpr::create_unary(plan.plan().clone(), flatten_plan))
+            }
+
+            RelOperator::Limit(op) => {
+                // Currently, we don't support limit contain subquery.
+                if op
+                    .used_columns()?
+                    .iter()
+                    .any(|index| correlated_columns.contains(index))
+                {
+                    need_cross_join = true;
+                }
+                let flatten_plan = self.flatten(
+                    plan.child(0)?,
+                    correlated_columns,
+                    flatten_info,
+                    need_cross_join,
+                )?;
                 Ok(SExpr::create_unary(plan.plan().clone(), flatten_plan))
             }
 
             RelOperator::UnionAll(op) => {
-                let left_flatten_plan =
-                    self.flatten(plan.child(0)?, correlated_columns, flatten_info, true)?;
-                let right_flatten_plan =
-                    self.flatten(plan.child(1)?, correlated_columns, flatten_info, true)?;
+                if op
+                    .used_columns()?
+                    .iter()
+                    .any(|index| correlated_columns.contains(index))
+                {
+                    need_cross_join = true;
+                }
+                let left_flatten_plan = self.flatten(
+                    plan.child(0)?,
+                    correlated_columns,
+                    flatten_info,
+                    need_cross_join,
+                )?;
+                let right_flatten_plan = self.flatten(
+                    plan.child(1)?,
+                    correlated_columns,
+                    flatten_info,
+                    need_cross_join,
+                )?;
                 Ok(SExpr::create_binary(
                     op.clone().into(),
                     left_flatten_plan,
@@ -730,7 +808,6 @@ impl SubqueryRewriter {
     fn join_outer_inner_table(
         &mut self,
         filter: &Filter,
-        predicates_set: &mut HashSet<Scalar>,
         correlated_columns: &ColumnSet,
     ) -> Result<bool> {
         Ok(!filter.predicates.iter().all(|predicate| {
@@ -764,7 +841,6 @@ impl SubqueryRewriter {
                                     self.derived_columns
                                         .insert(right_column.index, left_column.index);
                                 }
-                                predicates_set.remove(predicate);
                                 return true;
                             }
                         }

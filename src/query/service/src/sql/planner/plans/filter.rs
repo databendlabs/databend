@@ -102,4 +102,12 @@ impl LogicalOperator for Filter {
             column_stats: Default::default(),
         })
     }
+
+    fn used_columns<'a>(&self) -> Result<ColumnSet> {
+        Ok(self
+            .predicates
+            .iter()
+            .map(|scalar| scalar.used_columns())
+            .fold(ColumnSet::new(), |acc, x| acc.union(&x).cloned().collect()))
+    }
 }
