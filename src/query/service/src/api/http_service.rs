@@ -15,6 +15,7 @@
 use std::net::SocketAddr;
 use std::path::Path;
 
+use common_config::Config;
 use common_exception::Result;
 use common_http::health_handler;
 use common_http::home::debug_home_handler;
@@ -31,7 +32,6 @@ use tracing::info;
 use tracing::warn;
 
 use crate::servers::Server;
-use crate::Config;
 
 pub struct HttpService {
     config: Config,

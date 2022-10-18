@@ -24,6 +24,7 @@ use std::time::Duration;
 use common_base::base::tokio;
 use common_base::base::SignalStream;
 use common_base::base::Singleton;
+use common_config::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_metrics::label_counter;
@@ -41,7 +42,6 @@ use crate::sessions::ProcessInfo;
 use crate::sessions::SessionContext;
 use crate::sessions::SessionManagerStatus;
 use crate::sessions::SessionType;
-use crate::Config;
 
 pub struct SessionManager {
     pub(in crate::sessions) conf: Config,

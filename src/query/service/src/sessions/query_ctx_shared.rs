@@ -22,6 +22,7 @@ use std::time::SystemTime;
 
 use common_base::base::Progress;
 use common_base::base::Runtime;
+use common_config::Config;
 use common_contexts::DalContext;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
@@ -44,7 +45,6 @@ use crate::sessions::Session;
 use crate::sessions::Settings;
 use crate::sql::SQLCommon;
 use crate::storages::Table;
-use crate::Config;
 
 type DatabaseAndTable = (String, String, String);
 
