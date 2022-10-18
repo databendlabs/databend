@@ -22,6 +22,7 @@ use common_catalog::catalog::StorageDescription;
 use common_catalog::table::ColumnId;
 use common_catalog::table::ColumnStatistics;
 use common_catalog::table::ColumnStatisticsProvider;
+use common_catalog::table::CompactTarget;
 use common_catalog::table_context::TableContext;
 use common_catalog::table_mutator::TableMutator;
 use common_datablocks::DataBlock;
@@ -454,10 +455,10 @@ impl Table for FuseTable {
     async fn compact(
         &self,
         ctx: Arc<dyn TableContext>,
-        segments_only: bool,
+        target: CompactTarget,
         pipeline: &mut Pipeline,
     ) -> Result<Option<Arc<dyn TableMutator>>> {
-        self.do_compact(ctx, segments_only, pipeline).await
+        self.do_compact(ctx, target, pipeline).await
     }
 
     async fn recluster(

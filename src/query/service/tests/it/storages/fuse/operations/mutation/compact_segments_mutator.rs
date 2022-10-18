@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_base::base::tokio;
+use common_catalog::table::CompactTarget;
 use common_catalog::table::Table;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
@@ -53,10 +54,9 @@ async fn test_compact_segment_normal_case() -> Result<()> {
         .get_table(ctx.get_tenant().as_str(), "default", "t")
         .await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let segment_only = true;
     let mut pipeline = common_pipeline_core::Pipeline::create();
     let mutator = fuse_table
-        .compact(ctx.clone(), segment_only, &mut pipeline)
+        .compact(ctx.clone(), CompactTarget::Segments, &mut pipeline)
         .await?;
     assert!(mutator.is_some());
     let mutator = mutator.unwrap();
@@ -99,10 +99,9 @@ async fn test_compact_segment_resolvable_conflict() -> Result<()> {
         .get_table(ctx.get_tenant().as_str(), "default", "t")
         .await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let segment_only = true;
     let mut pipeline = common_pipeline_core::Pipeline::create();
     let mutator = fuse_table
-        .compact(ctx.clone(), segment_only, &mut pipeline)
+        .compact(ctx.clone(), CompactTarget::Segments, &mut pipeline)
         .await?;
     assert!(mutator.is_some());
     let mutator = mutator.unwrap();
@@ -151,10 +150,9 @@ async fn test_compact_segment_unresolvable_conflict() -> Result<()> {
         .get_table(ctx.get_tenant().as_str(), "default", "t")
         .await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let segment_only = true;
     let mut pipeline = common_pipeline_core::Pipeline::create();
     let mutator = fuse_table
-        .compact(ctx.clone(), segment_only, &mut pipeline)
+        .compact(ctx.clone(), CompactTarget::Segments, &mut pipeline)
         .await?;
     assert!(mutator.is_some());
     let mutator = mutator.unwrap();
@@ -187,10 +185,9 @@ async fn check_count(result_stream: SendableDataBlockStream) -> Result<u64> {
 
 async fn compact_segment(ctx: Arc<QueryContext>, table: &dyn Table) -> Result<()> {
     let fuse_table = FuseTable::try_from_table(table)?;
-    let segment_only = true;
     let mut pipeline = common_pipeline_core::Pipeline::create();
     let mutator = fuse_table
-        .compact(ctx, segment_only, &mut pipeline)
+        .compact(ctx, CompactTarget::Segments, &mut pipeline)
         .await?
         .unwrap();
     mutator.try_commit(table.get_table_info()).await

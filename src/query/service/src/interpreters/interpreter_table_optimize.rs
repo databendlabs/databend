@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::table::CompactTarget;
 use common_exception::Result;
 use common_planner::plans::OptimizeTableAction;
 use common_planner::plans::OptimizeTablePlan;
@@ -65,9 +66,8 @@ impl Interpreter for OptimizeTableInterpreter {
 
         if do_compact_segments_only {
             let mut pipeline = Pipeline::create();
-            let segments_only = true;
             if let Some(mutator) = table
-                .compact(ctx.clone(), segments_only, &mut pipeline)
+                .compact(ctx.clone(), CompactTarget::Segments, &mut pipeline)
                 .await?
             {
                 mutator.try_commit(table.get_table_info()).await?;
@@ -77,9 +77,8 @@ impl Interpreter for OptimizeTableInterpreter {
 
         if do_compact_blocks {
             let mut pipeline = Pipeline::create();
-            let segments_only = false;
             let mutator = table
-                .compact(ctx.clone(), segments_only, &mut pipeline)
+                .compact(ctx.clone(), CompactTarget::Blocks, &mut pipeline)
                 .await?;
 
             if let Some(mutator) = mutator {

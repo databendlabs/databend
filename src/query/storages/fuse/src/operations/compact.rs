@@ -14,7 +14,9 @@
 
 use std::sync::Arc;
 
+use common_catalog::table::CompactTarget;
 use common_exception::Result;
+use common_fuse_meta::meta::TableSnapshot;
 use common_legacy_planners::ReadDataSourcePlan;
 use common_legacy_planners::SourceInfo;
 use common_pipeline_core::processors::port::InputPort;
@@ -33,11 +35,16 @@ use crate::TableMutator;
 use crate::DEFAULT_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 
+struct CompactOptions {
+    base_snapshot: Arc<TableSnapshot>,
+    block_per_seg: usize,
+}
+
 impl FuseTable {
     pub(crate) async fn do_compact(
         &self,
         ctx: Arc<dyn TableContext>,
-        segments_only: bool,
+        target: CompactTarget,
         pipeline: &mut Pipeline,
     ) -> Result<Option<Arc<dyn TableMutator>>> {
         let snapshot_opt = self.read_table_snapshot(ctx.clone()).await?;
@@ -55,29 +62,50 @@ impl FuseTable {
         let block_per_seg =
             self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
 
-        if segments_only {
-            let block_per_seg =
-                self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
-            let mut segment_mutator = CompactSegmentMutator::try_create(
-                ctx.clone(),
-                base_snapshot,
-                self.meta_location_generator().clone(),
-                block_per_seg,
-                self.operator.clone(),
-            )?;
+        let compact_params = CompactOptions {
+            base_snapshot,
+            block_per_seg,
+        };
 
-            if segment_mutator.target_select().await? {
-                return Ok(Some(Arc::new(segment_mutator)));
-            } else {
-                return Ok(None);
-            }
+        match target {
+            CompactTarget::Blocks => self.compact_segments(ctx, pipeline, compact_params).await,
+            CompactTarget::Segments => self.compact_blocks(ctx, pipeline, compact_params).await,
         }
+    }
 
+    async fn compact_segments(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        _pipeline: &mut Pipeline,
+        options: CompactOptions,
+    ) -> Result<Option<Arc<dyn TableMutator>>> {
+        let mut segment_mutator = CompactSegmentMutator::try_create(
+            ctx.clone(),
+            options.base_snapshot,
+            self.meta_location_generator().clone(),
+            options.block_per_seg,
+            self.operator.clone(),
+        )?;
+
+        if segment_mutator.target_select().await? {
+            Ok(Some(Arc::new(segment_mutator)))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn compact_blocks(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+        options: CompactOptions,
+    ) -> Result<Option<Arc<dyn TableMutator>>> {
         let block_compactor = self.get_block_compactor();
 
+        let block_per_seg = options.block_per_seg;
         let mut mutator = CompactMutator::try_create(
             ctx.clone(),
-            base_snapshot,
+            options.base_snapshot,
             block_compactor.clone(),
             self.meta_location_generator().clone(),
             block_per_seg,
