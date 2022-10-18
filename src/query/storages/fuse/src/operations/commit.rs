@@ -48,6 +48,7 @@ use uuid::Uuid;
 use crate::io::write_meta;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
+use crate::operations::mutation::AbortOperation;
 use crate::operations::AppendOperationLogEntry;
 use crate::operations::TableOperationLog;
 use crate::statistics;
@@ -59,6 +60,7 @@ use crate::OPT_KEY_SNAPSHOT_LOCATION;
 const OCC_DEFAULT_BACKOFF_INIT_DELAY_MS: Duration = Duration::from_millis(5);
 const OCC_DEFAULT_BACKOFF_MAX_DELAY_MS: Duration = Duration::from_millis(20 * 1000);
 const OCC_DEFAULT_BACKOFF_MAX_ELAPSED_MS: Duration = Duration::from_millis(120 * 1000);
+const MAX_RETRIES: u64 = 10;
 
 impl FuseTable {
     pub async fn do_commit(
@@ -399,54 +401,93 @@ impl FuseTable {
     pub async fn commit_mutation(
         &self,
         ctx: Arc<dyn TableContext>,
-        base_snapshot: Arc<TableSnapshot>,
+        snapshot: Arc<TableSnapshot>,
         mut segments: Vec<Location>,
         mut summary: Statistics,
+        abort_operation: AbortOperation,
     ) -> Result<()> {
-        let snapshot_opt = self.read_table_snapshot(ctx.clone()).await?;
-        let latest_snapshot = snapshot_opt.ok_or_else(|| {
-            ErrorCode::UnknownException("Data mutates during operation".to_string())
-        })?;
-        if latest_snapshot.snapshot_id != base_snapshot.snapshot_id {
-            if latest_snapshot.segments.len() < base_snapshot.segments.len() {
-                return Err(ErrorCode::UnknownException(
-                    "Data mutates during operation".to_string(),
-                ));
-            }
+        let mut table = self;
+        let mut latest: Arc<dyn Table>;
+        let mut retries = 0;
+        let mut latest_snapshot;
+        let mut base_snapshot = snapshot;
+        let mut current_table_info = &self.table_info;
 
-            // Check if there is only insertion during the operation.
-            let mut new_segments = latest_snapshot.segments.clone();
-            let suffix = new_segments
-                .split_off(latest_snapshot.segments.len() - base_snapshot.segments.len());
-            if suffix.ne(&base_snapshot.segments) {
-                return Err(ErrorCode::UnknownException(
-                    "Data mutates during operation".to_string(),
-                ));
-            }
+        loop {
+            let mut snapshot_tobe_committed = TableSnapshot::from_previous(base_snapshot.as_ref());
+            snapshot_tobe_committed.segments = segments.clone();
+            snapshot_tobe_committed.summary = summary.clone();
+            match Self::commit_to_meta_server(
+                ctx.as_ref(),
+                current_table_info,
+                &self.meta_location_generator,
+                snapshot_tobe_committed,
+                &self.operator,
+            )
+            .await
+            {
+                Err(e) => {
+                    if e.code() == ErrorCode::table_version_mismatched_code() {
+                        latest = table.refresh(ctx.as_ref()).await?;
+                        table = FuseTable::try_from_table(latest.as_ref())?;
 
-            // Read all segments information in parallel.
-            let fuse_segment_io = SegmentsIO::create(ctx.clone(), self.operator.clone());
-            let results = fuse_segment_io.read_segments(&new_segments).await?;
-            for result in results.iter() {
-                let segment = result.clone()?;
-                summary = merge_statistics(&summary, &segment.summary)?;
+                        latest_snapshot = table
+                            .read_table_snapshot(ctx.clone())
+                            .await?
+                            .ok_or_else(|| {
+                                ErrorCode::LogicalError(
+                                    "mutation meets empty snapshot during conflict reconciliation",
+                                )
+                            })?;
+                        current_table_info = &table.table_info;
+
+                        if latest_snapshot.segments.len() < base_snapshot.segments.len() {
+                            return Err(ErrorCode::StorageOther(
+                                "mutation conflicts, concurrent mutation detected while committing segment compaction operation",
+                            ));
+                        }
+
+                        // Check if there is only insertion during the operation.
+                        let mut new_segments = latest_snapshot.segments.clone();
+                        let suffix = new_segments.split_off(
+                            latest_snapshot.segments.len() - base_snapshot.segments.len(),
+                        );
+                        if suffix.ne(&base_snapshot.segments) {
+                            return Err(ErrorCode::StorageOther(
+                                "mutation conflicts, concurrent mutation detected while committing segment compaction operation",
+                            ));
+                        }
+
+                        info!("resolvable conflicts detected");
+                        // Read all segments information in parallel.
+                        let fuse_segment_io =
+                            SegmentsIO::create(ctx.clone(), table.operator.clone());
+                        let results = fuse_segment_io.read_segments(&new_segments).await?;
+                        for result in results.iter() {
+                            let segment = result.clone()?;
+                            summary = merge_statistics(&summary, &segment.summary)?;
+                        }
+                        new_segments.extend(segments.clone());
+                        segments = new_segments;
+                        base_snapshot = latest_snapshot;
+
+                        retries += 1;
+                        if retries >= MAX_RETRIES {
+                            abort_operation
+                                .abort(ctx.clone(), self.operator.clone())
+                                .await?;
+                            return Err(ErrorCode::StorageOther(format!(
+                                "commit mutation failed after {} retries",
+                                retries
+                            )));
+                        }
+                    } else {
+                        return Err(e);
+                    }
+                }
+                Ok(_) => return Ok(()),
             }
-            new_segments.extend(segments.clone());
-            segments = new_segments;
         }
-
-        let mut new_snapshot = TableSnapshot::from_previous(&latest_snapshot);
-        new_snapshot.segments = segments;
-        new_snapshot.summary = summary;
-
-        Self::commit_to_meta_server(
-            ctx.as_ref(),
-            &self.table_info,
-            &self.meta_location_generator,
-            new_snapshot,
-            &self.operator,
-        )
-        .await
     }
 }
 

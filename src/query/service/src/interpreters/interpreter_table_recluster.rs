@@ -91,12 +91,6 @@ impl Interpreter for ReclusterTableInterpreter {
             executor.execute()?;
             drop(executor);
 
-            // refresh table
-            let table = self
-                .ctx
-                .get_catalog(&plan.catalog)?
-                .get_table(tenant.as_str(), &plan.database, &plan.table)
-                .await?;
             mutator.try_commit(table).await?;
 
             if !plan.is_final {

@@ -232,20 +232,14 @@ impl TableMutator for ReclusterMutator {
         summary = merge_statistics(&summary, &merged_summary)?;
 
         let table = FuseTable::try_from_table(table.as_ref())?;
-        if let Err(e) = table
+        table
             .commit_mutation(
                 ctx.clone(),
                 base_mutator.base_snapshot.clone(),
                 segments,
                 summary,
+                abort_operation,
             )
             .await
-        {
-            abort_operation
-                .abort(ctx, self.base_mutator.data_accessor.clone())
-                .await?;
-            return Err(e);
-        }
-        Ok(())
     }
 }

@@ -75,13 +75,6 @@ impl Interpreter for OptimizeTableInterpreter {
                 executor.execute()?;
                 drop(executor);
 
-                // "refresh" the table by using the catalog API directly
-                table = self
-                    .ctx
-                    .get_catalog(&plan.catalog)?
-                    .get_table(ctx.get_tenant().as_str(), &plan.database, &plan.table)
-                    .await?;
-
                 mutator.try_commit(table.clone()).await?;
             }
 
