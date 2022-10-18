@@ -821,28 +821,22 @@ impl SubqueryRewriter {
                 }) = predicate
                 {
                     if op == &ComparisonOp::Equal {
-                        if let Scalar::BoundColumnRef(BoundColumnRef {
-                            column: left_column,
-                        }) = &**left
+                        if let (Scalar::BoundColumnRef(left), Scalar::BoundColumnRef(right)) =
+                            (&**left, &**right)
                         {
-                            if let Scalar::BoundColumnRef(BoundColumnRef {
-                                column: right_column,
-                            }) = &**right
+                            if correlated_columns.contains(&left.column.index)
+                                && !correlated_columns.contains(&right.column.index)
                             {
-                                if correlated_columns.contains(&left_column.index)
-                                    && !correlated_columns.contains(&right_column.index)
-                                {
-                                    self.derived_columns
-                                        .insert(left_column.index, right_column.index);
-                                }
-                                if !correlated_columns.contains(&left_column.index)
-                                    && correlated_columns.contains(&right_column.index)
-                                {
-                                    self.derived_columns
-                                        .insert(right_column.index, left_column.index);
-                                }
-                                return true;
+                                self.derived_columns
+                                    .insert(left.column.index, right.column.index);
                             }
+                            if !correlated_columns.contains(&left.column.index)
+                                && correlated_columns.contains(&right.column.index)
+                            {
+                                self.derived_columns
+                                    .insert(right.column.index, left.column.index);
+                            }
+                            return true;
                         }
                     }
                 }
