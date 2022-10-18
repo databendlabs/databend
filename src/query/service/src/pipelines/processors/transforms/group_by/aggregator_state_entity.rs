@@ -14,14 +14,22 @@
 
 use common_hashtable::HashtableEntry;
 use common_hashtable::HashtableKeyable;
-use common_hashtable::UnsizedHashtableFakeEntry;
+use common_hashtable::UnsizedHashtableEntryMutRef;
+use common_hashtable::UnsizedHashtableEntryRef;
 
-pub trait StateEntity {
+pub trait StateEntityRef {
     type KeyRef: Copy;
 
-    fn get_state_key(self: *mut Self) -> Self::KeyRef;
-    fn set_state_value(self: *mut Self, value: usize);
-    fn get_state_value<'a>(self: *mut Self) -> &'a usize;
+    fn get_state_key(&self) -> Self::KeyRef;
+    fn get_state_value(&self) -> usize;
+}
+
+pub trait StateEntityMutRef {
+    type KeyRef: Copy;
+
+    fn get_state_key(&self) -> Self::KeyRef;
+    fn get_state_value(&self) -> usize;
+    fn set_state_value(&mut self, value: usize);
 }
 
 pub trait ShortFixedKeyable: Sized + Clone {
@@ -35,64 +43,104 @@ pub struct ShortFixedKeysStateEntity<Key: ShortFixedKeyable> {
     pub fill: bool,
 }
 
-impl<Key: ShortFixedKeyable + Copy> StateEntity for ShortFixedKeysStateEntity<Key> {
+impl<'a, Key: ShortFixedKeyable + Copy> StateEntityRef for &'a ShortFixedKeysStateEntity<Key> {
     type KeyRef = Key;
 
     #[inline(always)]
-    fn get_state_key<'a>(self: *mut Self) -> Key {
-        unsafe { (*self).key }
+    fn get_state_key(&self) -> Key {
+        self.key
     }
 
     #[inline(always)]
-    fn set_state_value(self: *mut Self, value: usize) {
-        unsafe { (*self).value = value }
-    }
-
-    #[inline(always)]
-    fn get_state_value<'a>(self: *mut Self) -> &'a usize {
-        unsafe { &(*self).value }
+    fn get_state_value(&self) -> usize {
+        self.value
     }
 }
 
-impl<Key: HashtableKeyable> StateEntity for HashtableEntry<Key, usize> {
+impl<'a, Key: ShortFixedKeyable + Copy> StateEntityMutRef
+    for &'a mut ShortFixedKeysStateEntity<Key>
+{
     type KeyRef = Key;
 
     #[inline(always)]
-    fn get_state_key(self: *mut Self) -> Key {
-        unsafe { *(*self).key() }
+    fn get_state_key(&self) -> Key {
+        self.key
     }
 
     #[inline(always)]
-    fn set_state_value(self: *mut Self, value: usize) {
-        unsafe {
-            *(*self).get_mut() = value;
-        }
+    fn get_state_value(&self) -> usize {
+        self.value
     }
 
     #[inline(always)]
-    fn get_state_value<'a>(self: *mut Self) -> &'a usize {
-        unsafe { &*((*self).get() as *const _) }
+    fn set_state_value(&mut self, value: usize) {
+        self.value = value;
     }
 }
 
-impl StateEntity for UnsizedHashtableFakeEntry<[u8], usize> {
-    type KeyRef = *const [u8];
+impl<'a, Key: HashtableKeyable> StateEntityRef for &'a HashtableEntry<Key, usize> {
+    type KeyRef = Key;
 
     #[inline(always)]
-    fn get_state_key(self: *mut Self) -> *const [u8] {
-        unsafe { self.key() }
+    fn get_state_key(&self) -> Key {
+        *self.key()
     }
 
     #[inline(always)]
-    fn set_state_value(self: *mut Self, value: usize) {
-        unsafe {
-            *self.get_mut() = value;
-        }
+    fn get_state_value(&self) -> usize {
+        *self.get()
+    }
+}
+
+impl<'a, Key: HashtableKeyable> StateEntityMutRef for &'a mut HashtableEntry<Key, usize> {
+    type KeyRef = Key;
+
+    #[inline(always)]
+    fn get_state_key(&self) -> Key {
+        *self.key()
     }
 
     #[inline(always)]
-    fn get_state_value<'a>(self: *mut Self) -> &'a usize {
-        unsafe { self.get() }
+    fn get_state_value(&self) -> usize {
+        *self.get()
+    }
+
+    #[inline(always)]
+    fn set_state_value(&mut self, value: usize) {
+        *self.get_mut() = value;
+    }
+}
+
+impl<'a> StateEntityRef for UnsizedHashtableEntryRef<'a, [u8], usize> {
+    type KeyRef = &'a [u8];
+
+    #[inline(always)]
+    fn get_state_key(&self) -> &'a [u8] {
+        self.key()
+    }
+
+    #[inline(always)]
+    fn get_state_value(&self) -> usize {
+        *self.get()
+    }
+}
+
+impl<'a> StateEntityMutRef for UnsizedHashtableEntryMutRef<'a, [u8], usize> {
+    type KeyRef = &'a [u8];
+
+    #[inline(always)]
+    fn get_state_key(&self) -> &'a [u8] {
+        self.key()
+    }
+
+    #[inline(always)]
+    fn get_state_value(&self) -> usize {
+        *self.get()
+    }
+
+    #[inline(always)]
+    fn set_state_value(&mut self, value: usize) {
+        *self.get_mut() = value;
     }
 }
 

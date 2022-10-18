@@ -20,31 +20,6 @@ use std::ops::DerefMut;
 use super::table0::Entry;
 use super::traits::Keyable;
 
-pub struct SliceIterPtr<T> {
-    slice: *const [T],
-    i: usize,
-}
-
-impl<T> SliceIterPtr<T> {
-    pub fn new(slice: *const [T]) -> Self {
-        Self { slice, i: 0 }
-    }
-}
-
-impl<T> Iterator for SliceIterPtr<T> {
-    type Item = *const T;
-
-    fn next(&mut self) -> Option<*const T> {
-        if self.i == unsafe { (*self.slice).len() } {
-            None
-        } else {
-            let result = unsafe { &(*self.slice)[self.i] as *const _ };
-            self.i += 1;
-            Some(result)
-        }
-    }
-}
-
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Hashed<K: Keyable> {
     hash: u64,

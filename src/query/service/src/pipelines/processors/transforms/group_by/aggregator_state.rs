@@ -24,16 +24,18 @@ use common_datablocks::HashMethodSerializer;
 use common_datavalues::prelude::*;
 use common_functions::aggregates::StateAddr;
 use common_hashtable::HashMapKind;
-use common_hashtable::HashMapKindIterMutPtr;
+use common_hashtable::HashMapKindIter;
 use common_hashtable::HashtableEntry;
 use common_hashtable::HashtableKeyable;
 use common_hashtable::UnsizedHashMap;
-use common_hashtable::UnsizedHashMapIterMutPtr;
-use common_hashtable::UnsizedHashtableFakeEntry;
+use common_hashtable::UnsizedHashMapIter;
+use common_hashtable::UnsizedHashtableEntryMutRef;
+use common_hashtable::UnsizedHashtableEntryRef;
 
 use crate::pipelines::processors::transforms::group_by::aggregator_state_entity::ShortFixedKeyable;
 use crate::pipelines::processors::transforms::group_by::aggregator_state_entity::ShortFixedKeysStateEntity;
-use crate::pipelines::processors::transforms::group_by::aggregator_state_entity::StateEntity;
+use crate::pipelines::processors::transforms::group_by::aggregator_state_entity::StateEntityMutRef;
+use crate::pipelines::processors::transforms::group_by::aggregator_state_entity::StateEntityRef;
 use crate::pipelines::processors::transforms::group_by::aggregator_state_iterator::ShortFixedKeysStateIterator;
 use crate::pipelines::processors::transforms::group_by::AggregatorParams;
 use crate::pipelines::processors::AggregatorParams as NewAggregatorParams;
@@ -47,13 +49,18 @@ use crate::pipelines::processors::AggregatorParams as NewAggregatorParams;
 #[allow(clippy::len_without_is_empty)]
 pub trait AggregatorState<Method: HashMethod>: Sync + Send {
     type Key: ?Sized;
-    type KeyRef: Copy;
-    type Entity: StateEntity<KeyRef = Self::KeyRef>;
-    type Iterator: Iterator<Item = *mut Self::Entity>;
+    type KeyRef<'a>: Copy + 'a
+    where Self: 'a;
+    type EntityRef<'a>: StateEntityRef<KeyRef = Self::KeyRef<'a>>
+    where Self: 'a;
+    type EntityMutRef<'a>: StateEntityMutRef<KeyRef = Self::KeyRef<'a>>
+    where Self: 'a;
+    type Iterator<'a>: Iterator<Item = Self::EntityRef<'a>>
+    where Self: 'a;
 
     fn len(&self) -> usize;
 
-    fn iter(&self) -> Self::Iterator;
+    fn iter(&self) -> Self::Iterator<'_>;
 
     fn alloc_place(&self, layout: Layout) -> StateAddr;
 
@@ -81,9 +88,17 @@ pub trait AggregatorState<Method: HashMethod>: Sync + Send {
         Some(place)
     }
 
-    fn entity(&mut self, key: Method::HashKeyRef<'_>, inserted: &mut bool) -> *mut Self::Entity;
+    fn entity(
+        &mut self,
+        key: Method::HashKeyRef<'_>,
+        inserted: &mut bool,
+    ) -> Self::EntityMutRef<'_>;
 
-    fn entity_by_key(&mut self, key: Self::KeyRef, inserted: &mut bool) -> *mut Self::Entity;
+    fn entity_by_key<'a>(
+        &mut self,
+        key: Self::KeyRef<'a>,
+        inserted: &mut bool,
+    ) -> Self::EntityMutRef<'_>;
 
     fn is_two_level(&self) -> bool {
         false
@@ -149,9 +164,10 @@ where
     for<'a> <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashtableKeyable,
 {
     type Key = T;
-    type KeyRef = T;
-    type Entity = ShortFixedKeysStateEntity<T>;
-    type Iterator = ShortFixedKeysStateIterator<T>;
+    type KeyRef<'a> = T;
+    type EntityRef<'a> = &'a ShortFixedKeysStateEntity<T>;
+    type EntityMutRef<'a> = &'a mut ShortFixedKeysStateEntity<T>;
+    type Iterator<'a> = ShortFixedKeysStateIterator<'a, T>;
 
     #[inline(always)]
     fn len(&self) -> usize {
@@ -159,8 +175,11 @@ where
     }
 
     #[inline(always)]
-    fn iter(&self) -> Self::Iterator {
-        Self::Iterator::create(self.data, self.max_size as isize)
+    fn iter(&self) -> Self::Iterator<'_> {
+        unsafe {
+            let data = std::slice::from_raw_parts_mut(self.data, self.max_size);
+            Self::Iterator::create(data)
+        }
     }
 
     #[inline(always)]
@@ -169,26 +188,31 @@ where
     }
 
     #[inline(always)]
-    fn entity(&mut self, key: T, inserted: &mut bool) -> *mut Self::Entity {
+    fn entity(&mut self, key: T, inserted: &mut bool) -> Self::EntityMutRef<'_> {
         unsafe {
             let index = key.lookup();
             let value = self.data.offset(index);
 
             if likely((*value).fill) {
                 *inserted = false;
-                return value;
+                return &mut *(value);
             }
 
             *inserted = true;
             self.size += 1;
             (*value).key = key;
             (*value).fill = true;
-            value
+            // It's an undefined behavior, but uninitialized integers rarely lead to problems.
+            &mut (*value)
         }
     }
 
     #[inline(always)]
-    fn entity_by_key(&mut self, key: Self::KeyRef, inserted: &mut bool) -> *mut Self::Entity {
+    fn entity_by_key<'a>(
+        &mut self,
+        key: Self::KeyRef<'a>,
+        inserted: &mut bool,
+    ) -> Self::EntityMutRef<'_> {
         self.entity(key, inserted)
     }
 
@@ -237,9 +261,10 @@ where
     for<'a> <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashtableKeyable,
 {
     type Key = T;
-    type KeyRef = T;
-    type Entity = HashtableEntry<T, usize>;
-    type Iterator = HashMapKindIterMutPtr<T, usize>;
+    type KeyRef<'a> = T;
+    type EntityRef<'a> = &'a HashtableEntry<T, usize>;
+    type EntityMutRef<'a> = &'a mut HashtableEntry<T, usize>;
+    type Iterator<'a> = HashMapKindIter<'a, T, usize>;
 
     #[inline(always)]
     fn len(&self) -> usize {
@@ -247,8 +272,8 @@ where
     }
 
     #[inline(always)]
-    fn iter(&self) -> Self::Iterator {
-        unsafe { self.data.iter_mut_ptr() }
+    fn iter(&self) -> Self::Iterator<'_> {
+        self.data.iter()
     }
 
     #[inline(always)]
@@ -257,7 +282,7 @@ where
     }
 
     #[inline(always)]
-    fn entity(&mut self, key: Self::Key, inserted: &mut bool) -> *mut Self::Entity {
+    fn entity(&mut self, key: Self::Key, inserted: &mut bool) -> Self::EntityMutRef<'_> {
         match unsafe { self.data.insert_and_entry(key) } {
             Ok(e) => {
                 *inserted = true;
@@ -271,7 +296,11 @@ where
     }
 
     #[inline(always)]
-    fn entity_by_key(&mut self, key: Self::KeyRef, inserted: &mut bool) -> *mut Self::Entity {
+    fn entity_by_key<'a>(
+        &mut self,
+        key: Self::KeyRef<'a>,
+        inserted: &mut bool,
+    ) -> Self::EntityMutRef<'_> {
         self.entity(key, inserted)
     }
 
@@ -306,15 +335,16 @@ unsafe impl Sync for SerializedKeysAggregatorState {}
 
 impl AggregatorState<HashMethodSerializer> for SerializedKeysAggregatorState {
     type Key = [u8];
-    type KeyRef = *const [u8];
-    type Entity = UnsizedHashtableFakeEntry<[u8], usize>;
-    type Iterator = UnsizedHashMapIterMutPtr<[u8], usize>;
+    type KeyRef<'a> = &'a [u8];
+    type EntityRef<'a> = UnsizedHashtableEntryRef<'a, [u8], usize>;
+    type EntityMutRef<'a> = UnsizedHashtableEntryMutRef<'a, [u8], usize>;
+    type Iterator<'a> = UnsizedHashMapIter<'a, [u8], usize>;
 
     fn len(&self) -> usize {
         self.data_state_map.len()
     }
-    fn iter(&self) -> Self::Iterator {
-        unsafe { self.data_state_map.iter_mut_ptr() }
+    fn iter(&self) -> Self::Iterator<'_> {
+        self.data_state_map.iter()
     }
 
     #[inline(always)]
@@ -323,7 +353,7 @@ impl AggregatorState<HashMethodSerializer> for SerializedKeysAggregatorState {
     }
 
     #[inline(always)]
-    fn entity(&mut self, keys: &[u8], inserted: &mut bool) -> *mut Self::Entity {
+    fn entity(&mut self, keys: &[u8], inserted: &mut bool) -> Self::EntityMutRef<'_> {
         unsafe {
             match self.data_state_map.insert_and_entry(keys) {
                 Ok(e) => {
@@ -339,7 +369,11 @@ impl AggregatorState<HashMethodSerializer> for SerializedKeysAggregatorState {
     }
 
     #[inline(always)]
-    fn entity_by_key(&mut self, key_ref: Self::KeyRef, inserted: &mut bool) -> *mut Self::Entity {
+    fn entity_by_key<'a>(
+        &mut self,
+        key_ref: Self::KeyRef<'a>,
+        inserted: &mut bool,
+    ) -> Self::EntityMutRef<'_> {
         unsafe {
             match self.data_state_map.insert_and_entry(&*key_ref) {
                 Ok(e) => {

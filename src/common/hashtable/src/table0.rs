@@ -197,18 +197,6 @@ where
             i: 0,
         }
     }
-    pub unsafe fn iter_ptr(&self) -> Table0IterPtr<K, V> {
-        Table0IterPtr {
-            slice: self.entries.as_ref() as *const _,
-            i: 0,
-        }
-    }
-    pub unsafe fn iter_mut_ptr(&self) -> Table0IterMutPtr<K, V> {
-        Table0IterMutPtr {
-            slice: self.entries.as_ref() as *const _ as *mut _,
-            i: 0,
-        }
-    }
     pub fn grow(&mut self, shift: u8) {
         let old_capacity = self.entries.len();
         let new_capacity = self.entries.len() << shift;
@@ -279,7 +267,7 @@ where
     pub unsafe fn merge(&mut self, mut other: Self) {
         assert!(self.capacity() >= self.len() + other.len());
         other.dropped = true;
-        for entry in other.iter_mut_ptr() {
+        for entry in other.iter() {
             let key = *(*entry).key.assume_init_ref();
             let result = self.insert(key);
             if let Ok(x) = result {
@@ -346,54 +334,6 @@ where K: Keyable
             None
         } else {
             let res = unsafe { &mut *(self.slice.as_ptr().add(self.i) as *mut _) };
-            self.i += 1;
-            Some(res)
-        }
-    }
-}
-
-pub struct Table0IterPtr<K, V> {
-    slice: *const [Entry<K, V>],
-    i: usize,
-}
-
-impl<K, V> Iterator for Table0IterPtr<K, V>
-where K: Keyable
-{
-    type Item = *const Entry<K, V>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        while unsafe { self.i < (*self.slice).len() && (*self.slice)[self.i].is_zero() } {
-            self.i += 1;
-        }
-        if self.i == unsafe { (*self.slice).len() } {
-            None
-        } else {
-            let res = unsafe { &*((*self.slice).as_ptr().add(self.i) as *const _) };
-            self.i += 1;
-            Some(res)
-        }
-    }
-}
-
-pub struct Table0IterMutPtr<K, V> {
-    slice: *mut [Entry<K, V>],
-    i: usize,
-}
-
-impl<K, V> Iterator for Table0IterMutPtr<K, V>
-where K: Keyable
-{
-    type Item = *mut Entry<K, V>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        while unsafe { self.i < (*self.slice).len() && (*self.slice)[self.i].is_zero() } {
-            self.i += 1;
-        }
-        if self.i == unsafe { (*self.slice).len() } {
-            None
-        } else {
-            let res = unsafe { &mut *((*self.slice).as_ptr().add(self.i) as *mut _) };
             self.i += 1;
             Some(res)
         }

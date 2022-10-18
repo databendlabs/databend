@@ -36,7 +36,8 @@ use common_functions::aggregates::StateAddrs;
 use crate::pipelines::processors::transforms::group_by::AggregatorState;
 use crate::pipelines::processors::transforms::group_by::KeysColumnBuilder;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
-use crate::pipelines::processors::transforms::group_by::StateEntity;
+use crate::pipelines::processors::transforms::group_by::StateEntityMutRef;
+use crate::pipelines::processors::transforms::group_by::StateEntityRef;
 use crate::pipelines::processors::transforms::transform_aggregator::Aggregator;
 use crate::pipelines::processors::AggregatorParams;
 use crate::sessions::QueryContext;
@@ -109,17 +110,18 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
 
         let mut inserted = true;
         for key in keys_iter {
-            let entity = state.entity(key, &mut inserted);
+            let unsafe_state = state as *mut Method::State;
+            let mut entity = state.entity(key, &mut inserted);
 
             match inserted {
                 true => {
-                    if let Some(place) = state.alloc_layout2(params) {
+                    if let Some(place) = unsafe { (*unsafe_state).alloc_layout2(params) } {
                         places.push(place);
                         entity.set_state_value(place.addr());
                     }
                 }
                 false => {
-                    let place: StateAddr = (*entity.get_state_value()).into();
+                    let place: StateAddr = entity.get_state_value().into();
                     places.push(place);
                 }
             }
@@ -205,7 +207,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
 
         let mut bytes = BytesMut::new();
         for group_entity in self.state.iter() {
-            let place: StateAddr = (*group_entity.get_state_value()).into();
+            let place: StateAddr = group_entity.get_state_value().into();
 
             for (idx, func) in funcs.iter().enumerate() {
                 let arg_place = place.next(offsets_aggregate_states[idx]);
@@ -325,7 +327,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method>>
                 .collect::<Vec<_>>();
 
             for group_entity in self.state.iter() {
-                let place: StateAddr = (*group_entity.get_state_value()).into();
+                let place: StateAddr = group_entity.get_state_value().into();
 
                 for (function, state_offset) in functions.iter().zip(states.iter()) {
                     unsafe { function.drop_state(place.next(*state_offset)) }

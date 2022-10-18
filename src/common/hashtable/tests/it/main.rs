@@ -120,20 +120,20 @@ fn test_unsized_hash_map() {
     }
     let mut hashtable = UnsizedHashMap::<[u8], U64>::new();
     for s in sequence.iter() {
-        match unsafe { hashtable.insert(&s) } {
-            Ok(e) => {
+        match unsafe { hashtable.insert_and_entry(&s) } {
+            Ok(mut e) => {
                 e.write(U64::new(1u64));
             }
-            Err(e) => {
-                e.0 += 1;
+            Err(mut e) => {
+                e.get_mut().0 += 1;
             }
         }
     }
     assert_eq!(standard.len(), hashtable.len());
     let mut check = std::collections::HashSet::new();
-    for (key, value) in hashtable.iter() {
-        assert!(check.insert(key));
-        assert_eq!(standard.get(key).copied().unwrap(), value.0);
+    for e in hashtable.iter() {
+        assert!(check.insert(e.key()));
+        assert_eq!(standard.get(e.key()).copied().unwrap(), e.get().0);
     }
     drop(hashtable);
     assert_eq!(COUNT.load(Ordering::Relaxed), 0);

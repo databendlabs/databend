@@ -23,15 +23,11 @@ use super::container::HeapContainer;
 use super::hashtable::Hashtable;
 use super::hashtable::HashtableIter;
 use super::hashtable::HashtableIterMut;
-use super::hashtable::HashtableIterMutPtr;
-use super::hashtable::HashtableIterPtr;
 use super::table0::Entry;
 use super::table0::Table0;
 use super::table0::Table0Iter;
 use super::table0::Table0IterMut;
-use super::table0::Table0IterPtr;
 use super::traits::Keyable;
-use super::utils::SliceIterPtr;
 use super::utils::ZeroEntry;
 
 const BUCKETS: usize = 256;
@@ -184,23 +180,6 @@ where
             )),
         }
     }
-    pub unsafe fn iter_ptr(&self) -> TwolevelHashtableIterPtr<K, V, A> {
-        TwolevelHashtableIterPtr {
-            inner: self.zero.as_ref().map(|x| x as *const _).into_iter().chain(
-                SliceIterPtr::new(self.tables.as_ref()).flat_map(
-                    (|x| Table0::iter_ptr(&*x))
-                        as fn(
-                            *const Table0<K, V, HeapContainer<Entry<K, V>, A>, A>,
-                        ) -> Table0IterPtr<K, V>,
-                ),
-            ),
-        }
-    }
-    pub unsafe fn iter_mut_ptr(&self) -> TwolevelHashtableIterMutPtr<K, V, A> {
-        TwolevelHashtableIterMutPtr {
-            inner: self.iter_ptr(),
-        }
-    }
 }
 
 impl<K, V, A> From<Hashtable<K, V, A>> for TwolevelHashtable<K, V, A>
@@ -213,7 +192,7 @@ where
         unsafe {
             src.table.dropped = true;
             res.zero = ZeroEntry(src.zero.take());
-            for entry in src.table.iter_mut_ptr() {
+            for entry in src.table.iter() {
                 let key = *(*entry).key.assume_init_ref();
                 let val = std::ptr::read((*entry).val.assume_init_ref());
                 let hash = K::hash(&key);
@@ -316,53 +295,6 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         self.inner.next()
-    }
-}
-
-pub struct TwolevelHashtableIterPtr<K, V, A = MmapAllocator<GlobalAllocator>>
-where
-    K: Keyable,
-    A: Allocator + Clone,
-{
-    inner: std::iter::Chain<
-        std::option::IntoIter<*const Entry<K, V>>,
-        std::iter::FlatMap<
-            SliceIterPtr<Table0<K, V, HeapContainer<Entry<K, V>, A>, A>>,
-            Table0IterPtr<K, V>,
-            fn(*const Table0<K, V, HeapContainer<Entry<K, V>, A>, A>) -> Table0IterPtr<K, V>,
-        >,
-    >,
-}
-
-impl<K, V, A> Iterator for TwolevelHashtableIterPtr<K, V, A>
-where
-    K: Keyable,
-    A: Allocator + Clone,
-{
-    type Item = *const Entry<K, V>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next()
-    }
-}
-
-pub struct TwolevelHashtableIterMutPtr<K, V, A = MmapAllocator<GlobalAllocator>>
-where
-    K: Keyable,
-    A: Allocator + Clone,
-{
-    inner: TwolevelHashtableIterPtr<K, V, A>,
-}
-
-impl<K, V, A> Iterator for TwolevelHashtableIterMutPtr<K, V, A>
-where
-    K: Keyable,
-    A: Allocator + Clone,
-{
-    type Item = *mut Entry<K, V>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next().map(|x| x as *mut _)
     }
 }
 
@@ -488,20 +420,6 @@ where
             Twolevel(x) => HashtableKindIterMut::Twolevel(TwolevelHashtable::iter_mut(x)),
         }
     }
-    pub unsafe fn iter_ptr(&self) -> HashtableKindIterPtr<K, V, A> {
-        use HashtableKind::*;
-        match self {
-            Onelevel(x) => HashtableKindIterPtr::Onelevel(Hashtable::iter_ptr(x)),
-            Twolevel(x) => HashtableKindIterPtr::Twolevel(TwolevelHashtable::iter_ptr(x)),
-        }
-    }
-    pub unsafe fn iter_mut_ptr(&self) -> HashtableKindIterMutPtr<K, V, A> {
-        use HashtableKind::*;
-        match self {
-            Onelevel(x) => HashtableKindIterMutPtr::Onelevel(Hashtable::iter_mut_ptr(x)),
-            Twolevel(x) => HashtableKindIterMutPtr::Twolevel(TwolevelHashtable::iter_mut_ptr(x)),
-        }
-    }
     pub fn convert_to_twolevel(&mut self) {
         use HashtableKind::*;
         unsafe {
@@ -557,56 +475,6 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         use HashtableKindIterMut::*;
-        match self {
-            Onelevel(x) => x.next(),
-            Twolevel(x) => x.next(),
-        }
-    }
-}
-
-pub enum HashtableKindIterPtr<K, V, A = MmapAllocator<GlobalAllocator>>
-where
-    K: Keyable,
-    A: Allocator + Clone,
-{
-    Onelevel(HashtableIterPtr<K, V>),
-    Twolevel(TwolevelHashtableIterPtr<K, V, A>),
-}
-
-impl<K, V, A> Iterator for HashtableKindIterPtr<K, V, A>
-where
-    K: Keyable,
-    A: Allocator + Clone,
-{
-    type Item = *const Entry<K, V>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        use HashtableKindIterPtr::*;
-        match self {
-            Onelevel(x) => x.next(),
-            Twolevel(x) => x.next(),
-        }
-    }
-}
-
-pub enum HashtableKindIterMutPtr<K, V, A = MmapAllocator<GlobalAllocator>>
-where
-    K: Keyable,
-    A: Allocator + Clone,
-{
-    Onelevel(HashtableIterMutPtr<K, V>),
-    Twolevel(TwolevelHashtableIterMutPtr<K, V, A>),
-}
-
-impl<K, V, A> Iterator for HashtableKindIterMutPtr<K, V, A>
-where
-    K: Keyable,
-    A: Allocator + Clone,
-{
-    type Item = *mut Entry<K, V>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        use HashtableKindIterMutPtr::*;
         match self {
             Onelevel(x) => x.next(),
             Twolevel(x) => x.next(),

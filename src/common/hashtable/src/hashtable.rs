@@ -24,8 +24,6 @@ use super::table0::Entry;
 use super::table0::Table0;
 use super::table0::Table0Iter;
 use super::table0::Table0IterMut;
-use super::table0::Table0IterMutPtr;
-use super::table0::Table0IterPtr;
 use super::traits::Keyable;
 use super::utils::ZeroEntry;
 
@@ -160,26 +158,6 @@ where
             inner: self.zero.iter_mut().chain(self.table.iter_mut()),
         }
     }
-    pub unsafe fn iter_ptr(&self) -> HashtableIterPtr<K, V> {
-        HashtableIterPtr {
-            inner: self
-                .zero
-                .as_ref()
-                .map(|x| x as *const _)
-                .into_iter()
-                .chain(self.table.iter_ptr()),
-        }
-    }
-    pub unsafe fn iter_mut_ptr(&self) -> HashtableIterMutPtr<K, V> {
-        HashtableIterMutPtr {
-            inner: self
-                .zero
-                .as_ref()
-                .map(|x| x as *const _ as *mut _)
-                .into_iter()
-                .chain(self.table.iter_mut_ptr()),
-        }
-    }
 }
 
 impl<K, A> Hashtable<K, (), A>
@@ -231,34 +209,6 @@ impl<'a, K, V> Iterator for HashtableIterMut<'a, K, V>
 where K: Keyable
 {
     type Item = &'a mut Entry<K, V>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next()
-    }
-}
-
-pub struct HashtableIterPtr<K, V> {
-    inner: std::iter::Chain<std::option::IntoIter<*const Entry<K, V>>, Table0IterPtr<K, V>>,
-}
-
-impl<K, V> Iterator for HashtableIterPtr<K, V>
-where K: Keyable
-{
-    type Item = *const Entry<K, V>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next()
-    }
-}
-
-pub struct HashtableIterMutPtr<K, V> {
-    inner: std::iter::Chain<std::option::IntoIter<*mut Entry<K, V>>, Table0IterMutPtr<K, V>>,
-}
-
-impl<K, V> Iterator for HashtableIterMutPtr<K, V>
-where K: Keyable
-{
-    type Item = *mut Entry<K, V>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.inner.next()

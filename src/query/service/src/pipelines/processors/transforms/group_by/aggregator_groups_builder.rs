@@ -27,8 +27,9 @@ use common_io::prelude::FormatSettings;
 
 use crate::pipelines::processors::AggregatorParams;
 
-pub trait GroupColumnsBuilder<KeyRef> {
-    fn append_value(&mut self, v: KeyRef);
+pub trait GroupColumnsBuilder {
+    type T;
+    fn append_value(&mut self, v: Self::T);
     fn finish(self) -> Result<Vec<ColumnRef>>;
 }
 
@@ -48,9 +49,11 @@ where for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey = T>
     }
 }
 
-impl<T: Copy + Send + Sync + 'static> GroupColumnsBuilder<T> for FixedKeysGroupColumnsBuilder<T>
+impl<T: Copy + Send + Sync + 'static> GroupColumnsBuilder for FixedKeysGroupColumnsBuilder<T>
 where for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey = T>
 {
+    type T = T;
+
     #[inline]
     fn append_value(&mut self, v: T) {
         self.data.push(v);
@@ -63,12 +66,12 @@ where for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey = T>
     }
 }
 
-pub struct SerializedKeysGroupColumnsBuilder {
-    data: Vec<*const [u8]>,
+pub struct SerializedKeysGroupColumnsBuilder<'a> {
+    data: Vec<&'a [u8]>,
     groups_fields: Vec<DataField>,
 }
 
-impl SerializedKeysGroupColumnsBuilder {
+impl<'a> SerializedKeysGroupColumnsBuilder<'a> {
     pub fn create(capacity: usize, params: &AggregatorParams) -> Self {
         Self {
             data: Vec::with_capacity(capacity),
@@ -77,19 +80,16 @@ impl SerializedKeysGroupColumnsBuilder {
     }
 }
 
-impl GroupColumnsBuilder<*const [u8]> for SerializedKeysGroupColumnsBuilder {
-    fn append_value(&mut self, v: *const [u8]) {
+impl<'a> GroupColumnsBuilder for SerializedKeysGroupColumnsBuilder<'a> {
+    type T = &'a [u8];
+
+    fn append_value(&mut self, v: &'a [u8]) {
         self.data.push(v);
     }
 
-    fn finish(self) -> Result<Vec<ColumnRef>> {
-        let mut keys = Vec::with_capacity(self.data.len());
-
-        for v in &self.data {
-            unsafe {
-                keys.push(v.as_ref().unwrap());
-            }
-        }
+    fn finish(mut self) -> Result<Vec<ColumnRef>> {
+        let rows = self.data.len();
+        let keys = self.data.as_mut_slice();
 
         if self.groups_fields.len() == 1
             && self.groups_fields[0].data_type().data_type_id() == TypeID::String
@@ -98,7 +98,6 @@ impl GroupColumnsBuilder<*const [u8]> for SerializedKeysGroupColumnsBuilder {
             return Ok(vec![col.arc()]);
         }
 
-        let rows = self.data.len();
         let mut res = Vec::with_capacity(self.groups_fields.len());
         let format = FormatSettings::default();
         for group_field in self.groups_fields.iter() {

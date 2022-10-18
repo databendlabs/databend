@@ -83,18 +83,6 @@ impl<V, A: Allocator + Clone> Table1<V, A> {
             i: 0,
         }
     }
-    pub unsafe fn iter_ptr(&self) -> Table1IterPtr<V> {
-        Table1IterPtr {
-            slice: self.data.as_ref(),
-            i: 0,
-        }
-    }
-    pub unsafe fn iter_mut_ptr(&self) -> Table1IterMutPtr<V> {
-        Table1IterMutPtr {
-            slice: self.data.as_ref() as *const _ as *mut _,
-            i: 0,
-        }
-    }
 }
 
 impl<V, A: Allocator + Clone> Drop for Table1<V, A> {
@@ -153,58 +141,6 @@ impl<'a, V> Iterator for Table1IterMut<'a, V> {
             None
         } else {
             let res = unsafe { &mut *(self.slice.as_ptr().add(self.i) as *mut _) };
-            self.i += 1;
-            Some(res)
-        }
-    }
-}
-
-pub struct Table1IterPtr<V> {
-    slice: *const [Entry<[u8; 2], V>; 65536],
-    i: usize,
-}
-
-impl<V> Iterator for Table1IterPtr<V> {
-    type Item = *const Entry<[u8; 2], V>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        while self.i < 65536
-            && unsafe {
-                u16::from_le_bytes((*self.slice)[self.i].key.assume_init()) as usize != self.i
-            }
-        {
-            self.i += 1;
-        }
-        if self.i == 65536 {
-            None
-        } else {
-            let res = unsafe { &*((*self.slice).as_ptr().add(self.i) as *const _) };
-            self.i += 1;
-            Some(res)
-        }
-    }
-}
-
-pub struct Table1IterMutPtr<V> {
-    slice: *mut [Entry<[u8; 2], V>; 65536],
-    i: usize,
-}
-
-impl<V> Iterator for Table1IterMutPtr<V> {
-    type Item = *mut Entry<[u8; 2], V>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        while self.i < 65536
-            && unsafe {
-                u16::from_le_bytes((*self.slice)[self.i].key.assume_init()) as usize != self.i
-            }
-        {
-            self.i += 1;
-        }
-        if self.i == 65536 {
-            None
-        } else {
-            let res = unsafe { &mut *((*self.slice).as_ptr().add(self.i) as *mut _) };
             self.i += 1;
             Some(res)
         }

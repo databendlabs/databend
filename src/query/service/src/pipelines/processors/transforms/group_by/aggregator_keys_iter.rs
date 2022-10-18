@@ -75,14 +75,14 @@ where T: LargePrimitive
     }
 }
 
-pub struct SerializedKeysColumnIter {
-    inner: Vec<*const [u8]>,
+pub struct SerializedKeysColumnIter<'a> {
+    inner: Vec<&'a [u8]>,
     #[allow(unused)]
     column: StringColumn,
 }
 
-impl SerializedKeysColumnIter {
-    pub fn create(column: &StringColumn) -> Result<SerializedKeysColumnIter> {
+impl<'a> SerializedKeysColumnIter<'a> {
+    pub fn create(column: &'a StringColumn) -> Result<SerializedKeysColumnIter<'a>> {
         let values = column.values();
         let offsets = column.offsets();
 
@@ -92,7 +92,7 @@ impl SerializedKeysColumnIter {
             let offset_1 = offsets[index + 1] as usize;
             unsafe {
                 let address = values.as_ptr().add(offset) as *const u8;
-                inner.push(std::slice::from_raw_parts(address, offset_1 - offset) as *const [u8]);
+                inner.push(std::slice::from_raw_parts(address, offset_1 - offset));
             }
         }
 
@@ -103,8 +103,8 @@ impl SerializedKeysColumnIter {
     }
 }
 
-impl KeysColumnIter<*const [u8]> for SerializedKeysColumnIter {
-    fn get_slice(&self) -> &[*const [u8]] {
+impl<'a> KeysColumnIter<&'a [u8]> for SerializedKeysColumnIter<'a> {
+    fn get_slice(&self) -> &[&'a [u8]] {
         self.inner.as_slice()
     }
 }

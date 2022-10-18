@@ -19,9 +19,11 @@ use common_datablocks::HashMethodFixedKeys;
 use common_datavalues::prelude::*;
 
 /// Remove the group by key from the state and rebuild it into a column
-pub trait KeysColumnBuilder<KeyRef> {
+pub trait KeysColumnBuilder {
+    type T;
+
+    fn append_value(&mut self, v: Self::T);
     fn finish(self) -> ColumnRef;
-    fn append_value(&mut self, v: KeyRef);
 }
 
 pub struct FixedKeysColumnBuilder<T>
@@ -30,11 +32,13 @@ where T: PrimitiveType
     pub inner_builder: MutablePrimitiveColumn<T>,
 }
 
-impl<T> KeysColumnBuilder<T> for FixedKeysColumnBuilder<T>
+impl<T> KeysColumnBuilder for FixedKeysColumnBuilder<T>
 where
     T: PrimitiveType,
     for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey = T>,
 {
+    type T = T;
+
     #[inline]
     fn finish(mut self) -> ColumnRef {
         self.inner_builder.to_column()
@@ -46,19 +50,29 @@ where
     }
 }
 
-pub struct SerializedKeysColumnBuilder {
+pub struct SerializedKeysColumnBuilder<'a> {
     pub inner_builder: MutableStringColumn,
+    _phantom: PhantomData<&'a ()>,
 }
 
-impl KeysColumnBuilder<*const [u8]> for SerializedKeysColumnBuilder {
+impl<'a> SerializedKeysColumnBuilder<'a> {
+    pub fn create(capacity: usize) -> Self {
+        SerializedKeysColumnBuilder {
+            inner_builder: MutableStringColumn::with_capacity(capacity),
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<'a> KeysColumnBuilder for SerializedKeysColumnBuilder<'a> {
+    type T = &'a [u8];
+
     fn finish(mut self) -> ColumnRef {
         self.inner_builder.to_column()
     }
 
-    fn append_value(&mut self, v: *const [u8]) {
-        unsafe {
-            self.inner_builder.append_value(&*v);
-        }
+    fn append_value(&mut self, v: &'a [u8]) {
+        self.inner_builder.append_value(v);
     }
 }
 
@@ -69,11 +83,13 @@ where T: LargePrimitive
     pub _t: PhantomData<T>,
 }
 
-impl<T> KeysColumnBuilder<T> for LargeFixedKeysColumnBuilder<T>
+impl<T> KeysColumnBuilder for LargeFixedKeysColumnBuilder<T>
 where
     T: LargePrimitive,
     for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey = T>,
 {
+    type T = T;
+
     #[inline]
     fn finish(mut self) -> ColumnRef {
         self.inner_builder.to_column()

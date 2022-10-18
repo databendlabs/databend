@@ -27,7 +27,8 @@ use crate::pipelines::processors::transforms::group_by::aggregator_keys_builder:
 use crate::pipelines::processors::transforms::group_by::aggregator_params::AggregatorParams;
 use crate::pipelines::processors::transforms::group_by::aggregator_params::AggregatorParamsRef;
 use crate::pipelines::processors::transforms::group_by::aggregator_state::AggregatorState;
-use crate::pipelines::processors::transforms::group_by::aggregator_state_entity::StateEntity;
+use crate::pipelines::processors::transforms::group_by::aggregator_state_entity::StateEntityMutRef;
+use crate::pipelines::processors::transforms::group_by::aggregator_state_entity::StateEntityRef;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 
 pub struct Aggregator<Method: HashMethod> {
@@ -126,17 +127,18 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
         let params = self.params.as_ref();
 
         for key in keys_iter {
-            let entity = state.entity(key, &mut inserted);
+            let unsafe_state = state as *mut Method::State;
+            let mut entity = state.entity(key, &mut inserted);
 
             match inserted {
                 true => {
-                    if let Some(place) = state.alloc_layout(params) {
+                    if let Some(place) = unsafe { (*unsafe_state).alloc_layout(params) } {
                         places.push(place);
                         entity.set_state_value(place.addr());
                     }
                 }
                 false => {
-                    let place: StateAddr = (*entity.get_state_value()).into();
+                    let place: StateAddr = entity.get_state_value().into();
                     places.push(place);
                 }
             }
@@ -202,7 +204,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
 
         let mut bytes = BytesMut::new();
         for group_entity in groups.iter() {
-            let place: StateAddr = (*group_entity.get_state_value()).into();
+            let place: StateAddr = group_entity.get_state_value().into();
 
             for (idx, func) in funcs.iter().enumerate() {
                 let arg_place = place.next(offsets_aggregate_states[idx]);
