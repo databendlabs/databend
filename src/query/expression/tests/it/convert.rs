@@ -89,11 +89,6 @@ fn test_convert() {
         })
         .collect();
 
-    // todo(remove me): scalar column is skipped for now
-    if columns.iter().any(|c| c.is_const()) {
-        return;
-    }
-
     let block = DataBlock::create(schema.clone(), columns);
 
     let chunk = from_block(&block);
