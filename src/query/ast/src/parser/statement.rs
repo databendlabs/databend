@@ -941,7 +941,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #alter_table : "`ALTER TABLE [<database>.]<table> <action>`"
             | #rename_table : "`RENAME TABLE [<database>.]<table> TO <new_table>`"
             | #truncate_table : "`TRUNCATE TABLE [<database>.]<table> [PURGE]`"
-            | #optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT [SEGMENTS])`"
+            | #optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT [SEGMENT])`"
             | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
         ),
         rule!(
