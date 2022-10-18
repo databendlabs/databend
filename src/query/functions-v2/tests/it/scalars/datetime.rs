@@ -1044,4 +1044,12 @@ fn test_rounder_functions(file: &mut impl Write) {
     run_ast(file, "to_start_of_quarter(to_timestamp(1630812366))", &[]);
     run_ast(file, "to_start_of_year(to_timestamp(1630812366))", &[]);
     run_ast(file, "to_start_of_iso_year(to_timestamp(1630812366))", &[]);
+
+    run_ast(file, "date_trunc(year, to_timestamp(1630812366))", &[]);
+    run_ast(file, "date_trunc(quarter, to_timestamp(1630812366))", &[]);
+    run_ast(file, "date_trunc(month, to_timestamp(1630812366))", &[]);
+    run_ast(file, "date_trunc(day, to_timestamp(1630812366))", &[]);
+    run_ast(file, "date_trunc(hour, to_timestamp(1630812366))", &[]);
+    run_ast(file, "date_trunc(minute, to_timestamp(1630812366))", &[]);
+    run_ast(file, "date_trunc(second, to_timestamp(1630812366))", &[]);
 }
