@@ -8,6 +8,11 @@ edition = "2021"
 doctest = false
 test = false
 
+[features]
+default = []
+storage-hdfs = ["opendal/services-hdfs", "common-storage/storage-hdfs"]
+hive = ["common-hive-meta-store", "thrift", "storage-hdfs"]
+
 [dependencies]
 common-base = { path = "../../common/base" }
 common-exception = { path = "../../common/exception" }
@@ -28,7 +33,5 @@ semver = "1.0.14"
 serde = { workspace = true }
 serfig = "0.0.2"
 
-[features]
-default = []
-storage-hdfs = ["opendal/services-hdfs", "common-storage/storage-hdfs"]
-hive = ["common-hive-meta-store", "thrift", "storage-hdfs"]
+[build-dependencies]
+common-building = { path = "../../common/building" }

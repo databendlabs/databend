@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_config::Config;
 use common_exception::Result;
 use common_meta_api::SchemaApi;
 use common_meta_app::schema::CountTablesReply;
@@ -65,7 +66,6 @@ use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
 use crate::storages::StorageFactory;
 use crate::storages::Table;
-use crate::Config;
 
 /// Catalog based on MetaStore
 /// - System Database NOT included

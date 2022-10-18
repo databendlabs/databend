@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
+use common_config::Config;
 use common_exception::Result;
 use common_grpc::ConnectionFactory;
 
 use crate::api::FlightClient;
-use crate::Config;
 
 #[async_trait::async_trait]
 pub trait Packet: Send + Sync {
