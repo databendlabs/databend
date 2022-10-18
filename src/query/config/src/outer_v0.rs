@@ -64,7 +64,7 @@ use crate::DATABEND_COMMIT_VERSION;
 /// Only adding new fields is allowed.
 /// This same rules should be applied to all fields of this struct.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Parser)]
-#[clap(about, version = &**DATABEND_COMMIT_VERSION, author)]
+#[clap(name = "databend-query", about, version = &**DATABEND_COMMIT_VERSION, author)]
 #[serde(default)]
 pub struct Config {
     /// Run a command and quit

@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_config::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::CountTablesReply;
@@ -58,7 +59,6 @@ use crate::storages::Table;
 use crate::table_functions::TableArgs;
 use crate::table_functions::TableFunction;
 use crate::table_functions::TableFunctionFactory;
-use crate::Config;
 
 /// Combine two catalogs together
 /// - read/search like operations are always performed at

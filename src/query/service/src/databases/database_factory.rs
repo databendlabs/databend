@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_config::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::DatabaseInfo;
@@ -24,7 +25,6 @@ use crate::databases::default::DefaultDatabase;
 use crate::databases::share::ShareDatabase;
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
-use crate::Config;
 
 pub trait DatabaseCreator: Send + Sync {
     fn try_create(&self, ctx: DatabaseContext, db_info: DatabaseInfo) -> Result<Box<dyn Database>>;

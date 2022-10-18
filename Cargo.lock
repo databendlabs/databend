@@ -1273,6 +1273,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "common-base",
+ "common-building",
  "common-exception",
  "common-grpc",
  "common-hive-meta-store",
@@ -2625,6 +2626,7 @@ dependencies = [
  "anyhow",
  "clap",
  "common-base",
+ "common-config",
  "common-exception",
  "common-grpc",
  "common-macros",

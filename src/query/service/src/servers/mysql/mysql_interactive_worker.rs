@@ -18,6 +18,7 @@ use std::time::Instant;
 
 use common_base::base::tokio::io::AsyncWrite;
 use common_base::base::TrySpawn;
+use common_config::DATABEND_COMMIT_VERSION;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -432,11 +433,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorker<W> {
                 generic_hold: PhantomData::default(),
             },
             salt: scramble,
-            version: format!(
-                "{}-{}",
-                MYSQL_VERSION,
-                *crate::version::DATABEND_COMMIT_VERSION
-            ),
+            version: format!("{}-{}", MYSQL_VERSION, *DATABEND_COMMIT_VERSION),
             client_addr,
         }
     }
