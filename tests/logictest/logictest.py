@@ -453,7 +453,7 @@ class SuiteRunner(object):
                 f"expected error {statement.s_type.expect_error}, but got ok on statement: {statement.text} ",
                 errorType="Error code mismatch",
                 runner=self.kind)
-        match = re.search(statement.s_type.expect_error, actual.msg)
+        match = re.search(statement.s_type.expect_error, str(actual))
         if match is None:
             raise LogicError(
                 message=
