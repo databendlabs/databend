@@ -4,6 +4,10 @@ title: OPTIMIZE TABLE
 
 Use this command to compact the data in a table or purge historical data from a table.
 
+:::tip
+Databend's Time Travel feature relies on historical data. If you purge historical data from a table with the command `OPTIMIZE TABLE <your_table> PURGE` or `OPTIMIZE TABLE <your_table> ALL`, the table will not be eligible for time travel. The command removes all snapshots (except the most recent one) and their associated segments and block files.
+:::
+
 ## Syntax
 
 ```sql

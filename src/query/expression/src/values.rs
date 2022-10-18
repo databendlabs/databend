@@ -1052,6 +1052,19 @@ impl ColumnBuilder {
     }
 
     pub fn repeat(scalar: &ScalarRef, n: usize, data_type: &DataType) -> ColumnBuilder {
+        if !scalar.is_null() {
+            if let DataType::Nullable(ty) = data_type {
+                let mut builder = ColumnBuilder::with_capacity(ty, 1);
+                for _ in 0..n {
+                    builder.push(scalar.clone());
+                }
+                return ColumnBuilder::Nullable(Box::new(NullableColumnBuilder {
+                    builder,
+                    validity: constant_bitmap(true, n),
+                }));
+            }
+        }
+
         match scalar {
             ScalarRef::Null => match data_type {
                 DataType::Null => ColumnBuilder::Null { len: n },
