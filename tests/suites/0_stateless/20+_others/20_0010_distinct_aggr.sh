@@ -5,10 +5,9 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 
 echo "create table s_distinct (a String);" | $MYSQL_CLIENT_CONNECT
-
-for i in `seq 1 100`;do
-	echo "insert into s_distinct values ('$i'), ('$[i+1]'), ('$[i+2]')" | $MYSQL_CLIENT_CONNECT
-done
+echo "insert into s_distinct select to_string(number+1) from numbers(100);" | $MYSQL_CLIENT_CONNECT
+echo "insert into s_distinct select to_string(number+2) from numbers(100);" | $MYSQL_CLIENT_CONNECT
+echo "insert into s_distinct select to_string(number+3) from numbers(100);" | $MYSQL_CLIENT_CONNECT
 
 echo "select count(distinct a) from s_distinct" |  $MYSQL_CLIENT_CONNECT
 
