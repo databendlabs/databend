@@ -54,21 +54,21 @@ pub struct CompactSegmentMutator {
     // blocks lesser than `blocks_per_seg`, and then compacted them into `compacted_segments`,
     // such that, at most one of them contains less than `blocks_per_seg` number of blocks,
     // and each of the others(if any) contains `blocks_per_seg` number of blocks.
-    compacted_segment_accumulator: SegmentAccumualtor,
+    compacted_segment_accumulator: SegmentAccumulator,
     // segments of base_snapshot that need not to be compacted, but should be included in
     // the new snapshot
-    unchanged_segment_accumulator: SegmentAccumualtor,
+    unchanged_segment_accumulator: SegmentAccumulator,
     // segments_unchanged: Vec<(Location, Arc<SegmentInfo>)>,
 }
 
-struct SegmentAccumualtor {
+struct SegmentAccumulator {
     // location of accumulated segments
     locations: Vec<Location>,
     // summarised statistics of all the accumulated segment
     summary: Statistics,
 }
 
-impl SegmentAccumualtor {
+impl SegmentAccumulator {
     fn new() -> Self {
         Self {
             locations: vec![],
@@ -77,17 +77,12 @@ impl SegmentAccumualtor {
     }
 
     fn merge_stats(&mut self, stats: &Statistics) -> Result<()> {
-        // TODO merge_inplace?
         self.summary = merge_statistics(stats, &self.summary)?;
         Ok(())
     }
 
     fn add_location(&mut self, location: Location) {
         self.locations.push(location)
-    }
-
-    fn is_empty(&self) -> bool {
-        self.locations.is_empty()
     }
 }
 
@@ -105,9 +100,13 @@ impl CompactSegmentMutator {
             data_accessor: operator,
             location_generator,
             blocks_per_seg,
-            compacted_segment_accumulator: SegmentAccumualtor::new(),
-            unchanged_segment_accumulator: SegmentAccumualtor::new(),
+            compacted_segment_accumulator: SegmentAccumulator::new(),
+            unchanged_segment_accumulator: SegmentAccumulator::new(),
         })
+    }
+
+    fn need_compaction(&self) -> bool {
+        self.compacted_segment_accumulator.locations.len() > 1
     }
 }
 
@@ -187,11 +186,18 @@ impl TableMutator for CompactSegmentMutator {
             select_begin.elapsed(),
         );
 
-        Ok(!self.compacted_segment_accumulator.is_empty())
+        eprintln!(
+            "compacted_segment_accumulator len {}-{}, {}",
+            self.compacted_segment_accumulator.locations.len(),
+            self.compacted_segment_accumulator.summary.block_count,
+            self.need_compaction()
+        );
+        Ok(self.need_compaction())
     }
 
     async fn try_commit(&self, table_info: &TableInfo) -> Result<()> {
-        if self.compacted_segment_accumulator.is_empty() {
+        if !self.need_compaction() {
+            // defensive checking
             return Ok(());
         }
 
@@ -199,7 +205,7 @@ impl TableMutator for CompactSegmentMutator {
         let base_snapshot = &self.base_snapshot;
         let catalog = ctx.get_catalog(table_info.catalog())?;
         let mut table = catalog.get_table_by_info(table_info)?;
-        let mut latest_snapshot;
+        let mut latest_snapshot = self.base_snapshot.clone();
         let mut retries = 0;
         let mut current_table_info = table_info;
 
@@ -263,7 +269,8 @@ impl TableMutator for CompactSegmentMutator {
                 .chain(self.unchanged_segment_accumulator.locations.iter())
                 .chain(self.compacted_segment_accumulator.locations.iter());
 
-            let mut snapshot_tobe_committed = TableSnapshot::from_previous(base_snapshot.as_ref());
+            let mut snapshot_tobe_committed =
+                TableSnapshot::from_previous(latest_snapshot.as_ref());
             snapshot_tobe_committed.segments = locations.into_iter().cloned().collect::<Vec<_>>();
             snapshot_tobe_committed.summary = merged_stats_with_unchanged;
 
