@@ -32,6 +32,8 @@ use common_base::base::SignalStream;
 use common_base::base::SignalType;
 use common_base::base::Singleton;
 pub use common_catalog::cluster_info::Cluster;
+use common_config::Config;
+use common_config::DATABEND_COMMIT_VERSION;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::ConnectionFactory;
@@ -53,7 +55,6 @@ use tracing::error;
 use tracing::warn;
 
 use crate::api::FlightClient;
-use crate::Config;
 
 pub struct ClusterDiscovery {
     local_id: String,
@@ -379,7 +380,7 @@ impl ClusterDiscovery {
             self.local_id.clone(),
             cpus,
             address,
-            crate::version::DATABEND_COMMIT_VERSION.to_string(),
+            DATABEND_COMMIT_VERSION.to_string(),
         );
 
         self.drop_invalid_nodes(&node_info).await?;
