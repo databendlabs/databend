@@ -19,36 +19,55 @@ use common_base::base::Runtime;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::meta::Location;
+use common_fuse_meta::meta::SegmentInfo;
 use futures_util::future;
 use opendal::Operator;
-use tracing::warn;
 use tracing::Instrument;
 
-// File related operations.
-pub struct FuseFile {
+use crate::io::MetaReaders;
+
+// Read segment related operations.
+pub struct SegmentsIO {
     ctx: Arc<dyn TableContext>,
     operator: Operator,
 }
 
-impl FuseFile {
+impl SegmentsIO {
     pub fn create(ctx: Arc<dyn TableContext>, operator: Operator) -> Self {
         Self { ctx, operator }
     }
 
+    // Read one segment file by location.
+    async fn read_segment(
+        dal: Operator,
+        ctx: Arc<dyn TableContext>,
+        segment_location: Location,
+    ) -> Result<Arc<SegmentInfo>> {
+        let (path, ver) = segment_location;
+        let reader = MetaReaders::segment_info_reader(ctx.as_ref(), dal);
+        reader.read(path, None, ver).await
+    }
+
+    // Read all segments information from s3 in concurrency.
     #[tracing::instrument(level = "debug", skip_all)]
-    pub async fn remove_file_in_batch(&self, file_locations: &[String]) -> Result<()> {
+    pub async fn read_segments(
+        &self,
+        segment_locations: &[Location],
+    ) -> Result<Vec<Result<Arc<SegmentInfo>>>> {
         let ctx = self.ctx.clone();
         let max_runtime_threads = ctx.get_settings().get_max_threads()? as usize;
         let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
 
         // 1.1 combine all the tasks.
-        let mut iter = file_locations.iter();
+        let mut iter = segment_locations.iter();
         let tasks = std::iter::from_fn(move || {
             if let Some(location) = iter.next() {
+                let ctx = ctx.clone();
                 let location = location.clone();
                 Some(
-                    Self::remove_file(self.operator.clone(), location)
-                        .instrument(tracing::debug_span!("remove_file")),
+                    Self::read_segment(self.operator.clone(), ctx, location)
+                        .instrument(tracing::debug_span!("read_segment")),
                 )
             } else {
                 None
@@ -56,41 +75,20 @@ impl FuseFile {
         });
 
         // 1.2 build the runtime.
-        let semaphore = Arc::new(Semaphore::new(max_io_requests));
-        let file_runtime = Arc::new(Runtime::with_worker_threads(
+        let semaphore = Semaphore::new(max_io_requests);
+        let segments_runtime = Arc::new(Runtime::with_worker_threads(
             max_runtime_threads,
-            Some("fuse-req-remove-files-worker".to_owned()),
+            Some("fuse-req-segments-worker".to_owned()),
         )?);
 
         // 1.3 spawn all the tasks to the runtime.
-        let join_handlers = file_runtime
-            .try_spawn_batch(semaphore.clone(), tasks)
-            .await?;
+        let join_handlers = segments_runtime.try_spawn_batch(semaphore, tasks).await?;
 
         // 1.4 get all the result.
-        future::try_join_all(join_handlers).await.map_err(|e| {
-            ErrorCode::StorageOther(format!("remove files in batch failure, {}", e))
-        })?;
-        Ok(())
-    }
-
-    async fn remove_file(opeartor: Operator, block_location: impl AsRef<str>) -> Result<()> {
-        match Self::do_remove_file_by_location(opeartor, block_location.as_ref()).await {
-            Err(e) if e.code() == ErrorCode::storage_not_found_code() => {
-                warn!(
-                    "concurrent remove: file of location {} already removed",
-                    block_location.as_ref()
-                );
-                Ok(())
-            }
-            Err(e) => Err(e),
-            Ok(_) => Ok(()),
-        }
-    }
-
-    // make type checker happy
-    #[inline]
-    async fn do_remove_file_by_location(operator: Operator, location: &str) -> Result<()> {
-        Ok(operator.object(location.as_ref()).delete().await?)
+        let joint: Vec<Result<Arc<SegmentInfo>>> = future::try_join_all(join_handlers)
+            .instrument(tracing::debug_span!("read_segments_join_all"))
+            .await
+            .map_err(|e| ErrorCode::StorageOther(format!("read segments failure, {}", e)))?;
+        Ok(joint)
     }
 }

@@ -75,7 +75,6 @@ pub enum Scalar {
     Number(NumberScalar),
     Timestamp(i64),
     Date(i32),
-    Interval(i64),
     Boolean(bool),
     String(Vec<u8>),
     Array(Column),
@@ -93,7 +92,6 @@ pub enum ScalarRef<'a> {
     String(&'a [u8]),
     Timestamp(i64),
     Date(i32),
-    Interval(i64),
     Array(Column),
     Tuple(Vec<ScalarRef<'a>>),
     Variant(&'a [u8]),
@@ -108,7 +106,6 @@ pub enum Column {
     String(StringColumn),
     Timestamp(Buffer<i64>),
     Date(Buffer<i32>),
-    Interval(Buffer<i64>),
     Array(Box<ArrayColumn<AnyType>>),
     Nullable(Box<NullableColumn<AnyType>>),
     Tuple { fields: Vec<Column>, len: usize },
@@ -128,7 +125,6 @@ pub enum ColumnBuilder {
     String(StringColumnBuilder),
     Timestamp(Vec<i64>),
     Date(Vec<i32>),
-    Interval(Vec<i64>),
     Array(Box<ArrayColumnBuilder<AnyType>>),
     Nullable(Box<NullableColumnBuilder<AnyType>>),
     Tuple {
@@ -217,7 +213,6 @@ impl Scalar {
             Scalar::String(s) => ScalarRef::String(s.as_slice()),
             Scalar::Timestamp(t) => ScalarRef::Timestamp(*t),
             Scalar::Date(d) => ScalarRef::Date(*d),
-            Scalar::Interval(i) => ScalarRef::Interval(*i),
             Scalar::Array(col) => ScalarRef::Array(col.clone()),
             Scalar::Tuple(fields) => ScalarRef::Tuple(fields.iter().map(Scalar::as_ref).collect()),
             Scalar::Variant(s) => ScalarRef::Variant(s.as_slice()),
@@ -235,7 +230,6 @@ impl<'a> ScalarRef<'a> {
             ScalarRef::String(s) => Scalar::String(s.to_vec()),
             ScalarRef::Timestamp(t) => Scalar::Timestamp(*t),
             ScalarRef::Date(d) => Scalar::Date(*d),
-            ScalarRef::Interval(i) => Scalar::Interval(*i),
             ScalarRef::Array(col) => Scalar::Array(col.clone()),
             ScalarRef::Tuple(fields) => {
                 Scalar::Tuple(fields.iter().map(ScalarRef::to_owned).collect())
@@ -266,7 +260,6 @@ impl<'a> ScalarRef<'a> {
             }),
             ScalarRef::Timestamp(t) => Domain::Timestamp(SimpleDomain { min: *t, max: *t }),
             ScalarRef::Date(d) => Domain::Date(SimpleDomain { min: *d, max: *d }),
-            ScalarRef::Interval(i) => Domain::Interval(SimpleDomain { min: *i, max: *i }),
             ScalarRef::Array(array) => Domain::Array(Some(Box::new(array.domain()))),
             ScalarRef::Tuple(fields) => {
                 Domain::Tuple(fields.iter().map(|field| field.domain()).collect())
@@ -286,7 +279,6 @@ impl PartialOrd for Scalar {
             (Scalar::String(s1), Scalar::String(s2)) => s1.partial_cmp(s2),
             (Scalar::Timestamp(t1), Scalar::Timestamp(t2)) => t1.partial_cmp(t2),
             (Scalar::Date(d1), Scalar::Date(d2)) => d1.partial_cmp(d2),
-            (Scalar::Interval(i1), Scalar::Interval(i2)) => i1.partial_cmp(i2),
             (Scalar::Array(a1), Scalar::Array(a2)) => a1.partial_cmp(a2),
             (Scalar::Tuple(t1), Scalar::Tuple(t2)) => t1.partial_cmp(t2),
             (Scalar::Variant(v1), Scalar::Variant(v2)) => {
@@ -310,7 +302,6 @@ impl PartialOrd for ScalarRef<'_> {
             (ScalarRef::String(s1), ScalarRef::String(s2)) => s1.partial_cmp(s2),
             (ScalarRef::Timestamp(t1), ScalarRef::Timestamp(t2)) => t1.partial_cmp(t2),
             (ScalarRef::Date(d1), ScalarRef::Date(d2)) => d1.partial_cmp(d2),
-            (ScalarRef::Interval(i1), ScalarRef::Interval(i2)) => i1.partial_cmp(i2),
             (ScalarRef::Array(a1), ScalarRef::Array(a2)) => a1.partial_cmp(a2),
             (ScalarRef::Tuple(t1), ScalarRef::Tuple(t2)) => t1.partial_cmp(t2),
             (ScalarRef::Variant(v1), ScalarRef::Variant(v2)) => match common_jsonb::compare(v1, v2)
@@ -343,9 +334,6 @@ impl PartialOrd for Column {
                 col1.iter().partial_cmp(col2.iter())
             }
             (Column::Date(col1), Column::Date(col2)) => col1.iter().partial_cmp(col2.iter()),
-            (Column::Interval(col1), Column::Interval(col2)) => {
-                col1.iter().partial_cmp(col2.iter())
-            }
             (Column::Array(col1), Column::Array(col2)) => col1.iter().partial_cmp(col2.iter()),
             (Column::Nullable(col1), Column::Nullable(col2)) => {
                 col1.iter().partial_cmp(col2.iter())
@@ -376,7 +364,6 @@ impl Column {
             Column::String(col) => col.len(),
             Column::Timestamp(col) => col.len(),
             Column::Date(col) => col.len(),
-            Column::Interval(col) => col.len(),
             Column::Array(col) => col.len(),
             Column::Nullable(col) => col.len(),
             Column::Tuple { len, .. } => *len,
@@ -393,7 +380,6 @@ impl Column {
             Column::String(col) => Some(ScalarRef::String(col.index(index)?)),
             Column::Timestamp(col) => Some(ScalarRef::Timestamp(col.get(index).cloned()?)),
             Column::Date(col) => Some(ScalarRef::Date(col.get(index).cloned()?)),
-            Column::Interval(col) => Some(ScalarRef::Interval(col.get(index).cloned()?)),
             Column::Array(col) => Some(ScalarRef::Array(col.index(index)?)),
             Column::Nullable(col) => Some(col.index(index)?.unwrap_or(ScalarRef::Null)),
             Column::Tuple { fields, .. } => Some(ScalarRef::Tuple(
@@ -417,7 +403,6 @@ impl Column {
             Column::String(col) => ScalarRef::String(col.index_unchecked(index)),
             Column::Timestamp(col) => ScalarRef::Timestamp(*col.get_unchecked(index)),
             Column::Date(col) => ScalarRef::Date(*col.get_unchecked(index)),
-            Column::Interval(col) => ScalarRef::Interval(*col.get_unchecked(index)),
             Column::Array(col) => ScalarRef::Array(col.index_unchecked(index)),
             Column::Nullable(col) => col.index_unchecked(index).unwrap_or(ScalarRef::Null),
             Column::Tuple { fields, .. } => ScalarRef::Tuple(
@@ -454,9 +439,6 @@ impl Column {
             }
             Column::Date(col) => {
                 Column::Date(col.clone().slice(range.start, range.end - range.start))
-            }
-            Column::Interval(col) => {
-                Column::Interval(col.clone().slice(range.start, range.end - range.start))
             }
             Column::Array(col) => Column::Array(Box::new(col.slice(range))),
             Column::Nullable(col) => Column::Nullable(Box::new(col.slice(range))),
@@ -513,13 +495,6 @@ impl Column {
                     max: *max,
                 })
             }
-            Column::Interval(col) => {
-                let (min, max) = col.iter().minmax().into_option().unwrap();
-                Domain::Interval(SimpleDomain {
-                    min: *min,
-                    max: *max,
-                })
-            }
             Column::Array(col) => {
                 let inner_domain = col.values.domain();
                 Domain::Array(Some(Box::new(inner_domain)))
@@ -564,7 +539,6 @@ impl Column {
             Column::String { .. } => ArrowDataType::LargeBinary,
             Column::Timestamp(_) => ArrowDataType::Timestamp(TimeUnit::Microsecond, None),
             Column::Date(_) => ArrowDataType::Date32,
-            Column::Interval(_) => ArrowDataType::Date64,
             Column::Array(box ArrayColumn {
                 values: Column::Nullable(box NullableColumn { column, .. }),
                 ..
@@ -705,13 +679,6 @@ impl Column {
             ),
             Column::Date(col) => Box::new(
                 common_arrow::arrow::array::PrimitiveArray::<i32>::from_data(
-                    self.arrow_type(),
-                    col.clone(),
-                    None,
-                ),
-            ),
-            Column::Interval(col) => Box::new(
-                common_arrow::arrow::array::PrimitiveArray::<i64>::from_data(
                     self.arrow_type(),
                     col.clone(),
                     None,
@@ -934,14 +901,6 @@ impl Column {
                     .values()
                     .clone(),
             ),
-            ArrowDataType::Date64 => Column::Interval(
-                arrow_col
-                    .as_any()
-                    .downcast_ref::<common_arrow::arrow::array::Int64Array>()
-                    .expect("fail to read from arrow: array should be `Int64Array`")
-                    .values()
-                    .clone(),
-            ),
             ArrowDataType::Extension(name, _, None) if name == "Variant" => {
                 let arrow_col = arrow_col
                     .as_any()
@@ -1026,7 +985,6 @@ impl Column {
             Column::String(col) => col.data.len() + col.offsets.len() * 8,
             Column::Timestamp(col) => col.len() * 8,
             Column::Date(col) => col.len() * 4,
-            Column::Interval(col) => col.len() * 8,
             Column::Array(col) => col.values.memory_size() + col.offsets.len() * 8,
             Column::Nullable(c) => c.column.memory_size() + c.validity.as_slice().0.len(),
             Column::Tuple { fields, .. } => fields.iter().map(|f| f.memory_size()).sum(),
@@ -1076,7 +1034,6 @@ impl ColumnBuilder {
             Column::String(col) => ColumnBuilder::String(StringColumnBuilder::from_column(col)),
             Column::Timestamp(col) => ColumnBuilder::Timestamp(buffer_into_mut(col)),
             Column::Date(col) => ColumnBuilder::Date(buffer_into_mut(col)),
-            Column::Interval(col) => ColumnBuilder::Interval(buffer_into_mut(col)),
             Column::Array(box col) => {
                 ColumnBuilder::Array(Box::new(ArrayColumnBuilder::from_column(col)))
             }
@@ -1095,6 +1052,19 @@ impl ColumnBuilder {
     }
 
     pub fn repeat(scalar: &ScalarRef, n: usize, data_type: &DataType) -> ColumnBuilder {
+        if !scalar.is_null() {
+            if let DataType::Nullable(ty) = data_type {
+                let mut builder = ColumnBuilder::with_capacity(ty, 1);
+                for _ in 0..n {
+                    builder.push(scalar.clone());
+                }
+                return ColumnBuilder::Nullable(Box::new(NullableColumnBuilder {
+                    builder,
+                    validity: constant_bitmap(true, n),
+                }));
+            }
+        }
+
         match scalar {
             ScalarRef::Null => match data_type {
                 DataType::Null => ColumnBuilder::Null { len: n },
@@ -1116,7 +1086,6 @@ impl ColumnBuilder {
             ScalarRef::String(s) => ColumnBuilder::String(StringColumnBuilder::repeat(s, n)),
             ScalarRef::Timestamp(d) => ColumnBuilder::Timestamp(vec![*d; n]),
             ScalarRef::Date(d) => ColumnBuilder::Date(vec![*d; n]),
-            ScalarRef::Interval(i) => ColumnBuilder::Interval(vec![*i; n]),
             ScalarRef::Array(col) => {
                 ColumnBuilder::Array(Box::new(ArrayColumnBuilder::repeat(col, n)))
             }
@@ -1147,7 +1116,6 @@ impl ColumnBuilder {
             ColumnBuilder::String(builder) => builder.len(),
             ColumnBuilder::Timestamp(builder) => builder.len(),
             ColumnBuilder::Date(builder) => builder.len(),
-            ColumnBuilder::Interval(builder) => builder.len(),
             ColumnBuilder::Array(builder) => builder.len(),
             ColumnBuilder::Nullable(builder) => builder.len(),
             ColumnBuilder::Tuple { len, .. } => *len,
@@ -1171,9 +1139,6 @@ impl ColumnBuilder {
             }
             DataType::Date => {
                 ColumnBuilder::Number(NumberColumnBuilder::Int32(Vec::with_capacity(capacity)))
-            }
-            DataType::Interval => {
-                ColumnBuilder::Number(NumberColumnBuilder::Int64(Vec::with_capacity(capacity)))
             }
             DataType::Nullable(ty) => ColumnBuilder::Nullable(Box::new(NullableColumnBuilder {
                 builder: Self::with_capacity(ty, capacity),
@@ -1224,7 +1189,6 @@ impl ColumnBuilder {
                 builder.push(value);
             }
             (ColumnBuilder::Date(builder), ScalarRef::Date(value)) => builder.push(value),
-            (ColumnBuilder::Interval(builder), ScalarRef::Interval(value)) => builder.push(value),
             (ColumnBuilder::Array(builder), ScalarRef::Array(value)) => {
                 builder.push(value);
             }
@@ -1258,7 +1222,6 @@ impl ColumnBuilder {
             ColumnBuilder::String(builder) => builder.commit_row(),
             ColumnBuilder::Timestamp(builder) => builder.push(0),
             ColumnBuilder::Date(builder) => builder.push(0),
-            ColumnBuilder::Interval(builder) => builder.push(0),
             ColumnBuilder::Array(builder) => builder.push_default(),
             ColumnBuilder::Nullable(builder) => builder.push_null(),
             ColumnBuilder::Tuple { fields, len } => {
@@ -1297,9 +1260,6 @@ impl ColumnBuilder {
             (ColumnBuilder::Date(builder), ColumnBuilder::Date(other_builder)) => {
                 builder.extend_from_slice(other_builder);
             }
-            (ColumnBuilder::Interval(builder), ColumnBuilder::Interval(other_builder)) => {
-                builder.extend_from_slice(other_builder);
-            }
             (ColumnBuilder::Array(builder), ColumnBuilder::Array(other_builder)) => {
                 builder.append(other_builder);
             }
@@ -1332,7 +1292,6 @@ impl ColumnBuilder {
             ColumnBuilder::String(builder) => Column::String(builder.build()),
             ColumnBuilder::Timestamp(builder) => Column::Timestamp(builder.into()),
             ColumnBuilder::Date(builder) => Column::Date(builder.into()),
-            ColumnBuilder::Interval(builder) => Column::Interval(builder.into()),
             ColumnBuilder::Array(builder) => Column::Array(Box::new(builder.build())),
             ColumnBuilder::Nullable(builder) => Column::Nullable(Box::new(builder.build())),
             ColumnBuilder::Tuple { fields, len } => Column::Tuple {
@@ -1353,7 +1312,6 @@ impl ColumnBuilder {
             ColumnBuilder::String(builder) => Scalar::String(builder.build_scalar()),
             ColumnBuilder::Timestamp(builder) => Scalar::Timestamp(builder[0]),
             ColumnBuilder::Date(builder) => Scalar::Date(builder[0]),
-            ColumnBuilder::Interval(builder) => Scalar::Interval(builder[0]),
             ColumnBuilder::Array(builder) => Scalar::Array(builder.build_scalar()),
             ColumnBuilder::Nullable(builder) => builder.build_scalar().unwrap_or(Scalar::Null),
             ColumnBuilder::Tuple { fields, .. } => Scalar::Tuple(

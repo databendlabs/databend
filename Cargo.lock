@@ -1182,7 +1182,6 @@ version = "0.1.0"
 dependencies = [
  "codespan-reporting",
  "common-base",
- "common-datavalues",
  "common-exception",
  "common-functions",
  "common-meta-app",
@@ -1375,7 +1374,7 @@ dependencies = [
  "common-io",
  "common-jsonb",
  "educe",
- "enum-as-inner",
+ "enum-as-inner 0.5.1",
  "goldenfile",
  "hex",
  "itertools",
@@ -1426,7 +1425,7 @@ dependencies = [
  "h3ron",
  "hex",
  "itertools",
- "md5",
+ "md-5",
  "naive-cityhash",
  "num",
  "num-format",
@@ -1513,7 +1512,7 @@ dependencies = [
  "thiserror",
  "tonic",
  "tracing",
- "trust-dns-resolver",
+ "trust-dns-resolver 0.22.0",
 ]
 
 [[package]]
@@ -1979,6 +1978,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "base64",
  "bytes",
  "http",
  "moka",
@@ -1986,6 +1986,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "thiserror",
 ]
 
 [[package]]
@@ -2010,6 +2011,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait-fn",
  "backoff",
+ "backon",
  "chrono",
  "common-arrow",
  "common-base",
@@ -2028,6 +2030,7 @@ dependencies = [
  "common-pipeline-core",
  "common-pipeline-sources",
  "common-pipeline-transforms",
+ "common-sharing",
  "common-storage",
  "common-storages-index",
  "common-storages-util",
@@ -2086,6 +2089,7 @@ dependencies = [
  "common-fuse-meta",
  "common-legacy-expression",
  "common-pipeline-transforms",
+ "criterion",
  "rand 0.8.5",
  "serde",
  "thiserror",
@@ -2707,6 +2711,7 @@ dependencies = [
  "async-recursion",
  "async-stream",
  "async-trait-fn",
+ "backon",
  "base64",
  "bumpalo",
  "byteorder",
@@ -3017,6 +3022,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9852635589dc9f9ea1b6fe9f05b50ef208c85c834a562f0c6abb1c475736ec2b"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "enum-as-inner"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "21cdad81446a7f7dc43f6a77409efeb9733d2fa65553efef6018ef257c959b73"
+dependencies = [
+ "heck 0.4.0",
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -4640,10 +4657,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73cbba799671b762df5a175adf59ce145165747bb891505c43d09aefbbf38beb"
 
 [[package]]
-name = "md5"
-version = "0.7.0"
+name = "md-5"
+version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "490cc448043f947bae3cbee9c203358d62dbee0db12107a74be5c30ccfd09771"
+checksum = "6365506850d44bff6e2fbcb5176cf63650e48bd45ef2fe2665ae1570e0f4b9ca"
+dependencies = [
+ "digest 0.10.5",
+]
 
 [[package]]
 name = "memchr"
@@ -5208,9 +5228,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.19.3"
+version = "0.19.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c475264c97020195acd5a658dc25b7d0008f868e7c59fd57cfa95c2425501cb3"
+checksum = "f4d5fab510ae47b248289590801d40ce3f0239982c6d57820383cb72f75987e9"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -5226,7 +5246,7 @@ dependencies = [
  "hdrs",
  "http",
  "log",
- "md5",
+ "md-5",
  "metrics",
  "once_cell",
  "parking_lot 0.12.1",
@@ -6441,6 +6461,7 @@ dependencies = [
  "tokio-rustls",
  "tokio-util",
  "tower-service",
+ "trust-dns-resolver 0.21.2",
  "url",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -8019,6 +8040,31 @@ checksum = "f1ee9bd9239c339d714d657fac840c6d2a4f9c45f4f9ec7b0975113458be78db"
 
 [[package]]
 name = "trust-dns-proto"
+version = "0.21.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c31f240f59877c3d4bb3b3ea0ec5a6a0cff07323580ff8c7a605cd7d08b255d"
+dependencies = [
+ "async-trait",
+ "cfg-if",
+ "data-encoding",
+ "enum-as-inner 0.4.0",
+ "futures-channel",
+ "futures-io",
+ "futures-util",
+ "idna 0.2.3",
+ "ipnet",
+ "lazy_static",
+ "log",
+ "rand 0.8.5",
+ "smallvec",
+ "thiserror",
+ "tinyvec",
+ "tokio",
+ "url",
+]
+
+[[package]]
+name = "trust-dns-proto"
 version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4f7f83d1e4a0e4358ac54c5c3681e5d7da5efc5a7a632c90bb6d6669ddd9bc26"
@@ -8026,7 +8072,7 @@ dependencies = [
  "async-trait",
  "cfg-if",
  "data-encoding",
- "enum-as-inner",
+ "enum-as-inner 0.5.1",
  "futures-channel",
  "futures-io",
  "futures-util",
@@ -8040,6 +8086,26 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "trust-dns-resolver"
+version = "0.21.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4ba72c2ea84515690c9fcef4c6c660bb9df3036ed1051686de84605b74fd558"
+dependencies = [
+ "cfg-if",
+ "futures-util",
+ "ipconfig",
+ "lazy_static",
+ "log",
+ "lru-cache",
+ "parking_lot 0.12.1",
+ "resolv-conf",
+ "smallvec",
+ "thiserror",
+ "tokio",
+ "trust-dns-proto 0.21.2",
 ]
 
 [[package]]
@@ -8059,7 +8125,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
- "trust-dns-proto",
+ "trust-dns-proto 0.22.0",
 ]
 
 [[package]]
@@ -8075,7 +8141,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.7.3",
+ "rand 0.8.5",
  "static_assertions",
 ]
 

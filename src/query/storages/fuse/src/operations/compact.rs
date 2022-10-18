@@ -90,7 +90,7 @@ impl FuseTable {
         };
 
         ctx.try_set_partitions(plan.parts.clone())?;
-        self.do_read2(ctx.clone(), &plan, pipeline)?;
+        self.do_read_data(ctx.clone(), &plan, pipeline)?;
 
         pipeline.add_transform(|transform_input_port, transform_output_port| {
             TransformCompact::try_create(

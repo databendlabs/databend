@@ -37,6 +37,7 @@ use itertools::izip;
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("upper", &["ucase"]);
     registry.register_aliases("lower", &["lcase"]);
+    registry.register_aliases("length", &["octet_length"]);
     registry.register_aliases("char_length", &["character_length"]);
     registry.register_aliases("substr", &["substring", "mid"]);
 
@@ -95,13 +96,6 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         |val, _| 8 * val.len() as u64,
-    );
-
-    registry.register_1_arg::<StringType, NumberType<u64>, _, _>(
-        "octet_length",
-        FunctionProperty::default(),
-        |_| None,
-        |val, _| val.len() as u64,
     );
 
     registry.register_1_arg::<StringType, NumberType<u64>, _, _>(

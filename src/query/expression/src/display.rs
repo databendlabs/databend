@@ -24,7 +24,7 @@ use rust_decimal::Decimal;
 use rust_decimal::RoundingStrategy;
 
 use crate::chunk::Chunk;
-use crate::date_converter::DateConverter;
+use crate::date_helper::DateConverter;
 use crate::expression::Expr;
 use crate::expression::Literal;
 use crate::expression::RawExpr;
@@ -97,7 +97,6 @@ impl<'a> Debug for ScalarRef<'a> {
             ScalarRef::String(s) => write!(f, "{:?}", String::from_utf8_lossy(s)),
             ScalarRef::Timestamp(t) => write!(f, "{t:?}"),
             ScalarRef::Date(d) => write!(f, "{d:?}"),
-            ScalarRef::Interval(i) => write!(f, "{i:?}"),
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
             ScalarRef::Tuple(fields) => {
                 write!(
@@ -121,7 +120,6 @@ impl Debug for Column {
             Column::String(col) => write!(f, "{col:?}"),
             Column::Timestamp(col) => write!(f, "{col:?}"),
             Column::Date(col) => write!(f, "{col:?}"),
-            Column::Interval(col) => write!(f, "{col:?}"),
             Column::Array(col) => write!(f, "{col:?}"),
             Column::Nullable(col) => write!(f, "{col:?}"),
             Column::Tuple { fields, len } => f
@@ -144,7 +142,6 @@ impl<'a> Display for ScalarRef<'a> {
             ScalarRef::String(s) => write!(f, "{:?}", String::from_utf8_lossy(s)),
             ScalarRef::Timestamp(t) => write!(f, "{}", display_timestamp(*t)),
             ScalarRef::Date(d) => write!(f, "{}", display_date(*d as i64)),
-            ScalarRef::Interval(i) => write!(f, "{}", display_timestamp(*i)),
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
             ScalarRef::Tuple(fields) => {
                 write!(
@@ -154,7 +151,7 @@ impl<'a> Display for ScalarRef<'a> {
                 )
             }
             ScalarRef::Variant(s) => {
-                let value = common_jsonb::from_slice(s).map_err(|_| std::fmt::Error)?;
+                let value = common_jsonb::to_string(s);
                 write!(f, "{value}")
             }
         }
@@ -357,7 +354,6 @@ impl Display for DataType {
             DataType::Number(num) => write!(f, "{num}"),
             DataType::Timestamp => write!(f, "Timestamp"),
             DataType::Date => write!(f, "Date"),
-            DataType::Interval => write!(f, "Interval"),
             DataType::Null => write!(f, "NULL"),
             DataType::Nullable(inner) => write!(f, "{inner} NULL"),
             DataType::EmptyArray => write!(f, "Array(Nothing)"),
@@ -565,7 +561,6 @@ impl Display for Domain {
             Domain::String(domain) => write!(f, "{domain}"),
             Domain::Timestamp(domain) => write!(f, "{domain}"),
             Domain::Date(domain) => write!(f, "{domain}"),
-            Domain::Interval(domain) => write!(f, "{domain}"),
             Domain::Nullable(domain) => write!(f, "{domain}"),
             Domain::Array(None) => write!(f, "[]"),
             Domain::Array(Some(domain)) => write!(f, "[{domain}]"),

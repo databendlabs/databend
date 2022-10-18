@@ -36,13 +36,13 @@ use tracing::Instrument;
 use crate::io::MetaReaders;
 
 // Read snapshot related operations.
-pub struct FuseSnapshotIO {
+pub struct SnapshotsIO {
     ctx: Arc<dyn TableContext>,
     operator: Operator,
     format_version: u64,
 }
 
-impl FuseSnapshotIO {
+impl SnapshotsIO {
     pub fn create(ctx: Arc<dyn TableContext>, operator: Operator, format_version: u64) -> Self {
         Self {
             ctx,
@@ -91,16 +91,14 @@ impl FuseSnapshotIO {
         });
 
         // 1.2 build the runtime.
-        let semaphore = Arc::new(Semaphore::new(max_io_requests));
+        let semaphore = Semaphore::new(max_io_requests);
         let snapshot_runtime = Arc::new(Runtime::with_worker_threads(
             max_runtime_threads,
             Some("fuse-req-snapshots-worker".to_owned()),
         )?);
 
         // 1.3 spawn all the tasks to the runtime.
-        let join_handlers = snapshot_runtime
-            .try_spawn_batch(semaphore.clone(), tasks)
-            .await?;
+        let join_handlers = snapshot_runtime.try_spawn_batch(semaphore, tasks).await?;
 
         // 1.4 get all the result.
         future::try_join_all(join_handlers)

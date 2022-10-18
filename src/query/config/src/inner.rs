@@ -149,6 +149,7 @@ pub struct QueryConfig {
     pub async_insert_busy_timeout: u64,
     pub async_insert_stale_timeout: u64,
     pub idm: IDMConfig,
+    pub share_endpoint_address: String,
 }
 
 impl Default for QueryConfig {
@@ -194,6 +195,7 @@ impl Default for QueryConfig {
             async_insert_busy_timeout: 200,
             async_insert_stale_timeout: 0,
             idm: IDMConfig::default(),
+            share_endpoint_address: "".to_string(),
         }
     }
 }

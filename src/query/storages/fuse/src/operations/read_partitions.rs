@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
@@ -28,6 +29,7 @@ use common_legacy_planners::Projection;
 use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
 use opendal::Operator;
+use tracing::debug;
 
 use crate::fuse_lazy_part::FuseLazyPartInfo;
 use crate::fuse_part::ColumnLeaves;
@@ -43,6 +45,8 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
+        debug!("fuse table do read partitions, push downs:{:?}", push_downs);
+
         let snapshot = self.read_table_snapshot(ctx.clone()).await?;
         match snapshot {
             Some(snapshot) => {
@@ -95,6 +99,12 @@ impl FuseTable {
         segments_location: Vec<Location>,
         summary: usize,
     ) -> Result<(Statistics, Partitions)> {
+        let start = Instant::now();
+        debug!(
+            "prune snapshot block start, segment numbers:{}",
+            segments_location.len()
+        );
+
         let block_metas = BlockPruner::prune(
             &ctx,
             dal,
@@ -106,6 +116,13 @@ impl FuseTable {
         .into_iter()
         .map(|(_, v)| v)
         .collect::<Vec<_>>();
+
+        debug!(
+            "prune snapshot block end, final block numbers:{}, cost:{}",
+            block_metas.len(),
+            start.elapsed().as_secs()
+        );
+
         Self::read_partitions_with_metas(ctx, table_info.schema(), push_downs, block_metas, summary)
     }
 

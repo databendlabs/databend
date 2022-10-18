@@ -25,9 +25,9 @@ use common_fuse_meta::meta::SnapshotId;
 use tracing::info;
 use tracing::warn;
 
-use crate::FuseFile;
-use crate::FuseSegmentIO;
-use crate::FuseSnapshotIO;
+use crate::io::Files;
+use crate::io::SegmentsIO;
+use crate::io::SnapshotsIO;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -38,7 +38,7 @@ impl FuseTable {
                 // concurrent gc: someone else has already collected this snapshot, ignore it
                 warn!(
                     "concurrent gc: snapshot {:?} already collected. table: {}, ident {}",
-                    self.snapshot_loc(),
+                    self.snapshot_loc().await?,
                     self.table_info.desc,
                     self.table_info.ident,
                 );
@@ -66,13 +66,13 @@ impl FuseTable {
         // 2. Get all snapshot(including root snapshot).
         let mut all_snapshot_lites = vec![];
         let mut all_segment_locations = HashSet::new();
-        if let Some(root_snapshot_location) = self.snapshot_loc() {
-            let fuse_snapshot_io = FuseSnapshotIO::create(
+        if let Some(root_snapshot_location) = self.snapshot_loc().await? {
+            let snapshots_io = SnapshotsIO::create(
                 ctx.clone(),
                 self.operator.clone(),
-                self.snapshot_format_version(),
+                self.snapshot_format_version().await?,
             );
-            (all_snapshot_lites, all_segment_locations) = fuse_snapshot_io
+            (all_snapshot_lites, all_segment_locations) = snapshots_io
                 .read_snapshot_lites(root_snapshot_location, None, true)
                 .await?;
         }
@@ -152,7 +152,7 @@ impl FuseTable {
         }
         self.clean_cache(&locations);
 
-        let fuse_file = FuseFile::create(ctx, self.operator.clone());
+        let fuse_file = Files::create(ctx, self.operator.clone());
         fuse_file.remove_file_in_batch(&locations).await
     }
 
@@ -166,10 +166,8 @@ impl FuseTable {
         blocks_referenced_by_root: &HashSet<String>,
         keep_last_snapshot: bool,
     ) -> Result<()> {
-        let fuse_segment_io = FuseSegmentIO::create(ctx.clone(), self.operator.clone());
-        let segments = fuse_segment_io
-            .read_segments(segments_to_be_deleted)
-            .await?;
+        let segments_io = SegmentsIO::create(ctx.clone(), self.operator.clone());
+        let segments = segments_io.read_segments(segments_to_be_deleted).await?;
 
         let mut blocks_need_to_delete = HashSet::new();
         let mut blooms_need_to_delete = HashSet::new();
@@ -191,7 +189,7 @@ impl FuseTable {
             }
         }
 
-        let fuse_file = FuseFile::create(ctx.clone(), self.operator.clone());
+        let fuse_file = Files::create(ctx.clone(), self.operator.clone());
         // Try to remove block files in parallel.
         {
             let locations = Vec::from_iter(blocks_need_to_delete);
@@ -240,7 +238,7 @@ impl FuseTable {
     ) -> Result<HashSet<String>> {
         let mut result = HashSet::new();
 
-        let fuse_segments = FuseSegmentIO::create(ctx.clone(), self.operator.clone());
+        let fuse_segments = SegmentsIO::create(ctx.clone(), self.operator.clone());
         let segments = fuse_segments.read_segments(segment_locations).await?;
         for (idx, segment) in segments.iter().enumerate() {
             let segment = segment.clone();

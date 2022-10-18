@@ -931,6 +931,9 @@ pub struct QueryConfig {
 
     #[clap(skip)]
     users: Vec<UserConfig>,
+
+    #[clap(long, default_value = "")]
+    pub share_endpoint_address: String,
 }
 
 impl Default for QueryConfig {
@@ -986,6 +989,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             idm: InnerIDMConfig {
                 users: users_to_inner(self.users)?,
             },
+            share_endpoint_address: self.share_endpoint_address,
         })
     }
 }
@@ -1040,6 +1044,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             async_insert_busy_timeout: inner.async_insert_busy_timeout,
             async_insert_stale_timeout: inner.async_insert_stale_timeout,
             users: users_from_inner(inner.idm.users),
+            share_endpoint_address: inner.share_endpoint_address,
         }
     }
 }

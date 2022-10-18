@@ -70,7 +70,6 @@ pub struct QueryContext {
     partition_queue: Arc<RwLock<VecDeque<PartInfoPtr>>>,
     shared: Arc<QueryContextShared>,
     fragment_id: Arc<AtomicUsize>,
-    created_time: SystemTime,
 }
 
 impl QueryContext {
@@ -86,7 +85,6 @@ impl QueryContext {
             version: format!("DatabendQuery {}", *crate::version::DATABEND_COMMIT_VERSION),
             shared,
             fragment_id: Arc::new(AtomicUsize::new(0)),
-            created_time: SystemTime::now(),
         })
     }
 
@@ -192,7 +190,7 @@ impl QueryContext {
     }
 
     pub fn get_created_time(&self) -> SystemTime {
-        self.created_time
+        self.shared.created_time
     }
 }
 

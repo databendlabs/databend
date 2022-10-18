@@ -14,6 +14,7 @@
 
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use common_base::base::ProgressValues;
 use common_contexts::DalMetrics;
@@ -58,6 +59,7 @@ impl SyncSystemTable for ProcessesTable {
         let mut processes_scan_progress_read_rows = Vec::with_capacity(processes_info.len());
         let mut processes_scan_progress_read_bytes = Vec::with_capacity(processes_info.len());
         let mut processes_mysql_connection_id = Vec::with_capacity(processes_info.len());
+        let mut processes_time = Vec::with_capacity(processes_info.len());
 
         for process_info in &processes_info {
             processes_id.push(process_info.id.clone().into_bytes());
@@ -79,6 +81,13 @@ impl SyncSystemTable for ProcessesTable {
             processes_scan_progress_read_rows.push(scan_progress_read_rows);
             processes_scan_progress_read_bytes.push(scan_progress_read_bytes);
             processes_mysql_connection_id.push(process_info.mysql_connection_id);
+            processes_time.push(
+                process_info
+                    .created_time
+                    .elapsed()
+                    .unwrap_or(Duration::from_secs(0))
+                    .as_secs(),
+            );
         }
 
         Ok(DataBlock::create(self.table_info.schema(), vec![
@@ -95,6 +104,7 @@ impl SyncSystemTable for ProcessesTable {
             Series::from_data(processes_scan_progress_read_rows),
             Series::from_data(processes_scan_progress_read_bytes),
             Series::from_data(processes_mysql_connection_id),
+            Series::from_data(processes_time),
         ]))
     }
 }
@@ -115,6 +125,7 @@ impl ProcessesTable {
             DataField::new_nullable("scan_progress_read_rows", u64::to_data_type()),
             DataField::new_nullable("scan_progress_read_bytes", u64::to_data_type()),
             DataField::new_nullable("mysql_connection_id", u32::to_data_type()),
+            DataField::new("time", u64::to_data_type()),
         ]);
 
         let table_info = TableInfo {

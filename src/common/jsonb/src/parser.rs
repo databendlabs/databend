@@ -30,14 +30,34 @@ pub fn parse_value(buf: &[u8]) -> Result<Value<'_>, Error> {
     parser.parse()
 }
 
+// used to parse value from storage.
+// as value has be parsed, string don't need extra escape.
+pub fn decode_value(buf: &[u8]) -> Result<Value<'_>, Error> {
+    let mut parser = Parser::new_with_escaped(buf);
+    parser.parse()
+}
+
 struct Parser<'a> {
     buf: &'a [u8],
     idx: usize,
+    escaped: bool,
 }
 
 impl<'a> Parser<'a> {
     fn new(buf: &'a [u8]) -> Parser<'a> {
-        Self { buf, idx: 0 }
+        Self {
+            buf,
+            idx: 0,
+            escaped: false,
+        }
+    }
+
+    fn new_with_escaped(buf: &'a [u8]) -> Parser<'a> {
+        Self {
+            buf,
+            idx: 0,
+            escaped: true,
+        }
     }
 
     fn parse(&mut self) -> Result<Value<'a>, Error> {
@@ -279,7 +299,7 @@ impl<'a> Parser<'a> {
         }
 
         let mut data = &self.buf[start_idx..self.idx - 1];
-        let val = if escapes > 0 {
+        let val = if !self.escaped && escapes > 0 {
             let len = self.idx - 1 - start_idx - escapes;
             let mut idx = start_idx + 1;
             let mut str_buf = String::with_capacity(len);
