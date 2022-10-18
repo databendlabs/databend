@@ -173,7 +173,9 @@ impl<T: ComparisonImpl> ComparisonFunctionCreator<T> {
         }
 
         let mut least_supertype = compare_coercion(args[0], args[1])?;
-        if display_name == "=" && (lhs_id.is_string() && rhs_id.is_numeric())  || (rhs_id.is_string() && lhs_id.is_numeric()){
+        if display_name == "=" && (lhs_id.is_string() && rhs_id.is_numeric())
+            || (rhs_id.is_string() && lhs_id.is_numeric())
+        {
             least_supertype = Vu8::to_data_type();
         }
 
