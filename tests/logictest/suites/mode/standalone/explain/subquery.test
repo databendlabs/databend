@@ -6,7 +6,7 @@ Filter
 ├── filters: [=(t.number (#0), CAST(if(is_not_null(scalar_subquery_4 (#4)), scalar_subquery_4 (#4), 0) AS BIGINT UNSIGNED))]
 └── HashJoin
     ├── join type: SINGLE
-    ├── build keys: [subquery_6 (#6)]
+    ├── build keys: [subquery_2 (#2)]
     ├── probe keys: [subquery_0 (#0)]
     ├── filters: []
     ├── EvalScalar(Build)
@@ -18,9 +18,9 @@ Filter
     │           ├── group by: [number]
     │           ├── aggregate functions: [count()]
     │           └── HashJoin
-    │               ├── join type: INNER
-    │               ├── build keys: [subquery_6 (#6)]
-    │               ├── probe keys: [t2.number (#2)]
+    │               ├── join type: CROSS
+    │               ├── build keys: []
+    │               ├── probe keys: []
     │               ├── filters: []
     │               ├── TableScan(Build)
     │               │   ├── table: default.system.numbers
@@ -29,25 +29,13 @@ Filter
     │               │   ├── partitions total: 1
     │               │   ├── partitions scanned: 1
     │               │   └── push downs: [filters: [], limit: NONE]
-    │               └── HashJoin(Probe)
-    │                   ├── join type: CROSS
-    │                   ├── build keys: []
-    │                   ├── probe keys: []
-    │                   ├── filters: []
-    │                   ├── TableScan(Build)
-    │                   │   ├── table: default.system.numbers
-    │                   │   ├── read rows: 1
-    │                   │   ├── read bytes: 8
-    │                   │   ├── partitions total: 1
-    │                   │   ├── partitions scanned: 1
-    │                   │   └── push downs: [filters: [], limit: NONE]
-    │                   └── TableScan(Probe)
-    │                       ├── table: default.system.numbers
-    │                       ├── read rows: 1
-    │                       ├── read bytes: 8
-    │                       ├── partitions total: 1
-    │                       ├── partitions scanned: 1
-    │                       └── push downs: [filters: [], limit: NONE]
+    │               └── TableScan(Probe)
+    │                   ├── table: default.system.numbers
+    │                   ├── read rows: 1
+    │                   ├── read bytes: 8
+    │                   ├── partitions total: 1
+    │                   ├── partitions scanned: 1
+    │                   └── push downs: [filters: [], limit: NONE]
     └── HashJoin(Probe)
         ├── join type: CROSS
         ├── build keys: []
@@ -73,31 +61,19 @@ explain select t.number from numbers(1) as t where exists (select t1.number from
 
 ----
 Filter
-├── filters: [or(3 (#3), >(t.number (#0), 1))]
+├── filters: [or(2 (#2), >(t.number (#0), 1))]
 └── HashJoin
-    ├── join type: RIGHT MARK
-    ├── build keys: [subquery_2 (#2)]
-    ├── probe keys: [subquery_0 (#0)]
+    ├── join type: LEFT MARK
+    ├── build keys: [subquery_0 (#0)]
+    ├── probe keys: [subquery_1 (#1)]
     ├── filters: []
-    ├── HashJoin(Build)
-    │   ├── join type: INNER
-    │   ├── build keys: [subquery_2 (#2)]
-    │   ├── probe keys: [t1.number (#1)]
-    │   ├── filters: []
-    │   ├── TableScan(Build)
-    │   │   ├── table: default.system.numbers
-    │   │   ├── read rows: 1
-    │   │   ├── read bytes: 8
-    │   │   ├── partitions total: 1
-    │   │   ├── partitions scanned: 1
-    │   │   └── push downs: [filters: [], limit: NONE]
-    │   └── TableScan(Probe)
-    │       ├── table: default.system.numbers
-    │       ├── read rows: 1
-    │       ├── read bytes: 8
-    │       ├── partitions total: 1
-    │       ├── partitions scanned: 1
-    │       └── push downs: [filters: [], limit: NONE]
+    ├── TableScan(Build)
+    │   ├── table: default.system.numbers
+    │   ├── read rows: 1
+    │   ├── read bytes: 8
+    │   ├── partitions total: 1
+    │   ├── partitions scanned: 1
+    │   └── push downs: [filters: [], limit: NONE]
     └── TableScan(Probe)
         ├── table: default.system.numbers
         ├── read rows: 1
@@ -327,7 +303,7 @@ Filter
 ├── filters: [CAST(if(is_not_null(scalar_subquery_3 (#3)), scalar_subquery_3 (#3), 0) AS BIGINT UNSIGNED)]
 └── HashJoin
     ├── join type: SINGLE
-    ├── build keys: [subquery_5 (#5)]
+    ├── build keys: [subquery_2 (#2)]
     ├── probe keys: [subquery_0 (#0)]
     ├── filters: []
     ├── EvalScalar(Build)
@@ -338,25 +314,13 @@ Filter
     │       └── AggregatePartial
     │           ├── group by: [number]
     │           ├── aggregate functions: [count()]
-    │           └── HashJoin
-    │               ├── join type: INNER
-    │               ├── build keys: [subquery_5 (#5)]
-    │               ├── probe keys: [numbers.number (#2)]
-    │               ├── filters: []
-    │               ├── TableScan(Build)
-    │               │   ├── table: default.system.numbers
-    │               │   ├── read rows: 1
-    │               │   ├── read bytes: 8
-    │               │   ├── partitions total: 1
-    │               │   ├── partitions scanned: 1
-    │               │   └── push downs: [filters: [], limit: NONE]
-    │               └── TableScan(Probe)
-    │                   ├── table: default.system.numbers
-    │                   ├── read rows: 1
-    │                   ├── read bytes: 8
-    │                   ├── partitions total: 1
-    │                   ├── partitions scanned: 1
-    │                   └── push downs: [filters: [], limit: NONE]
+    │           └── TableScan
+    │               ├── table: default.system.numbers
+    │               ├── read rows: 1
+    │               ├── read bytes: 8
+    │               ├── partitions total: 1
+    │               ├── partitions scanned: 1
+    │               └── push downs: [filters: [], limit: NONE]
     └── HashJoin(Probe)
         ├── join type: INNER
         ├── build keys: [t1.number (#1)]

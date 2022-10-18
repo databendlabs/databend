@@ -481,6 +481,8 @@ impl SubqueryRewriter {
                                             if correlated_columns.contains(&left_column.index)
                                                 && !correlated_columns.contains(&right_column.index)
                                             {
+                                                self.derived_columns
+                                                    .insert(left_column.index, right_column.index);
                                             }
                                             if !correlated_columns.contains(&left_column.index)
                                                 && correlated_columns.contains(&right_column.index)

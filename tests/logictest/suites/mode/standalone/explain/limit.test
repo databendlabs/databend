@@ -73,7 +73,7 @@ Limit
                 ├── filters: [=(t.number (#0), CAST(if(is_not_null(scalar_subquery_4 (#4)), scalar_subquery_4 (#4), 0) AS BIGINT UNSIGNED))]
                 └── HashJoin
                     ├── join type: SINGLE
-                    ├── build keys: [subquery_6 (#6)]
+                    ├── build keys: [subquery_2 (#2)]
                     ├── probe keys: [subquery_0 (#0)]
                     ├── filters: []
                     ├── EvalScalar(Build)
@@ -85,9 +85,9 @@ Limit
                     │           ├── group by: [number]
                     │           ├── aggregate functions: [count()]
                     │           └── HashJoin
-                    │               ├── join type: INNER
-                    │               ├── build keys: [subquery_6 (#6)]
-                    │               ├── probe keys: [t2.number (#2)]
+                    │               ├── join type: CROSS
+                    │               ├── build keys: []
+                    │               ├── probe keys: []
                     │               ├── filters: []
                     │               ├── TableScan(Build)
                     │               │   ├── table: default.system.numbers
@@ -96,25 +96,13 @@ Limit
                     │               │   ├── partitions total: 1
                     │               │   ├── partitions scanned: 1
                     │               │   └── push downs: [filters: [], limit: NONE]
-                    │               └── HashJoin(Probe)
-                    │                   ├── join type: CROSS
-                    │                   ├── build keys: []
-                    │                   ├── probe keys: []
-                    │                   ├── filters: []
-                    │                   ├── TableScan(Build)
-                    │                   │   ├── table: default.system.numbers
-                    │                   │   ├── read rows: 1
-                    │                   │   ├── read bytes: 8
-                    │                   │   ├── partitions total: 1
-                    │                   │   ├── partitions scanned: 1
-                    │                   │   └── push downs: [filters: [], limit: NONE]
-                    │                   └── TableScan(Probe)
-                    │                       ├── table: default.system.numbers
-                    │                       ├── read rows: 1
-                    │                       ├── read bytes: 8
-                    │                       ├── partitions total: 1
-                    │                       ├── partitions scanned: 1
-                    │                       └── push downs: [filters: [], limit: NONE]
+                    │               └── TableScan(Probe)
+                    │                   ├── table: default.system.numbers
+                    │                   ├── read rows: 1
+                    │                   ├── read bytes: 8
+                    │                   ├── partitions total: 1
+                    │                   ├── partitions scanned: 1
+                    │                   └── push downs: [filters: [], limit: NONE]
                     └── HashJoin(Probe)
                         ├── join type: CROSS
                         ├── build keys: []
