@@ -161,26 +161,32 @@ impl FuseTable {
         let prewhere_filter = Arc::new(prewhere_filter);
         let remain_reader = Arc::new(remain_reader);
 
-        let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
-
-        let mut source_builder = SourcePipeBuilder::create();
-
-        for _index in 0..std::cmp::max(1, max_io_requests) {
-            let output = OutputPort::create();
-            source_builder.add_source(
-                output.clone(),
-                FuseTableSource::create(
-                    ctx.clone(),
-                    output,
-                    output_reader.clone(),
-                    prewhere_reader.clone(),
-                    prewhere_filter.clone(),
-                    remain_reader.clone(),
-                )?,
-            );
+        // Add source pipeline with max io requests.
+        {
+            let mut source_builder = SourcePipeBuilder::create();
+            let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
+            for _index in 0..std::cmp::max(1, max_io_requests) {
+                let output = OutputPort::create();
+                source_builder.add_source(
+                    output.clone(),
+                    FuseTableSource::create(
+                        ctx.clone(),
+                        output,
+                        output_reader.clone(),
+                        prewhere_reader.clone(),
+                        prewhere_filter.clone(),
+                        remain_reader.clone(),
+                    )?,
+                );
+            }
+            pipeline.add_pipe(source_builder.finalize());
         }
 
-        pipeline.add_pipe(source_builder.finalize());
+        // Resize pipeline to max_threads.
+        {
+            let max_threads = ctx.get_settings().get_max_threads()? as usize;
+            pipeline.resize(max_threads)?;
+        }
         Ok(())
     }
 }
