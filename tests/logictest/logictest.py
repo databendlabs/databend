@@ -163,9 +163,9 @@ class Statement:
 
 
 class ParsedStatement(
-        collections.namedtuple(
-            'ParsedStatement',
-            ["at_line", "s_type", "suite_name", "text", "results", "runs_on"])):
+    collections.namedtuple(
+        'ParsedStatement',
+        ["at_line", "s_type", "suite_name", "text", "results", "runs_on"])):
 
     def get_fields(self):
         return self._fields
@@ -284,7 +284,7 @@ class SuiteRunner(object):
                     continue
 
                 if self.args.skip and any(
-                    [re.search(r, base_name) for r in skips]):
+                        [re.search(r, base_name) for r in skips]):
                     log.info(f"Skip test file {filename}")
                     continue
 
@@ -296,7 +296,7 @@ class SuiteRunner(object):
                     continue
 
                 if not self.args.pattern or any(
-                    [re.search(r, base_name) for r in self.args.pattern]):
+                        [re.search(r, base_name) for r in self.args.pattern]):
                     self.statement_files.append(
                         (filename, os.path.relpath(filename, suite_path)))
 
@@ -375,24 +375,24 @@ class SuiteRunner(object):
                 return compare_result_with_reg(resultset[2].split(), f.split())
             except Exception as err:
                 raise LogicError(message="\n{}\n Expected:\n{:<80}\n Actual:\n{:<80}\n Statement:{}\n Start " \
-                                            "Line: {}, Result Label: {}".format(str(err),
-                                                                                resultset[2].rstrip(),
-                                                                                f.rstrip(),
-                                                                                str(statement), resultset[1],
-                                                                                resultset[0].group("label")),
-                            errorType="statement query get result not equal to expected(with regex expression)",
-                            runner=self.kind,
-                            )
+                                         "Line: {}, Result Label: {}".format(str(err),
+                                                                             resultset[2].rstrip(),
+                                                                             f.rstrip(),
+                                                                             str(statement), resultset[1],
+                                                                             resultset[0].group("label")),
+                                 errorType="statement query get result not equal to expected(with regex expression)",
+                                 runner=self.kind,
+                                 )
 
         if compare_f != compare_result:
             raise LogicError(message="\n Expected:\n{:<80}\n Actual:\n{:<80}\n Statement:{}\n Start " \
-                                            "Line: {}, Result Label: {}".format(resultset[2].rstrip(),
-                                                                                f.rstrip(),
-                                                                                str(statement), resultset[1],
-                                                                                resultset[0].group("label")),
-                            errorType="statement query get result not equal to expected",
-                            runner=self.kind,
-                            )
+                                     "Line: {}, Result Label: {}".format(resultset[2].rstrip(),
+                                                                         f.rstrip(),
+                                                                         str(statement), resultset[1],
+                                                                         resultset[0].group("label")),
+                             errorType="statement query get result not equal to expected",
+                             runner=self.kind,
+                             )
 
     def assert_execute_query(self, statement):
         if statement.s_type.query_type == "skipped":
