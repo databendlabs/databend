@@ -58,7 +58,7 @@ impl CopyInterpreterV2 {
         catalog_name: String,
         database_name: String,
         table_id: u64,
-        query_copied_files: &mut Vec<String>,
+        query_copied_files: &[String],
         file_info: &mut BTreeMap<String, TableCopiedFileInfo>,
     ) -> Result<()> {
         let catalog = self.ctx.get_catalog(&catalog_name)?;
@@ -73,7 +73,6 @@ impl CopyInterpreterV2 {
 
         file_info.extend(resp.file_info);
 
-        query_copied_files.clear();
         Ok(())
     }
 
@@ -118,27 +117,13 @@ impl CopyInterpreterV2 {
         if !force {
             // if force is false, copy only the files that unmatch to the meta copied files info.
             let mut file_info = BTreeMap::new();
-            let mut query_copied_files = vec![];
 
-            for file in files.iter() {
-                query_copied_files.push(file.clone());
-                if query_copied_files.len() > MAX_QUERY_COPIED_FILES_NUM {
-                    self.do_query_copied_files_info(
-                        catalog_name.to_string(),
-                        database_name.to_string(),
-                        table_id,
-                        &mut query_copied_files,
-                        &mut file_info,
-                    )
-                    .await?;
-                }
-            }
-            if !query_copied_files.is_empty() {
+            for query_copied_files in files.chunks(MAX_QUERY_COPIED_FILES_NUM) {
                 self.do_query_copied_files_info(
                     catalog_name.to_string(),
                     database_name.to_string(),
                     table_id,
-                    &mut query_copied_files,
+                    query_copied_files,
                     &mut file_info,
                 )
                 .await?;
