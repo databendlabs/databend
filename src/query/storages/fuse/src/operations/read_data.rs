@@ -146,7 +146,9 @@ impl FuseTable {
         } else {
             parts_len
         };
-        Ok(std::cmp::max(1, max_io_requests))
+
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        Ok(std::cmp::max(max_threads, max_io_requests))
     }
 
     pub fn do_read_data(
@@ -227,10 +229,9 @@ impl FuseTable {
             }
             pipeline.add_pipe(source_builder.finalize());
 
-            // Resize pipeline to adjust threa.
+            // Resize pipeline to max threads.
             let max_threads = ctx.get_settings().get_max_threads()? as usize;
-            let resize_to_threads = std::cmp::min(max_io_requests, max_threads);
-            pipeline.resize(resize_to_threads)?;
+            pipeline.resize(max_threads)?;
         }
 
         Ok(())
