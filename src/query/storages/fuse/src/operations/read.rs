@@ -71,7 +71,6 @@ impl FuseTable {
         }
     }
 
-    #[inline]
     pub fn do_read_data(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -161,7 +160,10 @@ impl FuseTable {
         let prewhere_filter = Arc::new(prewhere_filter);
         let remain_reader = Arc::new(remain_reader);
 
-        // Add source pipeline with max io requests.
+        // Add source transform with max io requests.
+        // max_storage_io_requests default is 1000, for example(c17 is a string column):
+        // select sum(CHAR_LENGTH(c17)) from t7861;
+        // The network bandwidth will be 1400M+ bytes/sec
         {
             let mut source_builder = SourcePipeBuilder::create();
             let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
