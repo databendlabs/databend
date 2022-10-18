@@ -13,10 +13,12 @@
 // limitations under the License.
 
 use std::env;
-use std::ops::Deref;
 use std::sync::Arc;
 
 use common_base::base::RuntimeTracker;
+use common_config::Config;
+use common_config::DATABEND_COMMIT_VERSION;
+use common_config::QUERY_SEMVER;
 use common_macros::databend_main;
 use common_meta_client::MIN_METASRV_SEMVER;
 use common_meta_embedded::MetaEmbedded;
@@ -31,9 +33,7 @@ use databend_query::servers::HttpHandlerKind;
 use databend_query::servers::MySQLHandler;
 use databend_query::servers::Server;
 use databend_query::servers::ShutdownHandle;
-use databend_query::Config;
 use databend_query::GlobalServices;
-use databend_query::QUERY_SEMVER;
 use tracing::info;
 
 #[databend_main]
@@ -167,7 +167,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     // Print information to users.
     println!("Databend Query");
     println!();
-    println!("Version: {}", *databend_query::DATABEND_COMMIT_VERSION);
+    println!("Version: {}", *DATABEND_COMMIT_VERSION);
     println!("Log:");
     println!("    File: {}", conf.log.file);
     println!("    Stderr: {}", conf.log.stderr);
@@ -238,7 +238,7 @@ fn run_cmd(conf: &Config) -> bool {
 
     match conf.cmd.as_str() {
         "ver" => {
-            println!("version: {}", QUERY_SEMVER.deref());
+            println!("version: {}", *QUERY_SEMVER);
             println!("min-compatible-metasrv-version: {}", MIN_METASRV_SEMVER);
         }
         _ => {

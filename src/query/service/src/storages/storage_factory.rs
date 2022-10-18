@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 pub use common_catalog::catalog::StorageDescription;
+use common_config::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
@@ -28,7 +29,6 @@ use crate::storages::null::NullTable;
 use crate::storages::view::ViewTable;
 use crate::storages::StorageContext;
 use crate::storages::Table;
-use crate::Config;
 
 pub trait StorageCreator: Send + Sync {
     fn try_create(&self, ctx: StorageContext, table_info: TableInfo) -> Result<Box<dyn Table>>;
