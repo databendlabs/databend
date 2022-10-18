@@ -165,8 +165,16 @@ impl FuseTable {
         // select sum(CHAR_LENGTH(c17)) from t7861;
         // The network bandwidth will be 1400M+ bytes/sec
         {
+            // Adjust the max io request.
+            let parts_len = plan.parts.len();
+            let max_storage_io = ctx.get_settings().get_max_storage_io_requests()? as usize;
+            let max_io_requests = if parts_len > max_storage_io {
+                max_storage_io
+            } else {
+                parts_len
+            };
+
             let mut source_builder = SourcePipeBuilder::create();
-            let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
             for _index in 0..std::cmp::max(1, max_io_requests) {
                 let output = OutputPort::create();
                 source_builder.add_source(
