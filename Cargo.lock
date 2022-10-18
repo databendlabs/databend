@@ -2004,6 +2004,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "base64 0.13.0",
  "bytes 1.2.1",
  "http",
  "moka",
@@ -2011,6 +2012,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "thiserror",
 ]
 
 [[package]]
@@ -2054,6 +2056,7 @@ dependencies = [
  "common-pipeline-core",
  "common-pipeline-sources",
  "common-pipeline-transforms",
+ "common-sharing",
  "common-storage",
  "common-storages-index",
  "common-storages-util",

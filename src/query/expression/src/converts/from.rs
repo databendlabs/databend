@@ -26,8 +26,6 @@ use crate::with_number_type;
 use crate::Chunk;
 use crate::Column;
 use crate::ColumnBuilder;
-use crate::DataField;
-use crate::DataSchema;
 use crate::Scalar;
 use crate::Value;
 
@@ -58,18 +56,6 @@ pub fn from_type(datatype: &DataTypeImpl) -> DataType {
         | DataTypeImpl::VariantObject(_) => DataType::Variant,
         DataTypeImpl::Interval(_) => unimplemented!(),
     })
-}
-
-pub fn from_schema(schema: &common_datavalues::DataSchema) -> DataSchema {
-    let fields = schema
-        .fields()
-        .iter()
-        .map(|f| {
-            let ty = from_type(f.data_type());
-            DataField::new(f.name(), ty)
-        })
-        .collect();
-    DataSchema::new_from(fields, schema.meta().clone())
 }
 
 pub fn from_scalar(datavalue: &DataValue, datatype: &DataTypeImpl) -> Scalar {
@@ -114,6 +100,14 @@ pub fn from_scalar(datavalue: &DataValue, datatype: &DataTypeImpl) -> Scalar {
         DataTypeImpl::Timestamp(_) => Scalar::Timestamp(datavalue.as_i64().unwrap() as i64),
         DataTypeImpl::Date(_) => Scalar::Date(datavalue.as_i64().unwrap() as i32),
         DataTypeImpl::String(_) => Scalar::String(datavalue.as_string().unwrap()),
+        DataTypeImpl::Variant(_) => match datavalue {
+            DataValue::String(x) => Scalar::Variant(x.clone()),
+            DataValue::Variant(x) => {
+                let v: Vec<u8> = serde_json::to_vec(x).unwrap();
+                Scalar::Variant(v)
+            }
+            _ => unreachable!(),
+        },
         DataTypeImpl::Struct(types) => {
             let values = match datavalue {
                 DataValue::Struct(x) => x,
@@ -143,17 +137,6 @@ pub fn from_scalar(datavalue: &DataValue, datatype: &DataTypeImpl) -> Scalar {
             }
             let col = builder.build();
             Scalar::Array(col)
-        }
-
-        DataTypeImpl::Variant(_)
-        | DataTypeImpl::VariantArray(_)
-        | DataTypeImpl::VariantObject(_) => {
-            let value = match datavalue {
-                DataValue::Variant(x) => x,
-                _ => unreachable!(),
-            };
-            let v: Vec<u8> = serde_json::to_vec(value).unwrap();
-            Scalar::Variant(v)
         }
         _ => unreachable!(),
     }

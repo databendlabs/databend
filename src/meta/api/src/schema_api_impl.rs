@@ -101,9 +101,12 @@ use common_meta_types::errors::app_error::WrongShareObject;
 use common_meta_types::ConditionResult;
 use common_meta_types::GCDroppedDataReply;
 use common_meta_types::GCDroppedDataReq;
+use common_meta_types::InvalidReply;
 use common_meta_types::KVAppError;
 use common_meta_types::MatchSeqExt;
+use common_meta_types::MetaError;
 use common_meta_types::MetaId;
+use common_meta_types::MetaNetworkError;
 use common_meta_types::TxnCondition;
 use common_meta_types::TxnOp;
 use common_meta_types::TxnRequest;
@@ -1015,6 +1018,33 @@ impl<KV: KVApi> SchemaApi for KV {
         Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
             TxnRetryMaxTimes::new("create_table", TXN_MAX_RETRY_TIMES),
         )))
+    }
+
+    /// List all tables belonging to every db and every tenant.
+    ///
+    /// It returns a list of (table-id, table-meta-seq, table-meta).
+    #[tracing::instrument(level = "debug", ret, err, skip_all)]
+    async fn list_all_tables(&self) -> Result<Vec<(TableId, u64, TableMeta)>, KVAppError> {
+        debug!("SchemaApi: {}", func_name!());
+
+        let reply = self
+            .prefix_list_kv(&vec![TableId::PREFIX, ""].join("/"))
+            .await?;
+
+        let mut res = vec![];
+
+        for (kk, vv) in reply.into_iter() {
+            let table_id = TableId::from_key(&kk).map_err(|e| {
+                let inv = InvalidReply::new("list_all_tables", &e);
+                let meta_net_err = MetaNetworkError::InvalidReply(inv);
+                MetaError::NetworkError(meta_net_err)
+            })?;
+
+            let table_meta: TableMeta = deserialize_struct(&vv.data)?;
+
+            res.push((table_id, vv.seq, table_meta));
+        }
+        Ok(res)
     }
 
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
