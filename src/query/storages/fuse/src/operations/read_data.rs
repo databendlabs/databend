@@ -229,12 +229,6 @@ impl FuseTable {
                 );
             }
             pipeline.add_pipe(source_builder.finalize());
-
-            // Resize pipeline to adjust threads.
-            let max_threads = ctx.get_settings().get_max_threads()? as usize;
-            let resize_to = std::cmp::min(max_threads, max_io_requests);
-            info!("read block data resize pipeline to:{}", resize_to);
-            pipeline.resize(resize_to)?;
         }
 
         Ok(())
