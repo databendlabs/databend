@@ -357,7 +357,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
         }
     }
 
-    //#[tracing::instrument(level = "debug", skip(interpreter, context))]
+    #[tracing::instrument(level = "debug", skip(interpreter, context))]
     async fn exec_query(
         interpreter: Arc<dyn Interpreter>,
         context: &Arc<QueryContext>,

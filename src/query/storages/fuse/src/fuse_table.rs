@@ -155,8 +155,10 @@ impl FuseTable {
         if let Some(loc) = self.snapshot_loc().await? {
             let reader = MetaReaders::table_snapshot_reader(ctx, self.get_operator());
             let ver = self.snapshot_format_version().await?;
+            eprintln!("snapshot location is some");
             Ok(Some(reader.read(loc.as_str(), None, ver).await?))
         } else {
+            eprintln!("snapshot location is none");
             Ok(None)
         }
     }

@@ -76,7 +76,6 @@ impl Interpreter for OptimizeTableInterpreter {
         }
 
         if do_compact_blocks {
-            eprintln!("is compact blocks");
             let mut pipeline = Pipeline::create();
             let segments_only = false;
             let mutator = table

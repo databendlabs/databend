@@ -188,11 +188,10 @@ impl TableMutator for CompactSegmentMutator {
         // [x, y, a, d, h, i]
         //
         // note that
-        // 1. the concurrently appended(and committed) segment will NOT
-        // be compacted here, to make the commit of compact agile
+        // 1. the concurrently appended(and committed) segment will NOT be compacted here, to make the commit of compact agile
         // 2. in the implementation, the order of segment in the vector is arranged in reversed order
 
-        // newly appended segments of concurrent append segments which are committed before us
+        // newly appended segments of concurrent txs which are committed before us
         // the init value of it is an empty slice
         let mut appended_segments_locations: &[Location] = &[];
 
@@ -249,6 +248,12 @@ impl TableMutator for CompactSegmentMutator {
                         match detect_conflicts(base_snapshot, &latest_snapshot) {
                             Conflict::Irreconcilable => {
                                 counter!("fuse_compact_segments_irreconcilable_conflict", 1);
+                                counter!("fuse_compact_segments_aborts", 1);
+                                abort_segment_compaction(
+                                    &self.data_accessor,
+                                    &self.compacted_segments,
+                                )
+                                .await;
                                 break Err(ErrorCode::StorageOther(
                                     "mutation conflicts, concurrent mutation detected while committing segment compaction operation",
                                 ));
