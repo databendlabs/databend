@@ -63,7 +63,7 @@ pub struct CompactSegmentMutator {
 
 struct SegmentAccumualtor {
     // location of accumulated segments
-    location: Vec<Location>,
+    locations: Vec<Location>,
     // summarised statistics of all the accumulated segment
     summary: Statistics,
 }
@@ -71,23 +71,23 @@ struct SegmentAccumualtor {
 impl SegmentAccumualtor {
     fn new() -> Self {
         Self {
-            location: vec![],
+            locations: vec![],
             summary: Default::default(),
         }
     }
 
     fn merge_stats(&mut self, stats: &Statistics) -> Result<()> {
         // TODO merge_inplace?
-        self.summary = merge_statistics(&stats, &self.summary)?;
+        self.summary = merge_statistics(stats, &self.summary)?;
         Ok(())
     }
 
     fn add_location(&mut self, location: Location) {
-        self.location.push(location)
+        self.locations.push(location)
     }
 
     fn is_empty(&self) -> bool {
-        self.location.is_empty()
+        self.locations.is_empty()
     }
 }
 
@@ -260,8 +260,8 @@ impl TableMutator for CompactSegmentMutator {
             // chain all the locations
             let locations = appended_segments_locations
                 .iter()
-                .chain(self.unchanged_segment_accumulator.location.iter())
-                .chain(self.compacted_segment_accumulator.location.iter());
+                .chain(self.unchanged_segment_accumulator.locations.iter())
+                .chain(self.compacted_segment_accumulator.locations.iter());
 
             let mut snapshot_tobe_committed = TableSnapshot::from_previous(base_snapshot.as_ref());
             snapshot_tobe_committed.segments = locations.into_iter().cloned().collect::<Vec<_>>();
@@ -292,7 +292,7 @@ impl TableMutator for CompactSegmentMutator {
                                 counter!("fuse_compact_segments_aborts", 1);
                                 abort_segment_compaction(
                                     &self.data_accessor,
-                                    &self.compacted_segment_accumulator.location,
+                                    &self.compacted_segment_accumulator.locations,
                                 )
                                 .await;
                                 break Err(ErrorCode::StorageOther(
@@ -313,7 +313,7 @@ impl TableMutator for CompactSegmentMutator {
                             counter!("fuse_compact_segments_aborts", 1);
                             abort_segment_compaction(
                                 &self.data_accessor,
-                                &self.compacted_segment_accumulator.location,
+                                &self.compacted_segment_accumulator.locations,
                             )
                             .await;
                             return Err(ErrorCode::StorageOther(format!(
