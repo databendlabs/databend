@@ -1365,11 +1365,11 @@ pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
         value(OptimizeTableAction::All, rule! { ALL }),
         value(OptimizeTableAction::Purge, rule! { PURGE }),
         value(
-            OptimizeTableAction::Compact(CompactTarget::Segments),
-            rule! { COMPACT ~ SEGMENTS},
+            OptimizeTableAction::Compact(CompactTarget::Segment),
+            rule! { COMPACT ~ SEGMENT},
         ),
         value(
-            OptimizeTableAction::Compact(CompactTarget::Blocks),
+            OptimizeTableAction::Compact(CompactTarget::Block),
             rule! { COMPACT},
         ),
     ))(i)

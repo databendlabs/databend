@@ -446,8 +446,8 @@ impl Display for Engine {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompactTarget {
-    Blocks,
-    Segments,
+    Block,
+    Segment,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -463,11 +463,11 @@ impl Display for OptimizeTableAction {
             OptimizeTableAction::All => write!(f, "ALL"),
             OptimizeTableAction::Purge => write!(f, "PURGE"),
             OptimizeTableAction::Compact(action) => match action {
-                CompactTarget::Blocks => {
-                    write!(f, "COMPACT BLOCKS")
+                CompactTarget::Block => {
+                    write!(f, "COMPACT BLOCK")
                 }
-                CompactTarget::Segments => {
-                    write!(f, "COMPACT SEGMENTS")
+                CompactTarget::Segment => {
+                    write!(f, "COMPACT SEGMENT")
                 }
             },
         }

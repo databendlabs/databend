@@ -782,8 +782,8 @@ impl<'a> Binder {
             AstOptimizeTableAction::All => OptimizeTableAction::All,
             AstOptimizeTableAction::Purge => OptimizeTableAction::Purge,
             AstOptimizeTableAction::Compact(target) => match target {
-                CompactTarget::Blocks => OptimizeTableAction::CompactBlocks,
-                CompactTarget::Segments => OptimizeTableAction::CompactSegments,
+                CompactTarget::Block => OptimizeTableAction::CompactBlocks,
+                CompactTarget::Segment => OptimizeTableAction::CompactSegments,
             },
         });
 

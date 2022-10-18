@@ -174,7 +174,7 @@ statement ok
 insert into t1 values (7);
 
 statement ok
-optimize table t1 compact segments;
+optimize table t1 compact segment;
 
 statement query II
 select segment_count, block_count from fuse_snapshot('db_09_0008', 't1') limit 1;
