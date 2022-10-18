@@ -238,6 +238,7 @@ impl SchemaApiTestSuite {
         suite.table_update_meta(&b.build().await).await?;
         suite.table_upsert_option(&b.build().await).await?;
         suite.table_list(&b.build().await).await?;
+        suite.table_list_all(&b.build().await).await?;
         suite
             .table_drop_undrop_list_history(&b.build().await)
             .await?;
@@ -3626,6 +3627,81 @@ impl SchemaApiTestSuite {
                 assert_eq!(tb_ids.len(), res.len());
                 assert_eq!(tb_ids[0], res[0].ident.table_id);
                 assert_eq!(tb_ids[1], res[1].ident.table_id);
+            }
+        }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn table_list_all<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+        let tenant = "tenant1";
+        let db1_name = "db1";
+        let db2_name = "db2";
+
+        info!("--- prepare db");
+        {
+            self.create_database(mt, tenant, db1_name, "eng1").await?;
+            self.create_database(mt, tenant, db2_name, "eng1").await?;
+        }
+
+        info!("--- create 2 tables: tb1 tb2");
+        {
+            // Table schema with metadata(due to serde issue).
+            let schema = Arc::new(DataSchema::new(vec![DataField::new(
+                "number",
+                u64::to_data_type(),
+            )]));
+
+            let options = maplit::btreemap! {"opt‐1".into() => "val-1".into()};
+
+            let mut req = CreateTableReq {
+                if_not_exists: false,
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db1_name.to_string(),
+                    table_name: "tb1".to_string(),
+                },
+                table_meta: TableMeta {
+                    schema: schema.clone(),
+                    engine: "JSON".to_string(),
+                    options: options.clone(),
+                    ..Default::default()
+                },
+            };
+
+            let tb_ids = {
+                req.table_meta
+                    .options
+                    .insert("name".to_string(), "t1".to_string());
+                let res = mt.create_table(req.clone()).await?;
+                assert!(res.table_id >= 1, "table id >= 1");
+                let tb_id1 = res.table_id;
+
+                req.name_ident.db_name = db2_name.to_string();
+                req.name_ident.table_name = "tb2".to_string();
+                req.table_meta
+                    .options
+                    .insert("name".to_string(), "t2".to_string());
+                let res = mt.create_table(req.clone()).await?;
+                assert!(res.table_id > tb_id1, "table id > tb_id1: {}", tb_id1);
+                let tb_id2 = res.table_id;
+
+                vec![tb_id1, tb_id2]
+            };
+
+            info!("--- get_tables");
+            {
+                let res = mt.list_all_tables().await?;
+                assert_eq!(tb_ids.len(), res.len());
+
+                // check table-id
+                assert_eq!(tb_ids[0], res[0].0.table_id);
+                assert_eq!(tb_ids[1], res[1].0.table_id);
+
+                // check table-meta
+                assert_eq!(Some(&"t1".to_string()), res[0].2.options.get("name"));
+                assert_eq!(Some(&"t2".to_string()), res[1].2.options.get("name"));
             }
         }
 

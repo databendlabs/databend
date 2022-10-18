@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_config::Config;
 use common_exception::Result;
 use common_meta_types::NodeInfo;
 
@@ -21,7 +22,6 @@ use crate::api::rpc::flight_actions::InitNodesChannel;
 use crate::api::rpc::packets::packet::create_client;
 use crate::api::rpc::Packet;
 use crate::api::FlightAction;
-use crate::Config;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ConnectionInfo {

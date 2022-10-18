@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_config::Config;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_exception::Result;
 use common_meta_embedded::MetaEmbedded;
@@ -31,7 +32,6 @@ use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
 use databend_query::sessions::TableContext;
 use databend_query::storages::StorageContext;
-use databend_query::Config;
 
 use crate::tests::sessions::TestGuard;
 use crate::tests::TestGlobalServices;

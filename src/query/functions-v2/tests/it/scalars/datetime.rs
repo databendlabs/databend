@@ -39,6 +39,7 @@ fn test_datetime() {
     test_date_arith(file);
     test_timestamp_arith(file);
     test_to_number(file);
+    test_rounder_functions(file);
 }
 
 fn test_to_timestamp(file: &mut impl Write) {
@@ -1012,4 +1013,43 @@ fn test_to_number(file: &mut impl Write) {
         DataType::Timestamp,
         from_timestamp_data(vec![-100, 0, 100]),
     )]);
+}
+
+fn test_rounder_functions(file: &mut impl Write) {
+    run_ast(file, "to_start_of_second(to_timestamp(1630812366))", &[]);
+    run_ast(file, "to_start_of_minute(to_timestamp(1630812366))", &[]);
+    run_ast(
+        file,
+        "to_start_of_five_minutes(to_timestamp(1630812366))",
+        &[],
+    );
+    run_ast(
+        file,
+        "to_start_of_ten_minutes(to_timestamp(1630812366))",
+        &[],
+    );
+    run_ast(
+        file,
+        "to_start_of_fifteen_minutes(to_timestamp(1630812366))",
+        &[],
+    );
+    run_ast(file, "to_start_of_hour(to_timestamp(1630812366))", &[]);
+    run_ast(file, "to_start_of_day(to_timestamp(1630812366))", &[]);
+    run_ast(file, "time_slot(to_timestamp(1630812366))", &[]);
+    run_ast(file, "to_monday(to_timestamp(1630812366))", &[]);
+    run_ast(file, "to_start_of_week(to_timestamp(1630812366))", &[]);
+    run_ast(file, "to_start_of_week(to_timestamp(1630812366))", &[]);
+    run_ast(file, "to_start_of_week(to_timestamp(1630812366), 1)", &[]);
+    run_ast(file, "to_start_of_month(to_timestamp(1630812366))", &[]);
+    run_ast(file, "to_start_of_quarter(to_timestamp(1630812366))", &[]);
+    run_ast(file, "to_start_of_year(to_timestamp(1630812366))", &[]);
+    run_ast(file, "to_start_of_iso_year(to_timestamp(1630812366))", &[]);
+
+    run_ast(file, "date_trunc(year, to_timestamp(1630812366))", &[]);
+    run_ast(file, "date_trunc(quarter, to_timestamp(1630812366))", &[]);
+    run_ast(file, "date_trunc(month, to_timestamp(1630812366))", &[]);
+    run_ast(file, "date_trunc(day, to_timestamp(1630812366))", &[]);
+    run_ast(file, "date_trunc(hour, to_timestamp(1630812366))", &[]);
+    run_ast(file, "date_trunc(minute, to_timestamp(1630812366))", &[]);
+    run_ast(file, "date_trunc(second, to_timestamp(1630812366))", &[]);
 }

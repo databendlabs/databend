@@ -76,8 +76,7 @@ def get_error(response):
         return None
 
     # Wrap errno into msg, for result check
-    wrap_msg = f"errno:{response['error']['code']},msg:{response['error']['message']}"
-    return Error(msg=wrap_msg, errno=response['error']['code'])
+    return Error(msg=response['error']['message'], errno=response['error']['code'])
 
 
 class HttpConnector(object):

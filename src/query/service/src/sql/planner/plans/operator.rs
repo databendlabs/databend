@@ -27,6 +27,7 @@ use super::pattern::PatternPlan;
 use super::physical_scan::PhysicalScan;
 use super::sort::Sort;
 use super::union_all::UnionAll;
+use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::PhysicalProperty;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::RelationalProperty;
@@ -51,6 +52,7 @@ pub trait Operator {
 
 pub trait LogicalOperator {
     fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty>;
+    fn used_columns(&self) -> Result<ColumnSet>;
 }
 
 pub trait PhysicalOperator {

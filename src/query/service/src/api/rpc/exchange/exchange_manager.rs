@@ -21,6 +21,7 @@ use std::sync::Arc;
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use common_base::base::Singleton;
 use common_base::base::Thread;
+use common_config::Config;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -55,7 +56,6 @@ use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::executor::PipelineBuilder as PipelineBuilderV2;
-use crate::Config;
 
 pub struct DataExchangeManager {
     config: Config,

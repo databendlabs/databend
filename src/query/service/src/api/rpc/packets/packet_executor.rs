@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_config::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::NodeInfo;
@@ -24,7 +25,6 @@ use crate::api::rpc::packets::packet::create_client;
 use crate::api::rpc::packets::packet::Packet;
 use crate::api::rpc::packets::packet_fragment::FragmentPlanPacket;
 use crate::api::FlightAction;
-use crate::Config;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct QueryFragmentsPlanPacket {
