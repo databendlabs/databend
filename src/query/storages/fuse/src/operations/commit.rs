@@ -355,7 +355,6 @@ impl FuseTable {
         Ok((seg_locs, s))
     }
 
-    // TODO duplicated code
     pub fn merge_segments<'a>(
         mut segments: impl Iterator<Item = (&'a Location, &'a SegmentInfo)>,
     ) -> Result<(Vec<Location>, Statistics)> {

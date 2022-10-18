@@ -68,8 +68,8 @@ impl FuseTable {
         };
 
         match target {
-            CompactTarget::Blocks => self.compact_segments(ctx, pipeline, compact_params).await,
-            CompactTarget::Segments => self.compact_blocks(ctx, pipeline, compact_params).await,
+            CompactTarget::Blocks => self.compact_blocks(ctx, pipeline, compact_params).await,
+            CompactTarget::Segments => self.compact_segments(ctx, pipeline, compact_params).await,
         }
     }
 
