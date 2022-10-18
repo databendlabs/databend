@@ -18,9 +18,13 @@ use crate::sql::optimizer::rule::Rule;
 use crate::sql::optimizer::rule::RuleID;
 use crate::sql::optimizer::rule::TransformResult;
 use crate::sql::optimizer::SExpr;
+use crate::sql::plans::BoundColumnRef;
+use crate::sql::plans::ComparisonExpr;
+use crate::sql::plans::ComparisonOp;
 use crate::sql::plans::Filter;
 use crate::sql::plans::PatternPlan;
 use crate::sql::plans::RelOp;
+use crate::sql::plans::Scalar;
 
 pub struct RuleEliminateFilter {
     id: RuleID,
@@ -30,7 +34,7 @@ pub struct RuleEliminateFilter {
 impl RuleEliminateFilter {
     pub fn new() -> Self {
         Self {
-            id: RuleID::EliminateEvalScalar,
+            id: RuleID::EliminateFilter,
             // Filter
             //  \
             //   *
@@ -56,8 +60,34 @@ impl Rule for RuleEliminateFilter {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let eval_scalar: Filter = s_expr.plan().clone().try_into()?;
-        if eval_scalar.predicates.is_empty() {
+        let filter: Filter = s_expr.plan().clone().try_into()?;
+        let mut predicates = Vec::with_capacity(filter.predicates.len());
+        // Delete the predicate if the predicate is `a = a` syntax.
+        for predicate in filter.predicates.iter() {
+            if let Scalar::ComparisonExpr(ComparisonExpr {
+                left, right, op, ..
+            }) = predicate
+            {
+                if op == &ComparisonOp::Equal {
+                    if let Scalar::BoundColumnRef(BoundColumnRef {
+                        column: left_column,
+                    }) = &**left
+                    {
+                        if let Scalar::BoundColumnRef(BoundColumnRef {
+                            column: right_column,
+                        }) = &**right
+                        {
+                            if left_column.index == right_column.index {
+                                continue;
+                            }
+                        }
+                    }
+                }
+            }
+            predicates.push(predicate.clone());
+        }
+
+        if predicates.is_empty() {
             state.add_result(s_expr.child(0)?.clone());
         }
         Ok(())
