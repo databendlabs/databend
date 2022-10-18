@@ -161,11 +161,11 @@ impl FuseTable {
         let prewhere_filter = Arc::new(prewhere_filter);
         let remain_reader = Arc::new(remain_reader);
 
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
 
         let mut source_builder = SourcePipeBuilder::create();
 
-        for _index in 0..std::cmp::max(1, max_threads) {
+        for _index in 0..std::cmp::max(1, max_io_requests) {
             let output = OutputPort::create();
             source_builder.add_source(
                 output.clone(),
