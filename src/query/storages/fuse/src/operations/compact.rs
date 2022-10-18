@@ -92,6 +92,10 @@ impl FuseTable {
         ctx.try_set_partitions(plan.parts.clone())?;
         self.do_read_data(ctx.clone(), &plan, pipeline)?;
 
+        // TODO(bohu): resize to make the unit test passed, but dont's know why
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        pipeline.resize(max_threads)?;
+
         pipeline.add_transform(|transform_input_port, transform_output_port| {
             TransformCompact::try_create(
                 transform_input_port,
