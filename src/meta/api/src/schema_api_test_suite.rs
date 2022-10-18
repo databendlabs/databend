@@ -3653,7 +3653,7 @@ impl SchemaApiTestSuite {
             // Table schema with metadata(due to serde issue).
             let schema = Arc::new(DataSchema::new(vec![DataField::new(
                 "number",
-                u64::to_data_type(),
+                NumberType::<u64>::data_type(),
             )]));
 
             let options = maplit::btreemap! {"opt‐1".into() => "val-1".into()};

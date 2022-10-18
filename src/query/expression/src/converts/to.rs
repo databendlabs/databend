@@ -22,38 +22,34 @@ use common_datavalues::DataValue;
 use common_datavalues::IntoColumn;
 use ordered_float::OrderedFloat;
 
+use common_arrow::arrow::datatypes::Field as ArrowField;
+
+use crate::DataField;
+use crate::DataSchema;
 use crate::types::AnyType;
 use crate::types::DataType;
-use crate::types::NumberDataType;
-use crate::with_number_type;
 use crate::Chunk;
 use crate::Column;
 use crate::ColumnBuilder;
-use crate::DataField;
-use crate::DataSchema;
 use crate::Scalar;
 use crate::Value;
 
-pub fn to_type(datatype: &DataTypeImpl) -> DataType {
-    with_number_type!(|TYPE| match datatype {
-        DataTypeImpl::TYPE(_) => DataType::Number(NumberDataType::TYPE),
+pub fn to_type(datatype: &DataType) -> DataTypeImpl {
+    let f = DataField::new("tmp", datatype.clone());
+    let arrow_f: ArrowField = (&f).into();
+    common_datavalues::from_arrow_field(&arrow_f)
+}
 
-        DataTypeImpl::Null(_) => DataType::Null,
-        DataTypeImpl::Nullable(v) => DataType::Nullable(Box::new(to_type(v.inner_type()))),
-        DataTypeImpl::Boolean(_) => DataType::Boolean,
-        DataTypeImpl::Timestamp(_) => DataType::Timestamp,
-        DataTypeImpl::Date(_) => DataType::Date,
-        DataTypeImpl::String(_) => DataType::String,
-        DataTypeImpl::Struct(ty) => {
-            let inners = ty.types().iter().map(to_type).collect();
-            DataType::Tuple(inners)
-        }
-        DataTypeImpl::Array(ty) => DataType::Array(Box::new(to_type(ty.inner_type()))),
-        DataTypeImpl::Variant(_)
-        | DataTypeImpl::VariantArray(_)
-        | DataTypeImpl::VariantObject(_) => DataType::Variant,
-        DataTypeImpl::Interval(_) => unimplemented!(),
-    })
+pub fn to_schema(schema: &DataSchema) -> common_datavalues::DataSchema {
+    let fields = schema
+        .fields()
+        .iter()
+        .map(|f| {
+            let ty = to_type(f.data_type());
+            common_datavalues::DataField::new(f.name(), ty)
+        })
+        .collect();
+    common_datavalues::DataSchema::new_from(fields, schema.meta().clone())
 }
 
 pub fn to_scalar(scalar: &Scalar) -> DataValue {

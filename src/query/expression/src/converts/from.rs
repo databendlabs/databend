@@ -18,6 +18,8 @@ use common_datavalues::ColumnRef;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 
+use crate::DataField;
+use crate::DataSchema;
 use crate::types::number::NumberScalar;
 use crate::types::AnyType;
 use crate::types::DataType;
@@ -56,6 +58,18 @@ pub fn from_type(datatype: &DataTypeImpl) -> DataType {
         | DataTypeImpl::VariantObject(_) => DataType::Variant,
         DataTypeImpl::Interval(_) => unimplemented!(),
     })
+}
+
+pub fn from_schema(schema: &common_datavalues::DataSchema) -> DataSchema {
+    let fields = schema
+        .fields()
+        .iter()
+        .map(|f| {
+            let ty = from_type(f.data_type());
+            DataField::new(f.name(), ty)
+        })
+        .collect();
+    DataSchema::new_from(fields, schema.meta().clone())
 }
 
 pub fn from_scalar(datavalue: &DataValue, datatype: &DataTypeImpl) -> Scalar {
