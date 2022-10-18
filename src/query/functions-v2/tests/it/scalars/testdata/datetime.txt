@@ -3060,3 +3060,147 @@ evaluation (internal):
 +--------+-------------------+
 
 
+ast            : to_start_of_second(to_timestamp(1630812366))
+raw expr       : to_start_of_second(to_timestamp(1630812366_u32))
+checked expr   : to_start_of_second<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
+optimized expr : 1630812366000000
+output type    : Timestamp
+output domain  : Unknown
+output         : 2021-09-05 03:26:06.000000
+
+
+ast            : to_start_of_minute(to_timestamp(1630812366))
+raw expr       : to_start_of_minute(to_timestamp(1630812366_u32))
+checked expr   : to_start_of_minute<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
+optimized expr : 1630812360000000
+output type    : Timestamp
+output domain  : Unknown
+output         : 2021-09-05 03:26:00.000000
+
+
+ast            : to_start_of_five_minutes(to_timestamp(1630812366))
+raw expr       : to_start_of_five_minutes(to_timestamp(1630812366_u32))
+checked expr   : to_start_of_five_minutes<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
+optimized expr : 1630812300000000
+output type    : Timestamp
+output domain  : Unknown
+output         : 2021-09-05 03:25:00.000000
+
+
+ast            : to_start_of_ten_minutes(to_timestamp(1630812366))
+raw expr       : to_start_of_ten_minutes(to_timestamp(1630812366_u32))
+checked expr   : to_start_of_ten_minutes<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
+optimized expr : 1630812000000000
+output type    : Timestamp
+output domain  : Unknown
+output         : 2021-09-05 03:20:00.000000
+
+
+ast            : to_start_of_fifteen_minutes(to_timestamp(1630812366))
+raw expr       : to_start_of_fifteen_minutes(to_timestamp(1630812366_u32))
+checked expr   : to_start_of_fifteen_minutes<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
+optimized expr : 1630811700000000
+output type    : Timestamp
+output domain  : Unknown
+output         : 2021-09-05 03:15:00.000000
+
+
+ast            : to_start_of_hour(to_timestamp(1630812366))
+raw expr       : to_start_of_hour(to_timestamp(1630812366_u32))
+checked expr   : to_start_of_hour<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
+optimized expr : 1630810800000000
+output type    : Timestamp
+output domain  : Unknown
+output         : 2021-09-05 03:00:00.000000
+
+
+ast            : to_start_of_day(to_timestamp(1630812366))
+raw expr       : to_start_of_day(to_timestamp(1630812366_u32))
+checked expr   : to_start_of_day<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
+optimized expr : 1630800000000000
+output type    : Timestamp
+output domain  : Unknown
+output         : 2021-09-05 00:00:00.000000
+
+
+ast            : time_slot(to_timestamp(1630812366))
+raw expr       : time_slot(to_timestamp(1630812366_u32))
+checked expr   : time_slot<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
+optimized expr : 1630810800000000
+output type    : Timestamp
+output domain  : Unknown
+output         : 2021-09-05 03:00:00.000000
+
+
+ast            : to_monday(to_timestamp(1630812366))
+raw expr       : to_monday(to_timestamp(1630812366_u32))
+checked expr   : to_monday<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
+optimized expr : 18869
+output type    : Date
+output domain  : Unknown
+output         : 2021-08-30
+
+
+ast            : to_start_of_week(to_timestamp(1630812366))
+raw expr       : to_start_of_week(to_timestamp(1630812366_u32))
+checked expr   : to_start_of_week<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
+optimized expr : 18875
+output type    : Date
+output domain  : Unknown
+output         : 2021-09-05
+
+
+ast            : to_start_of_week(to_timestamp(1630812366))
+raw expr       : to_start_of_week(to_timestamp(1630812366_u32))
+checked expr   : to_start_of_week<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
+optimized expr : 18875
+output type    : Date
+output domain  : Unknown
+output         : 2021-09-05
+
+
+ast            : to_start_of_week(to_timestamp(1630812366), 1)
+raw expr       : to_start_of_week(to_timestamp(1630812366_u32), 1_u8)
+checked expr   : to_start_of_week<Timestamp, Int64>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)), CAST(1_u8 AS Int64))
+optimized expr : 18869
+output type    : Date
+output domain  : Unknown
+output         : 2021-08-30
+
+
+ast            : to_start_of_month(to_timestamp(1630812366))
+raw expr       : to_start_of_month(to_timestamp(1630812366_u32))
+checked expr   : to_start_of_month<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
+optimized expr : 18871
+output type    : Date
+output domain  : Unknown
+output         : 2021-09-01
+
+
+ast            : to_start_of_quarter(to_timestamp(1630812366))
+raw expr       : to_start_of_quarter(to_timestamp(1630812366_u32))
+checked expr   : to_start_of_quarter<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
+optimized expr : 18809
+output type    : Date
+output domain  : Unknown
+output         : 2021-07-01
+
+
+ast            : to_start_of_year(to_timestamp(1630812366))
+raw expr       : to_start_of_year(to_timestamp(1630812366_u32))
+checked expr   : to_start_of_year<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
+optimized expr : 18628
+output type    : Date
+output domain  : Unknown
+output         : 2021-01-01
+
+
+ast            : to_start_of_iso_year(to_timestamp(1630812366))
+raw expr       : to_start_of_iso_year(to_timestamp(1630812366_u32))
+checked expr   : to_start_of_iso_year<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
+optimized expr : 18631
+output type    : Date
+output domain  : Unknown
+output         : 2021-01-04
+
+

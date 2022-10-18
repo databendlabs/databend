@@ -36,6 +36,7 @@ use common_expression::types::NullableType;
 use common_expression::types::StringType;
 use common_expression::types::TimestampType;
 use common_expression::vectorize_1_arg;
+use common_expression::vectorize_2_arg;
 use common_expression::vectorize_with_builder_1_arg;
 use common_expression::vectorize_with_builder_2_arg;
 use common_expression::FunctionProperty;
@@ -55,10 +56,14 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_add_functions(registry);
     register_sub_functions(registry);
 
+    // now, today, yesterday, tomorrow
     register_real_time_functions(registry);
 
     // to_*([date | timestamp]) -> number
     register_to_number_functions(registry);
+
+    // to_*([date | timestamp]) -> [date | timestamp]
+    register_rounder_functions(registry);
 }
 
 fn number_domain_to_timestamp_domain<T: AsPrimitive<i64>>(
@@ -596,6 +601,201 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
         |_| None,
         vectorize_1_arg::<TimestampType, UInt8Type>(|val, ctx| {
             ToNumberImpl::eval_timestamp::<ToSecond, _>(val, &ctx.tz)
+        }),
+    );
+}
+
+fn register_rounder_functions(registry: &mut FunctionRegistry) {
+    // timestamp -> timestamp
+    registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _, _>(
+        "to_start_of_second",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
+            round_timestamp(val, &ctx.tz, Round::Second)
+        }),
+    );
+    registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _, _>(
+        "to_start_of_minute",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
+            round_timestamp(val, &ctx.tz, Round::Minute)
+        }),
+    );
+    registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _, _>(
+        "to_start_of_five_minutes",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
+            round_timestamp(val, &ctx.tz, Round::FiveMinutes)
+        }),
+    );
+    registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _, _>(
+        "to_start_of_ten_minutes",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
+            round_timestamp(val, &ctx.tz, Round::TenMinutes)
+        }),
+    );
+    registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _, _>(
+        "to_start_of_fifteen_minutes",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
+            round_timestamp(val, &ctx.tz, Round::FifteenMinutes)
+        }),
+    );
+    registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _, _>(
+        "to_start_of_hour",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
+            round_timestamp(val, &ctx.tz, Round::Hour)
+        }),
+    );
+    registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _, _>(
+        "to_start_of_day",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
+            round_timestamp(val, &ctx.tz, Round::Day)
+        }),
+    );
+    registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _, _>(
+        "time_slot",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
+            round_timestamp(val, &ctx.tz, Round::TimeSlot)
+        }),
+    );
+
+    // date | timestamp -> date
+    registry.register_passthrough_nullable_1_arg::<TimestampType, DateType, _, _>(
+        "to_monday",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_1_arg::<TimestampType, DateType>(|val, ctx| {
+            DateRounder::eval_timestamp::<ToLastMonday>(val, &ctx.tz)
+        }),
+    );
+    registry.register_passthrough_nullable_1_arg::<DateType, DateType, _, _>(
+        "to_monday",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_1_arg::<DateType, DateType>(|val, ctx| {
+            DateRounder::eval_date::<ToLastMonday>(val, &ctx.tz)
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<TimestampType, DateType, _, _>(
+        "to_start_of_week",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_1_arg::<TimestampType, DateType>(|val, ctx| {
+            DateRounder::eval_timestamp::<ToLastSunday>(val, &ctx.tz)
+        }),
+    );
+    registry.register_passthrough_nullable_1_arg::<DateType, DateType, _, _>(
+        "to_start_of_week",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_1_arg::<DateType, DateType>(|val, ctx| {
+            DateRounder::eval_date::<ToLastSunday>(val, &ctx.tz)
+        }),
+    );
+    registry.register_passthrough_nullable_2_arg::<TimestampType, Int64Type, DateType, _, _>(
+        "to_start_of_week",
+        FunctionProperty::default(),
+        |_, _| None,
+        vectorize_2_arg::<TimestampType, Int64Type, DateType>(|val, mode, ctx| {
+            if mode == 0 {
+                DateRounder::eval_timestamp::<ToLastSunday>(val, &ctx.tz)
+            } else {
+                DateRounder::eval_timestamp::<ToLastMonday>(val, &ctx.tz)
+            }
+        }),
+    );
+    registry.register_passthrough_nullable_2_arg::<DateType, Int64Type, DateType, _, _>(
+        "to_start_of_week",
+        FunctionProperty::default(),
+        |_, _| None,
+        vectorize_2_arg::<DateType, Int64Type, DateType>(|val, mode, ctx| {
+            if mode == 0 {
+                DateRounder::eval_date::<ToLastSunday>(val, &ctx.tz)
+            } else {
+                DateRounder::eval_date::<ToLastMonday>(val, &ctx.tz)
+            }
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<TimestampType, DateType, _, _>(
+        "to_start_of_month",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_1_arg::<TimestampType, DateType>(|val, ctx| {
+            DateRounder::eval_timestamp::<ToStartOfMonth>(val, &ctx.tz)
+        }),
+    );
+    registry.register_passthrough_nullable_1_arg::<DateType, DateType, _, _>(
+        "to_start_of_month",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_1_arg::<DateType, DateType>(|val, ctx| {
+            DateRounder::eval_date::<ToStartOfMonth>(val, &ctx.tz)
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<TimestampType, DateType, _, _>(
+        "to_start_of_quarter",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_1_arg::<TimestampType, DateType>(|val, ctx| {
+            DateRounder::eval_timestamp::<ToStartOfQuarter>(val, &ctx.tz)
+        }),
+    );
+    registry.register_passthrough_nullable_1_arg::<DateType, DateType, _, _>(
+        "to_start_of_quarter",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_1_arg::<DateType, DateType>(|val, ctx| {
+            DateRounder::eval_date::<ToStartOfQuarter>(val, &ctx.tz)
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<TimestampType, DateType, _, _>(
+        "to_start_of_year",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_1_arg::<TimestampType, DateType>(|val, ctx| {
+            DateRounder::eval_timestamp::<ToStartOfYear>(val, &ctx.tz)
+        }),
+    );
+    registry.register_passthrough_nullable_1_arg::<DateType, DateType, _, _>(
+        "to_start_of_year",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_1_arg::<DateType, DateType>(|val, ctx| {
+            DateRounder::eval_date::<ToStartOfYear>(val, &ctx.tz)
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<TimestampType, DateType, _, _>(
+        "to_start_of_iso_year",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_1_arg::<TimestampType, DateType>(|val, ctx| {
+            DateRounder::eval_timestamp::<ToStartOfISOYear>(val, &ctx.tz)
+        }),
+    );
+    registry.register_passthrough_nullable_1_arg::<DateType, DateType, _, _>(
+        "to_start_of_iso_year",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_1_arg::<DateType, DateType>(|val, ctx| {
+            DateRounder::eval_date::<ToStartOfISOYear>(val, &ctx.tz)
         }),
     );
 }
