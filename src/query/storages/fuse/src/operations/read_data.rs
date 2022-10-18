@@ -71,6 +71,21 @@ impl FuseTable {
         }
     }
 
+    // Adjust the max io request.
+    fn adjust_max_io_requests(
+        ctx: Arc<dyn TableContext>,
+        plan: &ReadDataSourcePlan,
+    ) -> Result<usize> {
+        let parts_len = plan.parts.len();
+        let max_storage_io = ctx.get_settings().get_max_storage_io_requests()? as usize;
+        let max_io_requests = if parts_len > max_storage_io {
+            max_storage_io
+        } else {
+            parts_len
+        };
+        Ok(std::cmp::max(1, max_io_requests))
+    }
+
     pub fn do_read_data(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -160,22 +175,16 @@ impl FuseTable {
         let prewhere_filter = Arc::new(prewhere_filter);
         let remain_reader = Arc::new(remain_reader);
 
-        // Add source transform with max io requests.
+        // Add source transform with adjust max io requests.
         // max_storage_io_requests default is 1000, for example(c17 is a string column):
         // select sum(CHAR_LENGTH(c17)) from t7861;
         // The network bandwidth will be 1400M+ bytes/sec
         {
-            // Adjust the max io request.
-            let parts_len = plan.parts.len();
-            let max_storage_io = ctx.get_settings().get_max_storage_io_requests()? as usize;
-            let max_io_requests = if parts_len > max_storage_io {
-                max_storage_io
-            } else {
-                parts_len
-            };
-
             let mut source_builder = SourcePipeBuilder::create();
-            for _index in 0..std::cmp::max(1, max_io_requests) {
+
+            // Adjust the max io request.
+            let max_io_requests = Self::adjust_max_io_requests(ctx.clone(), plan)?;
+            for _index in 0..max_io_requests {
                 let output = OutputPort::create();
                 source_builder.add_source(
                     output.clone(),
@@ -190,13 +199,13 @@ impl FuseTable {
                 );
             }
             pipeline.add_pipe(source_builder.finalize());
+
+            // Resize pipeline to adjust max threads.
+            let max_threads = ctx.get_settings().get_max_threads()? as usize;
+            let resize_to_threads = std::cmp::min(max_io_requests, max_threads);
+            pipeline.resize(resize_to_threads)?;
         }
 
-        // Resize pipeline to max_threads.
-        {
-            let max_threads = ctx.get_settings().get_max_threads()? as usize;
-            pipeline.resize(max_threads)?;
-        }
         Ok(())
     }
 }
