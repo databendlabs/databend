@@ -39,7 +39,7 @@ use common_pipeline_transforms::processors::ExpressionExecutor;
 
 use crate::fuse_lazy_part::FuseLazyPartInfo;
 use crate::io::BlockReader;
-use crate::operations::read::State::Generated;
+use crate::operations::read_data::State::Generated;
 use crate::FuseTable;
 
 impl FuseTable {

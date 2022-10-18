@@ -21,7 +21,7 @@ mod gc;
 mod mutation;
 mod navigate;
 mod operation_log;
-mod read;
+mod read_data;
 mod read_partitions;
 mod recluster;
 mod truncate;
