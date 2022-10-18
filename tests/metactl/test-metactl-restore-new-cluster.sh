@@ -35,6 +35,14 @@ echo "import old meta node data to new cluster"
 ./target/debug/databend-metactl --import --raft-dir ./.databend/new_meta2 --id=5 --db meta.db --initial-cluster 4=localhost:29103,0.0.0.0:19191 5=localhost:29203,0.0.0.0:29191 6=localhost:29303,0.0.0.0:39191
 ./target/debug/databend-metactl --import --raft-dir ./.databend/new_meta3 --id=6 --db meta.db --initial-cluster 4=localhost:29103,0.0.0.0:19191 5=localhost:29203,0.0.0.0:29191 6=localhost:29303,0.0.0.0:39191
 
+echo " === check if state machine is complete by checking key 'LastMembership'"
+if ./target/debug/databend-metactl --export --raft-dir ./.databend/new_meta1 | grep LastMembership; then
+    echo "=== 'LastMembership' is found"
+else
+    echo "=== 'LastMembership' not found"
+    exit 1;
+fi
+
 echo "start 3 new meta node cluster"
 nohup ./target/debug/databend-meta --config-file=./tests/metactl/config/new-databend-meta-node-1.toml &
 python3 scripts/ci/wait_tcp.py --timeout 5 --port 19191
