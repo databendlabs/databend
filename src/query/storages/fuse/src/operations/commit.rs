@@ -442,6 +442,9 @@ impl FuseTable {
                     current_table_info = &table.table_info;
 
                     if latest_snapshot.segments.len() < base_snapshot.segments.len() {
+                        abort_operation
+                            .abort(ctx.clone(), self.operator.clone())
+                            .await?;
                         return Err(ErrorCode::StorageOther(
                             "mutation conflicts, concurrent mutation detected while committing segment compaction operation",
                         ));
@@ -452,6 +455,9 @@ impl FuseTable {
                     let suffix = new_segments
                         .split_off(latest_snapshot.segments.len() - base_snapshot.segments.len());
                     if suffix.ne(&base_snapshot.segments) {
+                        abort_operation
+                            .abort(ctx.clone(), self.operator.clone())
+                            .await?;
                         return Err(ErrorCode::StorageOther(
                             "mutation conflicts, concurrent mutation detected while committing segment compaction operation",
                         ));
