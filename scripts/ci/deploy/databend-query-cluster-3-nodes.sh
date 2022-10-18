@@ -34,6 +34,9 @@ python3 scripts/ci/wait_tcp.py --timeout 5 --port 28202
 nohup ./target/${BUILD_PROFILE}/databend-meta -c scripts/ci/deploy/config/databend-meta-node-3.toml &
 python3 scripts/ci/wait_tcp.py --timeout 5 --port 28302
 
+ulimit -n 65535;
+echo "Hard limit: $(ulimit -n)"
+
 echo 'Start databend-query node-1'
 env "RUST_BACKTRACE=1" nohup target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-1.toml &
 

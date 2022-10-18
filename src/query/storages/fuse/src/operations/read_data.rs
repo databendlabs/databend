@@ -36,6 +36,7 @@ use common_pipeline_core::processors::Processor;
 use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
 use common_pipeline_transforms::processors::ExpressionExecutor;
+use tracing::log::info;
 
 use crate::fuse_lazy_part::FuseLazyPartInfo;
 use crate::io::BlockReader;
@@ -212,6 +213,7 @@ impl FuseTable {
 
             // Adjust the max io request.
             let max_io_requests = Self::adjust_max_io_requests(ctx.clone(), plan)?;
+            info!("read block data adjust max io requests:{}", max_io_requests);
             for _index in 0..max_io_requests {
                 let output = OutputPort::create();
                 source_builder.add_source(
@@ -231,6 +233,7 @@ impl FuseTable {
             // Resize pipeline to adjust threads.
             let max_threads = ctx.get_settings().get_max_threads()? as usize;
             let resize_to = std::cmp::min(max_threads, max_io_requests);
+            info!("read block data resize pipeline to:{}", resize_to);
             pipeline.resize(resize_to)?;
         }
 
