@@ -39,8 +39,8 @@ macro_rules! with_interval_mapped_name {
     (| $t:tt | $($tail:tt)*) => {
         match_template::match_template! {
             $t = [
-              Year => "years", Quarter => "quarters", Month => "months", Day => "days",
-              Hour => "hours", Minute => "minutes", Second => "seconds",
+              Year => "year", Quarter => "quarter", Month => "month", Day => "day",
+              Hour => "hour", Minute => "minute", Second => "second",
             ],
             $($tail)*
         }
@@ -53,7 +53,7 @@ macro_rules! transform_interval_add_sub {
             with_interval_mapped_name!(|INTERVAL| match $unit {
                 IntervalKind::INTERVAL => RawExpr::FunctionCall {
                     span: transform_span($span),
-                    name: concat!("add_", INTERVAL).to_string(),
+                    name: concat!("add_", INTERVAL, "s").to_string(),
                     params: vec![],
                     args: vec![
                         transform_expr(*$date, $columns),
@@ -68,7 +68,7 @@ macro_rules! transform_interval_add_sub {
             with_interval_mapped_name!(|INTERVAL| match $unit {
                 IntervalKind::INTERVAL => RawExpr::FunctionCall {
                     span: transform_span($span),
-                    name: concat!("subtract_", INTERVAL).to_string(),
+                    name: concat!("subtract_", INTERVAL, "s").to_string(),
                     params: vec![],
                     args: vec![
                         transform_expr(*$date, $columns),
@@ -362,7 +362,7 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
             with_interval_mapped_name!(|INTERVAL| match unit {
                 IntervalKind::INTERVAL => RawExpr::FunctionCall {
                     span: transform_span(span),
-                    name: concat!("add_", INTERVAL).to_string(),
+                    name: concat!("add_", INTERVAL, "s").to_string(),
                     params: vec![],
                     args: vec![
                         transform_expr(*date, columns),
@@ -383,12 +383,25 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
             with_interval_mapped_name!(|INTERVAL| match unit {
                 IntervalKind::INTERVAL => RawExpr::FunctionCall {
                     span: transform_span(span),
-                    name: concat!("subtract_", INTERVAL).to_string(),
+                    name: concat!("subtract_", INTERVAL, "s").to_string(),
                     params: vec![],
                     args: vec![
                         transform_expr(*date, columns),
                         transform_expr(*interval, columns),
                     ],
+                },
+                kind => {
+                    unimplemented!("{kind:?} is not supported")
+                }
+            })
+        }
+        common_ast::ast::Expr::DateTrunc { span, unit, date } => {
+            with_interval_mapped_name!(|INTERVAL| match unit {
+                IntervalKind::INTERVAL => RawExpr::FunctionCall {
+                    span: transform_span(span),
+                    name: concat!("to_start_of_", INTERVAL).to_string(),
+                    params: vec![],
+                    args: vec![transform_expr(*date, columns),],
                 },
                 kind => {
                     unimplemented!("{kind:?} is not supported")

@@ -15,6 +15,7 @@
 use common_exception::Result;
 use common_planner::IndexType;
 
+use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::Distribution;
 use crate::sql::optimizer::PhysicalProperty;
 use crate::sql::optimizer::RelExpr;
@@ -88,6 +89,15 @@ impl LogicalOperator for UnionAll {
 
             column_stats: Default::default(),
         })
+    }
+
+    fn used_columns<'a>(&self) -> Result<ColumnSet> {
+        let mut used_columns = ColumnSet::new();
+        for (left, right) in &self.pairs {
+            used_columns.insert(*left);
+            used_columns.insert(*right);
+        }
+        Ok(used_columns)
     }
 }
 
