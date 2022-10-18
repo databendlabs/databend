@@ -458,71 +458,29 @@ impl SubqueryRewriter {
                 ))
             }
             RelOperator::Filter(filter) => {
-                let mut need_cross_join = true;
                 let mut predicates_set: HashSet<Scalar> =
                     HashSet::from_iter(filter.predicates.iter().cloned());
                 let mut predicates = Vec::with_capacity(filter.predicates.len());
-                if filter.predicates.iter().all(|predicate| {
-                    if predicate.used_columns().iter().all(|column| {
-                        if correlated_columns.contains(column) {
-                            if let Scalar::ComparisonExpr(ComparisonExpr {
-                                left, right, op, ..
-                            }) = predicate
-                            {
-                                if op == &ComparisonOp::Equal {
-                                    if let Scalar::BoundColumnRef(BoundColumnRef {
-                                        column: left_column,
-                                    }) = &**left
-                                    {
-                                        if let Scalar::BoundColumnRef(BoundColumnRef {
-                                            column: right_column,
-                                        }) = &**right
-                                        {
-                                            if correlated_columns.contains(&left_column.index)
-                                                && !correlated_columns.contains(&right_column.index)
-                                            {
-                                                self.derived_columns
-                                                    .insert(left_column.index, right_column.index);
-                                            }
-                                            if !correlated_columns.contains(&left_column.index)
-                                                && correlated_columns.contains(&right_column.index)
-                                            {
-                                                self.derived_columns
-                                                    .insert(right_column.index, left_column.index);
-                                            }
-                                            predicates_set.remove(predicate);
-                                            return true;
-                                        }
-                                    }
-                                }
-                            }
-                        } else {
-                            return true;
-                        }
-                        false
-                    }) {
-                        return true;
-                    }
-                    false
-                }) {
-                    need_cross_join = false;
-                }
+                let need_cross_join =
+                    self.join_outer_inner_table(filter, &mut predicates_set, correlated_columns)?;
                 let flatten_plan = self.flatten(
                     plan.child(0)?,
                     correlated_columns,
                     flatten_info,
                     need_cross_join,
                 )?;
-
-                for predicate in filter.predicates.iter() {
-                    predicates.push(self.flatten_scalar(predicate, correlated_columns)?);
+                if need_cross_join {
+                    for predicate in filter.predicates.iter() {
+                        predicates.push(self.flatten_scalar(predicate, correlated_columns)?);
+                    }
+                } else {
+                    for predicate in predicates_set.iter() {
+                        predicates.push(self.flatten_scalar(predicate, correlated_columns)?);
+                    }
                 }
+
                 let filter_plan = Filter {
-                    predicates: if !need_cross_join {
-                        predicates_set.into_iter().collect()
-                    } else {
-                        predicates
-                    },
+                    predicates,
                     is_having: filter.is_having,
                 }
                 .into();
@@ -764,5 +722,57 @@ impl SubqueryRewriter {
             right_conditions.push(right_column);
         }
         Ok(())
+    }
+
+    // Check if need to join outer and inner table
+    // If correlated_columns only occur in equi-conditions, such as `where t1.a = t.a and t1.b = t.b`(t1 is outer table)
+    // Then we won't join outer and inner table.
+    fn join_outer_inner_table(
+        &mut self,
+        filter: &Filter,
+        predicates_set: &mut HashSet<Scalar>,
+        correlated_columns: &ColumnSet,
+    ) -> Result<bool> {
+        Ok(!filter.predicates.iter().all(|predicate| {
+            if predicate
+                .used_columns()
+                .iter()
+                .any(|column| correlated_columns.contains(column))
+            {
+                if let Scalar::ComparisonExpr(ComparisonExpr {
+                    left, right, op, ..
+                }) = predicate
+                {
+                    if op == &ComparisonOp::Equal {
+                        if let Scalar::BoundColumnRef(BoundColumnRef {
+                            column: left_column,
+                        }) = &**left
+                        {
+                            if let Scalar::BoundColumnRef(BoundColumnRef {
+                                column: right_column,
+                            }) = &**right
+                            {
+                                if correlated_columns.contains(&left_column.index)
+                                    && !correlated_columns.contains(&right_column.index)
+                                {
+                                    self.derived_columns
+                                        .insert(left_column.index, right_column.index);
+                                }
+                                if !correlated_columns.contains(&left_column.index)
+                                    && correlated_columns.contains(&right_column.index)
+                                {
+                                    self.derived_columns
+                                        .insert(right_column.index, left_column.index);
+                                }
+                                predicates_set.remove(predicate);
+                                return true;
+                            }
+                        }
+                    }
+                }
+                return false;
+            }
+            true
+        }))
     }
 }
