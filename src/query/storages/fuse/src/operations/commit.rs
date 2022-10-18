@@ -413,7 +413,7 @@ impl FuseTable {
         let mut base_snapshot = snapshot;
         let mut current_table_info = &self.table_info;
 
-        loop {
+        while retries < MAX_RETRIES {
             let mut snapshot_tobe_committed = TableSnapshot::from_previous(base_snapshot.as_ref());
             snapshot_tobe_committed.segments = segments.clone();
             snapshot_tobe_committed.summary = summary.clone();
@@ -426,12 +426,12 @@ impl FuseTable {
             )
             .await
             {
-                Err(e) => {
-                    if e.code() == ErrorCode::table_version_mismatched_code() {
-                        latest = table.refresh(ctx.as_ref()).await?;
-                        table = FuseTable::try_from_table(latest.as_ref())?;
+                Err(e) if e.code() == ErrorCode::table_version_mismatched_code() => {
+                    latest = table.refresh(ctx.as_ref()).await?;
+                    table = FuseTable::try_from_table(latest.as_ref())?;
 
-                        latest_snapshot = table
+                    latest_snapshot =
+                        table
                             .read_table_snapshot(ctx.clone())
                             .await?
                             .ok_or_else(|| {
@@ -439,55 +439,49 @@ impl FuseTable {
                                     "mutation meets empty snapshot during conflict reconciliation",
                                 )
                             })?;
-                        current_table_info = &table.table_info;
+                    current_table_info = &table.table_info;
 
-                        if latest_snapshot.segments.len() < base_snapshot.segments.len() {
-                            return Err(ErrorCode::StorageOther(
-                                "mutation conflicts, concurrent mutation detected while committing segment compaction operation",
-                            ));
-                        }
-
-                        // Check if there is only insertion during the operation.
-                        let mut new_segments = latest_snapshot.segments.clone();
-                        let suffix = new_segments.split_off(
-                            latest_snapshot.segments.len() - base_snapshot.segments.len(),
-                        );
-                        if suffix.ne(&base_snapshot.segments) {
-                            return Err(ErrorCode::StorageOther(
-                                "mutation conflicts, concurrent mutation detected while committing segment compaction operation",
-                            ));
-                        }
-
-                        info!("resolvable conflicts detected");
-                        // Read all segments information in parallel.
-                        let fuse_segment_io =
-                            SegmentsIO::create(ctx.clone(), table.operator.clone());
-                        let results = fuse_segment_io.read_segments(&new_segments).await?;
-                        for result in results.iter() {
-                            let segment = result.clone()?;
-                            summary = merge_statistics(&summary, &segment.summary)?;
-                        }
-                        new_segments.extend(segments.clone());
-                        segments = new_segments;
-                        base_snapshot = latest_snapshot;
-
-                        retries += 1;
-                        if retries >= MAX_RETRIES {
-                            abort_operation
-                                .abort(ctx.clone(), self.operator.clone())
-                                .await?;
-                            return Err(ErrorCode::StorageOther(format!(
-                                "commit mutation failed after {} retries",
-                                retries
-                            )));
-                        }
-                    } else {
-                        return Err(e);
+                    if latest_snapshot.segments.len() < base_snapshot.segments.len() {
+                        return Err(ErrorCode::StorageOther(
+                            "mutation conflicts, concurrent mutation detected while committing segment compaction operation",
+                        ));
                     }
+
+                    // Check if there is only insertion during the operation.
+                    let mut new_segments = latest_snapshot.segments.clone();
+                    let suffix = new_segments
+                        .split_off(latest_snapshot.segments.len() - base_snapshot.segments.len());
+                    if suffix.ne(&base_snapshot.segments) {
+                        return Err(ErrorCode::StorageOther(
+                            "mutation conflicts, concurrent mutation detected while committing segment compaction operation",
+                        ));
+                    }
+
+                    info!("resolvable conflicts detected");
+                    // Read all segments information in parallel.
+                    let fuse_segment_io = SegmentsIO::create(ctx.clone(), table.operator.clone());
+                    let results = fuse_segment_io.read_segments(&new_segments).await?;
+                    for result in results.iter() {
+                        let segment = result.clone()?;
+                        summary = merge_statistics(&summary, &segment.summary)?;
+                    }
+                    new_segments.extend(segments.clone());
+                    segments = new_segments;
+                    base_snapshot = latest_snapshot;
+                    retries += 1;
                 }
+                Err(e) => return Err(e),
                 Ok(_) => return Ok(()),
             }
         }
+
+        abort_operation
+            .abort(ctx.clone(), self.operator.clone())
+            .await?;
+        Err(ErrorCode::StorageOther(format!(
+            "commit mutation failed after {} retries",
+            retries
+        )))
     }
 }
 
