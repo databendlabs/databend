@@ -235,18 +235,22 @@ fn register_like(registry: &mut FunctionRegistry) {
         "like",
         FunctionProperty::default(),
         |_, _| None,
-        vectorize_regexp(|str, pat, map, _| {
-            let mut sub_strings: Vec<&str> = vec![];
+        vectorize_regexp(|str, pat, map, string_map, _| {
             let pattern = if let Some(pattern) = map.get(pat) {
                 pattern
             } else {
                 let pattern_str = simdutf8::basic::from_utf8(pat).map_err(|err| {
                     format!("unable to convert the LIKE pattern to string: {err}")
                 })?;
-                sub_strings = pattern_str
+
+                let mut sub_strings: Vec<&str> = pattern_str
                     .split(|c: char| c == '%' || c == '_' || c == '\\')
                     .collect();
                 sub_strings.retain(|&substring| !substring.is_empty());
+                if !sub_strings.is_empty() {
+                    string_map.insert(pat.to_vec(), sub_strings[0].to_string());
+                }
+
                 let re_pattern = like_pattern_to_regex(pattern_str);
                 let re = Regex::new(&re_pattern)
                     .map_err(|err| format!("unable to build the LIKE pattern: {err}"))?;
@@ -254,11 +258,10 @@ fn register_like(registry: &mut FunctionRegistry) {
                 map.get(pat).unwrap()
             };
 
-            if !sub_strings.is_empty() {
+            if string_map.get(pat).is_some() {
                 let lhs_str =
                     std::str::from_utf8(str).expect("Unable to convert lhs value to string: {}");
-                let required_string = sub_strings[0];
-                let contain = lhs_str.find(required_string);
+                let contain = lhs_str.find(string_map.get(pat).unwrap().as_str());
                 if contain.is_none() {
                     Ok(false)
                 } else {
@@ -274,7 +277,7 @@ fn register_like(registry: &mut FunctionRegistry) {
         "regexp",
         FunctionProperty::default(),
         |_, _| None,
-        vectorize_regexp(|str, pat, map, _| {
+        vectorize_regexp(|str, pat, map, _, _| {
             let pattern = if let Some(pattern) = map.get(pat) {
                 pattern
             } else {
@@ -288,7 +291,13 @@ fn register_like(registry: &mut FunctionRegistry) {
 }
 
 fn vectorize_regexp(
-    func: impl Fn(&[u8], &[u8], &mut HashMap<Vec<u8>, Regex>, FunctionContext) -> Result<bool, String>
+    func: impl Fn(
+        &[u8],
+        &[u8],
+        &mut HashMap<Vec<u8>, Regex>,
+        &mut HashMap<Vec<u8>, String>,
+        FunctionContext,
+    ) -> Result<bool, String>
     + Copy,
 ) -> impl Fn(
     ValueRef<StringType>,
@@ -298,15 +307,20 @@ fn vectorize_regexp(
 + Copy {
     move |arg1, arg2, ctx| {
         let mut map = HashMap::new();
+        let mut string_map = HashMap::new();
         match (arg1, arg2) {
-            (ValueRef::Scalar(arg1), ValueRef::Scalar(arg2)) => {
-                Ok(Value::Scalar(func(arg1, arg2, &mut map, ctx)?))
-            }
+            (ValueRef::Scalar(arg1), ValueRef::Scalar(arg2)) => Ok(Value::Scalar(func(
+                arg1,
+                arg2,
+                &mut map,
+                &mut string_map,
+                ctx,
+            )?)),
             (ValueRef::Column(arg1), ValueRef::Scalar(arg2)) => {
                 let arg1_iter = StringType::iter_column(&arg1);
                 let mut builder = MutableBitmap::with_capacity(arg1.len());
                 for arg1 in arg1_iter {
-                    builder.push(func(arg1, arg2, &mut map, ctx)?);
+                    builder.push(func(arg1, arg2, &mut map, &mut string_map, ctx)?);
                 }
                 Ok(Value::Column(builder.into()))
             }
@@ -314,7 +328,7 @@ fn vectorize_regexp(
                 let arg2_iter = StringType::iter_column(&arg2);
                 let mut builder = MutableBitmap::with_capacity(arg2.len());
                 for arg2 in arg2_iter {
-                    builder.push(func(arg1, arg2, &mut map, ctx)?);
+                    builder.push(func(arg1, arg2, &mut map, &mut string_map, ctx)?);
                 }
                 Ok(Value::Column(builder.into()))
             }
@@ -323,7 +337,7 @@ fn vectorize_regexp(
                 let arg2_iter = StringType::iter_column(&arg2);
                 let mut builder = MutableBitmap::with_capacity(arg2.len());
                 for (arg1, arg2) in arg1_iter.zip(arg2_iter) {
-                    builder.push(func(arg1, arg2, &mut map, ctx)?);
+                    builder.push(func(arg1, arg2, &mut map, &mut string_map, ctx)?);
                 }
                 Ok(Value::Column(builder.into()))
             }
