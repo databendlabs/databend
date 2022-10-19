@@ -522,11 +522,6 @@ pub struct MutatorConflictDetector;
 impl MutatorConflictDetector {
     // detects conflicts, as a mutator, working on the base snapshot, with latest snapshot
     pub fn detect_conflicts(base: &TableSnapshot, latest: &TableSnapshot) -> Conflict {
-        if base.snapshot_id == latest.snapshot_id {
-            // just return an empty range
-            return Conflict::ResolvableAppend(0..0);
-        }
-
         let base_segments = &base.segments;
         let latest_segments = &latest.segments;
 
