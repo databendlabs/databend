@@ -52,7 +52,7 @@ pub struct CompactSegmentMutator {
     data_accessor: Operator,
     location_generator: TableMetaLocationGenerator,
     blocks_per_seg: usize,
-    // chosen form the base_snapshot.segments which contains number of
+    // chosen from the base_snapshot.segments which contains number of
     // blocks lesser than `blocks_per_seg`, and then compacted them into `compacted_segments`,
     // such that, at most one of them contains less than `blocks_per_seg` number of blocks,
     // and each of the others(if any) contains `blocks_per_seg` number of blocks.
@@ -60,7 +60,6 @@ pub struct CompactSegmentMutator {
     // segments of base_snapshot that need not to be compacted, but should be included in
     // the new snapshot
     unchanged_segment_accumulator: SegmentAccumulator,
-    // segments_unchanged: Vec<(Location, Arc<SegmentInfo>)>,
 }
 
 struct SegmentAccumulator {
@@ -118,10 +117,34 @@ impl CompactSegmentMutator {
 //     in condition of reconcilable conflicts detected, compactor will try to resolve the conflict and try again.
 //     after MAX_RETRIES attempts, if still failed, abort the operation even if conflict resolvable.
 //
-// compaction starts from the head of the snapshot's segment vector.
-// newly compacted segments will be added the end of snapshot's segment list, so that later
-// when compaction of segments is executed incrementally, the newly added segments will be
-// checked first.
+// example of a merge process:
+// - segments of base_snapshot:
+//  [a, b, c, d, e, f, g]
+//  suppose a and d are compacted enough, and others are not.
+// - after `select_target`:
+//  unchanged_segments : [a, d]
+//  compacted_segments : [x, y], where
+//     [b, c] compacted into x
+//     [e, f, g] compacted into y
+// - if there is a concurrent tx, committed BEFORE compact segments,
+//   and suppose the segments of the tx's snapshot is
+//  [a, b, c, d, e, f, g, h, i]
+//  compare with the base_snapshot's segments
+//  [a, b, c, d, e, f, g]
+// we know that tx is appended(only) on the base of base_snapshot
+// and the `appended_segments` is [h, i]
+//
+// The final merged segments should be
+// [x, y, a, d, h, i]
+//
+// note that
+// 1. the concurrently appended(and committed) segment will NOT be compacted here, to make the commit of compact agile
+// 2. in the implementation, the order of segment in the vector is arranged in reversed order
+//    compaction starts from the head of the snapshot's segment vector.
+//    newly compacted segments will be added the end of snapshot's segment list, so that later
+//    when compaction of segments is executed incrementally, the newly added segments will be
+//    checked first.
+//
 
 #[async_trait::async_trait]
 impl TableMutator for CompactSegmentMutator {
@@ -207,30 +230,6 @@ impl TableMutator for CompactSegmentMutator {
         let mut latest_snapshot = self.base_snapshot.clone();
         let mut retries = 0;
         let mut current_table_info = table.get_table_info();
-
-        // example of a merge process:
-        // - segments of base_snapshot:
-        //  [a, b, c, d, e, f, g]
-        //  suppose a and d are compacted enough, and others are not.
-        // - after `select_target`:
-        //  unchanged_segments : [a, d]
-        //  compacted_segments : [x, y], where
-        //     [b, c] compacted into x
-        //     [e, f, g] compacted into y
-        // - if there is a concurrent tx, committed BEFORE compact segments,
-        //   and suppose the segments of the tx's snapshot is
-        //  [a, b, c, d, e, f, g, h, i]
-        //  compare with the base_snapshot's segments
-        //  [a, b, c, d, e, f, g]
-        // we know that tx is appended(only) on the base of base_snapshot
-        // and the `appended_segments` is [h, i]
-        //
-        // The final merged segments should be
-        // [x, y, a, d, h, i]
-        //
-        // note that
-        // 1. the concurrently appended(and committed) segment will NOT be compacted here, to make the commit of compact agile
-        // 2. in the implementation, the order of segment in the vector is arranged in reversed order
 
         // newly appended segments of concurrent txs which are committed before us
         // the init value of it is an empty slice
