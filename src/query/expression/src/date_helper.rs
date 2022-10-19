@@ -19,6 +19,8 @@ use chrono::Duration;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
 use chrono::TimeZone;
+use chrono::Timelike;
+use chrono::Utc;
 use chrono_tz::Tz;
 use num_traits::AsPrimitive;
 
@@ -159,5 +161,241 @@ impl AddTimesImpl {
         factor: i64,
     ) -> Result<i64, String> {
         check_timestamp(ts.wrapping_add(delta.as_() * factor * 1_000_000))
+    }
+}
+
+#[inline]
+pub fn today_date() -> i32 {
+    let now = Utc::now();
+    NaiveDate::from_ymd(now.year(), now.month(), now.day())
+        .signed_duration_since(NaiveDate::from_ymd(1970, 1, 1))
+        .num_days() as i32
+}
+
+pub trait ToNumber<N> {
+    fn to_number(dt: &DateTime<Tz>) -> N;
+}
+
+pub struct ToNumberImpl;
+
+impl ToNumberImpl {
+    pub fn eval_timestamp<T: ToNumber<R>, R>(ts: i64, tz: &Tz) -> R {
+        let dt = ts.to_timestamp(tz);
+        T::to_number(&dt)
+    }
+
+    pub fn eval_date<T: ToNumber<R>, R>(date: i32, tz: &Tz) -> R {
+        let dt = date.to_date(tz).and_hms(0, 0, 0);
+        T::to_number(&dt)
+    }
+}
+
+pub struct ToYYYYMM;
+pub struct ToYYYYMMDD;
+pub struct ToYYYYMMDDHHMMSS;
+pub struct ToYear;
+pub struct ToMonth;
+pub struct ToDayOfYear;
+pub struct ToDayOfMonth;
+pub struct ToDayOfWeek;
+pub struct ToHour;
+pub struct ToMinute;
+pub struct ToSecond;
+
+impl ToNumber<u32> for ToYYYYMM {
+    fn to_number(dt: &DateTime<Tz>) -> u32 {
+        dt.year() as u32 * 100 + dt.month()
+    }
+}
+
+impl ToNumber<u32> for ToYYYYMMDD {
+    fn to_number(dt: &DateTime<Tz>) -> u32 {
+        dt.year() as u32 * 10_000 + dt.month() * 100 + dt.day()
+    }
+}
+
+impl ToNumber<u64> for ToYYYYMMDDHHMMSS {
+    fn to_number(dt: &DateTime<Tz>) -> u64 {
+        dt.year() as u64 * 10_000_000_000
+            + dt.month() as u64 * 100_000_000
+            + dt.day() as u64 * 1_000_000
+            + dt.hour() as u64 * 10_000
+            + dt.minute() as u64 * 100
+            + dt.second() as u64
+    }
+}
+
+impl ToNumber<u16> for ToYear {
+    fn to_number(dt: &DateTime<Tz>) -> u16 {
+        dt.year() as u16
+    }
+}
+
+impl ToNumber<u8> for ToMonth {
+    fn to_number(dt: &DateTime<Tz>) -> u8 {
+        dt.month() as u8
+    }
+}
+
+impl ToNumber<u16> for ToDayOfYear {
+    fn to_number(dt: &DateTime<Tz>) -> u16 {
+        dt.ordinal() as u16
+    }
+}
+
+impl ToNumber<u8> for ToDayOfMonth {
+    fn to_number(dt: &DateTime<Tz>) -> u8 {
+        dt.day() as u8
+    }
+}
+
+impl ToNumber<u8> for ToDayOfWeek {
+    fn to_number(dt: &DateTime<Tz>) -> u8 {
+        dt.weekday().number_from_monday() as u8
+    }
+}
+
+impl ToNumber<u8> for ToHour {
+    fn to_number(dt: &DateTime<Tz>) -> u8 {
+        dt.hour() as u8
+    }
+}
+
+impl ToNumber<u8> for ToMinute {
+    fn to_number(dt: &DateTime<Tz>) -> u8 {
+        dt.minute() as u8
+    }
+}
+
+impl ToNumber<u8> for ToSecond {
+    fn to_number(dt: &DateTime<Tz>) -> u8 {
+        dt.second() as u8
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum Round {
+    Second,
+    Minute,
+    FiveMinutes,
+    TenMinutes,
+    FifteenMinutes,
+    TimeSlot,
+    Hour,
+    Day,
+}
+
+pub fn round_timestamp(ts: i64, tz: &Tz, round: Round) -> i64 {
+    let dt = tz.timestamp(ts / 1_000_000, 0_u32);
+    let res = match round {
+        Round::Second => dt,
+        Round::Minute => {
+            tz.ymd(dt.year(), dt.month(), dt.day())
+                .and_hms_micro(dt.hour(), dt.minute(), 0, 0)
+        }
+        Round::FiveMinutes => tz.ymd(dt.year(), dt.month(), dt.day()).and_hms_micro(
+            dt.hour(),
+            dt.minute() / 5 * 5,
+            0,
+            0,
+        ),
+        Round::TenMinutes => tz.ymd(dt.year(), dt.month(), dt.day()).and_hms_micro(
+            dt.hour(),
+            dt.minute() / 10 * 10,
+            0,
+            0,
+        ),
+        Round::FifteenMinutes => tz.ymd(dt.year(), dt.month(), dt.day()).and_hms_micro(
+            dt.hour(),
+            dt.minute() / 15 * 15,
+            0,
+            0,
+        ),
+        Round::TimeSlot => tz.ymd(dt.year(), dt.month(), dt.day()).and_hms_micro(
+            dt.hour(),
+            dt.minute() / 30 * 30,
+            0,
+            0,
+        ),
+        Round::Hour => tz
+            .ymd(dt.year(), dt.month(), dt.day())
+            .and_hms_micro(dt.hour(), 0, 0, 0),
+        Round::Day => tz
+            .ymd(dt.year(), dt.month(), dt.day())
+            .and_hms_micro(0, 0, 0, 0),
+    };
+    res.timestamp_micros()
+}
+
+pub struct DateRounder;
+
+impl DateRounder {
+    pub fn eval_timestamp<T: ToNumber<i32>>(ts: i64, tz: &Tz) -> i32 {
+        let dt = ts.to_timestamp(tz);
+        T::to_number(&dt)
+    }
+
+    pub fn eval_date<T: ToNumber<i32>>(date: i32, tz: &Tz) -> i32 {
+        let dt = date.to_date(tz).and_hms(0, 0, 0);
+        T::to_number(&dt)
+    }
+}
+
+/// Convert `chrono::DateTime` to `i32` in `Scalar::Date(i32)` for `DateType`.
+///
+/// It's the days since 1970-01-01.
+#[inline]
+fn datetime_to_date_inner_number(date: &DateTime<Tz>) -> i32 {
+    date.naive_utc()
+        .signed_duration_since(NaiveDate::from_ymd(1970, 1, 1).and_hms(0, 0, 0))
+        .num_days() as i32
+}
+
+pub struct ToLastMonday;
+pub struct ToLastSunday;
+pub struct ToStartOfMonth;
+pub struct ToStartOfQuarter;
+pub struct ToStartOfYear;
+pub struct ToStartOfISOYear;
+
+impl ToNumber<i32> for ToLastMonday {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        datetime_to_date_inner_number(dt) - dt.weekday().num_days_from_monday() as i32
+    }
+}
+
+impl ToNumber<i32> for ToLastSunday {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        datetime_to_date_inner_number(dt) - dt.weekday().num_days_from_sunday() as i32
+    }
+}
+
+impl ToNumber<i32> for ToStartOfMonth {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        datetime_to_date_inner_number(&dt.with_day(1).unwrap())
+    }
+}
+
+impl ToNumber<i32> for ToStartOfQuarter {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        let new_month = dt.month0() / 3 * 3 + 1;
+        datetime_to_date_inner_number(&dt.with_month(new_month).unwrap().with_day(1).unwrap())
+    }
+}
+
+impl ToNumber<i32> for ToStartOfYear {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        datetime_to_date_inner_number(&dt.with_month(1).unwrap().with_day(1).unwrap())
+    }
+}
+
+impl ToNumber<i32> for ToStartOfISOYear {
+    fn to_number(dt: &DateTime<Tz>) -> i32 {
+        let iso_year = dt.iso_week().year();
+        let iso_dt = dt
+            .timezone()
+            .isoywd(iso_year, 1, chrono::Weekday::Mon)
+            .and_hms(0, 0, 0);
+        datetime_to_date_inner_number(&iso_dt)
     }
 }

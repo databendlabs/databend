@@ -14,6 +14,7 @@ if [ $# -gt 0 ]; then
 	RUN_DIR="--run-dir $*"
 fi
 echo "Run suites using argument: $RUN_DIR"
+echo "ulimit:\n$(ulimit -a)"
 
 echo "pip list"
 python3 -m pip list

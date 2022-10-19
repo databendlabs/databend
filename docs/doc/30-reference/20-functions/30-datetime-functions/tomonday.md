@@ -19,19 +19,12 @@ to_monday( <expr> )
 
 ## Return Type
 
-`UInt16` datatype.
+Datetime object, returns date in “YYYY-MM-DD” format.
 
 ## Examples
 
 ```sql
 SELECT to_monday(now());
-+------------------+
-| to_monday(now()) |
-+------------------+
-|            19079 |
-+------------------+
-
-SELECT to_date(to_monday(now()));
 +---------------------------+
 | to_date(to_monday(now())) |
 +---------------------------+
@@ -42,6 +35,6 @@ SELECT to_monday(to_timestamp(1630812366));
 +-------------------------------------+
 | to_monday(to_timestamp(1630812366)) |
 +-------------------------------------+
-|                               18869 |
+| 2021-08-30                          |
 +-------------------------------------+
 ```

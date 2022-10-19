@@ -22,6 +22,7 @@ use common_catalog::catalog::StorageDescription;
 use common_catalog::table::ColumnId;
 use common_catalog::table::ColumnStatistics;
 use common_catalog::table::ColumnStatisticsProvider;
+use common_catalog::table::CompactTarget;
 use common_catalog::table_context::TableContext;
 use common_catalog::table_mutator::TableMutator;
 use common_datablocks::DataBlock;
@@ -42,8 +43,8 @@ use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
 use common_sharing::create_share_table_operator;
 use common_storage::init_operator;
+use common_storage::DataOperator;
 use common_storage::ShareTableConfig;
-use common_storage::StorageOperator;
 use common_storages_util::storage_context::StorageContext;
 use common_storages_util::table_storage_prefix::table_storage_prefix;
 use opendal::Operator;
@@ -104,7 +105,7 @@ impl FuseTable {
                 match storage_params {
                     Some(sp) => init_operator(&sp)?,
                     None => {
-                        let op = &*(StorageOperator::instance());
+                        let op = &*(DataOperator::instance());
                         op.clone()
                     }
                 }
@@ -353,14 +354,14 @@ impl Table for FuseTable {
         self.do_read_partitions(ctx, push_downs).await
     }
 
-    #[tracing::instrument(level = "debug", name = "fuse_table_read2", skip(self, ctx, pipeline), fields(ctx.id = ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", name = "fuse_table_read_data", skip(self, ctx, pipeline), fields(ctx.id = ctx.get_id().as_str()))]
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
         plan: &ReadDataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        self.do_read2(ctx, plan, pipeline)
+        self.do_read_data(ctx, plan, pipeline)
     }
 
     fn append_data(
@@ -370,7 +371,7 @@ impl Table for FuseTable {
         need_output: bool,
     ) -> Result<()> {
         self.check_mutable()?;
-        self.do_append2(ctx, pipeline, need_output)
+        self.do_append_data(ctx, pipeline, need_output)
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_commit_insertion", skip(self, ctx, operations), fields(ctx.id = ctx.get_id().as_str()))]
@@ -454,9 +455,10 @@ impl Table for FuseTable {
     async fn compact(
         &self,
         ctx: Arc<dyn TableContext>,
+        target: CompactTarget,
         pipeline: &mut Pipeline,
     ) -> Result<Option<Arc<dyn TableMutator>>> {
-        self.do_compact(ctx, pipeline).await
+        self.do_compact(ctx, target, pipeline).await
     }
 
     async fn recluster(

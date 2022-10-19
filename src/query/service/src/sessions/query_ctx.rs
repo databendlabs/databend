@@ -27,6 +27,8 @@ use common_base::base::tokio::task::JoinHandle;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_base::base::TrySpawn;
+use common_config::Config;
+use common_config::DATABEND_COMMIT_VERSION;
 use common_contexts::DalContext;
 use common_contexts::DalMetrics;
 use common_datablocks::DataBlock;
@@ -42,8 +44,7 @@ use common_legacy_planners::SourceInfo;
 use common_legacy_planners::StageTableInfo;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::UserInfo;
-use common_storage::StorageParams;
-use opendal::Operator;
+use common_storage::DataOperator;
 use parking_lot::RwLock;
 use tracing::debug;
 
@@ -62,7 +63,6 @@ use crate::sessions::Settings;
 use crate::sessions::TableContext;
 use crate::storages::stage::StageTable;
 use crate::storages::Table;
-use crate::Config;
 
 #[derive(Clone)]
 pub struct QueryContext {
@@ -82,7 +82,7 @@ impl QueryContext {
 
         Arc::new(QueryContext {
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
-            version: format!("DatabendQuery {}", *crate::version::DATABEND_COMMIT_VERSION),
+            version: format!("DatabendQuery {}", *DATABEND_COMMIT_VERSION),
             shared,
             fragment_id: Arc::new(AtomicUsize::new(0)),
         })
@@ -309,14 +309,13 @@ impl TableContext for QueryContext {
     }
 
     // Get the storage data accessor operator from the session manager.
-    fn get_storage_operator(&self) -> Result<Operator> {
-        // deref from `StorageOperator` to `opendal::Operator` first.
-        let operator = (*self.shared.storage_operator).clone();
+    fn get_data_operator(&self) -> Result<DataOperator> {
+        let pop = self.shared.persist_operator.clone();
 
-        Ok(operator.layer(self.shared.dal_ctx.as_ref().clone()))
-    }
-    fn get_storage_params(&self) -> StorageParams {
-        self.shared.get_storage_params()
+        Ok(DataOperator::new(
+            pop.operator().layer(self.shared.dal_ctx.as_ref().clone()),
+            pop.params().clone(),
+        ))
     }
     fn get_dal_context(&self) -> &DalContext {
         self.shared.dal_ctx.as_ref()

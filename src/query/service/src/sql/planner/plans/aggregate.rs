@@ -25,6 +25,7 @@ use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalOperator;
 use crate::sql::plans::RelOp;
 use crate::sql::plans::ScalarItem;
+use crate::sql::ScalarExpr;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Copy)]
 pub enum AggregateMode {
@@ -104,9 +105,8 @@ impl PhysicalOperator for Aggregate {
                     // Scalar aggregation
                     required.distribution = Distribution::Serial;
                 } else {
-                    // Group aggregation, enforce `Hash` distribution
-                    required.distribution =
-                        Distribution::Hash(vec![self.group_items[0].scalar.clone()]);
+                    // The distribution should have been derived by partial aggregation
+                    required.distribution = Distribution::Any;
                 }
             }
 
@@ -159,5 +159,18 @@ impl LogicalOperator for Aggregate {
 
             column_stats: Default::default(),
         })
+    }
+
+    fn used_columns<'a>(&self) -> Result<ColumnSet> {
+        let mut used_columns = ColumnSet::new();
+        for group_item in self.group_items.iter() {
+            used_columns.insert(group_item.index);
+            used_columns.extend(group_item.scalar.used_columns())
+        }
+        for agg in self.aggregate_functions.iter() {
+            used_columns.insert(agg.index);
+            used_columns.extend(agg.scalar.used_columns())
+        }
+        Ok(used_columns)
     }
 }

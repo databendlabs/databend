@@ -15,6 +15,7 @@
 use common_exception::Result;
 use common_planner::IndexType;
 
+use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::Distribution;
 use crate::sql::optimizer::PhysicalProperty;
 use crate::sql::optimizer::RelExpr;
@@ -80,5 +81,13 @@ impl PhysicalOperator for Sort {
 impl LogicalOperator for Sort {
     fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
         rel_expr.derive_relational_prop_child(0)
+    }
+
+    fn used_columns<'a>(&self) -> Result<ColumnSet> {
+        let mut used_columns = ColumnSet::new();
+        for item in &self.items {
+            used_columns.insert(item.index);
+        }
+        Ok(used_columns)
     }
 }
