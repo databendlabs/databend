@@ -90,6 +90,19 @@ impl tonic::IntoRequest<RaftRequest> for MetaGrpcWriteReq {
     }
 }
 
+impl TryInto<Request<RaftRequest>> for MetaGrpcReq {
+    type Error = serde_json::Error;
+
+    fn try_into(self) -> Result<Request<RaftRequest>, Self::Error> {
+        let raft_request = RaftRequest {
+            data: serde_json::to_string(&self)?,
+        };
+
+        let request = tonic::Request::new(raft_request);
+        Ok(request)
+    }
+}
+
 impl TryInto<Request<RaftRequest>> for MetaGrpcWriteReq {
     type Error = serde_json::Error;
 
