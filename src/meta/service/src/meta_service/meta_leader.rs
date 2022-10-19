@@ -170,21 +170,18 @@ impl<'a> MetaLeader<'a> {
         // 2. Stop replication
         let res = self.meta_node.raft.remove_learner(node_id).await;
         if let Err(e) = res {
-            let res = match e {
+            match e {
                 RemoveLearnerError::ForwardToLeader(e) => {
-                    Err(RaftChangeMembershipError::ForwardToLeader(e))
+                    return Err(RaftChangeMembershipError::ForwardToLeader(e));
                 }
                 RemoveLearnerError::NotLearner(_e) => {
                     error!("Node to leave the cluster is not a learner: {}", node_id);
-                    Ok(())
                 }
                 RemoveLearnerError::NotExists(_e) => {
                     info!("Node to leave the cluster does not exists: {}", node_id);
-                    Ok(())
                 }
-                RemoveLearnerError::Fatal(e) => Err(RaftChangeMembershipError::Fatal(e)),
-            };
-            res?;
+                RemoveLearnerError::Fatal(e) => return Err(RaftChangeMembershipError::Fatal(e)),
+            }
         }
 
         // 3. Remove node info
