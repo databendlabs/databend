@@ -34,7 +34,6 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::Pipeline;
-use common_pipeline_core::SourcePipeBuilder;
 use common_pipeline_transforms::processors::ExpressionExecutor;
 use tracing::info;
 
@@ -202,11 +201,9 @@ impl FuseTable {
         let max_io_requests = Self::adjust_max_io_requests(ctx.clone(), plan)?;
         info!("read block data adjust max io requests:{}", max_io_requests);
 
-        let mut source_builder = SourcePipeBuilder::create();
-        for _index in 0..max_io_requests {
-            let output = OutputPort::create();
-            source_builder.add_source(
-                output.clone(),
+        // Add source pipe.
+        pipeline.add_source(
+            |output| {
                 FuseTableSource::create(
                     ctx.clone(),
                     output,
@@ -214,11 +211,10 @@ impl FuseTable {
                     prewhere_reader.clone(),
                     prewhere_filter.clone(),
                     remain_reader.clone(),
-                )?,
-            );
-        }
-        pipeline.add_pipe(source_builder.finalize());
-        Ok(())
+                )
+            },
+            max_io_requests,
+        )
     }
 }
 

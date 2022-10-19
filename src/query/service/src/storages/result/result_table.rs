@@ -30,10 +30,8 @@ use common_meta_types::UserIdentity;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::Pipeline;
-use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::TableContext;
 use crate::storages::fuse::io::BlockReader;
 use crate::storages::fuse::FuseTable;
@@ -87,7 +85,7 @@ pub struct ResultTable {
 impl ResultTable {
     pub async fn try_get(ctx: Arc<dyn TableContext>, query_id: &str) -> Result<Arc<ResultTable>> {
         let locations = ResultLocations::new(query_id);
-        let data_accessor = ctx.get_storage_operator()?;
+        let data_accessor = ctx.get_data_operator()?;
         let location = locations.get_meta_location();
         let obj = data_accessor.object(&location);
         let data = match obj.read().await {
@@ -125,7 +123,7 @@ impl ResultTable {
             .collect::<Vec<usize>>();
         let projection = Projection::Columns(indices);
 
-        let operator = ctx.get_storage_operator()?;
+        let operator = ctx.get_data_operator()?.operator();
         let table_schema = self.get_table_info().schema();
         BlockReader::create(operator, table_schema, projection)
     }
@@ -146,7 +144,7 @@ impl Table for ResultTable {
         ctx: Arc<dyn TableContext>,
         push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
-        let data_accessor = ctx.get_storage_operator()?;
+        let data_accessor = ctx.get_data_operator()?;
         let meta_location = self.locations.get_meta_location();
         let meta_data = data_accessor.object(&meta_location).read().await?;
         let meta: ResultTableMeta = serde_json::from_slice(&meta_data)?;
@@ -170,17 +168,10 @@ impl Table for ResultTable {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let max_threads = std::cmp::min(parts_len, max_threads);
 
-        let mut source_builder = SourcePipeBuilder::create();
-
-        for _index in 0..std::cmp::max(1, max_threads) {
-            let output = OutputPort::create();
-            source_builder.add_source(
-                output.clone(),
-                ResultTableSource::create(ctx.clone(), output, block_reader.clone())?,
-            );
-        }
-
-        pipeline.add_pipe(source_builder.finalize());
+        pipeline.add_source(
+            |output| ResultTableSource::create(ctx.clone(), output, block_reader.clone()),
+            std::cmp::max(1, max_threads),
+        )?;
 
         match &plan.push_downs {
             None => Ok(()),

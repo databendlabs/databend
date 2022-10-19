@@ -126,12 +126,6 @@ impl ResizeProcessor {
         }
     }
 
-    fn inputs_not_need_data(&mut self) {
-        for input in &self.inputs {
-            input.set_not_need_data();
-        }
-    }
-
     fn finish_outputs(&mut self) {
         for output in &self.outputs {
             output.finish();
@@ -172,7 +166,6 @@ impl Processor for ResizeProcessor {
             return Ok(Event::NeedData);
         }
 
-        self.inputs_not_need_data();
         Ok(Event::NeedConsume)
     }
 }

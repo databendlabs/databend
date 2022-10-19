@@ -205,9 +205,10 @@ impl Runtime {
     {
         let semaphore = Arc::new(semaphore);
         let iter = futures.into_iter().map(|v| {
-            |permit| {
-                let _permit = permit;
-                v
+            |permit| async {
+                let r = v.await;
+                drop(permit);
+                r
             }
         });
         self.try_spawn_batch_with_owned_semaphore(semaphore, iter)

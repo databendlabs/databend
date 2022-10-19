@@ -1,4 +1,7 @@
 statement ok
+drop database if exists join_reorder;
+
+statement ok
 create database join_reorder;
 
 statement ok

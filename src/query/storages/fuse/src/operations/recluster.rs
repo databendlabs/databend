@@ -23,9 +23,7 @@ use common_fuse_meta::meta::BlockMeta;
 use common_legacy_planners::Extras;
 use common_legacy_planners::ReadDataSourcePlan;
 use common_legacy_planners::SourceInfo;
-use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::Pipeline;
-use common_pipeline_core::SinkPipeBuilder;
 use common_pipeline_transforms::processors::transforms::SortMergeCompactor;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_pipeline_transforms::processors::transforms::TransformSortMerge;
@@ -107,7 +105,7 @@ impl FuseTable {
             self.operator.clone(),
         )?;
 
-        let need_recluster = mutator.blocks_select().await?;
+        let need_recluster = mutator.target_select().await?;
         if !need_recluster {
             return Ok(None);
         }
@@ -185,24 +183,17 @@ impl FuseTable {
             )
         })?;
 
-        let mut sink_pipeline_builder = SinkPipeBuilder::create();
-        for _ in 0..pipeline.output_len() {
-            let input_port = InputPort::create();
-            sink_pipeline_builder.add_sink(
-                input_port.clone(),
-                FuseTableSink::try_create(
-                    input_port,
-                    ctx.clone(),
-                    block_per_seg,
-                    self.operator.clone(),
-                    self.meta_location_generator().clone(),
-                    cluster_stats_gen.clone(),
-                    None,
-                )?,
-            );
-        }
-
-        pipeline.add_pipe(sink_pipeline_builder.finalize());
+        pipeline.add_sink(|input| {
+            FuseTableSink::try_create(
+                input,
+                ctx.clone(),
+                block_per_seg,
+                self.operator.clone(),
+                self.meta_location_generator().clone(),
+                cluster_stats_gen.clone(),
+                None,
+            )
+        })?;
         Ok(Some(Arc::new(mutator)))
     }
 }
