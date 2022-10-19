@@ -34,6 +34,7 @@ use opendal::services::ftp;
 use opendal::services::gcs;
 use opendal::services::http;
 use opendal::services::memory;
+use opendal::services::moka;
 use opendal::services::obs;
 use opendal::services::oss;
 use opendal::services::s3;
@@ -45,6 +46,7 @@ use super::StorageParams;
 use super::StorageS3Config;
 use crate::config::StorageGcsConfig;
 use crate::config::StorageHttpConfig;
+use crate::config::StorageMokaConfig;
 use crate::config::StorageObsConfig;
 use crate::StorageConfig;
 use crate::StorageOssConfig;
@@ -61,6 +63,7 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
         StorageParams::Http(cfg) => init_http_operator(cfg)?,
         StorageParams::Ipfs(cfg) => init_ipfs_operator(cfg)?,
         StorageParams::Memory => init_memory_operator()?,
+        StorageParams::Moka(cfg) => init_moka_operator(cfg)?,
         StorageParams::Obs(cfg) => init_obs_operator(cfg)?,
         StorageParams::S3(cfg) => init_s3_operator(cfg)?,
         StorageParams::Oss(cfg) => init_oss_operator(cfg)?,
@@ -249,6 +252,13 @@ fn init_obs_operator(cfg: &StorageObsConfig) -> Result<Operator> {
     // Credential
     builder.access_key_id(&cfg.access_key_id);
     builder.secret_access_key(&cfg.secret_access_key);
+
+    Ok(Operator::new(builder.build()?))
+}
+
+/// init_moka_operator will init a moka operator.
+fn init_moka_operator(_: &StorageMokaConfig) -> Result<Operator> {
+    let mut builder = moka::Builder::default();
 
     Ok(Operator::new(builder.build()?))
 }
