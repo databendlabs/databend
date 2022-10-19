@@ -4,7 +4,7 @@ description: multiple catalog support for databend
 ---
 
 - RFC PR: [datafuselabs/databend#8255](https://github.com/datafuselabs/databend/pull/8255)
-- Tracking Issue: [datafuselabs/databend#0000](https://github.com/datafuselabs/databend/issues/0000)
+- Tracking Issue: [datafuselabs/databend#8300](https://github.com/datafuselabs/databend/issues/8300)
 
 ## Summary
 
