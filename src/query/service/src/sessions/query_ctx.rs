@@ -27,6 +27,8 @@ use common_base::base::tokio::task::JoinHandle;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_base::base::TrySpawn;
+use common_config::Config;
+use common_config::DATABEND_COMMIT_VERSION;
 use common_contexts::DalContext;
 use common_contexts::DalMetrics;
 use common_datablocks::DataBlock;
@@ -62,7 +64,6 @@ use crate::sessions::Settings;
 use crate::sessions::TableContext;
 use crate::storages::stage::StageTable;
 use crate::storages::Table;
-use crate::Config;
 
 #[derive(Clone)]
 pub struct QueryContext {
@@ -82,7 +83,7 @@ impl QueryContext {
 
         Arc::new(QueryContext {
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
-            version: format!("DatabendQuery {}", *crate::version::DATABEND_COMMIT_VERSION),
+            version: format!("DatabendQuery {}", *DATABEND_COMMIT_VERSION),
             shared,
             fragment_id: Arc::new(AtomicUsize::new(0)),
         })

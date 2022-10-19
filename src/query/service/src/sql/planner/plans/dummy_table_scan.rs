@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_exception::Result;
+
 use super::LogicalOperator;
 use super::Operator;
 use super::PhysicalOperator;
@@ -48,7 +50,7 @@ impl LogicalOperator for DummyTableScan {
     fn derive_relational_prop<'a>(
         &self,
         _rel_expr: &crate::sql::optimizer::RelExpr<'a>,
-    ) -> common_exception::Result<crate::sql::optimizer::RelationalProperty> {
+    ) -> Result<RelationalProperty> {
         Ok(RelationalProperty {
             output_columns: ColumnSet::new(),
             outer_columns: ColumnSet::new(),
@@ -58,13 +60,17 @@ impl LogicalOperator for DummyTableScan {
             column_stats: Default::default(),
         })
     }
+
+    fn used_columns<'a>(&self) -> Result<ColumnSet> {
+        Ok(ColumnSet::new())
+    }
 }
 
 impl PhysicalOperator for DummyTableScan {
     fn derive_physical_prop<'a>(
         &self,
         _rel_expr: &crate::sql::optimizer::RelExpr<'a>,
-    ) -> common_exception::Result<crate::sql::optimizer::PhysicalProperty> {
+    ) -> Result<PhysicalProperty> {
         Ok(PhysicalProperty {
             distribution: crate::sql::optimizer::Distribution::Serial,
         })
@@ -75,7 +81,7 @@ impl PhysicalOperator for DummyTableScan {
         _rel_expr: &crate::sql::optimizer::RelExpr<'a>,
         _child_index: usize,
         required: &crate::sql::optimizer::RequiredProperty,
-    ) -> common_exception::Result<crate::sql::optimizer::RequiredProperty> {
+    ) -> Result<crate::sql::optimizer::RequiredProperty> {
         Ok(required.clone())
     }
 }

@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+pub use common_config::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::AuthInfo;
@@ -24,7 +25,6 @@ use common_users::UserApiProvider;
 use jwtk::Claims;
 
 use crate::sessions::Session;
-pub use crate::Config;
 
 pub struct AuthMgr {
     jwt_auth: Option<JwtAuthenticator>,

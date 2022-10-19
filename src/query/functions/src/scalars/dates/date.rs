@@ -86,10 +86,10 @@ impl DateFunction {
         factory.register("to_hour", ToHourFunction::desc());
         factory.register("to_minute", ToMinuteFunction::desc());
         factory.register("to_second", ToSecondFunction::desc());
-        factory.register("to_monday", ToMondayFunction::desc());
         factory.register("to_year", ToYearFunction::desc());
 
         // rounders
+        factory.register("to_monday", ToMondayFunction::desc());
         factory.register(
             "to_start_of_second",
             Self::round_function_creator(Round::Second),

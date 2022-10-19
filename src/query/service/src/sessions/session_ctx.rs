@@ -18,6 +18,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Weak;
 
+use common_config::Config;
 use common_exception::Result;
 use common_meta_types::UserInfo;
 use common_settings::Settings;
@@ -25,7 +26,6 @@ use futures::channel::oneshot::Sender;
 use parking_lot::RwLock;
 
 use crate::sessions::QueryContextShared;
-use crate::Config;
 
 pub struct SessionContext {
     conf: Config,

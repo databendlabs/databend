@@ -14,6 +14,7 @@
 
 use common_exception::Result;
 
+use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::Distribution;
 use crate::sql::optimizer::PhysicalProperty;
 use crate::sql::optimizer::RelExpr;
@@ -84,5 +85,9 @@ impl LogicalOperator for Limit {
 
             column_stats: Default::default(),
         })
+    }
+
+    fn used_columns<'a>(&self) -> Result<ColumnSet> {
+        Ok(ColumnSet::new())
     }
 }

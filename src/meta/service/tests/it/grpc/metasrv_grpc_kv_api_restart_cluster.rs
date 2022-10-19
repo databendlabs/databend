@@ -25,9 +25,9 @@ use common_meta_client::MetaGrpcClient;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
 use common_meta_types::UpsertKVReq;
+use databend_meta::init_meta_ut;
 use tracing::info;
 
-use crate::init_meta_ut;
 use crate::tests::service::start_metasrv_cluster;
 use crate::tests::service::MetaSrvTestContext;
 use crate::tests::start_metasrv_with_context;
