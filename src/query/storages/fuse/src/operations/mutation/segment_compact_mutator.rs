@@ -35,8 +35,8 @@ use crate::io::Files;
 use crate::io::SegmentWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
-use crate::operations::commit::detect_conflicts;
 use crate::operations::commit::Conflict;
+use crate::operations::commit::MutatorConflictDetector;
 use crate::statistics::merge_statistics;
 use crate::statistics::reducers::reduce_block_metas;
 use crate::statistics::reducers::reduce_statistics;
@@ -298,7 +298,10 @@ impl TableMutator for CompactSegmentMutator {
                         current_table_info = &fuse_table.table_info;
 
                         // check conflicts between the base and latest snapshots
-                        match detect_conflicts(base_snapshot, &latest_snapshot) {
+                        match MutatorConflictDetector::detect_conflicts(
+                            base_snapshot,
+                            &latest_snapshot,
+                        ) {
                             Conflict::Unresolvable => {
                                 counter!("fuse_compact_segments_unresolvable_conflict", 1);
                                 counter!("fuse_compact_segments_aborts", 1);
@@ -336,8 +339,8 @@ impl TableMutator for CompactSegmentMutator {
                                 retries
                             )));
                         }
-                        // different for retry of commit_insert, here operation retired without hesitation
-                        // since... we are in a hurry ;)
+                        // different from retry of commit_insert,  here operation retired
+                        // without hesitation, to resolve the conflict as soon as possible
                         continue;
                     } else {
                         return Err(e);
