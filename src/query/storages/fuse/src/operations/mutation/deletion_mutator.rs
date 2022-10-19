@@ -19,9 +19,11 @@ use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_fuse_meta::meta::ClusterStatistics;
 use common_fuse_meta::meta::Location;
+use common_fuse_meta::meta::Statistics;
 use common_fuse_meta::meta::TableSnapshot;
 use opendal::Operator;
 
+use super::AbortOperation;
 use crate::io::BlockWriter;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::mutation::BaseMutator;
@@ -52,9 +54,12 @@ impl DeletionMutator {
         })
     }
 
-    pub async fn into_new_snapshot(self) -> Result<TableSnapshot> {
-        let (segments, summary) = self.base_mutator.generate_segments().await?;
-        self.base_mutator.into_new_snapshot(segments, summary).await
+    pub fn base_snapshot(self) -> Arc<TableSnapshot> {
+        self.base_mutator.base_snapshot
+    }
+
+    pub async fn generate_segments(&self) -> Result<(Vec<Location>, Statistics, AbortOperation)> {
+        self.base_mutator.generate_segments().await
     }
 
     /// Records the replacements:  
