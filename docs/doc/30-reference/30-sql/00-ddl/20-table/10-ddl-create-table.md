@@ -3,17 +3,22 @@ title: CREATE TABLE
 description: Create a new table.
 ---
 
-CREATE TABLE is the most complicated operation for many databases because you might need to:
+Creating tables is one of the most complicated operations for many databases because you might need to:
 
 * Manually specify the engine
 * Manually specify the indexes
 * And even specify the data partitions or data shard
 
-Databend aims to be easy to use by design and does NOT require any of these when you create a table.
+Databend aims to be easy to use by design and does NOT require any of those operations when you create a table. Moreover, the CREATE TABLE statement provides these options to make it much easier for you to create tables in various scenarios:
 
-## Syntax
+- [CREATE TABLE ...](#create-table): Creates a table from scratch.
+- [CREATE TABLE ... LIKE](#create-table--like): Creates a table with the same column definitions as an existing one.
+- [CREATE TABLE ... AS](#create-table--as): Creates a table and inserts data with the results of a SELECT query.
+- [CREATE TRANSIENT TABLE ...](#create-transient-table): Creates a table without storing its historical data for Time Travel.
+- [CREATE TABLE ... SNAPSHOT_LOCATION](#create-table--snapshot_location): Creates a table and inserts data with a snapshot file.
+- [CREATE TABLE ... EXTERNAL_LOCATION](#create-table--external_location): Creates a table and specifies an S3 bucket for the data storage instead of the FUSE engine.
 
-### CREATE TABLE
+## CREATE TABLE ...
 
 ```sql
 CREATE [TRANSIENT] TABLE [IF NOT EXISTS] [db.]table_name
@@ -49,7 +54,7 @@ Data type reference:
 
 For detailed information about the CLUSTER BY clause, see [SET CLUSTER KEY](../70-clusterkey/dml-set-cluster-key.md).
 
-### CREATE TABLE ... LIKE
+## CREATE TABLE ... LIKE
 
 Creates an empty copy of an existing table, the new table automatically copies all column names, their data types, and their not-null constraints.
 
@@ -59,18 +64,17 @@ CREATE TABLE [IF NOT EXISTS] [db.]table_name
 LIKE [db.]origin_table_name
 ```
 
-### CREATE TABLE ... AS [SELECT query]
+## CREATE TABLE ... AS
 
 Creates a table and fills it with data computed by a SELECT command.
 
 Syntax:
 ```sql
 CREATE TABLE [IF NOT EXISTS] [db.]table_name
-LIKE [db.]origin_table_name
 AS SELECT query
 ```
 
-### CREATE TRANSIENT TABLE ...
+## CREATE TRANSIENT TABLE ...
 
 Creates a transient table. 
 
@@ -83,7 +87,7 @@ Syntax:
 CREATE TRANSIENT TABLE ...
 ```
 
-### CREATE TABLE ... SNAPSHOT_LOCATION
+## CREATE TABLE ... SNAPSHOT_LOCATION
 
 Creates a table and inserts data from a snapshot file. 
 
@@ -109,11 +113,11 @@ SELECT *
 FROM   Fuse_snapshot('<database_name>', '<table_name>'); 
 ```
 
-### CREATE TABLE ... EXTERNAL_LOCATION
+## CREATE TABLE ... EXTERNAL_LOCATION
 
-Creates a table and stores the table data (in parquet files) in a specified S3 bucket instead of the FUSE engine.
+Creates a table and specifies an S3 bucket for the data storage instead of the FUSE engine.
 
-Databend stores the table data in the location configured in the file `databend-query.toml` by default. This command enables you to store the data in a table in another bucket instead of the default one.
+Databend stores the table data in the location configured in the file `databend-query.toml` by default. This option enables you to store the data (in parquet format) in a table in another bucket instead of the default one.
 
 Syntax:
 ```sql
@@ -217,7 +221,7 @@ Databend’s syntax is difference from MySQL mainly in the data type and some sp
 
 ## Examples
 
-### Create Table
+### Create Table ...
 
 ```sql
 CREATE TABLE test(a BIGINT UNSIGNED, b VARCHAR , c VARCHAR  DEFAULT concat(b, '-b'));
@@ -247,7 +251,8 @@ SELECT * FROM test;
 +------+-------+---------+
 ```
 
-### Create Table Like Statement
+### Create Table ... Like
+
 ```sql
 CREATE TABLE test2 LIKE test;
 ```
@@ -276,7 +281,7 @@ SELECT * FROM test2;
 +------+-------+---------+
 ```
 
-### Create Table As SELECT (CTAS) Statement
+### Create Table ... As
 
 ```sql
 CREATE TABLE test3 AS SELECT * FROM test2;
@@ -300,7 +305,7 @@ SELECT * FROM test3;
 |  888 | stars | stars-b |
 +------+-------+---------+
 ```
-### Create Transient Table
+### Create Transient Table ...
 
 ```sql
 -- Create a transient table
@@ -319,7 +324,7 @@ select count(*) from fuse_snapshot('default', 'mytemp');
 |       1 | 
 ```
 
-### Create Table ... Snapshot_Location ...
+### Create Table ... Snapshot_Location
 
 ```sql
 CREATE TABLE members 
@@ -368,10 +373,10 @@ FROM   members_previous;
 Amy
 ```
 
-### Create Table ... External_Location ...
+### Create Table ... External_Location
 
 ```sql
--- Create a table named `mytable` and store the data in an S3 bucket
+-- Create a table named `mytable` and specify the location `s3://testbucket/admin/data/` for the data storage
 CREATE TABLE mytable(a int) 
 's3://testbucket/admin/data/' 
 connection=(aws_key_id='<your_aws_key_id>' aws_secret_key='<your_aws_secret_key>' endpoint_url='https://s3.amazonaws.com');
