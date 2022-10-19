@@ -289,6 +289,7 @@ impl JoinHashTable {
             true => Ok(probed_blocks),
             false => {
                 let mut res = Vec::with_capacity(probed_blocks.len());
+                let probe_side_len = self.probe_schema.fields().len();
                 for probed_block in probed_blocks {
                     if self.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
@@ -312,17 +313,24 @@ impl JoinHashTable {
                             _ => unreachable!(),
                         };
 
-                        let nullable_columns = nullable_columns
+                        // probed_block contains probe side and build side.
+                        let nullable_columns = probed_block.columns()[probe_side_len..]
                             .iter()
                             .map(|c| Self::set_validity(c, &validity))
                             .collect::<Result<Vec<_>>>()?;
+
                         let nullable_build_block = DataBlock::create(
                             self.row_space.data_schema.clone(),
                             nullable_columns.clone(),
                         );
+
+                        let probe_block = DataBlock::create(
+                            self.probe_schema.clone(),
+                            probed_block.columns()[0..probe_side_len].to_vec(),
+                        );
+
                         let merged_block =
                             self.merge_eq_block(&nullable_build_block, &probe_block)?;
-
                         let mut bm = validity.into_mut().right().unwrap();
                         if self.hash_join_desc.join_type == JoinType::Full {
                             let mut build_indexes =
