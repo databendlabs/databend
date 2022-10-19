@@ -3,16 +3,22 @@ title: CREATE TABLE
 description: Create a new table.
 ---
 
-`CREATE TABLE` is the most complicated part of many Databases, you need to:
+Creating tables is one of the most complicated operations for many databases because you might need to:
+
 * Manually specify the engine
 * Manually specify the indexes
 * And even specify the data partitions or data shard
- 
-In Databend, you **don't need to specify any of these**, one of Databend's design goals is to make it easier to use.
 
-## Syntax
+Databend aims to be easy to use by design and does NOT require any of those operations when you create a table. Moreover, the CREATE TABLE statement provides these options to make it much easier for you to create tables in various scenarios:
 
-### CREATE TABLE
+- [CREATE TABLE](#create-table): Creates a table from scratch.
+- [CREATE TABLE ... LIKE](#create-table--like): Creates a table with the same column definitions as an existing one.
+- [CREATE TABLE ... AS](#create-table--as): Creates a table and inserts data with the results of a SELECT query.
+- [CREATE TRANSIENT TABLE](#create-transient-table): Creates a table without storing its historical data for Time Travel.
+- [CREATE TABLE ... SNAPSHOT_LOCATION](#create-table--snapshot_location): Creates a table and inserts data with a snapshot file.
+- [CREATE TABLE ... EXTERNAL_LOCATION](#create-table--external_location): Creates a table and specifies an S3 bucket for the data storage instead of the FUSE engine.
+
+## CREATE TABLE
 
 ```sql
 CREATE [TRANSIENT] TABLE [IF NOT EXISTS] [db.]table_name
@@ -48,7 +54,7 @@ Data type reference:
 
 For detailed information about the CLUSTER BY clause, see [SET CLUSTER KEY](../70-clusterkey/dml-set-cluster-key.md).
 
-### CREATE TABLE ... LIKE
+## CREATE TABLE ... LIKE
 
 Creates an empty copy of an existing table, the new table automatically copies all column names, their data types, and their not-null constraints.
 
@@ -58,18 +64,17 @@ CREATE TABLE [IF NOT EXISTS] [db.]table_name
 LIKE [db.]origin_table_name
 ```
 
-### CREATE TABLE ... AS [SELECT query]
+## CREATE TABLE ... AS
 
 Creates a table and fills it with data computed by a SELECT command.
 
 Syntax:
 ```sql
 CREATE TABLE [IF NOT EXISTS] [db.]table_name
-LIKE [db.]origin_table_name
 AS SELECT query
 ```
 
-### CREATE TRANSIENT TABLE ...
+## CREATE TRANSIENT TABLE
 
 Creates a transient table. 
 
@@ -82,7 +87,7 @@ Syntax:
 CREATE TRANSIENT TABLE ...
 ```
 
-### CREATE TABLE ... SNAPSHOT_LOCATION
+## CREATE TABLE ... SNAPSHOT_LOCATION
 
 Creates a table and inserts data from a snapshot file. 
 
@@ -107,6 +112,30 @@ To obtain the snapshot information (including the snapshot locations) of a table
 SELECT * 
 FROM   Fuse_snapshot('<database_name>', '<table_name>'); 
 ```
+
+## CREATE TABLE ... EXTERNAL_LOCATION
+
+Creates a table and specifies an S3 bucket for the data storage instead of the FUSE engine.
+
+Databend stores the table data in the location configured in the file `databend-query.toml` by default. This option enables you to store the data (in parquet format) in a table in another bucket instead of the default one.
+
+Syntax:
+```sql
+CREATE TABLE [IF NOT EXISTS] [db.]table_name
+
+    <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
+    <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
+    ...
+
+'s3://<bucket>/[<path>]' 
+CONNECTION = (AWS_KEY_ID = '<your_aws_key_id>' AWS_SECRECT_KEY = '<your_aws_secret_key>' ENDPOINT_URL = '<endpoint_url>');
+```
+
+| Parameter  | Description | Required |
+| ----------- | ----------- | --- |
+| `s3://<bucket>/[<path>]`  | Files are in the specified external location (S3-like bucket) | YES |
+| `AWS_KEY_ID = '<your_aws_key_id>' AWS_SECRECT_KEY = '<your_aws_secret_key>'`  | The credentials for connecting to AWS and accessing the private/protected S3 bucket where the files to load are staged. |  Optional |
+| `ENDPOINT_URL = '<endpoint_url>'`  | S3-compatible endpoint URL like MinIO. Default: `https://s3.amazonaws.com` |  Optional |
 
 ## Column Nullable
 
@@ -222,7 +251,8 @@ SELECT * FROM test;
 +------+-------+---------+
 ```
 
-### Create Table Like Statement
+### Create Table ... Like
+
 ```sql
 CREATE TABLE test2 LIKE test;
 ```
@@ -251,7 +281,7 @@ SELECT * FROM test2;
 +------+-------+---------+
 ```
 
-### Create Table As SELECT (CTAS) Statement
+### Create Table ... As
 
 ```sql
 CREATE TABLE test3 AS SELECT * FROM test2;
@@ -294,7 +324,7 @@ select count(*) from fuse_snapshot('default', 'mytemp');
 |       1 | 
 ```
 
-### Create Table ... Snapshot_Location ...
+### Create Table ... Snapshot_Location
 
 ```sql
 CREATE TABLE members 
@@ -341,4 +371,13 @@ SELECT *
 FROM   members_previous; 
 ---
 Amy
+```
+
+### Create Table ... External_Location
+
+```sql
+-- Create a table named `mytable` and specify the location `s3://testbucket/admin/data/` for the data storage
+CREATE TABLE mytable(a int) 
+'s3://testbucket/admin/data/' 
+connection=(aws_key_id='<your_aws_key_id>' aws_secret_key='<your_aws_secret_key>' endpoint_url='https://s3.amazonaws.com');
 ```
