@@ -26,12 +26,12 @@ use common_meta_client::MetaGrpcClient;
 use common_meta_client::METACLI_COMMIT_SEMVER;
 use common_meta_client::MIN_METASRV_SEMVER;
 use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
+use databend_meta::init_meta_ut;
 use databend_meta::version::MIN_METACLI_SEMVER;
 use semver::Version;
 use tracing::debug;
 use tracing::info;
 
-use crate::init_meta_ut;
 use crate::tests::start_metasrv;
 
 /// - Test client version < serverside min-compatible-client-ver.

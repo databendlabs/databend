@@ -20,11 +20,11 @@ use common_meta_types::ForwardToLeader;
 use common_meta_types::LogEntry;
 use common_meta_types::RaftWriteError;
 use common_meta_types::UpsertKV;
+use databend_meta::init_meta_ut;
 use databend_meta::meta_service::meta_leader::MetaLeader;
 use databend_meta::meta_service::MetaNode;
 use maplit::btreeset;
 
-use crate::init_meta_ut;
 use crate::tests::meta_node::start_meta_node_cluster;
 use crate::tests::service::MetaSrvTestContext;
 

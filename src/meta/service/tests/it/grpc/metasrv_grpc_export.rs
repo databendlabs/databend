@@ -21,12 +21,11 @@ use common_meta_types::protobuf::Empty;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
 use common_meta_types::UpsertKVReq;
+use databend_meta::init_meta_ut;
 use pretty_assertions::assert_eq;
 use regex::Regex;
 use tokio_stream::StreamExt;
 use tracing::info;
-
-use crate::init_meta_ut;
 
 #[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_export() -> anyhow::Result<()> {
