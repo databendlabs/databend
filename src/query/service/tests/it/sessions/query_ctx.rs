@@ -44,7 +44,7 @@ async fn test_get_storage_accessor_s3() -> Result<()> {
 
     let (_guard, qctx) = crate::tests::create_query_context_with_config(conf, None).await?;
 
-    let _ = qctx.get_persist_operator()?;
+    let _ = qctx.get_data_operator()?;
 
     Ok(())
 }
@@ -59,7 +59,7 @@ async fn test_get_storage_accessor_fs() -> Result<()> {
 
     let (_guard, qctx) = crate::tests::create_query_context_with_config(conf, None).await?;
 
-    let _ = qctx.get_persist_operator()?;
+    let _ = qctx.get_data_operator()?;
 
     Ok(())
 }

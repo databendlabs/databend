@@ -22,7 +22,7 @@ use common_catalog::catalog::CatalogManager;
 use common_config::Config;
 use common_exception::Result;
 use common_fuse_meta::caches::CacheManager;
-use common_storage::PersistOperator;
+use common_storage::DataOperator;
 use common_storage::ShareTableConfig;
 use common_tracing::QueryLogger;
 use common_users::RoleCacheManager;
@@ -38,7 +38,7 @@ pub struct GlobalServices {
     global_runtime: UnsafeCell<Option<Arc<Runtime>>>,
     query_logger: UnsafeCell<Option<Arc<QueryLogger>>>,
     cluster_discovery: UnsafeCell<Option<Arc<ClusterDiscovery>>>,
-    storage_operator: UnsafeCell<Option<PersistOperator>>,
+    storage_operator: UnsafeCell<Option<DataOperator>>,
     cache_manager: UnsafeCell<Option<Arc<CacheManager>>>,
     catalog_manager: UnsafeCell<Option<Arc<CatalogManager>>>,
     http_query_manager: UnsafeCell<Option<Arc<HttpQueryManager>>>,
@@ -79,7 +79,7 @@ impl GlobalServices {
         // Cluster discovery.
         ClusterDiscovery::init(config.clone(), global_services.clone()).await?;
 
-        PersistOperator::init(&config.storage, global_services.clone()).await?;
+        DataOperator::init(&config.storage, global_services.clone()).await?;
 
         ShareTableConfig::init(
             &config.query.share_endpoint_address,
@@ -155,8 +155,8 @@ impl SingletonImpl<Arc<ClusterDiscovery>> for GlobalServices {
     }
 }
 
-impl SingletonImpl<PersistOperator> for GlobalServices {
-    fn get(&self) -> PersistOperator {
+impl SingletonImpl<DataOperator> for GlobalServices {
+    fn get(&self) -> DataOperator {
         unsafe {
             match &*self.storage_operator.get() {
                 None => panic!("StorageOperator is not init"),
@@ -165,9 +165,9 @@ impl SingletonImpl<PersistOperator> for GlobalServices {
         }
     }
 
-    fn init(&self, value: PersistOperator) -> Result<()> {
+    fn init(&self, value: DataOperator) -> Result<()> {
         unsafe {
-            *(self.storage_operator.get() as *mut Option<PersistOperator>) = Some(value);
+            *(self.storage_operator.get() as *mut Option<DataOperator>) = Some(value);
             Ok(())
         }
     }

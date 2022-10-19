@@ -285,12 +285,12 @@ fn init_moka_operator(_: &StorageMokaConfig) -> Result<Operator> {
 ///
 /// All data accessed via this operator will be persisted.
 #[derive(Clone, Debug)]
-pub struct PersistOperator {
+pub struct DataOperator {
     operator: Operator,
     params: StorageParams,
 }
 
-impl Deref for PersistOperator {
+impl Deref for DataOperator {
     type Target = Operator;
 
     fn deref(&self) -> &Self::Target {
@@ -298,9 +298,9 @@ impl Deref for PersistOperator {
     }
 }
 
-static PERSIST_OPERATOR: OnceCell<Singleton<PersistOperator>> = OnceCell::new();
+static DATA_OPERATOR: OnceCell<Singleton<DataOperator>> = OnceCell::new();
 
-impl PersistOperator {
+impl DataOperator {
     /// Create a new persist operator.
     pub fn new(op: Operator, params: StorageParams) -> Self {
         Self {
@@ -321,21 +321,21 @@ impl PersistOperator {
 
     pub async fn init(
         conf: &StorageConfig,
-        v: Singleton<PersistOperator>,
+        v: Singleton<DataOperator>,
     ) -> common_exception::Result<()> {
         v.init(Self::try_create(conf).await?)?;
 
-        PERSIST_OPERATOR.set(v).ok();
+        DATA_OPERATOR.set(v).ok();
         Ok(())
     }
 
-    pub async fn try_create(conf: &StorageConfig) -> common_exception::Result<PersistOperator> {
+    pub async fn try_create(conf: &StorageConfig) -> common_exception::Result<DataOperator> {
         Self::try_create_with_storage_params(&conf.params).await
     }
 
     pub async fn try_create_with_storage_params(
         sp: &StorageParams,
-    ) -> common_exception::Result<PersistOperator> {
+    ) -> common_exception::Result<DataOperator> {
         let operator = init_operator(sp)?;
 
         // OpenDAL will send a real request to underlying storage to check whether it works or not.
@@ -355,14 +355,14 @@ impl PersistOperator {
             )));
         }
 
-        Ok(PersistOperator {
+        Ok(DataOperator {
             operator,
             params: sp.clone(),
         })
     }
 
-    pub fn instance() -> PersistOperator {
-        match PERSIST_OPERATOR.get() {
+    pub fn instance() -> DataOperator {
+        match DATA_OPERATOR.get() {
             None => panic!("StorageOperator is not init"),
             Some(storage_operator) => storage_operator.get(),
         }

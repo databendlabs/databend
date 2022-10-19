@@ -43,7 +43,7 @@ use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
 use common_sharing::create_share_table_operator;
 use common_storage::init_operator;
-use common_storage::PersistOperator;
+use common_storage::DataOperator;
 use common_storage::ShareTableConfig;
 use common_storages_util::storage_context::StorageContext;
 use common_storages_util::table_storage_prefix::table_storage_prefix;
@@ -105,7 +105,7 @@ impl FuseTable {
                 match storage_params {
                     Some(sp) => init_operator(&sp)?,
                     None => {
-                        let op = &*(PersistOperator::instance());
+                        let op = &*(DataOperator::instance());
                         op.clone()
                     }
                 }

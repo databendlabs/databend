@@ -357,7 +357,7 @@ impl HttpQueryHandle {
             schema: result_schema.clone(),
             user: ctx.get_current_user()?.identity(),
         };
-        let data_accessor = ctx.get_persist_operator()?.operator();
+        let data_accessor = ctx.get_data_operator()?.operator();
 
         let sink = ResultTableSink::create(
             input.clone(),

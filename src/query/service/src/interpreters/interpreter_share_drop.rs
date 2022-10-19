@@ -48,7 +48,7 @@ impl Interpreter for DropShareInterpreter {
 
         save_share_spec(
             &self.ctx.get_tenant(),
-            self.ctx.get_persist_operator()?.operator(),
+            self.ctx.get_data_operator()?.operator(),
             resp.spec_vec,
         )
         .await?;

@@ -44,7 +44,7 @@ use common_legacy_planners::SourceInfo;
 use common_legacy_planners::StageTableInfo;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::UserInfo;
-use common_storage::PersistOperator;
+use common_storage::DataOperator;
 use parking_lot::RwLock;
 use tracing::debug;
 
@@ -309,10 +309,10 @@ impl TableContext for QueryContext {
     }
 
     // Get the storage data accessor operator from the session manager.
-    fn get_persist_operator(&self) -> Result<PersistOperator> {
+    fn get_data_operator(&self) -> Result<DataOperator> {
         let pop = self.shared.persist_operator.clone();
 
-        Ok(PersistOperator::new(
+        Ok(DataOperator::new(
             pop.operator().layer(self.shared.dal_ctx.as_ref().clone()),
             pop.params().clone(),
         ))
