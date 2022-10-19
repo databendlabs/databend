@@ -31,13 +31,13 @@ use common_meta_sled_store::openraft::RaftStorage;
 use common_meta_sled_store::openraft::StorageHelper;
 use common_meta_types::AppliedState;
 use common_meta_types::LogEntry;
+use databend_meta::init_meta_ut;
 use databend_meta::store::RaftStoreBare;
 use databend_meta::Opened;
 use maplit::btreeset;
 use tracing::debug;
 use tracing::info;
 
-use crate::init_meta_ut;
 use crate::tests::service::MetaSrvTestContext;
 
 struct MetaStoreBuilder {

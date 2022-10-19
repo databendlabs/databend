@@ -25,6 +25,7 @@ use common_meta_types::LogEntry;
 use common_meta_types::NodeId;
 use common_meta_types::UpsertKV;
 use databend_meta::configs;
+use databend_meta::init_meta_ut;
 use databend_meta::meta_service::ForwardRequest;
 use databend_meta::meta_service::ForwardRequestBody;
 use databend_meta::meta_service::JoinRequest;
@@ -34,7 +35,6 @@ use maplit::btreeset;
 use pretty_assertions::assert_eq;
 use tracing::info;
 
-use crate::init_meta_ut;
 use crate::tests::meta_node::start_meta_node_cluster;
 use crate::tests::meta_node::start_meta_node_leader;
 use crate::tests::meta_node::start_meta_node_non_voter;

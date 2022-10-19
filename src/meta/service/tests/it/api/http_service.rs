@@ -20,9 +20,9 @@ use common_base::base::Stoppable;
 use common_exception::Result;
 use databend_meta::api::HttpService;
 use databend_meta::configs::Config;
+use databend_meta::init_meta_ut;
 use databend_meta::meta_service::MetaNode;
 
-use crate::init_meta_ut;
 use crate::tests::service::MetaSrvTestContext;
 use crate::tests::tls_constants::TEST_CA_CERT;
 use crate::tests::tls_constants::TEST_CN_NAME;
