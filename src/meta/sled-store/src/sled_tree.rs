@@ -508,14 +508,6 @@ impl<'a, KV: SledKeySpace> AsKeySpace<'a, KV> {
         self.inner.range_remove::<KV, R>(range, flush).await
     }
 
-    pub fn clear(&self) -> Result<(), MetaStorageError> {
-        let err = self.inner.tree.clear();
-        match err {
-            Err(err) => Err(MetaStorageError::SledError(AnyError::new(&err))),
-            Ok(()) => Ok(()),
-        }
-    }
-
     pub fn range<R>(
         &self,
         range: R,

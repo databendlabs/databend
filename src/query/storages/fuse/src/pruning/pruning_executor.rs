@@ -238,8 +238,9 @@ impl BlockPruner {
                     let filter_pruner = filter_pruner.clone();
                     let index_location = block_meta.bloom_filter_index_location.clone();
                     let index_size = block_meta.bloom_filter_index_size;
-                    let v: BlockPruningFuture = Box::new(move |_: OwnedSemaphorePermit| {
+                    let v: BlockPruningFuture = Box::new(move |permit: OwnedSemaphorePermit| {
                         Box::pin(async move {
+                            let _permit = permit;
                             let keep = filter_pruner.should_keep(&index_location, index_size).await
                                 && ctx.limiter.within_limit(row_count);
                             (block_idx, keep)
@@ -247,8 +248,11 @@ impl BlockPruner {
                     });
                     v
                 } else {
-                    let v: BlockPruningFuture = Box::new(move |_: OwnedSemaphorePermit| {
-                        Box::pin(async move { (block_idx, false) })
+                    let v: BlockPruningFuture = Box::new(move |permit: OwnedSemaphorePermit| {
+                        Box::pin(async move {
+                            let _permit = permit;
+                            (block_idx, false)
+                        })
                     });
                     v
                 }
