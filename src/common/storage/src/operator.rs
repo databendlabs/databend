@@ -34,6 +34,7 @@ use opendal::services::ftp;
 use opendal::services::gcs;
 use opendal::services::http;
 use opendal::services::memory;
+use opendal::services::moka;
 use opendal::services::obs;
 use opendal::services::oss;
 use opendal::services::s3;
@@ -45,6 +46,7 @@ use super::StorageParams;
 use super::StorageS3Config;
 use crate::config::StorageGcsConfig;
 use crate::config::StorageHttpConfig;
+use crate::config::StorageMokaConfig;
 use crate::config::StorageObsConfig;
 use crate::StorageConfig;
 use crate::StorageOssConfig;
@@ -61,6 +63,7 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
         StorageParams::Http(cfg) => init_http_operator(cfg)?,
         StorageParams::Ipfs(cfg) => init_ipfs_operator(cfg)?,
         StorageParams::Memory => init_memory_operator()?,
+        StorageParams::Moka(cfg) => init_moka_operator(cfg)?,
         StorageParams::Obs(cfg) => init_obs_operator(cfg)?,
         StorageParams::S3(cfg) => init_s3_operator(cfg)?,
         StorageParams::Oss(cfg) => init_oss_operator(cfg)?,
@@ -253,6 +256,29 @@ fn init_obs_operator(cfg: &StorageObsConfig) -> Result<Operator> {
     Ok(Operator::new(builder.build()?))
 }
 
+/// init_oss_operator will init an opendal OSS operator with input oss config.
+fn init_oss_operator(cfg: &StorageOssConfig) -> Result<Operator> {
+    let mut builder = oss::Builder::default();
+
+    // endpoint
+    let backend = builder
+        .endpoint(&cfg.endpoint_url)
+        .access_key_id(&cfg.access_key_id)
+        .access_key_secret(&cfg.access_key_secret)
+        .bucket(&cfg.bucket)
+        .root(&cfg.root)
+        .build()?;
+
+    Ok(Operator::new(backend))
+}
+
+/// init_moka_operator will init a moka operator.
+fn init_moka_operator(_: &StorageMokaConfig) -> Result<Operator> {
+    let mut builder = moka::Builder::default();
+
+    Ok(Operator::new(builder.build()?))
+}
+
 #[derive(Clone, Debug)]
 pub struct StorageOperator {
     operator: Operator,
@@ -324,18 +350,43 @@ impl StorageOperator {
     }
 }
 
-/// init_oss_operator will init an opendal OSS operator with input oss config.
-fn init_oss_operator(cfg: &StorageOssConfig) -> Result<Operator> {
-    let mut builder = oss::Builder::default();
+/// The operator for cache.
+#[derive(Clone, Debug)]
+pub struct CacheOperator {
+    op: Operator,
+}
 
-    // endpoint
-    let backend = builder
-        .endpoint(&cfg.endpoint_url)
-        .access_key_id(&cfg.access_key_id)
-        .access_key_secret(&cfg.access_key_secret)
-        .bucket(&cfg.bucket)
-        .root(&cfg.root)
-        .build()?;
+impl Deref for CacheOperator {
+    type Target = Operator;
 
-    Ok(Operator::new(backend))
+    fn deref(&self) -> &Self::Target {
+        &self.op
+    }
+}
+
+static CACHE_OPERATOR: OnceCell<Singleton<CacheOperator>> = OnceCell::new();
+
+impl CacheOperator {
+    pub async fn init(
+        conf: &StorageConfig,
+        v: Singleton<CacheOperator>,
+    ) -> common_exception::Result<()> {
+        v.init(Self::try_create(conf).await?)?;
+
+        CACHE_OPERATOR.set(v).ok();
+        Ok(())
+    }
+
+    pub async fn try_create(conf: &StorageConfig) -> common_exception::Result<CacheOperator> {
+        let op = init_operator(&conf.params)?;
+
+        Ok(CacheOperator { op })
+    }
+
+    pub fn instance() -> CacheOperator {
+        match CACHE_OPERATOR.get() {
+            None => panic!("StorageOperator is not init"),
+            Some(op) => op.get(),
+        }
+    }
 }
