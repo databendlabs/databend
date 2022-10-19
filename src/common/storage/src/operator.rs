@@ -256,6 +256,22 @@ fn init_obs_operator(cfg: &StorageObsConfig) -> Result<Operator> {
     Ok(Operator::new(builder.build()?))
 }
 
+/// init_oss_operator will init an opendal OSS operator with input oss config.
+fn init_oss_operator(cfg: &StorageOssConfig) -> Result<Operator> {
+    let mut builder = oss::Builder::default();
+
+    // endpoint
+    let backend = builder
+        .endpoint(&cfg.endpoint_url)
+        .access_key_id(&cfg.access_key_id)
+        .access_key_secret(&cfg.access_key_secret)
+        .bucket(&cfg.bucket)
+        .root(&cfg.root)
+        .build()?;
+
+    Ok(Operator::new(backend))
+}
+
 /// init_moka_operator will init a moka operator.
 fn init_moka_operator(_: &StorageMokaConfig) -> Result<Operator> {
     let mut builder = moka::Builder::default();
@@ -332,20 +348,4 @@ impl StorageOperator {
     pub fn get_storage_params(&self) -> StorageParams {
         self.params.clone()
     }
-}
-
-/// init_oss_operator will init an opendal OSS operator with input oss config.
-fn init_oss_operator(cfg: &StorageOssConfig) -> Result<Operator> {
-    let mut builder = oss::Builder::default();
-
-    // endpoint
-    let backend = builder
-        .endpoint(&cfg.endpoint_url)
-        .access_key_id(&cfg.access_key_id)
-        .access_key_secret(&cfg.access_key_secret)
-        .bucket(&cfg.bucket)
-        .root(&cfg.root)
-        .build()?;
-
-    Ok(Operator::new(backend))
 }
