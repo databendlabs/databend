@@ -2037,6 +2037,7 @@ dependencies = [
  "common-storages-util",
  "futures",
  "futures-util",
+ "metrics",
  "opendal",
  "serde",
  "serde_json",
