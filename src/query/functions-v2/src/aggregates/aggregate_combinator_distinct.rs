@@ -119,7 +119,7 @@ where
         let netest_place = place.next(layout.size());
 
         // faster path for count
-        if self.nested.name() == "AggregateFunctionCount" {
+        if self.nested.name() == "AggregateCountFunction" {
             match builder {
                 ColumnBuilder::Number(NumberColumnBuilder::UInt64(builder)) => {
                     builder.push(state.len() as u64);

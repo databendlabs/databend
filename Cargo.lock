@@ -1462,6 +1462,7 @@ dependencies = [
  "sha1 0.10.5",
  "sha2 0.10.6",
  "simdutf8",
+ "siphasher",
  "sqlparser",
  "strength_reduce",
  "twox-hash",
