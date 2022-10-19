@@ -106,7 +106,7 @@ impl CompactSegmentMutator {
     }
 
     fn need_compaction(&self) -> bool {
-        self.compacted_segment_accumulator.locations.len() > 1
+        !self.compacted_segment_accumulator.locations.is_empty()
     }
 }
 
@@ -136,7 +136,7 @@ impl TableMutator for CompactSegmentMutator {
 
         let blocks_per_segment_threshold = self.blocks_per_seg;
 
-        let mut segments_tobe_compacted = vec![];
+        let mut segments_tobe_compacted = Vec::with_capacity(base_segments.len() / 2);
         for (idx, segment) in base_segments.iter().enumerate() {
             let number_blocks = segment.blocks.len();
             if number_blocks >= blocks_per_segment_threshold {
@@ -150,6 +150,11 @@ impl TableMutator for CompactSegmentMutator {
                 // if number of blocks meets the threshold, mark them down
                 segments_tobe_compacted.push(segment)
             }
+        }
+
+        // check if necessary to compact the segment meta: at least two segments were marked as segments_tobe_compacted
+        if segments_tobe_compacted.len() <= 1 {
+            return Ok(false);
         }
 
         // flatten the block metas of segments being compacted
@@ -169,35 +174,21 @@ impl TableMutator for CompactSegmentMutator {
             &segment_info_cache,
         );
 
-        // build new segments which are compacted. the newly compacted segments will also
-        // be persistent into storage.
-        let mut last_segment = None;
+        // Build new segments which are compacted according to the setting of `block_per_seg`
+        // note that the newly segments will be persistent into storage, such that if retry
+        // happens during `try_commit`, they do no need to be written again.
         for chunk in chunk_of_blocks {
-            match last_segment {
-                None => {}
-                Some(segment) => {
-                    let location = segment_writer.write_segment(segment).await?;
-                    self.compacted_segment_accumulator.add_location(location)
-                }
-            }
             let stats = reduce_block_metas(chunk)?;
             self.compacted_segment_accumulator.merge_stats(&stats)?;
             let blocks: Vec<BlockMeta> = chunk.iter().map(|block| Clone::clone(*block)).collect();
             let new_segment = SegmentInfo::new(blocks, stats);
-            last_segment = Some(new_segment);
+            let location = segment_writer.write_segment(new_segment).await?;
+            self.compacted_segment_accumulator.add_location(location)
         }
 
-        // keep the compacted_segments
         gauge!(
             "fuse_compact_segments_select_duration_second",
             select_begin.elapsed(),
-        );
-
-        eprintln!(
-            "compacted_segment_accumulator len {}-{}, {}",
-            self.compacted_segment_accumulator.locations.len(),
-            self.compacted_segment_accumulator.summary.block_count,
-            self.need_compaction()
         );
         Ok(self.need_compaction())
     }
@@ -242,36 +233,40 @@ impl TableMutator for CompactSegmentMutator {
 
         // newly appended segments of concurrent txs which are committed before us
         // the init value of it is an empty slice
-        let mut appended_segments_locations: &[Location] = &[];
+        let mut concurrently_appended_segments_locations: &[Location] = &[];
 
         let fuse_segment_io = SegmentsIO::create(self.ctx.clone(), self.data_accessor.clone());
         loop {
-            let append_segments_infos = fuse_segment_io
-                .read_segments(appended_segments_locations)
+            let concurrently_append_segments_infos = fuse_segment_io
+                .read_segments(concurrently_appended_segments_locations)
                 .await?
                 .into_iter()
                 .collect::<Result<Vec<Arc<SegmentInfo>>>>()?;
 
-            let append_segments_stats = append_segments_infos
+            let concurrently_append_segments_stats = concurrently_append_segments_infos
                 .iter()
                 .map(|seg| &seg.summary)
                 .collect::<Vec<_>>();
 
             // merge all the statistics
-            let append_segments_merged_stats = reduce_statistics(&append_segments_stats)?;
+            let stats_concurrently_appended =
+                reduce_statistics(&concurrently_append_segments_stats)?;
 
-            let merged_stats_with_compacted = merge_statistics(
-                &append_segments_merged_stats,
+            let stats_merged_with_compacted = merge_statistics(
+                &stats_concurrently_appended,
                 &self.compacted_segment_accumulator.summary,
             )?;
 
-            let merged_stats_with_unchanged = merge_statistics(
-                &merged_stats_with_compacted,
+            let stats_merged_with_unchanged = merge_statistics(
+                &stats_merged_with_compacted,
                 &self.unchanged_segment_accumulator.summary,
             )?;
 
-            // chain all the locations
-            let locations = appended_segments_locations
+            // chain all the locations, places
+            // - the merged, potentially not compacted, concurrently appended segments at head
+            // - the unchanged, compacted segments in the middle
+            // - the compacted segments at the tail
+            let locations = concurrently_appended_segments_locations
                 .iter()
                 .chain(self.unchanged_segment_accumulator.locations.iter())
                 .chain(self.compacted_segment_accumulator.locations.iter());
@@ -279,7 +274,7 @@ impl TableMutator for CompactSegmentMutator {
             let mut snapshot_tobe_committed =
                 TableSnapshot::from_previous(latest_snapshot.as_ref());
             snapshot_tobe_committed.segments = locations.into_iter().cloned().collect::<Vec<_>>();
-            snapshot_tobe_committed.summary = merged_stats_with_unchanged;
+            snapshot_tobe_committed.summary = stats_merged_with_unchanged;
 
             match FuseTable::commit_to_meta_server(
                 ctx.as_ref(),
@@ -292,6 +287,7 @@ impl TableMutator for CompactSegmentMutator {
             {
                 Err(e) => {
                     if e.code() == ErrorCode::table_version_mismatched_code() {
+                        // refresh the table
                         table = table.refresh(ctx.as_ref()).await?;
                         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
                         latest_snapshot =
@@ -300,6 +296,7 @@ impl TableMutator for CompactSegmentMutator {
                             })?;
                         current_table_info = &fuse_table.table_info;
 
+                        // check conflicts between the base and latest snapshots
                         match detect_conflicts(base_snapshot, &latest_snapshot) {
                             Conflict::Irreconcilable => {
                                 counter!("fuse_compact_segments_irreconcilable_conflict", 1);
@@ -316,7 +313,8 @@ impl TableMutator for CompactSegmentMutator {
                             Conflict::ReconcilableAppend(r) => {
                                 counter!("fuse_compact_segments_reconcilable_conflict", 1);
                                 info!("resolvable conflicts detected");
-                                appended_segments_locations = &latest_snapshot.segments[r];
+                                concurrently_appended_segments_locations =
+                                    &latest_snapshot.segments[r];
                             }
                         }
 
