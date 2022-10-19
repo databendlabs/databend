@@ -369,3 +369,10 @@ Amy
 ```
 
 ### Create Table ... External_Location ...
+
+```sql
+-- Create a table named `mytable` and store the data in an S3 bucket
+CREATE TABLE mytable(a int) 
+'s3://testbucket/admin/data/' 
+connection=(aws_key_id='<your_aws_key_id>' aws_secret_key='<your_aws_secret_key>' endpoint_url='https://s3.amazonaws.com');
+```
