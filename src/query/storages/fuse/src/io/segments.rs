@@ -55,6 +55,10 @@ impl SegmentsIO {
         &self,
         segment_locations: &[Location],
     ) -> Result<Vec<Result<Arc<SegmentInfo>>>> {
+        if segment_locations.is_empty() {
+            return Ok(vec![]);
+        }
+
         let ctx = self.ctx.clone();
         let max_runtime_threads = ctx.get_settings().get_max_threads()? as usize;
         let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;

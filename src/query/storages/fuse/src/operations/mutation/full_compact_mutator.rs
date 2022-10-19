@@ -39,7 +39,7 @@ use crate::TableContext;
 use crate::TableMutator;
 
 #[derive(Clone)]
-pub struct CompactMutator {
+pub struct FullCompactMutator {
     ctx: Arc<dyn TableContext>,
     base_snapshot: Arc<TableSnapshot>,
     data_accessor: Operator,
@@ -55,7 +55,7 @@ pub struct CompactMutator {
     is_cluster: bool,
 }
 
-impl CompactMutator {
+impl FullCompactMutator {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
         base_snapshot: Arc<TableSnapshot>,
@@ -94,8 +94,8 @@ impl CompactMutator {
 }
 
 #[async_trait::async_trait]
-impl TableMutator for CompactMutator {
-    async fn blocks_select(&mut self) -> Result<bool> {
+impl TableMutator for FullCompactMutator {
+    async fn target_select(&mut self) -> Result<bool> {
         let snapshot = self.base_snapshot.clone();
         let segment_locations = &snapshot.segments;
         let mut summarys = Vec::new();
