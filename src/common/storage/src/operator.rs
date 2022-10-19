@@ -68,7 +68,7 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
 
     let op = op
         // Add retry
-        .layer(RetryLayer::new(ExponentialBackoff::default()))
+        .layer(RetryLayer::new(ExponentialBackoff::default().with_jitter()))
         // Add metrics
         .layer(MetricsLayer)
         // Add logging
