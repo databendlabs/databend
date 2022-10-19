@@ -105,9 +105,8 @@ impl PhysicalOperator for Aggregate {
                     // Scalar aggregation
                     required.distribution = Distribution::Serial;
                 } else {
-                    // Group aggregation, enforce `Hash` distribution
-                    required.distribution =
-                        Distribution::Hash(vec![self.group_items[0].scalar.clone()]);
+                    // The distribution should have been derived by partial aggregation
+                    required.distribution = Distribution::Any;
                 }
             }
 
