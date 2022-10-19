@@ -70,7 +70,7 @@ impl Interpreter for OptimizeTableInterpreter {
                 .compact(ctx.clone(), CompactTarget::Segments, &mut pipeline)
                 .await?
             {
-                mutator.try_commit(table.get_table_info()).await?;
+                mutator.try_commit(table).await?;
                 return Ok(PipelineBuildResult::create());
             }
         }
@@ -91,7 +91,7 @@ impl Interpreter for OptimizeTableInterpreter {
                 executor.execute()?;
                 drop(executor);
 
-                mutator.try_commit(table.get_table_info()).await?;
+                mutator.try_commit(table.clone()).await?;
             }
 
             if do_purge {

@@ -164,7 +164,7 @@ impl TestFixture {
     }
 
     // create a normal table without cluster key.
-    pub fn create_normal_table_plan(&self) -> CreateTablePlanV2 {
+    pub fn normal_create_table_plan(&self) -> CreateTablePlanV2 {
         CreateTablePlanV2 {
             if_not_exists: false,
             tenant: self.default_tenant(),
@@ -188,6 +188,14 @@ impl TestFixture {
 
     pub async fn create_default_table(&self) -> Result<()> {
         let create_table_plan = self.default_crate_table_plan();
+        let interpreter =
+            CreateTableInterpreterV2::try_create(self.ctx.clone(), create_table_plan)?;
+        interpreter.execute(self.ctx.clone()).await?;
+        Ok(())
+    }
+
+    pub async fn create_normal_table(&self) -> Result<()> {
+        let create_table_plan = self.normal_create_table_plan();
         let interpreter =
             CreateTableInterpreterV2::try_create(self.ctx.clone(), create_table_plan)?;
         interpreter.execute(self.ctx.clone()).await?;

@@ -12,10 +12,10 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::ops::Range;
 use std::sync::Arc;
 use std::time::Instant;
 
+use common_catalog::table::Table;
 use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -25,7 +25,6 @@ use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::Statistics;
 use common_fuse_meta::meta::TableSnapshot;
-use common_meta_app::schema::TableInfo;
 use metrics::counter;
 use metrics::gauge;
 use opendal::Operator;
@@ -35,6 +34,8 @@ use tracing::warn;
 use crate::io::SegmentWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
+use crate::operations::commit::detect_conflicts;
+use crate::operations::commit::Conflict;
 use crate::statistics::merge_statistics;
 use crate::statistics::reducers::reduce_block_metas;
 use crate::statistics::reducers::reduce_statistics;
@@ -193,7 +194,7 @@ impl TableMutator for CompactSegmentMutator {
         Ok(self.need_compaction())
     }
 
-    async fn try_commit(&self, table_info: &TableInfo) -> Result<()> {
+    async fn try_commit(&self, table: Arc<dyn Table>) -> Result<()> {
         if !self.need_compaction() {
             // defensive checking
             return Ok(());
@@ -201,11 +202,10 @@ impl TableMutator for CompactSegmentMutator {
 
         let ctx = &self.ctx;
         let base_snapshot = &self.base_snapshot;
-        let catalog = ctx.get_catalog(table_info.catalog())?;
-        let mut table = catalog.get_table_by_info(table_info)?;
+        let mut table = table;
         let mut latest_snapshot = self.base_snapshot.clone();
         let mut retries = 0;
-        let mut current_table_info = table_info;
+        let mut current_table_info = table.get_table_info();
 
         // example of a merge process:
         // - segments of base_snapshot:
@@ -298,8 +298,8 @@ impl TableMutator for CompactSegmentMutator {
 
                         // check conflicts between the base and latest snapshots
                         match detect_conflicts(base_snapshot, &latest_snapshot) {
-                            Conflict::Irreconcilable => {
-                                counter!("fuse_compact_segments_irreconcilable_conflict", 1);
+                            Conflict::Unresolvable => {
+                                counter!("fuse_compact_segments_unresolvable_conflict", 1);
                                 counter!("fuse_compact_segments_aborts", 1);
                                 abort_segment_compaction(
                                     &self.data_accessor,
@@ -310,8 +310,8 @@ impl TableMutator for CompactSegmentMutator {
                                     "mutation conflicts, concurrent mutation detected while committing segment compaction operation",
                                 ));
                             }
-                            Conflict::ReconcilableAppend(r) => {
-                                counter!("fuse_compact_segments_reconcilable_conflict", 1);
+                            Conflict::ResolvableAppend(r) => {
+                                counter!("fuse_compact_segments_resolvable_conflict", 1);
                                 info!("resolvable conflicts detected");
                                 concurrently_appended_segments_locations =
                                     &latest_snapshot.segments[r];
@@ -346,29 +346,28 @@ impl TableMutator for CompactSegmentMutator {
     }
 }
 
-enum Conflict {
-    Irreconcilable,
-    // reconcilable conflicts with append only operation
-    // the range embedded is the range of segments that are appended in the latest snapshot
-    ReconcilableAppend(Range<usize>),
-}
-
-fn detect_conflicts(base: &TableSnapshot, latest: &TableSnapshot) -> Conflict {
-    let base_segments = &base.segments;
-    let latest_segments = &latest.segments;
-
-    let base_segments_len = base_segments.len();
-    let latest_segments_len = latest_segments.len();
-
-    if latest_segments_len >= base_segments_len
-        && base_segments[base_segments_len - 1] == latest_segments[latest_segments_len - 1]
-        && base_segments[0] == latest_segments[latest_segments_len - base_segments_len]
-    {
-        Conflict::ReconcilableAppend(0..(latest_segments_len - base_segments_len))
-    } else {
-        Conflict::Irreconcilable
-    }
-}
+// enum Conflict {
+//    Irreconcilable,
+//    // reconcilable conflicts with append only operation
+//    // the range embedded is the range of segments that are appended in the latest snapshot
+//    ReconcilableAppend(Range<usize>),
+//}
+// fn detect_conflicts(base: &TableSnapshot, latest: &TableSnapshot) -> Conflict {
+//    let base_segments = &base.segments;
+//    let latest_segments = &latest.segments;
+//
+//    let base_segments_len = base_segments.len();
+//    let latest_segments_len = latest_segments.len();
+//
+//    if latest_segments_len >= base_segments_len
+//        && base_segments[base_segments_len - 1] == latest_segments[latest_segments_len - 1]
+//        && base_segments[0] == latest_segments[latest_segments_len - base_segments_len]
+//    {
+//        Conflict::ReconcilableAppend(0..(latest_segments_len - base_segments_len))
+//    } else {
+//        Conflict::Irreconcilable
+//    }
+//}
 
 async fn abort_segment_compaction(data_accessor: &Operator, locations: &[Location]) {
     // parallel delete?

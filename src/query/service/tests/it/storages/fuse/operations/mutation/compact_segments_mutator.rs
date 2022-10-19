@@ -60,7 +60,7 @@ async fn test_compact_segment_normal_case() -> Result<()> {
         .await?;
     assert!(mutator.is_some());
     let mutator = mutator.unwrap();
-    mutator.try_commit(table.get_table_info()).await?;
+    mutator.try_commit(table.clone()).await?;
 
     // check segment count
     let qry = "select segment_count as count from fuse_snapshot('default', 't') limit 1";
@@ -110,7 +110,7 @@ async fn test_compact_segment_resolvable_conflict() -> Result<()> {
     let num_inserts = 9;
     append_rows(ctx.clone(), num_inserts).await?;
 
-    mutator.try_commit(table.get_table_info()).await?;
+    mutator.try_commit(table.clone()).await?;
 
     // check segment count
     let count_seg = "select segment_count as count from fuse_snapshot('default', 't') limit 1";
@@ -159,11 +159,11 @@ async fn test_compact_segment_unresolvable_conflict() -> Result<()> {
 
     {
         // inject a unresolvable commit
-        compact_segment(ctx.clone(), table.as_ref()).await?;
+        compact_segment(ctx.clone(), &table).await?;
     }
 
     // the compact operation committed latter should failed
-    let r = mutator.try_commit(table.get_table_info()).await;
+    let r = mutator.try_commit(table.clone()).await;
     assert!(r.is_err());
     assert_eq!(r.err().unwrap().code(), ErrorCode::storage_other_code());
 
@@ -183,12 +183,12 @@ async fn check_count(result_stream: SendableDataBlockStream) -> Result<u64> {
     blocks[0].column(0).get_u64(0)
 }
 
-async fn compact_segment(ctx: Arc<QueryContext>, table: &dyn Table) -> Result<()> {
-    let fuse_table = FuseTable::try_from_table(table)?;
+async fn compact_segment(ctx: Arc<QueryContext>, table: &Arc<dyn Table>) -> Result<()> {
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let mut pipeline = common_pipeline_core::Pipeline::create();
     let mutator = fuse_table
         .compact(ctx, CompactTarget::Segments, &mut pipeline)
         .await?
         .unwrap();
-    mutator.try_commit(table.get_table_info()).await
+    mutator.try_commit(table.clone()).await
 }

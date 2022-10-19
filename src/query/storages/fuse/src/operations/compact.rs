@@ -26,7 +26,7 @@ use common_pipeline_transforms::processors::transforms::TransformCompact;
 
 use super::FuseTableSink;
 use crate::operations::mutation::CompactSegmentMutator;
-use crate::operations::CompactMutator;
+use crate::operations::FullCompactMutator;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
 use crate::Table;
@@ -103,7 +103,7 @@ impl FuseTable {
         let block_compactor = self.get_block_compactor();
 
         let block_per_seg = options.block_per_seg;
-        let mut mutator = CompactMutator::try_create(
+        let mut mutator = FullCompactMutator::try_create(
             ctx.clone(),
             options.base_snapshot,
             block_compactor.clone(),
