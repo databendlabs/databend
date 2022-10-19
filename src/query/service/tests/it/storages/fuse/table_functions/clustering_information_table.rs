@@ -18,8 +18,6 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_legacy_expression::*;
-use databend_query::interpreters::CreateTableInterpreterV2;
-use databend_query::interpreters::Interpreter;
 use tokio_stream::StreamExt;
 
 use crate::storages::fuse::table_test_fixture::*;
@@ -32,9 +30,7 @@ async fn test_clustering_information_table_read() -> Result<()> {
     let ctx = fixture.ctx();
 
     // test db & table
-    let create_table_plan = fixture.default_crate_table_plan();
-    let interpreter = CreateTableInterpreterV2::try_create(ctx.clone(), create_table_plan)?;
-    interpreter.execute(ctx.clone()).await?;
+    fixture.create_default_table().await?;
 
     // func args
     let arg_db = LegacyExpression::create_literal(DataValue::String(db.as_bytes().to_vec()));

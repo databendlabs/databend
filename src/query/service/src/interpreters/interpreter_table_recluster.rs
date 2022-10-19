@@ -91,7 +91,7 @@ impl Interpreter for ReclusterTableInterpreter {
             executor.execute()?;
             drop(executor);
 
-            mutator.try_commit(table.get_table_info()).await?;
+            mutator.try_commit(table).await?;
 
             if !plan.is_final {
                 break;
