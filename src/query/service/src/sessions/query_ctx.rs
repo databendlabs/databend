@@ -44,8 +44,7 @@ use common_legacy_planners::SourceInfo;
 use common_legacy_planners::StageTableInfo;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::UserInfo;
-use common_storage::StorageParams;
-use opendal::Operator;
+use common_storage::DataOperator;
 use parking_lot::RwLock;
 use tracing::debug;
 
@@ -310,14 +309,13 @@ impl TableContext for QueryContext {
     }
 
     // Get the storage data accessor operator from the session manager.
-    fn get_storage_operator(&self) -> Result<Operator> {
-        // deref from `StorageOperator` to `opendal::Operator` first.
-        let operator = (*self.shared.storage_operator).clone();
+    fn get_data_operator(&self) -> Result<DataOperator> {
+        let pop = self.shared.persist_operator.clone();
 
-        Ok(operator.layer(self.shared.dal_ctx.as_ref().clone()))
-    }
-    fn get_storage_params(&self) -> StorageParams {
-        self.shared.get_storage_params()
+        Ok(DataOperator::new(
+            pop.operator().layer(self.shared.dal_ctx.as_ref().clone()),
+            pop.params().clone(),
+        ))
     }
     fn get_dal_context(&self) -> &DalContext {
         self.shared.dal_ctx.as_ref()
