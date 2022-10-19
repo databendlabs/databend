@@ -21,9 +21,9 @@ use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::LogEntry;
 use common_meta_types::RetryableError;
+use databend_meta::init_meta_ut;
 use databend_meta::meta_service::MetaNode;
 
-use crate::init_meta_ut;
 use crate::tests::service::MetaSrvTestContext;
 
 #[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]

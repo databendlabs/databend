@@ -30,6 +30,7 @@ runs:
           --user $(id -u):$(id -g) \
           --env BUILD_PROFILE \
           --ulimit nofile=65535:65535 \
+          --ulimit stack=16777216:16777216 \
           --volume "${PWD}:/workspace" \
           --workdir "/workspace" \
           datafuselabs/build-tool:sqllogic \
