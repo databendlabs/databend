@@ -82,11 +82,10 @@ use tracing::info;
 use tracing::warn;
 
 use crate::from_digit_ver;
-use crate::grpc_action::MetaGrpcReadReq;
-use crate::grpc_action::MetaGrpcWriteReq;
 use crate::grpc_action::RequestFor;
 use crate::message;
 use crate::to_digit_ver;
+use crate::MetaGrpcReq;
 use crate::METACLI_COMMIT_SEMVER;
 use crate::MIN_METASRV_SEMVER;
 
@@ -352,19 +351,19 @@ impl MetaGrpcClient {
 
             let resp = match req {
                 message::Request::Get(r) => {
-                    let resp = self.do_read(r).await;
+                    let resp = self.kv_api(r).await;
                     message::Response::Get(resp)
                 }
                 message::Request::MGet(r) => {
-                    let resp = self.do_read(r).await;
+                    let resp = self.kv_api(r).await;
                     message::Response::MGet(resp)
                 }
                 message::Request::PrefixList(r) => {
-                    let resp = self.do_read(r).await;
+                    let resp = self.kv_api(r).await;
                     message::Response::PrefixList(resp)
                 }
                 message::Request::Upsert(r) => {
-                    let resp = self.do_write(r).await;
+                    let resp = self.kv_api(r).await;
                     message::Response::Upsert(resp)
                 }
                 message::Request::Txn(r) => {
@@ -780,65 +779,15 @@ impl MetaGrpcClient {
     }
 
     #[tracing::instrument(level = "debug", skip(self, v))]
-    pub(crate) async fn do_write<T, R>(&self, v: T) -> Result<R, KVAppError>
-    where
-        T: RequestFor<Reply = R> + Into<MetaGrpcWriteReq>,
-        R: DeserializeOwned,
-    {
-        let act: MetaGrpcWriteReq = v.into();
-
-        debug!(req = debug(&act), "MetaGrpcClient::do_write request");
-
-        let req: Request<RaftRequest> = act.clone().try_into().map_err(|e| {
-            MetaNetworkError::InvalidArgument(InvalidArgument::new(e, "fail to encode request"))
-        })?;
-
-        debug!(
-            req = debug(&req),
-            "MetaGrpcClient::do_write serialized request"
-        );
-
-        let req = common_tracing::inject_span_to_tonic_request(req);
-
-        let mut client = self.make_client().await?;
-        let result = client.write_msg(req).await;
-        let result: Result<RaftReply, Status> = match result {
-            Ok(r) => Ok(r.into_inner()),
-            Err(s) => {
-                if status_is_retryable(&s) {
-                    self.mark_as_unhealthy().await;
-                    let mut client = self.make_client().await?;
-                    let req: Request<RaftRequest> = act.try_into().map_err(|e| {
-                        MetaNetworkError::InvalidArgument(InvalidArgument::new(
-                            e,
-                            "fail to encode request",
-                        ))
-                    })?;
-                    let req = common_tracing::inject_span_to_tonic_request(req);
-                    Ok(client.write_msg(req).await?.into_inner())
-                } else {
-                    Err(s)
-                }
-            }
-        };
-
-        let raft_reply = result?;
-
-        let res: Result<R, KVAppError> = raft_reply.into();
-
-        res
-    }
-
-    #[tracing::instrument(level = "debug", skip(self, v))]
-    pub(crate) async fn do_read<T, R>(&self, v: T) -> Result<R, KVAppError>
+    pub(crate) async fn kv_api<T, R>(&self, v: T) -> Result<R, KVAppError>
     where
         T: RequestFor<Reply = R>,
-        T: Into<MetaGrpcReadReq>,
+        T: Into<MetaGrpcReq>,
         R: DeserializeOwned,
     {
-        let read_req: MetaGrpcReadReq = v.into();
+        let read_req: MetaGrpcReq = v.into();
 
-        debug!(req = debug(&read_req), "MetaGrpcClient::do_read request");
+        debug!(req = debug(&read_req), "MetaGrpcClient::kv_api request");
 
         let req: Request<RaftRequest> = read_req.clone().try_into().map_err(|e| {
             MetaNetworkError::InvalidArgument(InvalidArgument::new(e, "fail to encode request"))
@@ -846,15 +795,15 @@ impl MetaGrpcClient {
 
         debug!(
             req = debug(&req),
-            "MetaGrpcClient::do_read serialized request"
+            "MetaGrpcClient::kv_api serialized request"
         );
 
         let req = common_tracing::inject_span_to_tonic_request(req);
 
         let mut client = self.make_client().await?;
-        let result = client.read_msg(req).await;
+        let result = client.kv_api(req).await;
 
-        debug!(reply = debug(&result), "MetaGrpcClient::do_read reply");
+        debug!(reply = debug(&result), "MetaGrpcClient::kv_api reply");
 
         let rpc_res: Result<RaftReply, Status> = match result {
             Ok(r) => Ok(r.into_inner()),
@@ -869,7 +818,7 @@ impl MetaGrpcClient {
                         ))
                     })?;
                     let req = common_tracing::inject_span_to_tonic_request(req);
-                    Ok(client.read_msg(req).await?.into_inner())
+                    Ok(client.kv_api(req).await?.into_inner())
                 } else {
                     Err(s)
                 }
