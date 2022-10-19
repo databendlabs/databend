@@ -156,7 +156,7 @@ mod add {
     async fn test_add_builtin_user() -> common_exception::Result<()> {
         let test_user_name = "default";
         let test_hostname = "localhost";
-        let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());   
+        let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
         let api = MockKV::new();
         let api = Arc::new(api);

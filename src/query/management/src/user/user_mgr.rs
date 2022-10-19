@@ -92,14 +92,12 @@ impl UserMgr {
 impl UserApi for UserMgr {
     async fn add_user(&self, user_info: UserInfo) -> common_exception::Result<u64> {
         let user_identity = UserIdentity::new(&user_info.name, &user_info.hostname);
-        
+
         if user_identity.is_root() {
-            return Err(ErrorCode::UserAlreadyExists(
-                format!(
-                    "User cannot be created with builtin user name {}",
-                    user_info.name
-                )
-            ));
+            return Err(ErrorCode::UserAlreadyExists(format!(
+                "User cannot be created with builtin user name {}",
+                user_info.name
+            )));
         }
 
         let match_seq = MatchSeq::Exact(0);
