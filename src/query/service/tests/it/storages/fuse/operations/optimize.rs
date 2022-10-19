@@ -14,14 +14,11 @@
 
 use common_base::base::tokio;
 use common_exception::Result;
-use futures::TryStreamExt;
 
 use crate::storages::fuse::table_test_fixture::append_sample_data;
 use crate::storages::fuse::table_test_fixture::append_sample_data_overwrite;
 use crate::storages::fuse::table_test_fixture::check_data_dir;
 use crate::storages::fuse::table_test_fixture::execute_command;
-use crate::storages::fuse::table_test_fixture::execute_query;
-use crate::storages::fuse::table_test_fixture::expects_ok;
 use crate::storages::fuse::table_test_fixture::history_should_have_only_one_item;
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
@@ -65,47 +62,4 @@ async fn do_insertions(fixture: &TestFixture) -> Result<()> {
     // then, overwrite the table, new data set: 1 block, 1 segment, 1 snapshot
     append_sample_data_overwrite(1, true, fixture).await?;
     Ok(())
-}
-
-#[tokio::test]
-async fn test_fuse_snapshot_optimize_compact() -> Result<()> {
-    let fixture = TestFixture::new().await;
-    let db = fixture.default_db_name();
-    let tbl = fixture.default_table_name();
-    fixture.create_default_table().await?;
-
-    // insert 5 blocks
-    let n = 5;
-    for _ in 0..n {
-        let table = fixture.latest_default_table().await?;
-        let num_blocks = 1;
-        let stream = TestFixture::gen_sample_blocks_stream(num_blocks, 1);
-
-        let blocks = stream.try_collect().await?;
-        fixture
-            .append_commit_blocks(table.clone(), blocks, false, true)
-            .await?;
-    }
-
-    // optimize compact
-    let qry = format!("optimize table {}.{} compact", db, tbl);
-    execute_command(fixture.ctx(), qry.as_str()).await?;
-
-    // optimize compact should keep the histories
-    // there should be 6 history items there, 5 for the above insertions, 1 for that compaction
-    let expected = vec![
-        "+----------+",
-        "| count(*) |",
-        "+----------+",
-        "| 6        |",
-        "+----------+",
-    ];
-    let qry = format!("select count(*) from fuse_snapshot('{}', '{}')", db, tbl);
-
-    expects_ok(
-        "count_should_be_1",
-        execute_query(fixture.ctx(), qry.as_str()).await,
-        expected,
-    )
-    .await
 }
