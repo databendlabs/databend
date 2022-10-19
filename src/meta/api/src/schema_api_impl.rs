@@ -1865,8 +1865,7 @@ impl<KV: KVApi> SchemaApi for KV {
             ];
             let mut if_then = vec![
                 // every copied files changed, change tbid seq to make all table child consistent.
-                txn_op_put(&tbid, serialize_struct(&tb_meta.unwrap())?), /* (tenant, db_id, tb_id) -> tb_meta */
-                txn_op_put(&lock_key, serialize_struct(&lock)?),         // copied file lock key
+                txn_op_put(&lock_key, serialize_struct(&lock)?), // copied file lock key
             ];
             for (file, file_info) in req.file_info.iter() {
                 let key = TableCopiedFileNameIdent {
