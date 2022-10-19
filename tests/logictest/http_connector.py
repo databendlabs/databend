@@ -160,8 +160,7 @@ class HttpConnector(object):
         while response['next_uri'] is not None:
             resp = self.next_page(response['next_uri'])
             response = json.loads(resp.content)
-            log.debug(
-                f"Sql in progress, fetch next_uri content: {response}")
+            log.debug(f"Sql in progress, fetch next_uri content: {response}")
             check_error(response)
             session = response['session']
             if session:
