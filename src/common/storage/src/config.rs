@@ -390,6 +390,7 @@ pub struct StorageMokaConfig {}
 
 static SHARE_TABLE_CONFIG: OnceCell<Singleton<ShareTableConfig>> = OnceCell::new();
 
+// TODO: This config should be moved out of common-storage crate.
 #[derive(Clone)]
 pub struct ShareTableConfig {
     pub share_endpoint_address: Option<String>,

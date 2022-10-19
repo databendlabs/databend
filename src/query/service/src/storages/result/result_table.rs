@@ -85,7 +85,7 @@ pub struct ResultTable {
 impl ResultTable {
     pub async fn try_get(ctx: Arc<dyn TableContext>, query_id: &str) -> Result<Arc<ResultTable>> {
         let locations = ResultLocations::new(query_id);
-        let data_accessor = ctx.get_storage_operator()?;
+        let data_accessor = ctx.get_data_operator()?;
         let location = locations.get_meta_location();
         let obj = data_accessor.object(&location);
         let data = match obj.read().await {
@@ -123,7 +123,7 @@ impl ResultTable {
             .collect::<Vec<usize>>();
         let projection = Projection::Columns(indices);
 
-        let operator = ctx.get_storage_operator()?;
+        let operator = ctx.get_data_operator()?.operator();
         let table_schema = self.get_table_info().schema();
         BlockReader::create(operator, table_schema, projection)
     }
@@ -144,7 +144,7 @@ impl Table for ResultTable {
         ctx: Arc<dyn TableContext>,
         push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
-        let data_accessor = ctx.get_storage_operator()?;
+        let data_accessor = ctx.get_data_operator()?;
         let meta_location = self.locations.get_meta_location();
         let meta_data = data_accessor.object(&meta_location).read().await?;
         let meta: ResultTableMeta = serde_json::from_slice(&meta_data)?;
