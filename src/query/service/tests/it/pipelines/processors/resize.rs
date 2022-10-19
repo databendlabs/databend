@@ -24,19 +24,19 @@ use databend_query::pipelines::processors::Processor;
 use databend_query::pipelines::processors::ResizeProcessor;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_resize_output_not_need() -> Result<()> {
+async fn test_resize_output_finish() -> Result<()> {
     let mut resize_processor = ResizeProcessor::create(8, 1);
     let resize_inputs = connect_inputs(resize_processor.get_inputs());
     let resize_outputs = connect_outputs(resize_processor.get_outputs());
 
     for output in &resize_outputs {
-        output.set_not_need_data();
+        output.finish();
     }
 
-    assert!(matches!(resize_processor.event()?, Event::NeedConsume));
+    assert!(matches!(resize_processor.event()?, Event::Finished));
 
     for input in &resize_inputs {
-        assert!(!input.can_push());
+        assert!(input.is_finished());
     }
 
     Ok(())
