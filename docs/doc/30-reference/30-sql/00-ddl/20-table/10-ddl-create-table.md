@@ -11,14 +11,14 @@ Creating tables is one of the most complicated operations for many databases bec
 
 Databend aims to be easy to use by design and does NOT require any of those operations when you create a table. Moreover, the CREATE TABLE statement provides these options to make it much easier for you to create tables in various scenarios:
 
-- [CREATE TABLE ...](#create-table): Creates a table from scratch.
+- [CREATE TABLE](#create-table): Creates a table from scratch.
 - [CREATE TABLE ... LIKE](#create-table--like): Creates a table with the same column definitions as an existing one.
 - [CREATE TABLE ... AS](#create-table--as): Creates a table and inserts data with the results of a SELECT query.
-- [CREATE TRANSIENT TABLE ...](#create-transient-table): Creates a table without storing its historical data for Time Travel.
+- [CREATE TRANSIENT TABLE](#create-transient-table): Creates a table without storing its historical data for Time Travel.
 - [CREATE TABLE ... SNAPSHOT_LOCATION](#create-table--snapshot_location): Creates a table and inserts data with a snapshot file.
 - [CREATE TABLE ... EXTERNAL_LOCATION](#create-table--external_location): Creates a table and specifies an S3 bucket for the data storage instead of the FUSE engine.
 
-## CREATE TABLE ...
+## CREATE TABLE
 
 ```sql
 CREATE [TRANSIENT] TABLE [IF NOT EXISTS] [db.]table_name
@@ -74,7 +74,7 @@ CREATE TABLE [IF NOT EXISTS] [db.]table_name
 AS SELECT query
 ```
 
-## CREATE TRANSIENT TABLE ...
+## CREATE TRANSIENT TABLE
 
 Creates a transient table. 
 
@@ -221,7 +221,7 @@ Databend’s syntax is difference from MySQL mainly in the data type and some sp
 
 ## Examples
 
-### Create Table ...
+### Create Table
 
 ```sql
 CREATE TABLE test(a BIGINT UNSIGNED, b VARCHAR , c VARCHAR  DEFAULT concat(b, '-b'));
@@ -305,7 +305,7 @@ SELECT * FROM test3;
 |  888 | stars | stars-b |
 +------+-------+---------+
 ```
-### Create Transient Table ...
+### Create Transient Table
 
 ```sql
 -- Create a transient table
