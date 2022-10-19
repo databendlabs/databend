@@ -186,7 +186,7 @@ impl Rule for RuleRightAssociateJoin {
                 SExpr::create_binary(join_4.into(), t1.clone(), t2.clone()),
                 t3.clone(),
             ],
-            s_expr.original_group,
+            None,
             None,
         );
 
