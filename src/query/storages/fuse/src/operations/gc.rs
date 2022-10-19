@@ -53,14 +53,14 @@ impl FuseTable {
         // 1. Root snapshot.
         let mut segments_referenced_by_root = HashSet::new();
         let mut blocks_referenced_by_root = HashSet::new();
-        let root_snapshot_id = if let Some(root_snapshot) = snapshot_opt {
+        let (root_snapshot_id, root_snapshot_ts) = if let Some(root_snapshot) = snapshot_opt {
             let segments = root_snapshot.segments.clone();
             blocks_referenced_by_root = self.get_block_locations(ctx.clone(), &segments).await?;
 
             segments_referenced_by_root = HashSet::from_iter(segments);
-            root_snapshot.snapshot_id
+            (root_snapshot.snapshot_id, root_snapshot.timestamp)
         } else {
-            SnapshotId::new_v4()
+            (SnapshotId::new_v4(), None)
         };
 
         // 2. Get all snapshot(including root snapshot).
@@ -73,7 +73,7 @@ impl FuseTable {
                 self.snapshot_format_version().await?,
             );
             (all_snapshot_lites, all_segment_locations) = snapshots_io
-                .read_snapshot_lites(root_snapshot_location, None, true)
+                .read_snapshot_lites(root_snapshot_location, None, true, root_snapshot_ts)
                 .await?;
         }
 

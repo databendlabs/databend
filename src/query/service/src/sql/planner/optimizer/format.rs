@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 
 use common_ast::ast::FormatTreeNode;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planner::IndexType;
 
@@ -29,18 +28,7 @@ pub fn display_memo(memo: &Memo, cost_map: &HashMap<IndexType, CostContext>) -> 
     Ok(memo
         .groups
         .iter()
-        .map(|grp| {
-            group_to_format_tree(
-                grp,
-                cost_map.get(&grp.group_index).ok_or_else(|| {
-                    ErrorCode::LogicalError(format!(
-                        "Cannot find cost context for group {}",
-                        grp.group_index
-                    ))
-                })?,
-            )
-            .format_pretty()
-        })
+        .map(|grp| group_to_format_tree(grp, cost_map.get(&grp.group_index)).format_pretty())
         .collect::<Result<Vec<_>>>()?
         .join("\n"))
 }
@@ -63,14 +51,21 @@ pub fn display_rel_op(rel_op: &RelOperator) -> String {
     }
 }
 
-fn group_to_format_tree(group: &Group, cost_context: &CostContext) -> FormatTreeNode<String> {
+fn group_to_format_tree(
+    group: &Group,
+    cost_context: Option<&CostContext>,
+) -> FormatTreeNode<String> {
     FormatTreeNode::with_children(
         format!("Group #{}", group.group_index),
         vec![
-            vec![FormatTreeNode::new(format!(
-                "best cost: [#{}] {}",
-                cost_context.expr_index, cost_context.cost
-            ))],
+            if let Some(cost_context) = cost_context {
+                vec![FormatTreeNode::new(format!(
+                    "best cost: [#{}] {}",
+                    cost_context.expr_index, cost_context.cost
+                ))]
+            } else {
+                vec![]
+            },
             group.m_exprs.iter().map(m_expr_to_format_tree).collect(),
         ]
         .concat(),
