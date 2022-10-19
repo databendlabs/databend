@@ -152,12 +152,12 @@ async fn init_new_cluster(
     max_log_id: Option<LogId>,
     id: u64,
 ) -> anyhow::Result<()> {
-    println!("init-cluster: {:?}", initial_cluster);
+    eprintln!("init-cluster: {:?}", initial_cluster);
 
     let mut node_ids = BTreeSet::new();
     let mut nodes = BTreeMap::new();
     for peer in initial_cluster {
-        println!("peer:{}", peer);
+        eprintln!("peer:{}", peer);
         let node_info: Vec<&str> = peer.split('=').collect();
         if node_info.len() != 2 {
             return Err(anyhow::anyhow!("invalid peer str: {}", peer));
@@ -182,7 +182,7 @@ async fn init_new_cluster(
             endpoint: endpoint.clone(),
             grpc_api_addr: Some(addrs[1].to_string()),
         };
-        println!("new cluster node:{}", node);
+        eprintln!("new cluster node:{}", node);
         nodes.insert(id, node);
     }
 
@@ -224,7 +224,7 @@ async fn init_new_cluster(
     // construct AddNode log entries
     {
         // first clear all the nodes info
-        sm.nodes().clear()?;
+        sm.nodes().range_remove(.., true).await?;
 
         for node in nodes {
             sm.add_node(node.0, &node.1).await?;
