@@ -66,12 +66,12 @@ impl RuleLeftAssociateJoin {
                 PatternPlan {
                     plan_type: RelOp::LogicalInnerJoin,
                 }
-                .into(),
+                    .into(),
                 SExpr::create_binary(
                     PatternPlan {
                         plan_type: RelOp::LogicalInnerJoin,
                     }
-                    .into(),
+                        .into(),
                     SExpr::create_pattern_leaf(),
                     SExpr::create_pattern_leaf(),
                 ),
@@ -129,7 +129,7 @@ impl Rule for RuleLeftAssociateJoin {
             t2.clone(),
             t3.clone(),
         ))
-        .derive_relational_prop()?;
+            .derive_relational_prop()?;
 
         let mut join_4_preds = vec![];
 
@@ -190,7 +190,7 @@ impl Rule for RuleLeftAssociateJoin {
                 t1.clone(),
                 SExpr::create_binary(join_4.into(), t2.clone(), t3.clone()),
             ],
-            s_expr.original_group,
+            None,
             None,
         );
 
