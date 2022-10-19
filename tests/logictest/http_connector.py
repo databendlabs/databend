@@ -136,6 +136,10 @@ class HttpConnector(object):
     def reset_session(self):
         self._session = {}
 
+    def next_page(self, next_uri):
+        url = "http://{}:{}{}".format(self._host, self._port, next_uri)
+        return requests.get(url=url, headers=self.make_headers())
+
     # return a list of response util empty next_uri
     def query_with_session(self, statement):
         current_session = self._session
@@ -145,31 +149,23 @@ class HttpConnector(object):
         response_list.append(response)
         start_time = time.time()
         time_limit = 12
-        while True:
-            if response['next_uri'] is not None:
-                try:
-                    resp = requests.get(url="http://{}:{}{}".format(
-                        self._host, self._port, response['next_uri']),
-                                        headers=self.make_headers())
-                    response = json.loads(resp.content)
-                    log.debug(
-                        f"Sql in progress, fetch next_uri content: {response}")
-                    response_list.append(response)
-                except Exception as err:
-                    log.warning(
-                        f"Fetch next_uri response with error: {str(err)}")
-                if time.time() - start_time > time_limit:
-                    break
-                else:
-                    continue
-            break
+        while response['next_uri'] is not None:
+            try:
+                resp = self.next_page(response['next_uri'])
+                response = json.loads(resp.content)
+                log.debug(
+                    f"Sql in progress, fetch next_uri content: {response}")
+                response_list.append(response)
+            except Exception as err:
+                log.warning(
+                    f"Fetch next_uri response with error: {str(err)}")
+            if time.time() - start_time > time_limit:
+                log.warning(
+                    f"after waited for {time_limit} secs, query still not finished (next uri not none)!"
+                )
         session = response['session']
         if session:
             self._session = session
-        if response['next_uri'] is not None:
-            log.warning(
-                f"after waited for {time_limit} secs, query still not finished (next url not none)!"
-            )
         return response_list
 
     def fetch_all(self, statement):
