@@ -30,10 +30,8 @@ use common_meta_types::UserIdentity;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::Pipeline;
-use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::TableContext;
 use crate::storages::fuse::io::BlockReader;
 use crate::storages::fuse::FuseTable;
@@ -170,17 +168,10 @@ impl Table for ResultTable {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let max_threads = std::cmp::min(parts_len, max_threads);
 
-        let mut source_builder = SourcePipeBuilder::create();
-
-        for _index in 0..std::cmp::max(1, max_threads) {
-            let output = OutputPort::create();
-            source_builder.add_source(
-                output.clone(),
-                ResultTableSource::create(ctx.clone(), output, block_reader.clone())?,
-            );
-        }
-
-        pipeline.add_pipe(source_builder.finalize());
+        pipeline.add_source(
+            |output| ResultTableSource::create(ctx.clone(), output, block_reader.clone()),
+            std::cmp::max(1, max_threads),
+        )?;
 
         match &plan.push_downs {
             None => Ok(()),

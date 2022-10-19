@@ -34,15 +34,12 @@ use common_meta_app::schema::TableInfo;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
-use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::ContextSink;
 use crate::pipelines::processors::SyncSource;
 use crate::pipelines::processors::SyncSourcer;
 use crate::pipelines::Pipeline;
-use crate::pipelines::SinkPipeBuilder;
-use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::TableContext;
 use crate::storages::memory::memory_part::MemoryPartInfo;
 use crate::storages::StorageContext;
@@ -193,25 +190,21 @@ impl Table for MemoryTable {
         plan: &ReadDataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let settings = ctx.get_settings();
-        let mut builder = SourcePipeBuilder::create();
+        let numbers = ctx.get_settings().get_max_threads()? as usize;
         let read_data_blocks = self.get_read_data_blocks();
 
-        for _index in 0..settings.get_max_threads()? {
-            let output = OutputPort::create();
-            builder.add_source(
-                output.clone(),
+        // Add source pipe.
+        pipeline.add_source(
+            |output| {
                 MemoryTableSource::create(
                     ctx.clone(),
                     output,
                     read_data_blocks.clone(),
                     plan.push_downs.clone(),
-                )?,
-            );
-        }
-
-        pipeline.add_pipe(builder.finalize());
-        Ok(())
+                )
+            },
+            numbers,
+        )
     }
 
     fn append_data(
@@ -220,16 +213,7 @@ impl Table for MemoryTable {
         pipeline: &mut Pipeline,
         _: bool,
     ) -> Result<()> {
-        let mut sink_pipeline_builder = SinkPipeBuilder::create();
-        for _ in 0..pipeline.output_len() {
-            let input_port = InputPort::create();
-            sink_pipeline_builder.add_sink(
-                input_port.clone(),
-                ContextSink::create(input_port, ctx.clone()),
-            );
-        }
-        pipeline.add_pipe(sink_pipeline_builder.finalize());
-        Ok(())
+        pipeline.add_sink(|input| Ok(ContextSink::create(input, ctx.clone())))
     }
 
     async fn commit_insertion(

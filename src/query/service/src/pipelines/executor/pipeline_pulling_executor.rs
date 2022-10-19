@@ -24,7 +24,6 @@ use common_base::base::Thread;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_pipeline_core::SinkPipeBuilder;
 use parking_lot::Condvar;
 use parking_lot::Mutex;
 
@@ -103,15 +102,7 @@ impl PipelinePullingExecutor {
             ));
         }
 
-        let mut sink_pipe_builder = SinkPipeBuilder::create();
-
-        for _index in 0..pipeline.output_len() {
-            let input = InputPort::create();
-            sink_pipe_builder.add_sink(input.clone(), PullingSink::create(tx.clone(), input));
-        }
-
-        pipeline.add_pipe(sink_pipe_builder.finalize());
-        Ok(())
+        pipeline.add_sink(|input| Ok(PullingSink::create(tx.clone(), input)))
     }
 
     pub fn try_create(
