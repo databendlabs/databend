@@ -1,6 +1,6 @@
 ---
-title: Iceberg External Table
-description: Accessing Apache Iceberg formatted data source as external table.
+title: Iceberg Catalog
+description: Accessing Apache Iceberg formatted data source as an external catalog.
 ---
 
 - RFC PR: [datafuselabs/databend#8215](https://github.com/datafuselabs/databend/pull/8215)
@@ -9,7 +9,7 @@ description: Accessing Apache Iceberg formatted data source as external table.
 ## Summary
 
 Iceberg is a widely supported table format among data lake-houses.
-This RFC describes how the iceberg external table will behave and how we will implement it.
+This RFC describes how the iceberg external catalog will behave and how we will implement it.
 
 ## Motivation
 
@@ -23,114 +23,31 @@ Supporting Iceberg will empower databend as a open data lake, giving it more OLA
 
 ## Guide-level explanation
 
-### Create Iceberg Table
+### Create Iceberg Catalog
 
-To use Iceberg external table, users need to have an iceberg storage with neccessary permission established. Then they can establish a external table with `ICEBERG` engine:
+To use Iceberg catalog, users need to have an iceberg storage with neccessary permission established. Then they can create a `catalog` on it.
 
 ```sql
-CREATE EXTERNAL TABLE [IF NOT EXISTS] [db.]table_name
-[(
-    <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
-    <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
+CREATE CATALOG my_iceberg
+  TYPE="iceberg"
+  URL='s3://path/to/iceberg'
+  CONNECTION=(
+    ACCESS_KEY_ID=...
+    SECRET_ACCESS_KEY=...
     ...
-)] ENGINE=ICEBERG
-ENGINE_OPTIONS=(
-  DATABASE='db0'
-  TABLE='tbl0'
-  LOCATION=<external-location>
-)
-```
-
-where:
-
-- data_type:
-
-```
-<data_type>:
-  TINYINT
-| SMALLINT
-| INT
-| BIGINT
-| FLOAT
-| DOUBLE
-| DATE
-| TIMESTAMP
-| VARCHAR
-| ARRAY
-| OBJECT
-| VARIANT
-```
-
-- external-location (using S3 for example):
-
-```
-external-location ::=
-
-URL = 's3://<bucket-name>/<path-to-iceberg>'
-CONNECTION = (
-  ENDPOINT_URL = <endpoint_url>
-  ACCESS_KEY_ID = <access_key_id>
-  SECRET_ACCESS_KEY = <secret_access_key>
-  SESSION_TOKEN = <aws_session_token>
-)
-```
-
-- ENGINE_OPTIONS
-
-```
-ENGINE_OPTIONS=(
-  DATABASE=<database-name>
-  TABLE=<table-name>
-  [SNAPSHOT= { snapshot_id => <snapshot-id> | timestamp => <timestamp> }]
-)
-```
-
-For example:
-
-```sql
-CREATE EXTERNAL TABLE icebergs.books (
-    author VARCHAR,
-    name VARCHAR,
-    date VARCHAR,
-) ENGINE=ICEBERG
-ENGINE_OPTIONS=(
-    DATABASE='shared_to_databend'
-    TABLE='books'
-    LOCATION=(
-        URL='s3://example/path/to/iceberg/'
-        CONNECTION=(
-            ENDPOINT_URL='https://s3.minio.local'
-            ACCESS_KEY_ID='example-id'
-            SECRET_ACCESS_KEY='example-key'
-        )
-    )
-)
-```
-
-For convenience, this will create the same schema as the table inside the external Iceberg storage.
-
-```sql
-
-CREATE EXTERNAL TABLE [IF [NOT] EXISTS] [db.]<table_name>
-ENGINE=ICEBERG
-ENGINE_OPTIONS=(
-    DATABASE=<database-name>
-    TABLE=<table-name>
-    LOCATION=...
-)
+  )
 ```
 
 ### Accessing Iceberg Table's content
 
 ```sql
--- assuming users have created an external table named `iceberg_tbl`
-SELECT COUNT(*) FROM iceberg_tbl;
+SELECT * FROM my_iceberg.iceberg_db.iceberg_tbl;
 ```
 
 Joint query on normal table and Iceberg Table:
 
 ```sql
-SELECT normal_tbl.book_name, iceberg_tbl.author FROM normal_tbl, iceberg_tbl WHERE normal_tbl.isbn = iceberg_tbl.isbn AND iceberg_tbl.sales > 100000;
+SELECT normal_tbl.book_name, my_iceberg.iceberg_db.iceberg_tbl.author FROM normal_tbl, iceberg_tbl WHERE normal_tbl.isbn = my_iceberg.iceberg_db.iceberg_tbl.isbn AND iceberg_tbl.sales > 100000;
 ```
 
 On operating the table, all data remains still on the user-provided ends.
@@ -141,16 +58,16 @@ Iceberg offers a list of snapshots and its timestamps. Time travelling on it is 
 
 ```sql
 SELECT ...
-FROM iceberg_table
+FROM <iceberg_catalog>.<database_name>.<table_name>
 AT ( { SNAPSHOT => <snapshot_id> | TIMESTAMP => <timestamp> } );
 ```
 
 #### Accessing Snapshot Metadata
 
-Users should be able to lookup the list of snapshot id in Iceberg:
+Users should be able to lookup the list of snapshot id in catalog:
 
 ```sql
-SELECT snapshot_id FROM ICEBERG_SNAPSHOT('<database-name>', '<external-iceberg-table-name>');
+SELECT snapshot_id FROM ICEBERG_SNAPSHOT(my_iceberg.iceberg_db.iceberg_tbl);
 ```
 
 ```
@@ -161,21 +78,17 @@ SELECT snapshot_id FROM ICEBERG_SNAPSHOT('<database-name>', '<external-iceberg-t
 (2 rows)
 ```
 
-Current snapshot id the external table is reading will always be the newest. But users can using time travel with `AT`.
+Current snapshot id the external table is reading will always be the newest. But users can using `time travel` with `AT`.
 
 ## Reference-level explanation
 
-A new table engine `ICEBERG`, and options like `ENGINE_OPTIONS` for engine configuration and `external-location` in DDL will be added.
+A new catalog type `ICEBERG`, and table engine for reading data from Iceberg storage.
 
-### `ICEBERG` Engine
+### Table Engine
 
-`ICEBERG` is a table engine that enable users reading data from established Apache Iceberg endpoints. All table content and metadata of external table should remain in user-provided Iceberg data sources, in Iceberg's manner.
+The table engine enables users reading data from established Apache Iceberg endpoints. All table content and metadata of external table should remain in user-provided Iceberg data sources, in Iceberg's manner.
 
 The engine will track the last commited snapshot, and should able to read from former snapshots.
-
-### ENGINE_OPTIONS
-
-Apache Iceberg has its own defined database and tables, but this external table only concerned about single tables in the Iceberg storage. Using ENGINE_OPTIONS users can specify which table in which database should the external access from Iceberg.
 
 ### external-location
 
@@ -208,6 +121,38 @@ No matter where the Iceberg is, like S3, GCS or OSS, if Databend support the sto
 None
 
 ## Rationale and alternatives
+
+### Iceberg External Table
+
+Creating an external table from Iceberg storage:
+
+```sql
+CREATE EXTERNAL TABLE [IF NOT EXISTS] [db.]table_name
+[(
+    <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
+    <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
+    ...
+)] ENGINE=ICEBERG
+ENGINE_OPTIONS=(
+  DATABASE='db0'
+  TABLE='tbl0'
+  LOCATION=<external-location>
+)
+```
+
+A new table engine `ICEBERG` will be introduced, and all data will remain still in the Iceberg storage. The external table also should support users to query its snapshot data and time travelling.
+
+```sql
+SELECT snapshot_id FROM ICEBERG_SNAPSHOT('<db_name>', '<external_table_name');
+```
+
+```
+ snapshot_id
+--------------
+73556087355608
+```
+
+After discussion, the catalog way above is chosen, for its more complete support to Iceberg features, and it is more aligned to the current design of Hive catalog.
 
 ### Create Table from Iceberg Snapshots
 
@@ -261,7 +206,7 @@ None
 The default Iceberg snapshot use in external table should always be the newest commited one:
 
 ```sql
-SELECT snapshot_id from ICEBERG_SNAPSHOT('example_db', 'iceberg_tbl');
+SELECT snapshot_id from ICEBERG_SNAPSHOT(iceberg_catalog.iceberg_db.iceberg_tbl);
 ```
 
 ```
@@ -274,13 +219,13 @@ Supporting schema evolution making databend able to modify contents of Iceberg.
 For example, inserting a new record into Iceberg Table:
 
 ```sql
-INSERT INTO example_db.iceberg_tbl VALUES ('datafuselabs', 'How To Be a Healthy DBA', '2022-10-14');
+INSERT INTO iceberg_catalog.iceberg_db.iceberg_tbl VALUES ('datafuselabs', 'How To Be a Healthy DBA', '2022-10-14');
 ```
 
 This will create a new snapshot in Iceberg Storage:
 
 ```sql
-SELECT snapshot_id from ICEBERG_SNAPSHOT('example_db', 'iceberg_tbl');
+SELECT snapshot_id from ICEBERG_SNAPSHOT(iceberg_catalog.iceberg_db.iceberg_tbl);
 ```
 
 ```
