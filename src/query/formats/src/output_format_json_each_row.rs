@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datablocks::DataBlock;
-use common_datavalues::serializations::write_escaped_string;
-use common_datavalues::serializations::write_json_string;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataType;
-use common_datavalues::TypeSerializer;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::serializations::write_escaped_string;
+use common_expression::serializations::write_json_string;
+use common_expression::Chunk;
+use common_expression::DataSchemaRef;
+use common_expression::TypeSerializer;
 use common_io::prelude::FormatSettings;
 
 use crate::output_format::OutputFormat;
@@ -100,13 +100,16 @@ impl<const STRINGS: bool, const COMPACT: bool, const WITH_NAMES: bool, const WIT
 impl<const STRINGS: bool, const COMPACT: bool, const WITH_NAMES: bool, const WITH_TYPES: bool>
     OutputFormat for JsonEachRowOutputFormatBase<STRINGS, COMPACT, WITH_NAMES, WITH_TYPES>
 {
-    fn serialize_block(&mut self, block: &DataBlock) -> Result<Vec<u8>> {
-        let rows_size = block.column(0).len();
+    fn serialize_block(&mut self, chunk: &Chunk) -> Result<Vec<u8>> {
+        let rows_size = chunk.num_rows();
 
-        let mut buf = Vec::with_capacity(block.memory_size());
-        let serializers = block.get_serializers()?;
-        let field_names: Vec<_> = block
-            .schema()
+        let mut buf = Vec::with_capacity(chunk.memory_size());
+        let serializers = chunk
+            .get_serializers()
+            .map_err(|err| ErrorCode::UnknownColumn(err))?;
+
+        let field_names: Vec<_> = self
+            .schema
             .fields()
             .iter()
             .map(|f| f.name().as_bytes())

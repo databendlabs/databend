@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use comfy_table::Table;
 use common_base::base::tokio;
 use common_base::base::*;
 use common_exception::Result;

@@ -14,10 +14,16 @@
 
 use std::ops::Range;
 
+use common_arrow::arrow::chunk::Chunk as ArrowChunk;
+use common_arrow::ArrayRef;
+use common_exception::ErrorCode;
+use common_exception::Result;
+
 use crate::types::AnyType;
 use crate::types::DataType;
 use crate::ColumnBuilder;
 use crate::Domain;
+use crate::TypeSerializerImpl;
 use crate::Value;
 
 /// Chunk is a lightweight container for a group of columns.
@@ -123,5 +129,31 @@ impl Chunk {
     #[inline]
     pub fn add_column(&mut self, column: Value<AnyType>, data_type: DataType) {
         self.columns.push((column, data_type))
+    }
+
+    pub fn get_serializers(&self) -> Result<Vec<TypeSerializerImpl>, String> {
+        let mut serializers = Vec::with_capacity(self.num_columns());
+        for (column, data_type) in self.columns() {
+            let serializer = data_type.create_serializer(column)?;
+            serializers.push(serializer);
+        }
+        Ok(serializers)
+    }
+}
+
+impl TryFrom<Chunk> for ArrowChunk<ArrayRef> {
+    type Error = ErrorCode;
+
+    fn try_from(v: Chunk) -> Result<ArrowChunk<ArrayRef>> {
+        let arrays = v
+            .columns()
+            .iter()
+            .map(|(val, _)| {
+                let column = val.clone().into_column().unwrap();
+                column.as_arrow()
+            })
+            .collect();
+
+        Ok(ArrowChunk::try_new(arrays)?)
     }
 }

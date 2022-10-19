@@ -50,11 +50,14 @@ pub use self::string::StringType;
 pub use self::timestamp::TimestampType;
 pub use self::variant::VariantType;
 use crate::property::Domain;
+use crate::serializations::BooleanSerializer;
+use crate::serializations::TypeSerializerImpl;
 use crate::util::concat_array;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
+use crate::Value;
 
 pub type GenericMap = [DataType];
 
@@ -109,6 +112,58 @@ impl DataType {
 
     pub fn can_inside_nullable(&self) -> bool {
         !self.is_nullable_or_null()
+    }
+
+    pub fn name(&self) -> String {
+        match self {
+            DataType::Boolean => "Boolean".to_string(),
+            DataType::String => "String".to_string(),
+            DataType::Number(number_type) => number_type.name(),
+            DataType::Timestamp => "Timestamp".to_string(),
+            DataType::Date => "Date".to_string(),
+            DataType::Null => "Null".to_string(),
+            DataType::Nullable(inner) => format!("Nullable({})", inner.name()),
+            DataType::EmptyArray => "Array()".to_string(),
+            DataType::Array(inner) => format!("Array({})", inner.name()),
+            DataType::Map(inner) => format!("Map({})", inner.name()),
+            DataType::Tuple(inners) => {
+                let mut name = String::new();
+                name.push_str("Tuple(");
+                let mut first = true;
+                for inner in inners.iter() {
+                    if !first {
+                        name.push_str(", ");
+                    }
+                    first = false;
+                    name.push_str(&inner.name());
+                }
+                name.push(')');
+                name
+            }
+            DataType::Variant => "Variant".to_string(),
+            DataType::Generic(index) => format!("Generic({})", index),
+        }
+    }
+
+    pub fn create_serializer<'a>(
+        &self,
+        value: &'a Value<AnyType>,
+    ) -> Result<TypeSerializerImpl<'a>, String> {
+        let column = match value {
+            Value::Scalar(s) => ColumnBuilder::repeat(&s.as_ref(), 1, self).build(),
+            Value::Column(c) => c.clone(),
+        };
+        match self {
+            DataType::Boolean => {
+                let boolean_column = column
+                    .into_boolean()
+                    .map_err(|_| "unable to get boolean column".to_string())?;
+                Ok(TypeSerializerImpl::Boolean(BooleanSerializer {
+                    values: boolean_column,
+                }))
+            }
+            _ => unimplemented!("todo"),
+        }
     }
 }
 

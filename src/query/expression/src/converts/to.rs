@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_datablocks::DataBlock;
 use common_datavalues::Column as DvColumn;
 use common_datavalues::ColumnRef;
@@ -22,15 +23,13 @@ use common_datavalues::DataValue;
 use common_datavalues::IntoColumn;
 use ordered_float::OrderedFloat;
 
-use common_arrow::arrow::datatypes::Field as ArrowField;
-
-use crate::DataField;
-use crate::DataSchema;
 use crate::types::AnyType;
 use crate::types::DataType;
 use crate::Chunk;
 use crate::Column;
 use crate::ColumnBuilder;
+use crate::DataField;
+use crate::DataSchema;
 use crate::Scalar;
 use crate::Value;
 

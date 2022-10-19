@@ -12,18 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::from_date_data;
+use common_expression::from_date_data_with_validity;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::ColumnFrom;
+use common_expression::DataField;
+use common_expression::DataSchemaRef;
+use common_expression::DataSchemaRefExt;
 use common_formats::output_format::OutputFormatType;
 use common_io::prelude::FormatSettings;
 use pretty_assertions::assert_eq;
 
-use crate::output_format_utils::get_simple_block;
+use crate::output_format_utils::get_simple_chunk;
 
-fn test_data_block(is_nullable: bool) -> Result<()> {
-    let block = get_simple_block(is_nullable)?;
-    let schema = block.schema().clone();
+fn test_chunk(is_nullable: bool) -> Result<()> {
+    let (schema, chunk) = get_simple_chunk(is_nullable)?;
     let format_setting = FormatSettings::default();
 
     {
@@ -47,21 +54,34 @@ fn test_null() -> Result<()> {
     let format_setting = FormatSettings::default();
 
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new_nullable("c1", i32::to_data_type()),
-        DataField::new_nullable("c2", i32::to_data_type()),
+        DataField::new(
+            "c1",
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int32))),
+        ),
+        DataField::new(
+            "c2",
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int32))),
+        ),
     ]);
-
-    let columns = vec![
-        Series::from_data(vec![Some(1i32), None, Some(3)]),
-        Series::from_data(vec![None, Some(2i32), None]),
-    ];
-
-    let block = DataBlock::create(schema.clone(), columns);
+    let chunk = Chunk::new(vec![
+        (
+            Value::Column(Column::from_data_with_validity(vec![1i32, 0, 3], vec![
+                true, false, true,
+            ])),
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int32))),
+        ),
+        (
+            Value::Column(Column::from_data_with_validity(vec![0i32, 2, 0], vec![
+                false, true, false,
+            ])),
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int32))),
+        ),
+    ]);
 
     {
         let fmt = OutputFormatType::JsonEachRow;
         let mut formatter = fmt.create_format(schema, format_setting);
-        let buffer = formatter.serialize_block(&block)?;
+        let buffer = formatter.serialize_block(&chunk)?;
 
         let tsv_block = String::from_utf8(buffer)?;
         let expect = r#"{"c1":1,"c2":null}
@@ -76,22 +96,26 @@ fn test_null() -> Result<()> {
 #[test]
 fn test_denormal() -> Result<()> {
     let format_setting = FormatSettings::default();
+
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("c1", f32::to_data_type()),
-        DataField::new("c2", f32::to_data_type()),
+        DataField::new("c1", DataType::Number(NumberDataType::Float32)),
+        DataField::new("c2", DataType::Number(NumberDataType::Float32)),
     ]);
-
-    let columns = vec![
-        Series::from_data(vec![1f32, f32::NAN]),
-        Series::from_data(vec![f32::INFINITY, f32::NEG_INFINITY]),
-    ];
-
-    let block = DataBlock::create(schema.clone(), columns);
+    let chunk = Chunk::new(vec![
+        (
+            Value::Column(Column::from_data(vec![1f32, f32::NAN])),
+            DataType::Number(NumberDataType::Float32),
+        ),
+        (
+            Value::Column(Column::from_data(vec![f32::INFINITY, f32::NEG_INFINITY])),
+            DataType::Number(NumberDataType::Float32),
+        ),
+    ]);
 
     {
         let fmt = OutputFormatType::JsonEachRow;
         let mut formatter = fmt.create_format(schema.clone(), format_setting);
-        let buffer = formatter.serialize_block(&block)?;
+        let buffer = formatter.serialize_block(&chunk)?;
 
         let tsv_block = String::from_utf8(buffer)?;
         let expect = r#"{"c1":1.0,"c2":null}
@@ -107,7 +131,7 @@ fn test_denormal() -> Result<()> {
         };
         let fmt = OutputFormatType::JsonEachRow;
         let mut formatter = fmt.create_format(schema, format_setting);
-        let buffer = formatter.serialize_block(&block)?;
+        let buffer = formatter.serialize_block(&chunk)?;
 
         let json_block = String::from_utf8(buffer)?;
         let expect = r#"{"c1":1.0,"c2":"inf"}
@@ -122,16 +146,17 @@ fn test_denormal() -> Result<()> {
 #[test]
 fn test_string_escape() -> Result<()> {
     let format_setting = FormatSettings::default();
-    let schema = DataSchemaRefExt::create(vec![DataField::new("c1", Vu8::to_data_type())]);
 
-    let columns = vec![Series::from_data(vec!["\0"])];
-
-    let block = DataBlock::create(schema.clone(), columns);
+    let schema = DataSchemaRefExt::create(vec![DataField::new("c1", DataType::String)]);
+    let chunk = Chunk::new(vec![(
+        Value::Column(Column::from_data(vec!["\0"])),
+        DataType::String,
+    )]);
 
     {
         let fmt = OutputFormatType::JsonEachRow;
         let mut formatter = fmt.create_format(schema, format_setting);
-        let buffer = formatter.serialize_block(&block)?;
+        let buffer = formatter.serialize_block(&chunk)?;
 
         let expect = b"{\"c1\":\"\\u0000\"}\n";
         assert_eq!(&buffer, expect);
@@ -141,11 +166,11 @@ fn test_string_escape() -> Result<()> {
 }
 
 #[test]
-fn test_data_block_nullable() -> Result<()> {
-    test_data_block(true)
+fn test_chunk_nullable() -> Result<()> {
+    test_chunk(true)
 }
 
 #[test]
-fn test_data_block_not_nullable() -> Result<()> {
-    test_data_block(false)
+fn test_chunk_not_nullable() -> Result<()> {
+    test_chunk(false)
 }

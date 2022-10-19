@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use comfy_table::Table;
 use common_base::base::tokio;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;

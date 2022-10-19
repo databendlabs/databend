@@ -398,6 +398,21 @@ impl NumberDataType {
             },
         })
     }
+
+    pub fn name(&self) -> String {
+        match self {
+            NumberDataType::UInt8 => "UInt8".to_string(),
+            NumberDataType::UInt16 => "UInt16".to_string(),
+            NumberDataType::UInt32 => "UInt32".to_string(),
+            NumberDataType::UInt64 => "UInt64".to_string(),
+            NumberDataType::Int8 => "Int8".to_string(),
+            NumberDataType::Int16 => "Int16".to_string(),
+            NumberDataType::Int32 => "Int32".to_string(),
+            NumberDataType::Int64 => "Int64".to_string(),
+            NumberDataType::Float32 => "Float32".to_string(),
+            NumberDataType::Float64 => "Float64".to_string(),
+        }
+    }
 }
 
 const fn next_bit_width(width: u8) -> Option<u8> {

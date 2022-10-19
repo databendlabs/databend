@@ -12,9 +12,8 @@ test = false
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
-common-datablocks = { path = "../datablocks" }
-common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../../common/exception" }
+common-expression = { path = "../expression" }
 common-io = { path = "../../common/io" }
 
 # Crates.io dependencies

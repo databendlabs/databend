@@ -1397,6 +1397,7 @@ dependencies = [
  "common-jsonb",
  "educe",
  "enum-as-inner 0.5.1",
+ "enum_dispatch",
  "goldenfile",
  "hex",
  "itertools",
@@ -1414,9 +1415,8 @@ name = "common-formats"
 version = "0.1.0"
 dependencies = [
  "common-arrow",
- "common-datablocks",
- "common-datavalues",
  "common-exception",
+ "common-expression",
  "common-io",
  "once_cell",
  "pretty_assertions",
@@ -2195,10 +2195,12 @@ dependencies = [
 name = "common-streams"
 version = "0.1.0"
 dependencies = [
+ "comfy-table",
  "common-base",
  "common-exception",
  "common-expression",
  "futures",
+ "goldenfile",
  "opendal",
  "pin-project-lite",
  "serde_json",

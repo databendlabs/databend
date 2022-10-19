@@ -15,10 +15,10 @@
 use std::fmt;
 use std::str::FromStr;
 
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::DataSchemaRef;
 use common_io::prelude::FormatSettings;
 use strum_macros::EnumIter;
 
@@ -41,7 +41,7 @@ use crate::output_format_values::ValuesOutputFormat;
 use crate::FormatFactory;
 
 pub trait OutputFormat: Send {
-    fn serialize_block(&mut self, _data_block: &DataBlock) -> Result<Vec<u8>> {
+    fn serialize_block(&mut self, _chunk: &Chunk) -> Result<Vec<u8>> {
         unimplemented!()
     }
 

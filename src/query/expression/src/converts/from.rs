@@ -18,8 +18,6 @@ use common_datavalues::ColumnRef;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 
-use crate::DataField;
-use crate::DataSchema;
 use crate::types::number::NumberScalar;
 use crate::types::AnyType;
 use crate::types::DataType;
@@ -28,6 +26,8 @@ use crate::with_number_type;
 use crate::Chunk;
 use crate::Column;
 use crate::ColumnBuilder;
+use crate::DataField;
+use crate::DataSchema;
 use crate::Scalar;
 use crate::Value;
 

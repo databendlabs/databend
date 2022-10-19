@@ -25,4 +25,6 @@ pin-project-lite = "0.2.9"
 serde_json = { workspace = true }
 
 [dev-dependencies]
+comfy-table = "6"
+goldenfile = "1.4"
 opendal = { version = "0.19", features = ["layers-retry", "compress"] }

@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datablocks::DataBlock;
-use common_datavalues::serializations::write_escaped_string;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataType;
-use common_datavalues::TypeSerializer;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::serializations::write_escaped_string;
+use common_expression::Chunk;
+use common_expression::DataSchemaRef;
+use common_expression::TypeSerializer;
 use common_io::prelude::FormatSettings;
 
 use crate::output_format::OutputFormat;
@@ -91,12 +91,14 @@ impl<const TSV: bool, const WITH_NAMES: bool, const WITH_TYPES: bool>
 impl<const TSV: bool, const WITH_NAMES: bool, const WITH_TYPES: bool> OutputFormat
     for TCSVOutputFormat<TSV, WITH_NAMES, WITH_TYPES>
 {
-    fn serialize_block(&mut self, block: &DataBlock) -> Result<Vec<u8>> {
-        let rows_size = block.column(0).len();
+    fn serialize_block(&mut self, chunk: &Chunk) -> Result<Vec<u8>> {
+        let rows_size = chunk.num_rows();
         let format_settings = &self.format_settings;
 
-        let mut buf = Vec::with_capacity(block.memory_size());
-        let serializers = block.get_serializers()?;
+        let mut buf = Vec::with_capacity(chunk.memory_size());
+        let serializers = chunk
+            .get_serializers()
+            .map_err(|err| ErrorCode::UnknownColumn(err))?;
 
         let fd = if TSV {
             FIELD_DELIMITER
@@ -155,6 +157,7 @@ impl<const TSV: bool, const WITH_NAMES: bool, const WITH_TYPES: bool> OutputForm
         }
         Ok(buf)
     }
+
     fn finalize(&mut self) -> Result<Vec<u8>> {
         Ok(vec![])
     }
