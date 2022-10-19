@@ -31,6 +31,7 @@ use opendal::Operator;
 use tracing::info;
 use tracing::warn;
 
+use crate::io::Files;
 use crate::io::SegmentWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
@@ -302,7 +303,8 @@ impl TableMutator for CompactSegmentMutator {
                                 counter!("fuse_compact_segments_unresolvable_conflict", 1);
                                 counter!("fuse_compact_segments_aborts", 1);
                                 abort_segment_compaction(
-                                    &self.data_accessor,
+                                    self.ctx.clone(),
+                                    self.data_accessor.clone(),
                                     &self.compacted_segment_accumulator.locations,
                                 )
                                 .await;
@@ -324,7 +326,8 @@ impl TableMutator for CompactSegmentMutator {
                         if retries >= MAX_RETRIES {
                             counter!("fuse_compact_segments_aborts", 1);
                             abort_segment_compaction(
-                                &self.data_accessor,
+                                self.ctx.clone(),
+                                self.data_accessor.clone(),
                                 &self.compacted_segment_accumulator.locations,
                             )
                             .await;
@@ -346,38 +349,20 @@ impl TableMutator for CompactSegmentMutator {
     }
 }
 
-// enum Conflict {
-//    Irreconcilable,
-//    // reconcilable conflicts with append only operation
-//    // the range embedded is the range of segments that are appended in the latest snapshot
-//    ReconcilableAppend(Range<usize>),
-//}
-// fn detect_conflicts(base: &TableSnapshot, latest: &TableSnapshot) -> Conflict {
-//    let base_segments = &base.segments;
-//    let latest_segments = &latest.segments;
-//
-//    let base_segments_len = base_segments.len();
-//    let latest_segments_len = latest_segments.len();
-//
-//    if latest_segments_len >= base_segments_len
-//        && base_segments[base_segments_len - 1] == latest_segments[latest_segments_len - 1]
-//        && base_segments[0] == latest_segments[latest_segments_len - base_segments_len]
-//    {
-//        Conflict::ReconcilableAppend(0..(latest_segments_len - base_segments_len))
-//    } else {
-//        Conflict::Irreconcilable
-//    }
-//}
-
-async fn abort_segment_compaction(data_accessor: &Operator, locations: &[Location]) {
-    // parallel delete?
-    for (path, _) in locations {
-        let object = data_accessor.object(path.as_str());
-        object.delete().await.unwrap_or_else(|e| {
-            warn!(
-                "failed to delete object [{}] while aborting segment compact operation. {} ",
-                path, e
-            )
-        });
-    }
+async fn abort_segment_compaction(
+    ctx: Arc<dyn TableContext>,
+    operator: Operator,
+    locations: &[Location],
+) {
+    let files = Files::create(ctx, operator);
+    let paths = locations
+        .iter()
+        .map(|(path, _v)| path.clone())
+        .collect::<Vec<_>>();
+    files.remove_file_in_batch(&paths).await.unwrap_or_else(|e| {
+        warn!(
+            "failed to delete all the segment meta files while aborting segment compact operation. {} ",
+            e
+        )
+    })
 }
