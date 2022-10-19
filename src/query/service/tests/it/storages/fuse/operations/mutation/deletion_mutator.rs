@@ -111,13 +111,13 @@ async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
         }
     }
 
-    let new_snapshot = mutator.into_new_snapshot().await?;
+    let (segments, _, _) = mutator.generate_segments().await?;
 
     // half segments left after deletion
-    assert_eq!(new_snapshot.segments.len(), 50);
+    assert_eq!(segments.len(), 50);
 
     // new_segments should be a subset of test_segments in our case (no partial deletion of segment)
-    let new_segments = HashSet::<_, RandomState>::from_iter(new_snapshot.segments.into_iter());
+    let new_segments = HashSet::<_, RandomState>::from_iter(segments.into_iter());
     let test_segments = HashSet::from_iter(test_segment_locations.into_iter());
     assert!(new_segments.is_subset(&test_segments));
 
