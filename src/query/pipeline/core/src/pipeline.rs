@@ -22,6 +22,8 @@ use crate::processors::port::OutputPort;
 use crate::processors::processor::ProcessorPtr;
 use crate::processors::ResizeProcessor;
 use crate::Pipe;
+use crate::SinkPipeBuilder;
+use crate::SourcePipeBuilder;
 use crate::TransformPipeBuilder;
 
 /// The struct of new pipeline
@@ -138,6 +140,37 @@ impl Pipeline {
         }
 
         self.add_pipe(transform_builder.finalize());
+        Ok(())
+    }
+
+    // Add source processor to pipeline.
+    // numbers: how many output pipe numbers.
+    pub fn add_source<F>(&mut self, f: F, numbers: usize) -> Result<()>
+    where F: Fn(Arc<OutputPort>) -> Result<ProcessorPtr> {
+        if numbers == 0 {
+            return Err(ErrorCode::LogicalError(
+                "Source output port numbers cannot be zero.",
+            ));
+        }
+
+        let mut source_builder = SourcePipeBuilder::create();
+        for _index in 0..numbers {
+            let output = OutputPort::create();
+            source_builder.add_source(output.clone(), f(output)?);
+        }
+        self.add_pipe(source_builder.finalize());
+        Ok(())
+    }
+
+    // Add sink processor to pipeline.
+    pub fn add_sink<F>(&mut self, f: F) -> Result<()>
+    where F: Fn(Arc<InputPort>) -> Result<ProcessorPtr> {
+        let mut sink_builder = SinkPipeBuilder::create();
+        for _ in 0..self.output_len() {
+            let input = InputPort::create();
+            sink_builder.add_sink(input.clone(), f(input)?);
+        }
+        self.add_pipe(sink_builder.finalize());
         Ok(())
     }
 
