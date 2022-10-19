@@ -349,3 +349,44 @@ impl StorageOperator {
         self.params.clone()
     }
 }
+
+/// The operator for cache.
+#[derive(Clone, Debug)]
+pub struct CacheOperator {
+    op: Operator,
+}
+
+impl Deref for CacheOperator {
+    type Target = Operator;
+
+    fn deref(&self) -> &Self::Target {
+        &self.op
+    }
+}
+
+static CACHE_OPERATOR: OnceCell<Singleton<CacheOperator>> = OnceCell::new();
+
+impl CacheOperator {
+    pub async fn init(
+        conf: &StorageConfig,
+        v: Singleton<CacheOperator>,
+    ) -> common_exception::Result<()> {
+        v.init(Self::try_create(conf).await?)?;
+
+        CACHE_OPERATOR.set(v).ok();
+        Ok(())
+    }
+
+    pub async fn try_create(conf: &StorageConfig) -> common_exception::Result<CacheOperator> {
+        let op = init_operator(&conf.params)?;
+
+        Ok(CacheOperator { op })
+    }
+
+    pub fn instance() -> CacheOperator {
+        match CACHE_OPERATOR.get() {
+            None => panic!("StorageOperator is not init"),
+            Some(op) => op.get(),
+        }
+    }
+}
