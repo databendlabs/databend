@@ -26,12 +26,12 @@ use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKVReply;
 use common_meta_types::UpsertKVReq;
+use databend_meta::init_meta_ut;
 use pretty_assertions::assert_eq;
 use tokio::time::Duration;
 use tracing::debug;
 use tracing::info;
 
-use crate::init_meta_ut;
 use crate::tests::service::MetaSrvTestContext;
 use crate::tests::start_metasrv_with_context;
 
