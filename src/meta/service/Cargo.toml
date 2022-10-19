@@ -60,6 +60,8 @@ tokio-stream = "0.1.10"
 tonic = { version = "0.8.1", features = ["tls"] }
 tonic-reflection = "0.5.0"
 tracing = "0.1.36"
+tracing-appender = "0.2.2"
+tracing-subscriber = { version = "0.3.15", features = ["env-filter", "ansi"] }
 
 [dev-dependencies]
 async-entry = "0.3.1"
@@ -70,8 +72,6 @@ regex = "1.6.0"
 reqwest = { version = "0.11.12", features = ["json"] }
 temp-env = "0.3.0"
 tempfile = "3.3.0"
-tracing-appender = "0.2.2"
-tracing-subscriber = { version = "0.3.15", features = ["env-filter", "ansi"] }
 
 [build-dependencies]
 common-building = { path = "../../common/building" }

@@ -26,6 +26,7 @@ use common_fuse_meta::meta::Statistics;
 use common_fuse_meta::meta::TableSnapshot;
 use opendal::Operator;
 
+use super::AbortOperation;
 use crate::io::MetaReaders;
 use crate::io::SegmentWriter;
 use crate::io::TableMetaLocationGenerator;
@@ -81,19 +82,8 @@ impl BaseMutator {
             });
     }
 
-    pub async fn into_new_snapshot(
-        self,
-        segments: Vec<Location>,
-        summary: Statistics,
-    ) -> Result<TableSnapshot> {
-        let snapshot = self.base_snapshot;
-        let mut new_snapshot = TableSnapshot::from_previous(&snapshot);
-        new_snapshot.segments = segments;
-        new_snapshot.summary = summary;
-        Ok(new_snapshot)
-    }
-
-    pub async fn generate_segments(&self) -> Result<(Vec<Location>, Statistics)> {
+    pub async fn generate_segments(&self) -> Result<(Vec<Location>, Statistics, AbortOperation)> {
+        let mut abort_operation = AbortOperation::default();
         let segments = self.base_snapshot.segments.clone();
         let mut segments_editor =
             HashMap::<_, _, RandomState>::from_iter(segments.clone().into_iter().enumerate());
@@ -143,6 +133,7 @@ impl BaseMutator {
                         ))
                     })?;
                 if let Some(block_meta) = replacement.new_block_meta {
+                    abort_operation = abort_operation.add_block(&block_meta);
                     block_editor.insert(*position, block_meta);
                 } else {
                     block_editor.remove(position);
@@ -160,7 +151,8 @@ impl BaseMutator {
                 new_segment.summary = new_summary;
                 // write down new segment
                 let new_segment_location = seg_writer.write_segment(new_segment).await?;
-                segments_editor.insert(seg_idx, new_segment_location);
+                segments_editor.insert(seg_idx, new_segment_location.clone());
+                abort_operation = abort_operation.add_segment(new_segment_location.0);
             }
         }
 
@@ -175,6 +167,6 @@ impl BaseMutator {
 
         // update the summary of new snapshot
         let new_summary = reduce_statistics(&new_segment_summaries)?;
-        Ok((new_segments, new_summary))
+        Ok((new_segments, new_summary, abort_operation))
     }
 }

@@ -30,7 +30,7 @@ pub struct RuleEliminateFilter {
 impl RuleEliminateFilter {
     pub fn new() -> Self {
         Self {
-            id: RuleID::EliminateEvalScalar,
+            id: RuleID::EliminateFilter,
             // Filter
             //  \
             //   *

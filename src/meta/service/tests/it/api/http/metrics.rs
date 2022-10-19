@@ -15,6 +15,7 @@
 use common_base::base::tokio;
 use common_metrics::init_default_metrics_recorder;
 use databend_meta::api::http::v1::metrics::metrics_handler;
+use databend_meta::init_meta_ut;
 use maplit::btreeset;
 use poem::get;
 use poem::http::Method;
@@ -27,7 +28,6 @@ use poem::Route;
 use pretty_assertions::assert_eq;
 use tracing::info;
 
-use crate::init_meta_ut;
 use crate::tests::meta_node::start_meta_node_cluster;
 
 #[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]

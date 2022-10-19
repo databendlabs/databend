@@ -19,6 +19,7 @@ use common_exception::Result;
 use common_planner::IndexType;
 
 use super::ScalarExpr;
+use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::RelationalProperty;
 use crate::sql::plans::LogicalOperator;
@@ -218,5 +219,18 @@ impl LogicalOperator for LogicalInnerJoin {
 
             column_stats: Default::default(),
         })
+    }
+
+    fn used_columns<'a>(&self) -> Result<ColumnSet> {
+        let mut used_columns = ColumnSet::new();
+        for cond in self
+            .left_conditions
+            .iter()
+            .chain(self.right_conditions.iter())
+            .chain(self.other_conditions.iter())
+        {
+            used_columns = used_columns.union(&cond.used_columns()).cloned().collect();
+        }
+        Ok(used_columns)
     }
 }

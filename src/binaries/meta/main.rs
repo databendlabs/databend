@@ -66,7 +66,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 
     set_panic_hook();
 
-    let _guards = init_logging("databend-meta", &conf.log);
+    let _guards = init_logging("databend-meta", &conf.log, true);
 
     info!("Databend Meta version: {}", METASRV_COMMIT_VERSION.as_str());
     info!(
