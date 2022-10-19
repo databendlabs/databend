@@ -111,4 +111,13 @@ impl LogicalOperator for EvalScalar {
             column_stats: Default::default(),
         })
     }
+
+    fn used_columns<'a>(&self) -> Result<ColumnSet> {
+        let mut used_columns = ColumnSet::new();
+        for item in self.items.iter() {
+            used_columns.insert(item.index);
+            used_columns.extend(item.scalar.used_columns());
+        }
+        Ok(used_columns)
+    }
 }

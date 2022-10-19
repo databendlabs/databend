@@ -34,6 +34,7 @@ use opendal::services::ftp;
 use opendal::services::gcs;
 use opendal::services::http;
 use opendal::services::memory;
+use opendal::services::moka;
 use opendal::services::obs;
 use opendal::services::oss;
 use opendal::services::s3;
@@ -45,6 +46,7 @@ use super::StorageParams;
 use super::StorageS3Config;
 use crate::config::StorageGcsConfig;
 use crate::config::StorageHttpConfig;
+use crate::config::StorageMokaConfig;
 use crate::config::StorageObsConfig;
 use crate::StorageConfig;
 use crate::StorageOssConfig;
@@ -61,6 +63,7 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
         StorageParams::Http(cfg) => init_http_operator(cfg)?,
         StorageParams::Ipfs(cfg) => init_ipfs_operator(cfg)?,
         StorageParams::Memory => init_memory_operator()?,
+        StorageParams::Moka(cfg) => init_moka_operator(cfg)?,
         StorageParams::Obs(cfg) => init_obs_operator(cfg)?,
         StorageParams::S3(cfg) => init_s3_operator(cfg)?,
         StorageParams::Oss(cfg) => init_oss_operator(cfg)?,
@@ -68,7 +71,7 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
 
     let op = op
         // Add retry
-        .layer(RetryLayer::new(ExponentialBackoff::default()))
+        .layer(RetryLayer::new(ExponentialBackoff::default().with_jitter()))
         // Add metrics
         .layer(MetricsLayer)
         // Add logging
@@ -253,13 +256,41 @@ fn init_obs_operator(cfg: &StorageObsConfig) -> Result<Operator> {
     Ok(Operator::new(builder.build()?))
 }
 
+/// init_oss_operator will init an opendal OSS operator with input oss config.
+fn init_oss_operator(cfg: &StorageOssConfig) -> Result<Operator> {
+    let mut builder = oss::Builder::default();
+
+    // endpoint
+    let backend = builder
+        .endpoint(&cfg.endpoint_url)
+        .access_key_id(&cfg.access_key_id)
+        .access_key_secret(&cfg.access_key_secret)
+        .bucket(&cfg.bucket)
+        .root(&cfg.root)
+        .build()?;
+
+    Ok(Operator::new(backend))
+}
+
+/// init_moka_operator will init a moka operator.
+fn init_moka_operator(_: &StorageMokaConfig) -> Result<Operator> {
+    let mut builder = moka::Builder::default();
+
+    Ok(Operator::new(builder.build()?))
+}
+
+/// PersistOperator is the operator to access persist services.
+///
+/// # Notes
+///
+/// All data accessed via this operator will be persisted.
 #[derive(Clone, Debug)]
-pub struct StorageOperator {
+pub struct DataOperator {
     operator: Operator,
     params: StorageParams,
 }
 
-impl Deref for StorageOperator {
+impl Deref for DataOperator {
     type Target = Operator;
 
     fn deref(&self) -> &Self::Target {
@@ -267,26 +298,44 @@ impl Deref for StorageOperator {
     }
 }
 
-static STORAGE_OPERATOR: OnceCell<Singleton<StorageOperator>> = OnceCell::new();
+static DATA_OPERATOR: OnceCell<Singleton<DataOperator>> = OnceCell::new();
 
-impl StorageOperator {
+impl DataOperator {
+    /// Create a new persist operator.
+    pub fn new(op: Operator, params: StorageParams) -> Self {
+        Self {
+            operator: op,
+            params,
+        }
+    }
+
+    /// Get the operator from PersistOperator
+    pub fn operator(&self) -> Operator {
+        self.operator.clone()
+    }
+
+    /// Get the params from PersistOperator
+    pub fn params(&self) -> &StorageParams {
+        &self.params
+    }
+
     pub async fn init(
         conf: &StorageConfig,
-        v: Singleton<StorageOperator>,
+        v: Singleton<DataOperator>,
     ) -> common_exception::Result<()> {
         v.init(Self::try_create(conf).await?)?;
 
-        STORAGE_OPERATOR.set(v).ok();
+        DATA_OPERATOR.set(v).ok();
         Ok(())
     }
 
-    pub async fn try_create(conf: &StorageConfig) -> common_exception::Result<StorageOperator> {
+    pub async fn try_create(conf: &StorageConfig) -> common_exception::Result<DataOperator> {
         Self::try_create_with_storage_params(&conf.params).await
     }
 
     pub async fn try_create_with_storage_params(
         sp: &StorageParams,
-    ) -> common_exception::Result<StorageOperator> {
+    ) -> common_exception::Result<DataOperator> {
         let operator = init_operator(sp)?;
 
         // OpenDAL will send a real request to underlying storage to check whether it works or not.
@@ -306,14 +355,14 @@ impl StorageOperator {
             )));
         }
 
-        Ok(StorageOperator {
+        Ok(DataOperator {
             operator,
             params: sp.clone(),
         })
     }
 
-    pub fn instance() -> StorageOperator {
-        match STORAGE_OPERATOR.get() {
+    pub fn instance() -> DataOperator {
+        match DATA_OPERATOR.get() {
             None => panic!("StorageOperator is not init"),
             Some(storage_operator) => storage_operator.get(),
         }
@@ -324,18 +373,50 @@ impl StorageOperator {
     }
 }
 
-/// init_oss_operator will init an opendal OSS operator with input oss config.
-fn init_oss_operator(cfg: &StorageOssConfig) -> Result<Operator> {
-    let mut builder = oss::Builder::default();
+/// CacheOperator is the operator to access cache services.
+///
+/// # Notes
+///
+/// As described in [RFC: Cache](https://databend.rs/doc/contributing/rfcs/cache):
+///
+/// All data stored in cache operator should be non-persist and could be GC or
+/// background auto evict at any time.
+#[derive(Clone, Debug)]
+pub struct CacheOperator {
+    op: Operator,
+}
 
-    // endpoint
-    let backend = builder
-        .endpoint(&cfg.endpoint_url)
-        .access_key_id(&cfg.access_key_id)
-        .access_key_secret(&cfg.access_key_secret)
-        .bucket(&cfg.bucket)
-        .root(&cfg.root)
-        .build()?;
+impl Deref for CacheOperator {
+    type Target = Operator;
 
-    Ok(Operator::new(backend))
+    fn deref(&self) -> &Self::Target {
+        &self.op
+    }
+}
+
+static CACHE_OPERATOR: OnceCell<Singleton<CacheOperator>> = OnceCell::new();
+
+impl CacheOperator {
+    pub async fn init(
+        conf: &StorageConfig,
+        v: Singleton<CacheOperator>,
+    ) -> common_exception::Result<()> {
+        v.init(Self::try_create(conf).await?)?;
+
+        CACHE_OPERATOR.set(v).ok();
+        Ok(())
+    }
+
+    pub async fn try_create(conf: &StorageConfig) -> common_exception::Result<CacheOperator> {
+        let op = init_operator(&conf.params)?;
+
+        Ok(CacheOperator { op })
+    }
+
+    pub fn instance() -> CacheOperator {
+        match CACHE_OPERATOR.get() {
+            None => panic!("StorageOperator is not init"),
+            Some(op) => op.get(),
+        }
+    }
 }

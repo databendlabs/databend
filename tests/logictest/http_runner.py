@@ -2,6 +2,7 @@ from abc import ABC
 
 import logictest
 import http_connector
+from mysql.connector.errors import Error
 
 
 class TestHttp(logictest.SuiteRunner, ABC):
@@ -25,12 +26,16 @@ class TestHttp(logictest.SuiteRunner, ABC):
         self.reset_connection()
 
     def execute_ok(self, statement):
-        resp = self.get_connection().query_with_session(statement)
-        return http_connector.get_error(resp[0])
+        try:
+            self.get_connection().query_with_session(statement)
+        except Error as e:
+            return e
 
     def execute_error(self, statement):
-        resp = self.get_connection().query_with_session(statement)
-        return http_connector.get_error(resp[0])
+        try:
+            self.get_connection().query_with_session(statement)
+        except Error as e:
+            return e
 
     def execute_query(self, statement):
         results = self.get_connection().fetch_all(statement.text)

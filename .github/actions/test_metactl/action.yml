@@ -23,3 +23,8 @@ runs:
       shell: bash
       run: |
         bash ./tests/metactl/test-metactl.sh
+
+    - name: Test metactl restore new cluster
+      shell: bash
+      run: |
+        bash ./tests/metactl/test-metactl-restore-new-cluster.sh

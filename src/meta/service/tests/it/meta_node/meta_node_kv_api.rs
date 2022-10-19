@@ -19,10 +19,10 @@ use async_trait::async_trait;
 use common_base::base::tokio;
 use common_meta_api::ApiBuilder;
 use common_meta_api::KVApiTestSuite;
+use databend_meta::init_meta_ut;
 use databend_meta::meta_service::MetaNode;
 use maplit::btreeset;
 
-use crate::init_meta_ut;
 use crate::tests::meta_node::start_meta_node_cluster;
 use crate::tests::meta_node::start_meta_node_leader;
 use crate::tests::service::MetaSrvTestContext;

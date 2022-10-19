@@ -106,4 +106,8 @@ impl LogicalOperator for LogicalGet {
             column_stats: Default::default(),
         })
     }
+
+    fn used_columns<'a>(&self) -> Result<ColumnSet> {
+        Ok(self.columns.clone())
+    }
 }

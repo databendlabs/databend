@@ -36,7 +36,6 @@ use common_meta_app::schema::TableMeta;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
-use common_pipeline_core::SourcePipeBuilder;
 use common_pipeline_sources::processors::sources::SyncSource;
 use common_pipeline_sources::processors::sources::SyncSourcer;
 use once_cell::sync::OnceCell;
@@ -170,9 +169,6 @@ impl<Event: SystemLogElement + 'static> Table for SystemLogTable<Event> {
         _: &ReadDataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let output = OutputPort::create();
-        let mut source_builder = SourcePipeBuilder::create();
-
         let schema = Event::schema();
         let mut mutable_columns: Vec<Box<dyn MutableColumn>> =
             Vec::with_capacity(schema.num_fields());
@@ -191,13 +187,17 @@ impl<Event: SystemLogElement + 'static> Table for SystemLogTable<Event> {
             columns.push(mutable_column.to_column());
         }
 
-        source_builder.add_source(
-            output.clone(),
-            SystemLogSource::<Event>::create(ctx, output, DataBlock::create(schema, columns))?,
-        );
-
-        pipeline.add_pipe(source_builder.finalize());
-        Ok(())
+        // Add source pipe.
+        pipeline.add_source(
+            move |output| {
+                SystemLogSource::<Event>::create(
+                    ctx.clone(),
+                    output,
+                    DataBlock::create(schema.clone(), columns.clone()),
+                )
+            },
+            1,
+        )
     }
 
     async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: bool) -> Result<()> {

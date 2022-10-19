@@ -20,10 +20,10 @@ use common_meta_types::Cmd;
 use common_meta_types::LogEntry;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKV;
+use databend_meta::init_meta_ut;
 use databend_meta::meta_service::MetaNode;
 use tracing::info;
 
-use crate::init_meta_ut;
 use crate::tests::meta_node::start_meta_node_non_voter;
 use crate::tests::meta_node::timeout;
 use crate::tests::service::MetaSrvTestContext;

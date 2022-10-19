@@ -22,6 +22,7 @@ use common_meta_types::Node;
 use databend_meta::api::http::v1::cluster_state::nodes_handler;
 use databend_meta::api::http::v1::cluster_state::status_handler;
 use databend_meta::api::HttpService;
+use databend_meta::init_meta_ut;
 use databend_meta::meta_service::MetaNode;
 use poem::get;
 use poem::http::Method;
@@ -33,7 +34,6 @@ use poem::Request;
 use poem::Route;
 use pretty_assertions::assert_eq;
 
-use crate::init_meta_ut;
 use crate::tests::service::MetaSrvTestContext;
 use crate::tests::tls_constants::TEST_CA_CERT;
 use crate::tests::tls_constants::TEST_CN_NAME;

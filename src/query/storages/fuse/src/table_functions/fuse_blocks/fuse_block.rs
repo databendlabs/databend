@@ -82,6 +82,8 @@ impl<'a> FuseBlock<'a> {
         let timestamp = vec![snapshot.timestamp.map(|dt| (dt.timestamp_micros()) as i64)];
         let mut block_location: Vec<Vec<u8>> = Vec::with_capacity(len);
         let mut block_size: Vec<u64> = Vec::with_capacity(len);
+        let mut file_size: Vec<u64> = Vec::with_capacity(len);
+        let mut row_count: Vec<u64> = Vec::with_capacity(len);
         let mut bloom_filter_location: Vec<Option<Vec<u8>>> = Vec::with_capacity(len);
         let mut bloom_filter_size: Vec<u64> = Vec::with_capacity(len);
 
@@ -92,6 +94,8 @@ impl<'a> FuseBlock<'a> {
             segment.blocks.clone().into_iter().for_each(|block| {
                 block_location.push(block.location.0.into_bytes());
                 block_size.push(block.block_size);
+                file_size.push(block.file_size);
+                row_count.push(block.row_count);
                 bloom_filter_location.push(
                     block
                         .bloom_filter_index_location
@@ -106,6 +110,8 @@ impl<'a> FuseBlock<'a> {
             Arc::new(ConstColumn::new(Series::from_data(timestamp), len)),
             Series::from_data(block_location),
             Series::from_data(block_size),
+            Series::from_data(file_size),
+            Series::from_data(row_count),
             Series::from_data(bloom_filter_location),
             Series::from_data(bloom_filter_size),
         ]))
@@ -117,6 +123,8 @@ impl<'a> FuseBlock<'a> {
             DataField::new_nullable("timestamp", TimestampType::new_impl()),
             DataField::new("block_location", Vu8::to_data_type()),
             DataField::new("block_size", u64::to_data_type()),
+            DataField::new("file_size", u64::to_data_type()),
+            DataField::new("row_count", u64::to_data_type()),
             DataField::new_nullable("bloom_filter_location", Vu8::to_data_type()),
             DataField::new("bloom_filter_size", u64::to_data_type()),
         ])
