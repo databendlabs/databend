@@ -154,6 +154,16 @@ SELECT snapshot_id FROM ICEBERG_SNAPSHOT('<db_name>', '<external_table_name');
 
 After discussion, the catalog way above is chosen, for its more complete support to Iceberg features, and it is more aligned to the current design of Hive catalog.
 
+## Prior art
+
+None
+
+## Unresolved questions
+
+None
+
+## Future possibilities
+
 ### Create Table from Iceberg Snapshots
 
 Iceberg provides a snapshot capability and tables can be created from them.
@@ -164,42 +174,14 @@ CREATE TABLE [IF NOT EXISTS] [db.]table_name
     <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
     <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
     ...
-) ICEBERG_SNAPSHOT_LOCATION=
-<external-location>
-```
-
-The reason why this is not chosen is that this may require copying data from Iceberg into our storage. This may not be expected by users, since almost all data lakes keep the Iceberg data unmoved, and this way is harder to sync up with Iceberg data source.
-
-If users do want to copy data out of Iceberg, this might be done with a `COPY INTO` option:
-
-```sql
-COPY INTO [db.]table_name
-<file-format>
-[<iceberg-options>]
-```
-
-where:
-
-```
-iceberg-options ::=
-
-ICEBERG_OPTIONS = (
-DATABASE=<database-name>
-TABLE=<table-name>
-LOCATION=<external-location>
-[SNAPSHOT=<snapshot-id>]
+) ENGINE = `ICEBERG`
+ENGINE_OPTIONS = (
+URL = 's3://path/to/iceberg'
+DATABASE = <iceberg_db>
+TABLE = <iceberg_tbl>
+[ SNAPSHOT = { SNAPSHOT_ID => <snapshot_id> | TIMESTAMP => <timestamp> } ]
 )
 ```
-
-## Prior art
-
-None
-
-## Unresolved questions
-
-None
-
-## Future possibilities
 
 ### Schema Evolution
 
