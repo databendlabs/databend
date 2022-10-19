@@ -229,6 +229,16 @@ impl FuseTable {
                 );
             }
             pipeline.add_pipe(source_builder.finalize());
+
+            // Resize the pipeline to min(max_threas, max_io_requests).
+            let max_threads = ctx.get_settings().get_max_threads()? as usize;
+            let resize_to = std::cmp::min(max_threads, max_io_requests);
+            info!(
+                "read block data resize pipeline from:{} to:{}",
+                pipeline.output_len(),
+                resize_to
+            );
+            pipeline.resize(resize_to)?;
         }
 
         Ok(())
