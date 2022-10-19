@@ -17,6 +17,8 @@ use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Arc;
 
+use chrono::DateTime;
+use chrono::Utc;
 use common_base::base::tokio::sync::Semaphore;
 use common_base::base::Runtime;
 use common_catalog::table_context::TableContext;
@@ -113,7 +115,8 @@ impl SnapshotsIO {
         &self,
         root_snapshot_file: String,
         limit: Option<usize>,
-        with_segment_locations: bool, // Return segment location or not
+        with_segment_locations: bool,
+        min_snapshot_timestamp: Option<DateTime<Utc>>,
     ) -> Result<(Vec<TableSnapshotLite>, HashSet<Location>)> {
         let ctx = self.ctx.clone();
         let data_accessor = self.operator.clone();
@@ -138,6 +141,9 @@ impl SnapshotsIO {
             info!("Finish to read_snapshots, chunk:[{}]", idx);
 
             for snapshot in results.into_iter().flatten() {
+                if snapshot.timestamp > min_snapshot_timestamp {
+                    continue;
+                }
                 let snapshot_lite = TableSnapshotLite::from(snapshot.as_ref());
                 snapshot_lites.push(snapshot_lite);
 

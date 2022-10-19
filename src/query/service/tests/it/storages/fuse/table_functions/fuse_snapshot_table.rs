@@ -147,6 +147,7 @@ async fn test_fuse_snapshot_table_read() -> Result<()> {
     }
 
     {
+        // previously, inserted 5 blocks, 3 rows per block
         // another 5 blocks, 15 rows here
         append_sample_data(5, &fixture).await?;
         let expected = vec![
