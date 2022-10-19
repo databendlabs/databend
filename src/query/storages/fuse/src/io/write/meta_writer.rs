@@ -27,7 +27,7 @@ where T: Serialize {
     let bs = serde_json::to_vec(&meta).map_err(Error::other)?;
     let object = data_accessor.object(location);
     { || object.write(bs.as_slice()) }
-        .retry(ExponentialBackoff::default())
+        .retry(ExponentialBackoff::default().with_jitter())
         .when(|err| err.kind() == ErrorKind::Interrupted)
         .notify(|err, dur| {
             warn!(

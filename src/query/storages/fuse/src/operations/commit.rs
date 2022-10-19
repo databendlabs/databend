@@ -379,7 +379,7 @@ impl FuseTable {
 
         let object = operator.object(&hint_path);
         { || object.write(last_snapshot_path.as_bytes()) }
-            .retry(backon::ExponentialBackoff::default())
+            .retry(backon::ExponentialBackoff::default().with_jitter())
             .when(|err| err.kind() == ErrorKind::Interrupted)
             .notify(|err, dur| {
                 warn!(
