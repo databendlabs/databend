@@ -46,7 +46,7 @@ use common_planner::plans::ShowCreateTablePlan;
 use common_planner::plans::TruncateTablePlan;
 use common_planner::plans::UndropTablePlan;
 use common_storage::parse_uri_location;
-use common_storage::StorageOperator;
+use common_storage::PersistOperator;
 use common_storage::UriLocation;
 use tracing::debug;
 
@@ -378,7 +378,7 @@ impl<'a> Binder {
                 let (sp, _) = parse_uri_location(&uri)?;
 
                 // create a temporary op to check if params is correct
-                StorageOperator::try_create_with_storage_params(&sp).await?;
+                PersistOperator::try_create_with_storage_params(&sp).await?;
 
                 Some(sp)
             }

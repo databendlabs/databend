@@ -31,8 +31,7 @@ use common_legacy_planners::Partitions;
 use common_legacy_planners::ReadDataSourcePlan;
 use common_meta_types::UserInfo;
 use common_settings::Settings;
-use common_storage::StorageParams;
-use opendal::Operator;
+use common_storage::PersistOperator;
 
 use crate::catalog::Catalog;
 use crate::cluster_info::Cluster;
@@ -91,9 +90,8 @@ pub trait TableContext: Send + Sync {
     fn get_query_str(&self) -> String;
     /// Get the kind of session running query.
     fn get_query_kind(&self) -> String;
-    // Get the storage data accessor operator from the session manager.
-    fn get_storage_operator(&self) -> Result<Operator>;
-    fn get_storage_params(&self) -> StorageParams;
+    // Get the persist storage data accessor operator from the session manager.
+    fn get_persist_operator(&self) -> Result<PersistOperator>;
     fn get_dal_context(&self) -> &DalContext;
     fn push_precommit_block(&self, block: DataBlock);
     fn consume_precommit_blocks(&self) -> Vec<DataBlock>;

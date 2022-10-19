@@ -50,7 +50,7 @@ pub use config::STORAGE_S3_DEFAULT_ENDPOINT;
 mod operator;
 pub use operator::init_operator;
 pub use operator::CacheOperator;
-pub use operator::StorageOperator;
+pub use operator::PersistOperator;
 
 mod location;
 pub use location::parse_uri_location;

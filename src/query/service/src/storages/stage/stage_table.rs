@@ -71,8 +71,8 @@ impl StageTable {
     pub fn get_op(ctx: &Arc<dyn TableContext>, stage: &UserStageInfo) -> Result<Operator> {
         if stage.stage_type == StageType::Internal {
             let prefix = format!("/stage/{}/", stage.stage_name);
-            ctx.get_storage_operator()
-                .map(|op| op.layer(SubdirLayer::new(&prefix)))
+            let pop = ctx.get_persist_operator()?.operator();
+            Ok(pop.layer(SubdirLayer::new(&prefix)))
         } else {
             Ok(init_operator(&stage.stage_params.storage)?)
         }

@@ -48,7 +48,7 @@ pub struct ResultTableWriter {
 
 impl ResultTableWriter {
     pub async fn new(ctx: Arc<QueryContext>, query_info: ResultQueryInfo) -> Result<Self> {
-        let data_accessor = ctx.get_storage_operator()?;
+        let data_accessor = ctx.get_persist_operator()?.operator();
         let query_id = query_info.query_id.clone();
         Ok(ResultTableWriter {
             query_info,

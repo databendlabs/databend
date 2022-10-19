@@ -48,7 +48,7 @@ impl Interpreter for CreateShareInterpreter {
 
         save_share_spec(
             &self.ctx.get_tenant(),
-            self.ctx.get_storage_operator()?,
+            self.ctx.get_persist_operator()?.operator(),
             resp.spec_vec,
         )
         .await?;
