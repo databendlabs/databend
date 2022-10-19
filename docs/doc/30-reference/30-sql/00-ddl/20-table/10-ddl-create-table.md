@@ -3,12 +3,13 @@ title: CREATE TABLE
 description: Create a new table.
 ---
 
-`CREATE TABLE` is the most complicated part of many Databases, you need to:
+CREATE TABLE is the most complicated operation for many databases because you might need to:
+
 * Manually specify the engine
 * Manually specify the indexes
 * And even specify the data partitions or data shard
- 
-In Databend, you **don't need to specify any of these**, one of Databend's design goals is to make it easier to use.
+
+Databend aims to be easy to use by design and does NOT require any of these when you create a table.
 
 ## Syntax
 
@@ -107,6 +108,30 @@ To obtain the snapshot information (including the snapshot locations) of a table
 SELECT * 
 FROM   Fuse_snapshot('<database_name>', '<table_name>'); 
 ```
+
+### CREATE TABLE ... EXTERNAL_LOCATION
+
+Creates a table and stores the table data (in parquet files) in a specified S3 bucket instead of the FUSE engine.
+
+Databend stores the table data in the location configured in the file `databend-query.toml` by default. This command enables you to store the data in a table in another bucket instead of the default one.
+
+Syntax:
+```sql
+CREATE TABLE [IF NOT EXISTS] [db.]table_name
+
+    <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
+    <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
+    ...
+
+'s3://<bucket>/[<path>]' 
+CONNECTION = (AWS_KEY_ID = '<your_aws_key_id>' AWS_SECRECT_KEY = '<your_aws_secret_key>' ENDPOINT_URL = '<endpoint_url>');
+```
+
+| Parameter  | Description | Required |
+| ----------- | ----------- | --- |
+| `s3://<bucket>/[<path>]`  | Files are in the specified external location (S3-like bucket) | YES |
+| `AWS_KEY_ID = '<your_aws_key_id>' AWS_SECRECT_KEY = '<your_aws_secret_key>'`  | The credentials for connecting to AWS and accessing the private/protected S3 bucket where the files to load are staged. |  Optional |
+| `ENDPOINT_URL = '<endpoint_url>'`  | S3-compatible endpoint URL like MinIO. Default: `https://s3.amazonaws.com` |  Optional |
 
 ## Column Nullable
 
@@ -342,3 +367,5 @@ FROM   members_previous;
 ---
 Amy
 ```
+
+### Create Table ... External_Location ...
