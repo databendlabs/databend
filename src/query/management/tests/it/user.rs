@@ -151,6 +151,25 @@ mod add {
 
         Ok(())
     }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_add_builtin_user() -> common_exception::Result<()> {
+        let test_user_name = "default";
+        let test_hostname = "localhost";
+        let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());   
+
+        let api = MockKV::new();
+        let api = Arc::new(api);
+        let user_mgr = UserMgr::create(api, "tenant1")?;
+        let res = user_mgr.add_user(user_info);
+
+        assert_eq!(
+            res.await.unwrap_err().code(),
+            ErrorCode::UserAlreadyExists("").code()
+        );
+
+        Ok(())
+    }
 }
 
 mod get {
