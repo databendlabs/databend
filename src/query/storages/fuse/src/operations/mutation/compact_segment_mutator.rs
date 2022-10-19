@@ -171,13 +171,20 @@ impl TableMutator for CompactSegmentMutator {
 
         // build new segments which are compacted. the newly compacted segments will also
         // be persistent into storage.
+        let mut last_segment = None;
         for chunk in chunk_of_blocks {
+            match last_segment {
+                None => {}
+                Some(segment) => {
+                    let location = segment_writer.write_segment(segment).await?;
+                    self.compacted_segment_accumulator.add_location(location)
+                }
+            }
             let stats = reduce_block_metas(chunk)?;
             self.compacted_segment_accumulator.merge_stats(&stats)?;
             let blocks: Vec<BlockMeta> = chunk.iter().map(|block| Clone::clone(*block)).collect();
             let new_segment = SegmentInfo::new(blocks, stats);
-            let loc = segment_writer.write_segment(new_segment).await?;
-            self.compacted_segment_accumulator.add_location(loc)
+            last_segment = Some(new_segment);
         }
 
         // keep the compacted_segments
@@ -343,7 +350,7 @@ impl TableMutator for CompactSegmentMutator {
 
 enum Conflict {
     Irreconcilable,
-    // reconcilable conflicts with append only option
+    // reconcilable conflicts with append only operation
     // the range embedded is the range of segments that are appended in the latest snapshot
     ReconcilableAppend(Range<usize>),
 }
