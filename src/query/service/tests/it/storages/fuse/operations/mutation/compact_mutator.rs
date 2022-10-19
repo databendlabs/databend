@@ -20,8 +20,6 @@ use common_catalog::table_mutator::TableMutator;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_storages_fuse::FuseTable;
-use databend_query::interpreters::CreateTableInterpreterV2;
-use databend_query::interpreters::Interpreter;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::PipelineCompleteExecutor;
 use databend_query::sessions::QueryContext;
@@ -38,13 +36,10 @@ use crate::storages::fuse::table_test_fixture::TestFixture;
 async fn test_compact() -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
-    let create_table_plan = fixture.create_normal_table_plan();
+    let tbl_name = fixture.default_table_name();
+    let db_name = fixture.default_db_name();
 
-    // create test table
-    let tbl_name = create_table_plan.table.clone();
-    let db_name = create_table_plan.database.clone();
-    let interpreter = CreateTableInterpreterV2::try_create(ctx.clone(), create_table_plan)?;
-    interpreter.execute(ctx.clone()).await?;
+    fixture.create_normal_table().await?;
 
     // insert
     for i in 0..9 {
@@ -87,13 +82,10 @@ async fn test_compact() -> Result<()> {
 async fn test_compact_resolved_conflict() -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
-    let create_table_plan = fixture.create_normal_table_plan();
+    let tbl_name = fixture.default_table_name();
+    let db_name = fixture.default_db_name();
 
-    // create test table
-    let tbl_name = create_table_plan.table.clone();
-    let db_name = create_table_plan.database.clone();
-    let interpreter = CreateTableInterpreterV2::try_create(ctx.clone(), create_table_plan)?;
-    interpreter.execute(ctx.clone()).await?;
+    fixture.create_normal_table().await?;
 
     // insert
     for i in 0..9 {
@@ -140,13 +132,10 @@ async fn test_compact_resolved_conflict() -> Result<()> {
 async fn test_compact_unresolved_conflict() -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
-    let create_table_plan = fixture.create_normal_table_plan();
+    let tbl_name = fixture.default_table_name();
+    let db_name = fixture.default_db_name();
 
-    // create test table
-    let tbl_name = create_table_plan.table.clone();
-    let db_name = create_table_plan.database.clone();
-    let interpreter = CreateTableInterpreterV2::try_create(ctx.clone(), create_table_plan)?;
-    interpreter.execute(ctx.clone()).await?;
+    fixture.create_normal_table().await?;
 
     // insert
     for i in 0..9 {
