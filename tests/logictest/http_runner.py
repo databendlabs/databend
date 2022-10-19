@@ -4,6 +4,7 @@ import logictest
 import http_connector
 from mysql.connector.errors import Error
 
+
 class TestHttp(logictest.SuiteRunner, ABC):
 
     def __init__(self, kind, args):
