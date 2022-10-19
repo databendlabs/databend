@@ -232,9 +232,10 @@ pub trait Table: Sync + Send {
     async fn compact(
         &self,
         ctx: Arc<dyn TableContext>,
+        target: CompactTarget,
         pipeline: &mut Pipeline,
     ) -> Result<Option<Arc<dyn TableMutator>>> {
-        let (_, _) = (ctx, pipeline);
+        let (_, _, _) = (ctx, target, pipeline);
 
         Err(ErrorCode::UnImplement(format!(
             "table {},  of engine type {}, does not support compact",
@@ -301,6 +302,11 @@ pub struct ColumnStatistics {
     pub max: DataValue,
     pub null_count: u64,
     pub number_of_distinct_values: u64,
+}
+
+pub enum CompactTarget {
+    Blocks,
+    Segments,
 }
 
 pub trait ColumnStatisticsProvider {

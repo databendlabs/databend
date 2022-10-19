@@ -22,6 +22,7 @@ use common_catalog::catalog::StorageDescription;
 use common_catalog::table::ColumnId;
 use common_catalog::table::ColumnStatistics;
 use common_catalog::table::ColumnStatisticsProvider;
+use common_catalog::table::CompactTarget;
 use common_catalog::table_context::TableContext;
 use common_catalog::table_mutator::TableMutator;
 use common_datablocks::DataBlock;
@@ -42,8 +43,8 @@ use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
 use common_sharing::create_share_table_operator;
 use common_storage::init_operator;
+use common_storage::DataOperator;
 use common_storage::ShareTableConfig;
-use common_storage::StorageOperator;
 use common_storages_util::storage_context::StorageContext;
 use common_storages_util::table_storage_prefix::table_storage_prefix;
 use opendal::Operator;
@@ -104,7 +105,7 @@ impl FuseTable {
                 match storage_params {
                     Some(sp) => init_operator(&sp)?,
                     None => {
-                        let op = &*(StorageOperator::instance());
+                        let op = &*(DataOperator::instance());
                         op.clone()
                     }
                 }
@@ -454,9 +455,10 @@ impl Table for FuseTable {
     async fn compact(
         &self,
         ctx: Arc<dyn TableContext>,
+        target: CompactTarget,
         pipeline: &mut Pipeline,
     ) -> Result<Option<Arc<dyn TableMutator>>> {
-        self.do_compact(ctx, pipeline).await
+        self.do_compact(ctx, target, pipeline).await
     }
 
     async fn recluster(

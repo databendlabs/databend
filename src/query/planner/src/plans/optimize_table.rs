@@ -34,5 +34,6 @@ impl OptimizeTablePlan {
 pub enum OptimizeTableAction {
     All,
     Purge,
-    Compact,
+    CompactBlocks,
+    CompactSegments,
 }

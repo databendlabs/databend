@@ -39,10 +39,33 @@ pub static METACLI_COMMIT_SEMVER: Lazy<Version> = Lazy::new(|| {
 });
 
 /// Oldest compatible nightly metasrv version
+///
+/// ```text
+/// now  --.
+///        |
+/// 8.79 . |
+///      | |
+///      | '---> 8.35
+///      |    .--'
+///      |    |
+///      '-----> 8.30
+///           |  |
+///           |  |
+/// 7.59 <----+--'
+///
+/// Client       Server
+///
+/// --> : pointing to min compatible version
+/// ```
+///
+/// - 2022-10-19: after 0.8.79:
+///   Update min compatible server to 0.8.35:
+///   Since which, meta-server adds new API kv_api() to replace write_msg() and read_msg();
+///   Feature commit: 69a05aca41036976fec37ad7a8b447e2868ef08b 2022-09-14
 pub static MIN_METASRV_SEMVER: Version = Version {
     major: 0,
     minor: 8,
-    patch: 30,
+    patch: 35,
     pre: Prerelease::EMPTY,
     build: BuildMetadata::EMPTY,
 };

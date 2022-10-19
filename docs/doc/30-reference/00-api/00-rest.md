@@ -20,9 +20,8 @@ This handler return results in `pages` with long-polling.
    of type `QueryResponse`.
 2. Use fields of `QueryResponse` for further processing:
     1. A `GET` to the `next_uri` returns the next `page` of query results. It returns `QueryResponse` too, processing it
-       the same way recursively until `next_uri` is nil.
-    2. A `GET` to the `final_uri` finally after all results is fetched (`next_uri = nil`) or the remaining is not
-       needed. Return empty body.
+       the same way until `next_uri` is null.
+    2. (optional) A `GET` to the `kill_uri` to kill the query. Return empty body.
     3. (optional) A `GET` to the `stats_uri` to get stats only at once (without long-polling), return `QueryResponse`
        with empty `data` field.
 
@@ -81,16 +80,10 @@ you are expected to get JSON like this (formatted):
     "running_time_ms": 466.85395800000003
   },
   "stats_uri": "/v1/query/3cd25ab7-c3a4-42ce-9e02-e1b354d91f06",
-  "final_uri": "/v1/query/3cd25ab7-c3a4-42ce-9e02-e1b354d91f06/kill?delete=true",
   "next_uri": null
   "affect": null
 }
 ```
-
-Note:
-
-1. next_uri is null because all data is returned.
-1. client should call final_uri to tell the server the client has received the results and server can delete them.
 
 
 ## Query Request

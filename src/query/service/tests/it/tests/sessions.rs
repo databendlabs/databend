@@ -24,7 +24,7 @@ use common_catalog::catalog::CatalogManager;
 use common_config::Config;
 use common_exception::Result;
 use common_fuse_meta::caches::CacheManager;
-use common_storage::StorageOperator;
+use common_storage::DataOperator;
 use common_tracing::set_panic_hook;
 use common_tracing::QueryLogger;
 use common_users::RoleCacheManager;
@@ -66,7 +66,7 @@ pub struct TestGlobalServices {
     global_runtime: Mutex<HashMap<String, Arc<Runtime>>>,
     query_logger: Mutex<HashMap<String, Arc<QueryLogger>>>,
     cluster_discovery: Mutex<HashMap<String, Arc<ClusterDiscovery>>>,
-    storage_operator: Mutex<HashMap<String, StorageOperator>>,
+    storage_operator: Mutex<HashMap<String, DataOperator>>,
     cache_manager: Mutex<HashMap<String, Arc<CacheManager>>>,
     catalog_manager: Mutex<HashMap<String, Arc<CatalogManager>>>,
     http_query_manager: Mutex<HashMap<String, Arc<HttpQueryManager>>>,
@@ -111,7 +111,7 @@ impl TestGlobalServices {
         // Cluster discovery.
         ClusterDiscovery::init(config.clone(), global_services.clone()).await?;
 
-        StorageOperator::init(&config.storage, global_services.clone()).await?;
+        DataOperator::init(&config.storage, global_services.clone()).await?;
         CacheManager::init(&config.query, global_services.clone())?;
         CatalogManager::init(&config, global_services.clone()).await?;
         HttpQueryManager::init(&config, global_services.clone()).await?;
@@ -280,8 +280,8 @@ impl SingletonImpl<Arc<ClusterDiscovery>> for TestGlobalServices {
     }
 }
 
-impl SingletonImpl<StorageOperator> for TestGlobalServices {
-    fn get(&self) -> StorageOperator {
+impl SingletonImpl<DataOperator> for TestGlobalServices {
+    fn get(&self) -> DataOperator {
         match std::thread::current().name() {
             None => panic!("Operator is not init"),
             Some(name) => match self.storage_operator.lock().get(name) {
@@ -291,7 +291,7 @@ impl SingletonImpl<StorageOperator> for TestGlobalServices {
         }
     }
 
-    fn init(&self, value: StorageOperator) -> Result<()> {
+    fn init(&self, value: DataOperator) -> Result<()> {
         match std::thread::current().name() {
             None => panic!("thread name is none"),
             Some(name) => match self.storage_operator.lock().entry(name.to_string()) {
