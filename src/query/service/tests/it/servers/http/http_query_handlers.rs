@@ -81,17 +81,39 @@ type EndpointType = HTTPSessionEndpoint<Route>;
 // 1. query fail after started
 
 async fn expect_end(ep: &EndpointType, result: QueryResponse) -> Result<()> {
-    let result = match result.next_uri {
-        None => result,
-        Some(next_uri) => {
-            let (status, result) = get_uri_checked(ep, &next_uri).await?;
-            assert_eq!(status, StatusCode::OK, "{:?}", result);
-            assert_eq!(result.data.len(), 0, "{:?}", result);
-            assert!(result.next_uri.is_none(), "{:?}", result);
-            result
-        }
-    };
+    assert!(result.next_uri.is_some(), "{:?}", result);
+    assert_eq!(result.data.len(), 0, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result);
+    assert!(
+        matches!(
+            result.state,
+            ExecuteStateKind::Succeeded | ExecuteStateKind::Running
+        ),
+        "{:?}",
+        result
+    );
+    assert!(result.schema.is_some(), "{:?}", result);
+
+    let next_uri = result.next_uri.clone().unwrap();
+    if next_uri.contains("final") {
+        check_final(ep, &next_uri).await?;
+    } else {
+        let (status, result) = get_uri_checked(ep, &next_uri).await?;
+        assert_eq!(status, StatusCode::OK, "{:?}", result);
+        assert_eq!(result.data.len(), 0, "{:?}", result);
+        let next_uri = result.next_uri.clone().unwrap();
+        check_final(ep, &next_uri).await?;
+    }
+    Ok(())
+}
+
+async fn check_final(ep: &EndpointType, final_uri: &str) -> Result<()> {
+    let (status, result) = get_uri_checked(ep, final_uri).await?;
+    assert!(final_uri.contains("final"), "{:?}", result);
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert!(result.error.is_none(), "{:?}", result);
+    assert!(result.next_uri.is_none(), "{:?}", result);
+    assert_eq!(result.data.len(), 0, "{:?}", result);
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
     Ok(())
 }
@@ -105,9 +127,13 @@ async fn test_simple_sql() -> Result<()> {
     let (status, result) = post_sql_to_endpoint_new_session(&ep, sql, 1).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result.error);
-    assert_eq!(result.data.len(), 10, "{:?}", result);
+
+    let query_id = &result.id;
+    let final_uri = make_final_uri(query_id);
+
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
-    assert!(result.next_uri.is_none(), "{:?}", result);
+    assert_eq!(result.next_uri, Some(final_uri.clone()), "{:?}", result);
+    assert_eq!(result.data.len(), 10, "{:?}", result);
     assert!(result.schema.is_some(), "{:?}", result);
     assert_eq!(
         result.schema.as_ref().unwrap().fields().len(),
@@ -116,42 +142,60 @@ async fn test_simple_sql() -> Result<()> {
         result
     );
 
-    let query_id = &result.id;
     // get state
     let uri = make_state_uri(query_id);
     let (status, result) = get_uri_checked(&ep, &uri).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result);
     assert_eq!(result.data.len(), 0, "{:?}", result);
-    assert!(result.next_uri.is_none(), "{:?}", result);
+    assert_eq!(result.next_uri, Some(final_uri.clone()), "{:?}", result);
     assert!(result.schema.is_some(), "{:?}", result);
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
 
     // get page, support retry
-    let uri = make_page_uri(query_id, 0);
+    let page_0_uri = make_page_uri(query_id, 0);
     for _ in 1..3 {
-        let (status, result) = get_uri_checked(&ep, &uri).await?;
+        let (status, result) = get_uri_checked(&ep, &page_0_uri).await?;
         assert_eq!(status, StatusCode::OK, "{:?}", result);
         assert!(result.error.is_none(), "{:?}", result);
         assert_eq!(result.data.len(), 10, "{:?}", result);
-        assert!(result.next_uri.is_none(), "{:?}", result);
+        assert_eq!(result.next_uri, Some(final_uri.clone()), "{:?}", result);
         assert!(result.schema.is_some(), "{:?}", result);
         assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
     }
 
     // get page not expected
-    let uri = make_page_uri(query_id, 1);
-    let response = get_uri(&ep, &uri).await;
+    let page_1_uri = make_page_uri(query_id, 1);
+    let response = get_uri(&ep, &page_1_uri).await;
     assert_eq!(response.status(), StatusCode::NOT_FOUND, "{:?}", result);
     let body = response.into_body().into_string().await.unwrap();
     assert_eq!(body, "wrong page number 1");
 
-    // delete
-    let status = delete_query(&ep, query_id).await;
+    // final
+    let (status, result) = get_uri_checked(&ep, &final_uri).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert!(result.next_uri.is_none(), "{:?}", result);
 
-    let response = get_uri(&ep, &uri).await;
+    let response = get_uri(&ep, &page_0_uri).await;
     assert_eq!(response.status(), StatusCode::NOT_FOUND, "{:?}", result);
+
+    let sql = "show databases";
+    let (status, result) = post_sql(sql, 1).await?;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert!(result.error.is_none(), "{:?}", result);
+    assert!(result.schema.is_some(), "{:?}", result);
+    assert_eq!(
+        result.schema.as_ref().unwrap().fields().len(),
+        1,
+        "{:?}",
+        result
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_show_databases() -> Result<()> {
+    let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
 
     let sql = "show databases";
     let (status, result) = post_sql(sql, 1).await?;
@@ -332,32 +376,6 @@ async fn test_pagination() -> Result<()> {
     assert_eq!(result.next_uri, Some(next_uri), "{:?}", result);
     assert!(result.schema.is_some(), "{:?}", result);
 
-    for page in 0..5 {
-        let uri = make_page_uri(query_id, page);
-
-        let (status, result) = get_uri_checked(&ep, &uri).await?;
-        let msg = || format!("page {}: {:?}", page, result);
-        assert_eq!(status, StatusCode::OK, "{:?}", msg());
-        assert!(result.error.is_none(), "{:?}", msg());
-        assert_eq!(result.data.len(), 2, "{:?}", msg());
-        assert!(result.schema.is_some(), "{:?}", result);
-        if page == 4 {
-            expect_end(&ep, result).await?;
-        } else {
-            assert!(result.next_uri.is_some(), "{:?}", msg());
-        }
-    }
-
-    // get state
-    let uri = make_state_uri(query_id);
-    let (status, result) = get_uri_checked(&ep, &uri).await?;
-    assert_eq!(status, StatusCode::OK);
-    assert!(result.error.is_none(), "{:?}", result.error);
-    assert_eq!(result.data.len(), 0, "{:?}", result);
-    assert!(result.next_uri.is_none(), "{:?}", result);
-    assert!(result.schema.is_some(), "{:?}", result);
-    assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
-
     // get page not expected
     let uri = make_page_uri(query_id, 6);
     let response = get_uri(&ep, &uri).await;
@@ -365,13 +383,27 @@ async fn test_pagination() -> Result<()> {
     let body = response.into_body().into_string().await.unwrap();
     assert_eq!(body, "wrong page number 6");
 
-    // delete
-    let status = delete_query(&ep, query_id).await;
-    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    let mut next_uri = result.next_uri.clone().unwrap();
 
-    let response = get_uri(&ep, &uri).await;
-    assert_eq!(response.status(), StatusCode::NOT_FOUND, "{:?}", result);
+    for page in 1..5 {
+        let (status, result) = get_uri_checked(&ep, &next_uri).await?;
+        let msg = || format!("page {}: {:?}", page, result);
+        assert_eq!(status, StatusCode::OK, "{:?}", msg());
+        assert!(result.error.is_none(), "{:?}", msg());
+        assert!(result.schema.is_some(), "{:?}", result);
+        if page == 5 {
+            // get state
+            let uri = make_state_uri(query_id);
+            let (status, _state_result) = get_uri_checked(&ep, &uri).await?;
+            assert_eq!(status, StatusCode::OK);
 
+            expect_end(&ep, result).await?;
+        } else {
+            assert_eq!(result.data.len(), 2, "{:?}", msg());
+            assert!(result.next_uri.is_some(), "{:?}", msg());
+            next_uri = result.next_uri.clone().unwrap();
+        }
+    }
     Ok(())
 }
 
@@ -387,7 +419,7 @@ async fn test_http_session() -> Result<()> {
     assert_eq!(status, StatusCode::OK);
     assert!(result.error.is_none(), "{:?}", result);
     assert_eq!(result.data.len(), 0, "{:?}", result);
-    assert_eq!(result.next_uri, None, "{:?}", result);
+    assert!(result.next_uri.is_some(), "{:?}", result);
     assert!(result.schema.is_some(), "{:?}", result);
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
     let session_id = &result.session_id.unwrap();
@@ -448,7 +480,7 @@ async fn test_result_timeout() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_system_tables() -> Result<()> {
     let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
     let session_middleware = HTTPSessionMiddleware::create(
@@ -494,7 +526,7 @@ async fn test_system_tables() -> Result<()> {
             "{}",
             error_message
         );
-        assert!(result.next_uri.is_none(), "{:?}", result);
+        assert!(result.next_uri.is_some(), "{:?}", result);
         assert!(result.schema.is_some(), "{:?}", result);
     }
     Ok(())
@@ -635,12 +667,6 @@ async fn test_query_log() -> Result<()> {
         result
     );
     Ok(())
-}
-
-async fn delete_query(ep: &EndpointType, query_id: &str) -> StatusCode {
-    let uri = make_final_uri(query_id);
-    let resp = get_uri(ep, &uri).await;
-    resp.status()
 }
 
 async fn check_response(response: Response) -> Result<(StatusCode, QueryResponse)> {
@@ -1129,7 +1155,7 @@ async fn test_download_running() -> Result<()> {
     );
     assert_eq!(resp.into_body().into_string().await.unwrap(), "running");
 
-    let response = get_uri(&ep, &result.final_uri.unwrap()).await;
+    let response = get_uri(&ep, &result.kill_uri.unwrap()).await;
     assert_eq!(response.status(), StatusCode::OK, "{:?}", response);
 
     let uri = format!("/v1/query/{query_id}/download?limit=1");
