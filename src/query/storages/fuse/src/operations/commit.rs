@@ -334,35 +334,16 @@ impl FuseTable {
     pub fn merge_append_operations(
         append_log_entries: &[AppendOperationLogEntry],
     ) -> Result<(Vec<String>, Statistics)> {
-        let (s, seg_locs) = append_log_entries.iter().try_fold(
-            (
-                Statistics::default(),
-                Vec::with_capacity(append_log_entries.len()),
-            ),
-            |(mut acc, mut seg_acc), log_entry| {
-                let loc = &log_entry.segment_location;
-                let stats = &log_entry.segment_info.summary;
-                acc.row_count += stats.row_count;
-                acc.block_count += stats.block_count;
-                acc.uncompressed_byte_size += stats.uncompressed_byte_size;
-                acc.compressed_byte_size += stats.compressed_byte_size;
-                acc.index_size = stats.index_size;
-                acc.col_stats = if acc.col_stats.is_empty() {
-                    stats.col_stats.clone()
-                } else {
-                    statistics::reduce_block_statistics(&[&acc.col_stats, &stats.col_stats])?
-                };
-                seg_acc.push(loc.clone());
-                Ok::<_, ErrorCode>((acc, seg_acc))
-            },
-        )?;
-
-        Ok((seg_locs, s))
+        let iter = append_log_entries
+            .iter()
+            .map(|entry| (&entry.segment_location, entry.segment_info.as_ref()));
+        FuseTable::merge_segments(iter)
     }
 
-    pub fn merge_segments<'a>(
-        mut segments: impl Iterator<Item = (&'a Location, &'a SegmentInfo)>,
-    ) -> Result<(Vec<Location>, Statistics)> {
+    pub fn merge_segments<'a, T>(
+        mut segments: impl Iterator<Item = (&'a T, &'a SegmentInfo)>,
+    ) -> Result<(Vec<T>, Statistics)>
+    where T: Clone + 'a {
         let len_hint = segments
             .size_hint()
             .1
