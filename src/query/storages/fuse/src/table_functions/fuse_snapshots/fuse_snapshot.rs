@@ -45,7 +45,7 @@ impl<'a> FuseSnapshot<'a> {
                 snapshot_version,
             );
             let (snapshots, _) = snapshots_io
-                .read_snapshot_lites(snapshot_location, limit, false)
+                .read_snapshot_lites(snapshot_location, limit, false, None)
                 .await?;
             return self.to_block(&meta_location_generator, &snapshots, snapshot_version);
         }
