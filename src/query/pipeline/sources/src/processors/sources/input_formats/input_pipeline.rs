@@ -22,9 +22,7 @@ use common_base::base::GlobalIORuntime;
 use common_base::base::TrySpawn;
 use common_datablocks::DataBlock;
 use common_exception::Result;
-use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipeline;
-use common_pipeline_core::SourcePipeBuilder;
 use futures::AsyncRead;
 use futures_util::stream::FuturesUnordered;
 use futures_util::AsyncReadExt;
@@ -204,17 +202,11 @@ pub trait InputFormatPipe: Sized + Send + 'static {
         row_batch_rx: async_channel::Receiver<Self::RowBatch>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let mut builder = SourcePipeBuilder::create();
-        for _ in 0..ctx.settings.get_max_threads()? {
-            let output = OutputPort::create();
-            let source = DeserializeSource::<Self>::create(
-                ctx.clone(),
-                output.clone(),
-                row_batch_rx.clone(),
-            )?;
-            builder.add_source(output, source);
-        }
-        pipeline.add_pipe(builder.finalize());
+        let max_threads = ctx.settings.get_max_threads()? as usize;
+        pipeline.add_source(
+            |output| DeserializeSource::<Self>::create(ctx.clone(), output, row_batch_rx.clone()),
+            max_threads,
+        )?;
         Ok(())
     }
 
@@ -223,7 +215,6 @@ pub trait InputFormatPipe: Sized + Send + 'static {
         split_rx: async_channel::Receiver<Result<Split<Self>>>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let mut builder = SourcePipeBuilder::create();
         let n_threads = ctx.settings.get_max_threads()? as usize;
         let max_aligner = match ctx.plan {
             InputPlan::CopyInto(_) => ctx.splits.len(),
@@ -236,17 +227,17 @@ pub trait InputFormatPipe: Sized + Send + 'static {
             }
         };
         let (row_batch_tx, row_batch_rx) = crossbeam_channel::bounded(n_threads);
-        for _ in 0..std::cmp::min(max_aligner, n_threads) {
-            let output = OutputPort::create();
-            let source = Aligner::<Self>::try_create(
-                output.clone(),
-                ctx.clone(),
-                split_rx.clone(),
-                row_batch_tx.clone(),
-            )?;
-            builder.add_source(output, source);
-        }
-        pipeline.add_pipe(builder.finalize());
+        pipeline.add_source(
+            |output| {
+                Aligner::<Self>::try_create(
+                    output,
+                    ctx.clone(),
+                    split_rx.clone(),
+                    row_batch_tx.clone(),
+                )
+            },
+            std::cmp::min(max_aligner, n_threads),
+        )?;
         pipeline.resize(n_threads)?;
         pipeline.add_transform(|input, output| {
             DeserializeTransformer::<Self>::create(ctx.clone(), input, output, row_batch_rx.clone())

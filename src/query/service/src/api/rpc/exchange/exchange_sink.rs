@@ -21,9 +21,7 @@ use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_sink_merge::ExchangeMergeSink;
 use crate::api::rpc::exchange::exchange_sink_shuffle::ExchangePublisherSink;
 use crate::clusters::ClusterHelper;
-use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::Pipeline;
-use crate::pipelines::SinkPipeBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -46,33 +44,10 @@ impl ExchangeSink {
                     )));
                 }
 
-                let mut sink_builder = SinkPipeBuilder::create();
-
-                for _index in 0..pipeline.output_len() {
-                    let input = InputPort::create();
-                    sink_builder.add_sink(
-                        input.clone(),
-                        ExchangeMergeSink::try_create(ctx.clone(), input.clone(), params)?,
-                    );
-                }
-
-                pipeline.add_pipe(sink_builder.finalize());
-                Ok(())
+                pipeline.add_sink(|input| ExchangeMergeSink::try_create(ctx.clone(), input, params))
             }
-            ExchangeParams::ShuffleExchange(params) => {
-                let mut sink_builder = SinkPipeBuilder::create();
-
-                for _index in 0..pipeline.output_len() {
-                    let input = InputPort::create();
-                    sink_builder.add_sink(
-                        input.clone(),
-                        ExchangePublisherSink::try_create(ctx.clone(), input, params)?,
-                    );
-                }
-
-                pipeline.add_pipe(sink_builder.finalize());
-                Ok(())
-            }
+            ExchangeParams::ShuffleExchange(params) => pipeline
+                .add_sink(|input| ExchangePublisherSink::try_create(ctx.clone(), input, params)),
         }
     }
 }
