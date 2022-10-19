@@ -350,7 +350,14 @@ impl StorageOperator {
     }
 }
 
-/// The operator for cache.
+/// CacheOperator is the operator to access cache services.
+///
+/// # Notes
+///
+/// As described in [RFC: Cache](https://databend.rs/doc/contributing/rfcs/cache):
+///
+/// All data stored in cache operator should be non-persist and could be GC or
+/// background auto evict at any time.
 #[derive(Clone, Debug)]
 pub struct CacheOperator {
     op: Operator,
