@@ -46,10 +46,13 @@ use tracing::warn;
 use uuid::Uuid;
 
 use crate::io::write_meta;
+use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
+use crate::operations::mutation::AbortOperation;
 use crate::operations::AppendOperationLogEntry;
 use crate::operations::TableOperationLog;
 use crate::statistics;
+use crate::statistics::merge_statistics;
 use crate::FuseTable;
 use crate::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use crate::OPT_KEY_SNAPSHOT_LOCATION;
@@ -57,6 +60,7 @@ use crate::OPT_KEY_SNAPSHOT_LOCATION;
 const OCC_DEFAULT_BACKOFF_INIT_DELAY_MS: Duration = Duration::from_millis(5);
 const OCC_DEFAULT_BACKOFF_MAX_DELAY_MS: Duration = Duration::from_millis(20 * 1000);
 const OCC_DEFAULT_BACKOFF_MAX_ELAPSED_MS: Duration = Duration::from_millis(120 * 1000);
+const MAX_RETRIES: u64 = 10;
 
 impl FuseTable {
     pub async fn do_commit(
@@ -379,7 +383,7 @@ impl FuseTable {
 
         let object = operator.object(&hint_path);
         { || object.write(last_snapshot_path.as_bytes()) }
-            .retry(backon::ExponentialBackoff::default())
+            .retry(backon::ExponentialBackoff::default().with_jitter())
             .when(|err| err.kind() == ErrorKind::Interrupted)
             .notify(|err, dur| {
                 warn!(
@@ -392,6 +396,98 @@ impl FuseTable {
             .unwrap_or_else(|e| {
                 warn!("write last snapshot hint failure. {}", e);
             })
+    }
+
+    pub async fn commit_mutation(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        snapshot: Arc<TableSnapshot>,
+        mut segments: Vec<Location>,
+        mut summary: Statistics,
+        abort_operation: AbortOperation,
+    ) -> Result<()> {
+        let mut table = self;
+        let mut latest: Arc<dyn Table>;
+        let mut retries = 0;
+        let mut latest_snapshot;
+        let mut base_snapshot = snapshot;
+        let mut current_table_info = &self.table_info;
+
+        while retries < MAX_RETRIES {
+            let mut snapshot_tobe_committed = TableSnapshot::from_previous(base_snapshot.as_ref());
+            snapshot_tobe_committed.segments = segments.clone();
+            snapshot_tobe_committed.summary = summary.clone();
+            match Self::commit_to_meta_server(
+                ctx.as_ref(),
+                current_table_info,
+                &self.meta_location_generator,
+                snapshot_tobe_committed,
+                &self.operator,
+            )
+            .await
+            {
+                Err(e) if e.code() == ErrorCode::table_version_mismatched_code() => {
+                    latest = table.refresh(ctx.as_ref()).await?;
+                    table = FuseTable::try_from_table(latest.as_ref())?;
+
+                    latest_snapshot =
+                        table
+                            .read_table_snapshot(ctx.clone())
+                            .await?
+                            .ok_or_else(|| {
+                                ErrorCode::LogicalError(
+                                    "mutation meets empty snapshot during conflict reconciliation",
+                                )
+                            })?;
+                    current_table_info = &table.table_info;
+
+                    if latest_snapshot.segments.len() < base_snapshot.segments.len() {
+                        abort_operation
+                            .abort(ctx.clone(), self.operator.clone())
+                            .await?;
+                        return Err(ErrorCode::StorageOther(
+                            "mutation conflicts, concurrent mutation detected while committing segment compaction operation",
+                        ));
+                    }
+
+                    // Check if there is only insertion during the operation.
+                    let mut new_segments = latest_snapshot.segments.clone();
+                    let suffix = new_segments
+                        .split_off(latest_snapshot.segments.len() - base_snapshot.segments.len());
+                    if suffix.ne(&base_snapshot.segments) {
+                        abort_operation
+                            .abort(ctx.clone(), self.operator.clone())
+                            .await?;
+                        return Err(ErrorCode::StorageOther(
+                            "mutation conflicts, concurrent mutation detected while committing segment compaction operation",
+                        ));
+                    }
+
+                    info!("resolvable conflicts detected");
+                    // Read all segments information in parallel.
+                    let fuse_segment_io = SegmentsIO::create(ctx.clone(), table.operator.clone());
+                    let results = fuse_segment_io.read_segments(&new_segments).await?;
+                    for result in results.iter() {
+                        let segment = result.clone()?;
+                        summary = merge_statistics(&summary, &segment.summary)?;
+                    }
+                    new_segments.extend(segments.clone());
+                    segments = new_segments;
+                    base_snapshot = latest_snapshot;
+                    retries += 1;
+                }
+                Err(e) => return Err(e),
+                Ok(_) => return Ok(()),
+            }
+        }
+
+        abort_operation
+            .abort(ctx.clone(), self.operator.clone())
+            .await?;
+        Err(ErrorCode::StorageOther(format!(
+            "commit mutation failed after {} retries",
+            retries
+        )))
     }
 }
 
@@ -410,6 +506,9 @@ mod utils {
                 // if deletion operation failed (after DAL retried)
                 // we just left them there, and let the "major GC" collect them
                 let _ = operator.object(block_location).delete().await;
+                if let Some(index) = &block.bloom_filter_index_location {
+                    let _ = operator.object(&index.0).delete().await;
+                }
             }
             let _ = operator.object(&entry.segment_location).delete().await;
         }

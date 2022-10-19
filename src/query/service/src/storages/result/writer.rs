@@ -108,7 +108,7 @@ impl ResultTableWriter {
 
         let object = self.data_accessor.object(&location);
         { || object.write(data.as_slice()) }
-            .retry(ExponentialBackoff::default())
+            .retry(ExponentialBackoff::default().with_jitter())
             .when(|err| err.kind() == ErrorKind::Interrupted)
             .notify(|err, dur| {
                 warn!(
