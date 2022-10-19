@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_base::base::tokio;
+use common_catalog::table::CompactTarget;
 use common_catalog::table::Table;
 use common_catalog::table_mutator::TableMutator;
 use common_exception::ErrorCode;
@@ -174,7 +175,9 @@ async fn build_mutator(
     let settings = ctx.get_settings();
     settings.set_max_threads(1)?;
     let mut pipeline = common_pipeline_core::Pipeline::create();
-    let mutator = fuse_table.compact(ctx.clone(), &mut pipeline).await?;
+    let mutator = fuse_table
+        .compact(ctx.clone(), CompactTarget::Blocks, &mut pipeline)
+        .await?;
     assert!(mutator.is_some());
     let mutator = mutator.unwrap();
     pipeline.set_max_threads(1);

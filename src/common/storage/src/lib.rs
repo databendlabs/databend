@@ -37,6 +37,7 @@ pub use config::STORAGE_S3_DEFAULT_ENDPOINT;
 
 mod operator;
 pub use operator::init_operator;
+pub use operator::CacheOperator;
 pub use operator::StorageOperator;
 
 mod location;

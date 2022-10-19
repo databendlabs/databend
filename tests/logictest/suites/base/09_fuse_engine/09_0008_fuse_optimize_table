@@ -160,11 +160,42 @@ optimize table m purge;
 statement ok
 optimize table m compact;
 
+
+statement ok
+create table t1(a uint64);
+
+statement ok
+insert into t1 values (5);
+
+statement ok
+insert into t1 values (6);
+
+statement ok
+insert into t1 values (7);
+
+statement query II
+select segment_count, block_count from fuse_snapshot('db_09_0008', 't1') limit 1;
+
+----
+3 3
+
+statement ok
+optimize table t1 compact segment;
+
+statement query II
+select segment_count, block_count from fuse_snapshot('db_09_0008', 't1') limit 1;
+
+----
+1 3
+
 statement ok
 DROP TABLE m;
 
 statement ok
 DROP TABLE t;
+
+statement ok
+DROP TABLE t1;
 
 statement ok
 DROP DATABASE db_09_0008;

@@ -601,6 +601,8 @@ pub enum TokenKind {
     SECOND,
     #[token("SELECT", ignore(ascii_case))]
     SELECT,
+    #[token("SEGMENT", ignore(ascii_case))]
+    SEGMENT,
     #[token("SET", ignore(ascii_case))]
     SET,
     #[token("SETTINGS", ignore(ascii_case))]

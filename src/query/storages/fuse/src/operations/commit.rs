@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 use std::io::ErrorKind;
+use std::ops::Range;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -333,14 +334,24 @@ impl FuseTable {
     pub fn merge_append_operations(
         append_log_entries: &[AppendOperationLogEntry],
     ) -> Result<(Vec<String>, Statistics)> {
-        let (s, seg_locs) = append_log_entries.iter().try_fold(
-            (
-                Statistics::default(),
-                Vec::with_capacity(append_log_entries.len()),
-            ),
-            |(mut acc, mut seg_acc), log_entry| {
-                let loc = &log_entry.segment_location;
-                let stats = &log_entry.segment_info.summary;
+        let iter = append_log_entries
+            .iter()
+            .map(|entry| (&entry.segment_location, entry.segment_info.as_ref()));
+        FuseTable::merge_segments(iter)
+    }
+
+    pub fn merge_segments<'a, T>(
+        mut segments: impl Iterator<Item = (&'a T, &'a SegmentInfo)>,
+    ) -> Result<(Vec<T>, Statistics)>
+    where T: Clone + 'a {
+        let len_hint = segments
+            .size_hint()
+            .1
+            .unwrap_or_else(|| segments.size_hint().0);
+        let (s, seg_locs) = segments.try_fold(
+            (Statistics::default(), Vec::with_capacity(len_hint)),
+            |(mut acc, mut seg_acc), (location, segment_info)| {
+                let stats = &segment_info.summary;
                 acc.row_count += stats.row_count;
                 acc.block_count += stats.block_count;
                 acc.uncompressed_byte_size += stats.uncompressed_byte_size;
@@ -351,7 +362,7 @@ impl FuseTable {
                 } else {
                     statistics::reduce_block_statistics(&[&acc.col_stats, &stats.col_stats])?
                 };
-                seg_acc.push(loc.clone());
+                seg_acc.push(location.clone());
                 Ok::<_, ErrorCode>((acc, seg_acc))
             },
         )?;
@@ -383,7 +394,7 @@ impl FuseTable {
 
         let object = operator.object(&hint_path);
         { || object.write(last_snapshot_path.as_bytes()) }
-            .retry(backon::ExponentialBackoff::default())
+            .retry(backon::ExponentialBackoff::default().with_jitter())
             .when(|err| err.kind() == ErrorKind::Interrupted)
             .notify(|err, dur| {
                 warn!(
@@ -441,26 +452,24 @@ impl FuseTable {
                             })?;
                     current_table_info = &table.table_info;
 
-                    if latest_snapshot.segments.len() < base_snapshot.segments.len() {
-                        abort_operation
-                            .abort(ctx.clone(), self.operator.clone())
-                            .await?;
-                        return Err(ErrorCode::StorageOther(
-                            "mutation conflicts, concurrent mutation detected while committing segment compaction operation",
-                        ));
-                    }
-
                     // Check if there is only insertion during the operation.
                     let mut new_segments = latest_snapshot.segments.clone();
-                    let suffix = new_segments
-                        .split_off(latest_snapshot.segments.len() - base_snapshot.segments.len());
-                    if suffix.ne(&base_snapshot.segments) {
-                        abort_operation
-                            .abort(ctx.clone(), self.operator.clone())
-                            .await?;
-                        return Err(ErrorCode::StorageOther(
-                            "mutation conflicts, concurrent mutation detected while committing segment compaction operation",
-                        ));
+                    match MutatorConflictDetector::detect_conflicts(
+                        base_snapshot.as_ref(),
+                        latest_snapshot.as_ref(),
+                    ) {
+                        Conflict::Unresolvable => {
+                            abort_operation
+                                .abort(ctx.clone(), self.operator.clone())
+                                .await?;
+                            return Err(ErrorCode::StorageOther(
+                                "mutation conflicts, concurrent mutation detected while committing segment compaction operation",
+                            ));
+                        }
+                        Conflict::ResolvableAppend(range_of_newly_append) => {
+                            // for resolvable append only operation, the range returned always begin with 0
+                            new_segments.truncate(range_of_newly_append.len());
+                        }
                     }
 
                     info!("resolvable conflicts detected");
@@ -488,6 +497,39 @@ impl FuseTable {
             "commit mutation failed after {} retries",
             retries
         )))
+    }
+}
+
+pub enum Conflict {
+    Unresolvable,
+    // resolvable conflicts with append only operation
+    // the range embedded is the range of segments that are appended in the latest snapshot
+    ResolvableAppend(Range<usize>),
+}
+
+// wraps a namespace, to clarify the who is detecting conflict
+pub struct MutatorConflictDetector;
+
+impl MutatorConflictDetector {
+    // detects conflicts, as a mutator, working on the base snapshot, with latest snapshot
+    pub fn detect_conflicts(base: &TableSnapshot, latest: &TableSnapshot) -> Conflict {
+        let base_segments = &base.segments;
+        let latest_segments = &latest.segments;
+
+        let base_segments_len = base_segments.len();
+        let latest_segments_len = latest_segments.len();
+
+        if latest_segments_len >= base_segments_len
+            && base_segments[0..base_segments_len]
+                == latest_segments[(latest_segments_len - base_segments_len)..latest_segments_len]
+        {
+            // note (latest_segments_len == base_segments_len indicate) indicates that the latest
+            // snapshot is generated by non-data related operations, like `alter table add column`
+            // which can be merged
+            Conflict::ResolvableAppend(0..(latest_segments_len - base_segments_len))
+        } else {
+            Conflict::Unresolvable
+        }
     }
 }
 
