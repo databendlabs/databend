@@ -2026,6 +2026,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-storages-context"
+version = "0.1.0"
+dependencies = [
+ "common-datablocks",
+ "parking_lot 0.12.1",
+]
+
+[[package]]
 name = "common-storages-fuse"
 version = "0.1.0"
 dependencies = [
@@ -2052,6 +2060,7 @@ dependencies = [
  "common-pipeline-transforms",
  "common-sharing",
  "common-storage",
+ "common-storages-context",
  "common-storages-index",
  "common-storages-util",
  "futures",
@@ -2140,6 +2149,7 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
+ "common-storages-context",
  "common-storages-util",
  "common-users",
  "futures",
@@ -2177,12 +2187,10 @@ dependencies = [
  "common-arrow",
  "common-cache",
  "common-catalog",
- "common-datablocks",
  "common-exception",
  "common-fuse-meta",
  "once_cell",
  "opendal",
- "parking_lot 0.12.1",
 ]
 
 [[package]]
@@ -2771,6 +2779,7 @@ dependencies = [
  "common-planner",
  "common-settings",
  "common-storage",
+ "common-storages-context",
  "common-storages-fuse",
  "common-storages-hive",
  "common-storages-index",

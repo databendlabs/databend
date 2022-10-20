@@ -61,6 +61,7 @@ common-pipeline-transforms = { path = "../pipeline/transforms" }
 common-planner = { path = "../planner" }
 common-settings = { path = "../settings" }
 common-storage = { path = "../../common/storage" }
+common-storages-context = { path = "../storages/context" }
 common-storages-fuse = { path = "../storages/fuse" }
 common-storages-hive = { path = "../storages/hive", optional = true }
 common-storages-index = { path = "../storages/index" }
