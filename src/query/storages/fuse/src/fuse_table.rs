@@ -80,12 +80,12 @@ pub struct FuseTable {
 }
 
 impl FuseTable {
-    pub fn try_create(_ctx: StorageContext, table_info: TableInfo) -> Result<Box<dyn Table>> {
-        let r = Self::do_create(table_info, false)?;
+    pub fn try_create(ctx: StorageContext, table_info: TableInfo) -> Result<Box<dyn Table>> {
+        let r = Self::do_create(ctx, table_info)?;
         Ok(r)
     }
 
-    pub fn do_create(table_info: TableInfo, read_only: bool) -> Result<Box<FuseTable>> {
+    pub fn do_create(ctx: StorageContext, table_info: TableInfo) -> Result<Box<FuseTable>> {
         let storage_prefix = Self::parse_storage_prefix(&table_info)?;
         let cluster_key_meta = table_info.meta.cluster_key();
         let mut cluster_keys = Vec::new();
@@ -117,7 +117,7 @@ impl FuseTable {
             cluster_keys,
             cluster_key_meta,
             meta_location_generator: TableMetaLocationGenerator::with_prefix(storage_prefix),
-            read_only,
+            read_only: ctx.read_only,
             operator,
         }))
     }

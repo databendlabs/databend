@@ -105,7 +105,6 @@ pub async fn create_storage_context() -> Result<StorageContext> {
     let meta_embedded = MetaEmbedded::new_temp().await.unwrap();
 
     Ok(StorageContext {
-        meta: Arc::new(meta_embedded),
         in_memory_data: Arc::new(Default::default()),
     })
 }

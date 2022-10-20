@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use common_contexts::DalContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::CreateTableReq;
@@ -73,7 +74,11 @@ pub trait Database: DynClone + Sync + Send {
     }
 
     // Build a `Arc<dyn Table>` from `TableInfo`.
-    fn get_table_by_info(&self, _table_info: &TableInfo) -> Result<Arc<dyn Table>> {
+    fn get_table_by_info(
+        &self,
+        _dal_ctx: Arc<DalContext>,
+        _table_info: &TableInfo,
+    ) -> Result<Arc<dyn Table>> {
         Err(ErrorCode::UnImplement(format!(
             "UnImplement get_table_by_info in {} Database",
             self.name()
@@ -81,7 +86,11 @@ pub trait Database: DynClone + Sync + Send {
     }
 
     // Get one table by db and table name.
-    async fn get_table(&self, _table_name: &str) -> Result<Arc<dyn Table>> {
+    async fn get_table(
+        &self,
+        _dal_ctx: Arc<DalContext>,
+        _table_name: &str,
+    ) -> Result<Arc<dyn Table>> {
         Err(ErrorCode::UnImplement(format!(
             "UnImplement get_table in {} Database",
             self.name()

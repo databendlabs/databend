@@ -214,21 +214,19 @@ impl Catalog for MutableCatalog {
 
     fn get_table_by_info(
         &self,
-        _dal_ctx: Arc<DalContext>,
+        dal_ctx: Arc<DalContext>,
         table_info: &TableInfo,
     ) -> Result<Arc<dyn Table>> {
         let storage = self.ctx.storage_factory.clone();
         let ctx = StorageContext {
-            meta: self.ctx.meta.clone().arc(),
+            dal_ctx,
+            read_only: false,
             in_memory_data: self.ctx.in_memory_data.clone(),
         };
         storage.get_table(ctx, table_info)
     }
 
-    async fn get_table_meta_by_id(
-        &self,
-        table_id: MetaId,
-    ) -> common_exception::Result<(TableIdent, Arc<TableMeta>)> {
+    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)> {
         let res = self.ctx.meta.get_table_by_id(table_id).await?;
         Ok(res)
     }

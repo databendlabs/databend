@@ -21,6 +21,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::TableSnapshot;
 use common_meta_app::schema::TableStatistics;
+use common_storages_util::storage_context::StorageContext;
 use futures::TryStreamExt;
 
 use crate::io::MetaReaders;
@@ -71,7 +72,7 @@ impl FuseTable {
         };
 
         let snapshot_version = self.snapshot_format_version().await?;
-        let reader = MetaReaders::table_snapshot_reader(ctx, self.get_operator());
+        let reader = MetaReaders::table_snapshot_reader(ctx.clone(), self.get_operator());
 
         // grab the table history
         // snapshots are order by timestamp DESC.
@@ -130,8 +131,12 @@ impl FuseTable {
             };
 
             // let's instantiate it
-            let read_only = true;
-            let fuse_tbl = FuseTable::do_create(table_info, read_only)?;
+            let storage_ctx = StorageContext {
+                dal_ctx: ctx.get_dal_context(),
+                read_only: true,
+                in_memory_data: Arc::new(Default::default()),
+            };
+            let fuse_tbl = FuseTable::do_create(storage_ctx, table_info)?;
             Ok(fuse_tbl.into())
         } else {
             Err(ErrorCode::TableHistoricalDataNotFound(

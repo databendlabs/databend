@@ -14,14 +14,17 @@
 
 use std::sync::Arc;
 
+use common_contexts::DalContext;
 use common_datablocks::InMemoryData;
-use common_meta_api::SchemaApi;
 use parking_lot::RwLock;
 
 /// Storage Context.
 #[derive(Clone)]
 pub struct StorageContext {
-    pub meta: Arc<dyn SchemaApi>,
+    // For metrics collect.
+    pub dal_ctx: Arc<DalContext>,
+    // Table is read only or not, read only for share table.
+    pub read_only: bool,
     // For shared data in memory.
     pub in_memory_data: Arc<RwLock<InMemoryData<u64>>>,
 }

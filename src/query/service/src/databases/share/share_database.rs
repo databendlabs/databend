@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_catalog::table::Table;
+use common_contexts::DalContext;
 use common_exception::Result;
 use common_meta_api::SchemaApi;
 use common_meta_app::schema::CreateTableReq;
@@ -75,17 +76,26 @@ impl Database for ShareDatabase {
         &self.db_info
     }
 
-    fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
+    fn get_table_by_info(
+        &self,
+        dal_ctx: Arc<DalContext>,
+        table_info: &TableInfo,
+    ) -> Result<Arc<dyn Table>> {
         let storage = self.ctx.storage_factory.clone();
         let ctx = StorageContext {
-            meta: self.ctx.meta.clone().arc(),
+            dal_ctx,
+            read_only: false,
             in_memory_data: self.ctx.in_memory_data.clone(),
         };
         storage.get_table(ctx, table_info)
     }
 
     // Get one table by db and table name.
-    async fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>> {
+    async fn get_table(
+        &self,
+        dal_ctx: Arc<DalContext>,
+        table_name: &str,
+    ) -> Result<Arc<dyn Table>> {
         let table_info = self
             .ctx
             .meta
@@ -95,7 +105,8 @@ impl Database for ShareDatabase {
                 table_name,
             ))
             .await?;
-        self.get_table_by_info(table_info.as_ref())
+
+        self.get_table_by_info(dal_ctx, table_info.as_ref())
     }
 
     async fn list_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
