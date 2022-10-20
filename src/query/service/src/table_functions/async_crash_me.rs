@@ -43,7 +43,6 @@ use crate::pipelines::Pipeline;
 use crate::sessions::TableContext;
 use crate::storages::Table;
 use crate::table_functions::table_function_factory::TableArgs;
-use crate::table_functions::TableFunction;
 
 pub struct AsyncCrashMeTable {
     table_info: TableInfo,
