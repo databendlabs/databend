@@ -29,18 +29,13 @@ use crate::caches::ItemCache;
 use crate::caches::SegmentInfoCache;
 use crate::caches::TableSnapshotCache;
 
-// default number of index meta cached, default 3000 items
-static DEFAULT_BLOOM_INDEX_META_CACHE_ITEMS: u64 = 3000;
-// default size of cached bloom filter index (in bytes), 1G
-static DEFAULT_BLOOM_INDEX_COLUMN_CACHE_SIZE: u64 = 1024 * 1024 * 1024;
-// default number of file meta data cached, default 3000 items
 static DEFAULT_FILE_META_DATA_CACHE_ITEMS: u64 = 3000;
 
 /// Where all the caches reside
 pub struct CacheManager {
     table_snapshot_cache: Option<TableSnapshotCache>,
     segment_info_cache: Option<SegmentInfoCache>,
-    bloom_index_cache: Option<BloomIndexCache>,
+    bloom_index_data_cache: Option<BloomIndexCache>,
     bloom_index_meta_cache: Option<BloomIndexMetaCache>,
     file_meta_data_cache: Option<FileMetaDataCache>,
     cluster_id: String,
@@ -58,7 +53,7 @@ impl CacheManager {
             v.init(Arc::new(Self {
                 table_snapshot_cache: None,
                 segment_info_cache: None,
-                bloom_index_cache: None,
+                bloom_index_data_cache: None,
                 bloom_index_meta_cache: None,
                 file_meta_data_cache: None,
                 cluster_id: config.cluster_id.clone(),
@@ -69,15 +64,17 @@ impl CacheManager {
         } else {
             let table_snapshot_cache = Self::new_item_cache(config.table_cache_snapshot_count);
             let segment_info_cache = Self::new_item_cache(config.table_cache_segment_count);
-            let bloom_index_cache = Self::new_bytes_cache(DEFAULT_BLOOM_INDEX_COLUMN_CACHE_SIZE);
-            let bloom_index_meta_cache = Self::new_item_cache(DEFAULT_BLOOM_INDEX_META_CACHE_ITEMS);
+            let bloom_index_data_cache =
+                Self::new_bytes_cache(config.table_cache_bloom_index_data_bytes);
+            let bloom_index_meta_cache =
+                Self::new_item_cache(config.table_cache_bloom_index_meta_count);
 
             let file_meta_data_cache = Self::new_item_cache(DEFAULT_FILE_META_DATA_CACHE_ITEMS);
 
             v.init(Arc::new(Self {
                 table_snapshot_cache,
                 segment_info_cache,
-                bloom_index_cache,
+                bloom_index_data_cache,
                 bloom_index_meta_cache,
                 file_meta_data_cache,
                 cluster_id: config.cluster_id.clone(),
@@ -106,7 +103,7 @@ impl CacheManager {
     }
 
     pub fn get_bloom_index_cache(&self) -> Option<BloomIndexCache> {
-        self.bloom_index_cache.clone()
+        self.bloom_index_data_cache.clone()
     }
 
     pub fn get_bloom_index_meta_cache(&self) -> Option<BloomIndexMetaCache> {
