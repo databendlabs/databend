@@ -280,6 +280,7 @@ d. Set your values in the `[storage.s3]`, `[storage.azblob]`, `[storage.gcs]` or
 type = "s3"
 
 [storage.s3]
+bucket = "databend"
 endpoint_url = "http://127.0.0.1:9900"
 access_key_id = "minioadmin"
 secret_access_key = "minioadmin"
