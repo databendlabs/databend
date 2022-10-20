@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_config::Config;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_exception::Result;
-use common_meta_embedded::MetaEmbedded;
 use common_meta_types::AuthInfo;
 use common_meta_types::GrantObject;
 use common_meta_types::NodeInfo;
@@ -102,12 +101,7 @@ pub async fn create_query_context_with_config(
 }
 
 pub async fn create_storage_context() -> Result<StorageContext> {
-    let meta_embedded = MetaEmbedded::new_temp().await.unwrap();
-
-    Ok(StorageContext {
-        meta: Arc::new(meta_embedded),
-        in_memory_data: Arc::new(Default::default()),
-    })
+    Ok(StorageContext {})
 }
 
 #[allow(dead_code)]

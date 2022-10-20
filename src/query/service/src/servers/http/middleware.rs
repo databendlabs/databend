@@ -27,8 +27,8 @@ use poem::Addr;
 use poem::Endpoint;
 use poem::Middleware;
 use poem::Request;
+use tracing::error;
 use tracing::info;
-use tracing::warn;
 
 use super::v1::HttpQueryContext;
 use crate::auth::AuthMgr;
@@ -161,7 +161,7 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
             )),
         };
         if let Err(ref err) = res {
-            warn!("http request error: {}", err);
+            error!("http request error: {}", err);
         };
         res
     }

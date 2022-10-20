@@ -34,8 +34,8 @@ use databend_query::sql::OPT_KEY_DATABASE_ID;
 use databend_query::sql::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::FuseTable;
-use databend_query::storages::TableStreamReadWrap;
 use databend_query::storages::ToReadDataSourcePlan;
+use databend_query::stream::DataBlockStream;
 use futures::TryStreamExt;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;

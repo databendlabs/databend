@@ -310,7 +310,7 @@ impl TableContext for QueryContext {
 
     // Get the storage data accessor operator from the session manager.
     fn get_data_operator(&self) -> Result<DataOperator> {
-        let pop = self.shared.persist_operator.clone();
+        let pop = self.shared.data_operator.clone();
 
         Ok(DataOperator::new(
             pop.operator().layer(self.shared.dal_ctx.as_ref().clone()),

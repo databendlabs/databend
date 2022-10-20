@@ -56,6 +56,7 @@ impl ClusterStatsGenerator {
 
         let mut block = data_block.clone();
         // Remove unused columns.
+
         if let Some(executor) = &self.expression_executor {
             block = executor.execute(&block)?;
         }
