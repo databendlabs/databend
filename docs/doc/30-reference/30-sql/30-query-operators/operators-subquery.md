@@ -4,11 +4,54 @@ description:
   A subquery is a query nested within another query.
 ---
 
-This topic provides reference information about the subquery operators supported in Databend.
+A subquery is a query nested within another one. Databend supports the following subquery types:
 
-A subquery is a query nested within another query.
+- [Scalar Subqueries](#scalar-subqueries)
+- [EXISTS / NOT EXISTS](#exists--not-exists)
 
-## [ NOT ] EXISTS
+## Scalar Subqueries
+
+A scalar subquery selects only one column or expression and returns only one row at most. A SQL query can have scalar subqueries in any places where a column or an expression is expected.
+
+- If a scalar subquery returns 0 rows, Databend will use NULL as the subquery output.
+- If a scalar subquery returns more than one row, Databend will throw an error.
+
+### Example
+
+```sql
+CREATE TABLE t1 (num int);
+INSERT INTO t1 VALUES (1);
+
+-- This subquery returns "1". 
+CREATE TABLE t2 (num int NULL);
+INSERT INTO t2 VALUES (2* (SELECT num FROM t1));
+SELECT * FROM t2;
+
+---
++------+
+| num  |
++------+
+|   2  |
++------+
+
+-- This subquery returns NULL. 
+INSERT INTO t2 VALUES (2* (SELECT num FROM t1 WHERE num > 100));
+SELECT * FROM t2;
+
+---
++------+
+| num  |
++------+
+|<null>|
+|   2  |
++------+
+
+-- Invalid subquery: More than one row is returned.
+INSERT INTO t1 VALUES (11);
+INSERT INTO t2 VALUES (2* (SELECT num FROM t1));
+```
+
+## EXISTS / NOT EXISTS
 
 An EXISTS subquery is a boolean expression that can appear in a WHERE clause:
 * An EXISTS expression evaluates to TRUE if any rows are produced by the subquery.
