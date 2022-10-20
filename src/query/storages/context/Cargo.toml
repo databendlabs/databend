@@ -12,6 +12,3 @@ doctest = false
 test = false
 
 [dependencies]
-common-datablocks = { path = "../../datablocks" }
-
-parking_lot = "0.12.1"

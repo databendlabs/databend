@@ -12,14 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use common_datablocks::InMemoryData;
-use parking_lot::RwLock;
-
 /// Storage Context.
 #[derive(Clone)]
-pub struct StorageContext {
-    // For shared data in memory.
-    pub in_memory_data: Arc<RwLock<InMemoryData<u64>>>,
-}
+pub struct StorageContext {}

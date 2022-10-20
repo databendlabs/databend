@@ -14,9 +14,7 @@
 
 use std::sync::Arc;
 
-use common_datablocks::InMemoryData;
 use common_meta_store::MetaStore;
-use parking_lot::RwLock;
 
 use crate::databases::DatabaseFactory;
 use crate::storages::StorageFactory;
@@ -26,5 +24,4 @@ pub struct CatalogContext {
     pub meta: MetaStore,
     pub storage_factory: Arc<StorageFactory>,
     pub database_factory: Arc<DatabaseFactory>,
-    pub in_memory_data: Arc<RwLock<InMemoryData<u64>>>,
 }

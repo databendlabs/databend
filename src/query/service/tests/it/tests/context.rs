@@ -101,9 +101,7 @@ pub async fn create_query_context_with_config(
 }
 
 pub async fn create_storage_context() -> Result<StorageContext> {
-    Ok(StorageContext {
-        in_memory_data: Arc::new(Default::default()),
-    })
+    Ok(StorageContext {})
 }
 
 #[allow(dead_code)]

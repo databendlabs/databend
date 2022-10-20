@@ -2048,10 +2048,6 @@ dependencies = [
 [[package]]
 name = "common-storages-context"
 version = "0.1.0"
-dependencies = [
- "common-datablocks",
- "parking_lot 0.12.1",
-]
 
 [[package]]
 name = "common-storages-fuse"
