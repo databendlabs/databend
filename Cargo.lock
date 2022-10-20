@@ -1498,6 +1498,7 @@ dependencies = [
  "regex",
  "serde",
  "simdutf8",
+ "siphasher",
  "strength_reduce",
 ]
 
