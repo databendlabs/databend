@@ -170,7 +170,7 @@ async fn test_compact_unresolved_conflict() -> Result<()> {
 async fn build_mutator(
     ctx: Arc<QueryContext>,
     table: Arc<dyn Table>,
-) -> Result<Arc<dyn TableMutator>> {
+) -> Result<Box<dyn TableMutator>> {
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let settings = ctx.get_settings();
     settings.set_max_threads(1)?;
