@@ -11,6 +11,9 @@ publish = false
 doctest = false
 test = false
 
+[package.metadata.cargo-machete]
+ignored = ["xorfilter-rs"]
+
 [dependencies]
 common-catalog = { path = "../../catalog" }
 common-datablocks = { path = "../../datablocks" }
