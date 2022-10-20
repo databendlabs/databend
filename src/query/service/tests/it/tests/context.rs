@@ -101,7 +101,7 @@ pub async fn create_query_context_with_config(
 }
 
 pub async fn create_storage_context() -> Result<StorageContext> {
-    Ok(StorageContext {})
+    Ok(StorageContext::default())
 }
 
 #[allow(dead_code)]

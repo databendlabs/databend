@@ -59,5 +59,8 @@ pub use location::UriLocation;
 mod context;
 pub use context::StorageContext;
 
+mod metrics;
+pub use metrics::StorageMetrics;
+
 mod runtime_layer;
 mod utils;

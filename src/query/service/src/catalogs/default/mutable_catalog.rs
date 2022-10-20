@@ -211,7 +211,7 @@ impl Catalog for MutableCatalog {
 
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
         let storage = self.ctx.storage_factory.clone();
-        let ctx = StorageContext {};
+        let ctx = StorageContext::default();
         storage.get_table(ctx, table_info)
     }
 

@@ -12,6 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use opendal::Operator;
+
+use crate::metrics::StorageMetricsLayer;
+use crate::StorageMetrics;
+
 /// Storage Context.
-#[derive(Clone, Debug)]
-pub struct StorageContext {}
+#[derive(Clone, Debug, Default)]
+pub struct StorageContext {
+    /// Record the metrics of table data (via data operator).
+    table_data_metrics: Arc<StorageMetrics>,
+}
+
+impl StorageContext {
+    /// Get table data metrics from storage context.
+    pub fn table_data_metrics(&self) -> Arc<StorageMetrics> {
+        self.table_data_metrics.clone()
+    }
+
+    /// Wrap input operator with table data metrics layer.
+    ///
+    /// All IO operator happened in this operator will record in table_data_metrics.
+    pub fn with_table_data_metrics_layer(&self, op: Operator) -> Operator {
+        op.layer(StorageMetricsLayer::new(self.table_data_metrics.clone()))
+    }
+}
