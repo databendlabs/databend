@@ -194,7 +194,7 @@ impl TableMutator for FullCompactMutator {
         let table = FuseTable::try_from_table(table.as_ref())?;
         table
             .commit_mutation(
-                ctx.clone(),
+                &ctx,
                 self.base_snapshot.clone(),
                 segments,
                 summary,

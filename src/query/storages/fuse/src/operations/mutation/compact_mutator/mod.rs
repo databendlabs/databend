@@ -1,3 +1,5 @@
+// Copyright 2022 Datafuse Labs.
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -9,11 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
 
-#![deny(unused_crate_dependencies)]
+mod full_compact_mutator;
+mod segment_compact_mutator;
 
-pub mod cached_reader;
-pub mod file_meta_data_reader;
-pub mod storage_context;
-pub mod table_option_keys;
-pub mod table_storage_prefix;
+pub use full_compact_mutator::FullCompactMutator;
+pub use segment_compact_mutator::SegmentCompactMutator;

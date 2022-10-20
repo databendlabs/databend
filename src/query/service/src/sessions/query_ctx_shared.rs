@@ -79,7 +79,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) auth_manager: Arc<AuthMgr>,
     pub(in crate::sessions) affect: Arc<Mutex<Option<QueryAffect>>>,
     pub(in crate::sessions) catalog_manager: Arc<CatalogManager>,
-    pub(in crate::sessions) persist_operator: DataOperator,
+    pub(in crate::sessions) data_operator: DataOperator,
     pub(in crate::sessions) executor: Arc<RwLock<Weak<PipelineExecutor>>>,
     pub(in crate::sessions) precommit_blocks: Arc<RwLock<Vec<DataBlock>>>,
     pub(in crate::sessions) created_time: SystemTime,
@@ -96,7 +96,7 @@ impl QueryContextShared {
             cluster_cache,
             config: config.clone(),
             catalog_manager: CatalogManager::instance(),
-            persist_operator: DataOperator::instance(),
+            data_operator: DataOperator::instance(),
             init_query_id: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             scan_progress: Arc::new(Progress::create()),
             result_progress: Arc::new(Progress::create()),
@@ -166,7 +166,7 @@ impl QueryContextShared {
     }
 
     pub fn get_storage_params(&self) -> StorageParams {
-        self.persist_operator.get_storage_params()
+        self.data_operator.get_storage_params()
     }
 
     pub fn get_tenant(&self) -> String {
