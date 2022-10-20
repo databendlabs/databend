@@ -139,9 +139,8 @@ impl FuseTable {
     ) -> Result<()> {
         let (segments, summary, abort_operation) = del_holder.generate_segments().await?;
 
-        // TODO check if error is recoverable, and try to resolve the conflict
         self.commit_mutation(
-            ctx.clone(),
+            &ctx,
             del_holder.base_snapshot().clone(),
             segments,
             summary,

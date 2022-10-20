@@ -15,15 +15,14 @@
 pub mod abort_operation;
 pub mod base_mutator;
 pub mod block_filter;
+mod compact_mutator;
 pub mod deletion_mutator;
-pub mod full_compact_mutator;
 pub mod recluster_mutator;
-mod segment_compact_mutator;
 
 pub use abort_operation::AbortOperation;
 pub use base_mutator::BaseMutator;
 pub use block_filter::delete_from_block;
+pub use compact_mutator::FullCompactMutator;
+pub use compact_mutator::SegmentCompactMutator;
 pub use deletion_mutator::DeletionMutator;
-pub use full_compact_mutator::FullCompactMutator;
 pub use recluster_mutator::ReclusterMutator;
-pub use segment_compact_mutator::CompactSegmentMutator;

@@ -45,7 +45,7 @@ use crate::TableContext;
 use crate::TableMutator;
 
 const MAX_RETRIES: u64 = 10;
-pub struct CompactSegmentMutator {
+pub struct SegmentCompactMutator {
     ctx: Arc<dyn TableContext>,
     // the snapshot that compactor working on, it never changed during phases compaction.
     base_snapshot: Arc<TableSnapshot>,
@@ -87,7 +87,7 @@ impl SegmentAccumulator {
     }
 }
 
-impl CompactSegmentMutator {
+impl SegmentCompactMutator {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
         base_snapshot: Arc<TableSnapshot>,
@@ -147,7 +147,7 @@ impl CompactSegmentMutator {
 //
 
 #[async_trait::async_trait]
-impl TableMutator for CompactSegmentMutator {
+impl TableMutator for SegmentCompactMutator {
     async fn target_select(&mut self) -> Result<bool> {
         let select_begin = Instant::now();
 
