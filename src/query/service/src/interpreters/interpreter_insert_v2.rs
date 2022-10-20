@@ -266,6 +266,7 @@ impl AsyncSource for ValueSource {
     const NAME: &'static str = "ValueSource";
     const SKIP_EMPTY_DATA_BLOCK: bool = true;
 
+    #[async_trait::unboxed_simple]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.is_finished {
             return Ok(None);
