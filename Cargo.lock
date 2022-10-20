@@ -1285,7 +1285,6 @@ dependencies = [
  "common-storage",
  "dyn-clone",
  "once_cell",
- "opendal",
 ]
 
 [[package]]

@@ -28,4 +28,3 @@ common-storage = { path = "../../common/storage" }
 async-trait = "0.1.57"
 dyn-clone = "1.0.9"
 once_cell = "1.15.0"
-opendal = { version = "0.19", features = ["layers-retry"] }

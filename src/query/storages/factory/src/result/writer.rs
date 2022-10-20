@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::io::ErrorKind;
+use std::sync::Arc;
 
 use backon::ExponentialBackoff;
 use backon::Retryable;
@@ -22,6 +23,7 @@ use common_exception::Result;
 use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::Statistics as FuseMetaStatistics;
 use common_legacy_planners::PartInfoPtr;
+use common_storages_fuse::TableContext;
 use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
 use opendal::Operator;
@@ -44,7 +46,7 @@ pub struct ResultTableWriter {
 }
 
 impl ResultTableWriter {
-    pub async fn new(ctx: Arc<QueryContext>, query_info: ResultQueryInfo) -> Result<Self> {
+    pub async fn new(ctx: Arc<dyn TableContext>, query_info: ResultQueryInfo) -> Result<Self> {
         let data_accessor = ctx.get_data_operator()?.operator();
         let query_id = query_info.query_id.clone();
         Ok(ResultTableWriter {

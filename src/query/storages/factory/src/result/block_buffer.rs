@@ -215,7 +215,7 @@ impl BlockBufferWriterWithResultTable {
         query_info: ResultQueryInfo,
     ) -> Result<Box<dyn BlockBufferWriter>> {
         let schema = query_info.schema.clone();
-        let writer = ResultTableWriter::new(op.clone(), query_info).await?;
+        let writer = ResultTableWriter::new(ctx.clone(), query_info).await?;
         let indices = (0..schema.fields().len())
             .into_iter()
             .collect::<Vec<usize>>();
