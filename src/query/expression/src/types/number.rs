@@ -212,7 +212,7 @@ pub enum NumberScalar {
     Float64(F64),
 }
 
-#[derive(Clone, PartialEq, Eq, EnumAsInner)]
+#[derive(Clone, PartialEq, EnumAsInner)]
 pub enum NumberColumn {
     UInt8(Buffer<u8>),
     UInt16(Buffer<u16>),

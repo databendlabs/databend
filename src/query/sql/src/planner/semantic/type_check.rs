@@ -739,7 +739,16 @@ impl<'a> TypeChecker<'a> {
                 while !exprs.is_empty() {
                     let expr = exprs.pop().unwrap();
                     match *expr {
-                        Expr::MapAccess { expr, accessor, .. } => {
+                        Expr::MapAccess {
+                            expr,
+                            accessor:
+                                MapAccessor::Period { .. }
+                                | MapAccessor::Colon { .. }
+                                | MapAccessor::Bracket {
+                                    key: box Expr::Literal { .. },
+                                },
+                            ..
+                        } => {
                             exprs.push(expr.clone());
                             accessores.push(accessor.clone());
                         }
@@ -768,10 +777,7 @@ impl<'a> TypeChecker<'a> {
                     }
                 }
                 let arg = match accessor {
-                    MapAccessor::Bracket { key } => Expr::Literal {
-                        span,
-                        lit: key.clone(),
-                    },
+                    MapAccessor::Bracket { key } => (**key).clone(),
                     MapAccessor::Period { key } | MapAccessor::Colon { key } => Expr::Literal {
                         span,
                         lit: Literal::String(key.name.clone()),
@@ -1806,11 +1812,13 @@ impl<'a> TypeChecker<'a> {
 
             let accessor = accessores.pop().unwrap();
             let accessor_lit = match accessor {
-                MapAccessor::Bracket { key } => key.clone(),
+                MapAccessor::Bracket {
+                    key: box Expr::Literal { lit, .. },
+                } => lit,
                 MapAccessor::Period { key } | MapAccessor::Colon { key } => {
                     Literal::String(key.name.clone())
                 }
-                MapAccessor::PeriodNumber { .. } => unimplemented!(),
+                _ => unreachable!(),
             };
 
             match accessor_lit {

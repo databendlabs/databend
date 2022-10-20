@@ -351,10 +351,7 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
             let (params, args) = match accessor {
                 MapAccessor::Bracket { key } => (vec![], vec![
                     transform_expr(*expr, columns),
-                    RawExpr::Literal {
-                        span: transform_span(span),
-                        lit: transform_literal(key),
-                    },
+                    transform_expr(*key, columns),
                 ]),
                 MapAccessor::Period { key } | MapAccessor::Colon { key } => (vec![], vec![
                     transform_expr(*expr, columns),

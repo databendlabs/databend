@@ -112,10 +112,7 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
                     expr_elements[curr as usize] = WithSpan {
                         span,
                         elem: ExprElement::Array {
-                            exprs: vec![Expr::Literal {
-                                span: span.0,
-                                lit: key.clone(),
-                            }],
+                            exprs: vec![(**key).clone()],
                         },
                     };
                 }
@@ -1252,17 +1249,9 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
 pub fn map_access(i: Input) -> IResult<MapAccessor> {
     let bracket = map(
         rule! {
-           "[" ~ #literal ~ "]"
+           "[" ~ #subexpr(0) ~ "]"
         },
-        |(_, key, _)| MapAccessor::Bracket { key },
-    );
-    let bracket_ident = map(
-        rule! {
-           "[" ~ #ident ~ "]"
-        },
-        |(_, key, _)| MapAccessor::Bracket {
-            key: Literal::String(key.name),
-        },
+        |(_, key, _)| MapAccessor::Bracket { key: Box::new(key) },
     );
     let period = map(
         rule! {
@@ -1292,7 +1281,6 @@ pub fn map_access(i: Input) -> IResult<MapAccessor> {
 
     rule!(
         #bracket
-        | #bracket_ident
         | #period
         | #period_number
         | #colon

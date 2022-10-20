@@ -233,7 +233,7 @@ pub enum Literal {
 #[derive(Debug, Clone, PartialEq)]
 pub enum MapAccessor<'a> {
     /// `[0][1]`
-    Bracket { key: Literal },
+    Bracket { key: Box<Expr<'a>> },
     /// `.a.b`
     Period { key: Identifier<'a> },
     /// `.1`

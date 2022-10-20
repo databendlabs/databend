@@ -187,7 +187,7 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, buf: &mut Vec<u8>) {
                 values
                     .iter()
                     .enumerate()
-                    .map(|(i, bytes)| (format!("{i}"), bytes)),
+                    .map(|(i, bytes)| (format!("{}", i + 1), bytes)),
                 buf,
             )
             .expect("failed to build jsonb object");

@@ -56,7 +56,11 @@ fn test_cast_to_variant(file: &mut impl Write) {
         "CAST(CAST('🍦 が美味しい' AS VARIANT) AS VARIANT)",
         &[],
     );
-    // TODO(andylokandy): test CAST(<tuple> as variant)
+    run_ast(file, "CAST((1,) AS VARIANT)", &[]);
+    run_ast(file, "CAST((1, 2) AS VARIANT)", &[]);
+    run_ast(file, "CAST((false, true) AS VARIANT)", &[]);
+    run_ast(file, "CAST(('a',) AS VARIANT)", &[]);
+    run_ast(file, "CAST((1, 2, (false, true, ('a',))) AS VARIANT)", &[]);
 
     run_ast(file, "CAST(a AS VARIANT)", &[(
         "a",

@@ -34,8 +34,9 @@ pub fn build_array<'a>(
     items: impl IntoIterator<Item = &'a [u8]>,
     buf: &mut Vec<u8>,
 ) -> Result<(), Error> {
+    let start = buf.len();
     // reserve space for header
-    buf.resize(4, 0);
+    buf.resize(start + 4, 0);
     let mut len: u32 = 0;
     let mut data = Vec::new();
     for value in items.into_iter() {
@@ -58,7 +59,7 @@ pub fn build_array<'a>(
     // write header
     let header = ARRAY_CONTAINER_TAG | len;
     for (i, b) in header.to_be_bytes().iter().enumerate() {
-        buf[i] = *b;
+        buf[start + i] = *b;
     }
     buf.extend_from_slice(&data);
 
@@ -71,8 +72,9 @@ pub fn build_object<'a, K: AsRef<str>>(
     items: impl IntoIterator<Item = (K, &'a [u8])>,
     buf: &mut Vec<u8>,
 ) -> Result<(), Error> {
+    let start = buf.len();
     // reserve space for header
-    buf.resize(4, 0);
+    buf.resize(start + 4, 0);
     let mut len: u32 = 0;
     let mut key_data = Vec::new();
     let mut val_data = Vec::new();
@@ -104,7 +106,7 @@ pub fn build_object<'a, K: AsRef<str>>(
     // write header and value jentry
     let header = OBJECT_CONTAINER_TAG | len;
     for (i, b) in header.to_be_bytes().iter().enumerate() {
-        buf[i] = *b;
+        buf[start + i] = *b;
     }
     while let Some(val_jentry) = val_jentries.pop_front() {
         buf.extend_from_slice(&val_jentry);
@@ -967,9 +969,10 @@ fn scalar_to_string(
 // Check whether the value is `JSONB` format,
 // for compatibility with previous `JSON` string.
 fn is_jsonb(value: &[u8]) -> bool {
-    let v = value.first().unwrap();
-    if *v == ARRAY_PREFIX || *v == OBJECT_PREFIX || *v == SCALAR_PREFIX {
-        return true;
+    if let Some(v) = value.first() {
+        if *v == ARRAY_PREFIX || *v == OBJECT_PREFIX || *v == SCALAR_PREFIX {
+            return true;
+        }
     }
     false
 }
