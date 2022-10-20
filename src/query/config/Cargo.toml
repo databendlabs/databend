@@ -10,8 +10,11 @@ test = false
 
 [features]
 default = []
-storage-hdfs = ["opendal/services-hdfs", "common-storage/storage-hdfs"]
+storage-hdfs = ["common-storage/storage-hdfs"]
 hive = ["common-hive-meta-store", "thrift", "storage-hdfs"]
+
+[package.metadata.cargo-machete]
+ignored = ["thrift", "common-hive-meta-store"]
 
 [dependencies]
 common-base = { path = "../../common/base" }
@@ -28,7 +31,6 @@ thrift = { git = "https://github.com/datafuse-extras/thrift", tag = "v0.17.0", o
 clap = { workspace = true }
 hex = "0.4.3"
 once_cell = "1.15.0"
-opendal = { version = "0.19", features = ["layers-retry", "compress"], optional = true }
 semver = "1.0.14"
 serde = { workspace = true }
 serfig = "0.0.2"
