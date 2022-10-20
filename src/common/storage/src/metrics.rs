@@ -55,6 +55,26 @@ pub struct StorageMetrics {
 }
 
 impl StorageMetrics {
+    /// Merge give metrics into one.
+    pub fn merge(vs: &[impl AsRef<StorageMetrics>]) -> StorageMetrics {
+        StorageMetrics {
+            read_bytes: AtomicUsize::new(vs.iter().map(|v| v.as_ref().get_read_bytes()).sum()),
+            read_bytes_cost_ms: AtomicU64::new(
+                vs.iter().map(|v| v.as_ref().get_read_bytes_cost()).sum(),
+            ),
+            write_bytes: AtomicUsize::new(vs.iter().map(|v| v.as_ref().get_write_bytes()).sum()),
+            write_bytes_cost_ms: AtomicU64::new(
+                vs.iter().map(|v| v.as_ref().get_write_bytes_cost()).sum(),
+            ),
+            partitions_scanned: AtomicU64::new(
+                vs.iter().map(|v| v.as_ref().get_partitions_scanned()).sum(),
+            ),
+            partitions_total: AtomicU64::new(
+                vs.iter().map(|v| v.as_ref().get_partitions_total()).sum(),
+            ),
+        }
+    }
+
     pub fn inc_read_bytes(&self, v: usize) {
         if v > 0 {
             self.read_bytes.fetch_add(v, Ordering::Relaxed);
