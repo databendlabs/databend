@@ -144,7 +144,15 @@ impl PipelineExecutor {
     }
 
     pub fn finish(&self, cause: Option<ErrorCode>) {
-        *self.finished_error.lock() = cause;
+        if let Some(cause) = cause {
+            let mut finished_error = self.finished_error.lock();
+
+            // We only save the cause of the first error.
+            if finished_error.is_none() {
+                *finished_error = Some(cause);
+            }
+        }
+
         self.global_tasks_queue.finish(self.workers_condvar.clone());
         self.graph.interrupt_running_nodes();
         self.finished_notify.notify_waiters();
@@ -163,7 +171,10 @@ impl PipelineExecutor {
 
         while let Some(join_handle) = thread_join_handles.pop() {
             if let Err(error_code) = join_handle.join().flatten() {
-                let may_error = Some(error_code);
+                let may_error = match self.finished_error.lock().as_ref() {
+                    None => Some(error_code),
+                    Some(error) => Some(error.clone()),
+                };
                 (self.on_finished_callback)(&may_error)?;
                 return Err(may_error.unwrap());
             }
