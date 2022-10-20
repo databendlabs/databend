@@ -1313,7 +1313,6 @@ name = "common-contexts"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "common-base",
  "opendal",
 ]
 
@@ -2014,6 +2013,7 @@ name = "common-storage"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "backon",
  "common-base",
  "common-contexts",
