@@ -23,10 +23,10 @@ use common_legacy_planners::SourceInfo;
 use common_storages_fuse::TableContext;
 use futures::StreamExt;
 
-use super::storage_table_read_wrap::TableStreamReadWrap;
 use crate::sessions::QueryContext;
 use crate::storages::result::ResultTable;
 use crate::storages::Table;
+use crate::stream::DataBlockStream;
 
 pub type SendableVu8Stream =
     std::pin::Pin<Box<dyn futures::stream::Stream<Item = Result<Vec<u8>>> + Send>>;

@@ -47,7 +47,7 @@ use databend_query::storages::system::TablesTableWithoutHistory;
 use databend_query::storages::system::TracingTable;
 use databend_query::storages::system::UsersTable;
 use databend_query::storages::ToReadDataSourcePlan;
-use databend_query::utils::TableStreamReadWrap;
+use databend_query::stream::DataBlockStream;
 use futures::TryStreamExt;
 use goldenfile::Mint;
 use wiremock::matchers::method;

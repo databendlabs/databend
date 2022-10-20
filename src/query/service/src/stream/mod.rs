@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod download;
-mod storage_table_read_wrap;
+mod processor_executor_stream;
+mod table_read_block_stream;
 
-pub use download::Dowloader;
-pub use storage_table_read_wrap::TableStreamReadWrap;
+pub use processor_executor_stream::PullingExecutorStream;
+pub use table_read_block_stream::DataBlockStream;

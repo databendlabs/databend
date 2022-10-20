@@ -41,6 +41,7 @@ use super::query::ExecuteStateKind;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
 use crate::servers::http::v1::query::Progresses;
+use crate::servers::http::v1::Dowloader;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::HttpSessionConf;
@@ -48,7 +49,6 @@ use crate::servers::http::v1::JsonBlock;
 use crate::sessions::QueryAffect;
 use crate::sessions::SessionType;
 use crate::storages::result::ResultTable;
-use crate::utils::Dowloader;
 
 const HEADER_QUERY_ID: &str = "X-DATABEND-QUERY-ID";
 const HEADER_QUERY_STATE: &str = "X-DATABEND-QUERY-STATE";
