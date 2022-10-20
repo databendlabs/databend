@@ -287,21 +287,15 @@ impl StringColumnBuilder {
         // the first offset of other column may not be zero
         let other_start = *other.offsets.first().unwrap();
         let start = self.offsets.last().cloned().unwrap();
-        if other_start == 0 {
-            self.data.extend_from_slice(&other.data);
-            self.offsets
-                .extend(other.offsets.iter().skip(1).map(|offset| start + offset));
-        } else {
-            self.data
-                .extend_from_slice(&other.data[(other_start as usize)..]);
-            self.offsets.extend(
-                other
-                    .offsets
-                    .iter()
-                    .skip(1)
-                    .map(|offset| start + offset - other_start),
-            );
-        }
+        self.data
+            .extend_from_slice(&other.data[(other_start as usize)..]);
+        self.offsets.extend(
+            other
+                .offsets
+                .iter()
+                .skip(1)
+                .map(|offset| start + offset - other_start),
+        );
     }
 
     pub fn build(self) -> StringColumn {
