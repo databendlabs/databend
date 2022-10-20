@@ -145,8 +145,7 @@ impl FuseTable {
                     }
                     None => {
                         info!("aborting operations");
-                        let _ =
-                            self::utils::abort_operations(self.get_operator(), operation_log).await;
+                        let _ = utils::abort_operations(self.get_operator(), operation_log).await;
                         break Err(ErrorCode::OCCRetryFailure(format!(
                             "can not fulfill the tx after retries({} times, {} ms), aborted. table name {}, identity {}",
                             retry_times,
@@ -238,7 +237,7 @@ impl FuseTable {
         // 1. merge stats with previous snapshot, if any
         let stats = if let Some(snapshot) = &previous {
             let summary = &snapshot.summary;
-            statistics::merge_statistics(&statistics, summary)?
+            merge_statistics(&statistics, summary)?
         } else {
             statistics
         };
@@ -284,7 +283,7 @@ impl FuseTable {
             snapshot_location.clone(),
         );
         // remove legacy options
-        self::utils::remove_legacy_options(&mut new_table_meta.options);
+        utils::remove_legacy_options(&mut new_table_meta.options);
 
         // 2.2 setup table statistics
         let stats = &snapshot.summary;
@@ -431,33 +430,15 @@ impl FuseTable {
         while retries < MAX_RETRIES {
             let mut snapshot_tobe_committed =
                 TableSnapshot::from_previous(latest_snapshot.as_ref());
-            let segments_tobe_committed = if concurrently_appended_segment_locations.is_empty() {
-                base_segments.clone()
-            } else {
-                // place the concurrently appended segments at the head of segment list
-                concurrently_appended_segment_locations
-                    .iter()
-                    .chain(base_segments.iter())
-                    .cloned()
-                    .collect()
-            };
 
-            let statistics_tobe_committed = if concurrently_appended_segment_locations.is_empty() {
-                base_summary.clone()
-            } else {
-                let fuse_segment_io = SegmentsIO::create(ctx.clone(), self.operator.clone());
-                let concurrent_appended_segment_infos = fuse_segment_io
-                    .read_segments(concurrently_appended_segment_locations)
-                    .await?;
-
-                let mut stats = base_summary.clone();
-                for result in concurrent_appended_segment_infos.into_iter() {
-                    let concurrent_appended_segment = result?;
-                    stats = merge_statistics(&stats, &concurrent_appended_segment.summary)?;
-                }
-                stats
-            };
-
+            let (segments_tobe_committed, statistics_tobe_committed) = Self::merge_with_base(
+                ctx.clone(),
+                self.operator.clone(),
+                &base_segments,
+                &base_summary,
+                concurrently_appended_segment_locations,
+            )
+            .await?;
             snapshot_tobe_committed.segments = segments_tobe_committed;
             snapshot_tobe_committed.summary = statistics_tobe_committed;
 
@@ -525,6 +506,38 @@ impl FuseTable {
             "commit mutation failed after {} retries",
             retries
         )))
+    }
+
+    async fn merge_with_base(
+        ctx: Arc<dyn TableContext>,
+        operator: Operator,
+        base_segments: &[Location],
+        base_summary: &Statistics,
+        concurrently_appended_segment_locations: &[Location],
+    ) -> Result<(Vec<Location>, Statistics)> {
+        if concurrently_appended_segment_locations.is_empty() {
+            Ok((base_segments.to_owned(), base_summary.clone()))
+        } else {
+            // place the concurrently appended segments at the head of segment list
+            let new_segments = concurrently_appended_segment_locations
+                .iter()
+                .chain(base_segments.iter())
+                .cloned()
+                .collect();
+
+            let fuse_segment_io = SegmentsIO::create(ctx, operator);
+            let concurrent_appended_segment_infos = fuse_segment_io
+                .read_segments(concurrently_appended_segment_locations)
+                .await?;
+
+            let mut new_statistics = base_summary.clone();
+            for result in concurrent_appended_segment_infos.into_iter() {
+                let concurrent_appended_segment = result?;
+                new_statistics =
+                    merge_statistics(&new_statistics, &concurrent_appended_segment.summary)?;
+            }
+            Ok((new_segments, new_statistics))
+        }
     }
 }
 
