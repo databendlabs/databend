@@ -339,7 +339,7 @@ EOF
 		cat <<EOF
 Check tools (since -c was provided):
   * lcov
-  * tools from rust-tools.txt ( e.g. cargo-audit, cargo-udeps, taplo-cli)
+  * tools from rust-tools.txt ( e.g. cargo-audit, cargo-machete, taplo-cli)
 EOF
 	fi
 
