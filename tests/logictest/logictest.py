@@ -163,9 +163,9 @@ class Statement:
 
 
 class ParsedStatement(
-    collections.namedtuple(
-        'ParsedStatement',
-        ["at_line", "s_type", "suite_name", "text", "results", "runs_on"])):
+        collections.namedtuple(
+            'ParsedStatement',
+            ["at_line", "s_type", "suite_name", "text", "results", "runs_on"])):
 
     def get_fields(self):
         return self._fields
@@ -284,7 +284,7 @@ class SuiteRunner(object):
                     continue
 
                 if self.args.skip and any(
-                        [re.search(r, base_name) for r in skips]):
+                    [re.search(r, base_name) for r in skips]):
                     log.info(f"Skip test file {filename}")
                     continue
 
@@ -296,7 +296,7 @@ class SuiteRunner(object):
                     continue
 
                 if not self.args.pattern or any(
-                        [re.search(r, base_name) for r in self.args.pattern]):
+                    [re.search(r, base_name) for r in self.args.pattern]):
                     self.statement_files.append(
                         (filename, os.path.relpath(filename, suite_path)))
 
@@ -356,7 +356,8 @@ class SuiteRunner(object):
     # expect the query just return ok
     def assert_execute_ok(self, statement):
         try:
-            error = safe_execute(lambda: self.execute_ok(statement.text), statement)
+            error = safe_execute(lambda: self.execute_ok(statement.text),
+                                 statement)
         except Exception as err:
             raise LogicError(runner=self.kind,
                              message=str(err),

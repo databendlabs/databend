@@ -302,7 +302,7 @@ async fn execute(
             let mut block_writer = if use_result_cache {
                 BlockBufferWriterWithResultTable::create(
                     block_buffer.clone(),
-                    ctx.get_storage_operator()?,
+                    ctx.clone(),
                     ResultQueryInfo {
                         query_id: ctx.get_id(),
                         schema: block.schema().clone(),
@@ -357,7 +357,7 @@ impl HttpQueryHandle {
             schema: result_schema.clone(),
             user: ctx.get_current_user()?.identity(),
         };
-        let data_accessor = ctx.get_storage_operator()?;
+        let data_accessor = ctx.get_data_operator()?.operator();
 
         let sink = ResultTableSink::create(
             input.clone(),

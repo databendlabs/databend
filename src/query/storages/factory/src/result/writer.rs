@@ -44,7 +44,8 @@ pub struct ResultTableWriter {
 }
 
 impl ResultTableWriter {
-    pub async fn new(data_accessor: Operator, query_info: ResultQueryInfo) -> Result<Self> {
+    pub async fn new(ctx: Arc<QueryContext>, query_info: ResultQueryInfo) -> Result<Self> {
+        let data_accessor = ctx.get_data_operator()?.operator();
         let query_id = query_info.query_id.clone();
         Ok(ResultTableWriter {
             query_info,
@@ -104,7 +105,7 @@ impl ResultTableWriter {
 
         let object = self.data_accessor.object(&location);
         { || object.write(data.as_slice()) }
-            .retry(ExponentialBackoff::default())
+            .retry(ExponentialBackoff::default().with_jitter())
             .when(|err| err.kind() == ErrorKind::Interrupted)
             .notify(|err, dur| {
                 warn!(

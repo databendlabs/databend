@@ -46,7 +46,7 @@ use common_planner::plans::ShowCreateTablePlan;
 use common_planner::plans::TruncateTablePlan;
 use common_planner::plans::UndropTablePlan;
 use common_storage::parse_uri_location;
-use common_storage::StorageOperator;
+use common_storage::DataOperator;
 use common_storage::UriLocation;
 use tracing::debug;
 
@@ -378,7 +378,7 @@ impl<'a> Binder {
                 let (sp, _) = parse_uri_location(&uri)?;
 
                 // create a temporary op to check if params is correct
-                StorageOperator::try_create_with_storage_params(&sp).await?;
+                DataOperator::try_create_with_storage_params(&sp).await?;
 
                 Some(sp)
             }
@@ -781,7 +781,10 @@ impl<'a> Binder {
         let action = action.map_or(OptimizeTableAction::Purge, |v| match v {
             AstOptimizeTableAction::All => OptimizeTableAction::All,
             AstOptimizeTableAction::Purge => OptimizeTableAction::Purge,
-            AstOptimizeTableAction::Compact => OptimizeTableAction::Compact,
+            AstOptimizeTableAction::Compact(target) => match target {
+                CompactTarget::Block => OptimizeTableAction::CompactBlocks,
+                CompactTarget::Segment => OptimizeTableAction::CompactSegments,
+            },
         });
 
         Ok(Plan::OptimizeTable(Box::new(OptimizeTablePlan {

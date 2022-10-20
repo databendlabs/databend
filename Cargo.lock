@@ -120,6 +120,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f44124848854b941eafdb34f05b3bcf59472f643c7e151eba7c2b69daa469ed5"
 
 [[package]]
+name = "arc-swap"
+version = "1.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "983cd8b9d4b02a6dc6ffa557262eb5858a27a0038ffffe21a0f133eaa819a164"
+
+[[package]]
 name = "array-init-cursor"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1155,6 +1161,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "combine"
+version = "4.6.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "35ed6e9d84f0b51a7f52daf1c7d71dd136fd7a3f41a8462b8cdb8c78d920fad4"
+dependencies = [
+ "bytes",
+ "futures-core",
+ "memchr",
+ "pin-project-lite",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
 name = "comfy-table"
 version = "6.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1284,7 +1304,6 @@ dependencies = [
  "common-users",
  "hex",
  "once_cell",
- "opendal",
  "semver 1.0.14",
  "serde",
  "serfig",
@@ -1441,9 +1460,10 @@ dependencies = [
  "rust-embed",
  "serde",
  "serde_json",
- "sha1",
+ "sha1 0.10.5",
  "sha2 0.10.6",
  "simdutf8",
+ "siphasher",
  "sqlparser",
  "strength_reduce",
  "twox-hash",
@@ -1820,7 +1840,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
- "sha1",
+ "sha1 0.10.5",
  "sha2 0.10.6",
  "sled",
  "thiserror",
@@ -2163,6 +2183,7 @@ dependencies = [
  "common-storages-util",
  "futures",
  "futures-util",
+ "metrics",
  "opendal",
  "serde",
  "serde_json",
@@ -2286,7 +2307,6 @@ dependencies = [
  "common-datablocks",
  "common-exception",
  "common-fuse-meta",
- "common-meta-api",
  "once_cell",
  "opendal",
  "parking_lot 0.12.1",
@@ -2303,7 +2323,6 @@ dependencies = [
  "futures",
  "opendal",
  "pin-project-lite",
- "serde_json",
 ]
 
 [[package]]
@@ -2766,9 +2785,7 @@ dependencies = [
  "common-meta-store",
  "common-meta-types",
  "common-metrics",
- "common-storage",
  "common-tracing",
- "common-users",
  "databend-meta",
  "databend-query",
  "openraft",
@@ -3383,6 +3400,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f82b0f4c27ad9f8bfd1f3208d882da2b09c301bc1c828fd3a00d0216d2fbbff6"
 dependencies = [
  "crc32fast",
+ "libz-ng-sys",
  "libz-sys",
  "miniz_oxide",
 ]
@@ -3962,7 +3980,7 @@ dependencies = [
  "http",
  "httpdate",
  "mime",
- "sha1",
+ "sha1 0.10.5",
 ]
 
 [[package]]
@@ -4624,6 +4642,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "292a948cd991e376cf75541fe5b97a1081d713c618b4f1b9500f8844e49eb565"
 
 [[package]]
+name = "libz-ng-sys"
+version = "1.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4399ae96a9966bf581e726de86969f803a81b7ce795fcd5480e640589457e0f2"
+dependencies = [
+ "cmake",
+ "libc",
+]
+
+[[package]]
 name = "libz-sys"
 version = "1.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4955,9 +4983,12 @@ version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dd8256cf9fa396576521e5e94affadb95818ec48f5dbedca36714387688aea29"
 dependencies = [
+ "async-io",
+ "async-lock",
  "crossbeam-channel",
  "crossbeam-epoch",
  "crossbeam-utils",
+ "futures-util",
  "num_cpus",
  "once_cell",
  "parking_lot 0.12.1",
@@ -5378,12 +5409,14 @@ dependencies = [
  "log",
  "md-5",
  "metrics",
+ "moka",
  "once_cell",
  "parking_lot 0.12.1",
  "percent-encoding",
  "pin-project",
  "prost",
  "quick-xml 0.25.0",
+ "redis",
  "reqsign",
  "reqwest",
  "serde",
@@ -6471,6 +6504,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "redis"
+version = "0.21.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "571c252c68d09a2ad3e49edd14e9ee48932f3e0f27b06b4ea4c9b2a706d31103"
+dependencies = [
+ "arc-swap",
+ "async-trait",
+ "bytes",
+ "combine",
+ "futures",
+ "futures-util",
+ "itoa 1.0.3",
+ "percent-encoding",
+ "pin-project-lite",
+ "ryu",
+ "sha1 0.6.1",
+ "tokio",
+ "tokio-util",
+ "url",
+]
+
+[[package]]
 name = "redox_syscall"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6548,7 +6603,7 @@ dependencies = [
  "rust-ini",
  "serde",
  "serde_json",
- "sha1",
+ "sha1 0.10.5",
  "sha2 0.10.6",
  "time 0.3.14",
  "ureq",
@@ -7196,6 +7251,15 @@ dependencies = [
 
 [[package]]
 name = "sha1"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1da05c97445caa12d05e848c4a4fcbbea29e748ac28f7e80e9b010392063770"
+dependencies = [
+ "sha1_smol",
+]
+
+[[package]]
+name = "sha1"
 version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f04293dc80c3993519f2d7f6f511707ee7094fe0c6d3406feb330cdb3540eba3"
@@ -7204,6 +7268,12 @@ dependencies = [
  "cpufeatures",
  "digest 0.10.5",
 ]
+
+[[package]]
+name = "sha1_smol"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae1a47186c03a32177042e55dbc5fd5aee900b8e0069a8d70fba96a9375cd012"
 
 [[package]]
 name = "sha2"

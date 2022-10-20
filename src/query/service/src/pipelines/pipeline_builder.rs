@@ -57,7 +57,6 @@ use crate::pipelines::processors::TransformSortMerge;
 use crate::pipelines::processors::TransformSortPartial;
 use crate::pipelines::Pipeline;
 use crate::pipelines::PipelineBuildResult;
-use crate::pipelines::SinkPipeBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::evaluator::Evaluator;
@@ -162,21 +161,12 @@ impl PipelineBuilder {
         let mut build_res = build_side_builder.finalize(build)?;
 
         assert!(build_res.main_pipeline.is_pulling_pipeline()?);
-        let mut sink_pipeline_builder = SinkPipeBuilder::create();
-        for _index in 0..build_res.main_pipeline.output_len() {
-            let input_port = InputPort::create();
-            sink_pipeline_builder.add_sink(
-                input_port.clone(),
-                Sinker::<SinkBuildHashTable>::create(
-                    input_port,
-                    SinkBuildHashTable::try_create(join_state.clone())?,
-                ),
-            );
-        }
-
-        build_res
-            .main_pipeline
-            .add_pipe(sink_pipeline_builder.finalize());
+        build_res.main_pipeline.add_sink(|input| {
+            Ok(Sinker::<SinkBuildHashTable>::create(
+                input,
+                SinkBuildHashTable::try_create(join_state.clone())?,
+            ))
+        })?;
 
         self.pipelines.push(build_res.main_pipeline);
         self.pipelines

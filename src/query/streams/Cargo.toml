@@ -23,7 +23,5 @@ common-exception = { path = "../../common/exception" }
 futures = "0.3.24"
 pin-project-lite = "0.2.9"
 
-serde_json = { workspace = true }
-
 [dev-dependencies]
 opendal = { version = "0.19", features = ["layers-retry", "compress"] }

@@ -78,9 +78,12 @@ impl Distribution {
             | (Distribution::Random, _)
             | (Distribution::Serial, Distribution::Serial)
             | (Distribution::Broadcast, Distribution::Broadcast) => true,
-            (Distribution::Hash(ref keys), Distribution::Hash(ref other_keys)) => keys
-                .iter()
-                .all(|key| other_keys.iter().any(|other_key| key == other_key)),
+
+            // TODO(leiysky): this is actually broken by https://github.com/datafuselabs/databend/pull/7451
+            // , would be fixed later.
+            // (Distribution::Hash(ref keys), Distribution::Hash(ref other_keys)) => keys
+            //     .iter()
+            //     .all(|key| other_keys.iter().any(|other_key| key == other_key)),
             _ => false,
         }
     }

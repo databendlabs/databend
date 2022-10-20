@@ -20,9 +20,9 @@ use common_grpc::RpcClientTlsConfig;
 use common_meta_api::KVApi;
 use common_meta_api::SchemaApi;
 use common_meta_client::MetaGrpcClient;
+use databend_meta::init_meta_ut;
 use pretty_assertions::assert_eq;
 
-use crate::init_meta_ut;
 use crate::tests::service::MetaSrvTestContext;
 use crate::tests::start_metasrv_with_context;
 use crate::tests::tls_constants::TEST_CA_CERT;

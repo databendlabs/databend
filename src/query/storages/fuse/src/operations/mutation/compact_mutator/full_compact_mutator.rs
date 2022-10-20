@@ -22,29 +22,32 @@ use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::Statistics;
 use common_fuse_meta::meta::TableSnapshot;
 use common_fuse_meta::meta::Versioned;
-use common_meta_app::schema::TableInfo;
 use opendal::Operator;
 
 use crate::io::BlockCompactor;
 use crate::io::SegmentWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
+use crate::operations::mutation::AbortOperation;
 use crate::operations::AppendOperationLogEntry;
 use crate::statistics::merge_statistics;
 use crate::statistics::reducers::reduce_block_metas;
 use crate::statistics::reducers::reduce_statistics;
 use crate::FuseTable;
+use crate::Table;
 use crate::TableContext;
 use crate::TableMutator;
 
 #[derive(Clone)]
-pub struct CompactMutator {
+pub struct FullCompactMutator {
     ctx: Arc<dyn TableContext>,
     base_snapshot: Arc<TableSnapshot>,
     data_accessor: Operator,
     block_compactor: BlockCompactor,
     location_generator: TableMetaLocationGenerator,
     selected_blocks: Vec<BlockMeta>,
+    // Blocks that need to be reorganized into new segments.
+    remain_blocks: Vec<BlockMeta>,
     segments: Vec<Location>,
     summary: Statistics,
     block_per_seg: usize,
@@ -52,7 +55,7 @@ pub struct CompactMutator {
     is_cluster: bool,
 }
 
-impl CompactMutator {
+impl FullCompactMutator {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
         base_snapshot: Arc<TableSnapshot>,
@@ -69,6 +72,7 @@ impl CompactMutator {
             block_compactor,
             location_generator,
             selected_blocks: Vec::new(),
+            remain_blocks: Vec::new(),
             segments: Vec::new(),
             summary: Statistics::default(),
             block_per_seg,
@@ -90,12 +94,10 @@ impl CompactMutator {
 }
 
 #[async_trait::async_trait]
-impl TableMutator for CompactMutator {
-    async fn blocks_select(&mut self) -> Result<bool> {
+impl TableMutator for FullCompactMutator {
+    async fn target_select(&mut self) -> Result<bool> {
         let snapshot = self.base_snapshot.clone();
         let segment_locations = &snapshot.segments;
-        // Blocks that need to be reorganized into new segments.
-        let mut remain_blocks = Vec::new();
         let mut summarys = Vec::new();
 
         // Read all segments information in parallel.
@@ -128,14 +130,25 @@ impl TableMutator for CompactMutator {
                 continue;
             }
 
-            remain_blocks.append(&mut remains);
+            self.remain_blocks.append(&mut remains);
         }
 
         if self.selected_blocks.is_empty()
-            && (remain_blocks.is_empty() || snapshot.segments.len() <= self.segments.len() + 1)
+            && (self.remain_blocks.is_empty() || snapshot.segments.len() <= self.segments.len() + 1)
         {
             return Ok(false);
         }
+
+        // update the summary of new snapshot
+        self.summary = reduce_statistics(&summarys)?;
+        Ok(true)
+    }
+
+    async fn try_commit(&self, table: Arc<dyn Table>) -> Result<()> {
+        let ctx = self.ctx.clone();
+        let mut segments = self.segments.clone();
+        let mut summary = self.summary.clone();
+        let mut abort_operation = AbortOperation::default();
 
         // Create new segments.
         let segment_info_cache = CacheManager::instance().get_table_segment_cache();
@@ -144,25 +157,16 @@ impl TableMutator for CompactMutator {
             &self.location_generator,
             &segment_info_cache,
         );
-        let chunks = remain_blocks.chunks(self.block_per_seg);
+        let chunks = self.remain_blocks.chunks(self.block_per_seg);
         for chunk in chunks {
             let new_summary = reduce_block_metas(chunk)?;
             let new_segment = SegmentInfo::new(chunk.to_vec(), new_summary.clone());
             let new_segment_location = seg_writer.write_segment(new_segment).await?;
-            self.segments.push(new_segment_location);
-            summarys.push(new_summary);
+            segments.push(new_segment_location.clone());
+            summary = merge_statistics(&summary, &new_summary)?;
+
+            abort_operation = abort_operation.add_segment(new_segment_location.0);
         }
-
-        // update the summary of new snapshot
-        self.summary = reduce_statistics(&summarys)?;
-        Ok(true)
-    }
-
-    async fn try_commit(&self, table_info: &TableInfo) -> Result<()> {
-        let ctx = self.ctx.clone();
-        let snapshot = self.base_snapshot.clone();
-        let mut new_snapshot = TableSnapshot::from_previous(&snapshot);
-        new_snapshot.segments = self.segments.clone();
 
         let append_entries = ctx.consume_precommit_blocks();
         let append_log_entries = append_entries
@@ -173,20 +177,29 @@ impl TableMutator for CompactMutator {
         let (merged_segments, merged_summary) =
             FuseTable::merge_append_operations(&append_log_entries)?;
 
-        let mut merged_segments = merged_segments
-            .into_iter()
-            .map(|loc| (loc, SegmentInfo::VERSION))
-            .collect();
-        new_snapshot.segments.append(&mut merged_segments);
-        new_snapshot.summary = merge_statistics(&self.summary, &merged_summary)?;
+        for entry in append_log_entries {
+            for block in &entry.segment_info.blocks {
+                abort_operation = abort_operation.add_block(block);
+            }
+            abort_operation = abort_operation.add_segment(entry.segment_location);
+        }
 
-        FuseTable::commit_to_meta_server(
-            ctx.as_ref(),
-            table_info,
-            &self.location_generator,
-            new_snapshot,
-            &self.data_accessor,
-        )
-        .await
+        segments.extend(
+            merged_segments
+                .into_iter()
+                .map(|loc| (loc, SegmentInfo::VERSION)),
+        );
+        summary = merge_statistics(&summary, &merged_summary)?;
+
+        let table = FuseTable::try_from_table(table.as_ref())?;
+        table
+            .commit_mutation(
+                &ctx,
+                self.base_snapshot.clone(),
+                segments,
+                summary,
+                abort_operation,
+            )
+            .await
     }
 }

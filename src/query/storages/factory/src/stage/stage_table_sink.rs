@@ -274,7 +274,7 @@ impl Processor for StageTableSink {
 
                 let object = self.data_accessor.object(&path);
                 { || object.write(bytes.as_slice()) }
-                    .retry(ExponentialBackoff::default())
+                    .retry(ExponentialBackoff::default().with_jitter())
                     .when(|err| err.kind() == ErrorKind::Interrupted)
                     .notify(|err, dur| {
                         warn!(

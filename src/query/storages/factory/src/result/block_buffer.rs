@@ -21,6 +21,7 @@ use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_legacy_planners::PartInfoPtr;
 use common_legacy_planners::Projection;
+use common_storages_fuse::TableContext;
 use opendal::Operator;
 
 use crate::fuse::io::BlockReader;
@@ -210,7 +211,7 @@ pub struct BlockBufferWriterWithResultTable {
 impl BlockBufferWriterWithResultTable {
     pub async fn create(
         buffer: Arc<BlockBuffer>,
-        op:  Operator,
+        ctx:  Arc<dyn TableContext>,
         query_info: ResultQueryInfo,
     ) -> Result<Box<dyn BlockBufferWriter>> {
         let schema = query_info.schema.clone();
@@ -220,7 +221,7 @@ impl BlockBufferWriterWithResultTable {
             .collect::<Vec<usize>>();
         let projection = Projection::Columns(indices);
 
-        let reader = BlockReader::create(op, schema, projection)?;
+        let reader = BlockReader::create(ctx.get_data_operator()?.operator(), schema, projection)?;
         Ok(Box::new(Self {
             buffer,
             reader,

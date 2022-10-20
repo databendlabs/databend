@@ -27,8 +27,6 @@ use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::SinkPipeBuilder;
 use common_pipeline_sources::processors::sources::input_formats::InputContext;
 use common_pipeline_transforms::processors::transforms::TransformLimit;
 use common_storage::init_operator;
@@ -71,8 +69,8 @@ impl StageTable {
     pub fn get_op(ctx: &Arc<dyn TableContext>, stage: &UserStageInfo) -> Result<Operator> {
         if stage.stage_type == StageType::Internal {
             let prefix = format!("/stage/{}/", stage.stage_name);
-            ctx.get_storage_operator()
-                .map(|op| op.layer(SubdirLayer::new(&prefix)))
+            let pop = ctx.get_data_operator()?.operator();
+            Ok(pop.layer(SubdirLayer::new(&prefix)))
         } else {
             Ok(init_operator(&stage.stage_params.storage)?)
         }
@@ -144,7 +142,6 @@ impl Table for StageTable {
         pipeline: &mut Pipeline,
         _: bool,
     ) -> Result<()> {
-        let mut sink_pipeline_builder = SinkPipeBuilder::create();
         let single = self.table_info.stage_info.copy_options.single;
         let op = StageTable::get_op(&ctx, &self.table_info.stage_info)?;
 
@@ -169,24 +166,20 @@ impl Table for StageTable {
 
         // final compact unload
         pipeline.resize(1)?;
-        let input_port = InputPort::create();
 
-        let gid = group_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        sink_pipeline_builder.add_sink(
-            input_port.clone(),
+        // Add sink pipe.
+        pipeline.add_sink(|input| {
+            let gid = group_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             StageTableSink::try_create(
-                input_port,
-                ctx,
+                input,
+                ctx.clone(),
                 self.table_info.clone(),
-                op,
+                op.clone(),
                 None,
-                uuid,
+                uuid.clone(),
                 gid,
-            )?,
-        );
-
-        pipeline.add_pipe(sink_pipeline_builder.finalize());
-        Ok(())
+            )
+        })
     }
 
     // TODO use tmp file_name & rename to have atomic commit

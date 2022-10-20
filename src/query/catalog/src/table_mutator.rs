@@ -12,11 +12,14 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::Result;
-use common_meta_app::schema::TableInfo;
+
+use crate::table::Table;
 
 #[async_trait::async_trait]
 pub trait TableMutator: Send + Sync {
-    async fn blocks_select(&mut self) -> Result<bool>;
-    async fn try_commit(&self, table_info: &TableInfo) -> Result<()>;
+    async fn target_select(&mut self) -> Result<bool>;
+    async fn try_commit(&self, table: Arc<dyn Table>) -> Result<()>;
 }

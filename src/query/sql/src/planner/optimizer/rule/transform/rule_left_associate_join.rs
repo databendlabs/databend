@@ -190,7 +190,7 @@ impl Rule for RuleLeftAssociateJoin {
                 t1.clone(),
                 SExpr::create_binary(join_4.into(), t2.clone(), t3.clone()),
             ],
-            s_expr.original_group,
+            None,
             None,
         );
 

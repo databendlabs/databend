@@ -41,7 +41,6 @@ use super::interpreter_common::append2table;
 use super::plan_schedulers::build_schedule_pipeline;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::transforms::ChunkOperator;
 use crate::pipelines::processors::transforms::CompoundChunkOperator;
 use crate::pipelines::PipelineBuildResult;
@@ -115,7 +114,6 @@ impl Interpreter for InsertInterpreterV2 {
             .await?;
 
         let mut build_res = PipelineBuildResult::create();
-        let mut builder = SourcePipeBuilder::create();
 
         if self.async_insert {
             build_res.main_pipeline.add_pipe(
@@ -126,20 +124,22 @@ impl Interpreter for InsertInterpreterV2 {
         } else {
             match &self.plan.source {
                 InsertInputSource::Values(data) => {
-                    let output_port = OutputPort::create();
                     let settings = self.ctx.get_settings();
-                    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-                    let inner = ValueSource::new(
-                        data.to_string(),
-                        self.ctx.clone(),
-                        name_resolution_ctx,
-                        plan.schema(),
-                    );
-                    let source =
-                        AsyncSourcer::create(self.ctx.clone(), output_port.clone(), inner)?;
-                    builder.add_source(output_port, source);
 
-                    build_res.main_pipeline.add_pipe(builder.finalize());
+                    build_res.main_pipeline.add_source(
+                        |output| {
+                            let name_resolution_ctx =
+                                NameResolutionContext::try_from(settings.as_ref())?;
+                            let inner = ValueSource::new(
+                                data.to_string(),
+                                self.ctx.clone(),
+                                name_resolution_ctx,
+                                plan.schema(),
+                            );
+                            AsyncSourcer::create(self.ctx.clone(), output, inner)
+                        },
+                        1,
+                    )?;
                 }
                 InsertInputSource::StreamingWithFormat(_, _, input_context) => {
                     let input_context = input_context.as_ref().expect("must success").clone();

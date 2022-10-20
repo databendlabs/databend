@@ -80,22 +80,21 @@ impl<T: Compactor + Send + 'static> TransformCompact<T> {
                 return Ok(Event::NeedConsume);
             }
 
+            if state.input_port.has_data() {
+                let data_block = state.input_port.pull_data().unwrap()?;
+                state.input_data_blocks.push(data_block);
+
+                if T::use_partial_compact() {
+                    return Ok(Event::Sync);
+                }
+            }
+
             if state.input_port.is_finished() {
                 let mut temp_state = ProcessorState::Finished;
                 std::mem::swap(&mut self.state, &mut temp_state);
                 temp_state = temp_state.convert_to_compacting_state()?;
                 std::mem::swap(&mut self.state, &mut temp_state);
                 return Ok(Event::Sync);
-            }
-
-            if state.input_port.has_data() {
-                state
-                    .input_data_blocks
-                    .push(state.input_port.pull_data().unwrap()?);
-
-                if T::use_partial_compact() {
-                    return Ok(Event::Sync);
-                }
             }
 
             state.input_port.set_need_data();

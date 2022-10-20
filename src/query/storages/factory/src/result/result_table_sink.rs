@@ -88,7 +88,8 @@ impl ResultTableSink {
             .collect::<Vec<usize>>();
         let projection = Projection::Columns(indices);
 
-        let block_reader = BlockReader::create(data_accessor.clone(), schema, projection)?;
+        let block_reader =
+            BlockReader::create(ctx.get_data_operator()?.operator(), schema, projection)?;
         Ok(ProcessorPtr::create(Box::new(ResultTableSink {
             ctx,
             input,
