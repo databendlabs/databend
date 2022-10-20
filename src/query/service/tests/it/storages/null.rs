@@ -27,7 +27,7 @@ use futures::TryStreamExt;
 async fn test_null_table() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
 
-    let table = NullTable::try_create(crate::tests::create_storage_context().await?, TableInfo {
+    let table = NullTable::try_create(TableInfo {
         desc: "'default'.'a'".into(),
         name: "a".into(),
         ident: Default::default(),

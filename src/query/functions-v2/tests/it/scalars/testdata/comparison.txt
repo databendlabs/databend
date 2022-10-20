@@ -830,6 +830,26 @@ output domain  : Unknown
 output         : false
 
 
+ast            : 'hello
+' like 'h%'
+raw expr       : like("hello\n", "h%")
+checked expr   : like<String, String>("hello\n", "h%")
+optimized expr : true
+output type    : Boolean
+output domain  : Unknown
+output         : true
+
+
+ast            : 'h
+' like 'h_'
+raw expr       : like("h\n", "h_")
+checked expr   : like<String, String>("h\n", "h_")
+optimized expr : true
+output type    : Boolean
+output domain  : Unknown
+output         : true
+
+
 ast            : lhs like 'a%'
 raw expr       : like(ColumnRef(0)::String, "a%")
 checked expr   : like<String, String>(ColumnRef(0), "a%")

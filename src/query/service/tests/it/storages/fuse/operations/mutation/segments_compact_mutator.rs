@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_base::base::tokio;
 use common_catalog::table::CompactTarget;
 use common_catalog::table::Table;
+use common_catalog::table::TableExt;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -123,6 +124,18 @@ async fn test_compact_segment_resolvable_conflict() -> Result<()> {
     let count_block = "select block_count as count from fuse_snapshot('default', 't') limit 1";
     let stream = execute_query(fixture.ctx(), count_block).await?;
     assert_eq!(num_inserts as u64 * 2, check_count(stream).await?);
+
+    // check table statistics
+
+    let latest = table.refresh(ctx.as_ref()).await?;
+    let latest_fuse_table = FuseTable::try_from_table(latest.as_ref())?;
+    let table_statistics = latest_fuse_table
+        .table_statistics(ctx.clone())
+        .await?
+        .unwrap();
+
+    assert_eq!(table_statistics.num_rows.unwrap() as usize, num_inserts * 2);
+
     Ok(())
 }
 

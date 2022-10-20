@@ -32,7 +32,6 @@ common-ast = { path = "../ast" }
 common-base = { path = "../../common/base" }
 common-catalog = { path = "../catalog" }
 common-config = { path = "../config" }
-common-contexts = { path = "../../common/contexts" }
 common-datablocks = { path = "../datablocks" }
 common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../../common/exception" }
@@ -64,7 +63,6 @@ common-sql = { path = "../sql" }
 common-storage = { path = "../../common/storage" }
 common-storages-cache = { path = "../storages/cache" }
 common-storages-constants = { path = "../storages/constants" }
-common-storages-context = { path = "../storages/context" }
 common-storages-factory = { path = "../storages/factory" }
 common-storages-fuse = { path = "../storages/fuse" }
 common-storages-hive = { path = "../storages/hive", optional = true }

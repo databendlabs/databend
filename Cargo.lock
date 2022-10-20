@@ -1259,7 +1259,6 @@ dependencies = [
  "async-trait",
  "common-base",
  "common-config",
- "common-contexts",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
@@ -1296,14 +1295,6 @@ dependencies = [
  "serde",
  "serfig",
  "thrift 0.17.0",
-]
-
-[[package]]
-name = "common-contexts"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "opendal",
 ]
 
 [[package]]
@@ -2019,7 +2010,6 @@ dependencies = [
  "common-base",
  "common-catalog",
  "common-config",
- "common-contexts",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
@@ -2097,7 +2087,6 @@ dependencies = [
  "async-trait",
  "backon",
  "common-base",
- "common-contexts",
  "common-exception",
  "globiter",
  "once_cell",
@@ -2127,10 +2116,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-storages-context"
-version = "0.1.0"
-
-[[package]]
 name = "common-storages-factory"
 version = "0.1.0"
 dependencies = [
@@ -2151,7 +2136,6 @@ dependencies = [
  "common-pipeline-sources",
  "common-pipeline-transforms",
  "common-storage",
- "common-storages-context",
  "common-storages-fuse",
  "common-storages-index",
  "common-storages-preludes",
@@ -2194,7 +2178,6 @@ dependencies = [
  "common-storage",
  "common-storages-cache",
  "common-storages-constants",
- "common-storages-context",
  "common-storages-index",
  "futures",
  "futures-util",
@@ -2269,7 +2252,6 @@ dependencies = [
  "common-base",
  "common-building",
  "common-catalog",
- "common-contexts",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
@@ -2282,7 +2264,7 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
- "common-storages-context",
+ "common-storage",
  "common-users",
  "futures",
  "itertools",
@@ -2900,7 +2882,6 @@ dependencies = [
  "common-building",
  "common-catalog",
  "common-config",
- "common-contexts",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
@@ -2932,7 +2913,6 @@ dependencies = [
  "common-storage",
  "common-storages-cache",
  "common-storages-constants",
- "common-storages-context",
  "common-storages-factory",
  "common-storages-fuse",
  "common-storages-hive",

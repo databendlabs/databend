@@ -27,20 +27,19 @@ use crate::fuse::FuseTable;
 use crate::memory::MemoryTable;
 use crate::null::NullTable;
 use crate::view::ViewTable;
-use crate::StorageContext;
 use crate::Table;
 
 pub trait StorageCreator: Send + Sync {
-    fn try_create(&self, ctx: StorageContext, table_info: TableInfo) -> Result<Box<dyn Table>>;
+    fn try_create(&self, table_info: TableInfo) -> Result<Box<dyn Table>>;
 }
 
 impl<T> StorageCreator for T
 where
-    T: Fn(StorageContext, TableInfo) -> Result<Box<dyn Table>>,
+    T: Fn(TableInfo) -> Result<Box<dyn Table>>,
     T: Send + Sync,
 {
-    fn try_create(&self, ctx: StorageContext, table_info: TableInfo) -> Result<Box<dyn Table>> {
-        self(ctx, table_info)
+    fn try_create(&self, table_info: TableInfo) -> Result<Box<dyn Table>> {
+        self(table_info)
     }
 }
 
@@ -109,14 +108,14 @@ impl StorageFactory {
         }
     }
 
-    pub fn get_table(&self, ctx: StorageContext, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
+    pub fn get_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
         let engine = table_info.engine().to_uppercase();
         let lock = self.storages.read();
         let factory = lock.get(&engine).ok_or_else(|| {
             ErrorCode::UnknownTableEngine(format!("Unknown table engine {}", engine))
         })?;
 
-        let table: Arc<dyn Table> = factory.creator.try_create(ctx, table_info.clone())?.into();
+        let table: Arc<dyn Table> = factory.creator.try_create(table_info.clone())?.into();
         Ok(table)
     }
 

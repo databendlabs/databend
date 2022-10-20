@@ -11,7 +11,6 @@ storage-hdfs = ["opendal/services-hdfs"]
 
 [dependencies]
 common-base = { path = "../base" }
-common-contexts = { path = "../contexts" }
 common-exception = { path = "../exception" }
 
 anyhow = { workspace = true }

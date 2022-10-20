@@ -32,6 +32,7 @@ use common_legacy_planners::Projection;
 use common_legacy_planners::ReadDataSourcePlan;
 use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
+use common_storage::StorageMetrics;
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
@@ -44,7 +45,6 @@ use crate::pipelines::processors::SyncSourcer;
 use crate::pipelines::Pipeline;
 use crate::sessions::TableContext;
 use crate::storages::memory::memory_part::MemoryPartInfo;
-use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
 use crate::storages::Table;
 
@@ -54,10 +54,12 @@ static IN_MEMORY_DATA: Lazy<Arc<RwLock<InMemoryData<u64>>>> =
 pub struct MemoryTable {
     table_info: TableInfo,
     blocks: Arc<RwLock<Vec<DataBlock>>>,
+
+    data_metrics: Arc<StorageMetrics>,
 }
 
 impl MemoryTable {
-    pub fn try_create(_: StorageContext, table_info: TableInfo) -> Result<Box<dyn Table>> {
+    pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
         let table_id = &table_info.ident.table_id;
         let blocks = {
             let mut in_mem_data = IN_MEMORY_DATA.write();
@@ -72,7 +74,11 @@ impl MemoryTable {
             }
         };
 
-        let table = Self { table_info, blocks };
+        let table = Self {
+            table_info,
+            blocks,
+            data_metrics: Arc::new(StorageMetrics::default()),
+        };
         Ok(Box::new(table))
     }
 
@@ -133,6 +139,10 @@ impl Table for MemoryTable {
 
     fn benefit_column_prune(&self) -> bool {
         true
+    }
+
+    fn get_data_metrics(&self) -> Option<Arc<StorageMetrics>> {
+        Some(self.data_metrics.clone())
     }
 
     async fn read_partitions(
@@ -223,15 +233,13 @@ impl Table for MemoryTable {
 
     async fn commit_insertion(
         &self,
-        ctx: Arc<dyn TableContext>,
+        _: Arc<dyn TableContext>,
         operations: Vec<DataBlock>,
         overwrite: bool,
     ) -> Result<()> {
         let written_bytes: usize = operations.iter().map(|b| b.memory_size()).sum();
 
-        ctx.get_dal_context()
-            .get_metrics()
-            .inc_write_bytes(written_bytes);
+        self.data_metrics.inc_write_bytes(written_bytes);
 
         if overwrite {
             let mut blocks = self.blocks.write();
