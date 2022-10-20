@@ -18,13 +18,13 @@ use common_exception::Result;
 use common_legacy_planners::ReadDataSourcePlan;
 use common_streams::SendableDataBlockStream;
 
-use crate::interpreters::PullingExecutorStream;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::storages::Table;
+use crate::stream::PullingExecutorStream;
 
 #[async_trait::async_trait]
 pub trait DataBlockStream: Send + Sync {

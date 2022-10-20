@@ -39,10 +39,11 @@ pub mod pipelines;
 pub mod procedures;
 pub mod servers;
 pub mod sessions;
+pub mod stream;
 pub mod table_functions;
-pub mod utils;
 
 mod global_services;
+
 pub use common_sql as sql;
 pub use common_storages_factory as storages;
 pub use global_services::GlobalServices;

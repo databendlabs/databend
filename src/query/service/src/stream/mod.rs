@@ -13,5 +13,7 @@
 // limitations under the License.
 
 mod processor_executor_stream;
+mod table_read_block_stream;
 
 pub use processor_executor_stream::PullingExecutorStream;
+pub use table_read_block_stream::DataBlockStream;
