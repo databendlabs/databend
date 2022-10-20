@@ -20,7 +20,6 @@ use backon::ExponentialBackoff;
 use common_base::base::GlobalIORuntime;
 use common_base::base::Singleton;
 use common_base::base::TrySpawn;
-use common_contexts::DalRuntime;
 use common_exception::ErrorCode;
 use once_cell::sync::OnceCell;
 use opendal::layers::ImmutableIndexLayer;
@@ -48,6 +47,7 @@ use crate::config::StorageGcsConfig;
 use crate::config::StorageHttpConfig;
 use crate::config::StorageMokaConfig;
 use crate::config::StorageObsConfig;
+use crate::runtime_layer::RuntimeLayer;
 use crate::StorageConfig;
 use crate::StorageOssConfig;
 
@@ -83,7 +83,7 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
         // Magic happens here. We will add a layer upon original
         // storage operator so that all underlying storage operations
         // will send to storage runtime.
-        .layer(DalRuntime::new(GlobalIORuntime::instance().inner()));
+        .layer(RuntimeLayer::new(GlobalIORuntime::instance().inner()));
 
     Ok(op)
 }
