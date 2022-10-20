@@ -11,8 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-use std::io::Error;
-use std::io::ErrorKind;
+
 use std::io::Result;
 use std::sync::Arc;
 
@@ -39,52 +38,42 @@ use opendal::ObjectStreamer;
 /// So that we will not bothered by `dispatch dropped` panic.
 ///
 /// However, the new processor framework will make sure that all async task running
-/// in the same, global, separate, IO only async runtime, so we can remove `DalRuntime`
+/// in the same, global, separate, IO only async runtime, so we can remove `RuntimeLayer`
 /// after new processor framework finished.
 #[derive(Clone, Debug)]
-pub struct DalRuntime {
-    inner: Option<Arc<dyn Accessor>>,
+pub struct RuntimeLayer {
     runtime: Handle,
 }
 
-impl DalRuntime {
+impl RuntimeLayer {
     pub fn new(runtime: Handle) -> Self {
-        DalRuntime {
-            inner: None,
-            runtime,
-        }
-    }
-
-    fn get_inner(&self) -> Result<Arc<dyn Accessor>> {
-        match &self.inner {
-            None => Err(Error::new(
-                ErrorKind::Other,
-                "dal runtime must init wrongly, inner accessor is empty",
-            )),
-            Some(inner) => Ok(inner.clone()),
-        }
+        RuntimeLayer { runtime }
     }
 }
 
-impl Layer for DalRuntime {
+impl Layer for RuntimeLayer {
     fn layer(&self, inner: Arc<dyn Accessor>) -> Arc<dyn Accessor> {
-        Arc::new(DalRuntime {
-            inner: Some(inner),
+        Arc::new(RuntimeAccessor {
+            inner,
             runtime: self.runtime.clone(),
         })
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct RuntimeAccessor {
+    inner: Arc<dyn Accessor>,
+    runtime: Handle,
+}
+
 #[async_trait]
-impl Accessor for DalRuntime {
+impl Accessor for RuntimeAccessor {
     fn metadata(&self) -> AccessorMetadata {
-        self.get_inner()
-            .expect("must have valid accessor")
-            .metadata()
+        self.inner.metadata()
     }
 
     async fn create(&self, path: &str, args: OpCreate) -> Result<()> {
-        let op = self.get_inner()?;
+        let op = self.inner.clone();
         let path = path.to_string();
         self.runtime
             .spawn(async move { op.create(&path, args).await })
@@ -93,7 +82,7 @@ impl Accessor for DalRuntime {
     }
 
     async fn read(&self, path: &str, args: OpRead) -> Result<BytesReader> {
-        let op = self.get_inner()?;
+        let op = self.inner.clone();
         let path = path.to_string();
         self.runtime
             .spawn(async move { op.read(&path, args).await })
@@ -102,7 +91,7 @@ impl Accessor for DalRuntime {
     }
 
     async fn write(&self, path: &str, args: OpWrite, r: BytesReader) -> Result<u64> {
-        let op = self.get_inner()?;
+        let op = self.inner.clone();
         let path = path.to_string();
         self.runtime
             .spawn(async move { op.write(&path, args, r).await })
@@ -111,7 +100,7 @@ impl Accessor for DalRuntime {
     }
 
     async fn stat(&self, path: &str, args: OpStat) -> Result<ObjectMetadata> {
-        let op = self.get_inner()?;
+        let op = self.inner.clone();
         let path = path.to_string();
         self.runtime
             .spawn(async move { op.stat(&path, args).await })
@@ -120,7 +109,7 @@ impl Accessor for DalRuntime {
     }
 
     async fn delete(&self, path: &str, args: OpDelete) -> Result<()> {
-        let op = self.get_inner()?;
+        let op = self.inner.clone();
         let path = path.to_string();
         self.runtime
             .spawn(async move { op.delete(&path, args).await })
@@ -129,7 +118,7 @@ impl Accessor for DalRuntime {
     }
 
     async fn list(&self, path: &str, args: OpList) -> Result<ObjectStreamer> {
-        let op = self.get_inner()?;
+        let op = self.inner.clone();
         let path = path.to_string();
         self.runtime
             .spawn(async move { op.list(&path, args).await })
@@ -138,6 +127,6 @@ impl Accessor for DalRuntime {
     }
 
     fn presign(&self, path: &str, args: OpPresign) -> Result<PresignedRequest> {
-        self.get_inner()?.presign(path, args)
+        self.inner.presign(path, args)
     }
 }
