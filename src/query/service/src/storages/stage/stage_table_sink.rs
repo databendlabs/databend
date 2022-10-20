@@ -47,7 +47,6 @@ enum State {
 pub struct StageTableSink {
     state: State,
     input: Arc<InputPort>,
-    ctx: Arc<dyn TableContext>,
     data_accessor: Operator,
     output: Option<Arc<OutputPort>>,
 
@@ -104,7 +103,6 @@ impl StageTableSink {
         let single = table_info.stage_info.copy_options.single;
 
         Ok(ProcessorPtr::create(Box::new(StageTableSink {
-            ctx,
             input,
             data_accessor,
             table_info,
@@ -267,10 +265,11 @@ impl Processor for StageTableSink {
         match std::mem::replace(&mut self.state, State::None) {
             State::NeedWrite(bytes, remainng_block) => {
                 let path = self.unload_path();
-                self.ctx
-                    .get_dal_context()
-                    .get_metrics()
-                    .inc_write_bytes(bytes.len());
+
+                // TODO(xuanwo): we used to update the data metrics here.
+                //
+                // But all data metrics will be moved to table, thus we can't
+                // update here, we need to address this.
 
                 let object = self.data_accessor.object(&path);
                 { || object.write(bytes.as_slice()) }

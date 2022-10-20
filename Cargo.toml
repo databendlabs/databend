@@ -14,7 +14,6 @@ members = [
     "src/common/base",
     "src/common/building",
     "src/common/cache",
-    "src/common/contexts",
     "src/common/exception",
     "src/common/grpc",
     "src/common/hashtable",

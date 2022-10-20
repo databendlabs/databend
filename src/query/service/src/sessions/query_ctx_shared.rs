@@ -23,12 +23,12 @@ use std::time::SystemTime;
 use common_base::base::Progress;
 use common_base::base::Runtime;
 use common_config::Config;
-use common_contexts::DalContext;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::UserInfo;
 use common_storage::DataOperator;
+use common_storage::StorageMetrics;
 use common_storage::StorageParams;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
@@ -75,7 +75,6 @@ pub struct QueryContextShared {
     pub(in crate::sessions) http_query: Arc<RwLock<Option<HttpQueryHandle>>>,
     pub(in crate::sessions) aborting: Arc<AtomicBool>,
     pub(in crate::sessions) tables_refs: Arc<Mutex<HashMap<DatabaseAndTable, Arc<dyn Table>>>>,
-    pub(in crate::sessions) dal_ctx: Arc<DalContext>,
     pub(in crate::sessions) auth_manager: Arc<AuthMgr>,
     pub(in crate::sessions) affect: Arc<Mutex<Option<QueryAffect>>>,
     pub(in crate::sessions) catalog_manager: Arc<CatalogManager>,
@@ -108,7 +107,6 @@ impl QueryContextShared {
             http_query: Arc::new(RwLock::new(None)),
             aborting: Arc::new(AtomicBool::new(false)),
             tables_refs: Arc::new(Mutex::new(HashMap::new())),
-            dal_ctx: Arc::new(Default::default()),
             auth_manager: AuthMgr::create(config).await?,
             affect: Arc::new(Mutex::new(None)),
             executor: Arc::new(RwLock::new(Weak::new())),
@@ -173,6 +171,13 @@ impl QueryContextShared {
     pub fn get_tables_refs(&self) -> Vec<Arc<dyn Table>> {
         let tables = self.tables_refs.lock();
         tables.values().cloned().collect()
+    }
+
+    pub fn get_data_metrics(&self) -> StorageMetrics {
+        let tables = self.get_tables_refs();
+        let metrics: Vec<Arc<StorageMetrics>> =
+            tables.iter().filter_map(|v| v.get_data_metrics()).collect();
+        StorageMetrics::merge(&metrics)
     }
 
     pub fn get_tenant(&self) -> String {

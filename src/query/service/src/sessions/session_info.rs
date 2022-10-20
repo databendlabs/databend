@@ -89,12 +89,7 @@ impl Session {
         status
             .get_query_context_shared()
             .as_ref()
-            .map(|context_shared| {
-                let tables = context_shared.get_tables_refs();
-                let metrics: Vec<Arc<StorageMetrics>> =
-                    tables.iter().filter_map(|v| v.get_data_metrics()).collect();
-                StorageMetrics::merge(&metrics)
-            })
+            .map(|context_shared| context_shared.get_data_metrics())
     }
 
     fn query_scan_progress_value(status: &SessionContext) -> Option<ProgressValues> {

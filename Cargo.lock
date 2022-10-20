@@ -1270,7 +1270,6 @@ dependencies = [
  "async-trait",
  "common-base",
  "common-config",
- "common-contexts",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
@@ -1306,14 +1305,6 @@ dependencies = [
  "serde",
  "serfig",
  "thrift 0.17.0",
-]
-
-[[package]]
-name = "common-contexts"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "opendal",
 ]
 
 [[package]]
@@ -2016,7 +2007,6 @@ dependencies = [
  "async-trait",
  "backon",
  "common-base",
- "common-contexts",
  "common-exception",
  "globiter",
  "once_cell",
@@ -2148,7 +2138,6 @@ dependencies = [
  "common-base",
  "common-building",
  "common-catalog",
- "common-contexts",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
@@ -2748,7 +2737,6 @@ dependencies = [
  "common-building",
  "common-catalog",
  "common-config",
- "common-contexts",
  "common-datablocks",
  "common-datavalues",
  "common-exception",

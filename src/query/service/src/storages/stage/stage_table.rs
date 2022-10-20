@@ -40,6 +40,7 @@ use crate::pipelines::Pipeline;
 use crate::sessions::TableContext;
 use crate::storages::Table;
 
+/// TODO: we need to track the data metrics in stage table.
 pub struct StageTable {
     table_info: StageTableInfo,
     // This is no used but a placeholder.

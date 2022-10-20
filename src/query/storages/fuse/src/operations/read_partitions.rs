@@ -78,7 +78,7 @@ impl FuseTable {
                 let table_info = self.table_info.clone();
                 let segments_location = snapshot.segments.clone();
                 let summary = snapshot.summary.block_count as usize;
-                Self::prune_snapshot_blocks(
+                self.prune_snapshot_blocks(
                     ctx.clone(),
                     self.operator.clone(),
                     push_downs.clone(),
@@ -94,6 +94,7 @@ impl FuseTable {
 
     #[tracing::instrument(level = "debug", name = "prune_snapshot_blocks", skip_all, fields(ctx.id = ctx.get_id().as_str()))]
     pub async fn prune_snapshot_blocks(
+        &self,
         ctx: Arc<dyn TableContext>,
         dal: Operator,
         push_downs: Option<Extras>,
@@ -125,11 +126,12 @@ impl FuseTable {
             start.elapsed().as_secs()
         );
 
-        Self::read_partitions_with_metas(ctx, table_info.schema(), push_downs, block_metas, summary)
+        self.read_partitions_with_metas(ctx, table_info.schema(), push_downs, block_metas, summary)
     }
 
     pub fn read_partitions_with_metas(
-        ctx: Arc<dyn TableContext>,
+        &self,
+        _: Arc<dyn TableContext>,
         schema: DataSchemaRef,
         push_downs: Option<Extras>,
         block_metas: Vec<BlockMeta>,
@@ -147,11 +149,9 @@ impl FuseTable {
         statistics.partitions_scanned = partitions_scanned;
 
         // Update context statistics.
-        ctx.get_dal_context()
-            .get_metrics()
+        self.data_metrics
             .inc_partitions_total(partitions_total as u64);
-        ctx.get_dal_context()
-            .get_metrics()
+        self.data_metrics
             .inc_partitions_scanned(partitions_scanned as u64);
 
         Ok((statistics, parts))
