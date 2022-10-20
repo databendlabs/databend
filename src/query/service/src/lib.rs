@@ -33,16 +33,17 @@ pub mod catalogs;
 pub mod clusters;
 pub mod context_function;
 pub mod databases;
-pub mod evaluator;
 pub mod interpreters;
 pub mod metrics;
 pub mod pipelines;
 pub mod procedures;
 pub mod servers;
 pub mod sessions;
-pub mod sql;
-pub mod storages;
+pub mod stream;
 pub mod table_functions;
 
 mod global_services;
+
+pub use common_sql as sql;
+pub use common_storages_factory as storages;
 pub use global_services::GlobalServices;

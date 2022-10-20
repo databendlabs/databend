@@ -63,7 +63,6 @@ pub use transform_create_sets::SubqueryReceiver;
 pub use transform_create_sets::TransformCreateSets;
 pub use transform_dummy::TransformDummy;
 pub use transform_expression::ExpressionTransform;
-pub use transform_expression::ProjectionTransform;
 pub use transform_hash_join::SinkBuildHashTable;
 pub use transform_hash_join::TransformHashJoinProbe;
 pub use transform_limit::TransformLimit;

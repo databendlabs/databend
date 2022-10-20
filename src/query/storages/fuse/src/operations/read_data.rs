@@ -134,22 +134,6 @@ impl FuseTable {
         })
     }
 
-    // Adjust the max io request.
-    fn adjust_max_io_requests(
-        ctx: Arc<dyn TableContext>,
-        plan: &ReadDataSourcePlan,
-    ) -> Result<usize> {
-        let parts_len = plan.parts.len();
-        let max_storage_io = ctx.get_settings().get_max_storage_io_requests()? as usize;
-        let max_io_requests = if parts_len > max_storage_io {
-            max_storage_io
-        } else {
-            parts_len
-        };
-
-        Ok(std::cmp::max(1, max_io_requests))
-    }
-
     #[inline]
     pub fn do_read_data(
         &self,
@@ -166,6 +150,7 @@ impl FuseTable {
         }
 
         if !lazy_init_segments.is_empty() {
+            let table = self.clone();
             let table_info = self.table_info.clone();
             let push_downs = plan.push_downs.clone();
             let query_ctx = ctx.clone();
@@ -173,6 +158,7 @@ impl FuseTable {
 
             // TODO: need refactor
             pipeline.set_on_init(move || {
+                let table = table.clone();
                 let table_info = table_info.clone();
                 let ctx = query_ctx.clone();
                 let dal = dal.clone();
@@ -180,15 +166,16 @@ impl FuseTable {
                 let lazy_init_segments = lazy_init_segments.clone();
 
                 let partitions = Runtime::with_worker_threads(2, None)?.block_on(async move {
-                    let (_statistics, partitions) = FuseTable::prune_snapshot_blocks(
-                        ctx,
-                        dal,
-                        push_downs,
-                        table_info,
-                        lazy_init_segments,
-                        0,
-                    )
-                    .await?;
+                    let (_statistics, partitions) = table
+                        .prune_snapshot_blocks(
+                            ctx,
+                            dal,
+                            push_downs,
+                            table_info,
+                            lazy_init_segments,
+                            0,
+                        )
+                        .await?;
 
                     Result::<_, ErrorCode>::Ok(partitions)
                 })?;
@@ -204,7 +191,7 @@ impl FuseTable {
         let prewhere_filter = self.build_prewhere_filter_executor(ctx.clone(), plan)?;
         let remain_reader = self.build_remain_reader(plan)?;
 
-        let max_io_requests = Self::adjust_max_io_requests(ctx.clone(), plan)?;
+        let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
         info!("read block data adjust max io requests:{}", max_io_requests);
 
         // Add source pipe.

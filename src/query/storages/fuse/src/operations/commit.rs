@@ -145,8 +145,7 @@ impl FuseTable {
                     }
                     None => {
                         info!("aborting operations");
-                        let _ =
-                            self::utils::abort_operations(self.get_operator(), operation_log).await;
+                        let _ = utils::abort_operations(self.get_operator(), operation_log).await;
                         break Err(ErrorCode::OCCRetryFailure(format!(
                             "can not fulfill the tx after retries({} times, {} ms), aborted. table name {}, identity {}",
                             retry_times,
@@ -238,7 +237,7 @@ impl FuseTable {
         // 1. merge stats with previous snapshot, if any
         let stats = if let Some(snapshot) = &previous {
             let summary = &snapshot.summary;
-            statistics::merge_statistics(&statistics, summary)?
+            merge_statistics(&statistics, summary)?
         } else {
             statistics
         };
@@ -284,7 +283,7 @@ impl FuseTable {
             snapshot_location.clone(),
         );
         // remove legacy options
-        self::utils::remove_legacy_options(&mut new_table_meta.options);
+        utils::remove_legacy_options(&mut new_table_meta.options);
 
         // 2.2 setup table statistics
         let stats = &snapshot.summary;
@@ -411,26 +410,41 @@ impl FuseTable {
 
     pub async fn commit_mutation(
         &self,
-        ctx: Arc<dyn TableContext>,
-        snapshot: Arc<TableSnapshot>,
-        mut segments: Vec<Location>,
-        mut summary: Statistics,
+        ctx: &Arc<dyn TableContext>,
+        base_snapshot: Arc<TableSnapshot>,
+        base_segments: Vec<Location>,
+        base_summary: Statistics,
         abort_operation: AbortOperation,
     ) -> Result<()> {
-        let mut table = self;
-        let mut latest: Arc<dyn Table>;
         let mut retries = 0;
-        let mut latest_snapshot;
-        let mut base_snapshot = snapshot;
-        let mut current_table_info = &self.table_info;
+
+        let mut latest_snapshot = base_snapshot.clone();
+        let mut latest_table_info = &self.table_info;
+
+        // holding the reference of latest table during retries
+        let mut latest_table_ref: Arc<dyn Table>;
+
+        // potentially concurrently appended segments, init it to empty
+        let mut concurrently_appended_segment_locations: &[Location] = &[];
 
         while retries < MAX_RETRIES {
-            let mut snapshot_tobe_committed = TableSnapshot::from_previous(base_snapshot.as_ref());
-            snapshot_tobe_committed.segments = segments.clone();
-            snapshot_tobe_committed.summary = summary.clone();
+            let mut snapshot_tobe_committed =
+                TableSnapshot::from_previous(latest_snapshot.as_ref());
+
+            let (segments_tobe_committed, statistics_tobe_committed) = Self::merge_with_base(
+                ctx.clone(),
+                self.operator.clone(),
+                &base_segments,
+                &base_summary,
+                concurrently_appended_segment_locations,
+            )
+            .await?;
+            snapshot_tobe_committed.segments = segments_tobe_committed;
+            snapshot_tobe_committed.summary = statistics_tobe_committed;
+
             match Self::commit_to_meta_server(
                 ctx.as_ref(),
-                current_table_info,
+                latest_table_info,
                 &self.meta_location_generator,
                 snapshot_tobe_committed,
                 &self.operator,
@@ -438,22 +452,19 @@ impl FuseTable {
             .await
             {
                 Err(e) if e.code() == ErrorCode::table_version_mismatched_code() => {
-                    latest = table.refresh(ctx.as_ref()).await?;
-                    table = FuseTable::try_from_table(latest.as_ref())?;
-
-                    latest_snapshot =
-                        table
-                            .read_table_snapshot(ctx.clone())
-                            .await?
-                            .ok_or_else(|| {
-                                ErrorCode::LogicalError(
-                                    "mutation meets empty snapshot during conflict reconciliation",
-                                )
-                            })?;
-                    current_table_info = &table.table_info;
+                    latest_table_ref = self.refresh(ctx.as_ref()).await?;
+                    let latest_fuse_table = FuseTable::try_from_table(latest_table_ref.as_ref())?;
+                    latest_snapshot = latest_fuse_table
+                        .read_table_snapshot(ctx.clone())
+                        .await?
+                        .ok_or_else(|| {
+                            ErrorCode::LogicalError(
+                                "mutation meets empty snapshot during conflict reconciliation",
+                            )
+                        })?;
+                    latest_table_info = &latest_fuse_table.table_info;
 
                     // Check if there is only insertion during the operation.
-                    let mut new_segments = latest_snapshot.segments.clone();
                     match MutatorConflictDetector::detect_conflicts(
                         base_snapshot.as_ref(),
                         latest_snapshot.as_ref(),
@@ -462,31 +473,29 @@ impl FuseTable {
                             abort_operation
                                 .abort(ctx.clone(), self.operator.clone())
                                 .await?;
+                            metrics::counter!("fuse_commit_mutation_unresolvable_conflict", 1);
                             return Err(ErrorCode::StorageOther(
                                 "mutation conflicts, concurrent mutation detected while committing segment compaction operation",
                             ));
                         }
                         Conflict::ResolvableAppend(range_of_newly_append) => {
-                            // for resolvable append only operation, the range returned always begin with 0
-                            new_segments.truncate(range_of_newly_append.len());
+                            info!("resolvable conflicts detected");
+                            metrics::counter!("fuse_commit_mutation_resolvable_conflict", 1);
+                            concurrently_appended_segment_locations =
+                                &latest_snapshot.segments[range_of_newly_append];
                         }
                     }
 
-                    info!("resolvable conflicts detected");
-                    // Read all segments information in parallel.
-                    let fuse_segment_io = SegmentsIO::create(ctx.clone(), table.operator.clone());
-                    let results = fuse_segment_io.read_segments(&new_segments).await?;
-                    for result in results.iter() {
-                        let segment = result.clone()?;
-                        summary = merge_statistics(&summary, &segment.summary)?;
-                    }
-                    new_segments.extend(segments.clone());
-                    segments = new_segments;
-                    base_snapshot = latest_snapshot;
                     retries += 1;
+                    metrics::counter!("fuse_commit_mutation_retry", 1);
                 }
                 Err(e) => return Err(e),
-                Ok(_) => return Ok(()),
+                Ok(_) => {
+                    return {
+                        metrics::counter!("fuse_commit_mutation_success", 1);
+                        Ok(())
+                    };
+                }
             }
         }
 
@@ -497,6 +506,38 @@ impl FuseTable {
             "commit mutation failed after {} retries",
             retries
         )))
+    }
+
+    async fn merge_with_base(
+        ctx: Arc<dyn TableContext>,
+        operator: Operator,
+        base_segments: &[Location],
+        base_summary: &Statistics,
+        concurrently_appended_segment_locations: &[Location],
+    ) -> Result<(Vec<Location>, Statistics)> {
+        if concurrently_appended_segment_locations.is_empty() {
+            Ok((base_segments.to_owned(), base_summary.clone()))
+        } else {
+            // place the concurrently appended segments at the head of segment list
+            let new_segments = concurrently_appended_segment_locations
+                .iter()
+                .chain(base_segments.iter())
+                .cloned()
+                .collect();
+
+            let fuse_segment_io = SegmentsIO::create(ctx, operator);
+            let concurrent_appended_segment_infos = fuse_segment_io
+                .read_segments(concurrently_appended_segment_locations)
+                .await?;
+
+            let mut new_statistics = base_summary.clone();
+            for result in concurrent_appended_segment_infos.into_iter() {
+                let concurrent_appended_segment = result?;
+                new_statistics =
+                    merge_statistics(&new_statistics, &concurrent_appended_segment.summary)?;
+            }
+            Ok((new_segments, new_statistics))
+        }
     }
 }
 
@@ -523,9 +564,6 @@ impl MutatorConflictDetector {
             && base_segments[0..base_segments_len]
                 == latest_segments[(latest_segments_len - base_segments_len)..latest_segments_len]
         {
-            // note (latest_segments_len == base_segments_len indicate) indicates that the latest
-            // snapshot is generated by non-data related operations, like `alter table add column`
-            // which can be merged
             Conflict::ResolvableAppend(0..(latest_segments_len - base_segments_len))
         } else {
             Conflict::Unresolvable
@@ -542,6 +580,7 @@ mod utils {
         operator: Operator,
         operation_log: TableOperationLog,
     ) -> Result<()> {
+        metrics::counter!("fuse_commit_mutation_aborts", 1);
         for entry in operation_log {
             for block in &entry.segment_info.blocks {
                 let block_location = &block.location.0;

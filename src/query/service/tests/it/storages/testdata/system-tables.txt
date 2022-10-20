@@ -23,12 +23,12 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | created_on               | system   | tables_with_history | VARCHAR           |              |                    | false       |         |
 | creator                  | system   | stages              | VARCHAR           |              |                    | true        |         |
 | current_database         | system   | query_log           | VARCHAR           |              |                    | false       |         |
-| dal_metrics_read_bytes   | system   | processes           | BIGINT UNSIGNED   |              |                    | true        |         |
-| dal_metrics_write_bytes  | system   | processes           | BIGINT UNSIGNED   |              |                    | true        |         |
 | data_compressed_size     | system   | tables              | BIGINT UNSIGNED   |              |                    | true        |         |
 | data_compressed_size     | system   | tables_with_history | BIGINT UNSIGNED   |              |                    | true        |         |
+| data_read_bytes          | system   | processes           | BIGINT UNSIGNED   |              |                    | true        |         |
 | data_size                | system   | tables              | BIGINT UNSIGNED   |              |                    | true        |         |
 | data_size                | system   | tables_with_history | BIGINT UNSIGNED   |              |                    | true        |         |
+| data_write_bytes         | system   | processes           | BIGINT UNSIGNED   |              |                    | true        |         |
 | database                 | system   | clustering_history  | VARCHAR           |              |                    | false       |         |
 | database                 | system   | columns             | VARCHAR           |              |                    | false       |         |
 | database                 | system   | processes           | VARCHAR           |              |                    | false       |         |

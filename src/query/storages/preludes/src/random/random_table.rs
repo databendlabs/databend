@@ -34,7 +34,6 @@ use crate::pipelines::processors::SyncSourcer;
 use crate::pipelines::Pipeline;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::TableContext;
-use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
 use crate::storages::Table;
 
@@ -43,7 +42,7 @@ pub struct RandomTable {
 }
 
 impl RandomTable {
-    pub fn try_create(_ctx: StorageContext, table_info: TableInfo) -> Result<Box<dyn Table>> {
+    pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
         Ok(Box::new(Self { table_info }))
     }
 
