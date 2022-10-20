@@ -522,7 +522,7 @@ f. Run the following command to start the Query node:
 
 g. Run the following command to check if the Query node was started successfully:
 ```shell
-curl -I  http://127.0.0.1:8081/v1/health
+curl -I  http://127.0.0.1:8080/v1/health
 ```
 
 ### Verifying Deployment
