@@ -19,8 +19,8 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use databend_query::sql::plans::create_table_v2::TableOptions;
 use databend_query::storages::null::NullTable;
-use databend_query::storages::TableStreamReadWrap;
 use databend_query::storages::ToReadDataSourcePlan;
+use databend_query::stream::DataBlockStream;
 use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

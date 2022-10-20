@@ -59,9 +59,11 @@ common-pipeline-sources = { path = "../pipeline/sources" }
 common-pipeline-transforms = { path = "../pipeline/transforms" }
 common-planner = { path = "../planner" }
 common-settings = { path = "../settings" }
+common-sql = { path = "../sql" }
 common-storage = { path = "../../common/storage" }
 common-storages-cache = { path = "../storages/cache" }
 common-storages-constants = { path = "../storages/constants" }
+common-storages-factory = { path = "../storages/factory" }
 common-storages-fuse = { path = "../storages/fuse" }
 common-storages-hive = { path = "../storages/hive", optional = true }
 common-storages-index = { path = "../storages/index" }

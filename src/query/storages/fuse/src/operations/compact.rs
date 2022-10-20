@@ -44,7 +44,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         target: CompactTarget,
         pipeline: &mut Pipeline,
-    ) -> Result<Option<Arc<dyn TableMutator>>> {
+    ) -> Result<Option<Box<dyn TableMutator>>> {
         let snapshot_opt = self.read_table_snapshot(ctx.clone()).await?;
         let base_snapshot = if let Some(val) = snapshot_opt {
             val
@@ -76,7 +76,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         _pipeline: &mut Pipeline,
         options: CompactOptions,
-    ) -> Result<Option<Arc<dyn TableMutator>>> {
+    ) -> Result<Option<Box<dyn TableMutator>>> {
         let mut segment_mutator = SegmentCompactMutator::try_create(
             ctx.clone(),
             options.base_snapshot,
@@ -86,7 +86,7 @@ impl FuseTable {
         )?;
 
         if segment_mutator.target_select().await? {
-            Ok(Some(Arc::new(segment_mutator)))
+            Ok(Some(Box::new(segment_mutator)))
         } else {
             Ok(None)
         }
@@ -97,7 +97,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         options: CompactOptions,
-    ) -> Result<Option<Arc<dyn TableMutator>>> {
+    ) -> Result<Option<Box<dyn TableMutator>>> {
         let block_compactor = self.get_block_compactor();
 
         let block_per_seg = options.block_per_seg;
@@ -162,6 +162,6 @@ impl FuseTable {
             )
         })?;
 
-        Ok(Some(Arc::new(mutator)))
+        Ok(Some(Box::new(mutator)))
     }
 }

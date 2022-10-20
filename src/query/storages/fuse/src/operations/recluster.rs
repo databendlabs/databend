@@ -45,7 +45,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         push_downs: Option<Extras>,
-    ) -> Result<Option<Arc<dyn TableMutator>>> {
+    ) -> Result<Option<Box<dyn TableMutator>>> {
         if self.cluster_key_meta.is_none() {
             return Ok(None);
         }
@@ -194,6 +194,6 @@ impl FuseTable {
                 None,
             )
         })?;
-        Ok(Some(Arc::new(mutator)))
+        Ok(Some(Box::new(mutator)))
     }
 }

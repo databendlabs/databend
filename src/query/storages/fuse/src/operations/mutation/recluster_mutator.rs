@@ -202,9 +202,8 @@ impl TableMutator for ReclusterMutator {
         Ok(false)
     }
 
-    async fn try_commit(&self, table: Arc<dyn Table>) -> Result<()> {
-        let base_mutator = self.base_mutator.clone();
-        let ctx = base_mutator.ctx.clone();
+    async fn try_commit(self: Box<Self>, table: Arc<dyn Table>) -> Result<()> {
+        let ctx = &self.base_mutator.ctx;
         let (mut segments, mut summary, mut abort_operation) =
             self.base_mutator.generate_segments().await?;
 
@@ -234,8 +233,8 @@ impl TableMutator for ReclusterMutator {
         let table = FuseTable::try_from_table(table.as_ref())?;
         table
             .commit_mutation(
-                &ctx,
-                base_mutator.base_snapshot,
+                ctx,
+                self.base_mutator.base_snapshot,
                 segments,
                 summary,
                 abort_operation,

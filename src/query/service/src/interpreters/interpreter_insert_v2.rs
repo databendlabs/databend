@@ -39,20 +39,19 @@ use parking_lot::RwLock;
 
 use super::interpreter_common::append2table;
 use super::plan_schedulers::build_schedule_pipeline;
-use crate::evaluator::Evaluator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::pipelines::processors::transforms::ChunkOperator;
 use crate::pipelines::processors::transforms::CompoundChunkOperator;
 use crate::pipelines::PipelineBuildResult;
+use crate::pipelines::PipelineBuilder;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::binder::ScalarBinder;
+use crate::sql::evaluator::Evaluator;
 use crate::sql::executor::DistributedInsertSelect;
 use crate::sql::executor::PhysicalPlan;
 use crate::sql::executor::PhysicalPlanBuilder;
-use crate::sql::executor::PipelineBuilder;
 use crate::sql::plans::CastExpr;
 use crate::sql::plans::ConstantExpr;
 use crate::sql::plans::Insert;
@@ -61,6 +60,7 @@ use crate::sql::plans::Plan;
 use crate::sql::plans::Scalar;
 use crate::sql::BindContext;
 use crate::sql::NameResolutionContext;
+use crate::sql::ScalarBinder;
 
 pub struct InsertInterpreterV2 {
     ctx: Arc<QueryContext>,
@@ -266,6 +266,7 @@ impl AsyncSource for ValueSource {
     const NAME: &'static str = "ValueSource";
     const SKIP_EMPTY_DATA_BLOCK: bool = true;
 
+    #[async_trait::unboxed_simple]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.is_finished {
             return Ok(None);

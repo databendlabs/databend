@@ -144,10 +144,10 @@ impl TableMutator for FullCompactMutator {
         Ok(true)
     }
 
-    async fn try_commit(&self, table: Arc<dyn Table>) -> Result<()> {
+    async fn try_commit(self: Box<FullCompactMutator>, table: Arc<dyn Table>) -> Result<()> {
         let ctx = self.ctx.clone();
-        let mut segments = self.segments.clone();
-        let mut summary = self.summary.clone();
+        let mut segments = self.segments;
+        let mut summary = self.summary;
         let mut abort_operation = AbortOperation::default();
 
         // Create new segments.
@@ -193,13 +193,7 @@ impl TableMutator for FullCompactMutator {
 
         let table = FuseTable::try_from_table(table.as_ref())?;
         table
-            .commit_mutation(
-                &ctx,
-                self.base_snapshot.clone(),
-                segments,
-                summary,
-                abort_operation,
-            )
+            .commit_mutation(&ctx, self.base_snapshot, segments, summary, abort_operation)
             .await
     }
 }
