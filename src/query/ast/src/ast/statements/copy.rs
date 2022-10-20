@@ -190,9 +190,7 @@ impl Display for UriLocation {
     }
 }
 
-pub enum CopyOptionItem<'a> {
-    Dst(CopyUnit<'a>),
-    Src(CopyUnit<'a>),
+pub enum CopyOptionItem {
     Files(Vec<String>),
     Pattern(String),
     FileFormat(BTreeMap<String, String>),
@@ -203,4 +201,21 @@ pub enum CopyOptionItem<'a> {
     Single(bool),
     Purge(bool),
     Force(bool),
+}
+
+impl CopyOptionItem {
+    pub fn apply(&self, stmt: &mut CopyStmt<'_>) {
+        match self {
+            CopyOptionItem::Files(v) => stmt.files = v.clone(),
+            CopyOptionItem::Pattern(v) => stmt.pattern = v.clone(),
+            CopyOptionItem::FileFormat(v) => stmt.file_format = v.clone(),
+            CopyOptionItem::ValidationMode(v) => stmt.validation_mode = v.clone(),
+            CopyOptionItem::SizeLimit(v) => stmt.size_limit = *v,
+            CopyOptionItem::MaxFileSize(v) => stmt.max_file_size = *v,
+            CopyOptionItem::SplitSize(v) => stmt.split_size = *v,
+            CopyOptionItem::Single(v) => stmt.single = *v,
+            CopyOptionItem::Purge(v) => stmt.purge = *v,
+            CopyOptionItem::Force(v) => stmt.force = *v,
+        }
+    }
 }

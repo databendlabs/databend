@@ -756,48 +756,27 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             COPY
             ~ INTO ~ #copy_unit
             ~ FROM ~ #copy_unit
-            ~ ( FILES ~ "=" ~ "(" ~ #comma_separated_list0(literal_string) ~ ")")?
-            ~ ( PATTERN ~ "=" ~ #literal_string)?
-            ~ ( FILE_FORMAT ~ "=" ~ #options)?
-            ~ ( VALIDATION_MODE ~ "=" ~ #literal_string)?
-            ~ ( SIZE_LIMIT ~ "=" ~ #literal_u64)?
-            ~ ( MAX_FILE_SIZE ~ "=" ~ #literal_u64)?
-            ~ ( SPLIT_SIZE ~ "=" ~ #literal_u64)?
-            ~ ( SINGLE ~ "=" ~ #literal_bool)?
-            ~ ( PURGE ~ "=" ~ #literal_bool)?
-            ~ ( FORCE ~ "=" ~ #literal_bool)?
+            ~ ( #copy_option_item )*
         },
-        |(
-            _,
-            _,
-            dst,
-            _,
-            src,
-            files,
-            pattern,
-            file_format,
-            validation_mode,
-            size_limit,
-            max_file_size,
-            split_size,
-            single,
-            purge,
-            force,
-        )| {
-            Statement::Copy(CopyStmt {
+        |(_, _, dst, _, src, opts)| {
+            let mut copy_stmt = CopyStmt {
                 src,
                 dst,
-                files: files.map(|v| v.3).unwrap_or_default(),
-                pattern: pattern.map(|v| v.2).unwrap_or_default(),
-                file_format: file_format.map(|v| v.2).unwrap_or_default(),
-                validation_mode: validation_mode.map(|v| v.2).unwrap_or_default(),
-                size_limit: size_limit.map(|v| v.2).unwrap_or_default() as usize,
-                max_file_size: max_file_size.map(|v| v.2).unwrap_or_default() as usize,
-                split_size: split_size.map(|v| v.2).unwrap_or_default() as usize,
-                single: single.map(|v| v.2).unwrap_or_default(),
-                purge: purge.map(|v| v.2).unwrap_or_default(),
-                force: force.map(|v| v.2).unwrap_or_default(),
-            })
+                files: Default::default(),
+                pattern: Default::default(),
+                file_format: Default::default(),
+                validation_mode: Default::default(),
+                size_limit: Default::default(),
+                max_file_size: Default::default(),
+                split_size: Default::default(),
+                single: Default::default(),
+                purge: Default::default(),
+                force: Default::default(),
+            };
+            for opt in opts {
+                opt.apply(&mut copy_stmt);
+            }
+            Statement::Copy(copy_stmt)
         },
     );
 
