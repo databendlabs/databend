@@ -36,16 +36,19 @@ impl Files {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    pub async fn remove_file_in_batch(&self, file_locations: &[String]) -> Result<()> {
+    pub async fn remove_file_in_batch(
+        &self,
+        file_locations: impl IntoIterator<Item = impl AsRef<str>>,
+    ) -> Result<()> {
         let ctx = self.ctx.clone();
         let max_runtime_threads = ctx.get_settings().get_max_threads()? as usize;
         let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
 
         // 1.1 combine all the tasks.
-        let mut iter = file_locations.iter();
+        let mut iter = file_locations.into_iter();
         let tasks = std::iter::from_fn(move || {
             if let Some(location) = iter.next() {
-                let location = location.clone();
+                let location = location.as_ref().to_owned();
                 Some(
                     Self::remove_file(self.operator.clone(), location)
                         .instrument(tracing::debug_span!("remove_file")),

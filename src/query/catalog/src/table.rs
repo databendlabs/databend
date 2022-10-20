@@ -234,7 +234,7 @@ pub trait Table: Sync + Send {
         ctx: Arc<dyn TableContext>,
         target: CompactTarget,
         pipeline: &mut Pipeline,
-    ) -> Result<Option<Arc<dyn TableMutator>>> {
+    ) -> Result<Option<Box<dyn TableMutator>>> {
         let (_, _, _) = (ctx, target, pipeline);
 
         Err(ErrorCode::UnImplement(format!(
@@ -249,7 +249,7 @@ pub trait Table: Sync + Send {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         push_downs: Option<Extras>,
-    ) -> Result<Option<Arc<dyn TableMutator>>> {
+    ) -> Result<Option<Box<dyn TableMutator>>> {
         let (_, _, _) = (ctx, pipeline, push_downs);
 
         Err(ErrorCode::UnImplement(format!(

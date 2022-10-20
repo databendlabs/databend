@@ -141,7 +141,7 @@ impl FuseTable {
 
         self.commit_mutation(
             &ctx,
-            del_holder.base_snapshot().clone(),
+            del_holder.base_snapshot(),
             segments,
             summary,
             abort_operation,

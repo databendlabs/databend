@@ -457,7 +457,7 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         target: CompactTarget,
         pipeline: &mut Pipeline,
-    ) -> Result<Option<Arc<dyn TableMutator>>> {
+    ) -> Result<Option<Box<dyn TableMutator>>> {
         self.do_compact(ctx, target, pipeline).await
     }
 
@@ -466,7 +466,7 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         push_downs: Option<Extras>,
-    ) -> Result<Option<Arc<dyn TableMutator>>> {
+    ) -> Result<Option<Box<dyn TableMutator>>> {
         self.do_recluster(ctx, pipeline, push_downs).await
     }
 }
