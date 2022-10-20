@@ -111,7 +111,7 @@ impl FuseTable {
         }
 
         let partitions_total = mutator.partitions_total();
-        let (statistics, parts) = Self::read_partitions_with_metas(
+        let (statistics, parts) = self.read_partitions_with_metas(
             ctx.clone(),
             self.table_info.schema(),
             None,

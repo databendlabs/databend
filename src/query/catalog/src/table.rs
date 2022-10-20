@@ -33,6 +33,7 @@ use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::MetaId;
 use common_pipeline_core::Pipeline;
+use common_storage::StorageMetrics;
 
 use crate::table::column_stats_provider_impls::DummyColumnStatisticsProvider;
 use crate::table_context::TableContext;
@@ -73,6 +74,11 @@ pub trait Table: Sync + Send {
     fn as_any(&self) -> &dyn Any;
 
     fn get_table_info(&self) -> &TableInfo;
+
+    /// get_data_metrics will get data metrics from table.
+    fn get_data_metrics(&self) -> Option<Arc<StorageMetrics>> {
+        None
+    }
 
     /// whether column prune(projection) can help in table read
     fn benefit_column_prune(&self) -> bool {

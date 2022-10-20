@@ -166,6 +166,7 @@ impl FuseTable {
         }
 
         if !lazy_init_segments.is_empty() {
+            let table = self.clone();
             let table_info = self.table_info.clone();
             let push_downs = plan.push_downs.clone();
             let query_ctx = ctx.clone();
@@ -173,6 +174,7 @@ impl FuseTable {
 
             // TODO: need refactor
             pipeline.set_on_init(move || {
+                let table = table.clone();
                 let table_info = table_info.clone();
                 let ctx = query_ctx.clone();
                 let dal = dal.clone();
@@ -180,15 +182,16 @@ impl FuseTable {
                 let lazy_init_segments = lazy_init_segments.clone();
 
                 let partitions = Runtime::with_worker_threads(2, None)?.block_on(async move {
-                    let (_statistics, partitions) = FuseTable::prune_snapshot_blocks(
-                        ctx,
-                        dal,
-                        push_downs,
-                        table_info,
-                        lazy_init_segments,
-                        0,
-                    )
-                    .await?;
+                    let (_statistics, partitions) = table
+                        .prune_snapshot_blocks(
+                            ctx,
+                            dal,
+                            push_downs,
+                            table_info,
+                            lazy_init_segments,
+                            0,
+                        )
+                        .await?;
 
                     Result::<_, ErrorCode>::Ok(partitions)
                 })?;

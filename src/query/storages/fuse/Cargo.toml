@@ -33,7 +33,6 @@ common-sharing = { path = "../../sharing" }
 common-storage = { path = "../../../common/storage" }
 common-storages-cache = { path = "../cache" }
 common-storages-constants = { path = "../constants" }
-common-storages-context = { path = "../context" }
 common-storages-index = { path = "../index" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }

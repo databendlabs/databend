@@ -40,6 +40,7 @@ use tracing::info;
 use super::stage_table_sink::StageTableSink;
 use crate::Table;
 
+/// TODO: we need to track the data metrics in stage table.
 pub struct StageTable {
     table_info: StageTableInfo,
     // This is no used but a placeholder.

@@ -62,7 +62,6 @@ use crate::catalogs::catalog::Catalog;
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
 use crate::databases::DatabaseFactory;
-use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
 use crate::storages::StorageFactory;
 use crate::storages::Table;
@@ -211,8 +210,7 @@ impl Catalog for MutableCatalog {
 
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
         let storage = self.ctx.storage_factory.clone();
-        let ctx = StorageContext {};
-        storage.get_table(ctx, table_info)
+        storage.get_table(table_info)
     }
 
     async fn get_table_meta_by_id(
