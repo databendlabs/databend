@@ -130,6 +130,14 @@ pub struct QueryConfig {
     pub max_query_log_size: usize,
     /// Table Cached enabled
     pub table_cache_enabled: bool,
+    /// Max number of cached table block meta
+    pub table_cache_block_meta_count: u64,
+    /// Table memory cache size (mb)
+    pub table_memory_cache_mb_size: u64,
+    /// Table disk cache folder root
+    pub table_disk_cache_root: String,
+    /// Table disk cache size (mb)
+    pub table_disk_cache_mb_size: u64,
     /// Max number of cached table snapshot
     pub table_cache_snapshot_count: u64,
     /// Max number of cached table segment
@@ -179,6 +187,10 @@ impl Default for QueryConfig {
             wait_timeout_mills: 5000,
             max_query_log_size: 10000,
             table_cache_enabled: false,
+            table_cache_block_meta_count: 102400,
+            table_memory_cache_mb_size: 256,
+            table_disk_cache_root: "_cache".to_string(),
+            table_disk_cache_mb_size: 1024,
             table_cache_snapshot_count: 256,
             table_cache_segment_count: 10240,
             table_cache_bloom_index_meta_count: 3000,

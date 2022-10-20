@@ -886,6 +886,22 @@ pub struct QueryConfig {
     #[clap(long)]
     pub table_cache_enabled: bool,
 
+    /// Max number of cached table block meta
+    #[clap(long, default_value = "102400")]
+    pub table_cache_block_meta_count: u64,
+
+    /// Table memory cache size (mb)
+    #[clap(long, default_value = "256")]
+    pub table_memory_cache_mb_size: u64,
+
+    /// Table disk cache folder root
+    #[clap(long, default_value = "_cache")]
+    pub table_disk_cache_root: String,
+
+    /// Table disk cache size (mb)
+    #[clap(long, default_value = "1024")]
+    pub table_disk_cache_mb_size: u64,
+
     /// Max number of cached table snapshot
     #[clap(long, default_value = "256")]
     pub table_cache_snapshot_count: u64,
@@ -967,6 +983,10 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             wait_timeout_mills: self.wait_timeout_mills,
             max_query_log_size: self.max_query_log_size,
             table_cache_enabled: self.table_cache_enabled,
+            table_cache_block_meta_count: self.table_cache_block_meta_count,
+            table_memory_cache_mb_size: self.table_memory_cache_mb_size,
+            table_disk_cache_root: self.table_disk_cache_root,
+            table_disk_cache_mb_size: self.table_disk_cache_mb_size,
             table_cache_snapshot_count: self.table_cache_snapshot_count,
             table_cache_segment_count: self.table_cache_segment_count,
             table_cache_bloom_index_meta_count: self.table_cache_bloom_index_meta_count,
@@ -1022,6 +1042,10 @@ impl From<InnerQueryConfig> for QueryConfig {
             wait_timeout_mills: inner.wait_timeout_mills,
             max_query_log_size: inner.max_query_log_size,
             table_cache_enabled: inner.table_cache_enabled,
+            table_cache_block_meta_count: inner.table_cache_block_meta_count,
+            table_memory_cache_mb_size: inner.table_memory_cache_mb_size,
+            table_disk_cache_root: inner.table_disk_cache_root,
+            table_disk_cache_mb_size: inner.table_disk_cache_mb_size,
             table_cache_snapshot_count: inner.table_cache_snapshot_count,
             table_cache_segment_count: inner.table_cache_segment_count,
             table_cache_bloom_index_meta_count: inner.table_cache_bloom_index_meta_count,
