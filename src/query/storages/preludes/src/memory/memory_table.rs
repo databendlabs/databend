@@ -18,6 +18,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
+use common_datablocks::InMemoryData;
 use common_datavalues::ColumnRef;
 use common_datavalues::DataType;
 use common_datavalues::Series;
@@ -31,6 +32,7 @@ use common_legacy_planners::Projection;
 use common_legacy_planners::ReadDataSourcePlan;
 use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
+use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
@@ -46,16 +48,19 @@ use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
 use crate::storages::Table;
 
+static IN_MEMORY_DATA: Lazy<Arc<RwLock<InMemoryData<u64>>>> =
+    Lazy::new(|| Arc::new(Default::default()));
+
 pub struct MemoryTable {
     table_info: TableInfo,
     blocks: Arc<RwLock<Vec<DataBlock>>>,
 }
 
 impl MemoryTable {
-    pub fn try_create(ctx: StorageContext, table_info: TableInfo) -> Result<Box<dyn Table>> {
+    pub fn try_create(_: StorageContext, table_info: TableInfo) -> Result<Box<dyn Table>> {
         let table_id = &table_info.ident.table_id;
         let blocks = {
-            let mut in_mem_data = ctx.in_memory_data.write();
+            let mut in_mem_data = IN_MEMORY_DATA.write();
             let x = in_mem_data.get(table_id);
             match x {
                 None => {
