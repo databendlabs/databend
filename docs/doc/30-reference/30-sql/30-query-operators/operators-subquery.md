@@ -11,7 +11,7 @@ A subquery is a query nested within another one. Databend supports the following
 
 ## Scalar Subqueries
 
-A scalar subquery selects only one column or expression and returns only one row at most. A SQL query can have scalar subqueries in any places where a column or an expression is expected.
+A scalar subquery selects only one column or expression and returns only one row at most. A SQL query can have scalar subqueries in any places where a column or expression is expected.
 
 - If a scalar subquery returns 0 rows, Databend will use NULL as the subquery output.
 - If a scalar subquery returns more than one row, Databend will throw an error.
