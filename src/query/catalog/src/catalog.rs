@@ -16,6 +16,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_contexts::DalContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::CountTablesReply;
@@ -111,7 +112,12 @@ pub trait Catalog: DynClone + Send + Sync {
     /// Table.
 
     // Build a `Arc<dyn Table>` from `TableInfo`.
-    fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>>;
+    // DalContext for get operator metrics of this table.
+    fn get_table_by_info(
+        &self,
+        dal_ctx: Arc<DalContext>,
+        table_info: &TableInfo,
+    ) -> Result<Arc<dyn Table>>;
 
     // Get the table meta by meta id.
     async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)>;

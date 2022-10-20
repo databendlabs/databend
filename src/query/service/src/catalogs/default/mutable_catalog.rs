@@ -16,6 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_config::Config;
+use common_contexts::DalContext;
 use common_exception::Result;
 use common_meta_api::SchemaApi;
 use common_meta_app::schema::CountTablesReply;
@@ -211,7 +212,11 @@ impl Catalog for MutableCatalog {
         Ok(res)
     }
 
-    fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
+    fn get_table_by_info(
+        &self,
+        _dal_ctx: Arc<DalContext>,
+        table_info: &TableInfo,
+    ) -> Result<Arc<dyn Table>> {
         let storage = self.ctx.storage_factory.clone();
         let ctx = StorageContext {
             meta: self.ctx.meta.clone().arc(),

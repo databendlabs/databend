@@ -97,7 +97,7 @@ impl QueryContext {
     ) -> Result<Arc<dyn Table>> {
         let catalog = self.get_catalog(catalog_name)?;
         if table_args.is_none() {
-            catalog.get_table_by_info(table_info)
+            catalog.get_table_by_info(self.shared.dal_ctx.clone(), table_info)
         } else {
             Ok(catalog
                 .get_table_function(&table_info.name, table_args)?
@@ -213,18 +213,23 @@ impl TableContext for QueryContext {
     fn get_scan_progress(&self) -> Arc<Progress> {
         self.shared.scan_progress.clone()
     }
+
     fn get_scan_progress_value(&self) -> ProgressValues {
         self.shared.scan_progress.as_ref().get_values()
     }
+
     fn get_write_progress(&self) -> Arc<Progress> {
         self.shared.write_progress.clone()
     }
+
     fn get_write_progress_value(&self) -> ProgressValues {
         self.shared.write_progress.as_ref().get_values()
     }
+
     fn get_result_progress(&self) -> Arc<Progress> {
         self.shared.result_progress.clone()
     }
+
     fn get_result_progress_value(&self) -> ProgressValues {
         self.shared.result_progress.as_ref().get_values()
     }
@@ -259,6 +264,7 @@ impl TableContext for QueryContext {
     fn get_id(&self) -> String {
         self.shared.init_query_id.as_ref().read().clone()
     }
+
     fn get_current_catalog(&self) -> String {
         self.shared.get_current_catalog()
     }
@@ -270,21 +276,27 @@ impl TableContext for QueryContext {
     fn get_current_database(&self) -> String {
         self.shared.get_current_database()
     }
+
     fn get_config(&self) -> Config {
         self.shared.get_config()
     }
+
     fn get_current_user(&self) -> Result<UserInfo> {
         self.shared.get_current_user()
     }
+
     fn set_current_user(&self, user: UserInfo) {
         self.shared.set_current_user(user)
     }
+
     fn get_fuse_version(&self) -> String {
         self.version.clone()
     }
+
     fn get_changed_settings(&self) -> Arc<Settings> {
         self.shared.get_changed_settings()
     }
+
     fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()> {
         self.shared.apply_changed_settings(changed_settings)
     }
@@ -292,13 +304,11 @@ impl TableContext for QueryContext {
     fn get_format_settings(&self) -> Result<FormatSettings> {
         self.shared.session.get_format_settings()
     }
+
     fn get_tenant(&self) -> String {
         self.shared.get_tenant()
     }
-    /// Get the data accessor metrics.
-    fn get_dal_metrics(&self) -> DalMetrics {
-        self.shared.dal_ctx.get_metrics().as_ref().clone()
-    }
+
     /// Get the session running query.
     fn get_query_str(&self) -> String {
         self.shared.get_query_str()
@@ -317,15 +327,24 @@ impl TableContext for QueryContext {
             pop.params().clone(),
         ))
     }
-    fn get_dal_context(&self) -> &DalContext {
-        self.shared.dal_ctx.as_ref()
+
+    fn get_dal_context(&self) -> Arc<DalContext> {
+        self.shared.dal_ctx.clone()
     }
+
+    /// Get the data accessor metrics.
+    fn get_dal_metrics(&self) -> DalMetrics {
+        self.shared.dal_ctx.get_metrics().as_ref().clone()
+    }
+
     fn push_precommit_block(&self, block: DataBlock) {
         self.shared.push_precommit_block(block)
     }
+
     fn consume_precommit_blocks(&self) -> Vec<DataBlock> {
         self.shared.consume_precommit_blocks()
     }
+
     fn try_get_function_context(&self) -> Result<FunctionContext> {
         let tz = self.get_settings().get_timezone()?;
         let tz = tz.parse::<Tz>().map_err(|_| {
@@ -333,9 +352,11 @@ impl TableContext for QueryContext {
         })?;
         Ok(FunctionContext { tz })
     }
+
     fn get_connection_id(&self) -> String {
         self.shared.get_connection_id()
     }
+
     fn get_settings(&self) -> Arc<Settings> {
         self.shared.get_settings()
     }

@@ -84,15 +84,15 @@ pub trait TableContext: Send + Sync {
     fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()>;
     fn get_format_settings(&self) -> Result<FormatSettings>;
     fn get_tenant(&self) -> String;
-    /// Get the data accessor metrics.
-    fn get_dal_metrics(&self) -> DalMetrics;
     /// Get the session running query.
     fn get_query_str(&self) -> String;
     /// Get the kind of session running query.
     fn get_query_kind(&self) -> String;
     // Get the persist storage data accessor operator from the session manager.
     fn get_data_operator(&self) -> Result<DataOperator>;
-    fn get_dal_context(&self) -> &DalContext;
+    fn get_dal_context(&self) -> Arc<DalContext>;
+    /// Get the data accessor metrics.
+    fn get_dal_metrics(&self) -> DalMetrics;
     fn push_precommit_block(&self, block: DataBlock);
     fn consume_precommit_blocks(&self) -> Vec<DataBlock>;
     fn try_get_function_context(&self) -> Result<FunctionContext>;

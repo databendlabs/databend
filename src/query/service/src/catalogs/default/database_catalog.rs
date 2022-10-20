@@ -16,6 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_config::Config;
+use common_contexts::DalContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::CountTablesReply;
@@ -213,13 +214,19 @@ impl Catalog for DatabaseCatalog {
         self.mutable_catalog.rename_database(req).await
     }
 
-    fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
-        let res = self.immutable_catalog.get_table_by_info(table_info);
+    fn get_table_by_info(
+        &self,
+        dal_ctx: Arc<DalContext>,
+        table_info: &TableInfo,
+    ) -> Result<Arc<dyn Table>> {
+        let res = self
+            .immutable_catalog
+            .get_table_by_info(dal_ctx.clone(), table_info);
         match res {
             Ok(t) => Ok(t),
             Err(e) => {
                 if e.code() == ErrorCode::unknown_table_code() {
-                    self.mutable_catalog.get_table_by_info(table_info)
+                    self.mutable_catalog.get_table_by_info(dal_ctx, table_info)
                 } else {
                     Err(e)
                 }

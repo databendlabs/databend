@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use common_base::base::tokio;
+use common_contexts::DalContext;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_app::schema::CreateDatabaseReq;
@@ -198,7 +199,8 @@ async fn test_catalogs_table() -> Result<()> {
         assert_eq!(table_list_3.len(), 1);
         let table = catalog.get_table(tenant, "default", "test_table").await?;
         assert_eq!(table.name(), "test_table");
-        let table = catalog.get_table_by_info(table.get_table_info())?;
+        let dal_ctx = Arc::new(DalContext::default());
+        let table = catalog.get_table_by_info(dal_ctx, table.get_table_info())?;
         assert_eq!(table.name(), "test_table");
 
         // Tenant empty.

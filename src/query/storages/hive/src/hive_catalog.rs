@@ -22,6 +22,7 @@ use common_catalog::database::Database;
 use common_catalog::table::Table;
 use common_catalog::table_args::TableArgs;
 use common_catalog::table_function::TableFunction;
+use common_contexts::DalContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_hive_meta_store::Partition;
@@ -267,7 +268,11 @@ impl Catalog for HiveCatalog {
         ))
     }
 
-    fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
+    fn get_table_by_info(
+        &self,
+        _: Arc<DalContext>,
+        table_info: &TableInfo,
+    ) -> Result<Arc<dyn Table>> {
         let res: Arc<dyn Table> = Arc::new(HiveTable::try_create(table_info.clone())?);
         Ok(res)
     }

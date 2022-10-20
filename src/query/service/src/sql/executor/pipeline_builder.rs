@@ -625,10 +625,11 @@ impl PipelineBuilder {
                 })?;
         }
 
+        let dal_ctx = self.ctx.get_dal_context();
         let table = self
             .ctx
             .get_catalog(&insert_select.catalog)?
-            .get_table_by_info(&insert_select.table_info)?;
+            .get_table_by_info(dal_ctx, &insert_select.table_info)?;
 
         fill_missing_columns(
             self.ctx.clone(),

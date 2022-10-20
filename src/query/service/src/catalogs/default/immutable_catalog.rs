@@ -16,6 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_config::Config;
+use common_contexts::DalContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::CountTablesReply;
@@ -124,7 +125,11 @@ impl Catalog for ImmutableCatalog {
         Err(ErrorCode::UnImplement("Cannot rename system database"))
     }
 
-    fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
+    fn get_table_by_info(
+        &self,
+        _dal_ctx: Arc<DalContext>,
+        table_info: &TableInfo,
+    ) -> Result<Arc<dyn Table>> {
         let table_id = table_info.ident.table_id;
 
         let table = self

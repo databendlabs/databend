@@ -276,7 +276,7 @@ pub trait TableExt: Table {
             tenant: "".to_owned(),
             from_share: None,
         };
-        catalog.get_table_by_info(&table_info)
+        catalog.get_table_by_info(ctx.get_dal_context(), &table_info)
     }
 }
 
