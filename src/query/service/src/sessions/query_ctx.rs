@@ -181,6 +181,10 @@ impl QueryContext {
         self.shared.get_affect()
     }
 
+    pub fn get_tables_refs(&self) -> Vec<Arc<dyn Table>> {
+        self.shared.get_tables_refs()
+    }
+
     pub fn set_affect(self: &Arc<Self>, affect: QueryAffect) {
         self.shared.set_affect(affect)
     }

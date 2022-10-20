@@ -169,6 +169,12 @@ impl QueryContextShared {
         self.data_operator.get_storage_params()
     }
 
+    /// Get all tables that already attached in this query.
+    pub fn get_tables_refs(&self) -> Vec<Arc<dyn Table>> {
+        let tables = self.tables_refs.lock();
+        tables.values().cloned().collect()
+    }
+
     pub fn get_tenant(&self) -> String {
         self.session.get_current_tenant()
     }
