@@ -35,10 +35,9 @@ runs:
       if: "!contains(github.event.head_commit.message, 'skip audit')"
       run: cargo -Z sparse-registry audit --db ./target/advisory-db
 
-    - name: Check udeps
+    - name: Check unused deps
       shell: bash
-      if: "!contains(github.event.head_commit.message, 'skip udeps')"
-      run: cargo -Z sparse-registry udeps --workspace
+      run: cargo -Z sparse-registry machete
 
     - name: Check toml format
       shell: bash
