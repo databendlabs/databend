@@ -1823,21 +1823,26 @@ impl<'a> TypeChecker<'a> {
                 MapAccessor::Period { key } | MapAccessor::Colon { key } => {
                     Literal::String(key.name.clone())
                 }
-                MapAccessor::PeriodNumber { key } => Literal::Integer(key - 1),
+                MapAccessor::PeriodNumber { key } => Literal::Integer(key),
                 _ => unreachable!(),
             };
 
             match accessor_lit {
                 Literal::Integer(idx) => {
-                    if idx as usize >= inner_types.len() {
+                    if idx == 0 {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "tuple index is starting from 1, but 0 is found",
+                        )));
+                    }
+                    if idx as usize > inner_types.len() {
                         return Err(ErrorCode::SemanticError(format!(
                             "tuple index {} is out of bounds for length {}",
                             idx,
                             inner_types.len()
                         )));
                     }
-                    let inner_name = inner_names.get(idx as usize).unwrap();
-                    let inner_type = inner_types.get(idx as usize).unwrap();
+                    let inner_name = inner_names.get(idx as usize - 1).unwrap();
+                    let inner_type = inner_types.get(idx as usize - 1).unwrap();
                     names.push(inner_name.clone());
                     data_types.push(inner_type.clone());
                 }
