@@ -23,7 +23,7 @@ use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
 
 use super::FuseTableSink;
-use crate::operations::mutation::CompactSegmentMutator;
+use crate::operations::mutation::SegmentCompactMutator;
 use crate::operations::FullCompactMutator;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
@@ -77,7 +77,7 @@ impl FuseTable {
         _pipeline: &mut Pipeline,
         options: CompactOptions,
     ) -> Result<Option<Arc<dyn TableMutator>>> {
-        let mut segment_mutator = CompactSegmentMutator::try_create(
+        let mut segment_mutator = SegmentCompactMutator::try_create(
             ctx.clone(),
             options.base_snapshot,
             self.meta_location_generator().clone(),

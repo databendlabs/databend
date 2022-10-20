@@ -411,8 +411,8 @@ impl FuseTable {
 
     pub async fn commit_mutation(
         &self,
-        ctx: Arc<dyn TableContext>,
-        snapshot: Arc<TableSnapshot>,
+        ctx: &Arc<dyn TableContext>,
+        base_snapshot: Arc<TableSnapshot>,
         mut segments: Vec<Location>,
         mut summary: Statistics,
         abort_operation: AbortOperation,
@@ -420,12 +420,12 @@ impl FuseTable {
         let mut table = self;
         let mut latest: Arc<dyn Table>;
         let mut retries = 0;
-        let mut latest_snapshot;
-        let mut base_snapshot = snapshot;
+        let mut latest_snapshot = base_snapshot.clone();
         let mut current_table_info = &self.table_info;
 
         while retries < MAX_RETRIES {
-            let mut snapshot_tobe_committed = TableSnapshot::from_previous(base_snapshot.as_ref());
+            let mut snapshot_tobe_committed =
+                TableSnapshot::from_previous(latest_snapshot.as_ref());
             snapshot_tobe_committed.segments = segments.clone();
             snapshot_tobe_committed.summary = summary.clone();
             match Self::commit_to_meta_server(
@@ -482,7 +482,6 @@ impl FuseTable {
                     }
                     new_segments.extend(segments.clone());
                     segments = new_segments;
-                    base_snapshot = latest_snapshot;
                     retries += 1;
                 }
                 Err(e) => return Err(e),
