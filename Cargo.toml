@@ -46,6 +46,9 @@ members = [
     "src/query/legacy-expression",
     "src/query/legacy-planners",
     "src/query/settings",
+    "src/query/storages/cache",
+    "src/query/storages/context",
+    "src/query/storages/constants",
     "src/query/storages/fuse",
     "src/query/storages/fuse-meta",
     "src/query/storages/hive",
@@ -53,7 +56,6 @@ members = [
     "src/query/storages/index",
     "src/query/storages/preludes",
     "src/query/storages/share",
-    "src/query/storages/util",
     "src/query/streams",
     "src/query/users",
     # databend-query
