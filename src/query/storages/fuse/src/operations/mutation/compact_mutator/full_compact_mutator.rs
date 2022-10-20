@@ -46,10 +46,12 @@ pub struct FullCompactMutator {
     block_compactor: BlockCompactor,
     location_generator: TableMetaLocationGenerator,
     selected_blocks: Vec<BlockMeta>,
-    // Blocks that need to be reorganized into new segments.
-    remain_blocks: Vec<BlockMeta>,
-    segments: Vec<Location>,
-    summary: Statistics,
+    // summarised statistics of all the accumulated segments(segment compacted, and unchanged)
+    merged_segment_statistics: Statistics,
+    // locations all the accumulated segments(segment compacted, and unchanged)
+    merged_segments_locations: Vec<Location>,
+    // paths the newly created segments (which are segment compacted)
+    new_segment_paths: Vec<String>,
     block_per_seg: usize,
     // is_cluster indicates whether the table contains cluster key.
     is_cluster: bool,
@@ -72,9 +74,9 @@ impl FullCompactMutator {
             block_compactor,
             location_generator,
             selected_blocks: Vec::new(),
-            remain_blocks: Vec::new(),
-            segments: Vec::new(),
-            summary: Statistics::default(),
+            merged_segment_statistics: Statistics::default(),
+            merged_segments_locations: Vec::new(),
+            new_segment_paths: Vec::new(),
             block_per_seg,
             is_cluster,
         })
@@ -100,6 +102,8 @@ impl TableMutator for FullCompactMutator {
         let segment_locations = &snapshot.segments;
         let mut summarys = Vec::new();
 
+        // Blocks that need to be reorganized into new segments.
+        let mut remain_blocks = Vec::new();
         // Read all segments information in parallel.
         let segments_io = SegmentsIO::create(self.ctx.clone(), self.data_accessor.clone());
         let segments = segments_io.read_segments(segment_locations).await?;
@@ -125,30 +129,28 @@ impl TableMutator for FullCompactMutator {
             // then record the segment information.
             if !need_merge && segment.blocks.len() == self.block_per_seg {
                 let location = segment_locations[idx].clone();
-                self.segments.push(location);
+                self.merged_segments_locations.push(location);
                 summarys.push(segment.summary.clone());
                 continue;
             }
 
-            self.remain_blocks.append(&mut remains);
+            remain_blocks.append(&mut remains);
+        }
+
+        let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
+        // Because the pipeline is used, a threshold for the number of blocks is added to resolve
+        // https://github.com/datafuselabs/databend/issues/8316
+        if self.selected_blocks.len() < max_threads * 2 {
+            remain_blocks.append(&mut self.selected_blocks);
+            self.selected_blocks.clear();
         }
 
         if self.selected_blocks.is_empty()
-            && (self.remain_blocks.is_empty() || snapshot.segments.len() <= self.segments.len() + 1)
+            && (remain_blocks.is_empty()
+                || snapshot.segments.len() - self.merged_segments_locations.len() <= 1)
         {
             return Ok(false);
         }
-
-        // update the summary of new snapshot
-        self.summary = reduce_statistics(&summarys)?;
-        Ok(true)
-    }
-
-    async fn try_commit(self: Box<FullCompactMutator>, table: Arc<dyn Table>) -> Result<()> {
-        let ctx = self.ctx.clone();
-        let mut segments = self.segments;
-        let mut summary = self.summary;
-        let mut abort_operation = AbortOperation::default();
 
         // Create new segments.
         let segment_info_cache = CacheManager::instance().get_table_segment_cache();
@@ -157,18 +159,31 @@ impl TableMutator for FullCompactMutator {
             &self.location_generator,
             &segment_info_cache,
         );
-        let chunks = self.remain_blocks.chunks(self.block_per_seg);
+        let chunks = remain_blocks.chunks(self.block_per_seg);
         for chunk in chunks {
             let new_summary = reduce_block_metas(chunk)?;
             let new_segment = SegmentInfo::new(chunk.to_vec(), new_summary.clone());
             let new_segment_location = seg_writer.write_segment(new_segment).await?;
-            segments.push(new_segment_location.clone());
-            summary = merge_statistics(&summary, &new_summary)?;
-
-            abort_operation = abort_operation.add_segment(new_segment_location.0);
+            self.merged_segments_locations
+                .push(new_segment_location.clone());
+            self.new_segment_paths.push(new_segment_location.0);
+            summarys.push(new_summary);
         }
 
-        let append_entries = ctx.consume_precommit_blocks();
+        // update the summary of new snapshot
+        self.merged_segment_statistics = reduce_statistics(&summarys)?;
+        Ok(true)
+    }
+
+    async fn try_commit(self: Box<FullCompactMutator>, table: Arc<dyn Table>) -> Result<()> {
+        let mut segments = self.merged_segments_locations;
+        let mut summary = self.merged_segment_statistics;
+        let mut abort_operation = AbortOperation {
+            segments: self.new_segment_paths,
+            ..Default::default()
+        };
+
+        let append_entries = self.ctx.consume_precommit_blocks();
         let append_log_entries = append_entries
             .iter()
             .map(AppendOperationLogEntry::try_from)
@@ -193,7 +208,13 @@ impl TableMutator for FullCompactMutator {
 
         let table = FuseTable::try_from_table(table.as_ref())?;
         table
-            .commit_mutation(&ctx, self.base_snapshot, segments, summary, abort_operation)
+            .commit_mutation(
+                &self.ctx,
+                self.base_snapshot,
+                segments,
+                summary,
+                abort_operation,
+            )
             .await
     }
 }

@@ -27,6 +27,23 @@ select * from t order by a;
 6
 7
 
+
+
+statement ok
+set max_threads=2;
+
+statement ok
+optimize table t compact;
+
+statement query II
+select * from fuse_snapshot('db_09_0008', 't') limit 1;
+
+----
+1 3
+
+statement ok
+set max_threads=1;
+
 statement ok
 optimize table t compact;
 
@@ -38,11 +55,11 @@ select * from t order by a;
 6
 7
 
-statement query B
-select count(*)=4 from fuse_snapshot('db_09_0008', 't');
+statement query II
+select * from fuse_snapshot('db_09_0008', 't') limit 1;
 
 ----
-1
+1 1
 
 
 

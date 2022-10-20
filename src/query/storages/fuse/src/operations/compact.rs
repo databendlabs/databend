@@ -115,11 +115,6 @@ impl FuseTable {
             return Ok(None);
         }
 
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        if mutator.selected_blocks().len() < max_threads * 2 {
-            return Ok(None);
-        }
-
         let partitions_total = mutator.partitions_total();
         let (statistics, parts) = Self::read_partitions_with_metas(
             ctx.clone(),
