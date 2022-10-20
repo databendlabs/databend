@@ -133,7 +133,7 @@ pub async fn write_data(data: &[u8], data_accessor: &Operator, location: &str) -
     let object = data_accessor.object(location);
 
     { || object.write(data) }
-        .retry(ExponentialBackoff::default())
+        .retry(ExponentialBackoff::default().with_jitter())
         .when(|err| err.kind() == ErrorKind::Interrupted)
         .notify(|err, dur| {
             warn!(

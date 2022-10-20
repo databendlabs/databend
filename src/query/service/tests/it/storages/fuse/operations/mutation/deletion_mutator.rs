@@ -50,7 +50,7 @@ async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
     let location_generator = TableMetaLocationGenerator::with_prefix("_prefix".to_owned());
 
     let segment_info_cache = CacheManager::instance().get_table_segment_cache();
-    let data_accessor = ctx.get_storage_operator()?;
+    let data_accessor = ctx.get_data_operator()?.operator();
     let seg_writer = SegmentWriter::new(&data_accessor, &location_generator, &segment_info_cache);
 
     let gen_test_seg = || async {
@@ -111,13 +111,13 @@ async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
         }
     }
 
-    let new_snapshot = mutator.into_new_snapshot().await?;
+    let (segments, _, _) = mutator.generate_segments().await?;
 
     // half segments left after deletion
-    assert_eq!(new_snapshot.segments.len(), 50);
+    assert_eq!(segments.len(), 50);
 
     // new_segments should be a subset of test_segments in our case (no partial deletion of segment)
-    let new_segments = HashSet::<_, RandomState>::from_iter(new_snapshot.segments.into_iter());
+    let new_segments = HashSet::<_, RandomState>::from_iter(segments.into_iter());
     let test_segments = HashSet::from_iter(test_segment_locations.into_iter());
     assert!(new_segments.is_subset(&test_segments));
 

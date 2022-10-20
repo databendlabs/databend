@@ -24,9 +24,9 @@ use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKV;
+use databend_meta::init_meta_ut;
 use tracing::info;
 
-use crate::init_meta_ut;
 use crate::tests::meta_node::start_meta_node_leader;
 use crate::tests::meta_node::start_meta_node_non_voter;
 

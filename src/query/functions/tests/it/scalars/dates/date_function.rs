@@ -704,7 +704,7 @@ fn test_to_monday_function() -> Result<()> {
                 Series::from_data(vec![18919i32]),
                 DataField::new("dummy_1", DateType::new_impl()),
             )],
-            expect: Series::from_data(vec![18918u16]),
+            expect: Series::from_data(vec![18918]),
             error: "",
         },
         ScalarFunctionWithFieldTest {
@@ -713,7 +713,7 @@ fn test_to_monday_function() -> Result<()> {
                 Series::from_data(vec![18919i32]),
                 DataField::new("dummy_1", DateType::new_impl()),
             )],
-            expect: Series::from_data(vec![18918u16]),
+            expect: Series::from_data(vec![18918]),
             error: "",
         },
         ScalarFunctionWithFieldTest {
@@ -722,7 +722,7 @@ fn test_to_monday_function() -> Result<()> {
                 Series::from_data(vec![1634614318000000i64]),
                 DataField::new("dummy_1", TimestampType::new_impl()),
             )],
-            expect: Series::from_data(vec![18918u16]),
+            expect: Series::from_data(vec![18918]),
             error: "",
         },
     ];

@@ -30,6 +30,7 @@ use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
 use opendal::Operator;
 use tracing::debug;
+use tracing::info;
 
 use crate::fuse_lazy_part::FuseLazyPartInfo;
 use crate::fuse_part::ColumnLeaves;
@@ -39,7 +40,7 @@ use crate::pruning::BlockPruner;
 use crate::FuseTable;
 
 impl FuseTable {
-    #[inline]
+    #[tracing::instrument(level = "debug", name = "do_read_partitions", skip_all, fields(ctx.id = ctx.get_id().as_str()))]
     pub async fn do_read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -77,7 +78,7 @@ impl FuseTable {
                 let table_info = self.table_info.clone();
                 let segments_location = snapshot.segments.clone();
                 let summary = snapshot.summary.block_count as usize;
-                Self::prune_snapshot_blocks(
+                self.prune_snapshot_blocks(
                     ctx.clone(),
                     self.operator.clone(),
                     push_downs.clone(),
@@ -91,7 +92,9 @@ impl FuseTable {
         }
     }
 
+    #[tracing::instrument(level = "debug", name = "prune_snapshot_blocks", skip_all, fields(ctx.id = ctx.get_id().as_str()))]
     pub async fn prune_snapshot_blocks(
+        &self,
         ctx: Arc<dyn TableContext>,
         dal: Operator,
         push_downs: Option<Extras>,
@@ -100,7 +103,7 @@ impl FuseTable {
         summary: usize,
     ) -> Result<(Statistics, Partitions)> {
         let start = Instant::now();
-        debug!(
+        info!(
             "prune snapshot block start, segment numbers:{}",
             segments_location.len()
         );
@@ -117,17 +120,18 @@ impl FuseTable {
         .map(|(_, v)| v)
         .collect::<Vec<_>>();
 
-        debug!(
+        info!(
             "prune snapshot block end, final block numbers:{}, cost:{}",
             block_metas.len(),
             start.elapsed().as_secs()
         );
 
-        Self::read_partitions_with_metas(ctx, table_info.schema(), push_downs, block_metas, summary)
+        self.read_partitions_with_metas(ctx, table_info.schema(), push_downs, block_metas, summary)
     }
 
     pub fn read_partitions_with_metas(
-        ctx: Arc<dyn TableContext>,
+        &self,
+        _: Arc<dyn TableContext>,
         schema: DataSchemaRef,
         push_downs: Option<Extras>,
         block_metas: Vec<BlockMeta>,
@@ -145,11 +149,9 @@ impl FuseTable {
         statistics.partitions_scanned = partitions_scanned;
 
         // Update context statistics.
-        ctx.get_dal_context()
-            .get_metrics()
+        self.data_metrics
             .inc_partitions_total(partitions_total as u64);
-        ctx.get_dal_context()
-            .get_metrics()
+        self.data_metrics
             .inc_partitions_scanned(partitions_scanned as u64);
 
         Ok((statistics, parts))

@@ -27,7 +27,6 @@ use crate::processors::transforms::transform::Transform;
 use crate::processors::transforms::transform::Transformer;
 use crate::processors::transforms::ExpressionExecutor;
 
-pub type ProjectionTransform = ExpressionTransformImpl<true>;
 pub type ExpressionTransform = ExpressionTransformImpl<false>;
 
 pub struct ExpressionTransformImpl<const ALIAS_PROJECT: bool> {

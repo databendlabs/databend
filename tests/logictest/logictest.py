@@ -356,15 +356,15 @@ class SuiteRunner(object):
     # expect the query just return ok
     def assert_execute_ok(self, statement):
         try:
-            actual = safe_execute(lambda: self.execute_ok(statement.text),
-                                  statement)
+            error = safe_execute(lambda: self.execute_ok(statement.text),
+                                 statement)
         except Exception as err:
             raise LogicError(runner=self.kind,
                              message=str(err),
                              errorType="statement ok execute with exception")
-        if actual is not None:
+        if error is not None:
             raise LogicError(runner=self.kind,
-                             message=str(statement),
+                             message=str(error),
                              errorType="statement ok get error in response")
 
     def assert_query_equal(self, f, resultset, statement, with_regex=False):
@@ -376,24 +376,24 @@ class SuiteRunner(object):
                 return compare_result_with_reg(resultset[2].split(), f.split())
             except Exception as err:
                 raise LogicError(message="\n{}\n Expected:\n{:<80}\n Actual:\n{:<80}\n Statement:{}\n Start " \
-                                            "Line: {}, Result Label: {}".format(str(err),
-                                                                                resultset[2].rstrip(),
-                                                                                f.rstrip(),
-                                                                                str(statement), resultset[1],
-                                                                                resultset[0].group("label")),
-                            errorType="statement query get result not equal to expected(with regex expression)",
-                            runner=self.kind,
-                            )
+                                         "Line: {}, Result Label: {}".format(str(err),
+                                                                             resultset[2].rstrip(),
+                                                                             f.rstrip(),
+                                                                             str(statement), resultset[1],
+                                                                             resultset[0].group("label")),
+                                 errorType="statement query get result not equal to expected(with regex expression)",
+                                 runner=self.kind,
+                                 )
 
         if compare_f != compare_result:
             raise LogicError(message="\n Expected:\n{:<80}\n Actual:\n{:<80}\n Statement:{}\n Start " \
-                                            "Line: {}, Result Label: {}".format(resultset[2].rstrip(),
-                                                                                f.rstrip(),
-                                                                                str(statement), resultset[1],
-                                                                                resultset[0].group("label")),
-                            errorType="statement query get result not equal to expected",
-                            runner=self.kind,
-                            )
+                                     "Line: {}, Result Label: {}".format(resultset[2].rstrip(),
+                                                                         f.rstrip(),
+                                                                         str(statement), resultset[1],
+                                                                         resultset[0].group("label")),
+                             errorType="statement query get result not equal to expected",
+                             runner=self.kind,
+                             )
 
     def assert_execute_query(self, statement):
         if statement.s_type.query_type == "skipped":
@@ -454,7 +454,7 @@ class SuiteRunner(object):
                 f"expected error {statement.s_type.expect_error}, but got ok on statement: {statement.text} ",
                 errorType="Error code mismatch",
                 runner=self.kind)
-        match = re.search(statement.s_type.expect_error, actual.msg)
+        match = re.search(statement.s_type.expect_error, str(actual))
         if match is None:
             raise LogicError(
                 message=

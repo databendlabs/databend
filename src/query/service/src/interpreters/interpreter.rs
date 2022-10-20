@@ -26,7 +26,6 @@ use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::InterpreterQueryLog;
-use crate::interpreters::PullingExecutorStream;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::executor::PipelinePullingExecutor;
@@ -34,6 +33,7 @@ use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
+use crate::stream::PullingExecutorStream;
 
 #[async_trait::async_trait]
 /// Interpreter is a trait for different PlanNode

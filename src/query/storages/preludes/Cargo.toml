@@ -14,7 +14,6 @@ test = false
 [dependencies]
 common-base = { path = "../../../common/base" }
 common-catalog = { path = "../../catalog" }
-common-contexts = { path = "../../../common/contexts" }
 common-datablocks = { path = "../../datablocks" }
 common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
@@ -27,7 +26,7 @@ common-pipeline-core = { path = "../../pipeline/core" }
 common-pipeline-sinks = { path = "../../pipeline/sinks" }
 common-pipeline-sources = { path = "../../pipeline/sources" }
 common-pipeline-transforms = { path = "../../pipeline/transforms" }
-common-storages-util = { path = "../util" }
+common-storage = { path = "../../../common/storage" }
 common-users = { path = "../../users" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }

@@ -35,8 +35,7 @@ use common_meta_types::TxnDeleteRequest;
 use common_meta_types::TxnOp;
 use common_meta_types::TxnPutRequest;
 use common_meta_types::UpsertKVReq;
-
-use crate::init_meta_ut;
+use databend_meta::init_meta_ut;
 
 async fn upsert_kv_client_main(addr: String, updates: Vec<UpsertKVReq>) -> anyhow::Result<()> {
     let client = MetaGrpcClient::try_create(

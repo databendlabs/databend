@@ -16,8 +16,8 @@
 
 use common_base::base::tokio;
 use common_meta_api::SchemaApiTestSuite;
+use databend_meta::init_meta_ut;
 
-use crate::init_meta_ut;
 use crate::tests::service::start_metasrv_cluster;
 
 #[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]

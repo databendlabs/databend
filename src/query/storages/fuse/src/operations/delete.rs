@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
@@ -129,25 +128,25 @@ impl FuseTable {
                 }
             }
         }
-        self.commit_deletion(ctx.as_ref(), deletion_collector).await
+
+        self.commit_deletion(ctx, deletion_collector).await
     }
 
     async fn commit_deletion(
         &self,
-        ctx: &dyn TableContext,
+        ctx: Arc<dyn TableContext>,
         del_holder: DeletionMutator,
     ) -> Result<()> {
-        let new_snapshot = del_holder.into_new_snapshot().await?;
-        Self::commit_to_meta_server(
-            ctx,
-            self.get_table_info(),
-            &self.meta_location_generator,
-            new_snapshot,
-            &self.operator,
+        let (segments, summary, abort_operation) = del_holder.generate_segments().await?;
+
+        self.commit_mutation(
+            &ctx,
+            del_holder.base_snapshot(),
+            segments,
+            summary,
+            abort_operation,
         )
-        .await?;
-        // TODO check if error is recoverable, and try to resolve the conflict
-        Ok(())
+        .await
     }
 
     fn cluster_stats_gen(&self, ctx: Arc<dyn TableContext>) -> Result<ClusterStatsGenerator> {

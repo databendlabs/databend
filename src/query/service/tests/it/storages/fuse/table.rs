@@ -34,8 +34,8 @@ use databend_query::sql::OPT_KEY_DATABASE_ID;
 use databend_query::sql::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::FuseTable;
-use databend_query::storages::TableStreamReadWrap;
 use databend_query::storages::ToReadDataSourcePlan;
+use databend_query::stream::DataBlockStream;
 use futures::TryStreamExt;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;
@@ -45,9 +45,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
 
-    let create_table_plan = fixture.default_crate_table_plan();
-    let interpreter = CreateTableInterpreterV2::try_create(ctx.clone(), create_table_plan)?;
-    interpreter.execute(ctx.clone()).await?;
+    fixture.create_default_table().await?;
 
     let mut table = fixture.latest_default_table().await?;
 
@@ -172,9 +170,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
 
-    let create_table_plan = fixture.default_crate_table_plan();
-    let interpreter = CreateTableInterpreterV2::try_create(ctx.clone(), create_table_plan)?;
-    interpreter.execute(ctx.clone()).await?;
+    fixture.create_default_table().await?;
 
     let table = fixture.latest_default_table().await?;
 
@@ -235,15 +231,10 @@ async fn test_fuse_table_truncate() -> Result<()> {
 async fn test_fuse_table_optimize() -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
-    let mut planner = Planner::new(ctx.clone());
+    let tbl_name = fixture.default_table_name();
+    let db_name = fixture.default_db_name();
 
-    let create_table_plan = fixture.create_normal_table_plan();
-
-    // create test table
-    let tbl_name = create_table_plan.table.clone();
-    let db_name = create_table_plan.database.clone();
-    let interpreter = CreateTableInterpreterV2::try_create(ctx.clone(), create_table_plan)?;
-    interpreter.execute(ctx.clone()).await?;
+    fixture.create_normal_table().await?;
 
     // insert 5 times
     let n = 5;
@@ -266,6 +257,7 @@ async fn test_fuse_table_optimize() -> Result<()> {
     // do compact
     let query = format!("optimize table {}.{} compact", db_name, tbl_name);
 
+    let mut planner = Planner::new(ctx.clone());
     let (plan, _, _) = planner.plan_sql(&query).await?;
     let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
 

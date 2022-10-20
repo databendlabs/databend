@@ -22,12 +22,13 @@ use std::time::SystemTime;
 
 use common_base::base::Progress;
 use common_base::base::Runtime;
-use common_contexts::DalContext;
+use common_config::Config;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::UserInfo;
-use common_storage::StorageOperator;
+use common_storage::DataOperator;
+use common_storage::StorageMetrics;
 use common_storage::StorageParams;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
@@ -35,7 +36,6 @@ use uuid::Uuid;
 
 use crate::auth::AuthMgr;
 use crate::catalogs::CatalogManager;
-use crate::catalogs::CatalogManagerHelper;
 use crate::clusters::Cluster;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::servers::http::v1::HttpQueryHandle;
@@ -44,7 +44,6 @@ use crate::sessions::Session;
 use crate::sessions::Settings;
 use crate::sql::SQLCommon;
 use crate::storages::Table;
-use crate::Config;
 
 type DatabaseAndTable = (String, String, String);
 
@@ -75,11 +74,10 @@ pub struct QueryContextShared {
     pub(in crate::sessions) http_query: Arc<RwLock<Option<HttpQueryHandle>>>,
     pub(in crate::sessions) aborting: Arc<AtomicBool>,
     pub(in crate::sessions) tables_refs: Arc<Mutex<HashMap<DatabaseAndTable, Arc<dyn Table>>>>,
-    pub(in crate::sessions) dal_ctx: Arc<DalContext>,
     pub(in crate::sessions) auth_manager: Arc<AuthMgr>,
     pub(in crate::sessions) affect: Arc<Mutex<Option<QueryAffect>>>,
     pub(in crate::sessions) catalog_manager: Arc<CatalogManager>,
-    pub(in crate::sessions) storage_operator: StorageOperator,
+    pub(in crate::sessions) data_operator: DataOperator,
     pub(in crate::sessions) executor: Arc<RwLock<Weak<PipelineExecutor>>>,
     pub(in crate::sessions) precommit_blocks: Arc<RwLock<Vec<DataBlock>>>,
     pub(in crate::sessions) created_time: SystemTime,
@@ -96,7 +94,7 @@ impl QueryContextShared {
             cluster_cache,
             config: config.clone(),
             catalog_manager: CatalogManager::instance(),
-            storage_operator: StorageOperator::instance(),
+            data_operator: DataOperator::instance(),
             init_query_id: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             scan_progress: Arc::new(Progress::create()),
             result_progress: Arc::new(Progress::create()),
@@ -108,7 +106,6 @@ impl QueryContextShared {
             http_query: Arc::new(RwLock::new(None)),
             aborting: Arc::new(AtomicBool::new(false)),
             tables_refs: Arc::new(Mutex::new(HashMap::new())),
-            dal_ctx: Arc::new(Default::default()),
             auth_manager: AuthMgr::create(config).await?,
             affect: Arc::new(Mutex::new(None)),
             executor: Arc::new(RwLock::new(Weak::new())),
@@ -166,7 +163,20 @@ impl QueryContextShared {
     }
 
     pub fn get_storage_params(&self) -> StorageParams {
-        self.storage_operator.get_storage_params()
+        self.data_operator.get_storage_params()
+    }
+
+    /// Get all tables that already attached in this query.
+    pub fn get_tables_refs(&self) -> Vec<Arc<dyn Table>> {
+        let tables = self.tables_refs.lock();
+        tables.values().cloned().collect()
+    }
+
+    pub fn get_data_metrics(&self) -> StorageMetrics {
+        let tables = self.get_tables_refs();
+        let metrics: Vec<Arc<StorageMetrics>> =
+            tables.iter().filter_map(|v| v.get_data_metrics()).collect();
+        StorageMetrics::merge(&metrics)
     }
 
     pub fn get_tenant(&self) -> String {

@@ -12,9 +12,8 @@ test = false
 chrono = "0.4"
 common-base = { path = "../../common/base" }
 common-config = { path = "../config" }
-common-contexts = { path = "../../common/contexts" }
-common-expression = { path = "../expression" }
 common-exception = { path = "../../common/exception" }
+common-expression = { path = "../expression" }
 common-functions = { path = "../functions" }
 common-io = { path = "../../common/io" }
 common-legacy-expression = { path = "../legacy-expression" }
@@ -27,4 +26,4 @@ common-storage = { path = "../../common/storage" }
 
 async-trait = "0.1.57"
 dyn-clone = "1.0.9"
-opendal = { version = "0.19", features = ["layers-retry"] }
+once_cell = "1.15.0"

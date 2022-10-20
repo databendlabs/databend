@@ -22,8 +22,6 @@ common-expression = { path = "../expression" }
 futures = "0.3.24"
 pin-project-lite = "0.2.9"
 
-serde_json = { workspace = true }
-
 [dev-dependencies]
 comfy-table = "6"
 goldenfile = "1.4"

@@ -40,6 +40,8 @@ use crate::sql::plans::CopyPlanV2;
 use crate::sql::plans::Plan;
 use crate::storages::stage::StageTable;
 
+const MAX_QUERY_COPIED_FILES_NUM: usize = 50;
+
 pub struct CopyInterpreterV2 {
     ctx: Arc<QueryContext>,
     plan: CopyPlanV2,
@@ -49,6 +51,49 @@ impl CopyInterpreterV2 {
     /// Create a CopyInterpreterV2 with context and [`CopyPlanV2`].
     pub fn try_create(ctx: Arc<QueryContext>, plan: CopyPlanV2) -> Result<Self> {
         Ok(CopyInterpreterV2 { ctx, plan })
+    }
+
+    async fn do_query_copied_files_info(
+        &self,
+        catalog_name: String,
+        database_name: String,
+        table_id: u64,
+        query_copied_files: &[String],
+        file_info: &mut BTreeMap<String, TableCopiedFileInfo>,
+    ) -> Result<()> {
+        let catalog = self.ctx.get_catalog(&catalog_name)?;
+        let tenant = self.ctx.get_tenant();
+        let req = GetTableCopiedFileReq {
+            table_id,
+            files: query_copied_files.to_owned(),
+        };
+        let resp = catalog
+            .get_table_copied_file_info(&tenant, &database_name, req)
+            .await?;
+
+        file_info.extend(resp.file_info);
+
+        Ok(())
+    }
+
+    async fn do_upsert_copied_files_info(
+        &self,
+        catalog_name: String,
+        database_name: String,
+        table_id: u64,
+        copy_stage_files: &mut BTreeMap<String, TableCopiedFileInfo>,
+    ) -> Result<()> {
+        let req = UpsertTableCopiedFileReq {
+            table_id,
+            file_info: copy_stage_files.clone(),
+            expire_at: None,
+        };
+        let catalog = self.ctx.get_catalog(&catalog_name)?;
+        catalog
+            .upsert_table_copied_file_info(&self.ctx.get_tenant(), &database_name, req)
+            .await?;
+        copy_stage_files.clear();
+        Ok(())
     }
 
     async fn filter_duplicate_files(
@@ -66,21 +111,28 @@ impl CopyInterpreterV2 {
             .get_table(&tenant, database_name, table_name)
             .await?;
         let table_id = table.get_id();
-        let req = GetTableCopiedFileReq {
-            table_id,
-            files: files.to_owned(),
-        };
+
         let mut file_map = BTreeMap::new();
 
         if !force {
             // if force is false, copy only the files that unmatch to the meta copied files info.
-            let resp = catalog
-                .get_table_copied_file_info(&tenant, database_name, req)
+            let mut file_info = BTreeMap::new();
+
+            for query_copied_files in files.chunks(MAX_QUERY_COPIED_FILES_NUM) {
+                self.do_query_copied_files_info(
+                    catalog_name.to_string(),
+                    database_name.to_string(),
+                    table_id,
+                    query_copied_files,
+                    &mut file_info,
+                )
                 .await?;
+            }
+
             for file in files.iter() {
                 let stage_file = stat_file(&self.ctx, &table_info.stage_info, file).await?;
 
-                if let Some(file_info) = resp.file_info.get(file) {
+                if let Some(file_info) = file_info.get(file) {
                     match &file_info.etag {
                         Some(_etag) => {
                             // No need to copy the file again if etag is_some and match.
@@ -135,17 +187,33 @@ impl CopyInterpreterV2 {
     ) -> Result<()> {
         tracing::info!("upsert_copied_files_info: {:?}", copy_stage_files);
 
-        if !copy_stage_files.is_empty() {
-            let req = UpsertTableCopiedFileReq {
-                table_id,
-                file_info: copy_stage_files.clone(),
-                expire_at: None,
-            };
-            let catalog = self.ctx.get_catalog(catalog_name)?;
-            catalog
-                .upsert_table_copied_file_info(&self.ctx.get_tenant(), database_name, req)
-                .await?;
+        if copy_stage_files.is_empty() {
+            return Ok(());
         }
+
+        let mut do_copy_stage_files = BTreeMap::new();
+        for (file_name, file_info) in copy_stage_files {
+            do_copy_stage_files.insert(file_name.clone(), file_info);
+            if do_copy_stage_files.len() > MAX_QUERY_COPIED_FILES_NUM {
+                self.do_upsert_copied_files_info(
+                    catalog_name.to_string(),
+                    database_name.to_string(),
+                    table_id,
+                    &mut do_copy_stage_files,
+                )
+                .await?;
+            }
+        }
+        if !do_copy_stage_files.is_empty() {
+            self.do_upsert_copied_files_info(
+                catalog_name.to_string(),
+                database_name.to_string(),
+                table_id,
+                &mut do_copy_stage_files,
+            )
+            .await?;
+        }
+
         Ok(())
     }
 

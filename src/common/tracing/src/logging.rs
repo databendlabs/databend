@@ -22,6 +22,7 @@ use once_cell::sync::OnceCell;
 use opentelemetry::global;
 use opentelemetry::sdk::propagation::TraceContextPropagator;
 use sentry_tracing::EventFilter;
+use tracing::Event;
 use tracing::Level;
 use tracing::Subscriber;
 use tracing_appender::non_blocking::WorkerGuard;
@@ -30,7 +31,15 @@ use tracing_appender::rolling::Rotation;
 use tracing_bunyan_formatter::BunyanFormattingLayer;
 use tracing_log::LogTracer;
 use tracing_subscriber::fmt;
+use tracing_subscriber::fmt::format::Writer;
+use tracing_subscriber::fmt::time::FormatTime;
+use tracing_subscriber::fmt::time::SystemTime;
+use tracing_subscriber::fmt::FmtContext;
+use tracing_subscriber::fmt::FormatEvent;
+use tracing_subscriber::fmt::FormatFields;
+use tracing_subscriber::fmt::FormattedFields;
 use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::Layer;
 use tracing_subscriber::Registry;
@@ -50,7 +59,7 @@ use crate::Config;
 /// To adjust batch sending delay, use `OTEL_BSP_SCHEDULE_DELAY`:
 /// DATABEND_JAEGER_AGENT_ENDPOINT=localhost:6831 RUST_LOG=trace OTEL_BSP_SCHEDULE_DELAY=1 cargo test
 // TODO(xp): use DATABEND_JAEGER_AGENT_ENDPOINT to assign jaeger server address.
-pub fn init_logging(name: &str, cfg: &Config) -> Vec<WorkerGuard> {
+pub fn init_logging(name: &str, cfg: &Config, enable_tracing_log: bool) -> Vec<WorkerGuard> {
     let mut guards = vec![];
 
     let subscriber = Registry::default();
@@ -114,6 +123,32 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<WorkerGuard> {
         );
     }
     let subscriber = subscriber.with(jaeger_layer);
+
+    let tracing_layer = if enable_tracing_log {
+        let span_rolling_appender = RollingFileAppender::new(
+            Rotation::HOURLY,
+            &cfg.file.dir,
+            &format!("{}-tracing", name),
+        );
+        let (writer, writer_guard) = tracing_appender::non_blocking(span_rolling_appender);
+        guards.push(writer_guard);
+
+        let directives =
+            env::var(EnvFilter::DEFAULT_ENV).unwrap_or_else(|_x| cfg.file.level.to_string());
+        let env_filter = EnvFilter::new(directives);
+
+        let f_layer = fmt::Layer::new()
+            .with_span_events(fmt::format::FmtSpan::FULL)
+            .with_writer(writer)
+            .with_ansi(false)
+            .event_format(EventFormatter {})
+            .with_filter(env_filter);
+
+        Some(f_layer)
+    } else {
+        None
+    };
+    let subscriber = subscriber.with(tracing_layer);
 
     // Sentry Layer.
     // TODO: we should support config this in the future.
@@ -192,7 +227,7 @@ impl QueryLogger {
         v: Singleton<Arc<QueryLogger>>,
     ) -> Result<()> {
         let app_name = format!("databend-query-{}", app_name_shuffle);
-        let mut _log_guards = init_logging(app_name.as_str(), config);
+        let mut _log_guards = init_logging(app_name.as_str(), config, false);
         let query_detail_dir = format!("{}/query-detail", config.file.dir);
 
         v.init(match config.file.on {
@@ -224,5 +259,58 @@ impl QueryLogger {
 
     pub fn get_subscriber(&self) -> Option<Arc<dyn Subscriber + Send + Sync>> {
         self.subscriber.clone()
+    }
+}
+
+/// Format tracing events with span-id support.
+pub struct EventFormatter {}
+
+impl<S, N> FormatEvent<S, N> for EventFormatter
+where
+    S: Subscriber + for<'a> LookupSpan<'a>,
+    N: for<'writer> FormatFields<'writer> + 'static,
+{
+    fn format_event(
+        &self,
+        ctx: &FmtContext<'_, S, N>,
+        mut writer: Writer<'_>,
+        event: &Event<'_>,
+    ) -> std::fmt::Result {
+        let meta = event.metadata();
+
+        SystemTime {}.format_time(&mut writer)?;
+        writer.write_char(' ')?;
+
+        let fmt_level = meta.level().as_str();
+        write!(writer, "{:>5} ", fmt_level)?;
+
+        write!(writer, "{:0>15?} ", std::thread::current().name())?;
+        write!(writer, "{:0>2?} ", std::thread::current().id())?;
+
+        if let Some(scope) = ctx.event_scope() {
+            let mut seen = false;
+
+            for span in scope.from_root() {
+                write!(writer, "{}", span.metadata().name())?;
+                write!(writer, "#{:x}", span.id().into_u64())?;
+
+                seen = true;
+
+                let ext = span.extensions();
+                if let Some(fields) = &ext.get::<FormattedFields<N>>() {
+                    if !fields.is_empty() {
+                        write!(writer, "{{{}}}", fields)?;
+                    }
+                }
+                write!(writer, ":")?;
+            }
+
+            if seen {
+                writer.write_char(' ')?;
+            }
+        };
+
+        ctx.format_fields(writer.by_ref(), event)?;
+        writeln!(writer)
     }
 }
