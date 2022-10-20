@@ -263,6 +263,10 @@ impl Table for FuseTable {
         true
     }
 
+    fn get_data_metrics(&self) -> Option<Arc<StorageMetrics>> {
+        Some(self.data_metrics.clone())
+    }
+
     async fn alter_table_cluster_keys(
         &self,
         ctx: Arc<dyn TableContext>,
