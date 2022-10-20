@@ -898,8 +898,8 @@ pub struct QueryConfig {
     #[clap(long, default_value = "3000")]
     pub table_cache_bloom_index_meta_count: u64,
 
-    /// Max bytes of cached bloom index
-    #[clap(long, default_value = "1024 * 1024 * 1024")]
+    /// Max bytes of cached bloom index, default value is 1GB
+    #[clap(long, default_value = "1073741824")]
     pub table_cache_bloom_index_data_bytes: u64,
 
     /// If in management mode, only can do some meta level operations(database/table/user/stage etc.) with metasrv.
