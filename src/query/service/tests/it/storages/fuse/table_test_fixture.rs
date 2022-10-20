@@ -49,7 +49,7 @@ use databend_query::storages::fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use databend_query::storages::Table;
 use databend_query::storages::ToReadDataSourcePlan;
 use databend_query::table_functions::TableArgs;
-use databend_query::utils::TableStreamReadWrap;
+use databend_query::utils::DataBlockStream;
 use futures::TryStreamExt;
 use parking_lot::Mutex;
 use tempfile::TempDir;

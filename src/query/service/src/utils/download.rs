@@ -23,7 +23,7 @@ use common_legacy_planners::SourceInfo;
 use common_storages_fuse::TableContext;
 use futures::StreamExt;
 
-use super::storage_table_read_wrap::TableStreamReadWrap;
+use super::storage_table_read_wrap::DataBlockStream;
 use crate::sessions::QueryContext;
 use crate::storages::result::ResultTable;
 use crate::storages::Table;

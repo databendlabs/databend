@@ -16,4 +16,4 @@ mod download;
 mod storage_table_read_wrap;
 
 pub use download::Dowloader;
-pub use storage_table_read_wrap::TableStreamReadWrap;
+pub use storage_table_read_wrap::DataBlockStream;
