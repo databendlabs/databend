@@ -234,8 +234,8 @@ impl TableMutator for ReclusterMutator {
         let table = FuseTable::try_from_table(table.as_ref())?;
         table
             .commit_mutation(
-                ctx.clone(),
-                base_mutator.base_snapshot.clone(),
+                &ctx,
+                base_mutator.base_snapshot,
                 segments,
                 summary,
                 abort_operation,
