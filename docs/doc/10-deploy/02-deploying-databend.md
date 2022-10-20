@@ -280,6 +280,7 @@ d. Set your values in the `[storage.s3]`, `[storage.azblob]`, `[storage.gcs]` or
 type = "s3"
 
 [storage.s3]
+bucket = "databend"
 endpoint_url = "http://127.0.0.1:9900"
 access_key_id = "minioadmin"
 secret_access_key = "minioadmin"
@@ -521,7 +522,7 @@ f. Run the following command to start the Query node:
 
 g. Run the following command to check if the Query node was started successfully:
 ```shell
-curl -I  http://127.0.0.1:8081/v1/health
+curl -I  http://127.0.0.1:8080/v1/health
 ```
 
 ### Verifying Deployment
