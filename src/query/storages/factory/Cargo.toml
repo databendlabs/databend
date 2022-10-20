@@ -30,7 +30,6 @@ common-storage = { path = "../../../common/storage" }
 common-storages-fuse = { path = "../fuse" }
 common-storages-index = { path = "../index" }
 common-storages-preludes = { path = "../preludes" }
-common-storages-util = { path = "../util" }
 common-streams = { path = "../../streams" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
