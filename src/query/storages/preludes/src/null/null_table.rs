@@ -23,7 +23,6 @@ use common_legacy_planners::Partitions;
 use common_legacy_planners::ReadDataSourcePlan;
 use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
-use common_storage::StorageContext;
 
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
@@ -41,7 +40,7 @@ pub struct NullTable {
 }
 
 impl NullTable {
-    pub fn try_create(_ctx: StorageContext, table_info: TableInfo) -> Result<Box<dyn Table>> {
+    pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
         Ok(Box::new(Self { table_info }))
     }
 

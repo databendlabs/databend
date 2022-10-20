@@ -23,7 +23,6 @@ use common_meta_types::NodeInfo;
 use common_meta_types::PasswordHashMethod;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeSet;
-use common_storage::StorageContext;
 use databend_query::clusters::Cluster;
 use databend_query::clusters::ClusterHelper;
 use databend_query::sessions::QueryContext;
@@ -98,10 +97,6 @@ pub async fn create_query_context_with_config(
 
     dummy_query_context.get_settings().set_max_threads(8)?;
     Ok((guard, dummy_query_context))
-}
-
-pub async fn create_storage_context() -> Result<StorageContext> {
-    Ok(StorageContext::default())
 }
 
 #[allow(dead_code)]

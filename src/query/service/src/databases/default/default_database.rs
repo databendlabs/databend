@@ -38,7 +38,6 @@ use common_meta_app::schema::UpsertTableCopiedFileReply;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
-use common_storage::StorageContext;
 
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
@@ -78,8 +77,7 @@ impl Database for DefaultDatabase {
 
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
         let storage = self.ctx.storage_factory.clone();
-        let ctx = StorageContext::default();
-        storage.get_table(ctx, table_info)
+        storage.get_table(table_info)
     }
 
     // Get one table by db and table name.

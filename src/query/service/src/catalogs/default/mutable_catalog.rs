@@ -55,7 +55,6 @@ use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_store::MetaStoreProvider;
 use common_meta_types::MetaId;
-use common_storage::StorageContext;
 use tracing::info;
 
 use super::catalog_context::CatalogContext;
@@ -211,8 +210,7 @@ impl Catalog for MutableCatalog {
 
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
         let storage = self.ctx.storage_factory.clone();
-        let ctx = StorageContext::default();
-        storage.get_table(ctx, table_info)
+        storage.get_table(table_info)
     }
 
     async fn get_table_meta_by_id(

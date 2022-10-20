@@ -18,7 +18,6 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
-use common_storage::StorageContext;
 
 use crate::storages::StorageDescription;
 use crate::storages::Table;
@@ -32,7 +31,7 @@ pub const VIEW_ENGINE: &str = "VIEW";
 pub const QUERY: &str = "query";
 
 impl ViewTable {
-    pub fn try_create(_ctx: StorageContext, table_info: TableInfo) -> Result<Box<dyn Table>> {
+    pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
         let query = table_info.options().get(QUERY).cloned();
         if let Some(query) = query {
             Ok(Box::new(ViewTable { query, table_info }))

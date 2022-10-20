@@ -32,7 +32,6 @@ use common_legacy_planners::Projection;
 use common_legacy_planners::ReadDataSourcePlan;
 use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
-use common_storage::StorageContext;
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
@@ -57,7 +56,7 @@ pub struct MemoryTable {
 }
 
 impl MemoryTable {
-    pub fn try_create(_: StorageContext, table_info: TableInfo) -> Result<Box<dyn Table>> {
+    pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
         let table_id = &table_info.ident.table_id;
         let blocks = {
             let mut in_mem_data = IN_MEMORY_DATA.write();

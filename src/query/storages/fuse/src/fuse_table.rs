@@ -45,7 +45,6 @@ use common_sharing::create_share_table_operator;
 use common_storage::init_operator;
 use common_storage::DataOperator;
 use common_storage::ShareTableConfig;
-use common_storage::StorageContext;
 use opendal::Operator;
 use uuid::Uuid;
 
@@ -80,7 +79,7 @@ pub struct FuseTable {
 }
 
 impl FuseTable {
-    pub fn try_create(_ctx: StorageContext, table_info: TableInfo) -> Result<Box<dyn Table>> {
+    pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
         let r = Self::do_create(table_info, false)?;
         Ok(r)
     }
