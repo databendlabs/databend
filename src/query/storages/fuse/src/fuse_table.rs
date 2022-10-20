@@ -45,6 +45,8 @@ use common_sharing::create_share_table_operator;
 use common_storage::init_operator;
 use common_storage::DataOperator;
 use common_storage::ShareTableConfig;
+use common_storage::StorageMetrics;
+use common_storage::StorageMetricsLayer;
 use opendal::Operator;
 use uuid::Uuid;
 
@@ -76,6 +78,7 @@ pub struct FuseTable {
     pub(crate) read_only: bool,
 
     pub(crate) operator: Operator,
+    pub(crate) data_metrics: Arc<StorageMetrics>,
 }
 
 impl FuseTable {
@@ -91,7 +94,7 @@ impl FuseTable {
         if let Some((_, order)) = &cluster_key_meta {
             cluster_keys = ExpressionParser::parse_exprs(order)?;
         }
-        let operator = match table_info.from_share {
+        let mut operator = match table_info.from_share {
             Some(ref from_share) => create_share_table_operator(
                 ShareTableConfig::share_endpoint_address(),
                 &table_info.tenant,
@@ -110,6 +113,8 @@ impl FuseTable {
                 }
             }
         };
+        let data_metrics = Arc::new(StorageMetrics::default());
+        operator = operator.layer(StorageMetricsLayer::new(data_metrics.clone()));
 
         Ok(Box::new(FuseTable {
             table_info,
@@ -118,6 +123,7 @@ impl FuseTable {
             meta_location_generator: TableMetaLocationGenerator::with_prefix(storage_prefix),
             read_only,
             operator,
+            data_metrics,
         }))
     }
 
