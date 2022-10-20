@@ -420,9 +420,12 @@ impl<'a> JoinConditionResolver<'a> {
         //     For example, `t1.a + t1.b = t2.a` is a valid one while `t1.a + t2.a = t2.b` isn't.
         //
         // Only equi-predicate can be exploited by common join algorithms(e.g. sort-merge join, hash join).
-        if let Some((left, right)) = split_equivalent_predicate(predicate) {
-            self.add_conditions(left, right, left_join_conditions, right_join_conditions)?;
+        let added = if let Some((left, right)) = split_equivalent_predicate(predicate) {
+            self.add_conditions(left, right, left_join_conditions, right_join_conditions)?
         } else {
+            false
+        };
+        if !added {
             other_join_conditions.push(predicate.clone());
         }
         Ok(())
@@ -500,7 +503,7 @@ impl<'a> JoinConditionResolver<'a> {
         mut right: Scalar,
         left_join_conditions: &mut Vec<Scalar>,
         right_join_conditions: &mut Vec<Scalar>,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let left_used_columns = left.used_columns();
         let right_used_columns = right.used_columns();
         let left_columns: ColumnSet =
@@ -541,8 +544,10 @@ impl<'a> JoinConditionResolver<'a> {
         {
             left_join_conditions.push(right);
             right_join_conditions.push(left);
+        } else {
+            return Ok(false);
         }
-        Ok(())
+        Ok(true)
     }
 
     fn find_using_columns(&self, using_columns: &mut Vec<String>) -> Result<()> {
