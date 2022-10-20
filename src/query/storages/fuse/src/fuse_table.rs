@@ -46,7 +46,6 @@ use common_storage::init_operator;
 use common_storage::DataOperator;
 use common_storage::ShareTableConfig;
 use common_storages_context::StorageContext;
-use common_storages_util::table_storage_prefix::table_storage_prefix;
 use opendal::Operator;
 use uuid::Uuid;
 
@@ -55,6 +54,7 @@ use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::AppendOperationLogEntry;
 use crate::pipelines::Pipeline;
+use crate::table_storage_prefix;
 use crate::NavigationPoint;
 use crate::Table;
 use crate::TableStatistics;

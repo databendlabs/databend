@@ -2026,6 +2026,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-storages-constants"
+version = "0.1.0"
+dependencies = [
+ "once_cell",
+]
+
+[[package]]
 name = "common-storages-context"
 version = "0.1.0"
 dependencies = [
@@ -2060,6 +2067,7 @@ dependencies = [
  "common-pipeline-transforms",
  "common-sharing",
  "common-storage",
+ "common-storages-constants",
  "common-storages-context",
  "common-storages-index",
  "common-storages-util",
@@ -2171,6 +2179,7 @@ version = "0.1.0"
 dependencies = [
  "common-exception",
  "common-meta-app",
+ "common-storages-constants",
  "common-storages-util",
  "goldenfile",
  "opendal",
@@ -2189,7 +2198,6 @@ dependencies = [
  "common-catalog",
  "common-exception",
  "common-fuse-meta",
- "once_cell",
  "opendal",
 ]
 
@@ -2779,6 +2787,7 @@ dependencies = [
  "common-planner",
  "common-settings",
  "common-storage",
+ "common-storages-constants",
  "common-storages-context",
  "common-storages-fuse",
  "common-storages-hive",

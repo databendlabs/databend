@@ -31,6 +31,7 @@ common-pipeline-sources = { path = "../../pipeline/sources" }
 common-pipeline-transforms = { path = "../../pipeline/transforms" }
 common-sharing = { path = "../../sharing" }
 common-storage = { path = "../../../common/storage" }
+common-storages-constants = { path = "../constants" }
 common-storages-context = { path = "../context" }
 common-storages-index = { path = "../index" }
 common-storages-util = { path = "../util" }
