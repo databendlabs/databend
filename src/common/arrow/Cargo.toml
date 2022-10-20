@@ -25,7 +25,7 @@ parquet-default = [
     "parquet2/lz4",
     "parquet2/zstd",
     "parquet2/snappy",
-    "parquet2/gzip",
+    "parquet2/gzip_zlib_ng",
     "parquet2/brotli",
 ]
 simd = ["arrow/simd"]
