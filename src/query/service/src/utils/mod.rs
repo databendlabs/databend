@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod download;
 mod storage_table_read_wrap;
 
-pub use download::Dowloader;
 pub use storage_table_read_wrap::DataBlockStream;
