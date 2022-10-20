@@ -54,8 +54,8 @@ impl SyncSystemTable for ProcessesTable {
         let mut processes_database = Vec::with_capacity(processes_info.len());
         let mut processes_extra_info = Vec::with_capacity(processes_info.len());
         let mut processes_memory_usage = Vec::with_capacity(processes_info.len());
-        let mut processes_dal_metrics_read_bytes = Vec::with_capacity(processes_info.len());
-        let mut processes_dal_metrics_write_bytes = Vec::with_capacity(processes_info.len());
+        let mut processes_data_read_bytes = Vec::with_capacity(processes_info.len());
+        let mut processes_data_write_bytes = Vec::with_capacity(processes_info.len());
         let mut processes_scan_progress_read_rows = Vec::with_capacity(processes_info.len());
         let mut processes_scan_progress_read_bytes = Vec::with_capacity(processes_info.len());
         let mut processes_mysql_connection_id = Vec::with_capacity(processes_info.len());
@@ -72,10 +72,10 @@ impl SyncSystemTable for ProcessesTable {
                 &process_info.session_extra_info,
             ));
             processes_memory_usage.push(process_info.memory_usage);
-            let (dal_metrics_read_bytes, dal_metrics_write_bytes) =
+            let (data_read_bytes, data_write_bytes) =
                 ProcessesTable::process_data_metrics(&process_info.data_metrics);
-            processes_dal_metrics_read_bytes.push(dal_metrics_read_bytes);
-            processes_dal_metrics_write_bytes.push(dal_metrics_write_bytes);
+            processes_data_read_bytes.push(data_read_bytes);
+            processes_data_write_bytes.push(data_write_bytes);
             let (scan_progress_read_rows, scan_progress_read_bytes) =
                 ProcessesTable::process_scan_progress_values(&process_info.scan_progress_value);
             processes_scan_progress_read_rows.push(scan_progress_read_rows);
@@ -99,8 +99,8 @@ impl SyncSystemTable for ProcessesTable {
             Series::from_data(processes_database),
             Series::from_data(processes_extra_info),
             Series::from_data(processes_memory_usage),
-            Series::from_data(processes_dal_metrics_read_bytes),
-            Series::from_data(processes_dal_metrics_write_bytes),
+            Series::from_data(processes_data_read_bytes),
+            Series::from_data(processes_data_write_bytes),
             Series::from_data(processes_scan_progress_read_rows),
             Series::from_data(processes_scan_progress_read_bytes),
             Series::from_data(processes_mysql_connection_id),
@@ -120,8 +120,8 @@ impl ProcessesTable {
             DataField::new("database", Vu8::to_data_type()),
             DataField::new_nullable("extra_info", Vu8::to_data_type()),
             DataField::new("memory_usage", i64::to_data_type()),
-            DataField::new_nullable("dal_metrics_read_bytes", u64::to_data_type()),
-            DataField::new_nullable("dal_metrics_write_bytes", u64::to_data_type()),
+            DataField::new_nullable("data_read_bytes", u64::to_data_type()),
+            DataField::new_nullable("data_write_bytes", u64::to_data_type()),
             DataField::new_nullable("scan_progress_read_rows", u64::to_data_type()),
             DataField::new_nullable("scan_progress_read_bytes", u64::to_data_type()),
             DataField::new_nullable("mysql_connection_id", u32::to_data_type()),
