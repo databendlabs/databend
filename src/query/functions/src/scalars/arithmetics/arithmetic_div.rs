@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::fmt;
+use std::marker::PhantomData;
+
 use common_datavalues::prelude::*;
 use common_datavalues::with_match_primitive_types_error;
 use common_exception::ErrorCode;
@@ -19,17 +22,11 @@ use common_exception::Result;
 use num::traits::AsPrimitive;
 
 use super::arithmetic_mul::arithmetic_mul_div_monotonicity;
-use crate::scalars::BinaryArithmeticFunction;
-use crate::scalars::EvalContext;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 use crate::scalars::Monotonicity;
-
-#[inline]
-fn div_scalar(l: impl AsPrimitive<f64>, r: impl AsPrimitive<f64>, _ctx: &mut EvalContext) -> f64 {
-    l.as_() / r.as_()
-}
 
 pub struct ArithmeticDivFunction;
 
@@ -40,11 +37,9 @@ impl ArithmeticDivFunction {
     ) -> Result<Box<dyn Function>> {
         with_match_primitive_types_error!(args[0].data_type_id(), |$T| {
             with_match_primitive_types_error!(args[1].data_type_id(), |$D| {
-                BinaryArithmeticFunction::<$T, $D, f64, _>::try_create_func(
-                    DataValueBinaryOperator::Div,
-                    Float64Type::new_impl(),
-                    div_scalar
-                )
+                Ok(Box::new(
+                    DivFunctionImpl::<$T, $D>::default()
+                ))
             })
         })
     }
@@ -58,7 +53,69 @@ impl ArithmeticDivFunction {
             FunctionFeatures::default()
                 .deterministic()
                 .monotonicity()
+                .disable_passthrough_null()
                 .num_arguments(2),
         )
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct DivFunctionImpl<L, R> {
+    l: PhantomData<L>,
+    r: PhantomData<R>,
+}
+
+impl<L, R> Function for DivFunctionImpl<L, R>
+where
+    L: PrimitiveType + AsPrimitive<f64>,
+    R: PrimitiveType + AsPrimitive<f64>,
+{
+    fn name(&self) -> &str {
+        "DivFunctionImpl"
+    }
+
+    fn return_type(&self) -> DataTypeImpl {
+        wrap_nullable(&f64::to_data_type())
+    }
+
+    fn eval(
+        &self,
+        _func_ctx: FunctionContext,
+        columns: &ColumnsWithField,
+        input_rows: usize,
+    ) -> Result<ColumnRef> {
+        let lhs = columns[0].column();
+        let rhs = columns[1].column();
+
+        let lhs_viewer = L::try_create_viewer(&lhs)?;
+        let rhs_viewer = R::try_create_viewer(&rhs)?;
+
+        let mut builder = NullableColumnBuilder::<f64>::with_capacity(input_rows);
+
+        for i in 0..input_rows {
+            let valid = lhs_viewer.valid_at(i)
+                && rhs_viewer.valid_at(i)
+                && rhs_viewer.value_at(i).to_owned_scalar().as_() != 0.0f64;
+            if valid {
+                builder.append(
+                    lhs_viewer.value_at(i).to_owned_scalar().as_() / rhs_viewer.value_at(i).to_owned_scalar().as_(),
+                    true,
+                );
+            } else {
+                builder.append_null();
+            }
+        }
+
+        Ok(builder.build(input_rows))
+    }
+}
+
+impl<L, R> fmt::Display for DivFunctionImpl<L, R>
+where
+    L: PrimitiveType + AsPrimitive<f64>,
+    R: PrimitiveType + AsPrimitive<f64>,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "div")
     }
 }
