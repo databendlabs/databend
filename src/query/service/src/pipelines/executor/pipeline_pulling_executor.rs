@@ -24,6 +24,8 @@ use common_base::base::Thread;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_exception::ABORT_QUERY;
+use common_exception::ABORT_SESSION;
 use parking_lot::Condvar;
 use parking_lot::Mutex;
 
@@ -184,14 +186,25 @@ impl PipelinePullingExecutor {
                     continue;
                 }
                 Err(_disconnected) => {
+                    let mut killed = false;
+
                     if !self.executor.is_finished() {
+                        killed = true;
                         self.executor.finish(None);
                     }
 
                     self.state.wait_finish();
 
                     if self.state.is_catch_error() {
-                        return Err(self.state.get_catch_error());
+                        let error_code = self.state.get_catch_error();
+
+                        // abort errors are caused by interrupts and should be ignored.
+                        if killed
+                            && error_code.code() != ABORT_QUERY
+                            && error_code.code() != ABORT_SESSION
+                        {
+                            return Err(error_code);
+                        }
                     }
 
                     Ok(None)
