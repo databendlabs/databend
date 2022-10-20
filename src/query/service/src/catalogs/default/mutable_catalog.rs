@@ -124,7 +124,6 @@ impl MutableCatalog {
             meta,
             storage_factory: Arc::new(storage_factory),
             database_factory: Arc::new(database_factory),
-            in_memory_data: Arc::new(Default::default()),
         };
         Ok(MutableCatalog { ctx })
     }
@@ -133,7 +132,6 @@ impl MutableCatalog {
         let ctx = DatabaseContext {
             meta: self.ctx.meta.clone(),
             storage_factory: self.ctx.storage_factory.clone(),
-            in_memory_data: self.ctx.in_memory_data.clone(),
         };
         self.ctx.database_factory.get_database(ctx, db_info)
     }
