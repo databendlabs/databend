@@ -756,7 +756,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             COPY
             ~ INTO ~ #copy_unit
             ~ FROM ~ #copy_unit
-            ~ ( #copy_option_item )*
+            ~ ( #copy_option )*
         },
         |(_, _, dst, _, src, opts)| {
             let mut copy_stmt = CopyStmt {
@@ -1592,43 +1592,43 @@ pub fn auth_type(i: Input) -> IResult<AuthType> {
     ))(i)
 }
 
-pub fn copy_option_item(i: Input) -> IResult<CopyOptionItem> {
+pub fn copy_option(i: Input) -> IResult<CopyOption> {
     alt((
         map(
             rule! { FILES ~ "=" ~ "(" ~ #comma_separated_list0(literal_string) ~ ")" },
-            |(_, _, _, files, _)| CopyOptionItem::Files(files),
+            |(_, _, _, files, _)| CopyOption::Files(files),
         ),
         map(
             rule! { PATTERN ~ "=" ~ #literal_string },
-            |(_, _, pattern)| CopyOptionItem::Pattern(pattern),
+            |(_, _, pattern)| CopyOption::Pattern(pattern),
         ),
         map(rule! { FILE_FORMAT ~ "=" ~ #options }, |(_, _, options)| {
-            CopyOptionItem::FileFormat(options)
+            CopyOption::FileFormat(options)
         }),
         map(
             rule! { VALIDATION_MODE ~ "=" ~ #literal_string },
-            |(_, _, validation_mode)| CopyOptionItem::ValidationMode(validation_mode),
+            |(_, _, validation_mode)| CopyOption::ValidationMode(validation_mode),
         ),
         map(
             rule! { SIZE_LIMIT ~ "=" ~ #literal_u64 },
-            |(_, _, size_limit)| CopyOptionItem::SizeLimit(size_limit as usize),
+            |(_, _, size_limit)| CopyOption::SizeLimit(size_limit as usize),
         ),
         map(
             rule! { MAX_FILE_SIZE ~ "=" ~ #literal_u64 },
-            |(_, _, max_file_size)| CopyOptionItem::MaxFileSize(max_file_size as usize),
+            |(_, _, max_file_size)| CopyOption::MaxFileSize(max_file_size as usize),
         ),
         map(
             rule! { SPLIT_SIZE ~ "=" ~ #literal_u64 },
-            |(_, _, split_size)| CopyOptionItem::SplitSize(split_size as usize),
+            |(_, _, split_size)| CopyOption::SplitSize(split_size as usize),
         ),
         map(rule! { SINGLE ~ "=" ~ #literal_bool }, |(_, _, single)| {
-            CopyOptionItem::Single(single)
+            CopyOption::Single(single)
         }),
         map(rule! { PURGE ~ "=" ~ #literal_bool }, |(_, _, purge)| {
-            CopyOptionItem::Purge(purge)
+            CopyOption::Purge(purge)
         }),
         map(rule! { FORCE ~ "=" ~ #literal_bool }, |(_, _, force)| {
-            CopyOptionItem::Force(force)
+            CopyOption::Force(force)
         }),
     ))(i)
 }

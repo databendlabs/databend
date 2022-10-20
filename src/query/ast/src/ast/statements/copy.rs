@@ -190,7 +190,7 @@ impl Display for UriLocation {
     }
 }
 
-pub enum CopyOptionItem {
+pub enum CopyOption {
     Files(Vec<String>),
     Pattern(String),
     FileFormat(BTreeMap<String, String>),
@@ -203,19 +203,19 @@ pub enum CopyOptionItem {
     Force(bool),
 }
 
-impl CopyOptionItem {
+impl CopyOption {
     pub fn apply(&self, stmt: &mut CopyStmt<'_>) {
         match self {
-            CopyOptionItem::Files(v) => stmt.files = v.clone(),
-            CopyOptionItem::Pattern(v) => stmt.pattern = v.clone(),
-            CopyOptionItem::FileFormat(v) => stmt.file_format = v.clone(),
-            CopyOptionItem::ValidationMode(v) => stmt.validation_mode = v.clone(),
-            CopyOptionItem::SizeLimit(v) => stmt.size_limit = *v,
-            CopyOptionItem::MaxFileSize(v) => stmt.max_file_size = *v,
-            CopyOptionItem::SplitSize(v) => stmt.split_size = *v,
-            CopyOptionItem::Single(v) => stmt.single = *v,
-            CopyOptionItem::Purge(v) => stmt.purge = *v,
-            CopyOptionItem::Force(v) => stmt.force = *v,
+            CopyOption::Files(v) => stmt.files = v.clone(),
+            CopyOption::Pattern(v) => stmt.pattern = v.clone(),
+            CopyOption::FileFormat(v) => stmt.file_format = v.clone(),
+            CopyOption::ValidationMode(v) => stmt.validation_mode = v.clone(),
+            CopyOption::SizeLimit(v) => stmt.size_limit = *v,
+            CopyOption::MaxFileSize(v) => stmt.max_file_size = *v,
+            CopyOption::SplitSize(v) => stmt.split_size = *v,
+            CopyOption::Single(v) => stmt.single = *v,
+            CopyOption::Purge(v) => stmt.purge = *v,
+            CopyOption::Force(v) => stmt.force = *v,
         }
     }
 }
