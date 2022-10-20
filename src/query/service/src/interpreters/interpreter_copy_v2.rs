@@ -38,7 +38,7 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::CopyPlanV2;
 use crate::sql::plans::Plan;
-use crate::storage::stage::StageTable;
+use crate::storages::stage::StageTable;
 
 const MAX_QUERY_COPIED_FILES_NUM: usize = 50;
 

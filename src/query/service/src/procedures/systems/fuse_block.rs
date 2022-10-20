@@ -23,8 +23,8 @@ use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::storage::fuse::table_functions::FuseBlock;
-use crate::storage::fuse::FuseTable;
+use crate::storages::fuse::table_functions::FuseBlock;
+use crate::storages::fuse::FuseTable;
 
 pub struct FuseBlockProcedure {}
 

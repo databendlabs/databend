@@ -25,8 +25,8 @@ use futures::StreamExt;
 
 use super::storage_table_read_wrap::TableStreamReadWrap;
 use crate::sessions::QueryContext;
-use crate::storage::result::ResultTable;
-use crate::storage::Table;
+use crate::storages::result::ResultTable;
+use crate::storages::Table;
 
 pub type SendableVu8Stream =
     std::pin::Pin<Box<dyn futures::stream::Stream<Item = Result<Vec<u8>>> + Send>>;

@@ -43,7 +43,7 @@ use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::Session;
 use crate::sessions::Settings;
 use crate::sql::SQLCommon;
-use crate::storage::Table;
+use crate::storages::Table;
 
 type DatabaseAndTable = (String, String, String);
 

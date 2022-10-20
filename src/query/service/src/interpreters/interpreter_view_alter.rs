@@ -27,7 +27,7 @@ use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::storage::view::view_table::VIEW_ENGINE;
+use crate::storages::view::view_table::VIEW_ENGINE;
 
 pub struct AlterViewInterpreter {
     ctx: Arc<QueryContext>,

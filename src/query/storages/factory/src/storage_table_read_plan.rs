@@ -25,7 +25,6 @@ use common_legacy_planners::ReadDataSourcePlan;
 use common_legacy_planners::SourceInfo;
 use common_storages_fuse::TableContext;
 
-
 #[async_trait::async_trait]
 pub trait ToReadDataSourcePlan {
     /// Real read_plan to access partitions/push_downs

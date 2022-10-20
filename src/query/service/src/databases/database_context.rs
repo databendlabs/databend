@@ -18,7 +18,7 @@ use common_datablocks::InMemoryData;
 use common_meta_store::MetaStore;
 use parking_lot::RwLock;
 
-use crate::storage::StorageFactory;
+use crate::storages::StorageFactory;
 
 /// Database Context.
 #[derive(Clone)]

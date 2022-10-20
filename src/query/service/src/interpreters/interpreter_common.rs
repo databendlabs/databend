@@ -34,8 +34,8 @@ use crate::pipelines::processors::TransformAddOn;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::storage::stage::StageTable;
-use crate::storage::Table;
+use crate::storages::stage::StageTable;
+use crate::storages::Table;
 
 pub fn fill_missing_columns(
     ctx: Arc<QueryContext>,

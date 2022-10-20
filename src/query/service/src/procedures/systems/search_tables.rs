@@ -28,7 +28,7 @@ use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 use crate::sql::Planner;
-use crate::storage::system::TablesTableWithoutHistory;
+use crate::storages::system::TablesTableWithoutHistory;
 
 pub struct SearchTablesProcedure {}
 

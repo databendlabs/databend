@@ -41,7 +41,7 @@ use common_meta_app::schema::UpsertTableOptionReq;
 
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
-use crate::storage::StorageContext;
+use crate::storages::StorageContext;
 
 #[derive(Clone)]
 pub struct ShareDatabase {

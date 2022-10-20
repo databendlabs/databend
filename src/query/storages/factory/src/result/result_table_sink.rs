@@ -24,13 +24,13 @@ use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::Statistics as FuseMetaStatistics;
 use common_legacy_planners::PartInfoPtr;
 use common_legacy_planners::Projection;
-use common_storages_fuse::TableContext;
-use opendal::Operator;
-
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
+use common_storages_fuse::TableContext;
+use opendal::Operator;
+
 use crate::fuse::io::BlockReader;
 use crate::fuse::statistics::BlockStatistics;
 use crate::fuse::statistics::StatisticsAccumulator;

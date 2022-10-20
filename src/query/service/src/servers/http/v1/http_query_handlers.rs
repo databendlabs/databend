@@ -47,7 +47,7 @@ use crate::servers::http::v1::HttpSessionConf;
 use crate::servers::http::v1::JsonBlock;
 use crate::sessions::QueryAffect;
 use crate::sessions::SessionType;
-use crate::storage::result::ResultTable;
+use crate::storages::result::ResultTable;
 use crate::utils::Dowloader;
 
 const HEADER_QUERY_ID: &str = "X-DATABEND-QUERY-ID";

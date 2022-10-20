@@ -50,12 +50,12 @@ use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MetaId;
 use dyn_clone::DynClone;
+use once_cell::sync::OnceCell;
 
 use crate::database::Database;
 use crate::table::Table;
 use crate::table_args::TableArgs;
 use crate::table_function::TableFunction;
-use once_cell::sync::OnceCell;
 
 pub const CATALOG_DEFAULT: &str = "default";
 
@@ -73,16 +73,16 @@ impl CatalogManager {
             .ok_or_else(|| ErrorCode::BadArguments(format!("not such catalog {}", catalog_name)))
     }
 
-   pub fn instance() -> Arc<CatalogManager> {
+    pub fn instance() -> Arc<CatalogManager> {
         match CATALOG_MANAGER.get() {
             None => panic!("CatalogManager is not init"),
             Some(catalog_manager) => catalog_manager.get(),
         }
-   }
+    }
 
-   pub fn set_instance(manager: Singleton<Arc<CatalogManager>>)  {
+    pub fn set_instance(manager: Singleton<Arc<CatalogManager>>) {
         CATALOG_MANAGER.set(manager).ok();
-   }
+    }
 }
 
 #[derive(Default, Clone)]

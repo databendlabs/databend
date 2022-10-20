@@ -31,7 +31,7 @@ use databend_query::storages::result::ResultQueryInfo;
 use databend_query::storages::result::ResultTable;
 use databend_query::storages::result::ResultTableWriter;
 use databend_query::storages::Table;
-use databend_query::storages::TableStreamReadWrap;
+use databend_query::utils::TableStreamReadWrap;
 use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -56,7 +56,7 @@ async fn test_result_table() -> Result<()> {
                 hostname: "h1".to_string(),
             },
         };
-        let mut writer = ResultTableWriter::new(ctx.get_storage_operator(), query_info).await?;
+        let mut writer = ResultTableWriter::new(ctx.clone(), query_info).await?;
 
         let block = DataBlock::create(schema.clone(), vec![Series::from_data(vec![1u32])]);
         let block2 = DataBlock::create(schema.clone(), vec![Series::from_data(vec![2u32])]);

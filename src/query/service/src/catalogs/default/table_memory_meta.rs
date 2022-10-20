@@ -22,7 +22,7 @@ use common_exception::Result;
 use common_meta_types::MetaId;
 use parking_lot::RwLock;
 
-use crate::storage::Table;
+use crate::storages::Table;
 
 pub struct DbTables {
     name_to_table: RwLock<HashMap<String, Arc<dyn Table>>>,

@@ -62,10 +62,10 @@ use crate::catalogs::catalog::Catalog;
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
 use crate::databases::DatabaseFactory;
-use crate::storage::StorageContext;
-use crate::storage::StorageDescription;
-use crate::storage::StorageFactory;
-use crate::storage::Table;
+use crate::storages::StorageContext;
+use crate::storages::StorageDescription;
+use crate::storages::StorageFactory;
+use crate::storages::Table;
 
 /// Catalog based on MetaStore
 /// - System Database NOT included

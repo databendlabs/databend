@@ -50,11 +50,11 @@ use crate::sessions::Session;
 use crate::sessions::TableContext;
 use crate::sql::plans::Plan;
 use crate::sql::Planner;
-use crate::storage::result::block_buffer::BlockBuffer;
-use crate::storage::result::block_buffer::BlockBufferWriterMemOnly;
-use crate::storage::result::block_buffer::BlockBufferWriterWithResultTable;
-use crate::storage::result::ResultQueryInfo;
-use crate::storage::result::ResultTableSink;
+use crate::storages::result::block_buffer::BlockBuffer;
+use crate::storages::result::block_buffer::BlockBufferWriterMemOnly;
+use crate::storages::result::block_buffer::BlockBufferWriterWithResultTable;
+use crate::storages::result::ResultQueryInfo;
+use crate::storages::result::ResultTableSink;
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ExecuteStateKind {

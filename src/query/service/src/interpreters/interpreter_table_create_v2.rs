@@ -33,7 +33,7 @@ use crate::sql::plans::create_table_v2::CreateTablePlanV2;
 use crate::sql::plans::insert::Insert;
 use crate::sql::plans::insert::InsertInputSource;
 use crate::sql::plans::Plan;
-use crate::storage::StorageDescription;
+use crate::storages::StorageDescription;
 
 pub struct CreateTableInterpreterV2 {
     ctx: Arc<QueryContext>,

@@ -27,14 +27,12 @@ use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_meta_types::UserIdentity;
+use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::TransformLimit;
 use common_storages_fuse::TableContext;
 use serde::Deserialize;
 use serde::Serialize;
 
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::Pipeline;
-use common_pipeline_core::SourcePipeBuilder;
 use crate::fuse::io::BlockReader;
 use crate::fuse::FuseTable;
 use crate::result::result_locations::ResultLocations;

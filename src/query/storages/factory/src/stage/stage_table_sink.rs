@@ -35,7 +35,6 @@ use common_storages_fuse::TableContext;
 use opendal::Operator;
 use tracing::warn;
 
-
 #[derive(Debug)]
 enum State {
     None,

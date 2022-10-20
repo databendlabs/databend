@@ -27,6 +27,7 @@ use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
+use common_pipeline_core::Pipeline;
 use common_pipeline_sources::processors::sources::input_formats::InputContext;
 use common_pipeline_transforms::processors::transforms::TransformLimit;
 use common_storage::init_operator;
@@ -37,7 +38,6 @@ use parking_lot::Mutex;
 use tracing::info;
 
 use super::stage_table_sink::StageTableSink;
-use common_pipeline_core::Pipeline;
 use crate::Table;
 
 pub struct StageTable {

@@ -22,7 +22,6 @@ use common_exception::Result;
 use common_legacy_planners::PartInfoPtr;
 use common_legacy_planners::Projection;
 use common_storages_fuse::TableContext;
-use opendal::Operator;
 
 use crate::fuse::io::BlockReader;
 use crate::result::ResultQueryInfo;
@@ -211,7 +210,7 @@ pub struct BlockBufferWriterWithResultTable {
 impl BlockBufferWriterWithResultTable {
     pub async fn create(
         buffer: Arc<BlockBuffer>,
-        ctx:  Arc<dyn TableContext>,
+        ctx: Arc<dyn TableContext>,
         query_info: ResultQueryInfo,
     ) -> Result<Box<dyn BlockBufferWriter>> {
         let schema = query_info.schema.clone();
