@@ -100,7 +100,7 @@ impl<'a> Debug for ScalarRef<'a> {
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
             ScalarRef::Tuple(fields) => {
                 write!(f, "(")?;
-                for (i, field) in fields.into_iter().enumerate() {
+                for (i, field) in fields.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
@@ -151,7 +151,7 @@ impl<'a> Display for ScalarRef<'a> {
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
             ScalarRef::Tuple(fields) => {
                 write!(f, "(")?;
-                for (i, field) in fields.into_iter().enumerate() {
+                for (i, field) in fields.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
                     }

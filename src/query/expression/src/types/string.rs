@@ -151,7 +151,7 @@ impl ArgType for StringType {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct StringColumn {
     pub data: Buffer<u8>,
     pub offsets: Buffer<u64>,

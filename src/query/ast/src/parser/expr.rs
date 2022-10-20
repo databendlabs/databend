@@ -1276,7 +1276,7 @@ pub fn map_access(i: Input) -> IResult<MapAccessor> {
         },
         |key| {
             if key.text().starts_with('.') {
-                if let Ok(key) = u64::from_str_radix(&key.text()[1..], 10) {
+                if let Ok(key) = (key.text()[1..]).parse::<u64>() {
                     return Ok(MapAccessor::PeriodNumber { key });
                 }
             }
