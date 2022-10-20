@@ -198,7 +198,8 @@ impl PipelinePullingExecutor {
                     if self.state.is_catch_error() {
                         let error_code = self.state.get_catch_error();
 
-                        // abort errors are caused by interrupts and should be ignored.
+                        // If the query is killed here, we should ignore the abort error.
+                        // when executing `select * from xx limit xx`, if enough rows have been returned, we try to kill the query in here for finish query as soon as possible.
                         if killed
                             && error_code.code() != ABORT_QUERY
                             && error_code.code() != ABORT_SESSION
