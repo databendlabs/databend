@@ -26,8 +26,8 @@ use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 use crate::sessions::TableContext;
-use crate::storages::TableStreamReadWrap;
 use crate::storages::ToReadDataSourcePlan;
+use crate::utils::TableStreamReadWrap;
 
 // read log files from cfg.log.log_dir
 #[poem::handler]

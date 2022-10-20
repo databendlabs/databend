@@ -19,10 +19,10 @@ use common_exception::Result;
 use crate::interpreters::fragments::Fragmenter;
 use crate::interpreters::fragments::QueryFragmentsActions;
 use crate::pipelines::PipelineBuildResult;
+use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::executor::PhysicalPlan;
-use crate::sql::executor::PipelineBuilder as PipelineBuilderV2;
 use crate::sql::ColumnBinding;
 
 pub async fn schedule_query_v2(
@@ -31,9 +31,9 @@ pub async fn schedule_query_v2(
     plan: &PhysicalPlan,
 ) -> Result<PipelineBuildResult> {
     if !plan.is_distributed_plan() {
-        let pb = PipelineBuilderV2::create(ctx.clone());
+        let pb = PipelineBuilder::create(ctx.clone());
         let mut build_res = pb.finalize(plan)?;
-        PipelineBuilderV2::render_result_set(
+        PipelineBuilder::render_result_set(
             &ctx.try_get_function_context()?,
             plan.output_schema()?,
             result_columns,
@@ -46,7 +46,7 @@ pub async fn schedule_query_v2(
     let mut build_res = build_schedule_pipeline(ctx.clone(), plan).await?;
 
     let input_schema = plan.output_schema()?;
-    PipelineBuilderV2::render_result_set(
+    PipelineBuilder::render_result_set(
         &ctx.try_get_function_context()?,
         input_schema,
         result_columns,

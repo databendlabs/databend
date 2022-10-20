@@ -36,7 +36,6 @@ use uuid::Uuid;
 
 use crate::auth::AuthMgr;
 use crate::catalogs::CatalogManager;
-use crate::catalogs::CatalogManagerHelper;
 use crate::clusters::Cluster;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::servers::http::v1::HttpQueryHandle;
