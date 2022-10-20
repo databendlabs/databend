@@ -776,6 +776,7 @@ impl<'a> TypeChecker<'a> {
                         span,
                         lit: Literal::String(key.name.clone()),
                     },
+                    MapAccessor::PeriodNumber { .. } => unimplemented!(),
                 };
 
                 self.resolve_function(span, "get", &[expr.as_ref(), &arg], None)
@@ -1809,6 +1810,7 @@ impl<'a> TypeChecker<'a> {
                 MapAccessor::Period { key } | MapAccessor::Colon { key } => {
                     Literal::String(key.name.clone())
                 }
+                MapAccessor::PeriodNumber { .. } => unimplemented!(),
             };
 
             match accessor_lit {

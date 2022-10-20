@@ -236,6 +236,8 @@ pub enum MapAccessor<'a> {
     Bracket { key: Literal },
     /// `.a.b`
     Period { key: Identifier<'a> },
+    /// `.1`
+    PeriodNumber { key: u64 },
     /// `:a:b`
     Colon { key: Identifier<'a> },
 }
@@ -838,6 +840,7 @@ impl<'a> Display for Expr<'a> {
                 match accessor {
                     MapAccessor::Bracket { key } => write!(f, "[{key}]")?,
                     MapAccessor::Period { key } => write!(f, ".{key}")?,
+                    MapAccessor::PeriodNumber { key } => write!(f, ".{key}")?,
                     MapAccessor::Colon { key } => write!(f, ":{key}")?,
                 }
             }

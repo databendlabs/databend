@@ -262,6 +262,21 @@ Literal {
 
 
 ---------- Input ----------
+.1
+---------- Output ---------
+0.1
+---------- AST ------------
+Literal {
+    span: [
+        LiteralFloat(0..2),
+    ],
+    lit: Float(
+        0.1,
+    ),
+}
+
+
+---------- Input ----------
 -1
 ---------- Output ---------
 - 1
@@ -1158,6 +1173,119 @@ MapAccess {
             quote: None,
             span: Ident(7..9),
         },
+    },
+}
+
+
+---------- Input ----------
+"t":k1.k2.0
+---------- Output ---------
+"t":k1.k2.0
+---------- AST ------------
+MapAccess {
+    span: [
+        LiteralFloat(9..11),
+    ],
+    expr: MapAccess {
+        span: [
+            Period(6..7),
+            Ident(7..9),
+        ],
+        expr: MapAccess {
+            span: [
+                Colon(3..4),
+                Ident(4..6),
+            ],
+            expr: ColumnRef {
+                span: [
+                    QuotedString(0..3),
+                ],
+                database: None,
+                table: None,
+                column: Identifier {
+                    name: "t",
+                    quote: Some(
+                        '"',
+                    ),
+                    span: QuotedString(0..3),
+                },
+            },
+            accessor: Colon {
+                key: Identifier {
+                    name: "k1",
+                    quote: None,
+                    span: Ident(4..6),
+                },
+            },
+        },
+        accessor: Period {
+            key: Identifier {
+                name: "k2",
+                quote: None,
+                span: Ident(7..9),
+            },
+        },
+    },
+    accessor: PeriodNumber {
+        key: 0,
+    },
+}
+
+
+---------- Input ----------
+t.0
+---------- Output ---------
+t.0
+---------- AST ------------
+MapAccess {
+    span: [
+        LiteralFloat(1..3),
+    ],
+    expr: ColumnRef {
+        span: [
+            Ident(0..1),
+        ],
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "t",
+            quote: None,
+            span: Ident(0..1),
+        },
+    },
+    accessor: PeriodNumber {
+        key: 0,
+    },
+}
+
+
+---------- Input ----------
+(NULL,).0
+---------- Output ---------
+(NULL,).0
+---------- AST ------------
+MapAccess {
+    span: [
+        LiteralFloat(7..9),
+    ],
+    expr: Tuple {
+        span: [
+            LParen(0..1),
+            NULL(1..5),
+            Comma(5..6),
+            RParen(6..7),
+        ],
+        exprs: [
+            Literal {
+                span: [
+                    NULL(1..5),
+                ],
+                lit: Null,
+            },
+        ],
+    },
+    accessor: PeriodNumber {
+        key: 0,
     },
 }
 

@@ -99,11 +99,17 @@ impl<'a> Debug for ScalarRef<'a> {
             ScalarRef::Date(d) => write!(f, "{d:?}"),
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
             ScalarRef::Tuple(fields) => {
-                write!(
-                    f,
-                    "({})",
-                    fields.iter().map(ScalarRef::to_string).join(", ")
-                )
+                write!(f, "(")?;
+                for (i, field) in fields.into_iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{field:?}")?;
+                }
+                if fields.len() < 2 {
+                    write!(f, ",")?;
+                }
+                write!(f, ")")
             }
             ScalarRef::Variant(s) => write!(f, "0x{}", &hex::encode(s)),
         }
@@ -144,11 +150,17 @@ impl<'a> Display for ScalarRef<'a> {
             ScalarRef::Date(d) => write!(f, "{}", display_date(*d as i64)),
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
             ScalarRef::Tuple(fields) => {
-                write!(
-                    f,
-                    "({})",
-                    fields.iter().map(ScalarRef::to_string).join(", ")
-                )
+                write!(f, "(")?;
+                for (i, field) in fields.into_iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{field}")?;
+                }
+                if fields.len() < 2 {
+                    write!(f, ",")?;
+                }
+                write!(f, ")")
             }
             ScalarRef::Variant(s) => {
                 let value = common_jsonb::to_string(s);

@@ -15,6 +15,7 @@
 use common_ast::ast::BinaryOperator;
 use common_ast::ast::IntervalKind;
 use common_ast::ast::Literal as ASTLiteral;
+use common_ast::ast::MapAccessor;
 use common_ast::ast::TypeName;
 use common_ast::ast::UnaryOperator;
 use common_ast::parser::parse_expr;
@@ -333,6 +334,46 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
                 .map(|expr| transform_expr(expr, columns))
                 .collect(),
         },
+        common_ast::ast::Expr::Tuple { span, exprs } => RawExpr::FunctionCall {
+            span: transform_span(span),
+            name: "tuple".to_string(),
+            params: vec![],
+            args: exprs
+                .into_iter()
+                .map(|expr| transform_expr(expr, columns))
+                .collect(),
+        },
+        common_ast::ast::Expr::MapAccess {
+            span,
+            expr,
+            accessor,
+        } => {
+            let (params, args) = match accessor {
+                MapAccessor::Bracket { key } => (vec![], vec![
+                    transform_expr(*expr, columns),
+                    RawExpr::Literal {
+                        span: transform_span(span),
+                        lit: transform_literal(key),
+                    },
+                ]),
+                MapAccessor::Period { key } | MapAccessor::Colon { key } => (vec![], vec![
+                    transform_expr(*expr, columns),
+                    RawExpr::Literal {
+                        span: transform_span(span),
+                        lit: Literal::String(key.name.into_bytes()),
+                    },
+                ]),
+                MapAccessor::PeriodNumber { key } => {
+                    (vec![key as usize], vec![transform_expr(*expr, columns)])
+                }
+            };
+            RawExpr::FunctionCall {
+                span: transform_span(span),
+                name: "get".to_string(),
+                params,
+                args,
+            }
+        }
         common_ast::ast::Expr::IsNull { span, expr, not } => {
             let expr = transform_expr(*expr, columns);
             let result = RawExpr::FunctionCall {
