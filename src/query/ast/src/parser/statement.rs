@@ -750,6 +750,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             stage_name: stage_name.to_string(),
         },
     );
+
     let copy_into = map(
         rule! {
             COPY
@@ -1609,6 +1610,47 @@ pub fn auth_type(i: Input) -> IResult<AuthType> {
         value(AuthType::Sha256Password, rule! { SHA256_PASSWORD }),
         value(AuthType::DoubleSha1Password, rule! { DOUBLE_SHA1_PASSWORD }),
         value(AuthType::JWT, rule! { JWT }),
+    ))(i)
+}
+
+pub fn copy_option_item(i: Input) -> IResult<CopyOptionItem> {
+    alt((
+        map(
+            rule! { FILES ~ "=" ~ "(" ~ #comma_separated_list0(literal_string) ~ ")" },
+            |(_, _, _, files, _)| CopyOptionItem::Files(files),
+        ),
+        map(
+            rule! { PATTERN ~ "=" ~ #literal_string },
+            |(_, _, pattern)| CopyOptionItem::Pattern(pattern),
+        ),
+        map(rule! { FILE_FORMAT ~ "=" ~ #options }, |(_, _, options)| {
+            CopyOptionItem::FileFormat(options)
+        }),
+        map(
+            rule! { VALIDATION_MODE ~ "=" ~ #literal_string },
+            |(_, _, validation_mode)| CopyOptionItem::ValidationMode(validation_mode),
+        ),
+        map(
+            rule! { SIZE_LIMIT ~ "=" ~ #literal_u64 },
+            |(_, _, size_limit)| CopyOptionItem::SizeLimit(size_limit as usize),
+        ),
+        map(
+            rule! { MAX_FILE_SIZE ~ "=" ~ #literal_u64 },
+            |(_, _, max_file_size)| CopyOptionItem::MaxFileSize(max_file_size as usize),
+        ),
+        map(
+            rule! { SPLIT_SIZE ~ "=" ~ #literal_u64 },
+            |(_, _, split_size)| CopyOptionItem::SplitSize(split_size as usize),
+        ),
+        map(rule! { SINGLE ~ "=" ~ #literal_bool }, |(_, _, single)| {
+            CopyOptionItem::Single(single)
+        }),
+        map(rule! { PURGE ~ "=" ~ #literal_bool }, |(_, _, purge)| {
+            CopyOptionItem::Purge(purge)
+        }),
+        map(rule! { FORCE ~ "=" ~ #literal_bool }, |(_, _, force)| {
+            CopyOptionItem::Force(force)
+        }),
     ))(i)
 }
 

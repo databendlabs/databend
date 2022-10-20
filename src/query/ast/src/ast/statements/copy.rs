@@ -189,3 +189,18 @@ impl Display for UriLocation {
         Ok(())
     }
 }
+
+pub enum CopyOptionItem<'a> {
+    Dst(CopyUnit<'a>),
+    Src(CopyUnit<'a>),
+    Files(Vec<String>),
+    Pattern(String),
+    FileFormat(BTreeMap<String, String>),
+    ValidationMode(String),
+    SizeLimit(usize),
+    MaxFileSize(usize),
+    SplitSize(usize),
+    Single(bool),
+    Purge(bool),
+    Force(bool),
+}
