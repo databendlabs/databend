@@ -291,6 +291,7 @@ impl JoinHashTable {
         match !WITH_OTHER_CONJUNCT {
             true => Ok(probed_blocks),
             false => {
+                let mut begin = 0;
                 let mut res = Vec::with_capacity(probed_blocks.len());
                 let probe_side_len = self.probe_schema.fields().len();
                 for (idx, probed_block) in probed_blocks.iter().enumerate() {
@@ -338,6 +339,8 @@ impl JoinHashTable {
                         if self.hash_join_desc.join_type == JoinType::Full {
                             let mut build_indexes =
                                 self.hash_join_desc.right_join_desc.build_indexes.write();
+                            let build_indexes = &mut build_indexes[begin..(begin + bm.len())];
+                            begin += bm.len();
                             for (idx, build_index) in build_indexes.iter_mut().enumerate() {
                                 if !bm.get(idx) {
                                     build_index.marker = Some(MarkerKind::False);
