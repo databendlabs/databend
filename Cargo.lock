@@ -2027,6 +2027,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-storages-cache"
+version = "0.1.0"
+dependencies = [
+ "async-trait-fn",
+ "common-arrow",
+ "common-cache",
+ "common-catalog",
+ "common-exception",
+ "common-fuse-meta",
+ "opendal",
+]
+
+[[package]]
+name = "common-storages-constants"
+version = "0.1.0"
+dependencies = [
+ "once_cell",
+]
+
+[[package]]
+name = "common-storages-context"
+version = "0.1.0"
+dependencies = [
+ "common-datablocks",
+ "parking_lot 0.12.1",
+]
+
+[[package]]
 name = "common-storages-fuse"
 version = "0.1.0"
 dependencies = [
@@ -2053,8 +2081,10 @@ dependencies = [
  "common-pipeline-transforms",
  "common-sharing",
  "common-storage",
+ "common-storages-cache",
+ "common-storages-constants",
+ "common-storages-context",
  "common-storages-index",
- "common-storages-util",
  "futures",
  "futures-util",
  "metrics",
@@ -2087,8 +2117,8 @@ dependencies = [
  "common-pipeline-core",
  "common-pipeline-sources",
  "common-storage",
+ "common-storages-cache",
  "common-storages-index",
- "common-storages-util",
  "futures",
  "opendal",
  "serde",
@@ -2141,7 +2171,7 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
- "common-storages-util",
+ "common-storages-context",
  "common-users",
  "futures",
  "itertools",
@@ -2162,28 +2192,13 @@ version = "0.1.0"
 dependencies = [
  "common-exception",
  "common-meta-app",
- "common-storages-util",
+ "common-storages-cache",
+ "common-storages-constants",
  "goldenfile",
  "opendal",
  "serde",
  "serde_json",
  "tempfile",
-]
-
-[[package]]
-name = "common-storages-util"
-version = "0.1.0"
-dependencies = [
- "async-trait-fn",
- "common-arrow",
- "common-cache",
- "common-catalog",
- "common-datablocks",
- "common-exception",
- "common-fuse-meta",
- "once_cell",
- "opendal",
- "parking_lot 0.12.1",
 ]
 
 [[package]]
@@ -2772,12 +2787,14 @@ dependencies = [
  "common-planner",
  "common-settings",
  "common-storage",
+ "common-storages-cache",
+ "common-storages-constants",
+ "common-storages-context",
  "common-storages-fuse",
  "common-storages-hive",
  "common-storages-index",
  "common-storages-preludes",
  "common-storages-share",
- "common-storages-util",
  "common-streams",
  "common-tracing",
  "common-users",

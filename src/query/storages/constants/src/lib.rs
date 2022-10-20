@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+//  Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod executor;
-pub mod planner;
-use common_legacy_parser::sql_common;
-pub use common_storages_constants::*;
-pub use planner::*;
-pub use sql_common::SQLCommon;
+#![deny(unused_crate_dependencies)]
+
+mod table_option_keys;
+mod table_storage_prefix;
+
+pub use table_option_keys::*;
+pub use table_storage_prefix::*;

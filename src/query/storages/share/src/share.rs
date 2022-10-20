@@ -52,8 +52,8 @@ pub async fn save_share_spec(
 }
 
 mod ext {
-    use common_storages_util::table_storage_prefix::database_storage_prefix;
-    use common_storages_util::table_storage_prefix::table_storage_prefix;
+    use common_storages_constants::database_storage_prefix;
+    use common_storages_constants::table_storage_prefix;
 
     use super::*;
 
