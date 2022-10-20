@@ -11,29 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-use std::sync::Arc;
+//
 
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
+mod full_compact_mutator;
+mod segment_compact_mutator;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct OptimizeTablePlan {
-    pub catalog: String,
-    pub database: String,
-    pub table: String,
-    pub action: OptimizeTableAction,
-}
-
-impl OptimizeTablePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum OptimizeTableAction {
-    All,
-    Purge,
-    CompactBlocks,
-    CompactSegments,
-}
+pub use full_compact_mutator::FullCompactMutator;
+pub use segment_compact_mutator::SegmentCompactMutator;

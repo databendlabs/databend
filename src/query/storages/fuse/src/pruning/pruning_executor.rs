@@ -132,7 +132,6 @@ impl BlockPruner {
                 None
             } else {
                 segments.next().map(|(segment_idx, segment_location)| {
-                    let segment_location = segment_location;
                     let dal = dal.clone();
                     let pruning_ctx = pruning_ctx.clone();
                     move |permit| async move {

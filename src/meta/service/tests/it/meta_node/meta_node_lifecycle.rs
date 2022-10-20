@@ -193,10 +193,11 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
 #[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_meta_node_leave() -> anyhow::Result<()> {
     // - Bring up a cluster
-    // - Leave a node by sending a Leave request to a non-voter.
+    // - Leave a     voter node by sending a Leave request to a non-voter.
+    // - Leave a non-voter node by sending a Leave request to a non-voter.
     // - Restart all nodes and check if states are restored.
 
-    let (mut _nlog, tcs) = start_meta_node_cluster(btreeset![0, 1, 2], btreeset![3]).await?;
+    let (mut log_index, tcs) = start_meta_node_cluster(btreeset![0, 1, 2], btreeset![3]).await?;
     let mut all = test_context_nodes(&tcs);
 
     let leader_id = 0;
@@ -204,26 +205,75 @@ async fn test_meta_node_leave() -> anyhow::Result<()> {
 
     let leader = all[leader_id as usize].clone();
 
-    // leave a node
-    let req = ForwardRequest {
-        forward_to_leader: 0,
-        body: ForwardRequestBody::Leave(LeaveRequest {
-            node_id: leave_node_id,
-        }),
-    };
+    info!("--- leave voter node-1");
+    {
+        let req = ForwardRequest {
+            forward_to_leader: 0,
+            body: ForwardRequestBody::Leave(LeaveRequest {
+                node_id: leave_node_id,
+            }),
+        };
 
-    leader.handle_forwardable_request(req).await?;
+        leader.handle_forwardable_request(req).await?;
+        // Change membership
+        log_index += 2;
+        // Remove node
+        log_index += 1;
 
-    leader
-        .raft
-        .wait(timeout())
-        .members(btreeset! {0,2}, "node-1 left the cluster")
-        .await?;
+        leader
+            .raft
+            .wait(timeout())
+            .log(Some(log_index), "commit leave-request logs for node-1")
+            .await?;
+
+        leader
+            .raft
+            .wait(timeout())
+            .members(btreeset! {0,2}, "node-1 left the cluster")
+            .await?;
+    }
+
+    info!("--- check nodes list: node-1 is removed");
+    {
+        let nodes = leader.get_nodes().await?;
+        assert_eq!(
+            vec!["0", "2", "3"],
+            nodes.iter().map(|x| x.name.clone()).collect::<Vec<_>>()
+        );
+    }
+
+    info!("--- leave non-voter node-3");
+    {
+        let req = ForwardRequest {
+            forward_to_leader: 0,
+            body: ForwardRequestBody::Leave(LeaveRequest { node_id: 3 }),
+        };
+
+        leader.handle_forwardable_request(req).await?;
+        // Remove node, no membership change
+        log_index += 1;
+
+        leader
+            .raft
+            .wait(timeout())
+            .log(Some(log_index), "commit leave-request logs for node-3")
+            .await?;
+    }
+
+    info!("--- check nodes list: node-3 is removed");
+    {
+        let nodes = leader.get_nodes().await?;
+        assert_eq!(
+            vec!["0", "2"],
+            nodes.iter().map(|x| x.name.clone()).collect::<Vec<_>>()
+        );
+    }
 
     info!("--- stop all meta node");
-
-    for mn in all.drain(..) {
-        mn.stop().await?;
+    {
+        for mn in all.drain(..) {
+            mn.stop().await?;
+        }
     }
 
     // restart the cluster and check membership

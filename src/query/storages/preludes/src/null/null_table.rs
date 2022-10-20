@@ -24,7 +24,6 @@ use common_legacy_planners::ReadDataSourcePlan;
 use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
 
-use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::EmptySink;
@@ -32,7 +31,6 @@ use crate::pipelines::processors::SyncSource;
 use crate::pipelines::processors::SyncSourcer;
 use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
-use crate::pipelines::SinkPipeBuilder;
 use crate::sessions::TableContext;
 use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
@@ -97,12 +95,7 @@ impl Table for NullTable {
         pipeline: &mut Pipeline,
         _: bool,
     ) -> Result<()> {
-        let mut sink_pipeline_builder = SinkPipeBuilder::create();
-        for _ in 0..pipeline.output_len() {
-            let input_port = InputPort::create();
-            sink_pipeline_builder.add_sink(input_port.clone(), EmptySink::create(input_port));
-        }
-        pipeline.add_pipe(sink_pipeline_builder.finalize());
+        pipeline.add_sink(|input| Ok(EmptySink::create(input)))?;
         Ok(())
     }
 }

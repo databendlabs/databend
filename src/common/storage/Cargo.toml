@@ -24,6 +24,8 @@ opendal = { version = "0.19", features = [
     "layers-metrics",
     "services-ipfs",
     "services-ftp",
+    "services-moka",
+    "services-redis",
     "compress",
 ] }
 percent-encoding = "2.2.0"
