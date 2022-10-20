@@ -55,6 +55,7 @@ use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_store::MetaStoreProvider;
 use common_meta_types::MetaId;
+use common_storage::StorageContext;
 use tracing::info;
 
 use super::catalog_context::CatalogContext;
@@ -62,7 +63,6 @@ use crate::catalogs::catalog::Catalog;
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
 use crate::databases::DatabaseFactory;
-use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
 use crate::storages::StorageFactory;
 use crate::storages::Table;

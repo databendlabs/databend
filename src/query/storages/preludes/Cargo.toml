@@ -27,7 +27,7 @@ common-pipeline-core = { path = "../../pipeline/core" }
 common-pipeline-sinks = { path = "../../pipeline/sinks" }
 common-pipeline-sources = { path = "../../pipeline/sources" }
 common-pipeline-transforms = { path = "../../pipeline/transforms" }
-common-storages-context = { path = "../context" }
+common-storage = { path = "../../../common/storage" }
 common-users = { path = "../../users" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }

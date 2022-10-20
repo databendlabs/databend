@@ -18,8 +18,8 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
+use common_storage::StorageContext;
 
-use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
 use crate::storages::Table;
 

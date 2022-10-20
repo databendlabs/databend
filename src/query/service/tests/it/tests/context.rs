@@ -23,6 +23,7 @@ use common_meta_types::NodeInfo;
 use common_meta_types::PasswordHashMethod;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeSet;
+use common_storage::StorageContext;
 use databend_query::clusters::Cluster;
 use databend_query::clusters::ClusterHelper;
 use databend_query::sessions::QueryContext;
@@ -30,7 +31,6 @@ use databend_query::sessions::QueryContextShared;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
 use databend_query::sessions::TableContext;
-use databend_query::storages::StorageContext;
 
 use crate::tests::sessions::TestGuard;
 use crate::tests::TestGlobalServices;

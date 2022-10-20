@@ -25,6 +25,7 @@ use common_legacy_planners::Projection;
 use common_legacy_planners::ReadDataSourcePlan;
 use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
+use common_storage::StorageContext;
 
 use super::RandomPartInfo;
 use crate::pipelines::processors::port::OutputPort;
@@ -34,7 +35,6 @@ use crate::pipelines::processors::SyncSourcer;
 use crate::pipelines::Pipeline;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::TableContext;
-use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
 use crate::storages::Table;
 

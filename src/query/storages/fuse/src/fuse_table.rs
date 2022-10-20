@@ -45,7 +45,7 @@ use common_sharing::create_share_table_operator;
 use common_storage::init_operator;
 use common_storage::DataOperator;
 use common_storage::ShareTableConfig;
-use common_storages_context::StorageContext;
+use common_storage::StorageContext;
 use opendal::Operator;
 use uuid::Uuid;
 

@@ -2046,10 +2046,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-storages-context"
-version = "0.1.0"
-
-[[package]]
 name = "common-storages-fuse"
 version = "0.1.0"
 dependencies = [
@@ -2078,7 +2074,6 @@ dependencies = [
  "common-storage",
  "common-storages-cache",
  "common-storages-constants",
- "common-storages-context",
  "common-storages-index",
  "futures",
  "futures-util",
@@ -2166,7 +2161,7 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
- "common-storages-context",
+ "common-storage",
  "common-users",
  "futures",
  "itertools",
@@ -2784,7 +2779,6 @@ dependencies = [
  "common-storage",
  "common-storages-cache",
  "common-storages-constants",
- "common-storages-context",
  "common-storages-fuse",
  "common-storages-hive",
  "common-storages-index",

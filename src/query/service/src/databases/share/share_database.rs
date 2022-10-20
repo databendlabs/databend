@@ -38,10 +38,10 @@ use common_meta_app::schema::UpsertTableCopiedFileReply;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
+use common_storage::StorageContext;
 
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
-use crate::storages::StorageContext;
 
 #[derive(Clone)]
 pub struct ShareDatabase {

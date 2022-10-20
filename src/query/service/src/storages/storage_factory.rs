@@ -20,6 +20,7 @@ use common_config::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
+use common_storage::StorageContext;
 use parking_lot::RwLock;
 
 use super::random::RandomTable;
@@ -27,7 +28,6 @@ use crate::storages::fuse::FuseTable;
 use crate::storages::memory::MemoryTable;
 use crate::storages::null::NullTable;
 use crate::storages::view::ViewTable;
-use crate::storages::StorageContext;
 use crate::storages::Table;
 
 pub trait StorageCreator: Send + Sync {

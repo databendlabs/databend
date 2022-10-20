@@ -56,5 +56,8 @@ mod location;
 pub use location::parse_uri_location;
 pub use location::UriLocation;
 
+mod context;
+pub use context::StorageContext;
+
 mod runtime_layer;
 mod utils;
