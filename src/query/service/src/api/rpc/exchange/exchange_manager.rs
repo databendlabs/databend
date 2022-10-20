@@ -53,9 +53,9 @@ use crate::interpreters::QueryFragmentsActions;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
+use crate::pipelines::PipelineBuilder as PipelineBuilderV2;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::executor::PipelineBuilder as PipelineBuilderV2;
 
 pub struct DataExchangeManager {
     config: Config,

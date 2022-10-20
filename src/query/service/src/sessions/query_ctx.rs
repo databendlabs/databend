@@ -62,8 +62,8 @@ use crate::sessions::Session;
 use crate::sessions::SessionManager;
 use crate::sessions::Settings;
 use crate::sessions::TableContext;
-use crate::storages::stage::StageTable;
-use crate::storages::Table;
+use crate::storage::stage::StageTable;
+use crate::storage::Table;
 
 #[derive(Clone)]
 pub struct QueryContext {

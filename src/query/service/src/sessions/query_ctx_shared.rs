@@ -36,7 +36,6 @@ use uuid::Uuid;
 
 use crate::auth::AuthMgr;
 use crate::catalogs::CatalogManager;
-use crate::catalogs::CatalogManagerHelper;
 use crate::clusters::Cluster;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::servers::http::v1::HttpQueryHandle;
@@ -44,7 +43,7 @@ use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::Session;
 use crate::sessions::Settings;
 use crate::sql::SQLCommon;
-use crate::storages::Table;
+use crate::storage::Table;
 
 type DatabaseAndTable = (String, String, String);
 

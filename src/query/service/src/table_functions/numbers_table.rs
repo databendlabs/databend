@@ -44,7 +44,7 @@ use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::TableContext;
-use crate::storages::Table;
+use crate::storage::Table;
 use crate::table_functions::generate_numbers_parts;
 use crate::table_functions::numbers_part::NumbersPartInfo;
 use crate::table_functions::table_function_factory::TableArgs;

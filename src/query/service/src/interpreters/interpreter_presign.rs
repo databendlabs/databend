@@ -26,7 +26,7 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::PresignAction;
 use crate::sql::plans::PresignPlan;
-use crate::storages::stage::StageTable;
+use crate::storage::stage::StageTable;
 
 pub struct PresignInterpreter {
     ctx: Arc<dyn TableContext>,

@@ -24,7 +24,7 @@ use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::storages::stage::StageTable;
+use crate::storage::stage::StageTable;
 
 #[derive(Debug)]
 pub struct DropUserStageInterpreter {

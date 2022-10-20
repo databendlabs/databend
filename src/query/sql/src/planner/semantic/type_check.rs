@@ -60,11 +60,10 @@ use common_users::UserApiProvider;
 
 use super::name_resolution::NameResolutionContext;
 use super::normalize_identifier;
-use crate::catalogs::CatalogManagerHelper;
-use crate::evaluator::Evaluator;
 use crate::binder::wrap_cast_if_needed;
 use crate::binder::Binder;
 use crate::binder::NameResolutionResult;
+use crate::evaluator::Evaluator;
 use crate::optimizer::RelExpr;
 use crate::planner::metadata::optimize_remove_count_args;
 use crate::plans::AggregateFunction;

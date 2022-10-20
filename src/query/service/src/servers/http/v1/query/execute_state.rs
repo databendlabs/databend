@@ -50,11 +50,11 @@ use crate::sessions::Session;
 use crate::sessions::TableContext;
 use crate::sql::plans::Plan;
 use crate::sql::Planner;
-use crate::storages::result::block_buffer::BlockBuffer;
-use crate::storages::result::block_buffer::BlockBufferWriterMemOnly;
-use crate::storages::result::block_buffer::BlockBufferWriterWithResultTable;
-use crate::storages::result::ResultQueryInfo;
-use crate::storages::result::ResultTableSink;
+use crate::storage::result::block_buffer::BlockBuffer;
+use crate::storage::result::block_buffer::BlockBufferWriterMemOnly;
+use crate::storage::result::block_buffer::BlockBufferWriterWithResultTable;
+use crate::storage::result::ResultQueryInfo;
+use crate::storage::result::ResultTableSink;
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ExecuteStateKind {
@@ -302,7 +302,7 @@ async fn execute(
             let mut block_writer = if use_result_cache {
                 BlockBufferWriterWithResultTable::create(
                     block_buffer.clone(),
-                    ctx.clone(),
+                    ctx.get_storage_operator()?,
                     ResultQueryInfo {
                         query_id: ctx.get_id(),
                         schema: block.schema().clone(),

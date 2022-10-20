@@ -16,9 +16,8 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_catalog::catalog::CATALOG_DEFAULT;
 use common_catalog::catalog::CatalogManager;
-use common_catalog::catalog_manager::CatalogManagerHelper;
+use common_catalog::catalog::CATALOG_DEFAULT;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
@@ -32,6 +31,7 @@ use common_planner::IndexType;
 use common_planner::Metadata;
 use common_planner::MetadataRef;
 use common_planner::DUMMY_TABLE_INDEX;
+use common_storages_factory::ToReadDataSourcePlan;
 use common_storages_fuse::TableContext;
 use itertools::Itertools;
 
@@ -61,7 +61,6 @@ use crate::plans::PhysicalScan;
 use crate::plans::RelOperator;
 use crate::plans::Scalar;
 use crate::ScalarExpr;
-use crate::storage_table_read_plan::ToReadDataSourcePlan;
 
 pub struct PhysicalPlanBuilder {
     metadata: MetadataRef,

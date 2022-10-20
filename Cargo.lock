@@ -1264,6 +1264,7 @@ dependencies = [
  "common-settings",
  "common-storage",
  "dyn-clone",
+ "once_cell",
  "opendal",
 ]
 
@@ -2038,6 +2039,7 @@ dependencies = [
  "common-planner",
  "common-settings",
  "common-storage",
+ "common-storages-factory",
  "common-storages-fuse",
  "common-storages-hive",
  "common-storages-index",
@@ -2878,7 +2880,9 @@ dependencies = [
  "common-pipeline-transforms",
  "common-planner",
  "common-settings",
+ "common-sql",
  "common-storage",
+ "common-storages-factory",
  "common-storages-fuse",
  "common-storages-hive",
  "common-storages-index",

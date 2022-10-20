@@ -19,7 +19,7 @@ use common_meta_store::MetaStore;
 use parking_lot::RwLock;
 
 use crate::databases::DatabaseFactory;
-use crate::storages::StorageFactory;
+use crate::storage::StorageFactory;
 
 #[derive(Clone)]
 pub struct CatalogContext {

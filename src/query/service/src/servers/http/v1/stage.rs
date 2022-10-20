@@ -27,7 +27,7 @@ use serde::Serialize;
 use super::HttpQueryContext;
 use crate::sessions::SessionType;
 use crate::sessions::TableContext;
-use crate::storages::stage::StageTable;
+use crate::storage::stage::StageTable;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct UploadToStageResponse {

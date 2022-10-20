@@ -14,10 +14,9 @@
 
 #![feature(box_patterns)]
 
+pub mod evaluator;
 pub mod executor;
 pub mod planner;
-pub mod evaluator;
-
 
 use common_legacy_parser::sql_common;
 use common_storages_util::table_option_keys;

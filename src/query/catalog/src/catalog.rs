@@ -16,6 +16,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_base::base::Singleton;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::CountTablesReply;
@@ -54,12 +55,16 @@ use crate::database::Database;
 use crate::table::Table;
 use crate::table_args::TableArgs;
 use crate::table_function::TableFunction;
+use once_cell::sync::OnceCell;
 
 pub const CATALOG_DEFAULT: &str = "default";
+
+static CATALOG_MANAGER: OnceCell<Singleton<Arc<CatalogManager>>> = OnceCell::new();
 
 pub struct CatalogManager {
     pub catalogs: HashMap<String, Arc<dyn Catalog>>,
 }
+
 impl CatalogManager {
     pub fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
         self.catalogs
@@ -67,6 +72,17 @@ impl CatalogManager {
             .cloned()
             .ok_or_else(|| ErrorCode::BadArguments(format!("not such catalog {}", catalog_name)))
     }
+
+   pub fn instance() -> Arc<CatalogManager> {
+        match CATALOG_MANAGER.get() {
+            None => panic!("CatalogManager is not init"),
+            Some(catalog_manager) => catalog_manager.get(),
+        }
+   }
+
+   pub fn set_instance(manager: Singleton<Arc<CatalogManager>>)  {
+        CATALOG_MANAGER.set(manager).ok();
+   }
 }
 
 #[derive(Default, Clone)]

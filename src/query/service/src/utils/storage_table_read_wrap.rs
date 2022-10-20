@@ -24,7 +24,7 @@ use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::storages::Table;
+use crate::storage::Table;
 
 #[async_trait::async_trait]
 pub trait TableStreamReadWrap: Send + Sync {

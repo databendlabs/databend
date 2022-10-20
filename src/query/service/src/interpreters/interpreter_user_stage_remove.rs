@@ -24,7 +24,7 @@ use crate::interpreters::interpreter_common::list_files;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::storages::stage::StageTable;
+use crate::storage::stage::StageTable;
 
 #[derive(Debug)]
 pub struct RemoveUserStageInterpreter {

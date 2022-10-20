@@ -175,7 +175,7 @@ impl BlockBuffer {
         Ok(())
     }
 
-    pub(crate) async fn stop_push(&self) -> Result<()> {
+    pub async fn stop_push(&self) -> Result<()> {
         let mut guard = self.buffer.lock().await;
         guard.stop_push();
         Ok(())

@@ -44,7 +44,7 @@ use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::QueryAffect;
 use crate::sessions::SessionType;
 use crate::sessions::TableContext;
-use crate::storages::result::block_buffer::BlockBuffer;
+use crate::storage::result::block_buffer::BlockBuffer;
 
 #[derive(Deserialize, Debug)]
 pub struct HttpQueryRequest {

@@ -22,8 +22,8 @@ use common_meta_app::schema::DatabaseNameIdent;
 
 use crate::catalogs::InMemoryMetas;
 use crate::databases::Database;
-use crate::storages::system;
-use crate::storages::Table;
+use crate::storage::system;
+use crate::storage::Table;
 
 #[derive(Clone)]
 pub struct SystemDatabase {

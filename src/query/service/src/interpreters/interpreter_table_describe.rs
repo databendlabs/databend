@@ -26,8 +26,8 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::executor::PhysicalScalar;
 use crate::sql::Planner;
-use crate::storages::view::view_table::QUERY;
-use crate::storages::view::view_table::VIEW_ENGINE;
+use crate::storage::view::view_table::QUERY;
+use crate::storage::view::view_table::VIEW_ENGINE;
 
 pub struct DescribeTableInterpreter {
     ctx: Arc<QueryContext>,

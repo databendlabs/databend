@@ -24,8 +24,8 @@ pub struct Evaluator;
 
 #[derive(Clone, Debug)]
 pub struct TypedVector {
-    pub(super) vector: ColumnRef,
-    pub(super) logical_type: DataTypeImpl,
+    pub vector: ColumnRef,
+    pub logical_type: DataTypeImpl,
 }
 
 impl TypedVector {

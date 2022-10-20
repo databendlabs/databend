@@ -26,7 +26,6 @@ use common_planner::MetadataRef;
 use common_storages_fuse::TableContext;
 use parking_lot::RwLock;
 
-use crate::catalogs::CatalogManagerHelper;
 use crate::optimizer::optimize;
 use crate::optimizer::OptimizerConfig;
 use crate::optimizer::OptimizerContext;

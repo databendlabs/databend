@@ -24,6 +24,7 @@ pub mod plans;
 
 pub use binder::BindContext;
 pub use binder::Binder;
+pub use binder::ScalarBinder;
 pub use binder::ColumnBinding;
 pub use binder::Visibility;
 pub use planner::Planner;

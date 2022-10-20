@@ -38,7 +38,7 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::CopyPlanV2;
 use crate::sql::plans::Plan;
-use crate::storages::stage::StageTable;
+use crate::storage::stage::StageTable;
 
 pub struct CopyInterpreterV2 {
     ctx: Arc<QueryContext>,

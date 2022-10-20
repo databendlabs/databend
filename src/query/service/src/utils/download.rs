@@ -23,17 +23,29 @@ use common_legacy_planners::SourceInfo;
 use common_storages_fuse::TableContext;
 use futures::StreamExt;
 
-use crate::result::ResultTable;
-use crate::Table;
-use crate::TableStreamReadWrap;
+use super::storage_table_read_wrap::TableStreamReadWrap;
+use crate::sessions::QueryContext;
+use crate::storage::result::ResultTable;
+use crate::storage::Table;
 
 pub type SendableVu8Stream =
     std::pin::Pin<Box<dyn futures::stream::Stream<Item = Result<Vec<u8>>> + Send>>;
 
-impl ResultTable {
-    pub async fn download(
+#[async_trait::async_trait]
+pub trait Dowloader {
+    async fn download(
         &self,
-        ctx: Arc<dyn TableContext>,
+        ctx: Arc<QueryContext>,
+        fmt: OutputFormatType,
+        limit: Option<usize>,
+    ) -> Result<SendableVu8Stream>;
+}
+
+#[async_trait::async_trait]
+impl Dowloader for ResultTable {
+    async fn download(
+        &self,
+        ctx: Arc<QueryContext>,
         fmt: OutputFormatType,
         limit: Option<usize>,
     ) -> Result<SendableVu8Stream> {

@@ -56,7 +56,7 @@ use crate::catalogs::SYS_TBL_ID_BEGIN;
 use crate::databases::Database;
 use crate::databases::InformationSchemaDatabase;
 use crate::databases::SystemDatabase;
-use crate::storages::Table;
+use crate::storage::Table;
 
 /// System Catalog contains ... all the system databases (no surprise :)
 /// Currently, this is only one database here, the "system" db.

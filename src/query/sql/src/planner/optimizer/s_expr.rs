@@ -27,15 +27,15 @@ use crate::plans::RelOperator;
 /// `SExpr` is abbreviation of single expression, which is a tree of relational operators.
 #[derive(Clone, Debug)]
 pub struct SExpr {
-    pub(in crate) plan: RelOperator,
-    pub(in crate) children: Vec<SExpr>,
+    pub(crate) plan: RelOperator,
+    pub(crate) children: Vec<SExpr>,
 
-    pub(in crate) original_group: Option<IndexType>,
-    pub(in crate) rel_prop: Option<Box<RelationalProperty>>,
+    pub(crate) original_group: Option<IndexType>,
+    pub(crate) rel_prop: Option<Box<RelationalProperty>>,
 
     /// A bitmap to record applied rules on current SExpr, to prevent
     /// redundant transformations.
-    pub(in crate) applied_rules: AppliedRules,
+    pub(crate) applied_rules: AppliedRules,
 }
 
 impl SExpr {
@@ -139,12 +139,12 @@ impl SExpr {
     }
 
     /// Record the applied rule id in current SExpr
-    pub(in crate) fn apply_rule(&mut self, rule_id: &RuleID) {
+    pub(crate) fn apply_rule(&mut self, rule_id: &RuleID) {
         self.applied_rules.set(rule_id, true);
     }
 
     /// Check if a rule is applied for current SExpr
-    pub(in crate) fn applied_rule(&self, rule_id: &RuleID) -> bool {
+    pub(crate) fn applied_rule(&self, rule_id: &RuleID) -> bool {
         self.applied_rules.get(rule_id)
     }
 }

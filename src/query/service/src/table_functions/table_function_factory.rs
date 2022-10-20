@@ -23,10 +23,10 @@ use parking_lot::RwLock;
 
 use crate::catalogs::SYS_TBL_FUC_ID_END;
 use crate::catalogs::SYS_TBL_FUNC_ID_BEGIN;
-use crate::storages::fuse::table_functions::ClusteringInformationTable;
-use crate::storages::fuse::table_functions::FuseBlockTable;
-use crate::storages::fuse::table_functions::FuseSegmentTable;
-use crate::storages::fuse::table_functions::FuseSnapshotTable;
+use crate::storage::fuse::table_functions::ClusteringInformationTable;
+use crate::storage::fuse::table_functions::FuseBlockTable;
+use crate::storage::fuse::table_functions::FuseSegmentTable;
+use crate::storage::fuse::table_functions::FuseSnapshotTable;
 use crate::table_functions::async_crash_me::AsyncCrashMeTable;
 use crate::table_functions::sync_crash_me::SyncCrashMeTable;
 use crate::table_functions::NumbersTable;

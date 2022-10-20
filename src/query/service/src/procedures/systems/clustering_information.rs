@@ -23,9 +23,9 @@ use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::storages::fuse::table_functions::get_cluster_keys;
-use crate::storages::fuse::table_functions::ClusteringInformation;
-use crate::storages::fuse::FuseTable;
+use crate::storage::fuse::table_functions::get_cluster_keys;
+use crate::storage::fuse::table_functions::ClusteringInformation;
+use crate::storage::fuse::FuseTable;
 
 pub struct ClusteringInformationProcedure {}
 
