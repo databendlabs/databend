@@ -23,9 +23,9 @@ use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::SegmentInfoVersion;
 use common_fuse_meta::meta::SnapshotVersion;
 use common_fuse_meta::meta::TableSnapshot;
-use common_storages_util::cached_reader::CachedReader;
-use common_storages_util::cached_reader::HasTenantLabel;
-use common_storages_util::cached_reader::Loader;
+use common_storages_cache::CachedReader;
+use common_storages_cache::HasTenantLabel;
+use common_storages_cache::Loader;
 use opendal::BytesReader;
 use opendal::Operator;
 
