@@ -45,6 +45,23 @@ pub struct CopyStmt<'a> {
     pub force: bool,
 }
 
+impl<'a> CopyStmt<'a> {
+    pub fn apply_option(&mut self, opt: CopyOption) {
+        match opt {
+            CopyOption::Files(v) => self.files = v,
+            CopyOption::Pattern(v) => self.pattern = v,
+            CopyOption::FileFormat(v) => self.file_format = v,
+            CopyOption::ValidationMode(v) => self.validation_mode = v,
+            CopyOption::SizeLimit(v) => self.size_limit = v,
+            CopyOption::MaxFileSize(v) => self.max_file_size = v,
+            CopyOption::SplitSize(v) => self.split_size = v,
+            CopyOption::Single(v) => self.single = v,
+            CopyOption::Purge(v) => self.purge = v,
+            CopyOption::Force(v) => self.force = v,
+        }
+    }
+}
+
 impl Display for CopyStmt<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "COPY")?;
@@ -201,21 +218,4 @@ pub enum CopyOption {
     Single(bool),
     Purge(bool),
     Force(bool),
-}
-
-impl CopyOption {
-    pub fn apply(&self, stmt: &mut CopyStmt<'_>) {
-        match self {
-            CopyOption::Files(v) => stmt.files = v.clone(),
-            CopyOption::Pattern(v) => stmt.pattern = v.clone(),
-            CopyOption::FileFormat(v) => stmt.file_format = v.clone(),
-            CopyOption::ValidationMode(v) => stmt.validation_mode = v.clone(),
-            CopyOption::SizeLimit(v) => stmt.size_limit = *v,
-            CopyOption::MaxFileSize(v) => stmt.max_file_size = *v,
-            CopyOption::SplitSize(v) => stmt.split_size = *v,
-            CopyOption::Single(v) => stmt.single = *v,
-            CopyOption::Purge(v) => stmt.purge = *v,
-            CopyOption::Force(v) => stmt.force = *v,
-        }
-    }
 }

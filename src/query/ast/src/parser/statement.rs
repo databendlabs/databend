@@ -774,7 +774,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 force: Default::default(),
             };
             for opt in opts {
-                opt.apply(&mut copy_stmt);
+                copy_stmt.apply_option(opt);
             }
             Statement::Copy(copy_stmt)
         },
