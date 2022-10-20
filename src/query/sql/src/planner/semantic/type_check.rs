@@ -743,9 +743,14 @@ impl<'a> TypeChecker<'a> {
                             expr,
                             accessor:
                                 MapAccessor::Period { .. }
+                                | MapAccessor::PeriodNumber { .. }
                                 | MapAccessor::Colon { .. }
                                 | MapAccessor::Bracket {
-                                    key: box Expr::Literal { .. },
+                                    key:
+                                        box Expr::Literal {
+                                            lit: Literal::String(..),
+                                            ..
+                                        },
                                 },
                             ..
                         } => {
@@ -1818,6 +1823,7 @@ impl<'a> TypeChecker<'a> {
                 MapAccessor::Period { key } | MapAccessor::Colon { key } => {
                     Literal::String(key.name.clone())
                 }
+                MapAccessor::PeriodNumber { key } => Literal::Integer(key - 1),
                 _ => unreachable!(),
             };
 
