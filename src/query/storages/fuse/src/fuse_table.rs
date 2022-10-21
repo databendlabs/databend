@@ -420,7 +420,7 @@ impl Table for FuseTable {
         self.do_gc(&ctx, keep_last_snapshot).await
     }
 
-    async fn table_statistics(&self) -> Result<Option<TableStatistics>> {
+    fn table_statistics(&self) -> Result<Option<TableStatistics>> {
         let s = &self.table_info.meta.statistics;
         Ok(Some(TableStatistics {
             num_rows: Some(s.number_of_rows),

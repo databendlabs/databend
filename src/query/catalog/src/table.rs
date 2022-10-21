@@ -194,7 +194,7 @@ pub trait Table: Sync + Send {
         Ok(())
     }
 
-    async fn table_statistics(&self) -> Result<Option<TableStatistics>> {
+    fn table_statistics(&self) -> Result<Option<TableStatistics>> {
         Ok(None)
     }
 

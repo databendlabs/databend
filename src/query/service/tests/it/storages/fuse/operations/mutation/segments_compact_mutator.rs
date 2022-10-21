@@ -129,7 +129,7 @@ async fn test_compact_segment_resolvable_conflict() -> Result<()> {
 
     let latest = table.refresh(ctx.as_ref()).await?;
     let latest_fuse_table = FuseTable::try_from_table(latest.as_ref())?;
-    let table_statistics = latest_fuse_table.table_statistics().await?.unwrap();
+    let table_statistics = latest_fuse_table.table_statistics()?.unwrap();
 
     assert_eq!(table_statistics.num_rows.unwrap() as usize, num_inserts * 2);
 
