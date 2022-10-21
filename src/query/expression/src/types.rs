@@ -60,14 +60,14 @@ pub type GenericMap = [DataType];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, EnumAsInner)]
 pub enum DataType {
+    Null,
+    EmptyArray,
     Boolean,
     String,
     Number(NumberDataType),
     Timestamp,
     Date,
-    Null,
     Nullable(Box<DataType>),
-    EmptyArray,
     Array(Box<DataType>),
     Map(Box<DataType>),
     Tuple(Vec<DataType>),

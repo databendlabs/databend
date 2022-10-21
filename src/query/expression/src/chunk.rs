@@ -19,6 +19,7 @@ use common_arrow::ArrayRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::schema::DataSchema;
 use crate::serializations::BooleanSerializer;
 use crate::types::AnyType;
 use crate::types::DataType;
@@ -111,6 +112,22 @@ impl Chunk {
             columns,
             num_rows: self.num_rows,
         }
+    }
+
+    /// Convert the columns to fit the type required by schema. This is used to
+    /// restore the lost information (e.g. the scale of decimal) before persisting
+    /// the columns to storage.
+    pub fn fit_schema(&self, schema: DataSchema) -> Self {
+        debug_assert!(self.num_columns() == schema.fields().len());
+        debug_assert!(
+            self.columns
+                .iter()
+                .zip(schema.fields())
+                .all(|((_, ty), field)| { ty == &field.data_type().into() })
+        );
+
+        // Return chunk directly, because we don't support decimal yet.
+        self.clone()
     }
 
     pub fn slice(&self, range: Range<usize>) -> Self {

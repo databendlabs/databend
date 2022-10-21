@@ -29,6 +29,7 @@ use crate::ColumnBuilder;
 use crate::DataField;
 use crate::DataSchema;
 use crate::Scalar;
+use crate::SchemaDataType;
 use crate::Value;
 
 pub fn can_convert(datatype: &DataTypeImpl) -> bool {
@@ -38,24 +39,32 @@ pub fn can_convert(datatype: &DataTypeImpl) -> bool {
     )
 }
 
-pub fn from_type(datatype: &DataTypeImpl) -> DataType {
+pub fn from_type(datatype: &DataTypeImpl) -> SchemaDataType {
     with_number_type!(|TYPE| match datatype {
-        DataTypeImpl::TYPE(_) => DataType::Number(NumberDataType::TYPE),
+        DataTypeImpl::TYPE(_) => SchemaDataType::Number(NumberDataType::TYPE),
 
-        DataTypeImpl::Null(_) => DataType::Null,
-        DataTypeImpl::Nullable(v) => DataType::Nullable(Box::new(from_type(v.inner_type()))),
-        DataTypeImpl::Boolean(_) => DataType::Boolean,
-        DataTypeImpl::Timestamp(_) => DataType::Timestamp,
-        DataTypeImpl::Date(_) => DataType::Date,
-        DataTypeImpl::String(_) => DataType::String,
-        DataTypeImpl::Struct(ty) => {
-            let inners = ty.types().iter().map(from_type).collect();
-            DataType::Tuple(inners)
+        DataTypeImpl::Null(_) => SchemaDataType::Null,
+        DataTypeImpl::Nullable(v) => SchemaDataType::Nullable(Box::new(from_type(v.inner_type()))),
+        DataTypeImpl::Boolean(_) => SchemaDataType::Boolean,
+        DataTypeImpl::Timestamp(_) => SchemaDataType::Timestamp,
+        DataTypeImpl::Date(_) => SchemaDataType::Date,
+        DataTypeImpl::String(_) => SchemaDataType::String,
+        DataTypeImpl::Struct(fields) => {
+            let fields_name = fields.names().clone().unwrap_or_else(|| {
+                (0..fields.types().len())
+                    .map(|i| format!("{}", i + 1))
+                    .collect()
+            });
+            let fields_type = fields.types().iter().map(from_type).collect();
+            SchemaDataType::Tuple {
+                fields_name,
+                fields_type,
+            }
         }
-        DataTypeImpl::Array(ty) => DataType::Array(Box::new(from_type(ty.inner_type()))),
+        DataTypeImpl::Array(ty) => SchemaDataType::Array(Box::new(from_type(ty.inner_type()))),
         DataTypeImpl::Variant(_)
         | DataTypeImpl::VariantArray(_)
-        | DataTypeImpl::VariantObject(_) => DataType::Variant,
+        | DataTypeImpl::VariantObject(_) => SchemaDataType::Variant,
         DataTypeImpl::Interval(_) => unimplemented!(),
     })
 }
@@ -143,7 +152,7 @@ pub fn from_scalar(datavalue: &DataValue, datatype: &DataTypeImpl) -> Scalar {
             };
 
             let new_type = from_type(ty.inner_type());
-            let mut builder = ColumnBuilder::with_capacity(&new_type, values.len());
+            let mut builder = ColumnBuilder::with_capacity(&(&new_type).into(), values.len());
 
             for value in values.iter() {
                 let scalar = from_scalar(value, ty.inner_type());
@@ -173,7 +182,12 @@ pub fn from_block(datablock: &DataBlock) -> Chunk {
         .columns()
         .iter()
         .zip(datablock.schema().fields().iter())
-        .map(|(c, f)| (convert_column(c, f.data_type()), from_type(f.data_type())))
+        .map(|(c, f)| {
+            (
+                convert_column(c, f.data_type()),
+                (&from_type(f.data_type())).into(),
+            )
+        })
         .collect();
 
     Chunk::new(columns, datablock.num_rows())

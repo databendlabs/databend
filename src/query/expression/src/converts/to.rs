@@ -31,9 +31,10 @@ use crate::ColumnBuilder;
 use crate::DataField;
 use crate::DataSchema;
 use crate::Scalar;
+use crate::SchemaDataType;
 use crate::Value;
 
-pub fn to_type(datatype: &DataType) -> DataTypeImpl {
+pub fn to_type(datatype: &SchemaDataType) -> DataTypeImpl {
     let f = DataField::new("tmp", datatype.clone());
     let arrow_f: ArrowField = (&f).into();
     common_datavalues::from_arrow_field(&arrow_f)

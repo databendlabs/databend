@@ -49,6 +49,7 @@ use crate::values::Value;
 use crate::values::ValueRef;
 use crate::with_number_type;
 use crate::Column;
+use crate::SchemaDataType;
 
 const FLOAT_NUM_FRAC_DIGITS: u32 = 10;
 
@@ -360,21 +361,54 @@ impl Display for DataType {
             DataType::Array(inner) => write!(f, "Array({inner})"),
             DataType::Map(inner) => write!(f, "Map({inner})"),
             DataType::Tuple(tys) => {
-                if tys.len() == 1 {
-                    write!(f, "({},)", tys[0])
-                } else {
-                    write!(f, "(")?;
-                    for (i, ty) in tys.iter().enumerate() {
-                        if i > 0 {
-                            write!(f, ", ")?;
-                        }
-                        write!(f, "{ty}")?;
+                write!(f, "(")?;
+                for (i, ty) in tys.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
                     }
-                    write!(f, ")")
+                    write!(f, "{ty}")?;
                 }
+                if tys.len() == 1 {
+                    write!(f, ",")?;
+                }
+                write!(f, ")")
             }
             DataType::Variant => write!(f, "Variant"),
             DataType::Generic(index) => write!(f, "T{index}"),
+        }
+    }
+}
+
+impl Display for SchemaDataType {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        match &self {
+            SchemaDataType::Boolean => write!(f, "Boolean"),
+            SchemaDataType::String => write!(f, "String"),
+            SchemaDataType::Number(num) => write!(f, "{num}"),
+            SchemaDataType::Timestamp => write!(f, "Timestamp"),
+            SchemaDataType::Date => write!(f, "Date"),
+            SchemaDataType::Null => write!(f, "NULL"),
+            SchemaDataType::Nullable(inner) => write!(f, "{inner} NULL"),
+            SchemaDataType::EmptyArray => write!(f, "Array(Nothing)"),
+            SchemaDataType::Array(inner) => write!(f, "Array({inner})"),
+            SchemaDataType::Map(inner) => write!(f, "Map({inner})"),
+            SchemaDataType::Tuple {
+                fields_name,
+                fields_type,
+            } => {
+                write!(f, "(")?;
+                for (i, (name, ty)) in fields_name.iter().zip(fields_type).enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{name} {ty}")?;
+                }
+                if fields_name.len() == 1 {
+                    write!(f, ",")?;
+                }
+                write!(f, ")")
+            }
+            SchemaDataType::Variant => write!(f, "Variant"),
         }
     }
 }
