@@ -14,6 +14,7 @@
 
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_cache::Cache;
 use common_catalog::table_context::TableContext;
@@ -64,6 +65,7 @@ impl FuseTable {
         };
 
         // 2. Get all snapshot(including root snapshot).
+        let start = Instant::now();
         let mut all_snapshot_lites = vec![];
         let mut all_segment_locations = HashSet::new();
         if let Some(root_snapshot_location) = self.snapshot_loc().await? {
@@ -75,11 +77,21 @@ impl FuseTable {
             (all_snapshot_lites, all_segment_locations) = snapshots_io
                 .read_snapshot_lites(root_snapshot_location, None, true, root_snapshot_ts)
                 .await?;
+
+            // Log status.
+            let cost = start.elapsed().as_secs();
+            let status = format!(
+                "gc: all snapshots:{}, all segments:{}, take:{} sec",
+                all_snapshot_lites.len(),
+                all_segment_locations.len(),
+                cost
+            );
+            info!(status);
         }
 
         // 3. Find.
-        let mut snapshots_to_be_deleted = HashSet::new();
-        let mut segments_to_be_deleted = HashSet::new();
+        let mut snapshots_to_be_purged = HashSet::new();
+        let mut segments_to_be_purged = HashSet::new();
 
         // 3.1 Find all the snapshots need to be deleted.
         {
@@ -88,7 +100,7 @@ impl FuseTable {
                 if keep_last_snapshot && snapshot.snapshot_id == root_snapshot_id {
                     continue;
                 }
-                snapshots_to_be_deleted.insert((snapshot.snapshot_id, snapshot.format_version));
+                snapshots_to_be_purged.insert((snapshot.snapshot_id, snapshot.format_version));
             }
         }
 
@@ -99,18 +111,18 @@ impl FuseTable {
                 if keep_last_snapshot && segments_referenced_by_root.contains(segment) {
                     continue;
                 }
-                segments_to_be_deleted.insert(segment.clone());
+                segments_to_be_purged.insert(segment.clone());
             }
         }
 
         // 4. Purge segments&blocks by chunk size(max_storage_io_requests).
         {
-            let segments_to_be_delete_vec = Vec::from_iter(segments_to_be_deleted);
-            for (idx, chunk) in segments_to_be_delete_vec.chunks(chunk_size).enumerate() {
-                info!(
-                    "[Chunk: {}] start to purge blocks, chunk size:{}",
-                    idx, chunk_size
-                );
+            let mut status_purged_count = 0;
+            let status_need_purged_count = segments_to_be_purged.len();
+
+            let start = Instant::now();
+            let segments_to_be_purged_vec = Vec::from_iter(segments_to_be_purged);
+            for chunk in segments_to_be_purged_vec.chunks(chunk_size) {
                 self.try_purge_blocks(
                     ctx.clone(),
                     chunk,
@@ -118,21 +130,43 @@ impl FuseTable {
                     keep_last_snapshot,
                 )
                 .await?;
-                info!("[Chunk: {}] finish to purge blocks", idx);
+
+                // Refresh status.
+                {
+                    status_purged_count += chunk.len();
+                    let status = format!(
+                        "gc: segments need to be purged:{}, have purged:{}, take:{} sec",
+                        status_need_purged_count,
+                        status_purged_count,
+                        start.elapsed().as_secs()
+                    );
+                    self.data_metrics.set_status(&status);
+                    info!(status);
+                }
             }
         }
 
         // 5. Purge snapshots by chunk size(max_storage_io_requests).
         {
-            let snapshots_to_be_delete_vec = Vec::from_iter(snapshots_to_be_deleted);
-            for (idx, chunk) in snapshots_to_be_delete_vec.chunks(chunk_size).enumerate() {
-                info!(
-                    "[Chunk: {}] start to purge snapshot, chunk size:{}",
-                    idx,
-                    chunk.len()
-                );
+            let mut status_purged_count = 0;
+            let status_need_purged_count = snapshots_to_be_purged.len();
+
+            let snapshots_to_be_purged_vec = Vec::from_iter(snapshots_to_be_purged);
+            for chunk in snapshots_to_be_purged_vec.chunks(chunk_size) {
                 self.try_purge_snapshots(ctx.clone(), chunk).await?;
-                info!("[Chunk: {}] finish to purge snapshots", idx);
+
+                // Refresh status.
+                {
+                    status_purged_count += chunk.len();
+                    let status = format!(
+                        "gc: snapshots need to be purged:{}, have purged:{}, take:{} sec",
+                        status_need_purged_count,
+                        status_purged_count,
+                        start.elapsed().as_secs()
+                    );
+                    self.data_metrics.set_status(&status);
+                    info!(status);
+                }
             }
         }
 
@@ -142,11 +176,11 @@ impl FuseTable {
     async fn try_purge_snapshots(
         &self,
         ctx: Arc<dyn TableContext>,
-        snapshots_to_be_deleted: &[(SnapshotId, u64)],
+        snapshots_to_be_purged: &[(SnapshotId, u64)],
     ) -> Result<()> {
-        let mut locations = Vec::with_capacity(snapshots_to_be_deleted.len());
+        let mut locations = Vec::with_capacity(snapshots_to_be_purged.len());
         let location_gen = self.meta_location_generator();
-        for (id, ver) in snapshots_to_be_deleted.iter().rev() {
+        for (id, ver) in snapshots_to_be_purged.iter().rev() {
             let loc = location_gen.snapshot_location_from_uuid(id, *ver)?;
             locations.push(loc);
         }
@@ -162,15 +196,15 @@ impl FuseTable {
     async fn try_purge_blocks(
         &self,
         ctx: Arc<dyn TableContext>,
-        segments_to_be_deleted: &[Location],
+        segments_to_be_purged: &[Location],
         blocks_referenced_by_root: &HashSet<String>,
         keep_last_snapshot: bool,
     ) -> Result<()> {
         let segments_io = SegmentsIO::create(ctx.clone(), self.operator.clone());
-        let segments = segments_io.read_segments(segments_to_be_deleted).await?;
+        let segments = segments_io.read_segments(segments_to_be_purged).await?;
 
-        let mut blocks_need_to_delete = HashSet::new();
-        let mut blooms_need_to_delete = HashSet::new();
+        let mut blocks_need_to_be_purged = HashSet::new();
+        let mut blooms_need_to_be_purged = HashSet::new();
         for segment in segments {
             let segment = segment?;
 
@@ -180,11 +214,11 @@ impl FuseTable {
                 if keep_last_snapshot && blocks_referenced_by_root.contains(loc) {
                     continue;
                 }
-                blocks_need_to_delete.insert(loc.to_string());
+                blocks_need_to_be_purged.insert(loc.to_string());
 
                 // Bloom index file.
                 if let Some(bloom_index_location) = &block_meta.bloom_filter_index_location {
-                    blooms_need_to_delete.insert(bloom_index_location.0.to_string());
+                    blooms_need_to_be_purged.insert(bloom_index_location.0.to_string());
                 }
             }
         }
@@ -192,19 +226,19 @@ impl FuseTable {
         let fuse_file = Files::create(ctx.clone(), self.operator.clone());
         // Try to remove block files in parallel.
         {
-            let locations = Vec::from_iter(blocks_need_to_delete);
+            let locations = Vec::from_iter(blocks_need_to_be_purged);
             self.clean_cache(&locations);
-            info!("Prepare to purge block files, numbers:{}", locations.len());
+            info!("Prepare to purge block files, count:{}", locations.len());
             fuse_file.remove_file_in_batch(&locations).await?;
             info!("Finish to purge block files");
         }
 
         // Try to remove index files in parallel.
         {
-            let locations = Vec::from_iter(blooms_need_to_delete);
+            let locations = Vec::from_iter(blooms_need_to_be_purged);
             self.clean_cache(&locations);
             info!(
-                "Prepare to purge bloom index files, numbers:{}",
+                "Prepare to purge bloom index files, count:{}",
                 locations.len()
             );
             fuse_file.remove_file_in_batch(&locations).await?;
@@ -214,16 +248,13 @@ impl FuseTable {
         // Try to remove segment files in parallel.
         {
             let locations = Vec::from_iter(
-                segments_to_be_deleted
+                segments_to_be_purged
                     .iter()
                     .map(|x| x.0.clone())
                     .collect::<Vec<String>>(),
             );
             self.clean_cache(&locations);
-            info!(
-                "Prepare to purge segment files, numbers:{}",
-                locations.len()
-            );
+            info!("Prepare to purge segment files, count:{}", locations.len());
             fuse_file.remove_file_in_batch(&locations).await?;
             info!("Finish to purge segment files");
         }
