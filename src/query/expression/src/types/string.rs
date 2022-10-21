@@ -284,10 +284,18 @@ impl StringColumnBuilder {
     }
 
     pub fn append(&mut self, other: &Self) {
-        self.data.extend_from_slice(&other.data);
+        // the first offset of other column may not be zero
+        let other_start = *other.offsets.first().unwrap();
         let start = self.offsets.last().cloned().unwrap();
-        self.offsets
-            .extend(other.offsets.iter().skip(1).map(|offset| start + offset));
+        self.data
+            .extend_from_slice(&other.data[(other_start as usize)..]);
+        self.offsets.extend(
+            other
+                .offsets
+                .iter()
+                .skip(1)
+                .map(|offset| start + offset - other_start),
+        );
     }
 
     pub fn build(self) -> StringColumn {

@@ -151,3 +151,147 @@ output domain  : Unknown
 output         : NULL
 
 
+ast            : slice([], 1, 2)
+raw expr       : slice(array(), 1_u8, 2_u8)
+checked expr   : slice<Array(Nothing), UInt64, UInt64>(array<>(), CAST(1_u8 AS UInt64), CAST(2_u8 AS UInt64))
+optimized expr : [] :: Array(Nothing)
+output type    : Array(Nothing)
+output domain  : Unknown
+output         : []
+
+
+ast            : slice([1], 1, 2)
+raw expr       : slice(array(1_u8), 1_u8, 2_u8)
+checked expr   : slice<T0=UInt8><Array(T0), UInt64, UInt64>(array<T0=UInt8><T0>(1_u8), CAST(1_u8 AS UInt64), CAST(2_u8 AS UInt64))
+optimized expr : []
+output type    : Array(UInt8)
+output domain  : Unknown
+output         : []
+
+
+ast            : slice([NULL, 1, 2, 3], 0, 2)
+raw expr       : slice(array(NULL, 1_u8, 2_u8, 3_u8), 0_u8, 2_u8)
+checked expr   : slice<T0=UInt8 NULL><Array(T0), UInt64, UInt64>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(NULL AS UInt8 NULL), CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL)), CAST(0_u8 AS UInt64), CAST(2_u8 AS UInt64))
+optimized expr : [NULL, 1]
+output type    : Array(UInt8 NULL)
+output domain  : Unknown
+output         : [NULL, 1]
+
+
+ast            : slice([0, 1, 2, 3], 1, 2)
+raw expr       : slice(array(0_u8, 1_u8, 2_u8, 3_u8), 1_u8, 2_u8)
+checked expr   : slice<T0=UInt8><Array(T0), UInt64, UInt64>(array<T0=UInt8><T0, T0, T0, T0>(0_u8, 1_u8, 2_u8, 3_u8), CAST(1_u8 AS UInt64), CAST(2_u8 AS UInt64))
+optimized expr : [1]
+output type    : Array(UInt8)
+output domain  : Unknown
+output         : [1]
+
+
+ast            : slice(['a', 'b', 'c', 'd'], 0, 2)
+raw expr       : slice(array("a", "b", "c", "d"), 0_u8, 2_u8)
+checked expr   : slice<T0=String><Array(T0), UInt64, UInt64>(array<T0=String><T0, T0, T0, T0>("a", "b", "c", "d"), CAST(0_u8 AS UInt64), CAST(2_u8 AS UInt64))
+optimized expr : ["a", "b"]
+output type    : Array(String)
+output domain  : Unknown
+output         : ["a", "b"]
+
+
+ast            : slice(['a', 'b', 'c', 'd'], 2, 6)
+raw expr       : slice(array("a", "b", "c", "d"), 2_u8, 6_u8)
+checked expr   : slice<T0=String><Array(T0), UInt64, UInt64>(array<T0=String><T0, T0, T0, T0>("a", "b", "c", "d"), CAST(2_u8 AS UInt64), CAST(6_u8 AS UInt64))
+optimized expr : ["c", "d"]
+output type    : Array(String)
+output domain  : Unknown
+output         : ["c", "d"]
+
+
+ast            : remove_first([])
+raw expr       : remove_first(array())
+checked expr   : remove_first<Array(Nothing)>(array<>())
+optimized expr : [] :: Array(Nothing)
+output type    : Array(Nothing)
+output domain  : Unknown
+output         : []
+
+
+ast            : remove_first([1])
+raw expr       : remove_first(array(1_u8))
+checked expr   : remove_first<T0=UInt8><Array(T0)>(array<T0=UInt8><T0>(1_u8))
+optimized expr : []
+output type    : Array(UInt8)
+output domain  : Unknown
+output         : []
+
+
+ast            : remove_first([0, 1, 2, NULL])
+raw expr       : remove_first(array(0_u8, 1_u8, 2_u8, NULL))
+checked expr   : remove_first<T0=UInt8 NULL><Array(T0)>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(0_u8 AS UInt8 NULL), CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL)))
+optimized expr : [1, 2, NULL]
+output type    : Array(UInt8 NULL)
+output domain  : Unknown
+output         : [1, 2, NULL]
+
+
+ast            : remove_first([0, 1, 2, 3])
+raw expr       : remove_first(array(0_u8, 1_u8, 2_u8, 3_u8))
+checked expr   : remove_first<T0=UInt8><Array(T0)>(array<T0=UInt8><T0, T0, T0, T0>(0_u8, 1_u8, 2_u8, 3_u8))
+optimized expr : [1, 2, 3]
+output type    : Array(UInt8)
+output domain  : Unknown
+output         : [1, 2, 3]
+
+
+ast            : remove_first(['a', 'b', 'c', 'd'])
+raw expr       : remove_first(array("a", "b", "c", "d"))
+checked expr   : remove_first<T0=String><Array(T0)>(array<T0=String><T0, T0, T0, T0>("a", "b", "c", "d"))
+optimized expr : ["b", "c", "d"]
+output type    : Array(String)
+output domain  : Unknown
+output         : ["b", "c", "d"]
+
+
+ast            : remove_last([])
+raw expr       : remove_last(array())
+checked expr   : remove_last<Array(Nothing)>(array<>())
+optimized expr : [] :: Array(Nothing)
+output type    : Array(Nothing)
+output domain  : Unknown
+output         : []
+
+
+ast            : remove_last([1])
+raw expr       : remove_last(array(1_u8))
+checked expr   : remove_last<T0=UInt8><Array(T0)>(array<T0=UInt8><T0>(1_u8))
+optimized expr : []
+output type    : Array(UInt8)
+output domain  : Unknown
+output         : []
+
+
+ast            : remove_last([0, 1, 2, NULL])
+raw expr       : remove_last(array(0_u8, 1_u8, 2_u8, NULL))
+checked expr   : remove_last<T0=UInt8 NULL><Array(T0)>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(0_u8 AS UInt8 NULL), CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL)))
+optimized expr : [0, 1, 2]
+output type    : Array(UInt8 NULL)
+output domain  : Unknown
+output         : [0, 1, 2]
+
+
+ast            : remove_last([0, 1, 2, 3])
+raw expr       : remove_last(array(0_u8, 1_u8, 2_u8, 3_u8))
+checked expr   : remove_last<T0=UInt8><Array(T0)>(array<T0=UInt8><T0, T0, T0, T0>(0_u8, 1_u8, 2_u8, 3_u8))
+optimized expr : [0, 1, 2]
+output type    : Array(UInt8)
+output domain  : Unknown
+output         : [0, 1, 2]
+
+
+ast            : remove_last(['a', 'b', 'c', 'd'])
+raw expr       : remove_last(array("a", "b", "c", "d"))
+checked expr   : remove_last<T0=String><Array(T0)>(array<T0=String><T0, T0, T0, T0>("a", "b", "c", "d"))
+optimized expr : ["a", "b", "c"]
+output type    : Array(String)
+output domain  : Unknown
+output         : ["a", "b", "c"]
+
+
