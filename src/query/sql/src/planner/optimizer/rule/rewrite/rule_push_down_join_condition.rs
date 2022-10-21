@@ -76,26 +76,40 @@ impl Rule for RulePushDownJoinCondition {
 
         let mut left_push_down = vec![];
         let mut right_push_down = vec![];
-
-        // Other conditions in join can be directly pushed down here.
-        // Because we have classify them in binder.
+        let mut other_conditions = vec![];
+        let mut need_push_down = false;
         for predicate in join.other_conditions.iter() {
             let pred = JoinPredicate::new(predicate, &left_prop, &right_prop);
             match pred {
                 JoinPredicate::Left(_) => {
+                    need_push_down = true;
                     left_push_down.push(predicate.clone());
                 }
                 JoinPredicate::Right(_) => {
+                    need_push_down = true;
                     right_push_down.push(predicate.clone());
                 }
-                _ => unreachable!(),
+                _ => {
+                    other_conditions.push(predicate.clone());
+                }
             }
         }
 
+        if !need_push_down && other_conditions.is_empty() {
+            return Ok(());
+        }
         join.other_conditions.clear();
+        // If other_condition can't be pushed down, add them to non-equi conditions.
+        join.non_equi_conditions.extend(other_conditions.clone());
 
         let mut left_child = s_expr.child(0)?.clone();
         let mut right_child = s_expr.child(1)?.clone();
+
+        if !need_push_down && !other_conditions.is_empty() {
+            let result = SExpr::create_binary(join.into(), left_child, right_child);
+            state.add_result(result);
+            return Ok(());
+        }
 
         if !left_push_down.is_empty() {
             left_child = SExpr::create_unary(
