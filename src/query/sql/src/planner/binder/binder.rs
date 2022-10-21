@@ -93,6 +93,7 @@ impl<'a> Binder {
                     metadata: self.metadata.clone(),
                     bind_context: Box::new(bind_context),
                     rewrite_kind: None,
+                    ignore_result: query.ignore_result,
                 }
             }
 

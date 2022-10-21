@@ -37,6 +37,9 @@ pub struct Query<'a> {
     pub limit: Vec<Expr<'a>>,
     // `OFFSET` expr
     pub offset: Option<Expr<'a>>,
+
+    // If ignore the result (not output).
+    pub ignore_result: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]

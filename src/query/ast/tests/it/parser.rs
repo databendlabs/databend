@@ -393,7 +393,6 @@ fn test_query() {
     let mut mint = Mint::new("tests/it/testdata");
     let mut file = mint.new_goldenfile("query.txt").unwrap();
     let cases = &[
-        r#"select * from a limit 3 offset 4 format csv"#,
         r#"select * from customer inner join orders"#,
         r#"select * from customer cross join orders"#,
         r#"select * from customer inner join orders on a = b limit 1"#,

@@ -20,7 +20,7 @@ SELECT
     [ORDER BY {col_name | expr | col_alias | col_position} [ASC | DESC], [ NULLS { FIRST | LAST }]
     [LIMIT row_count]
     [OFFSET row_count]
-    [FORMAT format]
+    [IGNORE_RESULT]
     ]
 ```
 
@@ -254,13 +254,9 @@ SELECT number FROM numbers(5) ORDER BY number OFFSET 2;
 +--------+
 ```
 
-## FORMAT Clause
+## IGNORE_RESULT
 
-Format the output of the query result.
-
-Current supported format:
-
-- NULL: output nothing.
+Do not output the result set.
 
 ```sql
 SELECT number FROM numbers(2);
@@ -271,7 +267,7 @@ SELECT number FROM numbers(2);
 |      1 |
 +--------+
 
-mysql> SELECT number FROM numbers(2) FORMAT NULL;
+mysql> SELECT number FROM numbers(2) IGNORE_RESULT;
 -- Empty set
 ```
 

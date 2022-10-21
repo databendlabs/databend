@@ -1,9 +1,0 @@
-statement T
-SELECT FROM 1 FORMAT NULL;
-
-----
-
-statement T
-SELECT * FROM NUMBERS(1000) FORMAT NULL;
-
-----

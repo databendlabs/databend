@@ -986,7 +986,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     map(
         rule! {
-            #statement_body ~ (FORMAT ~ #ident_or_null)? ~ ";"? ~ &EOI
+            #statement_body ~ (FORMAT ~ #ident)? ~ ";"? ~ &EOI
         },
         |(stmt, opt_format, _, _)| StatementMsg {
             stmt,

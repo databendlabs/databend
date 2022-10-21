@@ -63,11 +63,6 @@ pub fn ident(i: Input) -> IResult<Identifier> {
     non_reserved_identifier(|token| token.is_reserved_ident(false))(i)
 }
 
-// Parse a ident or NULL to Identifier. Use for SELECT .. FORMAT [NULL | CSV | ... ]
-pub fn ident_or_null(i: Input) -> IResult<Identifier> {
-    non_reserved_identifier(|token| *token != TokenKind::NULL && token.is_reserved_ident(false))(i)
-}
-
 pub fn ident_after_as(i: Input) -> IResult<Identifier> {
     non_reserved_identifier(|token| token.is_reserved_ident(true))(i)
 }
