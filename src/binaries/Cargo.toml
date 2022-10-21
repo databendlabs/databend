@@ -49,10 +49,12 @@ databend-query = { path = "../query/service" }
 # Crates.io dependencies
 anyhow = { workspace = true }
 clap = { workspace = true }
+limits-rs = "0.1.0"
 openraft = { workspace = true }
 sentry = "0.27.0"
 serde = { workspace = true }
 serde_json = { workspace = true }
+sysinfo = "0.26.5"
 tokio-stream = "0.1.10"
 tonic = "0.8.1"
 tracing = "0.1.36"
