@@ -742,7 +742,7 @@ impl<'a> TypeChecker<'a> {
                         Expr::MapAccess {
                             expr,
                             accessor:
-                                MapAccessor::Period { .. }
+                                accessor @ (MapAccessor::Period { .. }
                                 | MapAccessor::PeriodNumber { .. }
                                 | MapAccessor::Colon { .. }
                                 | MapAccessor::Bracket {
@@ -751,7 +751,7 @@ impl<'a> TypeChecker<'a> {
                                             lit: Literal::String(..),
                                             ..
                                         },
-                                },
+                                }),
                             ..
                         } => {
                             exprs.push(expr.clone());
@@ -1811,7 +1811,7 @@ impl<'a> TypeChecker<'a> {
             let inner_names = match struct_type.names() {
                 Some(inner_names) => inner_names.clone(),
                 None => (0..inner_types.len())
-                    .map(|i| format!("{}", i))
+                    .map(|i| format!("{}", i + 1))
                     .collect::<Vec<_>>(),
             };
 
@@ -1859,7 +1859,7 @@ impl<'a> TypeChecker<'a> {
                     }
                     None => {
                         return Err(ErrorCode::SemanticError(format!(
-                            "tuple name `{}` is not exist",
+                            "tuple name `{}` does not exist",
                             name
                         )));
                     }
