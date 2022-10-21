@@ -2837,6 +2837,7 @@ dependencies = [
  "common-tracing",
  "env_logger",
  "futures",
+ "itertools",
  "maplit",
  "metrics",
  "once_cell",

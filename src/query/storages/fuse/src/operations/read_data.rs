@@ -134,22 +134,6 @@ impl FuseTable {
         })
     }
 
-    // Adjust the max io request.
-    fn adjust_max_io_requests(
-        ctx: Arc<dyn TableContext>,
-        plan: &ReadDataSourcePlan,
-    ) -> Result<usize> {
-        let parts_len = plan.parts.len();
-        let max_storage_io = ctx.get_settings().get_max_storage_io_requests()? as usize;
-        let max_io_requests = if parts_len > max_storage_io {
-            max_storage_io
-        } else {
-            parts_len
-        };
-
-        Ok(std::cmp::max(1, max_io_requests))
-    }
-
     #[inline]
     pub fn do_read_data(
         &self,
@@ -207,7 +191,7 @@ impl FuseTable {
         let prewhere_filter = self.build_prewhere_filter_executor(ctx.clone(), plan)?;
         let remain_reader = self.build_remain_reader(plan)?;
 
-        let max_io_requests = Self::adjust_max_io_requests(ctx.clone(), plan)?;
+        let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
         info!("read block data adjust max io requests:{}", max_io_requests);
 
         // Add source pipe.
