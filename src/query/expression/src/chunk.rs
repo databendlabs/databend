@@ -19,8 +19,10 @@ use common_arrow::ArrayRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::serializations::BooleanSerializer;
 use crate::types::AnyType;
 use crate::types::DataType;
+use crate::Column;
 use crate::ColumnBuilder;
 use crate::Domain;
 use crate::TypeSerializerImpl;
@@ -128,15 +130,27 @@ impl Chunk {
 
     #[inline]
     pub fn add_column(&mut self, column: Value<AnyType>, data_type: DataType) {
+        #[cfg(debug_assertions)]
+        if let Value::Column(col) = &column {
+            assert_eq!(self.num_rows, col.len());
+        }
         self.columns.push((column, data_type))
     }
 
     pub fn get_serializers(&self) -> Result<Vec<TypeSerializerImpl>, String> {
-        let mut serializers = Vec::with_capacity(self.num_columns());
-        for (column, data_type) in self.columns() {
-            let serializer = data_type.create_serializer(column)?;
-            serializers.push(serializer);
-        }
+        let serializers = self
+            .convert_to_full()
+            .columns
+            .iter()
+            .map(|(col, ty)| match (ty, col) {
+                (DataType::Boolean, Value::Column(Column::Boolean(col))) => {
+                    TypeSerializerImpl::Boolean(BooleanSerializer {
+                        values: col.clone(),
+                    })
+                }
+                _ => todo!(),
+            })
+            .collect();
         Ok(serializers)
     }
 }
