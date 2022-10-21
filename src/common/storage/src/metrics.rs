@@ -75,7 +75,13 @@ impl StorageMetrics {
             partitions_total: AtomicU64::new(
                 vs.iter().map(|v| v.as_ref().get_partitions_total()).sum(),
             ),
-            status: Default::default(),
+            // Get the last one status, mainly used for the single table operation.
+            status: RwLock::new(
+                vs.iter()
+                    .map(|v| v.as_ref().get_status())
+                    .collect::<Vec<String>>()
+                    .join("|"),
+            ),
         }
     }
 
