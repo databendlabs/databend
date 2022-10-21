@@ -124,6 +124,51 @@ output domain  : Undefined
 output         : "🍦 が美味しい"
 
 
+ast            : CAST((1,) AS VARIANT)
+raw expr       : CAST(tuple(1_u8) AS Variant)
+checked expr   : CAST(tuple<UInt8>(1_u8) AS Variant)
+optimized expr : 0x400000011000000120000002315001
+output type    : Variant
+output domain  : Undefined
+output         : {"1":1}
+
+
+ast            : CAST((1, 2) AS VARIANT)
+raw expr       : CAST(tuple(1_u8, 2_u8) AS Variant)
+checked expr   : CAST(tuple<UInt8, UInt8>(1_u8, 2_u8) AS Variant)
+optimized expr : 0x4000000210000001100000012000000220000002313250015002
+output type    : Variant
+output domain  : Undefined
+output         : {"1":1,"2":2}
+
+
+ast            : CAST((false, true) AS VARIANT)
+raw expr       : CAST(tuple(false, true) AS Variant)
+checked expr   : CAST(tuple<Boolean, Boolean>(false, true) AS Variant)
+optimized expr : 0x40000002100000011000000130000000400000003132
+output type    : Variant
+output domain  : Undefined
+output         : {"1":false,"2":true}
+
+
+ast            : CAST(('a',) AS VARIANT)
+raw expr       : CAST(tuple("a") AS Variant)
+checked expr   : CAST(tuple<String>("a") AS Variant)
+optimized expr : 0x4000000110000001100000013161
+output type    : Variant
+output domain  : Undefined
+output         : {"1":"a"}
+
+
+ast            : CAST((1, 2, (false, true, ('a',))) AS VARIANT)
+raw expr       : CAST(tuple(1_u8, 2_u8, tuple(false, true, tuple("a"))) AS Variant)
+checked expr   : CAST(tuple<UInt8, UInt8, (Boolean, Boolean, (String,))>(1_u8, 2_u8, tuple<Boolean, Boolean, (String,)>(false, true, tuple<String>("a"))) AS Variant)
+optimized expr : 0x4000000310000001100000011000000120000002200000025000002d313233500150024000000310000001100000011000000130000000400000005000000e3132334000000110000001100000013161
+output type    : Variant
+output domain  : Undefined
+output         : {"1":1,"2":2,"3":{"1":false,"2":true,"3":{"1":"a"}}}
+
+
 ast            : CAST(a AS VARIANT)
 raw expr       : CAST(ColumnRef(0)::String NULL AS Variant)
 checked expr   : CAST(ColumnRef(0) AS Variant)
