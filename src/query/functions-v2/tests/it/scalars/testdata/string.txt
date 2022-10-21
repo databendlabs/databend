@@ -1748,6 +1748,18 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------------------------------------------------------+
 
 
+error: 
+  --> SQL:1:1
+  |
+1 | concat_ws('', a, 2)
+  | ^^^^^^^^^^^^^^^^^^^ no overload satisfies `concat_ws(String, Boolean, UInt8)`
+
+has tried possible overloads:
+  concat_ws(String, String, String) :: String                      : unable to unify `Boolean` with `String`
+  concat_ws(String NULL, String NULL, String NULL) :: String NULL  : unable to unify `Boolean` with `String`
+
+
+
 ast            : bin(a)
 raw expr       : bin(ColumnRef(0)::Int8)
 checked expr   : bin<Int64>(CAST(ColumnRef(0) AS Int64))

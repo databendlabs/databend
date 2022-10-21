@@ -52,6 +52,43 @@ output domain  : {FALSE}
 output         : false
 
 
+error: 
+  --> SQL:1:6
+  |
+1 | true AND 1
+  |      ^^^ no overload satisfies `and(Boolean, UInt8)`
+
+has tried possible overloads:
+  and(Boolean, Boolean) :: Boolean                 : unable to unify `UInt8` with `Boolean`
+  and(Boolean NULL, Boolean NULL) :: Boolean NULL  : unable to unify `UInt8` with `Boolean`
+
+
+
+error: 
+  --> SQL:1:5
+  |
+1 | 'a' and 1
+  |     ^^^ no overload satisfies `and(String, UInt8)`
+
+has tried possible overloads:
+  and(Boolean, Boolean) :: Boolean                 : unable to unify `String` with `Boolean`
+  and(Boolean NULL, Boolean NULL) :: Boolean NULL  : unable to unify `String` with `Boolean`
+
+
+
+error: 
+  --> SQL:1:5
+  |
+1 | NOT NOT 'a'
+  |     ^^^ no overload satisfies `not(String)`
+
+has tried possible overloads:
+  not(NULL) :: NULL                  : unable to unify `String` with `NULL`
+  not(Boolean) :: Boolean            : unable to unify `String` with `Boolean`
+  not(Boolean NULL) :: Boolean NULL  : unable to unify `String` with `Boolean`
+
+
+
 ast            : (a < 1) AND (a < 1)
 raw expr       : and(lt(ColumnRef(0)::UInt8 NULL, 1_u8), lt(ColumnRef(0)::UInt8 NULL, 1_u8))
 checked expr   : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), CAST(1_u8 AS UInt8 NULL)), lt<UInt8 NULL, UInt8 NULL>(ColumnRef(0), CAST(1_u8 AS UInt8 NULL)))

@@ -397,6 +397,12 @@ fn test_concat(file: &mut impl Write) {
         DataType::Nullable(Box::new(DataType::String)),
         Column::from_data_with_validity(&["a", "b", "c", "d"], vec![true, true, false, true]),
     )]);
+
+    run_ast(file, "concat_ws('', a, 2)", &[(
+        "a",
+        DataType::Boolean,
+        Column::from_data(vec![false; 3]),
+    )]);
 }
 
 fn test_bin(file: &mut impl Write) {

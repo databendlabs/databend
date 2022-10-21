@@ -50,6 +50,10 @@ fn test_and(file: &mut impl Write) {
     run_ast(file, "false AND null", &[]);
     run_ast(file, "false AND true", &[]);
 
+    run_ast(file, "true AND 1", &[]);
+    run_ast(file, "'a' and 1", &[]);
+    run_ast(file, "NOT NOT 'a'", &[]);
+
     run_ast(file, "(a < 1) AND (a < 1)", one_null_column().as_slice()); // NULL(false)  AND NULL(false)
     run_ast(file, "(a > 1) AND (a < 1)", one_null_column().as_slice()); // NULL(false)  AND NULL(true)
     run_ast(file, "(a < 1) AND (a > 1)", one_null_column().as_slice()); // NULL(true)   AND NULL(false)

@@ -47,12 +47,12 @@ use crate::types::string::StringColumnBuilder;
 use crate::types::string::StringDomain;
 use crate::types::variant::JSONB_NULL;
 use crate::types::*;
-use crate::util::append_bitmap;
-use crate::util::bitmap_into_mut;
-use crate::util::buffer_into_mut;
-use crate::util::constant_bitmap;
-use crate::util::deserialize_arrow_array;
-use crate::util::serialize_arrow_array;
+use crate::utils::arrow::append_bitmap;
+use crate::utils::arrow::bitmap_into_mut;
+use crate::utils::arrow::buffer_into_mut;
+use crate::utils::arrow::constant_bitmap;
+use crate::utils::arrow::deserialize_arrow_array;
+use crate::utils::arrow::serialize_arrow_array;
 use crate::with_number_type;
 
 #[derive(Debug, Clone, EnumAsInner)]

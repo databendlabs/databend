@@ -23,13 +23,13 @@ use common_io::prelude::BufferReadExt;
 use common_io::prelude::BufferReader;
 
 use super::number::SimpleDomain;
+use crate::arrow::buffer_into_mut;
 use crate::display::display_date;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::GenericMap;
 use crate::types::ValueType;
-use crate::util::buffer_into_mut;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
