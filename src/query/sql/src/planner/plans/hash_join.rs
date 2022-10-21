@@ -30,7 +30,7 @@ use crate::plans::Scalar;
 pub struct PhysicalHashJoin {
     pub build_keys: Vec<Scalar>,
     pub probe_keys: Vec<Scalar>,
-    pub other_conditions: Vec<Scalar>,
+    pub non_equi_conditions: Vec<Scalar>,
     pub join_type: JoinType,
     pub marker_index: Option<IndexType>,
     pub from_correlated_subquery: bool,

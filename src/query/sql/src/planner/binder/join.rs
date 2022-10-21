@@ -37,6 +37,7 @@ use crate::planner::binder::scalar::ScalarBinder;
 use crate::planner::binder::Binder;
 use crate::planner::semantic::NameResolutionContext;
 use crate::plans::BoundColumnRef;
+use crate::plans::Filter;
 use crate::plans::JoinType;
 use crate::plans::LogicalInnerJoin;
 use crate::plans::Scalar;
@@ -122,6 +123,7 @@ impl<'a> Binder {
 
         let mut left_join_conditions: Vec<Scalar> = vec![];
         let mut right_join_conditions: Vec<Scalar> = vec![];
+        let mut non_equi_conditions: Vec<Scalar> = vec![];
         let mut other_conditions: Vec<Scalar> = vec![];
         let mut join_condition_resolver = JoinConditionResolver::new(
             self.ctx.clone(),
@@ -136,6 +138,7 @@ impl<'a> Binder {
             .resolve(
                 &mut left_join_conditions,
                 &mut right_join_conditions,
+                &mut non_equi_conditions,
                 &mut other_conditions,
                 &join.op,
             )
@@ -146,6 +149,7 @@ impl<'a> Binder {
                 JoinType::Inner,
                 left_join_conditions,
                 right_join_conditions,
+                non_equi_conditions,
                 other_conditions,
                 left_child,
                 right_child,
@@ -154,6 +158,7 @@ impl<'a> Binder {
                 JoinType::Left,
                 left_join_conditions,
                 right_join_conditions,
+                non_equi_conditions,
                 other_conditions,
                 left_child,
                 right_child,
@@ -162,6 +167,7 @@ impl<'a> Binder {
                 JoinType::Right,
                 left_join_conditions,
                 right_join_conditions,
+                non_equi_conditions,
                 other_conditions,
                 left_child,
                 right_child,
@@ -170,6 +176,7 @@ impl<'a> Binder {
                 JoinType::Full,
                 left_join_conditions,
                 right_join_conditions,
+                non_equi_conditions,
                 other_conditions,
                 left_child,
                 right_child,
@@ -178,6 +185,7 @@ impl<'a> Binder {
                 JoinType::Cross,
                 left_join_conditions,
                 right_join_conditions,
+                non_equi_conditions,
                 other_conditions,
                 left_child,
                 right_child,
@@ -188,6 +196,7 @@ impl<'a> Binder {
                     JoinType::LeftSemi,
                     left_join_conditions,
                     right_join_conditions,
+                    non_equi_conditions,
                     other_conditions,
                     left_child,
                     right_child,
@@ -199,6 +208,7 @@ impl<'a> Binder {
                     JoinType::RightSemi,
                     left_join_conditions,
                     right_join_conditions,
+                    non_equi_conditions,
                     other_conditions,
                     left_child,
                     right_child,
@@ -210,6 +220,7 @@ impl<'a> Binder {
                     JoinType::LeftAnti,
                     left_join_conditions,
                     right_join_conditions,
+                    non_equi_conditions,
                     other_conditions,
                     left_child,
                     right_child,
@@ -221,6 +232,7 @@ impl<'a> Binder {
                     JoinType::RightAnti,
                     left_join_conditions,
                     right_join_conditions,
+                    non_equi_conditions,
                     other_conditions,
                     left_child,
                     right_child,
@@ -236,6 +248,7 @@ impl<'a> Binder {
         join_type: JoinType,
         left_conditions: Vec<Scalar>,
         right_conditions: Vec<Scalar>,
+        non_equi_conditions: Vec<Scalar>,
         other_conditions: Vec<Scalar>,
         left_child: SExpr,
         right_child: SExpr,
@@ -250,16 +263,22 @@ impl<'a> Binder {
         let inner_join = LogicalInnerJoin {
             left_conditions,
             right_conditions,
-            other_conditions,
+            non_equi_conditions,
             join_type,
             marker_index: None,
             from_correlated_subquery: false,
         };
-        Ok(SExpr::create_binary(
-            inner_join.into(),
-            left_child,
-            right_child,
-        ))
+        let s_expr = SExpr::create_binary(inner_join.into(), left_child, right_child);
+        if other_conditions.is_empty() {
+            Ok(s_expr)
+        } else {
+            let filter = Filter {
+                predicates: other_conditions,
+                is_having: false,
+            }
+            .into();
+            Ok(SExpr::create_unary(filter, s_expr))
+        }
     }
 }
 
@@ -330,6 +349,7 @@ impl<'a> JoinConditionResolver<'a> {
         &mut self,
         left_join_conditions: &mut Vec<Scalar>,
         right_join_conditions: &mut Vec<Scalar>,
+        non_equi_conditions: &mut Vec<Scalar>,
         other_join_conditions: &mut Vec<Scalar>,
         join_op: &JoinOperator,
     ) -> Result<()> {
@@ -339,6 +359,7 @@ impl<'a> JoinConditionResolver<'a> {
                     cond,
                     left_join_conditions,
                     right_join_conditions,
+                    non_equi_conditions,
                     other_join_conditions,
                 )
                 .await?;
@@ -381,6 +402,7 @@ impl<'a> JoinConditionResolver<'a> {
         condition: &Expr<'a>,
         left_join_conditions: &mut Vec<Scalar>,
         right_join_conditions: &mut Vec<Scalar>,
+        non_equi_conditions: &mut Vec<Scalar>,
         other_join_conditions: &mut Vec<Scalar>,
     ) -> Result<()> {
         let mut scalar_binder = ScalarBinder::new(
@@ -398,6 +420,7 @@ impl<'a> JoinConditionResolver<'a> {
                 expr,
                 left_join_conditions,
                 right_join_conditions,
+                non_equi_conditions,
                 other_join_conditions,
             )
             .await?;
@@ -410,6 +433,7 @@ impl<'a> JoinConditionResolver<'a> {
         predicate: &Scalar,
         left_join_conditions: &mut Vec<Scalar>,
         right_join_conditions: &mut Vec<Scalar>,
+        non_equi_conditions: &mut Vec<Scalar>,
         other_join_conditions: &mut Vec<Scalar>,
     ) -> Result<()> {
         // Given two tables: t1(a, b), t2(a, b)
@@ -420,10 +444,22 @@ impl<'a> JoinConditionResolver<'a> {
         //     For example, `t1.a + t1.b = t2.a` is a valid one while `t1.a + t2.a = t2.b` isn't.
         //
         // Only equi-predicate can be exploited by common join algorithms(e.g. sort-merge join, hash join).
-        if let Some((left, right)) = split_equivalent_predicate(predicate) {
-            self.add_conditions(left, right, left_join_conditions, right_join_conditions)?;
+
+        let mut added = if let Some((left, right)) = split_equivalent_predicate(predicate) {
+            self.add_equi_conditions(
+                left,
+                right,
+                left_join_conditions,
+                right_join_conditions,
+            )?
         } else {
-            other_join_conditions.push(predicate.clone());
+            false
+        };
+        if !added {
+            added = self.add_other_conditions(predicate, other_join_conditions)?;
+            if !added {
+                non_equi_conditions.push(predicate.clone());
+            }
         }
         Ok(())
     }
@@ -484,7 +520,7 @@ impl<'a> JoinConditionResolver<'a> {
                 col_binding.visibility = Visibility::UnqualifiedWildcardInVisible;
             }
 
-            self.add_conditions(
+            self.add_equi_conditions(
                 left_scalar,
                 right_scalar,
                 left_join_conditions,
@@ -494,31 +530,16 @@ impl<'a> JoinConditionResolver<'a> {
         Ok(())
     }
 
-    fn add_conditions(
+    fn add_equi_conditions(
         &self,
         mut left: Scalar,
         mut right: Scalar,
         left_join_conditions: &mut Vec<Scalar>,
         right_join_conditions: &mut Vec<Scalar>,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let left_used_columns = left.used_columns();
         let right_used_columns = right.used_columns();
-        let left_columns: ColumnSet =
-            self.left_context
-                .all_column_bindings()
-                .iter()
-                .fold(ColumnSet::new(), |mut acc, v| {
-                    acc.insert(v.index);
-                    acc
-                });
-        let right_columns: ColumnSet =
-            self.right_context
-                .all_column_bindings()
-                .iter()
-                .fold(ColumnSet::new(), |mut acc, v| {
-                    acc.insert(v.index);
-                    acc
-                });
+        let (left_columns, right_columns) = self.left_right_columns()?;
 
         // Bump types of left conditions and right conditions
         let left_type = left.data_type();
@@ -536,13 +557,51 @@ impl<'a> JoinConditionResolver<'a> {
         {
             left_join_conditions.push(left);
             right_join_conditions.push(right);
+            return Ok(true);
         } else if left_used_columns.is_subset(&right_columns)
             && right_used_columns.is_subset(&left_columns)
         {
             left_join_conditions.push(right);
             right_join_conditions.push(left);
+            return Ok(true);
         }
-        Ok(())
+        Ok(false)
+    }
+
+    fn add_other_conditions(
+        &self,
+        predicate: &Scalar,
+        other_join_conditions: &mut Vec<Scalar>,
+    ) -> Result<bool> {
+        let predicate_used_columns = predicate.used_columns();
+        let (left_columns, right_columns) = self.left_right_columns()?;
+        if !predicate_used_columns.is_subset(&left_columns)
+            || !predicate_used_columns.is_subset(&right_columns)
+        {
+            other_join_conditions.push(predicate.clone());
+            return Ok(true);
+        }
+        Ok(false)
+    }
+
+    fn left_right_columns(&self) -> Result<(ColumnSet, ColumnSet)> {
+        let left_columns: ColumnSet =
+            self.left_context
+                .all_column_bindings()
+                .iter()
+                .fold(ColumnSet::new(), |mut acc, v| {
+                    acc.insert(v.index);
+                    acc
+                });
+        let right_columns: ColumnSet =
+            self.right_context
+                .all_column_bindings()
+                .iter()
+                .fold(ColumnSet::new(), |mut acc, v| {
+                    acc.insert(v.index);
+                    acc
+                });
+        Ok((left_columns, right_columns))
     }
 
     fn find_using_columns(&self, using_columns: &mut Vec<String>) -> Result<()> {

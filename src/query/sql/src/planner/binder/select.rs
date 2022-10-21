@@ -440,6 +440,7 @@ impl<'a> Binder {
             left_conditions,
             right_conditions,
             vec![],
+            vec![],
             left_expr,
             right_expr,
         )?;

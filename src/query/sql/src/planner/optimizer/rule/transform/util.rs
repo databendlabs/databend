@@ -38,6 +38,6 @@ pub fn get_join_predicates(join: &LogicalInnerJoin) -> Result<Vec<Scalar>> {
         })
         .collect::<Result<Vec<_>>>()?
         .into_iter()
-        .chain(join.other_conditions.clone().into_iter())
+        .chain(join.non_equi_conditions.clone().into_iter())
         .collect())
 }
