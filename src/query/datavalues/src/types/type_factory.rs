@@ -105,7 +105,7 @@ impl TypeFactory {
             while index <= bytes.len() {
                 if index == bytes.len() || bytes[index] == b',' {
                     if start1 != start2 {
-                        inner_names.push(names[start1..start2].to_string());
+                        inner_names.push(names[start1..start2 - 1].to_string());
                     }
                     inner_data_types.push(self.get(&names[start2..index])?);
                 } else if bytes[index] == b'(' {
@@ -132,7 +132,7 @@ impl TypeFactory {
                             || names[index - 5..index].to_lowercase() == "array")
                     {
                         if start1 != start2 {
-                            inner_names.push(names[start1..start2].to_string());
+                            inner_names.push(names[start1..start2 - 1].to_string());
                         }
                         inner_data_types.push(self.get(&names[index - 5..sub_index + 1])?);
                     } else {
