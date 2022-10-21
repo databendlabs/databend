@@ -382,7 +382,7 @@ pub struct OptimizeTableStmt<'a> {
     pub catalog: Option<Identifier<'a>>,
     pub database: Option<Identifier<'a>>,
     pub table: Identifier<'a>,
-    pub action: Option<OptimizeTableAction>,
+    pub action: Option<OptimizeTableAction<'a>>,
 }
 
 impl Display for OptimizeTableStmt<'_> {
@@ -444,32 +444,41 @@ impl Display for Engine {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CompactTarget {
     Block,
     Segment,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum OptimizeTableAction {
+#[derive(Debug, Clone, PartialEq)]
+pub enum OptimizeTableAction<'a> {
     All,
     Purge,
-    Compact(CompactTarget),
+    Compact {
+        target: CompactTarget,
+        limit: Option<Expr<'a>>,
+    },
 }
 
-impl Display for OptimizeTableAction {
+impl<'a> Display for OptimizeTableAction<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             OptimizeTableAction::All => write!(f, "ALL"),
             OptimizeTableAction::Purge => write!(f, "PURGE"),
-            OptimizeTableAction::Compact(action) => match action {
-                CompactTarget::Block => {
-                    write!(f, "COMPACT BLOCK")
+            OptimizeTableAction::Compact { target, limit } => {
+                match target {
+                    CompactTarget::Block => {
+                        write!(f, "COMPACT BLOCK")?;
+                    }
+                    CompactTarget::Segment => {
+                        write!(f, "COMPACT SEGMENT")?;
+                    }
                 }
-                CompactTarget::Segment => {
-                    write!(f, "COMPACT SEGMENT")
+                if let Some(limit) = limit {
+                    write!(f, " LIMIT {limit}")?;
                 }
-            },
+                Ok(())
+            }
         }
     }
 }

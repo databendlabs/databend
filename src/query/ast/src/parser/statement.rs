@@ -1344,13 +1344,12 @@ pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
     alt((
         value(OptimizeTableAction::All, rule! { ALL }),
         value(OptimizeTableAction::Purge, rule! { PURGE }),
-        value(
-            OptimizeTableAction::Compact(CompactTarget::Segment),
-            rule! { COMPACT ~ SEGMENT},
-        ),
-        value(
-            OptimizeTableAction::Compact(CompactTarget::Block),
-            rule! { COMPACT},
+        map(
+            rule! { COMPACT ~ (SEGMENT)? ~ ( LIMIT ~ ^#expr )?},
+            |(_, opt_segment, opt_limit)| OptimizeTableAction::Compact {
+                target: opt_segment.map_or(CompactTarget::Block, |_| CompactTarget::Segment),
+                limit: opt_limit.map(|(_, limit)| limit),
+            },
         ),
     ))(i)
 }

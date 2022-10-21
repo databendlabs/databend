@@ -778,14 +778,16 @@ impl<'a> Binder {
             .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
         let table = normalize_identifier(table, &self.name_resolution_ctx).name;
-        let action = action.map_or(OptimizeTableAction::Purge, |v| match v {
-            AstOptimizeTableAction::All => OptimizeTableAction::All,
-            AstOptimizeTableAction::Purge => OptimizeTableAction::Purge,
-            AstOptimizeTableAction::Compact(target) => match target {
-                CompactTarget::Block => OptimizeTableAction::CompactBlocks,
-                CompactTarget::Segment => OptimizeTableAction::CompactSegments,
-            },
-        });
+        let action = action
+            .clone()
+            .map_or(OptimizeTableAction::Purge, |v| match v {
+                AstOptimizeTableAction::All => OptimizeTableAction::All,
+                AstOptimizeTableAction::Purge => OptimizeTableAction::Purge,
+                AstOptimizeTableAction::Compact { target, .. } => match target {
+                    CompactTarget::Block => OptimizeTableAction::CompactBlocks,
+                    CompactTarget::Segment => OptimizeTableAction::CompactSegments,
+                },
+            });
 
         Ok(Plan::OptimizeTable(Box::new(OptimizeTablePlan {
             catalog,
