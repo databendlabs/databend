@@ -239,20 +239,21 @@ impl Session {
         object: &GrantObject,
         privilege: UserPrivilegeType,
     ) -> Result<()> {
+        // 1. check user's privilege set
         let current_user = self.get_current_user()?;
         let user_verified = current_user.grants.verify_privilege(object, privilege);
         if user_verified {
             return Ok(());
         }
 
-        // TODO: take current role instead of all roles
-        let all_roles = self.get_all_available_roles()?;
+        // 2. check the current role's privilege set
+        let current_role = self.get_current_role();
         let tenant = self.get_current_tenant();
         let role_verified = RoleCacheManager::instance()
-            .find_related_roles(&tenant, &all_roles)
+            .find_role(&tenant, &current_role)
             .await?
-            .iter()
-            .any(|r| r.grants.verify_privilege(object, privilege));
+            .map(|r| r.grants.verify_privilege(object, privilege))
+            .unwrap_or(false);
         if role_verified {
             return Ok(());
         }

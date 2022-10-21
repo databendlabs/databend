@@ -107,6 +107,15 @@ impl RoleCacheManager {
         cached.remove(tenant);
     }
 
+    pub async fn find_role(&self, tenant: &str, role: &String) -> Result<Option<RoleInfo>> {
+        let cached = self.cache.read();
+        let cached_roles = match cached.get(tenant) {
+            None => return Ok(None),
+            Some(cached_roles) => cached_roles,
+        };
+        Ok(cached_roles.roles.get(&role).cloned())
+    }
+
     // find_related_roles is called on validating an user's privileges.
     pub async fn find_related_roles(
         &self,
