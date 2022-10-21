@@ -75,7 +75,7 @@ select arr[3][0] from t2;
 "a"
 
 statement query T
-select arr[4]["k"] from t2;
+select arr[4]['k'] from t2;
 
 ----
 "v"

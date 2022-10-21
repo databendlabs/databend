@@ -1818,7 +1818,11 @@ impl<'a> TypeChecker<'a> {
             let accessor = accessores.pop().unwrap();
             let accessor_lit = match accessor {
                 MapAccessor::Bracket {
-                    key: box Expr::Literal { lit, .. },
+                    key:
+                        box Expr::Literal {
+                            lit: lit @ Literal::String(_),
+                            ..
+                        },
                 } => lit,
                 MapAccessor::Period { key } | MapAccessor::Colon { key } => {
                     Literal::String(key.name.clone())
