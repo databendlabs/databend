@@ -113,7 +113,7 @@ impl RoleCacheManager {
             None => return Ok(None),
             Some(cached_roles) => cached_roles,
         };
-        Ok(cached_roles.roles.get(&role).cloned())
+        Ok(cached_roles.roles.get(role).cloned())
     }
 
     // find_related_roles is called on validating an user's privileges.

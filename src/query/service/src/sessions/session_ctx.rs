@@ -20,7 +20,7 @@ use std::sync::Weak;
 
 use common_config::Config;
 use common_exception::Result;
-use common_meta_types::{RoleInfo, UserInfo};
+use common_meta_types::UserInfo;
 use common_settings::Settings;
 use futures::channel::oneshot::Sender;
 use parking_lot::RwLock;
