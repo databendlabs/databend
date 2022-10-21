@@ -99,7 +99,7 @@ where TablesTable<T>: HistoryAware
         let mut index_size: Vec<Option<u64>> = Vec::new();
 
         for (_, tbl) in &database_tables {
-            let stats = tbl.table_statistics(ctx.clone()).await?;
+            let stats = tbl.table_statistics().await?;
             num_rows.push(stats.as_ref().and_then(|v| v.num_rows));
             data_size.push(stats.as_ref().and_then(|v| v.data_size));
             data_compressed_size.push(stats.as_ref().and_then(|v| v.data_size_compressed));

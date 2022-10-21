@@ -15,25 +15,16 @@
 use std::sync::Arc;
 
 use common_cache::Cache;
-use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_fuse_meta::caches::CacheDeferMetrics;
-use common_fuse_meta::caches::CacheManager;
 use common_fuse_meta::caches::ItemCache;
 use common_fuse_meta::caches::TenantLabel;
-use opendal::Operator;
 
 /// Loads an object from a source
 #[async_trait::async_trait]
 pub trait Loader<T> {
     /// Loads object of type T, located at `location`
-    async fn load(
-        &self,
-        op: Operator,
-        location: &str,
-        len_hint: Option<u64>,
-        ver: u64,
-    ) -> Result<T>;
+    async fn load(&self, location: &str, len_hint: Option<u64>, ver: u64) -> Result<T>;
 }
 
 pub trait HasTenantLabel {
@@ -43,23 +34,16 @@ pub trait HasTenantLabel {
 /// A "cache-aware" reader
 pub struct CachedReader<T, L> {
     cache: Option<ItemCache<T>>,
-    loader: L,
     name: String,
-    dal: Operator,
+    dal: L,
 }
 
 impl<T, L> CachedReader<T, L>
-where L: Loader<T> + HasTenantLabel
+where L: Loader<T>
 {
-    pub fn new(
-        cache: Option<ItemCache<T>>,
-        loader: L,
-        name: impl Into<String>,
-        dal: Operator,
-    ) -> Self {
+    pub fn new(cache: Option<ItemCache<T>>, name: impl Into<String>, dal: L) -> Self {
         Self {
             cache,
-            loader,
             name: name.into(),
             dal,
         }
@@ -75,7 +59,12 @@ where L: Loader<T> + HasTenantLabel
         match &self.cache {
             None => self.load(path.as_ref(), len_hint, version).await,
             Some(cache) => {
-                let tenant_label = self.loader.tenant_label();
+                // let tenant_label = self.loader.tenant_label();
+                // TODO
+                let tenant_label = TenantLabel {
+                    tenant_id: "".to_string(),
+                    cluster_id: "".to_string(),
+                };
 
                 // in PR #3798, the cache is degenerated to metered by count of cached item,
                 // later, when the size of BlockMeta could be acquired (needs some enhancements of crate `parquet2`)
@@ -114,27 +103,8 @@ where L: Loader<T> + HasTenantLabel
     }
 
     async fn load(&self, loc: &str, len_hint: Option<u64>, version: u64) -> Result<Arc<T>> {
-        let val = self
-            .loader
-            .load(self.dal.clone(), loc, len_hint, version)
-            .await?;
+        let val = self.dal.load(loc, len_hint, version).await?;
         let item = Arc::new(val);
         Ok(item)
-    }
-}
-
-impl HasTenantLabel for &dyn TableContext {
-    fn tenant_label(&self) -> TenantLabel {
-        let storage_cache_manager = CacheManager::instance();
-        TenantLabel {
-            tenant_id: storage_cache_manager.get_tenant_id().to_owned(),
-            cluster_id: storage_cache_manager.get_cluster_id().to_owned(),
-        }
-    }
-}
-
-impl HasTenantLabel for Arc<dyn TableContext> {
-    fn tenant_label(&self) -> TenantLabel {
-        self.as_ref().tenant_label()
     }
 }

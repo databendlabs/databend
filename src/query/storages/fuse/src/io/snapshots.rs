@@ -54,12 +54,11 @@ impl SnapshotsIO {
     }
 
     async fn read_snapshot(
-        ctx: Arc<dyn TableContext>,
         snapshot_location: String,
         format_version: u64,
         data_accessor: Operator,
     ) -> Result<Arc<TableSnapshot>> {
-        let reader = MetaReaders::table_snapshot_reader(ctx.clone(), data_accessor);
+        let reader = MetaReaders::table_snapshot_reader(data_accessor);
         reader.read(snapshot_location, None, format_version).await
     }
 
@@ -73,19 +72,13 @@ impl SnapshotsIO {
         let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
 
         // 1.1 combine all the tasks.
-        let ctx_clone = self.ctx.clone();
         let mut iter = snapshot_files.iter();
         let tasks = std::iter::from_fn(move || {
             if let Some(location) = iter.next() {
                 let location = location.clone();
                 Some(
-                    Self::read_snapshot(
-                        ctx_clone.clone(),
-                        location,
-                        self.format_version,
-                        self.operator.clone(),
-                    )
-                    .instrument(tracing::debug_span!("read_snapshot")),
+                    Self::read_snapshot(location, self.format_version, self.operator.clone())
+                        .instrument(tracing::debug_span!("read_snapshot")),
                 )
             } else {
                 None
@@ -159,7 +152,6 @@ impl SnapshotsIO {
         {
             // 1 Get the root snapshot.
             let root_snapshot = Self::read_snapshot(
-                ctx.clone(),
                 root_snapshot_file.clone(),
                 self.format_version,
                 data_accessor.clone(),

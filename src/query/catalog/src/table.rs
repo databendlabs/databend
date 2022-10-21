@@ -194,29 +194,16 @@ pub trait Table: Sync + Send {
         Ok(())
     }
 
-    async fn table_statistics(
-        &self,
-        ctx: Arc<dyn TableContext>,
-    ) -> Result<Option<TableStatistics>> {
-        let _ = ctx;
-
+    async fn table_statistics(&self) -> Result<Option<TableStatistics>> {
         Ok(None)
     }
 
-    async fn column_statistics_provider(
-        &self,
-        ctx: Arc<dyn TableContext>,
-    ) -> Result<Box<dyn ColumnStatisticsProvider>> {
-        let _ = ctx;
+    async fn column_statistics_provider(&self) -> Result<Box<dyn ColumnStatisticsProvider>> {
         Ok(Box::new(DummyColumnStatisticsProvider))
     }
 
-    async fn navigate_to(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        instant: &NavigationPoint,
-    ) -> Result<Arc<dyn Table>> {
-        let (_, _) = (ctx, instant);
+    async fn navigate_to(&self, instant: &NavigationPoint) -> Result<Arc<dyn Table>> {
+        let _ = instant;
 
         Err(ErrorCode::UnImplement(format!(
             "table {},  of engine type {}, does not support time travel",

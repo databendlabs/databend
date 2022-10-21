@@ -306,7 +306,7 @@ impl<'a> Binder {
             };
             bind_context.add_column_binding(column_binding);
         }
-        let stat = table.table().table_statistics(self.ctx.clone()).await?;
+        let stat = table.table().table_statistics().await?;
         Ok((
             SExpr::create_leaf(
                 LogicalGet {
@@ -337,7 +337,7 @@ impl<'a> Binder {
         let mut table_meta = catalog.get_table(tenant, database_name, table_name).await?;
 
         if let Some(tp) = travel_point {
-            table_meta = table_meta.navigate_to(self.ctx.clone(), tp).await?;
+            table_meta = table_meta.navigate_to(tp).await?;
         }
         Ok(table_meta)
     }
