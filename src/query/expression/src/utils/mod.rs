@@ -18,8 +18,6 @@ mod column_from;
 pub mod date_helper;
 pub mod display;
 
-pub type Result<T> = std::result::Result<T, (crate::Span, String)>;
-
 use chrono_tz::Tz;
 use common_arrow::arrow::bitmap::Bitmap;
 
@@ -31,6 +29,7 @@ use crate::Column;
 use crate::Evaluator;
 use crate::FunctionRegistry;
 use crate::RawExpr;
+use crate::Result;
 use crate::Span;
 use crate::Value;
 

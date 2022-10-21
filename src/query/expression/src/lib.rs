@@ -28,6 +28,7 @@
 #![feature(core_intrinsics)]
 #![feature(iter_order_by)]
 
+pub type Result<T> = std::result::Result<T, (crate::Span, String)>;
 #[allow(dead_code)]
 mod chunk;
 
@@ -50,5 +51,4 @@ pub use crate::function::*;
 pub use crate::kernels::*;
 pub use crate::property::*;
 pub use crate::register::*;
-pub use crate::utils::*;
 pub use crate::values::*;
