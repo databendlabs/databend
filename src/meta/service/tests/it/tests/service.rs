@@ -48,8 +48,10 @@ pub async fn start_metasrv() -> Result<(MetaSrvTestContext, String)> {
 
 pub async fn start_metasrv_with_context(tc: &mut MetaSrvTestContext) -> Result<()> {
     let mn = MetaNode::start(&tc.config).await?;
-    mn.join_cluster(&tc.config.raft_config, tc.config.grpc_api_address.clone())
+    let _ = mn
+        .join_cluster(&tc.config.raft_config, tc.config.grpc_api_address.clone())
         .await?;
+
     let mut srv = GrpcServer::create(tc.config.clone(), mn);
     srv.start().await?;
     tc.grpc_srv = Some(Box::new(srv));

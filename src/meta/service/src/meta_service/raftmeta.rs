@@ -33,6 +33,8 @@ use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_sled_store::openraft;
 use common_meta_sled_store::openraft::error::AddLearnerError;
 use common_meta_sled_store::openraft::DefensiveCheck;
+use common_meta_sled_store::openraft::RaftStorage;
+use common_meta_sled_store::openraft::StorageError;
 use common_meta_sled_store::openraft::StoreExt;
 use common_meta_sled_store::SledKeySpace;
 use common_meta_stoerr::MetaStorageError;
@@ -59,6 +61,7 @@ use common_meta_types::MetaOperationError;
 use common_meta_types::MetaStartupError;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
+use itertools::Itertools;
 use openraft::Config;
 use openraft::LogId;
 use openraft::Raft;
@@ -508,6 +511,7 @@ impl MetaNode {
             return Ok(false);
         };
 
+        let mut errors = vec![];
         let addrs = &conf.leave_via;
         info!("node-{} about to leave cluster via {:?}", leave_id, addrs);
 
@@ -518,10 +522,14 @@ impl MetaNode {
             let conn_res = RaftServiceClient::connect(format!("http://{}", addr)).await;
             let mut raft_client = match conn_res {
                 Ok(c) => c,
-                Err(err) => {
+                Err(e) => {
                     error!(
                         "fail connecting to {} while leaving cluster, err: {:?}",
-                        addr, err
+                        addr, e
+                    );
+                    errors.push(
+                        AnyError::new(&e)
+                            .add_context(|| format!("leave {} via: {}", leave_id, addr.clone())),
                     );
                     continue;
                 }
@@ -546,12 +554,18 @@ impl MetaNode {
                 }
                 Err(s) => {
                     error!("leaving cluster via {} fail: {:?}", addr, s);
+                    errors.push(
+                        AnyError::new(&s)
+                            .add_context(|| format!("leave {} via: {}", leave_id, addr.clone())),
+                    );
                 }
             };
         }
         Err(MetaManagementError::Leave(AnyError::error(format!(
-            "fail to leave {} cluster via {:?}",
-            leave_id, addrs
+            "fail to leave {} cluster via {:?}, caused by errors: {}",
+            leave_id,
+            addrs,
+            errors.into_iter().map(|e| e.to_string()).join(", ")
         ))))
     }
 
@@ -561,19 +575,25 @@ impl MetaNode {
         &self,
         conf: &RaftConfig,
         grpc_api_addr: String,
-    ) -> Result<(), MetaManagementError> {
+    ) -> Result<Result<(), &'static str>, MetaManagementError> {
         if conf.join.is_empty() {
             info!("'--join' is empty, do not need joining cluster");
-            return Ok(());
+            return Ok(Err("Did not join: --join is empty"));
         }
 
-        // Try to join a cluster only when this node is just created.
+        // Try to join a cluster only when this node has no log.
         // Joining a node with log has risk messing up the data in this node and in the target cluster.
-        if self.is_opened() {
-            info!("meta node is already initialized, skip joining it to a cluster");
-            return Ok(());
+        let to_join = self
+            .can_join()
+            .await
+            .map_err(|e| MetaManagementError::Join(AnyError::new(&e)))?;
+
+        if !to_join {
+            info!("meta node has log, skip joining");
+            return Ok(Err("Did not join: node already has log"));
         }
 
+        let mut errors = vec![];
         let addrs = &conf.join;
 
         // Joining cluster has to use advertise host instead of listen host.
@@ -596,6 +616,9 @@ impl MetaNode {
                 Ok(c) => c,
                 Err(e) => {
                     error!("connect to {} join cluster fail: {:?}", addr, e);
+                    errors.push(
+                        AnyError::new(&e).add_context(|| format!("join via: {}", addr.clone())),
+                    );
                     continue;
                 }
             };
@@ -616,22 +639,43 @@ impl MetaNode {
             match join_res {
                 Ok(r) => {
                     let reply = r.into_inner();
-                    if !reply.data.is_empty() {
-                        info!("join cluster via {} success: {:?}", addr, reply.data);
-                        return Ok(());
-                    } else {
-                        error!("join cluster via {} fail: {:?}", addr, reply.error);
+
+                    let res: Result<ForwardResponse, MetaAPIError> = reply.into();
+                    match res {
+                        Ok(v) => {
+                            info!("join cluster via {} success: {:?}", addr, v);
+                            return Ok(Ok(()));
+                        }
+                        Err(e) => {
+                            error!("join cluster via {} fail: {}", addr, e.to_string());
+                            errors.push(
+                                AnyError::new(&e)
+                                    .add_context(|| format!("join via: {}", addr.clone())),
+                            );
+                        }
                     }
                 }
                 Err(s) => {
                     error!("join cluster via {} fail: {:?}", addr, s);
+                    errors.push(
+                        AnyError::new(&s).add_context(|| format!("join via: {}", addr.clone())),
+                    );
                 }
             };
         }
         Err(MetaManagementError::Join(AnyError::error(format!(
-            "fail to join {} cluster via {:?}",
-            self.sto.id, addrs
+            "fail to join {} cluster via {:?}, caused by errors: {}",
+            self.sto.id,
+            addrs,
+            errors.into_iter().map(|e| e.to_string()).join(", ")
         ))))
+    }
+
+    /// Check meta-node state to see if it's appropriate to join to a cluster.
+    async fn can_join(&self) -> Result<bool, StorageError> {
+        let l = self.sto.get_log_state().await?;
+        info!("check can_join: log_state: {:?}", l);
+        Ok(l.last_log_id.is_none())
     }
 
     async fn do_start(conf: &MetaConfig) -> Result<Arc<MetaNode>, MetaStartupError> {
