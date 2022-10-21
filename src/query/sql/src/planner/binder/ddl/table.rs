@@ -39,16 +39,15 @@ use common_datavalues::Int32Type;
 use common_datavalues::Int64Type;
 use common_datavalues::Int8Type;
 use common_datavalues::NullableType;
-use common_datavalues::ObjectType;
 use common_datavalues::StringType;
 use common_datavalues::StructType;
 use common_datavalues::TimestampType;
 use common_datavalues::ToDataType;
-use common_datavalues::TypeFactory;
 use common_datavalues::UInt16Type;
 use common_datavalues::UInt32Type;
 use common_datavalues::UInt64Type;
 use common_datavalues::UInt8Type;
+use common_datavalues::VariantObjectType;
 use common_datavalues::VariantType;
 use common_datavalues::Vu8;
 use common_exception::ErrorCode;
@@ -860,8 +859,8 @@ impl<'a> Binder {
                 let mut fields_default_expr = Vec::with_capacity(columns.len());
                 let mut fields_comments = Vec::with_capacity(columns.len());
                 for column in columns.iter() {
-                    fn type_name_to_data_type_impl(ty: TypeName) -> DataTypeImpl {
-                        match column.data_type {
+                    fn type_name_to_data_type_impl(ty: &TypeName) -> DataTypeImpl {
+                        match ty {
                             TypeName::Boolean => BooleanType::new_impl(),
                             TypeName::UInt8 => UInt8Type::new_impl(),
                             TypeName::UInt16 => UInt16Type::new_impl(),
@@ -883,13 +882,13 @@ impl<'a> Binder {
                                 fields_name,
                                 fields_type,
                             } => StructType::new_impl(
-                                fields_name,
+                                fields_name.clone(),
                                 fields_type
                                     .iter()
                                     .map(type_name_to_data_type_impl)
                                     .collect(),
                             ),
-                            TypeName::Object => ObjectType::new_impl(),
+                            TypeName::Object => VariantObjectType::new_impl(),
                             TypeName::Variant => VariantType::new_impl(),
                             TypeName::Nullable(ty) => {
                                 NullableType::new_impl(type_name_to_data_type_impl(ty))
