@@ -13,6 +13,6 @@ CREATE TABLE variant_test2
     e Date,
     f Timestamp,
     g Array(Int),
-    h Tuple(Int, String),
+    h (Int, String),
     i Variant
 );
