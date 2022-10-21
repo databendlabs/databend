@@ -1793,7 +1793,7 @@ impl<'a> TypeChecker<'a> {
     async fn resolve_map_access_pushdown(
         &mut self,
         data_type: DataTypeImpl,
-        mut accessors: Vec<MapAccessor<'async_recursion>>,
+        accessors: Vec<MapAccessor<'async_recursion>>,
         database: Option<Identifier<'async_recursion>>,
         table: Option<Identifier<'async_recursion>>,
         column: Identifier<'async_recursion>,
@@ -1859,8 +1859,8 @@ impl<'a> TypeChecker<'a> {
                     }
                     None => {
                         return Err(ErrorCode::SemanticError(format!(
-                            "tuple name `{}` does not exist",
-                            name
+                            "tuple name `{}` does not exist, available names are: {:?}",
+                            name, &inner_names
                         )));
                     }
                 },
