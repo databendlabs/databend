@@ -149,9 +149,9 @@ fn transform_data_type(target_type: common_ast::ast::TypeName) -> DataType {
         common_ast::ast::TypeName::Float32 => DataType::Number(NumberDataType::Float32),
         common_ast::ast::TypeName::Float64 => DataType::Number(NumberDataType::Float64),
         common_ast::ast::TypeName::String => DataType::String,
-        common_ast::ast::TypeName::Array {
-            item_type: Some(item_type),
-        } => DataType::Array(Box::new(transform_data_type(*item_type))),
+        common_ast::ast::TypeName::Array { item_type } => {
+            DataType::Array(Box::new(transform_data_type(*item_type)))
+        }
         common_ast::ast::TypeName::Tuple { fields_type, .. } => {
             DataType::Tuple(fields_type.into_iter().map(transform_data_type).collect())
         }
