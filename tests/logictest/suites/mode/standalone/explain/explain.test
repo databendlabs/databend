@@ -204,7 +204,7 @@ CREATE TABLE t3 (
     c Float64 NOT NULL,
     d STRING NOT NULL,
     e ARRAY(Int32) NOT NULL,
-    f TUPLE(f1 BOOLEAN, f2 STRING) NOT NULL
+    f (f1 BOOLEAN, f2 STRING) NOT NULL
 ) ENGINE = FUSE
 CLUSTER BY (
     a,
@@ -444,7 +444,7 @@ CreateTable (children 5)
 │   ├── ColumnDefinition e (children 1)
 │   │   └── DataType ARRAY(Int32)
 │   └── ColumnDefinition f (children 1)
-│       └── DataType TUPLE(f1 BOOLEAN, f2 STRING)
+│       └── DataType (f1 BOOLEAN, f2 STRING)
 ├── TableEngine FUSE
 ├── ClusterByList (children 3)
 │   ├── ColumnIdentifier a
