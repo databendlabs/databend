@@ -386,6 +386,65 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
 }
 
 #[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
+async fn test_meta_node_join_with_log() -> anyhow::Result<()> {
+    // Assert that MetaNode allows joining even with initialized store.
+    // But does not allow joining with a store that already has raft-log.
+    //
+    // In this test it needs a cluster of 3 to form a quorum of 2, so that node-2 can be stopped.
+
+    let tc0 = MetaSrvTestContext::new(0);
+
+    let mut tc1 = MetaSrvTestContext::new(1);
+    tc1.config.raft_config.single = false;
+    tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
+
+    let mut tc2 = MetaSrvTestContext::new(2);
+    tc2.config.raft_config.single = false;
+    tc2.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
+
+    let meta_node = MetaNode::start(&tc0.config).await?;
+    let res = meta_node
+        .join_cluster(&tc0.config.raft_config, tc0.config.grpc_api_address)
+        .await?;
+    assert_eq!(Err("Did not join: --join is empty"), res);
+
+    let meta_node1 = MetaNode::start(&tc1.config).await?;
+    let res = meta_node1
+        .join_cluster(&tc1.config.raft_config, tc1.config.grpc_api_address.clone())
+        .await?;
+    assert_eq!(Ok(()), res);
+
+    info!("--- initialize store for node-2");
+    {
+        let n2 = MetaNode::start(&tc2.config).await?;
+        n2.stop().await?;
+    }
+
+    info!("--- Allow to join node-2 with initialized store");
+    {
+        let n2 = MetaNode::start(&tc2.config).await?;
+        let res = n2
+            .join_cluster(&tc2.config.raft_config, tc2.config.grpc_api_address.clone())
+            .await?;
+        assert_eq!(Ok(()), res);
+
+        n2.stop().await?;
+    }
+
+    info!("--- Not allowed to join node-2 with store with log");
+    {
+        let n2 = MetaNode::start(&tc2.config).await?;
+        let res = n2
+            .join_cluster(&tc2.config.raft_config, tc2.config.grpc_api_address)
+            .await?;
+        assert_eq!(Err("Did not join: node already has log"), res);
+
+        n2.stop().await?;
+    }
+    Ok(())
+}
+
+#[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_meta_node_restart() -> anyhow::Result<()> {
     // TODO check restarted follower.
     // - Start a leader and a non-voter;
