@@ -75,11 +75,26 @@ pub trait BlockBuilderTrait {
     ) -> Result<Vec<DataBlock>>;
 }
 
+pub trait ReadBatchTrait: From<Vec<u8>> + Send + Debug {
+    fn size(&self) -> usize;
+}
+
+impl ReadBatchTrait for Vec<u8> {
+    fn size(&self) -> usize {
+        self.len()
+    }
+}
+
+pub trait RowBatchTrait: Send {
+    fn size(&self) -> usize;
+    fn rows(&self) -> usize;
+}
+
 #[async_trait::async_trait]
 pub trait InputFormatPipe: Sized + Send + 'static {
     type SplitMeta;
-    type ReadBatch: From<Vec<u8>> + Send + Debug;
-    type RowBatch: Send;
+    type ReadBatch: ReadBatchTrait;
+    type RowBatch: RowBatchTrait;
     type AligningState: AligningStateTrait<Pipe = Self> + Send;
     type BlockBuilder: BlockBuilderTrait<Pipe = Self> + Send;
 
