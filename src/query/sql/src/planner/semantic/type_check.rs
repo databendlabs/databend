@@ -761,7 +761,7 @@ impl<'a> TypeChecker<'a> {
                             column,
                             ..
                         } => {
-                            let (_, data_type) = *self.resolve(&expr, None).await?;
+                            let (_, data_type) = *self.resolve(expr, None).await?;
                             if data_type.data_type_id() != TypeID::Struct {
                                 break;
                             }
@@ -790,7 +790,7 @@ impl<'a> TypeChecker<'a> {
                     },
                     MapAccessor::PeriodNumber { .. } => unimplemented!(),
                 };
-                self.resolve_function(span, "get", &[&inner_expr, &arg], None)
+                self.resolve_function(span, "get", &[inner_expr, &arg], None)
                     .await?
             }
 
