@@ -20,7 +20,7 @@ use common_config::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
-use common_meta_types::GrantObject;
+use common_meta_types::{GrantObject, RoleInfo};
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeType;
 use common_users::RoleCacheManager;
@@ -210,18 +210,22 @@ impl Session {
 
     // if both current_role and user's current role is not set or not found, defaults as the PUBLIC
     // role
-    pub async fn get_current_role(self: &Arc<Self>) -> String {
+    pub async fn get_current_role(self: &Arc<Self>) -> Result<RoleInfo> {
+        let public_role = RoleCacheManager::instance()
+            .find_role(&tenant, "public")
+            .await?
+            .unwrap_or(RoleInfo::new("public"));
+
         let current_role = match self.session_ctx.get_current_role() {
-            None => return "public".to_string(),
+            None => return Ok(public_role),
             Some(current_role) => current_role,
         };
 
         let tenant = self.get_current_tenant();
-        RoleCacheManager::instance()
+        Ok(RoleCacheManager::instance()
             .find_role(&tenant, &current_role)
             .await?
-            .map(|_| current_role)
-            .unwrap_or("public".to_string())
+            .unwrap_or(public_role))
     }
 
     pub fn set_current_role(self: &Arc<Self>, role: String) {
@@ -267,13 +271,8 @@ impl Session {
         }
 
         // 2. check the current role's privilege set
-        let current_role = self.get_current_role();
-        let tenant = self.get_current_tenant();
-        let role_verified = RoleCacheManager::instance()
-            .find_role(&tenant, &current_role)
-            .await?
-            .map(|r| r.grants.verify_privilege(object, privilege))
-            .unwrap_or(false);
+        let current_role = self.get_current_role().await?;
+        let role_verified = current_role.grants.verify_privilege(object, privilege);
         if role_verified {
             return Ok(());
         }

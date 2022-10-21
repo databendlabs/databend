@@ -107,7 +107,7 @@ impl RoleCacheManager {
         cached.remove(tenant);
     }
 
-    pub async fn find_role(&self, tenant: &str, role: &String) -> Result<Option<RoleInfo>> {
+    pub async fn find_role(&self, tenant: &str, role: &str) -> Result<Option<RoleInfo>> {
         let cached = self.cache.read();
         let cached_roles = match cached.get(tenant) {
             None => return Ok(None),
