@@ -18,6 +18,13 @@ inputs:
     description: "default to ./target/{inputs.profile}/"
     required: false
     default: ""
+outputs:
+  path:
+    description: ""
+    value: ${{ steps.info.outputs.path }}
+  src:
+    description: ""
+    value: ${{ steps.info.outputs.src }}
 runs:
   using: "composite"
   steps:
@@ -30,14 +37,14 @@ runs:
         else
           path="${{ inputs.path }}"
         fi
-        echo "::set-output name=path::${path}"
+        echo "path=${path}" >> $GITHUB_OUTPUT
 
         if [[ "${{ inputs.profile }}" == "debug" && "${{ inputs.target }}" =~ "linux" ]]; then
           src="s3"
         else
           src="github"
         fi
-        echo "::set-output name=src::${src}"
+        echo "src=${src}" >> $GITHUB_OUTPUT
 
     - uses: actions/download-artifact@v2
       if: steps.info.outputs.src == 'github'
