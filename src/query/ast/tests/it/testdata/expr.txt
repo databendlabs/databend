@@ -405,9 +405,7 @@ Array {
     exprs: [
         Literal {
             span: [
-                LBracket(0..1),
                 LiteralInteger(1..2),
-                RBracket(2..3),
             ],
             lit: Integer(
                 1,
@@ -465,9 +463,7 @@ Array {
             exprs: [
                 Literal {
                     span: [
-                        LBracket(1..2),
                         LiteralInteger(2..3),
-                        RBracket(3..4),
                     ],
                     lit: Integer(
                         1,
@@ -506,9 +502,7 @@ Array {
             exprs: [
                 Literal {
                     span: [
-                        LBracket(1..2),
                         LiteralInteger(2..3),
-                        RBracket(3..4),
                     ],
                     lit: Integer(
                         1,
@@ -525,9 +519,7 @@ Array {
             exprs: [
                 Literal {
                     span: [
-                        LBracket(5..6),
                         LiteralInteger(6..7),
-                        RBracket(7..8),
                     ],
                     lit: Integer(
                         2,
@@ -747,21 +739,36 @@ MapAccess {
                 ],
             },
             accessor: Bracket {
-                key: Integer(
-                    0,
-                ),
+                key: Literal {
+                    span: [
+                        LiteralInteger(30..31),
+                    ],
+                    lit: Integer(
+                        0,
+                    ),
+                },
             },
         },
         accessor: Bracket {
-            key: Integer(
-                1,
-            ),
+            key: Literal {
+                span: [
+                    LiteralInteger(33..34),
+                ],
+                lit: Integer(
+                    1,
+                ),
+            },
         },
     },
     accessor: Bracket {
-        key: Integer(
-            2,
-        ),
+        key: Literal {
+            span: [
+                LiteralInteger(36..37),
+            ],
+            lit: Integer(
+                2,
+            ),
+        },
     },
 }
 
@@ -1857,9 +1864,14 @@ MapAccess {
                 },
             },
             accessor: Bracket {
-                key: Integer(
-                    0,
-                ),
+                key: Literal {
+                    span: [
+                        LiteralInteger(5..6),
+                    ],
+                    lit: Integer(
+                        0,
+                    ),
+                },
             },
         },
         accessor: Colon {
@@ -1883,7 +1895,7 @@ MapAccess {
 ---------- Input ----------
 arr[4]["k"]
 ---------- Output ---------
-arr[4]['k']
+arr[4]["k"]
 ---------- AST ------------
 MapAccess {
     span: [
@@ -1910,15 +1922,31 @@ MapAccess {
             },
         },
         accessor: Bracket {
-            key: Integer(
-                4,
-            ),
+            key: Literal {
+                span: [
+                    LiteralInteger(4..5),
+                ],
+                lit: Integer(
+                    4,
+                ),
+            },
         },
     },
     accessor: Bracket {
-        key: String(
-            "k",
-        ),
+        key: ColumnRef {
+            span: [
+                QuotedString(7..10),
+            ],
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "k",
+                quote: Some(
+                    '"',
+                ),
+                span: QuotedString(7..10),
+            },
+        },
     },
 }
 

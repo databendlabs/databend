@@ -108,7 +108,7 @@ select obj:a from t3;
 1
 
 statement query T
-select obj["a"] from t3;
+select obj['a'] from t3;
 
 ----
 1
@@ -156,13 +156,13 @@ select obj:c[0] from t3;
 10
 
 statement query T
-select obj["c"][0] from t3;
+select obj['c'][0] from t3;
 
 ----
 10
 
 statement query T
-select obj["c"][3] from t3;
+select obj['c'][3] from t3;
 
 ----
 NULL
