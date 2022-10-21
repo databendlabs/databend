@@ -119,7 +119,7 @@ impl SessionContext {
 
     // Return the current role if it's set. If the current role is not set, it'll take the user's
     // default role.
-    pub fn get_current_role(&self) -> String {
+    pub fn get_current_role(&self) -> Option<String> {
         let mut current_role = {
             let lock = self.current_role.read();
             lock.clone()
@@ -130,7 +130,7 @@ impl SessionContext {
                 current_role = user.option.default_role().cloned();
             }
         }
-        current_role.unwrap_or("PUBLIC".to_string())
+        current_role
     }
 
     pub fn set_current_role(&self, role: String) {

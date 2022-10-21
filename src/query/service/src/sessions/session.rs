@@ -208,8 +208,20 @@ impl Session {
         self.session_ctx.set_current_user(user);
     }
 
-    pub fn get_current_role(self: &Arc<Self>) -> String {
-        self.session_ctx.get_current_role()
+    // if both current_role and user's current role is not set or not found, defaults as the PUBLIC
+    // role
+    pub async fn get_current_role(self: &Arc<Self>) -> String {
+        let current_role = match self.session_ctx.get_current_role() {
+            None => return "public".to_string(),
+            Some(current_role) => current_role,
+        };
+
+        let tenant = self.get_current_tenant();
+        RoleCacheManager::instance()
+            .find_role(&tenant, &current_role)
+            .await?
+            .map(|_| current_role)
+            .unwrap_or("public".to_string())
     }
 
     pub fn set_current_role(self: &Arc<Self>, role: String) {
@@ -223,15 +235,23 @@ impl Session {
     // Returns all the roles the current session has. If the user have been granted auth_role,
     // the other roles will be ignored.
     // On executing SET ROLE, the role have to be one of the available roles.
-    pub fn get_all_available_roles(self: &Arc<Self>) -> Result<Vec<String>> {
-        let all_roles = match self.session_ctx.get_auth_role() {
+    pub async fn get_all_available_roles(self: &Arc<Self>) -> Result<Vec<String>> {
+        let roles = match self.session_ctx.get_auth_role() {
             Some(auth_role) => vec![auth_role],
             None => {
                 let current_user = self.get_current_user()?;
                 current_user.grants.roles();
             }
         };
-        Ok(all_roles)
+
+        let tenant = self.get_current_tenant();
+        let related_roles = RoleCacheManager::instance()
+            .find_related_roles(&tenant, &roles)
+            .await?
+            .into_iter()
+            .map(|r| r.name)
+            .collect();
+        Ok(related_roles)
     }
 
     pub async fn validate_privilege(
