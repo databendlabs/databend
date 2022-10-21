@@ -220,15 +220,17 @@ impl Session {
         self.session_ctx.set_auth_role(role)
     }
 
-    // returns all the roles the current session has, which includes the roles of
-    // the current user and the roles granted on the authentication phase.
-    pub fn get_all_roles(self: &Arc<Self>) -> Result<Vec<String>> {
-        let current_user = self.get_current_user()?;
-
-        let mut all_roles = current_user.grants.roles();
-        if let Some(auth_role) = self.session_ctx.get_auth_role() {
-            all_roles.push(auth_role);
-        }
+    // Returns all the roles the current session has. If the user have been granted auth_role,
+    // the other roles will be ignored.
+    // On executing SET ROLE, the role have to be one of the available roles.
+    pub fn get_all_available_roles(self: &Arc<Self>) -> Result<Vec<String>> {
+        let all_roles = match self.session_ctx.get_auth_role() {
+            Some(auth_role) => vec![auth_role],
+            None => {
+                let current_user = self.get_current_user()?;
+                current_user.grants.roles();
+            }
+        };
         Ok(all_roles)
     }
 
@@ -244,7 +246,7 @@ impl Session {
         }
 
         // TODO: take current role instead of all roles
-        let all_roles = self.get_all_roles()?;
+        let all_roles = self.get_all_available_roles()?;
         let tenant = self.get_current_tenant();
         let role_verified = RoleCacheManager::instance()
             .find_related_roles(&tenant, &all_roles)
