@@ -136,7 +136,7 @@ impl ProcessesTable {
             DataField::new_nullable("scan_progress_read_bytes", u64::to_data_type()),
             DataField::new_nullable("mysql_connection_id", u32::to_data_type()),
             DataField::new("time", u64::to_data_type()),
-            DataField::new("status", Vu8::to_data_type()),
+            DataField::new_nullable("status", Vu8::to_data_type()),
         ]);
 
         let table_info = TableInfo {

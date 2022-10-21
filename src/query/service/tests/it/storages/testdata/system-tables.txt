@@ -127,6 +127,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | stage_type               | system   | stages              | VARCHAR           |              |                    | false       |         |
 | start_time               | system   | clustering_history  | TIMESTAMP         |              |                    | false       |         |
 | state                    | system   | processes           | VARCHAR           |              |                    | false       |         |
+| status                   | system   | processes           | VARCHAR           |              |                    | false       |         |
 | syntax                   | system   | functions           | VARCHAR           |              |                    | false       |         |
 | table                    | system   | clustering_history  | VARCHAR           |              |                    | false       |         |
 | table                    | system   | columns             | VARCHAR           |              |                    | false       |         |
