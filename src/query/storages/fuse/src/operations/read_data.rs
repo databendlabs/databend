@@ -246,6 +246,8 @@ struct FuseTableSource {
     prewhere_reader: Arc<BlockReader>,
     prewhere_filter: Arc<Option<ExpressionExecutor>>,
     remain_reader: Arc<Option<BlockReader>>,
+
+    support_blocking: bool,
 }
 
 impl FuseTableSource {
@@ -258,6 +260,8 @@ impl FuseTableSource {
         remain_reader: Arc<Option<BlockReader>>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
+        let support_blocking = prewhere_reader.support_blocking_api();
+
         Ok(ProcessorPtr::create(Box::new(FuseTableSource {
             ctx,
             output,
@@ -267,6 +271,7 @@ impl FuseTableSource {
             prewhere_reader,
             prewhere_filter,
             remain_reader,
+            support_blocking,
         })))
     }
 
@@ -331,8 +336,20 @@ impl Processor for FuseTableSource {
 
         match self.state {
             State::Finish => Ok(Event::Finished),
-            State::ReadDataPrewhere(_) => Ok(Event::Async),
-            State::ReadDataRemain(_, _) => Ok(Event::Async),
+            State::ReadDataPrewhere(_) => {
+                if self.support_blocking {
+                    Ok(Event::Sync)
+                } else {
+                    Ok(Event::Async)
+                }
+            }
+            State::ReadDataRemain(_, _) => {
+                if self.support_blocking {
+                    Ok(Event::Sync)
+                } else {
+                    Ok(Event::Async)
+                }
+            }
             State::PrewhereFilter(_, _) => Ok(Event::Sync),
             State::Deserialize(_, _, _) => Ok(Event::Sync),
             State::Generated(_, _) => Err(ErrorCode::LogicalError("It's a bug.")),
@@ -421,6 +438,26 @@ impl Processor for FuseTableSource {
                     Err(ErrorCode::LogicalError(
                         "It's a bug. No need to do prewhere filter",
                     ))
+                }
+            }
+            State::ReadDataPrewhere(Some(part)) => {
+                let chunks = self.prewhere_reader.sync_read_columns_data(part.clone())?;
+
+                if self.prewhere_filter.is_some() {
+                    self.state = State::PrewhereFilter(part, chunks);
+                } else {
+                    // all needed columns are read.
+                    self.state = State::Deserialize(part, chunks, None)
+                }
+                Ok(())
+            }
+            State::ReadDataRemain(part, prewhere_data) => {
+                if let Some(remain_reader) = self.remain_reader.as_ref() {
+                    let chunks = remain_reader.sync_read_columns_data(part.clone())?;
+                    self.state = State::Deserialize(part, chunks, Some(prewhere_data));
+                    Ok(())
+                } else {
+                    return Err(ErrorCode::LogicalError("It's a bug. No remain reader"));
                 }
             }
             _ => Err(ErrorCode::LogicalError("It's a bug.")),
