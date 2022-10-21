@@ -61,7 +61,7 @@ drop table t_where_optimizer;
 -- Tuple (inner column) type tests
 
 statement ok
-create table t_where_optimizer(id int, s tuple(a int, b int));
+create table t_where_optimizer(id int, s (a int, b int));
 
 statement ok
 insert into t_where_optimizer values(1, (1, 2)), (2, (3, 4)), (3, (5, 6))

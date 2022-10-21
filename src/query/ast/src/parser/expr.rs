@@ -1109,27 +1109,23 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             item_type: opt_item_type.map(|(_, opt_item_type, _)| Box::new(opt_item_type)),
         },
     );
-    let ty_tuple = map(
-        rule! { TUPLE ~ "(" ~ #comma_separated_list1(tuple_types) ~ ")" },
-        |(_, _, tuple_types, _)| {
-            let mut fields_name = Vec::with_capacity(tuple_types.len());
-            let mut fields_type = Vec::with_capacity(tuple_types.len());
-            for tuple_type in tuple_types {
-                if let Some(field_name) = tuple_type.0 {
-                    fields_name.push(field_name.name);
-                }
-                fields_type.push(tuple_type.1);
-            }
-            if fields_name.is_empty() {
-                TypeName::Tuple {
-                    fields_name: None,
-                    fields_type,
-                }
-            } else {
-                TypeName::Tuple {
-                    fields_name: Some(fields_name),
-                    fields_type,
-                }
+    let ty_anonymous_tuple = map(
+        rule! { "(" ~ #comma_separated_list1(type_name) ~ ")" },
+        |(_, fields_type, _)| TypeName::Tuple {
+            fields_name: None,
+            fields_type,
+        },
+    );
+    let ty_named_tuple = map(
+        rule! { "(" ~ #comma_separated_list1(rule! {#ident ~ #type_name}) ~ ")" },
+        |(_, fields_type, _)| {
+            let (fields_name, fields_type) = fields_type
+                .into_iter()
+                .map(|(name, ty)| (name.name, ty))
+                .unzip();
+            TypeName::Tuple {
+                fields_name: Some(fields_name),
+                fields_type,
             }
         },
     );
@@ -1158,7 +1154,8 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_float32
             | #ty_float64
             | #ty_array
-            | #ty_tuple
+            | #ty_anonymous_tuple
+            | #ty_named_tuple
             | #ty_date
             | #ty_datetime
             | #ty_string
@@ -1173,26 +1170,6 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
                 ty
             }
         },
-    )(i)
-}
-
-pub fn tuple_types(i: Input) -> IResult<(Option<Identifier>, TypeName)> {
-    let tuple_types = map(
-        rule! {
-           #type_name
-        },
-        |type_name| (None, type_name),
-    );
-    let named_tuple_types = map(
-        rule! {
-           #ident ~ #type_name
-        },
-        |(name, type_name)| (Some(name), type_name),
-    );
-
-    rule!(
-        #tuple_types
-        | #named_tuple_types
     )(i)
 }
 

@@ -556,24 +556,23 @@ impl Display for TypeName {
                 fields_name,
                 fields_type,
             } => {
-                write!(f, "TUPLE(")?;
-                let mut first = true;
+                write!(f, "(")?;
                 match fields_name {
                     Some(fields_name) => {
-                        for (name, ty) in fields_name.iter().zip(fields_type.iter()) {
-                            if !first {
+                        for (i, (name, ty)) in
+                            fields_name.iter().zip(fields_type.iter()).enumerate()
+                        {
+                            if i != 0 {
                                 write!(f, ", ")?;
                             }
-                            first = false;
                             write!(f, "{} {}", name, ty)?;
                         }
                     }
                     None => {
-                        for ty in fields_type.iter() {
-                            if !first {
+                        for (i, ty) in fields_type.iter().enumerate() {
+                            if i != 0 {
                                 write!(f, ", ")?;
                             }
-                            first = false;
                             write!(f, "{}", ty)?;
                         }
                     }

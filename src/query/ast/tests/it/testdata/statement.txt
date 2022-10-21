@@ -416,9 +416,9 @@ CreateTable(
 
 
 ---------- Input ----------
-create table if not exists a.b (c tuple(m integer, n string), d tuple(integer, string));
+create table if not exists a.b (c (m integer, n string), d (integer, string));
 ---------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (c TUPLE(m Int32, n STRING) NOT NULL, d TUPLE(Int32, STRING) NOT NULL)
+CREATE TABLE IF NOT EXISTS a.b (c (m Int32, n STRING) NOT NULL, d (Int32, STRING) NOT NULL)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -464,7 +464,7 @@ CreateTable(
                         name: Identifier {
                             name: "d",
                             quote: None,
-                            span: Ident(62..63),
+                            span: Ident(57..58),
                         },
                         data_type: Tuple {
                             fields_name: None,

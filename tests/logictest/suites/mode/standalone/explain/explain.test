@@ -195,7 +195,7 @@ SIZE_LIMIT = 10
 PURGE = false
 
 statement query T
-explain syntax create table t3(a int64, b uint64, c float64, d string, e array(int32), f tuple(f1 bool, f2 string)) engine=fuse cluster by (a, b, c) comment='test' compression='LZ4';
+explain syntax create table t3(a int64, b uint64, c float64, d string, e array(int32), f (f1 bool, f2 string)) engine=fuse cluster by (a, b, c) comment='test' compression='LZ4';
 
 ----
 CREATE TABLE t3 (
@@ -427,7 +427,7 @@ CreateDatabase (children 2)
 └── DatabaseEngine DEFAULT
 
 statement query T
-explain ast create table t3(a int64, b uint64, c float64, d string, e array(int32), f tuple(f1 bool, f2 string)) engine=fuse cluster by (a, b, c) comment='test' compression='LZ4';
+explain ast create table t3(a int64, b uint64, c float64, d string, e array(int32), f (f1 bool, f2 string)) engine=fuse cluster by (a, b, c) comment='test' compression='LZ4';
 
 ----
 CreateTable (children 5)

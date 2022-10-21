@@ -93,7 +93,7 @@ impl TypeFactory {
             return self.get(name).map(ArrayType::new_impl);
         }
 
-        if lowercase_name.starts_with("tuple(") {
+        if lowercase_name.starts_with('(') {
             let names = origin_name[6..origin_name.len() - 1].to_string();
             let bytes = names.as_bytes();
 
