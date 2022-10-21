@@ -198,7 +198,13 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
             .await;
         assert!(res.is_ok());
 
-        let roles = ctx.get_current_session().get_all_available_roles().await?;
+        let roles: Vec<String> = ctx
+            .get_current_session()
+            .get_all_available_roles()
+            .await?
+            .into_iter()
+            .map(|r| r.name)
+            .collect();
         assert_eq!(roles.len(), 2);
         assert!(roles.contains(&"test-auth-role".to_string()));
     }

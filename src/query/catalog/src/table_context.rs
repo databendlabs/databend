@@ -27,6 +27,7 @@ use common_io::prelude::FormatSettings;
 use common_legacy_planners::PartInfoPtr;
 use common_legacy_planners::Partitions;
 use common_legacy_planners::ReadDataSourcePlan;
+use common_meta_types::RoleInfo;
 use common_meta_types::UserInfo;
 use common_settings::Settings;
 use common_storage::DataOperator;
@@ -79,6 +80,7 @@ pub trait TableContext: Send + Sync {
     fn get_config(&self) -> Config;
     fn get_current_user(&self) -> Result<UserInfo>;
     fn set_current_user(&self, user: UserInfo);
+    fn get_current_role(&self) -> Option<RoleInfo>;
     fn get_fuse_version(&self) -> String;
     fn get_changed_settings(&self) -> Arc<Settings>;
     fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()>;

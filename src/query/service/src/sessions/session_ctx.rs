@@ -20,6 +20,7 @@ use std::sync::Weak;
 
 use common_config::Config;
 use common_exception::Result;
+use common_meta_types::RoleInfo;
 use common_meta_types::UserInfo;
 use common_settings::Settings;
 use futures::channel::oneshot::Sender;
@@ -43,7 +44,7 @@ pub struct SessionContext {
     // Each session have a current role which takes effects, the privileges from the user's other
     // roles will not take effect. The user can switch to another available role by `SET ROLE`.
     // If the current_role is not set, it takes the user's default role.
-    current_role: RwLock<Option<String>>,
+    current_role: RwLock<Option<RoleInfo>>,
     // The role granted to user by external auth provider, when auth_role is provided, the current
     // user's all other roles are overridden by this role.
     auth_role: RwLock<Option<String>>,
@@ -119,23 +120,14 @@ impl SessionContext {
 
     // Return the current role if it's set. If the current role is not set, it'll take the user's
     // default role.
-    pub fn get_current_role(&self) -> Option<String> {
-        let mut current_role = {
-            let lock = self.current_role.read();
-            lock.clone()
-        };
-        if current_role.is_none() {
-            let user = self.get_current_user();
-            if let Some(user) = user {
-                current_role = user.option.default_role().cloned();
-            }
-        }
-        current_role
+    pub fn get_current_role(&self) -> Option<RoleInfo> {
+        let lock = self.current_role.read();
+        lock.clone()
     }
 
-    pub fn set_current_role(&self, role: String) {
+    pub fn set_current_role(&self, role: Option<RoleInfo>) {
         let mut lock = self.current_role.write();
-        *lock = Some(role)
+        *lock = role
     }
 
     pub fn get_current_tenant(&self) -> String {
