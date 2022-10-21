@@ -171,8 +171,21 @@ impl FuseTable {
 
         let mut blocks_need_to_delete = HashSet::new();
         let mut blooms_need_to_delete = HashSet::new();
-        for segment in segments {
-            let segment = segment?;
+
+        for segment_opt in segments {
+            let segment = match segment_opt {
+                Ok(v) => v,
+                Err(e) => {
+                    if e.code() == ErrorCode::storage_not_found_code() {
+                        warn! {
+                            "concurrent gc detected, segment has been removed "
+                        };
+                        continue;
+                    } else {
+                        return Err(e);
+                    }
+                }
+            };
 
             for block_meta in &segment.blocks {
                 let loc = block_meta.location.0.as_str();

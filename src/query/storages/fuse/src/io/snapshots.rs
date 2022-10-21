@@ -140,7 +140,7 @@ impl SnapshotsIO {
             let results = self.read_snapshots(chunks).await?;
             info!("Finish to read_snapshots, chunk:[{}]", idx);
 
-            for snapshot in results.into_iter().collect::<Result<Vec<_>>>()? {
+            for snapshot in results.into_iter().flatten() {
                 if snapshot.timestamp > min_snapshot_timestamp {
                     continue;
                 }
