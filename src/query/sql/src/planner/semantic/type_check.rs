@@ -1830,9 +1830,9 @@ impl<'a> TypeChecker<'a> {
             match accessor_lit {
                 Literal::Integer(idx) => {
                     if idx == 0 {
-                        return Err(ErrorCode::SemanticError(format!(
-                            "tuple index is starting from 1, but 0 is found",
-                        )));
+                        return Err(ErrorCode::SemanticError(
+                            "tuple index is starting from 1, but 0 is found".to_string(),
+                        ));
                     }
                     if idx as usize > inner_types.len() {
                         return Err(ErrorCode::SemanticError(format!(
