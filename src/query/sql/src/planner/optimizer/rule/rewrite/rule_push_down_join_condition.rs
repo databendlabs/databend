@@ -77,17 +77,15 @@ impl Rule for RulePushDownJoinCondition {
         let mut left_push_down = vec![];
         let mut right_push_down = vec![];
 
-        let mut need_push = false;
-
+        // Other conditions in join can be directly pushed down here.
+        // Because we have classify them in binder.
         for predicate in join.other_conditions.iter() {
             let pred = JoinPredicate::new(predicate, &left_prop, &right_prop);
             match pred {
                 JoinPredicate::Left(_) => {
-                    need_push = true;
                     left_push_down.push(predicate.clone());
                 }
                 JoinPredicate::Right(_) => {
-                    need_push = true;
                     right_push_down.push(predicate.clone());
                 }
                 _ => unreachable!(),
@@ -95,10 +93,6 @@ impl Rule for RulePushDownJoinCondition {
         }
 
         join.other_conditions.clear();
-
-        if !need_push {
-            return Ok(());
-        }
 
         let mut left_child = s_expr.child(0)?.clone();
         let mut right_child = s_expr.child(1)?.clone();

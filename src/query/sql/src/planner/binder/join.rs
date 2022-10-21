@@ -157,7 +157,6 @@ impl<'a> Binder {
             non_equi_conditions,
             other_conditions,
         };
-        dbg!(join.op.clone());
         let s_expr = match &join.op {
             JoinOperator::Inner => {
                 self.bind_join_with_type(JoinType::Inner, join_conditions, left_child, right_child)
