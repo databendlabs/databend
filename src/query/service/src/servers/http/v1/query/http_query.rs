@@ -297,15 +297,13 @@ impl HttpQuery {
     pub async fn get_response_page(&self, page_no: usize) -> Result<HttpQueryResponseInternal> {
         let data = Some(self.get_page(page_no).await?);
         let state = self.get_state().await;
-        let session_conf = if let Some(conf) = &self.request.session {
-            if let Some(affect) = &state.affect {
-                Some(conf.clone().apply_affect(affect))
-            } else {
-                Some(conf.clone())
-            }
+        let session_conf = self.request.session.clone().unwrap_or_default();
+        let session_conf = if let Some(affect) = &state.affect {
+            Some(session_conf.apply_affect(affect))
         } else {
-            None
+            Some(session_conf)
         };
+
         Ok(HttpQueryResponseInternal {
             data,
             state,
