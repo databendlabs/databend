@@ -19,36 +19,29 @@ A scalar subquery selects only one column or expression and returns only one row
 ### Example
 
 ```sql
-CREATE TABLE t1 (num int);
+CREATE TABLE t1 (a int);
+CREATE TABLE t2 (a int);
+
 INSERT INTO t1 VALUES (1);
+INSERT INTO t1 VALUES (2);
+INSERT INTO t1 VALUES (3);
 
--- This subquery returns "1". 
-CREATE TABLE t2 (num int NULL);
-INSERT INTO t2 VALUES (2* (SELECT num FROM t1));
-SELECT * FROM t2;
+INSERT INTO t2 VALUES (3);
+INSERT INTO t2 VALUES (4);
+INSERT INTO t2 VALUES (5);
 
----
-+------+
-| num  |
-+------+
-|   2  |
-+------+
+SELECT * 
+FROM   t1 
+WHERE  t1.a < (SELECT Min(t2.a) 
+               FROM   t2); 
 
--- This subquery returns NULL. 
-INSERT INTO t2 VALUES (2* (SELECT num FROM t1 WHERE num > 100));
-SELECT * FROM t2;
-
----
-+------+
-| num  |
-+------+
-|<null>|
-|   2  |
-+------+
-
--- Invalid subquery: More than one row is returned.
-INSERT INTO t1 VALUES (11);
-INSERT INTO t2 VALUES (2* (SELECT num FROM t1));
+--
++--------+
+|      a |
++--------+
+|      1 |
+|      2 |
++--------+
 ```
 
 ## EXISTS / NOT EXISTS
