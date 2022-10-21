@@ -208,6 +208,14 @@ impl Session {
         self.session_ctx.set_current_user(user);
     }
 
+    pub fn get_current_role(self: &Arc<Self>) -> String {
+        self.session_ctx.get_current_role()
+    }
+
+    pub fn set_current_role(self: &Arc<Self>, role: String) {
+        self.session_ctx.set_current_role(role);
+    }
+
     pub fn set_auth_role(self: &Arc<Self>, role: String) {
         self.session_ctx.set_auth_role(role)
     }
