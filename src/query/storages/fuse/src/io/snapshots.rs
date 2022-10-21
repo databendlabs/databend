@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Instant;
 
 use chrono::DateTime;
 use chrono::Utc;
@@ -111,13 +112,17 @@ impl SnapshotsIO {
     // Read all the snapshots by the root file.
     // limit: read how many snapshot files
     // with_segment_locations: if true will get the segments of the snapshot
-    pub async fn read_snapshot_lites(
+    pub async fn read_snapshot_lites<T>(
         &self,
         root_snapshot_file: String,
         limit: Option<usize>,
         with_segment_locations: bool,
         min_snapshot_timestamp: Option<DateTime<Utc>>,
-    ) -> Result<(Vec<TableSnapshotLite>, HashSet<Location>)> {
+        status_callback: T,
+    ) -> Result<(Vec<TableSnapshotLite>, HashSet<Location>)>
+    where
+        T: Fn(String),
+    {
         let ctx = self.ctx.clone();
         let data_accessor = self.operator.clone();
 
@@ -131,14 +136,11 @@ impl SnapshotsIO {
         // 1. Get all the snapshot by chunks.
         let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
         let mut snapshot_lites = Vec::with_capacity(snapshot_files.len());
-        for (idx, chunks) in snapshot_files.chunks(max_io_requests).enumerate() {
-            info!(
-                "Start to read_snapshots, chunk:[{}], size:{}",
-                idx,
-                chunks.len()
-            );
-            let results = self.read_snapshots(chunks).await?;
-            info!("Finish to read_snapshots, chunk:[{}]", idx);
+
+        let start = Instant::now();
+        let mut count = 0;
+        for chunk in snapshot_files.chunks(max_io_requests) {
+            let results = self.read_snapshots(chunk).await?;
 
             for snapshot in results.into_iter().collect::<Result<Vec<_>>>()? {
                 if snapshot.timestamp > min_snapshot_timestamp {
@@ -152,6 +154,19 @@ impl SnapshotsIO {
                         segment_locations.insert(segment.clone());
                     }
                 }
+            }
+
+            // Refresh status.
+            {
+                count += chunk.len();
+                let status = format!(
+                    "gc: read snapshot files:{}/{}, cost:{} sec",
+                    count,
+                    snapshot_files.len(),
+                    start.elapsed().as_secs()
+                );
+                info!(status);
+                (status_callback)(status);
             }
         }
 

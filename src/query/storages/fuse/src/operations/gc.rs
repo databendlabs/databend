@@ -65,7 +65,6 @@ impl FuseTable {
         };
 
         // 2. Get all snapshot(including root snapshot).
-        let start = Instant::now();
         let mut all_snapshot_lites = vec![];
         let mut all_segment_locations = HashSet::new();
         if let Some(root_snapshot_location) = self.snapshot_loc().await? {
@@ -74,19 +73,12 @@ impl FuseTable {
                 self.operator.clone(),
                 self.snapshot_format_version().await?,
             );
-            (all_snapshot_lites, all_segment_locations) = snapshots_io
-                .read_snapshot_lites(root_snapshot_location, None, true, root_snapshot_ts)
-                .await?;
 
-            // Log status.
-            let cost = start.elapsed().as_secs();
-            let status = format!(
-                "gc: all snapshots:{}, all segments:{}, take:{} sec",
-                all_snapshot_lites.len(),
-                all_segment_locations.len(),
-                cost
-            );
-            info!(status);
+            (all_snapshot_lites, all_segment_locations) = snapshots_io
+                .read_snapshot_lites(root_snapshot_location, None, true, root_snapshot_ts, |x| {
+                    self.data_metrics.set_status(&x);
+                })
+                .await?;
         }
 
         // 3. Find.
@@ -151,6 +143,7 @@ impl FuseTable {
             let mut status_purged_count = 0;
             let status_need_purged_count = snapshots_to_be_purged.len();
 
+            let start = Instant::now();
             let snapshots_to_be_purged_vec = Vec::from_iter(snapshots_to_be_purged);
             for chunk in snapshots_to_be_purged_vec.chunks(chunk_size) {
                 self.try_purge_snapshots(ctx.clone(), chunk).await?;
