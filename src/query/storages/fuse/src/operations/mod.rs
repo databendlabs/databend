@@ -28,6 +28,7 @@ mod truncate;
 
 pub mod util;
 
+pub(crate) use compact::CompactOptions;
 pub use fuse_sink::FuseTableSink;
 pub use mutation::delete_from_block;
 pub use mutation::DeletionMutator;

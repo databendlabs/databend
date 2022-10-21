@@ -20,7 +20,6 @@ use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::Statistics;
-use common_fuse_meta::meta::TableSnapshot;
 use common_fuse_meta::meta::Versioned;
 use opendal::Operator;
 
@@ -30,6 +29,7 @@ use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::mutation::AbortOperation;
 use crate::operations::AppendOperationLogEntry;
+use crate::operations::CompactOptions;
 use crate::statistics::merge_statistics;
 use crate::statistics::reducers::reduce_block_metas;
 use crate::statistics::reducers::reduce_statistics;
@@ -38,10 +38,9 @@ use crate::Table;
 use crate::TableContext;
 use crate::TableMutator;
 
-#[derive(Clone)]
 pub struct FullCompactMutator {
     ctx: Arc<dyn TableContext>,
-    base_snapshot: Arc<TableSnapshot>,
+    compact_params: CompactOptions,
     data_accessor: Operator,
     block_compactor: BlockCompactor,
     location_generator: TableMetaLocationGenerator,
@@ -52,7 +51,6 @@ pub struct FullCompactMutator {
     merged_segments_locations: Vec<Location>,
     // paths the newly created segments (which are segment compacted)
     new_segment_paths: Vec<String>,
-    block_per_seg: usize,
     // is_cluster indicates whether the table contains cluster key.
     is_cluster: bool,
 }
@@ -60,16 +58,15 @@ pub struct FullCompactMutator {
 impl FullCompactMutator {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
-        base_snapshot: Arc<TableSnapshot>,
+        compact_params: CompactOptions,
         block_compactor: BlockCompactor,
         location_generator: TableMetaLocationGenerator,
-        block_per_seg: usize,
         is_cluster: bool,
         operator: Operator,
     ) -> Result<Self> {
         Ok(Self {
             ctx,
-            base_snapshot,
+            compact_params,
             data_accessor: operator,
             block_compactor,
             location_generator,
@@ -77,13 +74,12 @@ impl FullCompactMutator {
             merged_segment_statistics: Statistics::default(),
             merged_segments_locations: Vec::new(),
             new_segment_paths: Vec::new(),
-            block_per_seg,
             is_cluster,
         })
     }
 
     pub fn partitions_total(&self) -> usize {
-        self.base_snapshot.summary.block_count as usize
+        self.compact_params.base_snapshot.summary.block_count as usize
     }
 
     pub fn selected_blocks(&self) -> Vec<BlockMeta> {
@@ -98,7 +94,7 @@ impl FullCompactMutator {
 #[async_trait::async_trait]
 impl TableMutator for FullCompactMutator {
     async fn target_select(&mut self) -> Result<bool> {
-        let snapshot = self.base_snapshot.clone();
+        let snapshot = self.compact_params.base_snapshot.clone();
         let segment_locations = &snapshot.segments;
         let mut summarys = Vec::new();
 
@@ -107,7 +103,17 @@ impl TableMutator for FullCompactMutator {
         // Read all segments information in parallel.
         let segments_io = SegmentsIO::create(self.ctx.clone(), self.data_accessor.clone());
         let segments = segments_io.read_segments(segment_locations).await?;
-        for (idx, segment) in segments.iter().enumerate() {
+
+        let limit = self.compact_params.limit.unwrap_or(segments.len());
+        if limit < segments.len() {
+            for i in limit..segments.len() {
+                self.merged_segments_locations
+                    .push(segment_locations[i].clone());
+                summarys.push(segments[i].clone()?.summary.clone());
+            }
+        }
+
+        for (idx, segment) in segments.iter().take(limit).enumerate() {
             let mut need_merge = false;
             let mut remains = Vec::new();
             let segment = segment.clone()?;
@@ -127,9 +133,9 @@ impl TableMutator for FullCompactMutator {
 
             // If the number of blocks of segment meets block_per_seg, and the blocks in segments donot need to be compacted,
             // then record the segment information.
-            if !need_merge && segment.blocks.len() == self.block_per_seg {
-                let location = segment_locations[idx].clone();
-                self.merged_segments_locations.push(location);
+            if !need_merge && segment.blocks.len() == self.compact_params.block_per_seg {
+                self.merged_segments_locations
+                    .push(segment_locations[idx].clone());
                 summarys.push(segment.summary.clone());
                 continue;
             }
@@ -159,7 +165,7 @@ impl TableMutator for FullCompactMutator {
             &self.location_generator,
             &segment_info_cache,
         );
-        let chunks = remain_blocks.chunks(self.block_per_seg);
+        let chunks = remain_blocks.chunks(self.compact_params.block_per_seg);
         for chunk in chunks {
             let new_summary = reduce_block_metas(chunk)?;
             let new_segment = SegmentInfo::new(chunk.to_vec(), new_summary.clone());
@@ -210,7 +216,7 @@ impl TableMutator for FullCompactMutator {
         table
             .commit_mutation(
                 &self.ctx,
-                self.base_snapshot,
+                self.compact_params.base_snapshot,
                 segments,
                 summary,
                 abort_operation,

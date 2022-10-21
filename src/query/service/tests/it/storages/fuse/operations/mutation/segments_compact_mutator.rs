@@ -57,7 +57,7 @@ async fn test_compact_segment_normal_case() -> Result<()> {
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let mut pipeline = common_pipeline_core::Pipeline::create();
     let mutator = fuse_table
-        .compact(ctx.clone(), CompactTarget::Segments, &mut pipeline)
+        .compact(ctx.clone(), CompactTarget::Segments, None, &mut pipeline)
         .await?;
     assert!(mutator.is_some());
     let mutator = mutator.unwrap();
@@ -102,7 +102,7 @@ async fn test_compact_segment_resolvable_conflict() -> Result<()> {
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let mut pipeline = common_pipeline_core::Pipeline::create();
     let mutator = fuse_table
-        .compact(ctx.clone(), CompactTarget::Segments, &mut pipeline)
+        .compact(ctx.clone(), CompactTarget::Segments, None, &mut pipeline)
         .await?;
     assert!(mutator.is_some());
     let mutator = mutator.unwrap();
@@ -165,7 +165,7 @@ async fn test_compact_segment_unresolvable_conflict() -> Result<()> {
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let mut pipeline = common_pipeline_core::Pipeline::create();
     let mutator = fuse_table
-        .compact(ctx.clone(), CompactTarget::Segments, &mut pipeline)
+        .compact(ctx.clone(), CompactTarget::Segments, None, &mut pipeline)
         .await?;
     assert!(mutator.is_some());
     let mutator = mutator.unwrap();
@@ -200,7 +200,7 @@ async fn compact_segment(ctx: Arc<QueryContext>, table: &Arc<dyn Table>) -> Resu
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let mut pipeline = common_pipeline_core::Pipeline::create();
     let mutator = fuse_table
-        .compact(ctx, CompactTarget::Segments, &mut pipeline)
+        .compact(ctx, CompactTarget::Segments, None, &mut pipeline)
         .await?
         .unwrap();
     mutator.try_commit(table.clone()).await
