@@ -17,7 +17,7 @@ A scalar subquery selects only one column or expression and returns only one row
 - If a scalar subquery returns 0 rows, Databend will use NULL as the subquery output.
 - If a scalar subquery returns more than one row, Databend will throw an error.
 
-### Example
+### Examples
 
 ```sql
 CREATE TABLE t1 (a int);
@@ -61,7 +61,7 @@ An EXISTS subquery is a boolean expression that can appear in a WHERE clause:
 * Correlated EXISTS subqueries are currently supported only in a WHERE clause.
 :::
 
-### Example
+### Examples
 
 ```sql
 SELECT number FROM numbers(10) WHERE number>5 AND exists(SELECT number FROM numbers(5) WHERE number>4);
@@ -108,7 +108,7 @@ By using IN or NOT IN, you can check whether an expression matches any value in 
 [ NOT ] IN ( <query> )
 ```
 
-### Example
+### Examples
 
 ```sql
 CREATE TABLE t1 (a int);
