@@ -324,6 +324,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
                     None,
                     has_result,
                     schema,
+                    None,
                 ))
             }
             None => {
@@ -331,7 +332,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
                 let context = self.session.create_query_context().await?;
 
                 let mut planner = Planner::new(context.clone());
-                let (plan, _, _) = planner.plan_sql(query).await?;
+                let (plan, _, fmt) = planner.plan_sql(query).await?;
 
                 context.attach_query_str(plan.to_string(), query);
                 let interpreter = InterpreterFactory::get(context.clone(), &plan).await;
@@ -347,6 +348,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
                             extra_info,
                             has_result_set,
                             schema,
+                            fmt,
                         ))
                     }
                     Err(e) => {

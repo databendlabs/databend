@@ -20,6 +20,7 @@ SELECT
     [ORDER BY {col_name | expr | col_alias | col_position} [ASC | DESC], [ NULLS { FIRST | LAST }]
     [LIMIT row_count]
     [OFFSET row_count]
+    [FORMAT format]
     ]
 ```
 
@@ -43,7 +44,7 @@ SELECT number FROM numbers(3);
 ## FROM Clause
 
 ```sql
-SELECT number FROM numbers(3) AS a; 
+SELECT number FROM numbers(3) AS a;
 +--------+
 | number |
 +--------+
@@ -180,7 +181,7 @@ INSERT INTO t_null VALUES (3);
 INSERT INTO t_null VALUES (NULL);
 INSERT INTO t_null VALUES (NULL);
 
---Databend considers NULL values larger than any non-NULL values. 
+--Databend considers NULL values larger than any non-NULL values.
 --The NULL values appear last in the following example that sorts the results in ascending order:
 
 SELECT number FROM t_null order by number ASC;
@@ -251,6 +252,27 @@ SELECT number FROM numbers(5) ORDER BY number OFFSET 2;
 |      3 |
 |      4 |
 +--------+
+```
+
+## FORMAT Clause
+
+Format the output of the query result.
+
+Current supported format:
+
+- NULL: output nothing.
+
+```sql
+SELECT number FROM numbers(2);
++--------+
+| number |
++--------+
+|      0 |
+|      1 |
++--------+
+
+mysql> SELECT number FROM numbers(2) FORMAT NULL;
+-- Empty set
 ```
 
 ## Nested Sub-Selects

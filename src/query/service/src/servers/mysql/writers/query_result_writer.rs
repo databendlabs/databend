@@ -45,6 +45,7 @@ pub struct QueryResult {
     extra_info: Option<Box<dyn ProgressReporter + Send>>,
     has_result_set: bool,
     schema: DataSchemaRef,
+    format: Option<String>,
 }
 
 impl QueryResult {
@@ -53,12 +54,14 @@ impl QueryResult {
         extra_info: Option<Box<dyn ProgressReporter + Send>>,
         has_result_set: bool,
         schema: DataSchemaRef,
+        format: Option<String>,
     ) -> QueryResult {
         QueryResult {
             blocks,
             extra_info,
             has_result_set,
             schema,
+            format,
         }
     }
 }
@@ -157,6 +160,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
         match convert_schema(&query_result.schema) {
             Err(error) => Self::err(&error, dataset_writer).await,
             Ok(columns) => {
+                let output_format = query_result.format.unwrap_or_default().to_ascii_uppercase();
                 let mut row_writer = dataset_writer.start(&columns).await?;
 
                 let blocks = &mut query_result.blocks;
@@ -173,6 +177,9 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                         }
                         Ok(block) => block,
                     };
+                    if output_format == "NULL" {
+                        continue;
+                    }
                     match block.get_serializers() {
                         Ok(serializers) => {
                             let rows_size = block.column(0).len();
