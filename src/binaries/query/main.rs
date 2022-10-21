@@ -15,6 +15,9 @@
 use std::env;
 use std::sync::Arc;
 
+use limits_rs::get_own_limits;
+use sysinfo::set_open_files_limit;
+
 use common_base::base::RuntimeTracker;
 use common_config::Config;
 use common_config::DATABEND_COMMIT_VERSION;
@@ -72,6 +75,14 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 
     init_default_metrics_recorder();
     set_panic_hook();
+
+    let limits = get_own_limits().unwrap();
+    let max_open_files_soft_limit = limits.max_open_files.soft;
+    if max_open_files_soft_limit < 65535 {
+        if set_open_files_limit(65535) {
+            warn!("Open files limit has been set to {}", 65535);
+        }
+    }
 
     GlobalServices::init(conf.clone()).await?;
     let mut shutdown_handle = ShutdownHandle::create()?;
