@@ -8,8 +8,9 @@ A subquery is a query nested within another one. Databend supports the following
 
 - [Scalar Subquery](#scalar-subquery)
 - [EXISTS / NOT EXISTS](#exists--not-exists)
+- [IN / NOT IN](#in--not-in)
 
-## Scalar Subqueries
+## Scalar Subquery
 
 A scalar subquery selects only one column or expression and returns only one row at most. A SQL query can have scalar subqueries in any places where a column or expression is expected.
 
@@ -94,3 +95,58 @@ SELECT number FROM numbers(10) WHERE number>5 AND not exists(SELECT number FROM 
 ```
 
 `not exists(SELECT number FROM numbers(5) WHERE number>4)` is TRUE.
+
+## IN / NOT IN
+
+By using IN or NOT IN, you can check whether an expression matches any value in a list returned by a subquery.
+
+- When you use IN or NOT IN, the subquery must return a single column of values. 
+
+### Syntax
+
+```sql
+[ NOT ] IN ( <query> )
+```
+
+### Example
+
+```sql
+CREATE TABLE t1 (a int);
+CREATE TABLE t2 (a int);
+
+INSERT INTO t1 VALUES (1);
+INSERT INTO t1 VALUES (2);
+INSERT INTO t1 VALUES (3);
+
+INSERT INTO t2 VALUES (3);
+INSERT INTO t2 VALUES (4);
+INSERT INTO t2 VALUES (5);
+
+-- IN example
+SELECT * 
+FROM   t1 
+WHERE  t1.a IN (SELECT *
+               FROM   t2);
+
+--
++--------+
+|      a |
++--------+
+|      3 |
++--------+
+
+-- NOT IN example
+SELECT * 
+FROM   t1 
+WHERE  t1.a NOT IN (SELECT *
+               FROM   t2);
+
+--
++--------+
+|      a |
++--------+
+|      1 |
+|      2 |
++--------+
+```
+
