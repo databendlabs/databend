@@ -23,15 +23,12 @@ use common_config::Config;
 use common_exception::Result;
 #[cfg(feature = "hive")]
 use common_storages_hive::CATALOG_HIVE;
-use once_cell::sync::OnceCell;
 
 use crate::catalogs::DatabaseCatalog;
 
 #[async_trait::async_trait]
 pub trait CatalogManagerHelper {
     async fn init(conf: &Config, v: Singleton<Arc<CatalogManager>>) -> Result<()>;
-
-    fn instance() -> Arc<CatalogManager>;
 
     async fn try_create(conf: &Config) -> Result<Arc<CatalogManager>>;
 
@@ -41,22 +38,12 @@ pub trait CatalogManagerHelper {
     fn register_external_catalogs(&mut self, conf: &Config) -> Result<()>;
 }
 
-static CATALOG_MANAGER: OnceCell<Singleton<Arc<CatalogManager>>> = OnceCell::new();
-
 #[async_trait::async_trait]
 impl CatalogManagerHelper for CatalogManager {
     async fn init(conf: &Config, v: Singleton<Arc<CatalogManager>>) -> Result<()> {
         v.init(Self::try_create(conf).await?)?;
-
-        CATALOG_MANAGER.set(v).ok();
+        CatalogManager::set_instance(v);
         Ok(())
-    }
-
-    fn instance() -> Arc<CatalogManager> {
-        match CATALOG_MANAGER.get() {
-            None => panic!("CatalogManager is not init"),
-            Some(catalog_manager) => catalog_manager.get(),
-        }
     }
 
     async fn try_create(conf: &Config) -> Result<Arc<CatalogManager>> {

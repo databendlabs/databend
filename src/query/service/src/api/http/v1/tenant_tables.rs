@@ -23,7 +23,6 @@ use poem::IntoResponse;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::catalogs::CatalogManagerHelper;
 use crate::sessions::SessionManager;
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Default)]

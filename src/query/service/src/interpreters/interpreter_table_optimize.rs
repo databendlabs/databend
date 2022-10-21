@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::table::CompactTarget;
 use common_exception::Result;
 use common_planner::plans::OptimizeTableAction;
 use common_planner::plans::OptimizeTablePlan;
@@ -56,14 +57,29 @@ impl Interpreter for OptimizeTableInterpreter {
             action,
             OptimizeTableAction::Purge | OptimizeTableAction::All
         );
-        let do_compact = matches!(
+        let do_compact_blocks = matches!(
             action,
-            OptimizeTableAction::Compact | OptimizeTableAction::All
+            OptimizeTableAction::CompactBlocks | OptimizeTableAction::All
         );
 
-        if do_compact {
+        let do_compact_segments_only = matches!(action, OptimizeTableAction::CompactSegments);
+
+        if do_compact_segments_only {
             let mut pipeline = Pipeline::create();
-            let mutator = table.compact(ctx.clone(), &mut pipeline).await?;
+            if let Some(mutator) = table
+                .compact(ctx.clone(), CompactTarget::Segments, &mut pipeline)
+                .await?
+            {
+                mutator.try_commit(table).await?;
+                return Ok(PipelineBuildResult::create());
+            }
+        }
+
+        if do_compact_blocks {
+            let mut pipeline = Pipeline::create();
+            let mutator = table
+                .compact(ctx.clone(), CompactTarget::Blocks, &mut pipeline)
+                .await?;
 
             if let Some(mutator) = mutator {
                 let settings = ctx.get_settings();
@@ -75,7 +91,7 @@ impl Interpreter for OptimizeTableInterpreter {
                 executor.execute()?;
                 drop(executor);
 
-                mutator.try_commit(table.get_table_info()).await?;
+                mutator.try_commit(table.clone()).await?;
             }
 
             if do_purge {

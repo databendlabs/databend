@@ -33,6 +33,7 @@ use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::MetaId;
 use common_pipeline_core::Pipeline;
+use common_storage::StorageMetrics;
 
 use crate::table::column_stats_provider_impls::DummyColumnStatisticsProvider;
 use crate::table_context::TableContext;
@@ -73,6 +74,11 @@ pub trait Table: Sync + Send {
     fn as_any(&self) -> &dyn Any;
 
     fn get_table_info(&self) -> &TableInfo;
+
+    /// get_data_metrics will get data metrics from table.
+    fn get_data_metrics(&self) -> Option<Arc<StorageMetrics>> {
+        None
+    }
 
     /// whether column prune(projection) can help in table read
     fn benefit_column_prune(&self) -> bool {
@@ -232,9 +238,10 @@ pub trait Table: Sync + Send {
     async fn compact(
         &self,
         ctx: Arc<dyn TableContext>,
+        target: CompactTarget,
         pipeline: &mut Pipeline,
-    ) -> Result<Option<Arc<dyn TableMutator>>> {
-        let (_, _) = (ctx, pipeline);
+    ) -> Result<Option<Box<dyn TableMutator>>> {
+        let (_, _, _) = (ctx, target, pipeline);
 
         Err(ErrorCode::UnImplement(format!(
             "table {},  of engine type {}, does not support compact",
@@ -248,7 +255,7 @@ pub trait Table: Sync + Send {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         push_downs: Option<Extras>,
-    ) -> Result<Option<Arc<dyn TableMutator>>> {
+    ) -> Result<Option<Box<dyn TableMutator>>> {
         let (_, _, _) = (ctx, pipeline, push_downs);
 
         Err(ErrorCode::UnImplement(format!(
@@ -301,6 +308,11 @@ pub struct ColumnStatistics {
     pub max: DataValue,
     pub null_count: u64,
     pub number_of_distinct_values: u64,
+}
+
+pub enum CompactTarget {
+    Blocks,
+    Segments,
 }
 
 pub trait ColumnStatisticsProvider {

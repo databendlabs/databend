@@ -29,8 +29,6 @@ use common_base::base::ProgressValues;
 use common_base::base::TrySpawn;
 use common_config::Config;
 use common_config::DATABEND_COMMIT_VERSION;
-use common_contexts::DalContext;
-use common_contexts::DalMetrics;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -44,8 +42,8 @@ use common_legacy_planners::SourceInfo;
 use common_legacy_planners::StageTableInfo;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::UserInfo;
-use common_storage::StorageParams;
-use opendal::Operator;
+use common_storage::DataOperator;
+use common_storage::StorageMetrics;
 use parking_lot::RwLock;
 use tracing::debug;
 
@@ -182,6 +180,10 @@ impl QueryContext {
         self.shared.get_affect()
     }
 
+    pub fn get_data_metrics(&self) -> StorageMetrics {
+        self.shared.get_data_metrics()
+    }
+
     pub fn set_affect(self: &Arc<Self>, affect: QueryAffect) {
         self.shared.set_affect(affect)
     }
@@ -296,10 +298,7 @@ impl TableContext for QueryContext {
     fn get_tenant(&self) -> String {
         self.shared.get_tenant()
     }
-    /// Get the data accessor metrics.
-    fn get_dal_metrics(&self) -> DalMetrics {
-        self.shared.dal_ctx.get_metrics().as_ref().clone()
-    }
+
     /// Get the session running query.
     fn get_query_str(&self) -> String {
         self.shared.get_query_str()
@@ -310,17 +309,8 @@ impl TableContext for QueryContext {
     }
 
     // Get the storage data accessor operator from the session manager.
-    fn get_storage_operator(&self) -> Result<Operator> {
-        // deref from `StorageOperator` to `opendal::Operator` first.
-        let operator = (*self.shared.storage_operator).clone();
-
-        Ok(operator.layer(self.shared.dal_ctx.as_ref().clone()))
-    }
-    fn get_storage_params(&self) -> StorageParams {
-        self.shared.get_storage_params()
-    }
-    fn get_dal_context(&self) -> &DalContext {
-        self.shared.dal_ctx.as_ref()
+    fn get_data_operator(&self) -> Result<DataOperator> {
+        Ok(self.shared.data_operator.clone())
     }
     fn push_precommit_block(&self, block: DataBlock) {
         self.shared.push_precommit_block(block)

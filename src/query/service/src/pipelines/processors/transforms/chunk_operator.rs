@@ -25,7 +25,7 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::Transform;
 use common_pipeline_transforms::processors::transforms::Transformer;
 
-use crate::evaluator::EvalNode;
+use crate::sql::evaluator::EvalNode;
 
 /// `ChunkOperator` takes a `DataBlock` as input and produces a `DataBlock` as output.
 #[derive(Clone)]

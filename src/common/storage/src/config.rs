@@ -45,6 +45,7 @@ pub enum StorageParams {
     Http(StorageHttpConfig),
     Ipfs(StorageIpfsConfig),
     Memory,
+    Moka(StorageMokaConfig),
     Obs(StorageObsConfig),
     Oss(StorageOssConfig),
     S3(StorageS3Config),
@@ -85,6 +86,7 @@ impl Display for StorageParams {
                 write!(f, "ipfs://endpoint={},root={}", c.endpoint_url, c.root)
             }
             StorageParams::Memory => write!(f, "memory://"),
+            StorageParams::Moka(_) => write!(f, "moka://"),
             StorageParams::Obs(v) => write!(
                 f,
                 "obs://bucket={},root={},endpoint={}",
@@ -120,6 +122,7 @@ impl StorageParams {
             StorageParams::Http(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Ipfs(c) => c.endpoint_url.starts_with("https://"),
             StorageParams::Memory => false,
+            StorageParams::Moka(_) => false,
             StorageParams::Obs(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Oss(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::S3(v) => v.endpoint_url.starts_with("https://"),
@@ -355,6 +358,7 @@ impl Debug for StorageObsConfig {
             .finish()
     }
 }
+
 /// config for Aliyun Object Storage Service
 #[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StorageOssConfig {
@@ -380,8 +384,13 @@ impl Debug for StorageOssConfig {
     }
 }
 
+/// config for Moka Object Storage Service
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StorageMokaConfig {}
+
 static SHARE_TABLE_CONFIG: OnceCell<Singleton<ShareTableConfig>> = OnceCell::new();
 
+// TODO: This config should be moved out of common-storage crate.
 #[derive(Clone)]
 pub struct ShareTableConfig {
     pub share_endpoint_address: Option<String>,

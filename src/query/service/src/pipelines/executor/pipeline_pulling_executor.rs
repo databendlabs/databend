@@ -24,7 +24,8 @@ use common_base::base::Thread;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_pipeline_core::SinkPipeBuilder;
+use common_exception::ABORT_QUERY;
+use common_exception::ABORT_SESSION;
 use parking_lot::Condvar;
 use parking_lot::Mutex;
 
@@ -103,15 +104,7 @@ impl PipelinePullingExecutor {
             ));
         }
 
-        let mut sink_pipe_builder = SinkPipeBuilder::create();
-
-        for _index in 0..pipeline.output_len() {
-            let input = InputPort::create();
-            sink_pipe_builder.add_sink(input.clone(), PullingSink::create(tx.clone(), input));
-        }
-
-        pipeline.add_pipe(sink_pipe_builder.finalize());
-        Ok(())
+        pipeline.add_sink(|input| Ok(PullingSink::create(tx.clone(), input)))
     }
 
     pub fn try_create(
@@ -193,14 +186,26 @@ impl PipelinePullingExecutor {
                     continue;
                 }
                 Err(_disconnected) => {
+                    let mut killed = false;
+
                     if !self.executor.is_finished() {
+                        killed = true;
                         self.executor.finish(None);
                     }
 
                     self.state.wait_finish();
 
                     if self.state.is_catch_error() {
-                        return Err(self.state.get_catch_error());
+                        let error_code = self.state.get_catch_error();
+
+                        // If the query is killed here, we should ignore the abort error.
+                        // when executing `select * from xx limit xx`, if enough rows have been returned, we try to kill the query in here for finish query as soon as possible.
+                        if killed
+                            && error_code.code() != ABORT_QUERY
+                            && error_code.code() != ABORT_SESSION
+                        {
+                            return Err(error_code);
+                        }
                     }
 
                     Ok(None)

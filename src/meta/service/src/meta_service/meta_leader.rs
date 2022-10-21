@@ -143,8 +143,9 @@ impl<'a> MetaLeader<'a> {
 
     /// A node leave the cluster.
     ///
-    /// - Remove the node from cluster.
     /// - Remove the node from membership.
+    /// - Stop replication.
+    /// - Remove the node from cluster.
     ///
     /// If the node is not in cluster membership, it still returns Ok.
     #[tracing::instrument(level = "debug", skip(self))]
@@ -153,47 +154,43 @@ impl<'a> MetaLeader<'a> {
         let metrics = self.meta_node.raft.metrics().borrow().clone();
         let membership = metrics.membership_config.membership.clone();
 
-        if !membership.contains(&node_id) {
-            return Ok(());
-        }
-
         // safe unwrap: if the first config is None, panic is the expected behavior here.
         let mut membership = membership.get_ith_config(0).unwrap().clone();
-        membership.remove(&node_id);
 
-        self.meta_node
-            .raft
-            .change_membership(membership, true)
-            .await?;
+        // 1. Remove it from membership if needed.
+        if membership.contains(&node_id) {
+            membership.remove(&node_id);
 
+            self.meta_node
+                .raft
+                .change_membership(membership, true)
+                .await?;
+        }
+
+        // 2. Stop replication
+        let res = self.meta_node.raft.remove_learner(node_id).await;
+        if let Err(e) = res {
+            match e {
+                RemoveLearnerError::ForwardToLeader(e) => {
+                    return Err(RaftChangeMembershipError::ForwardToLeader(e));
+                }
+                RemoveLearnerError::NotLearner(_e) => {
+                    error!("Node to leave the cluster is not a learner: {}", node_id);
+                }
+                RemoveLearnerError::NotExists(_e) => {
+                    info!("Node to leave the cluster does not exists: {}", node_id);
+                }
+                RemoveLearnerError::Fatal(e) => return Err(RaftChangeMembershipError::Fatal(e)),
+            }
+        }
+
+        // 3. Remove node info
         let ent = LogEntry {
             txid: None,
             time_ms: None,
             cmd: Cmd::RemoveNode { node_id },
         };
         self.write(ent).await?;
-
-        // When write(RemoveNode{}) returns, the replication to that node should be dropped.
-        // But there is chance `add_configured_non_voters()` adds it back because it runs in another task.
-        // Thus we need to ensure the replication is removed here.
-        let res = self.meta_node.raft.remove_learner(node_id).await;
-
-        if let Err(e) = res {
-            return match e {
-                RemoveLearnerError::ForwardToLeader(e) => {
-                    Err(RaftChangeMembershipError::ForwardToLeader(e))
-                }
-                RemoveLearnerError::NotLearner(_e) => {
-                    error!("Node to leave the cluster is not a learner: {}", node_id);
-                    Ok(())
-                }
-                RemoveLearnerError::NotExists(_e) => {
-                    info!("Node to leave the cluster does not exists: {}", node_id);
-                    Ok(())
-                }
-                RemoveLearnerError::Fatal(e) => Err(RaftChangeMembershipError::Fatal(e)),
-            };
-        }
 
         Ok(())
     }

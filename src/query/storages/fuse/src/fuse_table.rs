@@ -22,6 +22,7 @@ use common_catalog::catalog::StorageDescription;
 use common_catalog::table::ColumnId;
 use common_catalog::table::ColumnStatistics;
 use common_catalog::table::ColumnStatisticsProvider;
+use common_catalog::table::CompactTarget;
 use common_catalog::table_context::TableContext;
 use common_catalog::table_mutator::TableMutator;
 use common_datablocks::DataBlock;
@@ -42,10 +43,10 @@ use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
 use common_sharing::create_share_table_operator;
 use common_storage::init_operator;
+use common_storage::DataOperator;
 use common_storage::ShareTableConfig;
-use common_storage::StorageOperator;
-use common_storages_util::storage_context::StorageContext;
-use common_storages_util::table_storage_prefix::table_storage_prefix;
+use common_storage::StorageMetrics;
+use common_storage::StorageMetricsLayer;
 use opendal::Operator;
 use uuid::Uuid;
 
@@ -54,6 +55,7 @@ use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::AppendOperationLogEntry;
 use crate::pipelines::Pipeline;
+use crate::table_storage_prefix;
 use crate::NavigationPoint;
 use crate::Table;
 use crate::TableStatistics;
@@ -76,10 +78,11 @@ pub struct FuseTable {
     pub(crate) read_only: bool,
 
     pub(crate) operator: Operator,
+    pub(crate) data_metrics: Arc<StorageMetrics>,
 }
 
 impl FuseTable {
-    pub fn try_create(_ctx: StorageContext, table_info: TableInfo) -> Result<Box<dyn Table>> {
+    pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
         let r = Self::do_create(table_info, false)?;
         Ok(r)
     }
@@ -91,7 +94,7 @@ impl FuseTable {
         if let Some((_, order)) = &cluster_key_meta {
             cluster_keys = ExpressionParser::parse_exprs(order)?;
         }
-        let operator = match table_info.from_share {
+        let mut operator = match table_info.from_share {
             Some(ref from_share) => create_share_table_operator(
                 ShareTableConfig::share_endpoint_address(),
                 &table_info.tenant,
@@ -104,12 +107,14 @@ impl FuseTable {
                 match storage_params {
                     Some(sp) => init_operator(&sp)?,
                     None => {
-                        let op = &*(StorageOperator::instance());
+                        let op = &*(DataOperator::instance());
                         op.clone()
                     }
                 }
             }
         };
+        let data_metrics = Arc::new(StorageMetrics::default());
+        operator = operator.layer(StorageMetricsLayer::new(data_metrics.clone()));
 
         Ok(Box::new(FuseTable {
             table_info,
@@ -118,6 +123,7 @@ impl FuseTable {
             meta_location_generator: TableMetaLocationGenerator::with_prefix(storage_prefix),
             read_only,
             operator,
+            data_metrics,
         }))
     }
 
@@ -255,6 +261,10 @@ impl Table for FuseTable {
 
     fn support_prewhere(&self) -> bool {
         true
+    }
+
+    fn get_data_metrics(&self) -> Option<Arc<StorageMetrics>> {
+        Some(self.data_metrics.clone())
     }
 
     async fn alter_table_cluster_keys(
@@ -454,9 +464,10 @@ impl Table for FuseTable {
     async fn compact(
         &self,
         ctx: Arc<dyn TableContext>,
+        target: CompactTarget,
         pipeline: &mut Pipeline,
-    ) -> Result<Option<Arc<dyn TableMutator>>> {
-        self.do_compact(ctx, pipeline).await
+    ) -> Result<Option<Box<dyn TableMutator>>> {
+        self.do_compact(ctx, target, pipeline).await
     }
 
     async fn recluster(
@@ -464,7 +475,7 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         push_downs: Option<Extras>,
-    ) -> Result<Option<Arc<dyn TableMutator>>> {
+    ) -> Result<Option<Box<dyn TableMutator>>> {
         self.do_recluster(ctx, pipeline, push_downs).await
     }
 }

@@ -20,10 +20,10 @@ use common_functions::scalars::FunctionFactory;
 use common_planner::IndexType;
 use parking_lot::RwLock;
 
-use crate::evaluator::EvalNode;
-use crate::evaluator::Evaluator;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::sessions::QueryContext;
+use crate::sql::evaluator::EvalNode;
+use crate::sql::evaluator::Evaluator;
 use crate::sql::executor::HashJoin;
 use crate::sql::executor::PhysicalScalar;
 use crate::sql::plans::JoinType;

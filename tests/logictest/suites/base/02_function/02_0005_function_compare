@@ -52,6 +52,18 @@ select '%' like '\%';
 ----
 1
 
+statement query B
+select 'h\n' like 'h_';
+
+----
+1
+
+statement query B
+select 'hello\n' like 'h%';
+
+----
+1
+
 
 statement query B
 select '%' like '\\%';

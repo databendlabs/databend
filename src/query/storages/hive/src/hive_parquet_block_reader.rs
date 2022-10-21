@@ -30,7 +30,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storages_util::file_meta_data_reader::FileMetaDataReader;
+use common_storages_cache::FileMetaDataReader;
 use futures::AsyncReadExt;
 use opendal::Object;
 use opendal::Operator;

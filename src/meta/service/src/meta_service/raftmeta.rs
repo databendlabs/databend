@@ -59,6 +59,7 @@ use common_meta_types::MetaOperationError;
 use common_meta_types::MetaStartupError;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
+use itertools::Itertools;
 use openraft::Config;
 use openraft::LogId;
 use openraft::Raft;
@@ -508,6 +509,7 @@ impl MetaNode {
             return Ok(false);
         };
 
+        let mut errors = vec![];
         let addrs = &conf.leave_via;
         info!("node-{} about to leave cluster via {:?}", leave_id, addrs);
 
@@ -518,10 +520,14 @@ impl MetaNode {
             let conn_res = RaftServiceClient::connect(format!("http://{}", addr)).await;
             let mut raft_client = match conn_res {
                 Ok(c) => c,
-                Err(err) => {
+                Err(e) => {
                     error!(
                         "fail connecting to {} while leaving cluster, err: {:?}",
-                        addr, err
+                        addr, e
+                    );
+                    errors.push(
+                        AnyError::new(&e)
+                            .add_context(|| format!("leave {} via: {}", leave_id, addr.clone())),
                     );
                     continue;
                 }
@@ -546,12 +552,18 @@ impl MetaNode {
                 }
                 Err(s) => {
                     error!("leaving cluster via {} fail: {:?}", addr, s);
+                    errors.push(
+                        AnyError::new(&s)
+                            .add_context(|| format!("leave {} via: {}", leave_id, addr.clone())),
+                    );
                 }
             };
         }
         Err(MetaManagementError::Leave(AnyError::error(format!(
-            "fail to leave {} cluster via {:?}",
-            leave_id, addrs
+            "fail to leave {} cluster via {:?}, caused by errors: {}",
+            leave_id,
+            addrs,
+            errors.into_iter().map(|e| e.to_string()).join(", ")
         ))))
     }
 
@@ -574,6 +586,7 @@ impl MetaNode {
             return Ok(());
         }
 
+        let mut errors = vec![];
         let addrs = &conf.join;
 
         // Joining cluster has to use advertise host instead of listen host.
@@ -596,6 +609,9 @@ impl MetaNode {
                 Ok(c) => c,
                 Err(e) => {
                     error!("connect to {} join cluster fail: {:?}", addr, e);
+                    errors.push(
+                        AnyError::new(&e).add_context(|| format!("join via: {}", addr.clone())),
+                    );
                     continue;
                 }
             };
@@ -625,12 +641,17 @@ impl MetaNode {
                 }
                 Err(s) => {
                     error!("join cluster via {} fail: {:?}", addr, s);
+                    errors.push(
+                        AnyError::new(&s).add_context(|| format!("join via: {}", addr.clone())),
+                    );
                 }
             };
         }
         Err(MetaManagementError::Join(AnyError::error(format!(
-            "fail to join {} cluster via {:?}",
-            self.sto.id, addrs
+            "fail to join {} cluster via {:?}, caused by errors: {}",
+            self.sto.id,
+            addrs,
+            errors.into_iter().map(|e| e.to_string()).join(", ")
         ))))
     }
 

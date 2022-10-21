@@ -15,13 +15,11 @@
 //! Test arrow-grpc API of metasrv
 use std::collections::HashSet;
 
-use anyerror::AnyError;
 use common_base::base::tokio;
 use common_base::base::Stoppable;
 use common_meta_api::KVApi;
 use common_meta_client::MetaGrpcClient;
 use common_meta_types::MatchSeq;
-use common_meta_types::MetaManagementError;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKVReply;
@@ -158,15 +156,15 @@ async fn test_retry_join() -> anyhow::Result<()> {
 
         tc1.config.raft_config.join = vec![bad_addr.clone()];
         let ret = start_metasrv_with_context(&mut tc1).await;
-        let expect = MetaManagementError::Join(AnyError::error(format!(
+        let expect = format!(
             "fail to join {} cluster via {:?}",
             1, tc1.config.raft_config.join
-        )));
+        );
 
         match ret {
             Ok(_) => panic!("must return JoinClusterFail"),
             Err(e) => {
-                assert_eq!(e.to_string(), expect.to_string());
+                assert!(e.to_string().starts_with(&expect));
             }
         }
     }
