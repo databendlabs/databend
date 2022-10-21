@@ -25,11 +25,31 @@ use common_ast::walk_expr_mut;
 use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_datavalues::type_coercion::compare_coercion;
+use common_datavalues::ArrayType;
+use common_datavalues::BooleanType;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
+use common_datavalues::DataTypeImpl;
+use common_datavalues::DateType;
+use common_datavalues::Float32Type;
+use common_datavalues::Float64Type;
+use common_datavalues::Int16Type;
+use common_datavalues::Int32Type;
+use common_datavalues::Int64Type;
+use common_datavalues::Int8Type;
+use common_datavalues::NullableType;
+use common_datavalues::ObjectType;
+use common_datavalues::StringType;
+use common_datavalues::StructType;
+use common_datavalues::TimestampType;
 use common_datavalues::ToDataType;
 use common_datavalues::TypeFactory;
+use common_datavalues::UInt16Type;
+use common_datavalues::UInt32Type;
+use common_datavalues::UInt64Type;
+use common_datavalues::UInt8Type;
+use common_datavalues::VariantType;
 use common_datavalues::Vu8;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -840,8 +860,44 @@ impl<'a> Binder {
                 let mut fields_default_expr = Vec::with_capacity(columns.len());
                 let mut fields_comments = Vec::with_capacity(columns.len());
                 for column in columns.iter() {
+                    fn type_name_to_data_type_impl(ty: TypeName) -> DataTypeImpl {
+                        match column.data_type {
+                            TypeName::Boolean => BooleanType::new_impl(),
+                            TypeName::UInt8 => UInt8Type::new_impl(),
+                            TypeName::UInt16 => UInt16Type::new_impl(),
+                            TypeName::UInt32 => UInt32Type::new_impl(),
+                            TypeName::UInt64 => UInt64Type::new_impl(),
+                            TypeName::Int8 => Int8Type::new_impl(),
+                            TypeName::Int16 => Int16Type::new_impl(),
+                            TypeName::Int32 => Int32Type::new_impl(),
+                            TypeName::Int64 => Int64Type::new_impl(),
+                            TypeName::Float32 => Float32Type::new_impl(),
+                            TypeName::Float64 => Float64Type::new_impl(),
+                            TypeName::Date => DateType::new_impl(),
+                            TypeName::Timestamp => TimestampType::new_impl(),
+                            TypeName::String => StringType::new_impl(),
+                            TypeName::Array { item_type } => {
+                                ArrayType::new_impl(type_name_to_data_type_impl(item_type))
+                            }
+                            TypeName::Tuple {
+                                fields_name,
+                                fields_type,
+                            } => StructType::new_impl(
+                                fields_name,
+                                fields_type
+                                    .iter()
+                                    .map(type_name_to_data_type_impl)
+                                    .collect(),
+                            ),
+                            TypeName::Object => ObjectType::new_impl(),
+                            TypeName::Variant => VariantType::new_impl(),
+                            TypeName::Nullable(ty) => {
+                                NullableType::new_impl(type_name_to_data_type_impl(ty))
+                            }
+                        }
+                    }
+                    let data_type = type_name_to_data_type_impl(&column.data_type);
                     let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
-                    let data_type = TypeFactory::instance().get(column.data_type.to_string())?;
 
                     fields.push(DataField::new(&name, data_type.clone()));
                     fields_default_expr.push({

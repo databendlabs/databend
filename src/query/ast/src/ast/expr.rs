@@ -259,7 +259,7 @@ pub enum TypeName {
     Timestamp,
     String,
     Array {
-        item_type: Option<Box<TypeName>>,
+        item_type: Box<TypeName>,
     },
     Tuple {
         fields_name: Option<Vec<String>>,
