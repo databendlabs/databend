@@ -17,4 +17,3 @@
 
 mod convert;
 mod kernel;
-mod parser;
