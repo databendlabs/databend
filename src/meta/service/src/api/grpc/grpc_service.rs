@@ -121,6 +121,8 @@ impl MetaService for MetaServiceImpl {
             payload,
         } = req;
 
+        info!("handle handshake request, client ver: {}", protocol_version);
+
         let min_compatible = to_digit_ver(&MIN_METACLI_SEMVER);
 
         // backward compatibility: no version in handshake.
@@ -149,6 +151,8 @@ impl MetaService for MetaServiceImpl {
                 payload: token.into_bytes(),
             };
             let output = futures::stream::once(async { Ok(resp) });
+
+            info!("handshake OK");
             Ok(Response::new(Box::pin(output)))
         } else {
             Err(Status::unauthenticated(format!(
