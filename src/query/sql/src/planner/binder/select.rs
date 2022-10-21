@@ -32,6 +32,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planner::IndexType;
 
+use crate::binder::join::JoinConditions;
 use crate::binder::scalar_common::split_conjunctions;
 use crate::binder::CteInfo;
 use crate::binder::Visibility;
@@ -435,15 +436,13 @@ impl<'a> Binder {
                 .into(),
             );
         }
-        let s_expr = self.bind_join_with_type(
-            join_type,
+        let join_conditions = JoinConditions {
             left_conditions,
             right_conditions,
-            vec![],
-            vec![],
-            left_expr,
-            right_expr,
-        )?;
+            non_equi_conditions: vec![],
+            other_conditions: vec![],
+        };
+        let s_expr = self.bind_join_with_type(join_type, join_conditions, left_expr, right_expr)?;
         Ok((s_expr, left_context))
     }
 

@@ -37,12 +37,18 @@ use crate::planner::binder::scalar::ScalarBinder;
 use crate::planner::binder::Binder;
 use crate::planner::semantic::NameResolutionContext;
 use crate::plans::BoundColumnRef;
-use crate::plans::Filter;
 use crate::plans::JoinType;
 use crate::plans::LogicalInnerJoin;
 use crate::plans::Scalar;
 use crate::plans::ScalarExpr;
 use crate::BindContext;
+
+pub struct JoinConditions {
+    pub(crate) left_conditions: Vec<Scalar>,
+    pub(crate) right_conditions: Vec<Scalar>,
+    pub(crate) non_equi_conditions: Vec<Scalar>,
+    pub(crate) other_conditions: Vec<Scalar>,
+}
 
 impl<'a> Binder {
     #[async_recursion]
@@ -129,6 +135,7 @@ impl<'a> Binder {
             self.ctx.clone(),
             &self.name_resolution_ctx,
             self.metadata.clone(),
+            join.op.clone(),
             &left_context,
             &right_context,
             &mut bind_context,
@@ -144,60 +151,34 @@ impl<'a> Binder {
             )
             .await?;
 
+        let join_conditions = JoinConditions {
+            left_conditions: left_join_conditions,
+            right_conditions: right_join_conditions,
+            non_equi_conditions,
+            other_conditions,
+        };
+        dbg!(join.op.clone());
         let s_expr = match &join.op {
-            JoinOperator::Inner => self.bind_join_with_type(
-                JoinType::Inner,
-                left_join_conditions,
-                right_join_conditions,
-                non_equi_conditions,
-                other_conditions,
-                left_child,
-                right_child,
-            ),
-            JoinOperator::LeftOuter => self.bind_join_with_type(
-                JoinType::Left,
-                left_join_conditions,
-                right_join_conditions,
-                non_equi_conditions,
-                other_conditions,
-                left_child,
-                right_child,
-            ),
-            JoinOperator::RightOuter => self.bind_join_with_type(
-                JoinType::Right,
-                left_join_conditions,
-                right_join_conditions,
-                non_equi_conditions,
-                other_conditions,
-                left_child,
-                right_child,
-            ),
-            JoinOperator::FullOuter => self.bind_join_with_type(
-                JoinType::Full,
-                left_join_conditions,
-                right_join_conditions,
-                non_equi_conditions,
-                other_conditions,
-                left_child,
-                right_child,
-            ),
-            JoinOperator::CrossJoin => self.bind_join_with_type(
-                JoinType::Cross,
-                left_join_conditions,
-                right_join_conditions,
-                non_equi_conditions,
-                other_conditions,
-                left_child,
-                right_child,
-            ),
+            JoinOperator::Inner => {
+                self.bind_join_with_type(JoinType::Inner, join_conditions, left_child, right_child)
+            }
+            JoinOperator::LeftOuter => {
+                self.bind_join_with_type(JoinType::Left, join_conditions, left_child, right_child)
+            }
+            JoinOperator::RightOuter => {
+                self.bind_join_with_type(JoinType::Right, join_conditions, left_child, right_child)
+            }
+            JoinOperator::FullOuter => {
+                self.bind_join_with_type(JoinType::Full, join_conditions, left_child, right_child)
+            }
+            JoinOperator::CrossJoin => {
+                self.bind_join_with_type(JoinType::Cross, join_conditions, left_child, right_child)
+            }
             JoinOperator::LeftSemi => {
                 bind_context = left_context;
                 self.bind_join_with_type(
                     JoinType::LeftSemi,
-                    left_join_conditions,
-                    right_join_conditions,
-                    non_equi_conditions,
-                    other_conditions,
+                    join_conditions,
                     left_child,
                     right_child,
                 )
@@ -206,10 +187,7 @@ impl<'a> Binder {
                 bind_context = right_context;
                 self.bind_join_with_type(
                     JoinType::RightSemi,
-                    left_join_conditions,
-                    right_join_conditions,
-                    non_equi_conditions,
-                    other_conditions,
+                    join_conditions,
                     left_child,
                     right_child,
                 )
@@ -218,10 +196,7 @@ impl<'a> Binder {
                 bind_context = left_context;
                 self.bind_join_with_type(
                     JoinType::LeftAnti,
-                    left_join_conditions,
-                    right_join_conditions,
-                    non_equi_conditions,
-                    other_conditions,
+                    join_conditions,
                     left_child,
                     right_child,
                 )
@@ -230,10 +205,7 @@ impl<'a> Binder {
                 bind_context = right_context;
                 self.bind_join_with_type(
                     JoinType::RightAnti,
-                    left_join_conditions,
-                    right_join_conditions,
-                    non_equi_conditions,
-                    other_conditions,
+                    join_conditions,
                     left_child,
                     right_child,
                 )
@@ -246,13 +218,14 @@ impl<'a> Binder {
     pub fn bind_join_with_type(
         &mut self,
         join_type: JoinType,
-        left_conditions: Vec<Scalar>,
-        right_conditions: Vec<Scalar>,
-        non_equi_conditions: Vec<Scalar>,
-        other_conditions: Vec<Scalar>,
+        join_conditions: JoinConditions,
         left_child: SExpr,
         right_child: SExpr,
     ) -> Result<SExpr> {
+        let left_conditions = join_conditions.left_conditions;
+        let right_conditions = join_conditions.right_conditions;
+        let non_equi_conditions = join_conditions.non_equi_conditions;
+        let other_conditions = join_conditions.other_conditions;
         if join_type == JoinType::Cross
             && (!left_conditions.is_empty() || !right_conditions.is_empty())
         {
@@ -264,21 +237,16 @@ impl<'a> Binder {
             left_conditions,
             right_conditions,
             non_equi_conditions,
+            other_conditions,
             join_type,
             marker_index: None,
             from_correlated_subquery: false,
         };
-        let s_expr = SExpr::create_binary(inner_join.into(), left_child, right_child);
-        if other_conditions.is_empty() {
-            Ok(s_expr)
-        } else {
-            let filter = Filter {
-                predicates: other_conditions,
-                is_having: false,
-            }
-            .into();
-            Ok(SExpr::create_unary(filter, s_expr))
-        }
+        Ok(SExpr::create_binary(
+            inner_join.into(),
+            left_child,
+            right_child,
+        ))
     }
 }
 
@@ -317,7 +285,7 @@ struct JoinConditionResolver<'a> {
     ctx: Arc<dyn TableContext>,
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
-
+    join_op: JoinOperator,
     left_context: &'a BindContext,
     right_context: &'a BindContext,
     join_context: &'a mut BindContext,
@@ -325,10 +293,12 @@ struct JoinConditionResolver<'a> {
 }
 
 impl<'a> JoinConditionResolver<'a> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         ctx: Arc<dyn TableContext>,
         name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
+        join_op: JoinOperator,
         left_context: &'a BindContext,
         right_context: &'a BindContext,
         join_context: &'a mut BindContext,
@@ -338,6 +308,7 @@ impl<'a> JoinConditionResolver<'a> {
             ctx,
             name_resolution_ctx,
             metadata,
+            join_op,
             left_context,
             right_context,
             join_context,
@@ -446,12 +417,7 @@ impl<'a> JoinConditionResolver<'a> {
         // Only equi-predicate can be exploited by common join algorithms(e.g. sort-merge join, hash join).
 
         let mut added = if let Some((left, right)) = split_equivalent_predicate(predicate) {
-            self.add_equi_conditions(
-                left,
-                right,
-                left_join_conditions,
-                right_join_conditions,
-            )?
+            self.add_equi_conditions(left, right, left_join_conditions, right_join_conditions)?
         } else {
             false
         };
@@ -575,11 +541,35 @@ impl<'a> JoinConditionResolver<'a> {
     ) -> Result<bool> {
         let predicate_used_columns = predicate.used_columns();
         let (left_columns, right_columns) = self.left_right_columns()?;
-        if !predicate_used_columns.is_subset(&left_columns)
-            || !predicate_used_columns.is_subset(&right_columns)
-        {
-            other_join_conditions.push(predicate.clone());
-            return Ok(true);
+        match self.join_op {
+            JoinOperator::LeftOuter | JoinOperator::LeftAnti => {
+                if !predicate_used_columns.is_subset(&left_columns) {
+                    other_join_conditions.push(predicate.clone());
+                    return Ok(true);
+                }
+            }
+            JoinOperator::RightOuter | JoinOperator::RightAnti => {
+                if !predicate_used_columns.is_subset(&right_columns) {
+                    other_join_conditions.push(predicate.clone());
+                    return Ok(true);
+                }
+            }
+            JoinOperator::FullOuter => {
+                if !predicate_used_columns.is_subset(&left_columns)
+                    && !predicate_used_columns.is_subset(&right_columns)
+                {
+                    other_join_conditions.push(predicate.clone());
+                    return Ok(true);
+                }
+            }
+            _ => {
+                if !predicate_used_columns.is_subset(&left_columns)
+                    || !predicate_used_columns.is_subset(&right_columns)
+                {
+                    other_join_conditions.push(predicate.clone());
+                    return Ok(true);
+                }
+            }
         }
         Ok(false)
     }

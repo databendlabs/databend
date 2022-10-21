@@ -37,6 +37,7 @@ pub enum RuleID {
     NormalizeDisjunctiveFilter,
     PushDownFilterEvalScalar,
     PushDownFilterJoin,
+    PushDownJoinCondition,
     PushDownFilterScan,
     PushDownLimitOuterJoin,
     PushDownLimitSort,
@@ -64,6 +65,7 @@ impl Display for RuleID {
         match self {
             RuleID::PushDownFilterEvalScalar => write!(f, "PushDownFilterEvalScalar"),
             RuleID::PushDownFilterJoin => write!(f, "PushDownFilterJoin"),
+            RuleID::PushDownJoinCondition => write!(f, "PushDownJoinCondition"),
             RuleID::PushDownFilterScan => write!(f, "PushDownFilterScan"),
             RuleID::PushDownLimitOuterJoin => write!(f, "PushDownLimitOuterJoin"),
             RuleID::PushDownLimitSort => write!(f, "PushDownLimitSort"),
