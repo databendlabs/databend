@@ -1793,7 +1793,7 @@ impl<'a> TypeChecker<'a> {
     async fn resolve_map_access_pushdown(
         &mut self,
         data_type: DataTypeImpl,
-        accessors: Vec<MapAccessor<'async_recursion>>,
+        mut accessors: Vec<MapAccessor<'async_recursion>>,
         database: Option<Identifier<'async_recursion>>,
         table: Option<Identifier<'async_recursion>>,
         column: Identifier<'async_recursion>,
