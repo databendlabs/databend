@@ -14,11 +14,9 @@
 
 //! Supporting mod for tests
 
-pub mod logging;
 pub mod meta_node;
 pub mod service;
 pub mod tls_constants;
 
-pub use service::next_port;
 pub use service::start_metasrv;
 pub use service::start_metasrv_with_context;

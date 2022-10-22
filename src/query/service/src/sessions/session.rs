@@ -16,6 +16,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use chrono_tz::Tz;
+use common_config::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
@@ -35,7 +36,6 @@ use crate::sessions::SessionManager;
 use crate::sessions::SessionStatus;
 use crate::sessions::SessionType;
 use crate::sessions::Settings;
-use crate::Config;
 
 pub struct Session {
     pub(in crate::sessions) id: String,

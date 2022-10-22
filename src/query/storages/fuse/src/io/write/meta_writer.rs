@@ -13,14 +13,29 @@
 // limitations under the License.
 
 use std::io::Error;
+use std::io::ErrorKind;
 
+use backon::ExponentialBackoff;
+use backon::Retryable;
 use common_exception::Result;
 use opendal::Operator;
 use serde::Serialize;
+use tracing::warn;
 
 pub async fn write_meta<T>(data_accessor: &Operator, location: &str, meta: T) -> Result<()>
 where T: Serialize {
     let bs = serde_json::to_vec(&meta).map_err(Error::other)?;
-    data_accessor.object(location).write(bs).await?;
+    let object = data_accessor.object(location);
+    { || object.write(bs.as_slice()) }
+        .retry(ExponentialBackoff::default().with_jitter())
+        .when(|err| err.kind() == ErrorKind::Interrupted)
+        .notify(|err, dur| {
+            warn!(
+                "stage table sink write retry after {}s for error {:?}",
+                dur.as_secs(),
+                err
+            )
+        })
+        .await?;
     Ok(())
 }

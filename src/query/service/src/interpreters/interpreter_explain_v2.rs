@@ -24,10 +24,10 @@ use super::fragments::Fragmenter;
 use super::QueryFragmentsActions;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
+use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
 use crate::sql::executor::PhysicalPlan;
 use crate::sql::executor::PhysicalPlanBuilder;
-use crate::sql::executor::PipelineBuilder;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::Plan;
 

@@ -15,11 +15,11 @@
 use std::net::SocketAddr;
 
 use common_base::base::tokio;
+use common_config::Config;
 use common_exception::Result;
 use common_meta_types::UserInfo;
 use common_settings::Settings;
 use databend_query::sessions::SessionContext;
-use databend_query::Config;
 
 #[tokio::test]
 async fn test_session_context() -> Result<()> {

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::IntervalKind;
 use itertools::Itertools;
 use nom::branch::alt;
 use nom::combinator::consumed;
@@ -93,8 +92,7 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
                 }
             }
 
-            // Replace bracket map access to an array, if it's following a prefix or infix
-            // element or it's the first element.
+            // If it's following a prefix or infix element or it's the first element, ...
             if prev == -1
                 || matches!(
                     PrattParser::<std::iter::Once<_>>::query(
@@ -105,21 +103,30 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
                     Affix::Prefix(_) | Affix::Infix(_, _)
                 )
             {
-                let key = match &expr_elements[curr as usize].elem {
-                    ExprElement::MapAccess {
-                        accessor: MapAccessor::Bracket { key },
-                    } => Some(key),
-                    _ => None,
-                };
-                if let Some(key) = key {
+                // replace bracket map access to an array, ...
+                if let ExprElement::MapAccess {
+                    accessor: MapAccessor::Bracket { key },
+                } = &expr_elements[curr as usize].elem
+                {
                     let span = expr_elements[curr as usize].span;
                     expr_elements[curr as usize] = WithSpan {
                         span,
                         elem: ExprElement::Array {
-                            exprs: vec![Expr::Literal {
-                                span: span.0,
-                                lit: key.clone(),
-                            }],
+                            exprs: vec![(**key).clone()],
+                        },
+                    };
+                }
+
+                // and replace `.<number>` map access to floating point literal.
+                if let ExprElement::MapAccess {
+                    accessor: MapAccessor::PeriodNumber { .. },
+                } = &expr_elements[curr as usize].elem
+                {
+                    let span = expr_elements[curr as usize].span;
+                    expr_elements[curr as usize] = WithSpan {
+                        span,
+                        elem: ExprElement::Literal {
+                            lit: literal(span)?.1,
                         },
                     };
                 }
@@ -799,12 +806,15 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     );
     let binary_op = map(binary_op, |op| ExprElement::BinaryOp { op });
     let unary_op = map(unary_op, |op| ExprElement::UnaryOp { op });
-    let literal = map(literal, |lit| ExprElement::Literal { lit });
     let map_access = map(map_access, |accessor| ExprElement::MapAccess { accessor });
+    // Floating point literal with leading dot will be parsed as a peroid map access,
+    // and then will be converted back to a floating point literal if the map access
+    // is not following a primary element nor a postfix element.
+    let literal = map(literal, |lit| ExprElement::Literal { lit });
     let array = map(
         // Array that contains a single literal item will be parsed as a bracket map access,
         // and then will be converted back to an array if the map access is not following
-        // a primary element or postfix element.
+        // a primary element nor a postfix element.
         rule! {
             "[" ~ #comma_separated_list0_ignore_trailling(subexpr(0))? ~ ","? ~ ^"]"
         },
@@ -881,12 +891,12 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #count_all : "COUNT(*)"
             | #function_call_with_param : "<function>"
             | #function_call : "<function>"
-            | #literal : "<literal>"
             | #case : "`CASE ... END`"
             | #subquery : "`(SELECT ...)`"
             | #tuple : "`(<expr> [, ...])`"
             | #column_ref : "<column>"
             | #map_access : "[<key>] | .<key> | :<key>"
+            | #literal : "<literal>"
             | #array : "`[...]`"
         ),
     )))(i)?;
@@ -1239,23 +1249,28 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
 pub fn map_access(i: Input) -> IResult<MapAccessor> {
     let bracket = map(
         rule! {
-           "[" ~ #literal ~ "]"
+           "[" ~ #subexpr(0) ~ "]"
         },
-        |(_, key, _)| MapAccessor::Bracket { key },
-    );
-    let bracket_ident = map(
-        rule! {
-           "[" ~ #ident ~ "]"
-        },
-        |(_, key, _)| MapAccessor::Bracket {
-            key: Literal::String(key.name),
-        },
+        |(_, key, _)| MapAccessor::Bracket { key: Box::new(key) },
     );
     let period = map(
         rule! {
            "." ~ #ident
         },
         |(_, key)| MapAccessor::Period { key },
+    );
+    let period_number = map_res(
+        rule! {
+           LiteralFloat
+        },
+        |key| {
+            if key.text().starts_with('.') {
+                if let Ok(key) = (key.text()[1..]).parse::<u64>() {
+                    return Ok(MapAccessor::PeriodNumber { key });
+                }
+            }
+            Err(ErrorKind::ExpectText("."))
+        },
     );
     let colon = map(
         rule! {
@@ -1266,8 +1281,8 @@ pub fn map_access(i: Input) -> IResult<MapAccessor> {
 
     rule!(
         #bracket
-        | #bracket_ident
         | #period
+        | #period_number
         | #colon
     )(i)
 }

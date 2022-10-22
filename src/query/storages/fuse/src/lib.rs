@@ -17,11 +17,8 @@
 #![deny(unused_crate_dependencies)]
 
 mod constants;
-mod fuse_file;
 mod fuse_lazy_part;
 mod fuse_part;
-mod fuse_segment;
-mod fuse_snapshot;
 mod fuse_table;
 pub mod io;
 pub mod operations;
@@ -34,15 +31,11 @@ use common_catalog::table::Table;
 use common_catalog::table::TableStatistics;
 pub use common_catalog::table_context::TableContext;
 use common_catalog::table_mutator::TableMutator;
-use common_storages_util::table_option_keys;
+pub use common_storages_constants::*;
 pub use constants::*;
-pub use fuse_file::FuseFile;
 pub use fuse_part::ColumnLeaf;
 pub use fuse_part::ColumnLeaves;
-pub use fuse_segment::FuseSegmentIO;
-pub use fuse_snapshot::FuseSnapshotIO;
 pub use fuse_table::FuseTable;
-pub use table_option_keys::*;
 
 mod sessions {
     pub use common_catalog::table_context::TableContext;

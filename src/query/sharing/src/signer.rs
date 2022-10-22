@@ -137,7 +137,7 @@ impl SharedSigner {
         let reqs: Vec<PresignRequestItem> = reqs
             .into_iter()
             .map(|v| PresignRequestItem {
-                path: v.path,
+                file_name: v.path,
                 method: to_method(v.op),
             })
             .collect();
@@ -184,6 +184,7 @@ impl PresignRequest {
 fn to_method(op: Operation) -> String {
     match op {
         Operation::Read => "GET".to_string(),
+        Operation::Stat => "HEAD".to_string(),
         v => unimplemented!("not supported operation: {v}"),
     }
 }
@@ -191,32 +192,30 @@ fn to_method(op: Operation) -> String {
 fn from_method(method: &str) -> Operation {
     match method {
         "GET" => Operation::Read,
+        "HEAD" => Operation::Stat,
         v => unimplemented!("not supported operation: {v}"),
     }
 }
 
 #[derive(serde::Serialize)]
 struct PresignRequestItem {
+    file_name: String,
     method: String,
-    path: String,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, Clone, Debug)]
 struct PresignResponseItem {
     method: String,
     path: String,
-    url: String,
+    presigned_url: String,
     headers: HashMap<String, String>,
-    /// Keep this for future using.
-    #[allow(unused)]
-    expires_in: String,
 }
 
 impl From<PresignResponseItem> for PresignedRequest {
     fn from(v: PresignResponseItem) -> Self {
         PresignedRequest::new(
             v.method.parse().expect("must be valid method"),
-            v.url.parse().expect("must be valid uri"),
+            v.presigned_url.parse().expect("must be valid uri"),
             v.headers
                 .into_iter()
                 .map(|(k, v)| {

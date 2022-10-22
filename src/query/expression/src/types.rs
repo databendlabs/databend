@@ -13,13 +13,11 @@
 // limitations under the License.
 
 pub mod any;
-pub mod arithmetics_type;
 pub mod array;
 pub mod boolean;
 pub mod date;
 pub mod empty_array;
 pub mod generic;
-pub mod interval;
 pub mod map;
 pub mod null;
 pub mod nullable;
@@ -42,7 +40,6 @@ pub use self::boolean::BooleanType;
 pub use self::date::DateType;
 pub use self::empty_array::EmptyArrayType;
 pub use self::generic::GenericType;
-pub use self::interval::IntervalType;
 pub use self::map::MapType;
 pub use self::null::NullType;
 pub use self::nullable::NullableType;
@@ -52,7 +49,7 @@ pub use self::string::StringType;
 pub use self::timestamp::TimestampType;
 pub use self::variant::VariantType;
 use crate::property::Domain;
-use crate::util::concat_array;
+use crate::utils::concat_array;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
@@ -67,7 +64,6 @@ pub enum DataType {
     Number(NumberDataType),
     Timestamp,
     Date,
-    Interval,
     Null,
     Nullable(Box<DataType>),
     EmptyArray,

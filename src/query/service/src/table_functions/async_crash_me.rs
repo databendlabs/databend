@@ -19,6 +19,7 @@ use std::task::Context;
 use std::task::Poll;
 
 use chrono::NaiveDateTime;
+use common_catalog::table_function::TableFunction;
 use common_datablocks::DataBlock;
 use common_datavalues::chrono::TimeZone;
 use common_datavalues::chrono::Utc;
@@ -43,7 +44,6 @@ use crate::pipelines::Pipeline;
 use crate::sessions::TableContext;
 use crate::storages::Table;
 use crate::table_functions::table_function_factory::TableArgs;
-use crate::table_functions::TableFunction;
 
 pub struct AsyncCrashMeTable {
     table_info: TableInfo,

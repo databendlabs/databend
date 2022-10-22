@@ -27,6 +27,7 @@ use ordered_float::OrderedFloat;
 use super::aggregate_distinct_state::AggregateDistinctPrimitiveState;
 use super::aggregate_distinct_state::AggregateDistinctState;
 use super::aggregate_distinct_state::AggregateDistinctStringState;
+use super::aggregate_distinct_state::AggregateUniqStringState;
 use super::aggregate_distinct_state::DataGroupValues;
 use super::aggregate_distinct_state::DistinctStateFunc;
 use super::aggregate_function::AggregateFunction;
@@ -112,9 +113,8 @@ where
 
         let layout = Layout::new::<State>();
         let netest_place = place.next(layout.size());
-
         // faster path for count
-        if self.nested.name() == "AggregateFunctionCount" {
+        if self.nested.name() == "AggregateCountFunction" {
             let mut builder: &mut MutablePrimitiveColumn<u64> =
                 Series::check_get_mutable_column(array)?;
             builder.append_value(state.len() as u64);
@@ -244,17 +244,30 @@ pub fn try_create(
             })
         }
         if phid.is_string() {
-            return Ok(Arc::new(AggregateDistinctCombinator::<
-                KeysRef,
-                AggregateDistinctStringState,
-            > {
-                nested_name: nested_name.to_owned(),
-                arguments,
-                nested,
-                name,
-                _s: PhantomData,
-                _state: PhantomData,
-            }));
+            return match nested_name {
+                "count" | "uniq" => Ok(Arc::new(AggregateDistinctCombinator::<
+                    u128,
+                    AggregateUniqStringState,
+                > {
+                    name,
+                    arguments,
+                    nested,
+                    nested_name: nested_name.to_owned(),
+                    _s: PhantomData,
+                    _state: PhantomData,
+                })),
+                _ => Ok(Arc::new(AggregateDistinctCombinator::<
+                    KeysRef,
+                    AggregateDistinctStringState,
+                > {
+                    nested_name: nested_name.to_owned(),
+                    arguments,
+                    nested,
+                    name,
+                    _s: PhantomData,
+                    _state: PhantomData,
+                })),
+            };
         }
     }
     Ok(Arc::new(AggregateDistinctCombinator::<

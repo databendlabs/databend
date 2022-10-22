@@ -14,6 +14,10 @@
 
 use std::io::Write;
 
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::utils::ColumnFrom;
+use common_expression::Column;
 use goldenfile::Mint;
 
 use super::run_ast;
@@ -26,6 +30,9 @@ fn test_array() {
     test_create(file);
     test_length(file);
     test_get(file);
+    test_slice(file);
+    test_remove_first(file);
+    test_remove_last(file);
 }
 
 fn test_create(file: &mut impl Write) {
@@ -48,12 +55,55 @@ fn test_length(file: &mut impl Write) {
 }
 
 fn test_get(file: &mut impl Write) {
-    run_ast(file, "get([], 1)", &[]);
-    run_ast(file, "get([], NULL)", &[]);
-    run_ast(file, "get([true, false], 0)", &[]);
-    run_ast(file, "get(['a', 'b', 'c'], 2)", &[]);
-    run_ast(file, "get([1, 2, 3], 0)", &[]);
-    run_ast(file, "get([1, 2, 3], 5)", &[]);
-    run_ast(file, "get([1, null, 3], 0)", &[]);
-    run_ast(file, "get([1, null, 3], 1)", &[]);
+    run_ast(file, "[1, 2]['a']", &[]);
+    run_ast(file, "[][1]", &[]);
+    run_ast(file, "[][NULL]", &[]);
+    run_ast(file, "[true, false][0]", &[]);
+    run_ast(file, "['a', 'b', 'c'][2]", &[]);
+    run_ast(file, "[1, 2, 3][0]", &[]);
+    run_ast(file, "[1, 2, 3][5]", &[]);
+    run_ast(file, "[1, null, 3][0]", &[]);
+    run_ast(file, "[1, null, 3][1]", &[]);
+    run_ast(file, "[a, b][idx]", &[
+        (
+            "a",
+            DataType::Number(NumberDataType::Int16),
+            Column::from_data(vec![0i16, 1, 2]),
+        ),
+        (
+            "b",
+            DataType::Number(NumberDataType::Int16),
+            Column::from_data(vec![3i16, 4, 5]),
+        ),
+        (
+            "idx",
+            DataType::Number(NumberDataType::UInt16),
+            Column::from_data(vec![0u16, 1, 2]),
+        ),
+    ]);
+}
+
+fn test_slice(file: &mut impl Write) {
+    run_ast(file, "slice([], 1, 2)", &[]);
+    run_ast(file, "slice([1], 1, 2)", &[]);
+    run_ast(file, "slice([NULL, 1, 2, 3], 0, 2)", &[]);
+    run_ast(file, "slice([0, 1, 2, 3], 1, 2)", &[]);
+    run_ast(file, "slice(['a', 'b', 'c', 'd'], 0, 2)", &[]);
+    run_ast(file, "slice(['a', 'b', 'c', 'd'], 2, 6)", &[]);
+}
+
+fn test_remove_first(file: &mut impl Write) {
+    run_ast(file, "remove_first([])", &[]);
+    run_ast(file, "remove_first([1])", &[]);
+    run_ast(file, "remove_first([0, 1, 2, NULL])", &[]);
+    run_ast(file, "remove_first([0, 1, 2, 3])", &[]);
+    run_ast(file, "remove_first(['a', 'b', 'c', 'd'])", &[]);
+}
+
+fn test_remove_last(file: &mut impl Write) {
+    run_ast(file, "remove_last([])", &[]);
+    run_ast(file, "remove_last([1])", &[]);
+    run_ast(file, "remove_last([0, 1, 2, NULL])", &[]);
+    run_ast(file, "remove_last([0, 1, 2, 3])", &[]);
+    run_ast(file, "remove_last(['a', 'b', 'c', 'd'])", &[]);
 }

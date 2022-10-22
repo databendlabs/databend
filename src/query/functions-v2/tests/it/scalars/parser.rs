@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use common_ast::ast::BinaryOperator;
+use common_ast::ast::IntervalKind;
 use common_ast::ast::Literal as ASTLiteral;
+use common_ast::ast::MapAccessor;
 use common_ast::ast::TypeName;
 use common_ast::ast::UnaryOperator;
 use common_ast::parser::parse_expr;
@@ -32,6 +34,56 @@ pub fn parse_raw_expr(text: &str, columns: &[(&str, DataType)]) -> RawExpr {
     let tokens = tokenize_sql(text).unwrap();
     let expr = parse_expr(&tokens, Dialect::PostgreSQL, &backtrace).unwrap();
     transform_expr(expr, columns)
+}
+
+macro_rules! with_interval_mapped_name {
+    (| $t:tt | $($tail:tt)*) => {
+        match_template::match_template! {
+            $t = [
+              Year => "year", Quarter => "quarter", Month => "month", Day => "day",
+              Hour => "hour", Minute => "minute", Second => "second",
+            ],
+            $($tail)*
+        }
+    }
+}
+
+macro_rules! transform_interval_add_sub {
+    ($span: expr, $columns: expr, $name: expr, $unit: expr, $date: expr, $interval: expr) => {
+        if $name == "plus" {
+            with_interval_mapped_name!(|INTERVAL| match $unit {
+                IntervalKind::INTERVAL => RawExpr::FunctionCall {
+                    span: transform_span($span),
+                    name: concat!("add_", INTERVAL, "s").to_string(),
+                    params: vec![],
+                    args: vec![
+                        transform_expr(*$date, $columns),
+                        transform_expr(*$interval, $columns),
+                    ],
+                },
+                kind => {
+                    unimplemented!("{kind:?} is not supported for interval")
+                }
+            })
+        } else if $name == "minus" {
+            with_interval_mapped_name!(|INTERVAL| match $unit {
+                IntervalKind::INTERVAL => RawExpr::FunctionCall {
+                    span: transform_span($span),
+                    name: concat!("subtract_", INTERVAL, "s").to_string(),
+                    params: vec![],
+                    args: vec![
+                        transform_expr(*$date, $columns),
+                        transform_expr(*$interval, $columns),
+                    ],
+                },
+                kind => {
+                    unimplemented!("{kind:?} is not supported for interval")
+                }
+            })
+        } else {
+            unimplemented!("operator {} is not supported for interval", $name)
+        }
+    };
 }
 
 pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) -> RawExpr {
@@ -138,48 +190,62 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
             right,
         } => {
             let name = transform_binary_op(op);
-            if name != "notlike" && name != "notregexp" && name != "notrlike" {
-                RawExpr::FunctionCall {
-                    span: transform_span(span),
-                    name,
-                    params: vec![],
-                    args: vec![
-                        transform_expr(*left, columns),
-                        transform_expr(*right, columns),
-                    ],
+            match name.as_str() {
+                "notlike" => {
+                    let result = RawExpr::FunctionCall {
+                        span: transform_span(span),
+                        name: "like".to_string(),
+                        params: vec![],
+                        args: vec![
+                            transform_expr(*left, columns),
+                            transform_expr(*right, columns),
+                        ],
+                    };
+                    RawExpr::FunctionCall {
+                        span: transform_span(span),
+                        name: "not".to_string(),
+                        params: vec![],
+                        args: vec![result],
+                    }
                 }
-            } else if name == "notlike" {
-                let result = RawExpr::FunctionCall {
-                    span: transform_span(span),
-                    name: "like".to_string(),
-                    params: vec![],
-                    args: vec![
-                        transform_expr(*left, columns),
-                        transform_expr(*right, columns),
-                    ],
-                };
-                RawExpr::FunctionCall {
-                    span: transform_span(span),
-                    name: "not".to_string(),
-                    params: vec![],
-                    args: vec![result],
+                "notregexp" | "notrlike" => {
+                    let result = RawExpr::FunctionCall {
+                        span: transform_span(span),
+                        name: "regexp".to_string(),
+                        params: vec![],
+                        args: vec![
+                            transform_expr(*left, columns),
+                            transform_expr(*right, columns),
+                        ],
+                    };
+                    RawExpr::FunctionCall {
+                        span: transform_span(span),
+                        name: "not".to_string(),
+                        params: vec![],
+                        args: vec![result],
+                    }
                 }
-            } else {
-                let result = RawExpr::FunctionCall {
-                    span: transform_span(span),
-                    name: "regexp".to_string(),
-                    params: vec![],
-                    args: vec![
-                        transform_expr(*left, columns),
-                        transform_expr(*right, columns),
-                    ],
-                };
-                RawExpr::FunctionCall {
-                    span: transform_span(span),
-                    name: "not".to_string(),
-                    params: vec![],
-                    args: vec![result],
-                }
+                _ => match (*left.clone(), *right.clone()) {
+                    (common_ast::ast::Expr::Interval { expr, unit, .. }, _) => {
+                        if name == "minus" {
+                            unimplemented!("interval cannot be the minuend")
+                        } else {
+                            transform_interval_add_sub!(span, columns, name, unit, right, expr)
+                        }
+                    }
+                    (_, common_ast::ast::Expr::Interval { expr, unit, .. }) => {
+                        transform_interval_add_sub!(span, columns, name, unit, left, expr)
+                    }
+                    (_, _) => RawExpr::FunctionCall {
+                        span: transform_span(span),
+                        name,
+                        params: vec![],
+                        args: vec![
+                            transform_expr(*left, columns),
+                            transform_expr(*right, columns),
+                        ],
+                    },
+                },
             }
         }
         common_ast::ast::Expr::Position {
@@ -268,6 +334,43 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
                 .map(|expr| transform_expr(expr, columns))
                 .collect(),
         },
+        common_ast::ast::Expr::Tuple { span, exprs } => RawExpr::FunctionCall {
+            span: transform_span(span),
+            name: "tuple".to_string(),
+            params: vec![],
+            args: exprs
+                .into_iter()
+                .map(|expr| transform_expr(expr, columns))
+                .collect(),
+        },
+        common_ast::ast::Expr::MapAccess {
+            span,
+            expr,
+            accessor,
+        } => {
+            let (params, args) = match accessor {
+                MapAccessor::Bracket { key } => (vec![], vec![
+                    transform_expr(*expr, columns),
+                    transform_expr(*key, columns),
+                ]),
+                MapAccessor::Period { key } | MapAccessor::Colon { key } => (vec![], vec![
+                    transform_expr(*expr, columns),
+                    RawExpr::Literal {
+                        span: transform_span(span),
+                        lit: Literal::String(key.name.into_bytes()),
+                    },
+                ]),
+                MapAccessor::PeriodNumber { key } => {
+                    (vec![key as usize], vec![transform_expr(*expr, columns)])
+                }
+            };
+            RawExpr::FunctionCall {
+                span: transform_span(span),
+                name: "get".to_string(),
+                params,
+                args,
+            }
+        }
         common_ast::ast::Expr::IsNull { span, expr, not } => {
             let expr = transform_expr(*expr, columns);
             let result = RawExpr::FunctionCall {
@@ -287,6 +390,61 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
                     args: vec![result],
                 }
             }
+        }
+        common_ast::ast::Expr::DateAdd {
+            span,
+            unit,
+            interval,
+            date,
+        } => {
+            with_interval_mapped_name!(|INTERVAL| match unit {
+                IntervalKind::INTERVAL => RawExpr::FunctionCall {
+                    span: transform_span(span),
+                    name: concat!("add_", INTERVAL, "s").to_string(),
+                    params: vec![],
+                    args: vec![
+                        transform_expr(*date, columns),
+                        transform_expr(*interval, columns),
+                    ],
+                },
+                kind => {
+                    unimplemented!("{kind:?} is not supported")
+                }
+            })
+        }
+        common_ast::ast::Expr::DateSub {
+            span,
+            unit,
+            interval,
+            date,
+        } => {
+            with_interval_mapped_name!(|INTERVAL| match unit {
+                IntervalKind::INTERVAL => RawExpr::FunctionCall {
+                    span: transform_span(span),
+                    name: concat!("subtract_", INTERVAL, "s").to_string(),
+                    params: vec![],
+                    args: vec![
+                        transform_expr(*date, columns),
+                        transform_expr(*interval, columns),
+                    ],
+                },
+                kind => {
+                    unimplemented!("{kind:?} is not supported")
+                }
+            })
+        }
+        common_ast::ast::Expr::DateTrunc { span, unit, date } => {
+            with_interval_mapped_name!(|INTERVAL| match unit {
+                IntervalKind::INTERVAL => RawExpr::FunctionCall {
+                    span: transform_span(span),
+                    name: concat!("to_start_of_", INTERVAL).to_string(),
+                    params: vec![],
+                    args: vec![transform_expr(*date, columns),],
+                },
+                kind => {
+                    unimplemented!("{kind:?} is not supported")
+                }
+            })
         }
         expr => unimplemented!("{expr:?} is unimplemented"),
     }

@@ -25,12 +25,11 @@ use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_arrow::parquet::read::BasicDecompressor;
 use common_arrow::parquet::read::PageReader;
 use common_base::base::tokio::sync::Semaphore;
-use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storages_util::file_meta_data_reader::FileMetaDataReader;
+use common_storages_cache::FileMetaDataReader;
 use futures::AsyncReadExt;
 use opendal::Object;
 use opendal::Operator;
@@ -200,13 +199,8 @@ impl HiveParquetBlockReader {
         }
     }
 
-    pub async fn read_meta_data(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        dal: Operator,
-        filename: &str,
-    ) -> Result<Arc<FileMetaData>> {
-        let reader = FileMetaDataReader::new_reader(ctx, dal);
+    pub async fn read_meta_data(&self, dal: Operator, filename: &str) -> Result<Arc<FileMetaData>> {
+        let reader = FileMetaDataReader::new_reader(dal);
         reader.read(filename, None, 0).await
     }
 

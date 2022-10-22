@@ -22,7 +22,8 @@ use common_catalog::catalog::CatalogManager;
 use common_config::Config;
 use common_exception::Result;
 use common_fuse_meta::caches::CacheManager;
-use common_storage::StorageOperator;
+use common_storage::DataOperator;
+use common_storage::ShareTableConfig;
 use common_tracing::QueryLogger;
 use common_users::RoleCacheManager;
 use common_users::UserApiProvider;
@@ -37,7 +38,7 @@ pub struct GlobalServices {
     global_runtime: UnsafeCell<Option<Arc<Runtime>>>,
     query_logger: UnsafeCell<Option<Arc<QueryLogger>>>,
     cluster_discovery: UnsafeCell<Option<Arc<ClusterDiscovery>>>,
-    storage_operator: UnsafeCell<Option<StorageOperator>>,
+    storage_operator: UnsafeCell<Option<DataOperator>>,
     cache_manager: UnsafeCell<Option<Arc<CacheManager>>>,
     catalog_manager: UnsafeCell<Option<Arc<CatalogManager>>>,
     http_query_manager: UnsafeCell<Option<Arc<HttpQueryManager>>>,
@@ -45,6 +46,7 @@ pub struct GlobalServices {
     session_manager: UnsafeCell<Option<Arc<SessionManager>>>,
     users_manager: UnsafeCell<Option<Arc<UserApiProvider>>>,
     users_role_manager: UnsafeCell<Option<Arc<RoleCacheManager>>>,
+    share_table_config: UnsafeCell<Option<ShareTableConfig>>,
 }
 
 unsafe impl Send for GlobalServices {}
@@ -65,6 +67,7 @@ impl GlobalServices {
             users_manager: UnsafeCell::new(None),
             global_runtime: UnsafeCell::new(None),
             users_role_manager: UnsafeCell::new(None),
+            share_table_config: UnsafeCell::new(None),
         });
 
         // The order of initialization is very important
@@ -76,7 +79,13 @@ impl GlobalServices {
         // Cluster discovery.
         ClusterDiscovery::init(config.clone(), global_services.clone()).await?;
 
-        StorageOperator::init(&config.storage, global_services.clone()).await?;
+        DataOperator::init(&config.storage, global_services.clone()).await?;
+
+        ShareTableConfig::init(
+            &config.query.share_endpoint_address,
+            global_services.clone(),
+        )?;
+
         CacheManager::init(&config.query, global_services.clone())?;
         CatalogManager::init(&config, global_services.clone()).await?;
         HttpQueryManager::init(&config, global_services.clone()).await?;
@@ -146,8 +155,8 @@ impl SingletonImpl<Arc<ClusterDiscovery>> for GlobalServices {
     }
 }
 
-impl SingletonImpl<StorageOperator> for GlobalServices {
-    fn get(&self) -> StorageOperator {
+impl SingletonImpl<DataOperator> for GlobalServices {
+    fn get(&self) -> DataOperator {
         unsafe {
             match &*self.storage_operator.get() {
                 None => panic!("StorageOperator is not init"),
@@ -156,9 +165,9 @@ impl SingletonImpl<StorageOperator> for GlobalServices {
         }
     }
 
-    fn init(&self, value: StorageOperator) -> Result<()> {
+    fn init(&self, value: DataOperator) -> Result<()> {
         unsafe {
-            *(self.storage_operator.get() as *mut Option<StorageOperator>) = Some(value);
+            *(self.storage_operator.get() as *mut Option<DataOperator>) = Some(value);
             Ok(())
         }
     }
@@ -286,6 +295,24 @@ impl SingletonImpl<Arc<RoleCacheManager>> for GlobalServices {
     fn init(&self, value: Arc<RoleCacheManager>) -> Result<()> {
         unsafe {
             *(self.users_role_manager.get() as *mut Option<Arc<RoleCacheManager>>) = Some(value);
+            Ok(())
+        }
+    }
+}
+
+impl SingletonImpl<ShareTableConfig> for GlobalServices {
+    fn get(&self) -> ShareTableConfig {
+        unsafe {
+            match &*self.share_table_config.get() {
+                None => panic!("ShareTableConfig is not init"),
+                Some(share_table_config) => share_table_config.clone(),
+            }
+        }
+    }
+
+    fn init(&self, value: ShareTableConfig) -> Result<()> {
+        unsafe {
+            *(self.share_table_config.get() as *mut Option<ShareTableConfig>) = Some(value);
             Ok(())
         }
     }

@@ -11,6 +11,9 @@ publish = false
 doctest = false
 test = false
 
+[package.metadata.cargo-machete]
+ignored = ["xorfilter-rs"]
+
 [dependencies]
 common-catalog = { path = "../../catalog" }
 common-datablocks = { path = "../../datablocks" }
@@ -21,7 +24,7 @@ common-fuse-meta = { path = "../fuse-meta" }
 common-legacy-expression = { path = "../../legacy-expression" }
 common-pipeline-transforms = { path = "../../pipeline/transforms" }
 
-xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", features = ["cbordata"] }
+xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", features = ["cbordata"], rev = "008ca3" }
 
 anyerror = { workspace = true }
 cbordata = { version = "0.6.0" }
@@ -30,4 +33,9 @@ thiserror = { workspace = true }
 tracing = "0.1.36"
 
 [dev-dependencies]
+criterion = "0.4"
 rand = "0.8.5"
+
+[[bench]]
+name = "build_from_block"
+harness = false

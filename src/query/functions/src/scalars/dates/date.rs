@@ -86,10 +86,10 @@ impl DateFunction {
         factory.register("to_hour", ToHourFunction::desc());
         factory.register("to_minute", ToMinuteFunction::desc());
         factory.register("to_second", ToSecondFunction::desc());
-        factory.register("to_monday", ToMondayFunction::desc());
         factory.register("to_year", ToYearFunction::desc());
 
         // rounders
+        factory.register("to_monday", ToMondayFunction::desc());
         factory.register(
             "to_start_of_second",
             Self::round_function_creator(Round::Second),
@@ -130,6 +130,7 @@ impl DateFunction {
         factory.register("add_seconds", AddTimesFunction::desc(1));
 
         factory.register("subtract_years", AddYearsFunction::desc(-1));
+        factory.register("subtract_quarters", AddQuartersFunction::desc(-1));
         factory.register("subtract_months", AddMonthsFunction::desc(-1));
         factory.register("subtract_days", AddDaysFunction::desc(-1));
 

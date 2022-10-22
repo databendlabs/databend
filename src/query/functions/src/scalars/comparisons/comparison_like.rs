@@ -76,10 +76,28 @@ impl StringSearchImpl for StringSearchLike {
             PatternType::PatternStr => {
                 let pattern = simdutf8::basic::from_utf8(rhs)
                     .expect("Unable to convert the LIKE pattern to string: {}");
+                let mut sub_strings: Vec<&str> = pattern
+                    .split(|c: char| c == '%' || c == '_' || c == '\\')
+                    .collect();
+                sub_strings.retain(|&substring| !substring.is_empty());
+                let is_empty = sub_strings.is_empty();
                 let re_pattern = like_pattern_to_regex(pattern);
                 let re = BytesRegex::new(&re_pattern)
                     .expect("Unable to build regex from LIKE pattern: {}");
-                BooleanColumn::from_iterator(lhs.scalar_iter().map(|x| op(re.is_match(x))))
+                BooleanColumn::from_iterator(lhs.scalar_iter().map(|x| {
+                    if !is_empty {
+                        let lhs_str = std::str::from_utf8(x)
+                            .expect("Unable to convert lhs value to string: {}");
+                        let contain = lhs_str.find(sub_strings[0]);
+                        if contain.is_none() {
+                            op(false)
+                        } else {
+                            op(re.is_match(x))
+                        }
+                    } else {
+                        op(re.is_match(x))
+                    }
+                }))
             }
         }
     }
@@ -176,8 +194,8 @@ pub fn like_pattern_to_regex(pattern: &str) -> String {
                 regex.push('\\');
                 regex.push(c);
             }
-            '%' => regex.push_str(".*"),
-            '_' => regex.push('.'),
+            '%' => regex.push_str("(?s:.)*"),
+            '_' => regex.push_str("(?s:.)"),
             '\\' => match chars.peek().cloned() {
                 Some('%') => {
                     regex.push('%');

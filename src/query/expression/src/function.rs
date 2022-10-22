@@ -25,7 +25,7 @@ use crate::property::Domain;
 use crate::property::FunctionProperty;
 use crate::types::nullable::NullableColumn;
 use crate::types::*;
-use crate::util::constant_bitmap;
+use crate::utils::arrow::constant_bitmap;
 use crate::values::Value;
 use crate::values::ValueRef;
 use crate::Column;

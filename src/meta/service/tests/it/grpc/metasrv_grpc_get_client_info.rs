@@ -16,10 +16,9 @@ use std::time::Duration;
 
 use common_base::base::tokio;
 use common_meta_client::MetaGrpcClient;
+use databend_meta::init_meta_ut;
 use pretty_assertions::assert_eq;
 use regex::Regex;
-
-use crate::init_meta_ut;
 
 #[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_get_client_info() -> anyhow::Result<()> {

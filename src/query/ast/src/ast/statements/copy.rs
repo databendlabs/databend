@@ -45,6 +45,23 @@ pub struct CopyStmt<'a> {
     pub force: bool,
 }
 
+impl<'a> CopyStmt<'a> {
+    pub fn apply_option(&mut self, opt: CopyOption) {
+        match opt {
+            CopyOption::Files(v) => self.files = v,
+            CopyOption::Pattern(v) => self.pattern = v,
+            CopyOption::FileFormat(v) => self.file_format = v,
+            CopyOption::ValidationMode(v) => self.validation_mode = v,
+            CopyOption::SizeLimit(v) => self.size_limit = v,
+            CopyOption::MaxFileSize(v) => self.max_file_size = v,
+            CopyOption::SplitSize(v) => self.split_size = v,
+            CopyOption::Single(v) => self.single = v,
+            CopyOption::Purge(v) => self.purge = v,
+            CopyOption::Force(v) => self.force = v,
+        }
+    }
+}
+
 impl Display for CopyStmt<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "COPY")?;
@@ -188,4 +205,17 @@ impl Display for UriLocation {
         }
         Ok(())
     }
+}
+
+pub enum CopyOption {
+    Files(Vec<String>),
+    Pattern(String),
+    FileFormat(BTreeMap<String, String>),
+    ValidationMode(String),
+    SizeLimit(usize),
+    MaxFileSize(usize),
+    SplitSize(usize),
+    Single(bool),
+    Purge(bool),
+    Force(bool),
 }

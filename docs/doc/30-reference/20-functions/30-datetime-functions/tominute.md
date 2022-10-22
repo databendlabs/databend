@@ -2,7 +2,7 @@
 title: TO_MINUTE
 ---
 
-Converts a date with time to a UInt8 number containing the number of the minute of the hour (0-59).
+Converts a date with time (timestamp/datetime) to a UInt8 number containing the number of the minute of the hour (0-59).
 
 ## Syntax
 
@@ -14,7 +14,7 @@ to_minute( <expr> )
 
 | Arguments   | Description |
 | ----------- | ----------- |
-|  `<expr>` | datetime |
+|  `<expr>` | timestamp |
 
 ## Return Type
 
@@ -24,16 +24,16 @@ to_minute( <expr> )
 
 ```sql
 SELECT to_minute(now());
-+-----------------+
++------------------+
 | to_minute(now()) |
-+-----------------+
-|              17 |
-+-----------------+
++------------------+
+|               17 |
++------------------+
 
-SELECT to_minute(to_datetime(1630812366));
-+----------------------------------+
-| to_minute(to_datetime(1630812366)) |
-+----------------------------------+
-|                               26 |
-+----------------------------------+
+SELECT to_minute(to_timestamp(1630812366));
++-------------------------------------+
+| to_minute(to_timestamp(1630812366)) |
++-------------------------------------+
+|                                  26 |
++-------------------------------------+
 ```

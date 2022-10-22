@@ -20,6 +20,7 @@ use common_base::base::tokio;
 use common_base::base::tokio::sync::RwLock;
 use common_base::base::tokio::time::sleep;
 use common_base::base::Singleton;
+use common_config::Config;
 use common_exception::Result;
 use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
@@ -30,7 +31,6 @@ use super::HttpQueryContext;
 use crate::servers::http::v1::query::http_query::HttpQuery;
 use crate::servers::http::v1::query::HttpQueryRequest;
 use crate::sessions::Session;
-use crate::Config;
 
 // TODO(youngsofun): may need refactor later for 2 reasons:
 // 1. some can be both configured and overwritten by http query request

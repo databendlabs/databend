@@ -48,8 +48,10 @@ pub async fn start_metasrv() -> Result<(MetaSrvTestContext, String)> {
 
 pub async fn start_metasrv_with_context(tc: &mut MetaSrvTestContext) -> Result<()> {
     let mn = MetaNode::start(&tc.config).await?;
-    mn.join_cluster(&tc.config.raft_config, tc.config.grpc_api_address.clone())
+    let _ = mn
+        .join_cluster(&tc.config.raft_config, tc.config.grpc_api_address.clone())
         .await?;
+
     let mut srv = GrpcServer::create(tc.config.clone(), mn);
     srv.start().await?;
     tc.grpc_srv = Some(Box::new(srv));
@@ -197,23 +199,6 @@ impl MetaSrvTestContext {
         client.forward(req).await?;
         Ok(())
     }
-}
-
-/// 1. Open a temp sled::Db for all tests.
-/// 2. Initialize a global tracing.
-/// 3. Create a span for a test case. One needs to enter it by `span.enter()` and keeps the guard held.
-#[macro_export]
-macro_rules! init_meta_ut {
-    () => {{
-        let t = tempfile::tempdir().expect("create temp dir to sled db");
-        common_meta_sled_store::init_temp_sled_db(t);
-
-        $crate::tests::logging::init_meta_ut_tracing();
-
-        let name = common_tracing::func_name!();
-        let span = tracing::debug_span!("ut", "{}", name.split("::").last().unwrap());
-        ((), span)
-    }};
 }
 
 /// Build metasrv or metasrv cluster, returns the clients

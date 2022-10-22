@@ -22,13 +22,13 @@ use common_io::prelude::BufferReadExt;
 use common_io::prelude::BufferReader;
 
 use super::number::SimpleDomain;
-use crate::date_converter::DateConverter;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::GenericMap;
 use crate::types::ValueType;
-use crate::util::buffer_into_mut;
+use crate::utils::arrow::buffer_into_mut;
+use crate::utils::date_helper::DateConverter;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
@@ -49,19 +49,29 @@ pub const PRECISION_MICRO: u8 = 6;
 pub const PRECISION_MILLI: u8 = 3;
 pub const PRECISION_SEC: u8 = 0;
 
-/// check timestamp and return precision and the base.
+/// check when converting number to timestamp and return precision and the base.
 #[inline]
-pub fn check_timestamp(micros: i64) -> Result<i64, String> {
-    let base = if (-31536000000..=31536000000).contains(&micros) {
+pub fn check_number_to_timestamp(n: i64) -> Result<i64, String> {
+    let base = if (-31536000000..=31536000000).contains(&n) {
         MICROS_IN_A_SEC
-    } else if (-31536000000000..=31536000000000).contains(&micros) {
+    } else if (-31536000000000..=31536000000000).contains(&n) {
         MICROS_IN_A_MILLI
-    } else if (TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(&micros) {
+    } else if (TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(&n) {
         MICROS_IN_A_MICRO
     } else {
-        return Err(format!("timestamp `{}` is out of range", micros));
+        return Err(format!("timestamp `{}` is out of range", n));
     };
-    Ok(micros * base)
+    Ok(n * base)
+}
+
+/// check the micros in timestamp value.
+#[inline]
+pub fn check_timestamp(micros: i64) -> Result<i64, String> {
+    if (TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(&micros) {
+        Ok(micros)
+    } else {
+        Err(format!("timestamp `{}` is out of range", micros))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

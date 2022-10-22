@@ -22,7 +22,7 @@ use common_exception::Result;
 use common_expression::types::number::NumberColumnBuilder;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
-use common_expression::util::column_merge_validity;
+use common_expression::utils::column_merge_validity;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Scalar;

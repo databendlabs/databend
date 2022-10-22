@@ -16,6 +16,8 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use common_base::base::Singleton;
+use once_cell::sync::OnceCell;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -43,6 +45,7 @@ pub enum StorageParams {
     Http(StorageHttpConfig),
     Ipfs(StorageIpfsConfig),
     Memory,
+    Moka(StorageMokaConfig),
     Obs(StorageObsConfig),
     Oss(StorageOssConfig),
     S3(StorageS3Config),
@@ -83,6 +86,7 @@ impl Display for StorageParams {
                 write!(f, "ipfs://endpoint={},root={}", c.endpoint_url, c.root)
             }
             StorageParams::Memory => write!(f, "memory://"),
+            StorageParams::Moka(_) => write!(f, "moka://"),
             StorageParams::Obs(v) => write!(
                 f,
                 "obs://bucket={},root={},endpoint={}",
@@ -118,6 +122,7 @@ impl StorageParams {
             StorageParams::Http(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Ipfs(c) => c.endpoint_url.starts_with("https://"),
             StorageParams::Memory => false,
+            StorageParams::Moka(_) => false,
             StorageParams::Obs(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Oss(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::S3(v) => v.endpoint_url.starts_with("https://"),
@@ -353,6 +358,7 @@ impl Debug for StorageObsConfig {
             .finish()
     }
 }
+
 /// config for Aliyun Object Storage Service
 #[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StorageOssConfig {
@@ -375,5 +381,50 @@ impl Debug for StorageOssConfig {
                 &mask_string(&self.access_key_secret, 3),
             )
             .finish()
+    }
+}
+
+/// config for Moka Object Storage Service
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StorageMokaConfig {}
+
+static SHARE_TABLE_CONFIG: OnceCell<Singleton<ShareTableConfig>> = OnceCell::new();
+
+// TODO: This config should be moved out of common-storage crate.
+#[derive(Clone)]
+pub struct ShareTableConfig {
+    pub share_endpoint_address: Option<String>,
+}
+
+impl ShareTableConfig {
+    pub fn init(
+        share_endpoint_address: &str,
+        v: Singleton<ShareTableConfig>,
+    ) -> common_exception::Result<()> {
+        v.init(Self::try_create(share_endpoint_address)?)?;
+
+        SHARE_TABLE_CONFIG.set(v).ok();
+        Ok(())
+    }
+
+    pub fn try_create(share_endpoint_address: &str) -> common_exception::Result<ShareTableConfig> {
+        Ok(ShareTableConfig {
+            share_endpoint_address: if share_endpoint_address.is_empty() {
+                None
+            } else {
+                Some(share_endpoint_address.to_owned())
+            },
+        })
+    }
+
+    pub fn share_endpoint_address() -> Option<String> {
+        ShareTableConfig::instance().share_endpoint_address
+    }
+
+    pub fn instance() -> ShareTableConfig {
+        match SHARE_TABLE_CONFIG.get() {
+            None => panic!("ShareTableConfig is not init"),
+            Some(config) => config.get(),
+        }
     }
 }

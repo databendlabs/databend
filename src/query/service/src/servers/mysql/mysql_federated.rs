@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 
+use common_config::DATABEND_COMMIT_VERSION;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_datavalues::DataSchemaRefExt;
@@ -31,7 +32,7 @@ impl MySQLFederated {
     pub fn create() -> Self {
         MySQLFederated {
             mysql_version: MYSQL_VERSION.to_string(),
-            databend_version: crate::version::DATABEND_COMMIT_VERSION.to_string(),
+            databend_version: DATABEND_COMMIT_VERSION.to_string(),
         }
     }
 

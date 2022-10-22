@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::TableSnapshot;
@@ -31,10 +30,9 @@ use crate::OPT_KEY_SNAPSHOT_LOCATION;
 impl FuseTable {
     pub async fn navigate_to_time_point(
         &self,
-        ctx: Arc<dyn TableContext>,
         time_point: DateTime<Utc>,
     ) -> Result<Arc<FuseTable>> {
-        self.find(ctx, |snapshot| {
+        self.find(|snapshot| {
             if let Some(ts) = snapshot.timestamp {
                 ts <= time_point
             } else {
@@ -43,12 +41,8 @@ impl FuseTable {
         })
         .await
     }
-    pub async fn navigate_to_snapshot(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        snapshot_id: &str,
-    ) -> Result<Arc<FuseTable>> {
-        self.find(ctx, |snapshot| {
+    pub async fn navigate_to_snapshot(&self, snapshot_id: &str) -> Result<Arc<FuseTable>> {
+        self.find(|snapshot| {
             snapshot
                 .snapshot_id
                 .simple()
@@ -59,9 +53,9 @@ impl FuseTable {
         .await
     }
 
-    pub async fn find<P>(&self, ctx: Arc<dyn TableContext>, mut pred: P) -> Result<Arc<FuseTable>>
+    pub async fn find<P>(&self, mut pred: P) -> Result<Arc<FuseTable>>
     where P: FnMut(&TableSnapshot) -> bool {
-        let snapshot_location = if let Some(loc) = self.snapshot_loc() {
+        let snapshot_location = if let Some(loc) = self.snapshot_loc().await? {
             loc
         } else {
             // not an error?
@@ -70,8 +64,8 @@ impl FuseTable {
             ));
         };
 
-        let snapshot_version = self.snapshot_format_version();
-        let reader = MetaReaders::table_snapshot_reader(ctx, self.get_operator());
+        let snapshot_version = self.snapshot_format_version().await?;
+        let reader = MetaReaders::table_snapshot_reader(self.get_operator());
 
         // grab the table history
         // snapshots are order by timestamp DESC.

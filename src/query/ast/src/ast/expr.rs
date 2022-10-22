@@ -15,7 +15,6 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_datavalues::IntervalKind;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -24,6 +23,19 @@ use crate::ast::write_period_separated_list;
 use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::parser::token::Token;
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum IntervalKind {
+    Year,
+    Quarter,
+    Month,
+    Day,
+    Hour,
+    Minute,
+    Second,
+    Doy,
+    Dow,
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr<'a> {
@@ -221,9 +233,11 @@ pub enum Literal {
 #[derive(Debug, Clone, PartialEq)]
 pub enum MapAccessor<'a> {
     /// `[0][1]`
-    Bracket { key: Literal },
+    Bracket { key: Box<Expr<'a>> },
     /// `.a.b`
     Period { key: Identifier<'a> },
+    /// `.1`
+    PeriodNumber { key: u64 },
     /// `:a:b`
     Colon { key: Identifier<'a> },
 }
@@ -360,6 +374,22 @@ impl<'a> Expr<'a> {
             | Expr::DateSub { span, .. }
             | Expr::DateTrunc { span, .. } => span,
         }
+    }
+}
+
+impl Display for IntervalKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.write_str(match self {
+            IntervalKind::Year => "YEAR",
+            IntervalKind::Quarter => "QUARTER",
+            IntervalKind::Month => "MONTH",
+            IntervalKind::Day => "DAY",
+            IntervalKind::Hour => "HOUR",
+            IntervalKind::Minute => "MINUTE",
+            IntervalKind::Second => "SECOND",
+            IntervalKind::Doy => "DOY",
+            IntervalKind::Dow => "DOW",
+        })
     }
 }
 
@@ -810,6 +840,7 @@ impl<'a> Display for Expr<'a> {
                 match accessor {
                     MapAccessor::Bracket { key } => write!(f, "[{key}]")?,
                     MapAccessor::Period { key } => write!(f, ".{key}")?,
+                    MapAccessor::PeriodNumber { key } => write!(f, ".{key}")?,
                     MapAccessor::Colon { key } => write!(f, ":{key}")?,
                 }
             }

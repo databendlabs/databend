@@ -13,4 +13,6 @@
 //  limitations under the License.
 
 mod deletion_mutator;
+mod full_compact_mutator;
 mod recluster_mutator;
+mod segments_compact_mutator;

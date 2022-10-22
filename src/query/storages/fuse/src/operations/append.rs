@@ -20,9 +20,7 @@ use common_datablocks::SortColumnDescription;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
 use common_legacy_expression::LegacyExpression;
-use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::Pipeline;
-use common_pipeline_core::SinkPipeBuilder;
 use common_pipeline_transforms::processors::transforms::ExpressionTransform;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_pipeline_transforms::processors::transforms::TransformSortPartial;
@@ -36,7 +34,7 @@ use crate::DEFAULT_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 
 impl FuseTable {
-    pub fn do_append2(
+    pub fn do_append_data(
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
@@ -91,24 +89,17 @@ impl FuseTable {
                 )
             })?;
         } else {
-            let mut sink_pipeline_builder = SinkPipeBuilder::create();
-            for _ in 0..pipeline.output_len() {
-                let input_port = InputPort::create();
-                sink_pipeline_builder.add_sink(
-                    input_port.clone(),
-                    FuseTableSink::try_create(
-                        input_port,
-                        ctx.clone(),
-                        block_per_seg,
-                        self.operator.clone(),
-                        self.meta_location_generator().clone(),
-                        cluster_stats_gen.clone(),
-                        None,
-                    )?,
-                );
-            }
-
-            pipeline.add_pipe(sink_pipeline_builder.finalize());
+            pipeline.add_sink(|input| {
+                FuseTableSink::try_create(
+                    input,
+                    ctx.clone(),
+                    block_per_seg,
+                    self.operator.clone(),
+                    self.meta_location_generator().clone(),
+                    cluster_stats_gen.clone(),
+                    None,
+                )
+            })?;
         }
         Ok(())
     }

@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_config::Config;
 use common_meta_app::schema::DatabaseIdent;
 use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DatabaseMeta;
@@ -23,7 +24,6 @@ use crate::catalogs::InMemoryMetas;
 use crate::databases::Database;
 use crate::storages::system;
 use crate::storages::Table;
-use crate::Config;
 
 #[derive(Clone)]
 pub struct SystemDatabase {

@@ -5506,9 +5506,14 @@ Query(
                                 },
                             },
                             accessor: Bracket {
-                                key: Integer(
-                                    0,
-                                ),
+                                key: Literal {
+                                    span: [
+                                        LiteralInteger(42..43),
+                                    ],
+                                    lit: Integer(
+                                        0,
+                                    ),
+                                },
                             },
                         },
                         alias: None,
@@ -6549,6 +6554,63 @@ COPY INTO mytable
                     skip_header = 1
                 )
                 size_limit=10;
+---------- Output ---------
+COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url='http://127.0.0.1:9900' ) FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false
+---------- AST ------------
+Copy(
+    CopyStmt {
+        src: UriLocation(
+            UriLocation {
+                protocol: "s3",
+                name: "mybucket",
+                path: "/data.csv",
+                connection: {
+                    "endpoint_url": "http://127.0.0.1:9900",
+                },
+            },
+        ),
+        dst: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "mytable",
+                quote: None,
+                span: Ident(10..17),
+            },
+        },
+        files: [],
+        pattern: "",
+        file_format: {
+            "field_delimiter": ",",
+            "record_delimiter": "\n",
+            "skip_header": "1",
+            "type": "CSV",
+        },
+        validation_mode: "",
+        size_limit: 10,
+        max_file_size: 0,
+        split_size: 0,
+        single: false,
+        purge: false,
+        force: false,
+    },
+)
+
+
+---------- Input ----------
+COPY INTO mytable
+                FROM 's3://mybucket/data.csv'
+                CONNECTION = (
+                    ENDPOINT_URL = 'http://127.0.0.1:9900'
+                )
+                size_limit=10
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                );
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url='http://127.0.0.1:9900' ) FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
 ' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false

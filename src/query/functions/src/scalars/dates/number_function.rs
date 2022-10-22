@@ -301,12 +301,16 @@ impl NumberOperator<u8> for ToSecond {
 #[derive(Clone)]
 pub struct ToMonday;
 
-impl NumberOperator<u16> for ToMonday {
+impl NumberOperator<i32> for ToMonday {
     const IS_DETERMINISTIC: bool = true;
 
-    fn to_number(value: DateTime<Tz>, tz: &Tz) -> u16 {
+    fn to_number(value: DateTime<Tz>, tz: &Tz) -> i32 {
         let weekday = value.weekday();
-        (get_day(value, tz) as u32 - weekday.num_days_from_monday()) as u16
+        (get_day(value, tz) as u32 - weekday.num_days_from_monday()) as i32
+    }
+
+    fn return_type() -> Option<DataTypeImpl> {
+        Some(DateType::new_impl())
     }
 }
 
@@ -478,6 +482,6 @@ pub type ToHourFunction = NumberFunction<ToHour, u8>;
 pub type ToMinuteFunction = NumberFunction<ToMinute, u8>;
 pub type ToSecondFunction = NumberFunction<ToSecond, u8>;
 
-pub type ToMondayFunction = NumberFunction<ToMonday, u16>;
+pub type ToMondayFunction = NumberFunction<ToMonday, i32>;
 
 pub type ToYearFunction = NumberFunction<ToYear, u16>;

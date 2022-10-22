@@ -2,7 +2,7 @@
 title: TO_MONDAY
 ---
 
-Rounds down a date or date with time to the nearest Monday.
+Rounds down a date or date with time (timestamp/datetime) to the nearest Monday.
 Returns the date.
 
 ## Syntax
@@ -15,34 +15,26 @@ to_monday( <expr> )
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| `<expr>` | date/datetime |
+| `<expr>` | date/timestamp |
 
 ## Return Type
 
-`UInt16` datatype.
+Datetime object, returns date in “YYYY-MM-DD” format.
 
 ## Examples
 
 ```sql
 SELECT to_monday(now());
-+-----------------+
-| to_monday(now()) |
-+-----------------+
-|           19079 |
-+-----------------+
-
-SELECT to_date(to_monday(now()));
-+-------------------------+
++---------------------------+
 | to_date(to_monday(now())) |
-+-------------------------+
-| 2022-03-28              |
-+-------------------------+
++---------------------------+
+| 2022-03-28                |
++---------------------------+
 
-SELECT to_monday(to_datetime(1630812366));
-+----------------------------------+
-| to_monday(to_datetime(1630812366)) |
-+----------------------------------+
-|                            18869 |
-+----------------------------------+
-
+SELECT to_monday(to_timestamp(1630812366));
++-------------------------------------+
+| to_monday(to_timestamp(1630812366)) |
++-------------------------------------+
+| 2021-08-30                          |
++-------------------------------------+
 ```

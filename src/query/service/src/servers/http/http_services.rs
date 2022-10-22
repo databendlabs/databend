@@ -15,6 +15,7 @@
 use std::net::SocketAddr;
 use std::path::Path;
 
+use common_config::Config;
 use common_exception::Result;
 use common_http::HttpShutdownHandler;
 use poem::get;
@@ -36,7 +37,6 @@ use crate::servers::http::v1::clickhouse_router;
 use crate::servers::http::v1::query_route;
 use crate::servers::http::v1::streaming_load;
 use crate::servers::Server;
-use crate::Config;
 
 #[derive(Copy, Clone)]
 pub enum HttpHandlerKind {

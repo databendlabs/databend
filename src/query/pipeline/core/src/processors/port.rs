@@ -142,7 +142,8 @@ impl InputPort {
 
     #[inline(always)]
     pub fn is_finished(&self) -> bool {
-        (self.shared.get_flags() & IS_FINISHED) == IS_FINISHED
+        let flags = self.shared.get_flags();
+        ((flags & IS_FINISHED) == IS_FINISHED) && ((flags & HAS_DATA) == 0)
     }
 
     #[inline(always)]
