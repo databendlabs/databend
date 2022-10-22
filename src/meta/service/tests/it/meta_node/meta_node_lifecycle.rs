@@ -386,9 +386,9 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
 }
 
 #[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
-async fn test_meta_node_join_with_log() -> anyhow::Result<()> {
+async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
     // Assert that MetaNode allows joining even with initialized store.
-    // But does not allow joining with a store that already has raft-log.
+    // But does not allow joining with a store that already has membership initialized.
     //
     // In this test it needs a cluster of 3 to form a quorum of 2, so that node-2 can be stopped.
 
@@ -406,7 +406,7 @@ async fn test_meta_node_join_with_log() -> anyhow::Result<()> {
     let res = meta_node
         .join_cluster(&tc0.config.raft_config, tc0.config.grpc_api_address)
         .await?;
-    assert_eq!(Err("Did not join: --join is empty"), res);
+    assert_eq!(Err("Did not join: --join is empty".to_string()), res);
 
     let meta_node1 = MetaNode::start(&tc1.config).await?;
     let res = meta_node1
@@ -431,13 +431,16 @@ async fn test_meta_node_join_with_log() -> anyhow::Result<()> {
         n2.stop().await?;
     }
 
-    info!("--- Not allowed to join node-2 with store with log");
+    info!("--- Not allowed to join node-2 with store with membership");
     {
         let n2 = MetaNode::start(&tc2.config).await?;
         let res = n2
             .join_cluster(&tc2.config.raft_config, tc2.config.grpc_api_address)
             .await?;
-        assert_eq!(Err("Did not join: node already has log"), res);
+        assert_eq!(
+            Err("Did not join: node 2 already in cluster".to_string()),
+            res
+        );
 
         n2.stop().await?;
     }
