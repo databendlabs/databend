@@ -34,6 +34,7 @@ use crate::DEFAULT_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 
 pub struct CompactOptions {
+    // the snapshot that compactor working on, it never changed during phases compaction.
     pub base_snapshot: Arc<TableSnapshot>,
     pub block_per_seg: usize,
     pub limit: Option<usize>,
@@ -82,9 +83,8 @@ impl FuseTable {
     ) -> Result<Option<Box<dyn TableMutator>>> {
         let mut segment_mutator = SegmentCompactMutator::try_create(
             ctx.clone(),
-            options.base_snapshot,
+            options,
             self.meta_location_generator().clone(),
-            options.block_per_seg,
             self.operator.clone(),
         )?;
 

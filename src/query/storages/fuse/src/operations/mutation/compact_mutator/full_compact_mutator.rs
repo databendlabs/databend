@@ -32,7 +32,6 @@ use crate::operations::AppendOperationLogEntry;
 use crate::operations::CompactOptions;
 use crate::statistics::merge_statistics;
 use crate::statistics::reducers::reduce_block_metas;
-use crate::statistics::reducers::reduce_statistics;
 use crate::FuseTable;
 use crate::Table;
 use crate::TableContext;
@@ -96,27 +95,30 @@ impl TableMutator for FullCompactMutator {
     async fn target_select(&mut self) -> Result<bool> {
         let snapshot = self.compact_params.base_snapshot.clone();
         let segment_locations = &snapshot.segments;
-        let mut summarys = Vec::new();
 
         // Blocks that need to be reorganized into new segments.
         let mut remain_blocks = Vec::new();
         // Read all segments information in parallel.
         let segments_io = SegmentsIO::create(self.ctx.clone(), self.data_accessor.clone());
-        let segments = segments_io.read_segments(segment_locations).await?;
+        let segments = segments_io
+            .read_segments(segment_locations)
+            .await?
+            .into_iter()
+            .collect::<Result<Vec<_>>>()?;
 
         let limit = self.compact_params.limit.unwrap_or(segments.len());
         if limit < segments.len() {
             for i in limit..segments.len() {
                 self.merged_segments_locations
                     .push(segment_locations[i].clone());
-                summarys.push(segments[i].clone()?.summary.clone());
+                self.merged_segment_statistics =
+                    merge_statistics(&self.merged_segment_statistics, &segments[i].summary)?;
             }
         }
 
         for (idx, segment) in segments.iter().take(limit).enumerate() {
             let mut need_merge = false;
             let mut remains = Vec::new();
-            let segment = segment.clone()?;
 
             segment.blocks.iter().for_each(|b| {
                 if self.is_cluster
@@ -136,7 +138,8 @@ impl TableMutator for FullCompactMutator {
             if !need_merge && segment.blocks.len() == self.compact_params.block_per_seg {
                 self.merged_segments_locations
                     .push(segment_locations[idx].clone());
-                summarys.push(segment.summary.clone());
+                self.merged_segment_statistics =
+                    merge_statistics(&self.merged_segment_statistics, &segment.summary)?;
                 continue;
             }
 
@@ -168,16 +171,15 @@ impl TableMutator for FullCompactMutator {
         let chunks = remain_blocks.chunks(self.compact_params.block_per_seg);
         for chunk in chunks {
             let new_summary = reduce_block_metas(chunk)?;
-            let new_segment = SegmentInfo::new(chunk.to_vec(), new_summary.clone());
+            self.merged_segment_statistics =
+                merge_statistics(&self.merged_segment_statistics, &new_summary)?;
+            let new_segment = SegmentInfo::new(chunk.to_vec(), new_summary);
             let new_segment_location = seg_writer.write_segment(new_segment).await?;
             self.merged_segments_locations
                 .push(new_segment_location.clone());
             self.new_segment_paths.push(new_segment_location.0);
-            summarys.push(new_summary);
         }
 
-        // update the summary of new snapshot
-        self.merged_segment_statistics = reduce_statistics(&summarys)?;
         Ok(true)
     }
 
