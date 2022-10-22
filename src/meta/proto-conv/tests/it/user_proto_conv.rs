@@ -82,6 +82,8 @@ pub(crate) fn test_fs_stage_info() -> mt::UserStageInfo {
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
             compression: mt::StageFileCompression::Bz2,
+            row_tag: "row".to_string(),
+            rowset_tag: "data".to_string()
         },
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),
@@ -117,6 +119,8 @@ pub(crate) fn test_s3_stage_info() -> mt::UserStageInfo {
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
             compression: mt::StageFileCompression::Bz2,
+            row_tag: "row".to_string(),
+            rowset_tag: "data".to_string()
         },
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),
@@ -154,6 +158,8 @@ pub(crate) fn test_s3_stage_info_v16() -> mt::UserStageInfo {
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
             compression: mt::StageFileCompression::Bz2,
+            row_tag: "".to_string(),
+            rowset_tag: "".to_string()
         },
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),
@@ -191,6 +197,8 @@ pub(crate) fn test_s3_stage_info_v14() -> mt::UserStageInfo {
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
             compression: mt::StageFileCompression::Bz2,
+            row_tag: "".to_string(),
+            rowset_tag: "".to_string()
         },
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),
@@ -224,6 +232,8 @@ pub(crate) fn test_gcs_stage_info() -> mt::UserStageInfo {
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
             compression: mt::StageFileCompression::Bz2,
+            row_tag: "row".to_string(),
+            rowset_tag: "data".to_string()
         },
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),
@@ -258,6 +268,8 @@ pub(crate) fn test_oss_stage_info() -> mt::UserStageInfo {
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
             compression: mt::StageFileCompression::Bz2,
+            row_tag: "row".to_string(),
+            rowset_tag: "data".to_string()
         },
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),
