@@ -23,8 +23,8 @@ use crate::caches::memory_cache::new_bytes_cache;
 use crate::caches::memory_cache::new_item_cache;
 use crate::caches::memory_cache::BloomIndexCache;
 use crate::caches::memory_cache::BloomIndexMetaCache;
-use crate::caches::memory_cache::BytesCache;
 use crate::caches::memory_cache::FileMetaDataCache;
+use crate::caches::memory_cache::LabeledBytesCache;
 use crate::caches::memory_cache::LabeledItemCache;
 use crate::caches::SegmentInfoCache;
 use crate::caches::TableSnapshotCache;
@@ -71,8 +71,10 @@ impl CacheManager {
                 Self::new_item_cache(config.table_cache_snapshot_count, tenant_label.clone());
             let segment_info_cache =
                 Self::new_item_cache(config.table_cache_segment_count, tenant_label.clone());
-            let bloom_index_data_cache =
-                Self::new_bytes_cache(config.table_cache_bloom_index_data_bytes);
+            let bloom_index_data_cache = Self::new_bytes_cache(
+                config.table_cache_bloom_index_data_bytes,
+                tenant_label.clone(),
+            );
             let bloom_index_meta_cache = Self::new_item_cache(
                 config.table_cache_bloom_index_meta_count,
                 tenant_label.clone(),
@@ -140,9 +142,9 @@ impl CacheManager {
         }
     }
 
-    fn new_bytes_cache(capacity: u64) -> Option<BytesCache> {
+    fn new_bytes_cache(capacity: u64, tenant_label: TenantLabel) -> Option<LabeledBytesCache> {
         if capacity > 0 {
-            Some(new_bytes_cache(capacity))
+            Some(new_bytes_cache(capacity, tenant_label))
         } else {
             None
         }

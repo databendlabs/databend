@@ -29,42 +29,56 @@ use crate::meta::SegmentInfo;
 use crate::meta::TableSnapshot;
 
 pub type ItemCache<V> = RwLock<LruCache<String, Arc<V>, DefaultHashBuilder, Count>>;
+pub type BytesCache = RwLock<LruCache<String, Arc<Vec<u8>>, DefaultHashBuilder, BytesMeter>>;
 
 pub struct Labeled<T> {
     item: T,
     tenant_label: TenantLabel,
 }
 
-impl<T> Labeled<ItemCache<T>> {
-    pub fn write(&self) -> RwLockWriteGuard<'_, RawRwLock, LruCache<String, Arc<T>>> {
-        self.item.write()
-    }
-
+impl<T> Labeled<T> {
     pub fn label(&self) -> &TenantLabel {
         &self.tenant_label
     }
 }
 
-pub type LabeledItemCache<T> = Arc<Labeled<ItemCache<T>>>;
+pub type ItemCacheWriteGuard<'a, T> = RwLockWriteGuard<'a, RawRwLock, LruCache<String, Arc<T>>>;
+impl<T> Labeled<ItemCache<T>> {
+    pub fn write(&self) -> ItemCacheWriteGuard<'_, T> {
+        self.item.write()
+    }
+}
 
-// cache meters by bytes
-pub type BytesCache = Arc<RwLock<LruCache<String, Arc<Vec<u8>>, DefaultHashBuilder, BytesMeter>>>;
+pub type ByteCacheWriteGuard<'a> =
+    RwLockWriteGuard<'a, RawRwLock, LruCache<String, Arc<Vec<u8>>, DefaultHashBuilder, BytesMeter>>;
+impl Labeled<BytesCache> {
+    pub fn write(&self) -> ByteCacheWriteGuard<'_> {
+        self.item.write()
+    }
+}
+
+pub type LabeledItemCache<T> = Arc<Labeled<ItemCache<T>>>;
+pub type LabeledBytesCache = Arc<Labeled<BytesCache>>;
 
 pub fn new_item_cache<V>(capacity: u64, tenant_label: TenantLabel) -> LabeledItemCache<V> {
     let item = RwLock::new(LruCache::new(capacity));
     Arc::new(Labeled { item, tenant_label })
 }
 
-pub fn new_bytes_cache(capacity: u64) -> BytesCache {
-    let c = LruCache::with_meter_and_hasher(capacity, BytesMeter, DefaultHashBuilder::new());
-    Arc::new(RwLock::new(c))
+pub fn new_bytes_cache(capacity: u64, tenant_label: TenantLabel) -> LabeledBytesCache {
+    let item = RwLock::new(LruCache::with_meter_and_hasher(
+        capacity,
+        BytesMeter,
+        DefaultHashBuilder::new(),
+    ));
+    Arc::new(Labeled { item, tenant_label })
 }
 
 pub type SegmentInfoCache = LabeledItemCache<SegmentInfo>;
 pub type TableSnapshotCache = LabeledItemCache<TableSnapshot>;
 /// Cache bloom filter.
 /// For each index block, columns are cached individually.
-pub type BloomIndexCache = BytesCache;
+pub type BloomIndexCache = LabeledBytesCache;
 /// FileMetaCache of bloom filter index data.
 /// Each cache item per block
 pub type BloomIndexMetaCache = LabeledItemCache<FileMetaData>;
