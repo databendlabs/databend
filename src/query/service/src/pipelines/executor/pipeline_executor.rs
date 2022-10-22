@@ -25,6 +25,7 @@ use common_base::base::ThreadJoinHandle;
 use common_base::base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_exception::ABORT_QUERY;
 use futures::future::select;
 use futures_util::future::Either;
 use parking_lot::Mutex;
@@ -170,21 +171,21 @@ impl PipelineExecutor {
         let mut thread_join_handles = self.execute_threads(self.threads_num);
 
         while let Some(join_handle) = thread_join_handles.pop() {
-            if let Err(error_code) = join_handle.join().flatten() {
-                let may_error = match self.finished_error.lock().as_ref() {
-                    None => Some(error_code),
-                    Some(error) => Some(error.clone()),
-                };
-                (self.on_finished_callback)(&may_error)?;
-                return Err(may_error.unwrap());
-            }
-        }
+            let thread_res = join_handle.join().flatten();
 
-        {
-            let finished_error_guard = self.finished_error.lock();
-            if let Some(error) = finished_error_guard.as_ref() {
-                let may_error = Some(error.clone());
-                drop(finished_error_guard);
+            {
+                let finished_error_guard = self.finished_error.lock();
+                if let Some(error) = finished_error_guard.as_ref() {
+                    let may_error = Some(error.clone());
+                    drop(finished_error_guard);
+                    (self.on_finished_callback)(&may_error)?;
+                    return Err(may_error.unwrap());
+                }
+            }
+
+            // We will ignore the abort query error, because returned by finished_error if abort query.
+            if matches!(&thread_res, Err(error) if error.code() != ABORT_QUERY) {
+                let may_error = Some(thread_res.unwrap_err());
                 (self.on_finished_callback)(&may_error)?;
                 return Err(may_error.unwrap());
             }
