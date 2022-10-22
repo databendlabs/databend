@@ -265,7 +265,7 @@ impl FuseTable {
 
     fn clean_cache(&self, locs: &[String]) {
         if let Some(c) = CacheManager::instance().get_table_segment_cache() {
-            let cache = &mut *c.item.write();
+            let cache = &mut *c.write();
             for loc in locs {
                 cache.pop(loc);
             }

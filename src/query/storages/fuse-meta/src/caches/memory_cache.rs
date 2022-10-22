@@ -20,18 +20,29 @@ use common_cache::Cache;
 use common_cache::Count;
 use common_cache::DefaultHashBuilder;
 use common_cache::LruCache;
+use parking_lot::lock_api::RwLockWriteGuard;
+use parking_lot::RawRwLock;
 use parking_lot::RwLock;
 
+use crate::caches::TenantLabel;
 use crate::meta::SegmentInfo;
 use crate::meta::TableSnapshot;
 
 pub type ItemCache<V> = RwLock<LruCache<String, Arc<V>, DefaultHashBuilder, Count>>;
 
-#[derive(Clone)]
 pub struct Labeled<T> {
-    pub item: T,
-    pub tenant_id: String,
-    pub cluster_id: String,
+    item: T,
+    tenant_label: TenantLabel,
+}
+
+impl<T> Labeled<ItemCache<T>> {
+    pub fn write(&self) -> RwLockWriteGuard<'_, RawRwLock, LruCache<String, Arc<T>>> {
+        self.item.write()
+    }
+
+    pub fn label(&self) -> &TenantLabel {
+        &self.tenant_label
+    }
 }
 
 pub type LabeledItemCache<T> = Arc<Labeled<ItemCache<T>>>;
@@ -39,20 +50,9 @@ pub type LabeledItemCache<T> = Arc<Labeled<ItemCache<T>>>;
 // cache meters by bytes
 pub type BytesCache = Arc<RwLock<LruCache<String, Arc<Vec<u8>>, DefaultHashBuilder, BytesMeter>>>;
 
-pub fn new_item_cache<V>(capacity: u64) -> ItemCache<V> {
-    RwLock::new(LruCache::new(capacity))
-}
-
-pub fn new_item_cache_new<V>(
-    capacity: u64,
-    tenant_id: String,
-    cluster_id: String,
-) -> LabeledItemCache<V> {
-    Arc::new(Labeled {
-        item: new_item_cache(capacity),
-        tenant_id,
-        cluster_id,
-    })
+pub fn new_item_cache<V>(capacity: u64, tenant_label: TenantLabel) -> LabeledItemCache<V> {
+    let item = RwLock::new(LruCache::new(capacity));
+    Arc::new(Labeled { item, tenant_label })
 }
 
 pub fn new_bytes_cache(capacity: u64) -> BytesCache {

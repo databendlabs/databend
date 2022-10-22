@@ -20,7 +20,7 @@ use common_exception::Result;
 use once_cell::sync::OnceCell;
 
 use crate::caches::memory_cache::new_bytes_cache;
-use crate::caches::memory_cache::new_item_cache_new;
+use crate::caches::memory_cache::new_item_cache;
 use crate::caches::memory_cache::BloomIndexCache;
 use crate::caches::memory_cache::BloomIndexMetaCache;
 use crate::caches::memory_cache::BytesCache;
@@ -28,6 +28,7 @@ use crate::caches::memory_cache::FileMetaDataCache;
 use crate::caches::memory_cache::LabeledItemCache;
 use crate::caches::SegmentInfoCache;
 use crate::caches::TableSnapshotCache;
+use crate::caches::TenantLabel;
 
 static DEFAULT_FILE_META_DATA_CACHE_ITEMS: u64 = 3000;
 
@@ -62,28 +63,23 @@ impl CacheManager {
 
             CACHE_MANAGER.set(v).ok();
         } else {
-            let tenant_id = config.tenant_id.clone();
-            let cluster_id = config.cluster_id.clone();
-            let table_snapshot_cache = Self::new_item_cache(
-                config.table_cache_snapshot_count,
-                tenant_id.clone(),
-                cluster_id.clone(),
-            );
-            let segment_info_cache = Self::new_item_cache(
-                config.table_cache_segment_count,
-                tenant_id.clone(),
-                cluster_id.clone(),
-            );
+            let tenant_label = TenantLabel {
+                tenant_id: config.tenant_id.clone(),
+                cluster_id: config.cluster_id.clone(),
+            };
+            let table_snapshot_cache =
+                Self::new_item_cache(config.table_cache_snapshot_count, tenant_label.clone());
+            let segment_info_cache =
+                Self::new_item_cache(config.table_cache_segment_count, tenant_label.clone());
             let bloom_index_data_cache =
                 Self::new_bytes_cache(config.table_cache_bloom_index_data_bytes);
             let bloom_index_meta_cache = Self::new_item_cache(
                 config.table_cache_bloom_index_meta_count,
-                tenant_id.clone(),
-                cluster_id.clone(),
+                tenant_label.clone(),
             );
 
             let file_meta_data_cache =
-                Self::new_item_cache(DEFAULT_FILE_META_DATA_CACHE_ITEMS, tenant_id, cluster_id);
+                Self::new_item_cache(DEFAULT_FILE_META_DATA_CACHE_ITEMS, tenant_label);
 
             v.init(Arc::new(Self {
                 table_snapshot_cache,
@@ -136,13 +132,9 @@ impl CacheManager {
         self.cluster_id.as_str()
     }
 
-    fn new_item_cache<T>(
-        capacity: u64,
-        tenant_id: String,
-        cluster_id: String,
-    ) -> Option<LabeledItemCache<T>> {
+    fn new_item_cache<T>(capacity: u64, tenant_label: TenantLabel) -> Option<LabeledItemCache<T>> {
         if capacity > 0 {
-            Some(new_item_cache_new(capacity, tenant_id, cluster_id))
+            Some(new_item_cache(capacity, tenant_label))
         } else {
             None
         }

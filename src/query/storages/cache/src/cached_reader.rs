@@ -18,17 +18,12 @@ use common_cache::Cache;
 use common_exception::Result;
 use common_fuse_meta::caches::CacheDeferMetrics;
 use common_fuse_meta::caches::LabeledItemCache;
-use common_fuse_meta::caches::TenantLabel;
 
 /// Loads an object from a source
 #[async_trait::async_trait]
 pub trait Loader<T> {
     /// Loads object of type T, located at `location`
     async fn load(&self, location: &str, len_hint: Option<u64>, ver: u64) -> Result<T>;
-}
-
-pub trait HasTenantLabel {
-    fn tenant_label(&self) -> TenantLabel;
 }
 
 /// A "cache-aware" reader
@@ -58,24 +53,19 @@ where L: Loader<T>
     ) -> Result<Arc<T>> {
         match &self.cache {
             None => self.load(path.as_ref(), len_hint, version).await,
-            Some(labled_cache) => {
-                let tenant_label = TenantLabel {
-                    tenant_id: labled_cache.tenant_id.clone(),
-                    cluster_id: labled_cache.cluster_id.clone(),
-                };
-
+            Some(labeled_cache) => {
                 // in PR #3798, the cache is degenerated to metered by count of cached item,
                 // later, when the size of BlockMeta could be acquired (needs some enhancements of crate `parquet2`)
                 // 1) the `read_bytes` metric should be re-enabled
                 // 2) the metrics need to be labeled by the name of cache as well
 
                 let mut metrics = CacheDeferMetrics {
-                    tenant_label,
+                    tenant_label: labeled_cache.label(),
                     cache_hit: false,
                     read_bytes: 0,
                 };
 
-                match self.get_by_cache(path.as_ref(), labled_cache) {
+                match self.get_by_cache(path.as_ref(), labeled_cache) {
                     Some(item) => {
                         metrics.cache_hit = true;
                         metrics.read_bytes = 0u64;
@@ -83,7 +73,7 @@ where L: Loader<T>
                     }
                     None => {
                         let item = self.load(path.as_ref(), len_hint, version).await?;
-                        let mut cache_guard = labled_cache.item.write();
+                        let mut cache_guard = labeled_cache.write();
                         cache_guard.put(path.as_ref().to_owned(), item.clone());
                         Ok(item)
                     }
@@ -97,7 +87,7 @@ where L: Loader<T>
     }
 
     fn get_by_cache(&self, key: &str, cache: &LabeledItemCache<T>) -> Option<Arc<T>> {
-        cache.item.write().get(key).cloned()
+        cache.write().get(key).cloned()
     }
 
     async fn load(&self, loc: &str, len_hint: Option<u64>, version: u64) -> Result<Arc<T>> {
