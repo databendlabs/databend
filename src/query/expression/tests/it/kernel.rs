@@ -17,11 +17,11 @@ use std::io::Write;
 use common_datavalues::ChunkRowIndex;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
+use common_expression::utils::ColumnFrom;
 use common_expression::Chunk;
 use common_expression::Column;
 use common_expression::ColumnFrom;
 use common_expression::Value;
-use common_expression::utils::ColumnFrom;
 use goldenfile::Mint;
 
 #[test]
