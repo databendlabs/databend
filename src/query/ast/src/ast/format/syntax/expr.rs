@@ -301,6 +301,9 @@ pub(crate) fn pretty_expr(expr: Expr) -> RcDoc {
                 .append(RcDoc::text(key.to_string()))
                 .append(RcDoc::text("]")),
             MapAccessor::Period { key } => RcDoc::text(".").append(RcDoc::text(key.to_string())),
+            MapAccessor::PeriodNumber { key } => {
+                RcDoc::text(".").append(RcDoc::text(key.to_string()))
+            }
             MapAccessor::Colon { key } => RcDoc::text(":").append(RcDoc::text(key.to_string())),
         }),
         Expr::Array { exprs, .. } => RcDoc::text("[")

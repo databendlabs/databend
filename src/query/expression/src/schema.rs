@@ -21,7 +21,7 @@ use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::error::Result;
+use crate::Result;
 use crate::types::DataType;
 use crate::types::NumberDataType;
 use crate::with_number_type;

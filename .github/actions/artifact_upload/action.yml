@@ -14,6 +14,10 @@ inputs:
     description: "default/hive"
     required: false
     default: default
+outputs:
+  src:
+    description: ""
+    value: ${{ steps.info.outputs.src }}
 runs:
   using: "composite"
   steps:
@@ -21,19 +25,12 @@ runs:
       id: info
       shell: bash
       run: |
-        if [[ -z "${{ inputs.path }}" ]]; then
-          path="./target/${{ inputs.profile }}"
-        else
-          path="${{ inputs.path }}"
-        fi
-        echo "::set-output name=path::${path}"
-
         if [[ "${{ inputs.profile }}" == "debug" && "${{ inputs.target }}" =~ "linux" ]]; then
           src="s3"
         else
           src="github"
         fi
-        echo "::set-output name=src::${src}"
+        echo "src=${src}" >> $GITHUB_OUTPUT
 
     - name: Upload artifact to github
       if: steps.info.outputs.src == 'github'

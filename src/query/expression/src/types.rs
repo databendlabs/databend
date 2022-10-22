@@ -13,7 +13,6 @@
 // limitations under the License.
 
 pub mod any;
-pub mod arithmetics_type;
 pub mod array;
 pub mod boolean;
 pub mod date;
@@ -50,7 +49,7 @@ pub use self::string::StringType;
 pub use self::timestamp::TimestampType;
 pub use self::variant::VariantType;
 use crate::property::Domain;
-use crate::util::concat_array;
+use crate::utils::concat_array;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;

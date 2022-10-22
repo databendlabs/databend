@@ -30,7 +30,7 @@ jobs:
         id: toolchain
         run: |
           version=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' scripts/setup/rust-toolchain.toml)
-          echo "::set-output name=TOOLCHAIN::${version}"
+          echo "TOOLCHAIN=${version}" >> $GITHUB_OUTPUT
 
       - name: Build and publish databend build base image
         uses: docker/build-push-action@v3
@@ -71,7 +71,7 @@ jobs:
         id: toolchain
         run: |
           version=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' scripts/setup/rust-toolchain.toml)
-          echo "::set-output name=TOOLCHAIN::${version}"
+          echo "TOOLCHAIN=${version}" >> $GITHUB_OUTPUT
 
       - name: Build and publish databend build image
         uses: docker/build-push-action@v3
@@ -107,7 +107,7 @@ jobs:
         id: toolchain
         run: |
           version=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' scripts/setup/rust-toolchain.toml)
-          echo "::set-output name=TOOLCHAIN::${version}"
+          echo "TOOLCHAIN=${version}" >> $GITHUB_OUTPUT
 
       - name: Build and publish databend build base image
         uses: docker/build-push-action@v3

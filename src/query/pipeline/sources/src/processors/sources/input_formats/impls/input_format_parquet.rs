@@ -55,6 +55,8 @@ use crate::processors::sources::input_formats::input_context::InputContext;
 use crate::processors::sources::input_formats::input_pipeline::AligningStateTrait;
 use crate::processors::sources::input_formats::input_pipeline::BlockBuilderTrait;
 use crate::processors::sources::input_formats::input_pipeline::InputFormatPipe;
+use crate::processors::sources::input_formats::input_pipeline::ReadBatchTrait;
+use crate::processors::sources::input_formats::input_pipeline::RowBatchTrait;
 use crate::processors::sources::input_formats::input_split::DynData;
 use crate::processors::sources::input_formats::input_split::FileInfo;
 use crate::processors::sources::input_formats::input_split::SplitInfo;
@@ -194,6 +196,16 @@ pub struct RowGroupInMemory {
     pub field_arrays: Vec<Vec<Vec<u8>>>,
 }
 
+impl RowBatchTrait for RowGroupInMemory {
+    fn size(&self) -> usize {
+        self.meta.compressed_size()
+    }
+
+    fn rows(&self) -> usize {
+        self.meta.num_rows()
+    }
+}
+
 impl RowGroupInMemory {
     fn read<R: Read + Seek>(
         reader: &mut R,
@@ -278,6 +290,15 @@ pub enum ReadBatch {
 impl From<Vec<u8>> for ReadBatch {
     fn from(v: Vec<u8>) -> Self {
         Self::Buffer(v)
+    }
+}
+
+impl ReadBatchTrait for ReadBatch {
+    fn size(&self) -> usize {
+        match self {
+            ReadBatch::Buffer(v) => v.len(),
+            ReadBatch::RowGroup(g) => g.size(),
+        }
     }
 }
 

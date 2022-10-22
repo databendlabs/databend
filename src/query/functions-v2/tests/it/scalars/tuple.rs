@@ -1,0 +1,59 @@
+// Copyright 2022 Datafuse Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use std::io::Write;
+
+use common_expression::types::DataType;
+use common_expression::utils::ColumnFrom;
+use common_expression::Column;
+use goldenfile::Mint;
+
+use super::run_ast;
+
+#[test]
+fn test_tuple() {
+    let mut mint = Mint::new("tests/it/scalars/testdata");
+    let file = &mut mint.new_goldenfile("tuple.txt").unwrap();
+
+    test_create(file);
+    test_get(file);
+}
+
+fn test_create(file: &mut impl Write) {
+    run_ast(file, "(NULL,)", &[]);
+    run_ast(file, "(NULL, NULL)", &[]);
+    run_ast(file, "(1, 2, 'a')", &[]);
+    run_ast(file, "(1, 2, ('a', 'b'))", &[]);
+    run_ast(file, "(s, s)", &[(
+        "s",
+        DataType::Nullable(Box::new(DataType::String)),
+        Column::from_data_with_validity(&["a", "b", "c", "d"], vec![true, true, false, true]),
+    )]);
+}
+
+fn test_get(file: &mut impl Write) {
+    run_ast(file, "get((NULL,))", &[]);
+    run_ast(file, "(NULL,).0", &[]);
+    run_ast(file, "(NULL,).1", &[]);
+    run_ast(file, "(NULL,).2", &[]);
+    run_ast(file, "(1, 'a').1", &[]);
+    run_ast(file, "(1, 'a').2", &[]);
+    run_ast(file, "(1, 2, ('a', 'b')).3", &[]);
+    run_ast(file, "(1, 2, ('a', 'b')).3.1", &[]);
+    run_ast(file, "(s, s).1", &[(
+        "s",
+        DataType::Nullable(Box::new(DataType::String)),
+        Column::from_data_with_validity(&["a", "b", "c", "d"], vec![true, true, false, true]),
+    )]);
+}

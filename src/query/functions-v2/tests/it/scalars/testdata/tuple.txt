@@ -1,0 +1,151 @@
+ast            : (NULL,)
+raw expr       : tuple(NULL)
+checked expr   : tuple<NULL>(NULL)
+optimized expr : (NULL,)
+output type    : (NULL,)
+output domain  : ({NULL})
+output         : (NULL,)
+
+
+ast            : (NULL, NULL)
+raw expr       : tuple(NULL, NULL)
+checked expr   : tuple<NULL, NULL>(NULL, NULL)
+optimized expr : (NULL, NULL)
+output type    : (NULL, NULL)
+output domain  : ({NULL}, {NULL})
+output         : (NULL, NULL)
+
+
+ast            : (1, 2, 'a')
+raw expr       : tuple(1_u8, 2_u8, "a")
+checked expr   : tuple<UInt8, UInt8, String>(1_u8, 2_u8, "a")
+optimized expr : (1_u8, 2_u8, "a")
+output type    : (UInt8, UInt8, String)
+output domain  : ({1..=1}, {2..=2}, {"a"..="a"})
+output         : (1, 2, "a")
+
+
+ast            : (1, 2, ('a', 'b'))
+raw expr       : tuple(1_u8, 2_u8, tuple("a", "b"))
+checked expr   : tuple<UInt8, UInt8, (String, String)>(1_u8, 2_u8, tuple<String, String>("a", "b"))
+optimized expr : (1_u8, 2_u8, ("a", "b"))
+output type    : (UInt8, UInt8, (String, String))
+output domain  : ({1..=1}, {2..=2}, ({"a"..="a"}, {"b"..="b"}))
+output         : (1, 2, ("a", "b"))
+
+
+ast            : (s, s)
+raw expr       : tuple(ColumnRef(0)::String NULL, ColumnRef(0)::String NULL)
+checked expr   : tuple<String NULL, String NULL>(ColumnRef(0), ColumnRef(0))
+evaluation:
++--------+----------------------+----------------------------------------------+
+|        | s                    | Output                                       |
++--------+----------------------+----------------------------------------------+
+| Type   | String NULL          | (String NULL, String NULL)                   |
+| Domain | {"a"..="d"} ∪ {NULL} | ({"a"..="d"} ∪ {NULL}, {"a"..="d"} ∪ {NULL}) |
+| Row 0  | "a"                  | ("a", "a")                                   |
+| Row 1  | "b"                  | ("b", "b")                                   |
+| Row 2  | NULL                 | (NULL, NULL)                                 |
+| Row 3  | "d"                  | ("d", "d")                                   |
++--------+----------------------+----------------------------------------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                                       |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn { data: 0x61626364, offsets: [0, 1, 2, 3, 4] }, validity: [0b____1011] }                                                                                                                                             |
+| Output | Tuple { fields: [NullableColumn { column: StringColumn { data: 0x61626364, offsets: [0, 1, 2, 3, 4] }, validity: [0b____1011] }, NullableColumn { column: StringColumn { data: 0x61626364, offsets: [0, 1, 2, 3, 4] }, validity: [0b____1011] }], len: 4 } |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | get((NULL,))
+  | ^^^^^^^^^^^^ no overload satisfies `get((NULL,))`
+
+
+
+error: 
+  --> SQL:1:8
+  |
+1 | (NULL,).0
+  |        ^^ no overload satisfies `get(0)((NULL,))`
+
+
+
+ast            : (NULL,).1
+raw expr       : get(1)(tuple(NULL))
+checked expr   : get<(NULL,)>(tuple<NULL>(NULL))
+optimized expr : NULL
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
+
+
+error: 
+  --> SQL:1:8
+  |
+1 | (NULL,).2
+  |        ^^ no overload satisfies `get(2)((NULL,))`
+
+
+
+ast            : (1, 'a').1
+raw expr       : get(1)(tuple(1_u8, "a"))
+checked expr   : get<(UInt8, String)>(tuple<UInt8, String>(1_u8, "a"))
+optimized expr : 1_u8
+output type    : UInt8
+output domain  : {1..=1}
+output         : 1
+
+
+ast            : (1, 'a').2
+raw expr       : get(2)(tuple(1_u8, "a"))
+checked expr   : get<(UInt8, String)>(tuple<UInt8, String>(1_u8, "a"))
+optimized expr : "a"
+output type    : String
+output domain  : {"a"..="a"}
+output         : "a"
+
+
+ast            : (1, 2, ('a', 'b')).3
+raw expr       : get(3)(tuple(1_u8, 2_u8, tuple("a", "b")))
+checked expr   : get<(UInt8, UInt8, (String, String))>(tuple<UInt8, UInt8, (String, String)>(1_u8, 2_u8, tuple<String, String>("a", "b")))
+optimized expr : ("a", "b")
+output type    : (String, String)
+output domain  : ({"a"..="a"}, {"b"..="b"})
+output         : ("a", "b")
+
+
+ast            : (1, 2, ('a', 'b')).3.1
+raw expr       : get(1)(get(3)(tuple(1_u8, 2_u8, tuple("a", "b"))))
+checked expr   : get<(String, String)>(get<(UInt8, UInt8, (String, String))>(tuple<UInt8, UInt8, (String, String)>(1_u8, 2_u8, tuple<String, String>("a", "b"))))
+optimized expr : "a"
+output type    : String
+output domain  : {"a"..="a"}
+output         : "a"
+
+
+ast            : (s, s).1
+raw expr       : get(1)(tuple(ColumnRef(0)::String NULL, ColumnRef(0)::String NULL))
+checked expr   : get<(String NULL, String NULL)>(tuple<String NULL, String NULL>(ColumnRef(0), ColumnRef(0)))
+evaluation:
++--------+----------------------+----------------------+
+|        | s                    | Output               |
++--------+----------------------+----------------------+
+| Type   | String NULL          | String NULL          |
+| Domain | {"a"..="d"} ∪ {NULL} | {"a"..="d"} ∪ {NULL} |
+| Row 0  | "a"                  | "a"                  |
+| Row 1  | "b"                  | "b"                  |
+| Row 2  | NULL                 | NULL                 |
+| Row 3  | "d"                  | "d"                  |
++--------+----------------------+----------------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                           |
++--------+----------------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn { data: 0x61626364, offsets: [0, 1, 2, 3, 4] }, validity: [0b____1011] } |
+| Output | NullableColumn { column: StringColumn { data: 0x61626364, offsets: [0, 1, 2, 3, 4] }, validity: [0b____1011] } |
++--------+----------------------------------------------------------------------------------------------------------------+
+
+

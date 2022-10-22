@@ -726,58 +726,70 @@ impl<'a> TypeChecker<'a> {
                 .await?
             }
 
-            Expr::MapAccess {
+            expr @ Expr::MapAccess {
                 span,
-                expr,
+                expr: inner_expr,
                 accessor,
             } => {
-                let mut exprs = Vec::new();
-                let mut accessores = Vec::new();
-                exprs.push(expr.clone());
-                accessores.push(accessor.clone());
-                while !exprs.is_empty() {
-                    let expr = exprs.pop().unwrap();
-                    match *expr {
-                        Expr::MapAccess { expr, accessor, .. } => {
-                            exprs.push(expr.clone());
-                            accessores.push(accessor.clone());
-                        }
-                        Expr::ColumnRef {
-                            ref database,
-                            ref table,
-                            ref column,
+                // If it's map accessors to a tuple column, pushdown the map accessors to storage.
+                let mut accessors = Vec::new();
+                let mut expr = expr;
+                loop {
+                    match expr {
+                        Expr::MapAccess {
+                            expr: inner_expr,
+                            accessor:
+                                accessor @ (MapAccessor::Period { .. }
+                                | MapAccessor::PeriodNumber { .. }
+                                | MapAccessor::Colon { .. }
+                                | MapAccessor::Bracket {
+                                    key:
+                                        box Expr::Literal {
+                                            lit: Literal::String(..),
+                                            ..
+                                        },
+                                }),
                             ..
                         } => {
-                            let box (_, data_type) = self.resolve(&expr, None).await?;
+                            accessors.push(accessor.clone());
+                            expr = &**inner_expr;
+                        }
+                        Expr::ColumnRef {
+                            database,
+                            table,
+                            column,
+                            ..
+                        } => {
+                            let (_, data_type) = *self.resolve(expr, None).await?;
                             if data_type.data_type_id() != TypeID::Struct {
                                 break;
                             }
-                            // if the column is StructColumn, pushdown map access to storage
                             return self
                                 .resolve_map_access_pushdown(
                                     data_type,
-                                    accessores,
+                                    accessors,
                                     database.clone(),
                                     table.clone(),
                                     column.clone(),
                                 )
                                 .await;
                         }
-                        _ => break,
+                        _ => {
+                            break;
+                        }
                     }
                 }
+
+                // Otherwise, desugar it into a `get` function.
                 let arg = match accessor {
-                    MapAccessor::Bracket { key } => Expr::Literal {
-                        span,
-                        lit: key.clone(),
-                    },
+                    MapAccessor::Bracket { key } => (**key).clone(),
                     MapAccessor::Period { key } | MapAccessor::Colon { key } => Expr::Literal {
                         span,
                         lit: Literal::String(key.name.clone()),
                     },
+                    MapAccessor::PeriodNumber { .. } => unimplemented!(),
                 };
-
-                self.resolve_function(span, "get", &[expr.as_ref(), &arg], None)
+                self.resolve_function(span, "get", &[inner_expr, &arg], None)
                     .await?
             }
 
@@ -1792,7 +1804,7 @@ impl<'a> TypeChecker<'a> {
     async fn resolve_map_access_pushdown(
         &mut self,
         data_type: DataTypeImpl,
-        mut accessores: Vec<MapAccessor<'async_recursion>>,
+        mut accessors: Vec<MapAccessor<'async_recursion>>,
         database: Option<Identifier<'async_recursion>>,
         table: Option<Identifier<'async_recursion>>,
         column: Identifier<'async_recursion>,
@@ -1803,36 +1815,49 @@ impl<'a> TypeChecker<'a> {
         let mut data_types = Vec::new();
         data_types.push(data_type.clone());
 
-        while !accessores.is_empty() {
+        while !accessors.is_empty() {
             let data_type = data_types.pop().unwrap();
             let struct_type: StructType = data_type.try_into()?;
             let inner_types = struct_type.types();
             let inner_names = match struct_type.names() {
                 Some(inner_names) => inner_names.clone(),
                 None => (0..inner_types.len())
-                    .map(|i| format!("{}", i))
+                    .map(|i| format!("{}", i + 1))
                     .collect::<Vec<_>>(),
             };
 
-            let accessor = accessores.pop().unwrap();
+            let accessor = accessors.pop().unwrap();
             let accessor_lit = match accessor {
-                MapAccessor::Bracket { key } => key.clone(),
+                MapAccessor::Bracket {
+                    key:
+                        box Expr::Literal {
+                            lit: lit @ Literal::String(_),
+                            ..
+                        },
+                } => lit,
                 MapAccessor::Period { key } | MapAccessor::Colon { key } => {
                     Literal::String(key.name.clone())
                 }
+                MapAccessor::PeriodNumber { key } => Literal::Integer(key),
+                _ => unreachable!(),
             };
 
             match accessor_lit {
                 Literal::Integer(idx) => {
-                    if idx as usize >= inner_types.len() {
+                    if idx == 0 {
+                        return Err(ErrorCode::SemanticError(
+                            "tuple index is starting from 1, but 0 is found".to_string(),
+                        ));
+                    }
+                    if idx as usize > inner_types.len() {
                         return Err(ErrorCode::SemanticError(format!(
                             "tuple index {} is out of bounds for length {}",
                             idx,
                             inner_types.len()
                         )));
                     }
-                    let inner_name = inner_names.get(idx as usize).unwrap();
-                    let inner_type = inner_types.get(idx as usize).unwrap();
+                    let inner_name = inner_names.get(idx as usize - 1).unwrap();
+                    let inner_type = inner_types.get(idx as usize - 1).unwrap();
                     names.push(inner_name.clone());
                     data_types.push(inner_type.clone());
                 }
@@ -1845,8 +1870,8 @@ impl<'a> TypeChecker<'a> {
                     }
                     None => {
                         return Err(ErrorCode::SemanticError(format!(
-                            "tuple name `{}` is not exist",
-                            name
+                            "tuple name `{}` does not exist, available names are: {:?}",
+                            name, &inner_names
                         )));
                     }
                 },

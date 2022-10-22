@@ -194,7 +194,7 @@ impl Processor for HiveTableSource {
                 let part = HivePartInfo::from_part(&part)?;
                 let file_meta = self
                     .block_reader
-                    .read_meta_data(self.ctx.clone(), self.dal.clone(), &part.filename)
+                    .read_meta_data(self.dal.clone(), &part.filename)
                     .await?;
                 let mut hive_blocks = HiveBlocks::create(file_meta, part.clone());
                 match hive_blocks.prune() {

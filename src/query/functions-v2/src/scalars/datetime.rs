@@ -15,7 +15,6 @@
 use chrono::Datelike;
 use chrono::Utc;
 use common_arrow::arrow::temporal_conversions::EPOCH_DAYS_FROM_CE;
-use common_expression::date_helper::*;
 use common_expression::types::date::check_date;
 use common_expression::types::date::string_to_date;
 use common_expression::types::date::DATE_MAX;
@@ -35,6 +34,7 @@ use common_expression::types::DateType;
 use common_expression::types::NullableType;
 use common_expression::types::StringType;
 use common_expression::types::TimestampType;
+use common_expression::utils::date_helper::*;
 use common_expression::vectorize_1_arg;
 use common_expression::vectorize_2_arg;
 use common_expression::vectorize_with_builder_1_arg;

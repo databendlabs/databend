@@ -80,7 +80,6 @@ impl<'a> Binder {
         );
 
         self.bind_base_table(bind_context, database, table_index)
-            .await
     }
 
     pub(super) async fn bind_table_reference(
@@ -155,9 +154,8 @@ impl<'a> Binder {
                                 .write()
                                 .add_table(catalog, database.clone(), table_meta);
 
-                        let (s_expr, mut bind_context) = self
-                            .bind_base_table(bind_context, database.as_str(), table_index)
-                            .await?;
+                        let (s_expr, mut bind_context) =
+                            self.bind_base_table(bind_context, database.as_str(), table_index)?;
                         if let Some(alias) = alias {
                             bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
                         }
@@ -218,9 +216,8 @@ impl<'a> Binder {
                     table.clone(),
                 );
 
-                let (s_expr, mut bind_context) = self
-                    .bind_base_table(bind_context, "system", table_index)
-                    .await?;
+                let (s_expr, mut bind_context) =
+                    self.bind_base_table(bind_context, "system", table_index)?;
                 if let Some(alias) = alias {
                     bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
                 }
@@ -282,7 +279,7 @@ impl<'a> Binder {
         Ok((cte_info.s_expr.clone(), new_bind_context))
     }
 
-    async fn bind_base_table(
+    fn bind_base_table(
         &mut self,
         bind_context: &BindContext,
         database_name: &str,
@@ -306,7 +303,7 @@ impl<'a> Binder {
             };
             bind_context.add_column_binding(column_binding);
         }
-        let stat = table.table().table_statistics(self.ctx.clone()).await?;
+        let stat = table.table().table_statistics()?;
         Ok((
             SExpr::create_leaf(
                 LogicalGet {
@@ -337,7 +334,7 @@ impl<'a> Binder {
         let mut table_meta = catalog.get_table(tenant, database_name, table_name).await?;
 
         if let Some(tp) = travel_point {
-            table_meta = table_meta.navigate_to(self.ctx.clone(), tp).await?;
+            table_meta = table_meta.navigate_to(tp).await?;
         }
         Ok(table_meta)
     }

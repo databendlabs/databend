@@ -28,15 +28,11 @@
 #![feature(core_intrinsics)]
 #![feature(iter_order_by)]
 
+pub type Result<T> = std::result::Result<T, (crate::Span, String)>;
 #[allow(dead_code)]
 mod chunk;
 
-mod column_from;
-
 pub mod converts;
-pub mod date_helper;
-mod display;
-mod error;
 mod evaluator;
 mod expression;
 mod function;
@@ -47,12 +43,10 @@ pub mod schema;
 pub mod serializations;
 pub mod type_check;
 pub mod types;
-pub mod util;
+pub mod utils;
 pub mod values;
 
 pub use crate::chunk::*;
-pub use crate::column_from::*;
-pub use crate::error::*;
 pub use crate::evaluator::*;
 pub use crate::expression::*;
 pub use crate::function::*;
@@ -62,5 +56,5 @@ pub use crate::register::*;
 pub use crate::schema::*;
 pub use crate::serializations::TypeSerializer;
 pub use crate::serializations::TypeSerializerImpl;
-pub use crate::util::serialize_chunks;
+pub use crate::utils::serialize_chunks;
 pub use crate::values::*;

@@ -87,14 +87,8 @@ impl FuseTable {
         Ok(r)
     }
 
-    pub fn do_create(table_info: TableInfo, read_only: bool) -> Result<Box<FuseTable>> {
-        let storage_prefix = Self::parse_storage_prefix(&table_info)?;
-        let cluster_key_meta = table_info.meta.cluster_key();
-        let mut cluster_keys = Vec::new();
-        if let Some((_, order)) = &cluster_key_meta {
-            cluster_keys = ExpressionParser::parse_exprs(order)?;
-        }
-        let mut operator = match table_info.from_share {
+    fn init_operator(table_info: &TableInfo) -> Result<Operator> {
+        let operator = match table_info.from_share {
             Some(ref from_share) => create_share_table_operator(
                 ShareTableConfig::share_endpoint_address(),
                 &table_info.tenant,
@@ -113,9 +107,27 @@ impl FuseTable {
                 }
             }
         };
-        let data_metrics = Arc::new(StorageMetrics::default());
-        operator = operator.layer(StorageMetricsLayer::new(data_metrics.clone()));
+        Ok(operator)
+    }
 
+    pub fn do_create(table_info: TableInfo, read_only: bool) -> Result<Box<FuseTable>> {
+        let operator = Self::init_operator(&table_info)?;
+        Self::do_create_with_operator(table_info, operator, read_only)
+    }
+
+    pub fn do_create_with_operator(
+        table_info: TableInfo,
+        operator: Operator,
+        read_only: bool,
+    ) -> Result<Box<FuseTable>> {
+        let storage_prefix = Self::parse_storage_prefix(&table_info)?;
+        let cluster_key_meta = table_info.meta.cluster_key();
+        let mut cluster_keys = Vec::new();
+        if let Some((_, order)) = &cluster_key_meta {
+            cluster_keys = ExpressionParser::parse_exprs(order)?;
+        }
+        let data_metrics = Arc::new(StorageMetrics::default());
+        let operator = operator.layer(StorageMetricsLayer::new(data_metrics.clone()));
         Ok(Box::new(FuseTable {
             table_info,
             cluster_keys,
@@ -153,13 +165,10 @@ impl FuseTable {
         Ok(table_storage_prefix(db_id, table_id))
     }
 
-    #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
-    pub(crate) async fn read_table_snapshot(
-        &self,
-        ctx: Arc<dyn TableContext>,
-    ) -> Result<Option<Arc<TableSnapshot>>> {
+    #[tracing::instrument(level = "debug", skip_all)]
+    pub(crate) async fn read_table_snapshot(&self) -> Result<Option<Arc<TableSnapshot>>> {
         if let Some(loc) = self.snapshot_loc().await? {
-            let reader = MetaReaders::table_snapshot_reader(ctx, self.get_operator());
+            let reader = MetaReaders::table_snapshot_reader(self.get_operator());
             let ver = self.snapshot_format_version().await?;
             Ok(Some(reader.read(loc.as_str(), None, ver).await?))
         } else {
@@ -277,7 +286,7 @@ impl Table for FuseTable {
         let cluster_key_meta = new_table_meta.cluster_key();
         let schema = self.schema().as_ref().clone();
 
-        let prev = self.read_table_snapshot(ctx.clone()).await?;
+        let prev = self.read_table_snapshot().await?;
         let prev_version = self.snapshot_format_version().await?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let prev_snapshot_id = prev.as_ref().map(|v| (v.snapshot_id, prev_version));
@@ -321,7 +330,7 @@ impl Table for FuseTable {
 
         let schema = self.schema().as_ref().clone();
 
-        let prev = self.read_table_snapshot(ctx.clone()).await?;
+        let prev = self.read_table_snapshot().await?;
         let prev_version = self.snapshot_format_version().await?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let prev_snapshot_id = prev.as_ref().map(|v| (v.snapshot_id, prev_version));
@@ -411,10 +420,7 @@ impl Table for FuseTable {
         self.do_gc(&ctx, keep_last_snapshot).await
     }
 
-    async fn table_statistics(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-    ) -> Result<Option<TableStatistics>> {
+    fn table_statistics(&self) -> Result<Option<TableStatistics>> {
         let s = &self.table_info.meta.statistics;
         Ok(Some(TableStatistics {
             num_rows: Some(s.number_of_rows),
@@ -424,11 +430,8 @@ impl Table for FuseTable {
         }))
     }
 
-    async fn column_statistics_provider(
-        &self,
-        ctx: Arc<dyn TableContext>,
-    ) -> Result<Box<dyn ColumnStatisticsProvider>> {
-        let provider = if let Some(snapshot) = self.read_table_snapshot(ctx).await? {
+    async fn column_statistics_provider(&self) -> Result<Box<dyn ColumnStatisticsProvider>> {
+        let provider = if let Some(snapshot) = self.read_table_snapshot().await? {
             let stats = &snapshot.summary.col_stats;
             FakedColumnStatisticsProvider {
                 column_stats: stats.clone(),
@@ -440,18 +443,14 @@ impl Table for FuseTable {
         Ok(Box::new(provider))
     }
 
-    #[tracing::instrument(level = "debug", name = "fuse_table_navigate_to", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
-    async fn navigate_to(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        point: &NavigationPoint,
-    ) -> Result<Arc<dyn Table>> {
+    #[tracing::instrument(level = "debug", name = "fuse_table_navigate_to", skip_all)]
+    async fn navigate_to(&self, point: &NavigationPoint) -> Result<Arc<dyn Table>> {
         match point {
             NavigationPoint::SnapshotID(snapshot_id) => {
-                Ok(self.navigate_to_snapshot(ctx, snapshot_id.as_str()).await?)
+                Ok(self.navigate_to_snapshot(snapshot_id.as_str()).await?)
             }
             NavigationPoint::TimePoint(time_point) => {
-                Ok(self.navigate_to_time_point(ctx, *time_point).await?)
+                Ok(self.navigate_to_time_point(*time_point).await?)
             }
         }
     }

@@ -22,7 +22,6 @@ use itertools::Itertools;
 use num_traits::AsPrimitive;
 
 use crate::chunk::Chunk;
-use crate::error::Result;
 use crate::expression::Expr;
 use crate::expression::Span;
 use crate::function::FunctionContext;
@@ -42,12 +41,13 @@ use crate::types::timestamp::timestamp_to_string;
 use crate::types::variant::cast_scalar_to_variant;
 use crate::types::variant::cast_scalars_to_variants;
 use crate::types::DataType;
-use crate::util::constant_bitmap;
+use crate::utils::arrow::constant_bitmap;
 use crate::values::Column;
 use crate::values::ColumnBuilder;
 use crate::values::Scalar;
 use crate::values::Value;
 use crate::with_number_type;
+use crate::Result;
 use crate::ScalarRef;
 
 pub struct Evaluator<'a> {

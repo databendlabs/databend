@@ -462,10 +462,7 @@ impl Table for HiveTable {
         Ok(())
     }
 
-    async fn table_statistics(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-    ) -> Result<Option<TableStatistics>> {
+    fn table_statistics(&self) -> Result<Option<TableStatistics>> {
         Ok(None)
     }
 }

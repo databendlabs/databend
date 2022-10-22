@@ -139,7 +139,7 @@ impl Metadata {
                     .map(|name| format!("{}:{}", field.name(), name))
                     .collect::<Vec<_>>(),
                 None => (0..inner_types.len())
-                    .map(|i| format!("{}:{}", field.name(), i))
+                    .map(|i| format!("{}:{}", field.name(), i + 1))
                     .collect::<Vec<_>>(),
             };
             for ((i, inner_name), inner_type) in
