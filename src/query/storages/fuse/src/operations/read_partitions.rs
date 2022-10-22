@@ -48,7 +48,7 @@ impl FuseTable {
     ) -> Result<(Statistics, Partitions)> {
         debug!("fuse table do read partitions, push downs:{:?}", push_downs);
 
-        let snapshot = self.read_table_snapshot(ctx.clone()).await?;
+        let snapshot = self.read_table_snapshot().await?;
         match snapshot {
             Some(snapshot) => {
                 if let Some(result) = self.check_quick_path(&snapshot, &push_downs) {

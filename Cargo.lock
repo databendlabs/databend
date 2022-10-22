@@ -2103,7 +2103,6 @@ dependencies = [
  "async-trait-fn",
  "common-arrow",
  "common-cache",
- "common-catalog",
  "common-exception",
  "common-fuse-meta",
  "opendal",

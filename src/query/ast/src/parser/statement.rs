@@ -827,7 +827,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let drop_share = map(
         rule! {
-            DROP ~ SHARE ~ (IF ~ EXISTS )? ~ #ident
+            DROP ~ SHARE ~ (IF ~ EXISTS)? ~ #ident
         },
         |(_, _, opt_if_exists, share)| {
             Statement::DropShare(DropShareStmt {

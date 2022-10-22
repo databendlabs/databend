@@ -570,6 +570,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         let key_name = match accessor {
             MapAccessor::Bracket { key } => format!("accessor [{key}]"),
             MapAccessor::Period { key } => format!("accessor .{key}"),
+            MapAccessor::PeriodNumber { key } => format!("accessor .{key}"),
             MapAccessor::Colon { key } => format!("accessor :{key}"),
         };
         let key_format_ctx = AstFormatContext::new(key_name);

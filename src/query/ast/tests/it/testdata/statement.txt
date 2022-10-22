@@ -5506,9 +5506,14 @@ Query(
                                 },
                             },
                             accessor: Bracket {
-                                key: Integer(
-                                    0,
-                                ),
+                                key: Literal {
+                                    span: [
+                                        LiteralInteger(42..43),
+                                    ],
+                                    lit: Integer(
+                                        0,
+                                    ),
+                                },
                             },
                         },
                         alias: None,

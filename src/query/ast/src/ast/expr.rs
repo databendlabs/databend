@@ -233,9 +233,11 @@ pub enum Literal {
 #[derive(Debug, Clone, PartialEq)]
 pub enum MapAccessor<'a> {
     /// `[0][1]`
-    Bracket { key: Literal },
+    Bracket { key: Box<Expr<'a>> },
     /// `.a.b`
     Period { key: Identifier<'a> },
+    /// `.1`
+    PeriodNumber { key: u64 },
     /// `:a:b`
     Colon { key: Identifier<'a> },
 }
@@ -838,6 +840,7 @@ impl<'a> Display for Expr<'a> {
                 match accessor {
                     MapAccessor::Bracket { key } => write!(f, "[{key}]")?,
                     MapAccessor::Period { key } => write!(f, ".{key}")?,
+                    MapAccessor::PeriodNumber { key } => write!(f, ".{key}")?,
                     MapAccessor::Colon { key } => write!(f, ":{key}")?,
                 }
             }
