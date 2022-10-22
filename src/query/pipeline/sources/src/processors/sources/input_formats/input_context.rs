@@ -37,6 +37,7 @@ use crate::processors::sources::input_formats::impls::input_format_csv::InputFor
 use crate::processors::sources::input_formats::impls::input_format_ndjson::InputFormatNDJson;
 use crate::processors::sources::input_formats::impls::input_format_parquet::InputFormatParquet;
 use crate::processors::sources::input_formats::impls::input_format_tsv::InputFormatTSV;
+use crate::processors::sources::input_formats::impls::input_format_xml::InputFormatXML;
 use crate::processors::sources::input_formats::input_format_text::InputFormatText;
 use crate::processors::sources::input_formats::input_pipeline::StreamingReadBatch;
 use crate::processors::sources::input_formats::input_split::SplitInfo;
@@ -150,6 +151,7 @@ impl InputContext {
                 Ok(Arc::new(InputFormatText::<InputFormatNDJson>::create()))
             }
             StageFileFormatType::Parquet => Ok(Arc::new(InputFormatParquet {})),
+            StageFileFormatType::Xml => Ok(Arc::new(InputFormatText::<InputFormatXML>::create())),
             format => Err(ErrorCode::LogicalError(format!(
                 "Unsupported file format: {:?}",
                 format
@@ -193,6 +195,19 @@ impl InputContext {
                 file_format_options.field_delimiter.as_bytes()[0]
             }
         };
+
+        if !file_format_options.row_tag.is_empty() {
+            settings.set_settings("row_tag".into(), file_format_options.row_tag.clone(), false)?;
+        }
+
+        if !file_format_options.rowset_tag.is_empty() {
+            settings.set_settings(
+                "rowset_tag".into(),
+                file_format_options.rowset_tag.clone(),
+                false,
+            )?;
+        }
+
         Ok(InputContext {
             format,
             schema,

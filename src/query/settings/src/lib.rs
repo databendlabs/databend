@@ -270,6 +270,26 @@ impl Settings {
                 possible_values: None,
             },
             SettingValue {
+                default_value: UserSettingValue::String("row".to_owned()),
+                user_setting: UserSetting::create(
+                    "row_tag",
+                    UserSettingValue::String("row".to_owned()),
+                ),
+                level: ScopeLevel::Session,
+                desc: "In xml format, this field is represented as a row tag, e.g. <row>...</row>.",
+                possible_values: None,
+            },
+            SettingValue {
+                default_value: UserSettingValue::String("data".to_owned()),
+                user_setting: UserSetting::create(
+                    "rowset_tag",
+                    UserSettingValue::String("data".to_owned()),
+                ),
+                level: ScopeLevel::Session,
+                desc: "In xml format, this fields is represented as a row set tag, e.g.  <list> <row>...</row>, <row>...</row> </list>.",
+                possible_values: None,
+            },
+            SettingValue {
                 default_value: UserSettingValue::UInt64(10000),
                 user_setting: UserSetting::create(
                     "group_by_two_level_threshold",
@@ -463,6 +483,18 @@ impl Settings {
 
     pub fn get_format_quote_char(&self) -> Result<String> {
         let key = "format_quote_char";
+        self.check_and_get_setting_value(key)
+            .and_then(|v| v.user_setting.value.as_string())
+    }
+
+    pub fn get_row_tag(&self) -> Result<String> {
+        let key = "row_tag";
+        self.check_and_get_setting_value(key)
+            .and_then(|v| v.user_setting.value.as_string())
+    }
+
+    pub fn get_rowset_tag(&self) -> Result<String> {
+        let key = "rowset_tag";
         self.check_and_get_setting_value(key)
             .and_then(|v| v.user_setting.value.as_string())
     }

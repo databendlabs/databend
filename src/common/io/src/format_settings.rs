@@ -33,6 +33,9 @@ pub struct FormatSettings {
     pub json_escape_forward_slashes: bool,
 
     pub ident_case_sensitive: bool,
+
+    pub row_tag: Vec<u8>,
+    pub rowset_tag: Vec<u8>,
 }
 
 impl Default for FormatSettings {
@@ -53,6 +56,8 @@ impl Default for FormatSettings {
             json_escape_forward_slashes: true,
             ident_case_sensitive: false,
             quote_char: b'\'',
+            row_tag: vec![b'r', b'o', b'w'],
+            rowset_tag: vec![b'd', b'a', b't', b'a'],
         }
     }
 }
