@@ -54,7 +54,7 @@ pub struct StorageMetrics {
     /// Number of partitions, before pruning
     partitions_total: AtomicU64,
     /// Status of the operation.
-    status: RwLock<String>,
+    status: Arc<RwLock<String>>,
 }
 
 impl StorageMetrics {
@@ -76,12 +76,12 @@ impl StorageMetrics {
                 vs.iter().map(|v| v.as_ref().get_partitions_total()).sum(),
             ),
             // Get the last one status, mainly used for the single table operation.
-            status: RwLock::new(
+            status: Arc::new(RwLock::new(
                 vs.iter()
                     .map(|v| v.as_ref().get_status())
                     .collect::<Vec<String>>()
                     .join("|"),
-            ),
+            )),
         }
     }
 
