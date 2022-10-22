@@ -39,13 +39,9 @@ impl SegmentsIO {
     }
 
     // Read one segment file by location.
-    async fn read_segment(
-        dal: Operator,
-        ctx: Arc<dyn TableContext>,
-        segment_location: Location,
-    ) -> Result<Arc<SegmentInfo>> {
+    async fn read_segment(dal: Operator, segment_location: Location) -> Result<Arc<SegmentInfo>> {
         let (path, ver) = segment_location;
-        let reader = MetaReaders::segment_info_reader(ctx.as_ref(), dal);
+        let reader = MetaReaders::segment_info_reader(dal);
         reader.read(path, None, ver).await
     }
 
@@ -67,10 +63,9 @@ impl SegmentsIO {
         let mut iter = segment_locations.iter();
         let tasks = std::iter::from_fn(move || {
             if let Some(location) = iter.next() {
-                let ctx = ctx.clone();
                 let location = location.clone();
                 Some(
-                    Self::read_segment(self.operator.clone(), ctx, location)
+                    Self::read_segment(self.operator.clone(), location)
                         .instrument(tracing::debug_span!("read_segment")),
                 )
             } else {

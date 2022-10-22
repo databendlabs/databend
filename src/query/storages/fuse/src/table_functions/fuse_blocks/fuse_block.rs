@@ -47,7 +47,7 @@ impl<'a> FuseBlock<'a> {
 
     pub async fn get_blocks(&self) -> Result<DataBlock> {
         let tbl = self.table;
-        let maybe_snapshot = tbl.read_table_snapshot(self.ctx.clone()).await?;
+        let maybe_snapshot = tbl.read_table_snapshot().await?;
         if let Some(snapshot) = maybe_snapshot {
             if self.snapshot_id.is_none() {
                 return self.to_block(snapshot).await;
@@ -58,7 +58,7 @@ impl<'a> FuseBlock<'a> {
             let snapshot_location = tbl
                 .meta_location_generator
                 .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot_version)?;
-            let reader = MetaReaders::table_snapshot_reader(self.ctx.clone(), tbl.get_operator());
+            let reader = MetaReaders::table_snapshot_reader(tbl.get_operator());
             let mut snapshot_stream = reader.snapshot_history(
                 snapshot_location,
                 snapshot_version,

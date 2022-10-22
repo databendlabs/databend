@@ -163,13 +163,13 @@ impl FuseTable {
     }
 
     #[inline]
-    pub async fn try_commit(
-        &self,
+    pub async fn try_commit<'a>(
+        &'a self,
         ctx: Arc<dyn TableContext>,
-        operation_log: &TableOperationLog,
+        operation_log: &'a TableOperationLog,
         overwrite: bool,
     ) -> Result<()> {
-        let prev = self.read_table_snapshot(ctx.clone()).await?;
+        let prev = self.read_table_snapshot().await?;
         let prev_version = self.snapshot_format_version().await?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let schema = self.table_info.meta.schema.as_ref().clone();
@@ -454,14 +454,15 @@ impl FuseTable {
                 Err(e) if e.code() == ErrorCode::table_version_mismatched_code() => {
                     latest_table_ref = self.refresh(ctx.as_ref()).await?;
                     let latest_fuse_table = FuseTable::try_from_table(latest_table_ref.as_ref())?;
-                    latest_snapshot = latest_fuse_table
-                        .read_table_snapshot(ctx.clone())
-                        .await?
-                        .ok_or_else(|| {
-                            ErrorCode::LogicalError(
-                                "mutation meets empty snapshot during conflict reconciliation",
-                            )
-                        })?;
+                    latest_snapshot =
+                        latest_fuse_table
+                            .read_table_snapshot()
+                            .await?
+                            .ok_or_else(|| {
+                                ErrorCode::LogicalError(
+                                    "mutation meets empty snapshot during conflict reconciliation",
+                                )
+                            })?;
                     latest_table_info = &latest_fuse_table.table_info;
 
                     // Check if there is only insertion during the operation.
@@ -575,6 +576,7 @@ mod utils {
     use std::collections::BTreeMap;
 
     use super::*;
+
     #[inline]
     pub async fn abort_operations(
         operator: Operator,
