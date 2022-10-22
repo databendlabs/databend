@@ -70,6 +70,9 @@ impl FuseTable {
         // 2. Get all snapshot(including root snapshot).
         let mut all_snapshot_lites = vec![];
         let mut all_segment_locations = HashSet::new();
+
+        let mut status_snapshot_scan_count = 0;
+        let mut status_snapshot_scan_cost = 0;
         if let Some(root_snapshot_location) = self.snapshot_loc().await? {
             let snapshots_io = SnapshotsIO::create(
                 ctx.clone(),
@@ -77,11 +80,15 @@ impl FuseTable {
                 self.snapshot_format_version().await?,
             );
 
+            let start = Instant::now();
             (all_snapshot_lites, all_segment_locations) = snapshots_io
                 .read_snapshot_lites(root_snapshot_location, None, true, root_snapshot_ts, |x| {
                     self.data_metrics.set_status(&x);
                 })
                 .await?;
+
+            status_snapshot_scan_count += all_snapshot_lites.len();
+            status_snapshot_scan_cost += start.elapsed().as_secs();
         }
 
         // 3. Find.
@@ -171,7 +178,9 @@ impl FuseTable {
                 {
                     status_segment_to_be_purged_count += chunk.len();
                     let status = format!(
-                        "gc: block files purged:{}, bloom files purged:{}, segment files purged:{}, take:{} sec",
+                        "gc: scan snapshot:{} takes:{} sec. block files purged:{}, bloom files purged:{}, segment files purged:{}, take:{} sec",
+                        status_snapshot_scan_count,
+                        status_snapshot_scan_cost,
                         status_block_to_be_purged_count,
                         status_bloom_to_be_purged_count,
                         status_segment_to_be_purged_count,
@@ -189,8 +198,9 @@ impl FuseTable {
             let status_need_purged_count = snapshots_to_be_purged.len();
 
             let location_gen = self.meta_location_generator();
-            let start = Instant::now();
             let snapshots_to_be_purged_vec = Vec::from_iter(snapshots_to_be_purged);
+
+            let start = Instant::now();
             for chunk in snapshots_to_be_purged_vec.chunks(chunk_size) {
                 let mut snapshot_locations_to_be_purged = HashSet::new();
                 for (id, ver) in chunk {
