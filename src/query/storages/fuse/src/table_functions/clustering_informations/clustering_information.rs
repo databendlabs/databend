@@ -58,12 +58,11 @@ impl<'a> ClusteringInformation<'a> {
     }
 
     pub async fn get_clustering_info(&self) -> Result<DataBlock> {
-        let snapshot = self.table.read_table_snapshot(self.ctx.clone()).await?;
+        let snapshot = self.table.read_table_snapshot().await?;
 
         let mut blocks = Vec::new();
         if let Some(snapshot) = snapshot {
-            let reader =
-                MetaReaders::segment_info_reader(self.ctx.as_ref(), self.table.get_operator());
+            let reader = MetaReaders::segment_info_reader(self.table.get_operator());
             for (x, ver) in &snapshot.segments {
                 let res = reader.read(x, None, *ver).await?;
                 let mut block = res.blocks.clone();

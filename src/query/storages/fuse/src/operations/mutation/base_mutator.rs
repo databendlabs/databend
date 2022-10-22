@@ -88,8 +88,7 @@ impl BaseMutator {
         let mut segments_editor =
             HashMap::<_, _, RandomState>::from_iter(segments.clone().into_iter().enumerate());
 
-        let segment_reader =
-            MetaReaders::segment_info_reader(self.ctx.as_ref(), self.data_accessor.clone());
+        let segment_reader = MetaReaders::segment_info_reader(self.data_accessor.clone());
 
         let segment_info_cache = CacheManager::instance().get_table_segment_cache();
         let seg_writer = SegmentWriter::new(

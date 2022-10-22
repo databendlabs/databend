@@ -46,7 +46,6 @@ type SegmentIndex = usize;
 type SegmentPruningJoinHandles = Vec<JoinHandle<Result<Vec<(SegmentIndex, BlockMeta)>>>>;
 
 struct PruningContext {
-    ctx: Arc<dyn TableContext>,
     limiter: LimiterPruner,
     range_pruner: Arc<dyn RangePruner + Send + Sync>,
     filter_pruner: Option<Arc<dyn Pruner + Send + Sync>>,
@@ -115,7 +114,6 @@ impl BlockPruner {
 
         // 3. setup pruning context
         let pruning_ctx = Arc::new(PruningContext {
-            ctx: ctx.clone(),
             limiter: limiter.clone(),
             range_pruner: range_pruner.clone(),
             filter_pruner,
@@ -175,8 +173,7 @@ impl BlockPruner {
         segment_idx: SegmentIndex,
         segment_location: Location,
     ) -> Result<Vec<(SegmentIndex, BlockMeta)>> {
-        let segment_reader =
-            MetaReaders::segment_info_reader(pruning_ctx.ctx.as_ref(), dal.clone());
+        let segment_reader = MetaReaders::segment_info_reader(dal.clone());
 
         let (path, ver) = segment_location;
         let segment_info = segment_reader.read(path, None, ver).await?;

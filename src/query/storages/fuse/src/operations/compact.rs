@@ -45,7 +45,7 @@ impl FuseTable {
         target: CompactTarget,
         pipeline: &mut Pipeline,
     ) -> Result<Option<Box<dyn TableMutator>>> {
-        let snapshot_opt = self.read_table_snapshot(ctx.clone()).await?;
+        let snapshot_opt = self.read_table_snapshot().await?;
         let base_snapshot = if let Some(val) = snapshot_opt {
             val
         } else {
