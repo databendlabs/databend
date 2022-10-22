@@ -259,7 +259,7 @@ pub enum TypeName {
     Timestamp,
     String,
     Array {
-        item_type: Box<TypeName>,
+        item_type: Option<Box<TypeName>>,
     },
     Tuple {
         fields_name: Option<Vec<String>>,
@@ -547,7 +547,10 @@ impl Display for TypeName {
                 write!(f, "STRING")?;
             }
             TypeName::Array { item_type } => {
-                write!(f, "ARRAY({})", *item_type)?;
+                write!(f, "ARRAY")?;
+                if let Some(item_type) = item_type {
+                    write!(f, "({})", *item_type)?;
+                }
             }
             TypeName::Tuple {
                 fields_name,

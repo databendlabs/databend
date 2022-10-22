@@ -47,6 +47,7 @@ use common_datavalues::UInt16Type;
 use common_datavalues::UInt32Type;
 use common_datavalues::UInt64Type;
 use common_datavalues::UInt8Type;
+use common_datavalues::VariantArrayType;
 use common_datavalues::VariantObjectType;
 use common_datavalues::VariantType;
 use common_datavalues::Vu8;
@@ -875,9 +876,9 @@ impl<'a> Binder {
                             TypeName::Date => DateType::new_impl(),
                             TypeName::Timestamp => TimestampType::new_impl(),
                             TypeName::String => StringType::new_impl(),
-                            TypeName::Array { item_type } => {
-                                ArrayType::new_impl(type_name_to_data_type_impl(item_type))
-                            }
+                            TypeName::Array {
+                                item_type: Some(ty),
+                            } => ArrayType::new_impl(type_name_to_data_type_impl(ty)),
                             TypeName::Tuple {
                                 fields_name,
                                 fields_type,
@@ -888,6 +889,7 @@ impl<'a> Binder {
                                     .map(type_name_to_data_type_impl)
                                     .collect(),
                             ),
+                            TypeName::Array { item_type: None } => VariantArrayType::new_impl(),
                             TypeName::Object => VariantObjectType::new_impl(),
                             TypeName::Variant => VariantType::new_impl(),
                             TypeName::Nullable(ty) => {

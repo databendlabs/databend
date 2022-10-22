@@ -1104,9 +1104,9 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
     let ty_float32 = value(TypeName::Float32, rule! { FLOAT32 | FLOAT });
     let ty_float64 = value(TypeName::Float64, rule! { FLOAT64 | DOUBLE });
     let ty_array = map(
-        rule! { ARRAY ~ "(" ~ #type_name ~ ")"},
-        |(_, _, item_type, _)| TypeName::Array {
-            item_type: Box::new(item_type),
+        rule! { ARRAY ~ ( "(" ~ #type_name ~ ")" )? },
+        |(_, opt_item_type)| TypeName::Array {
+            item_type: opt_item_type.map(|(_, opt_item_type, _)| Box::new(opt_item_type)),
         },
     );
     let ty_anonymous_tuple = map(
