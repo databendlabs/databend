@@ -19,6 +19,7 @@ mod metrics;
 pub use cache::CacheManager;
 pub use memory_cache::new_item_cache;
 pub use memory_cache::ItemCache;
+pub use memory_cache::LabeledItemCache;
 pub use memory_cache::SegmentInfoCache;
 pub use memory_cache::TableSnapshotCache;
 

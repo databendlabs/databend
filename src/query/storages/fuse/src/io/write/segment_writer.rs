@@ -50,7 +50,7 @@ impl<'a> SegmentWriter<'a> {
 
         let segment = Arc::new(segment);
         if let Some(ref cache) = self.cache {
-            let cache = &mut cache.write();
+            let cache = &mut cache.item.write();
             cache.put(segment_location.0.clone(), segment);
         }
         Ok(segment_location)

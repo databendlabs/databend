@@ -221,7 +221,7 @@ impl Processor for FuseTableSink {
             }
             State::PreCommitSegment { location, segment } => {
                 if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
-                    let cache = &mut segment_cache.write();
+                    let cache = &mut segment_cache.item.write();
                     cache.put(location.clone(), segment.clone());
                 }
 

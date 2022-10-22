@@ -17,7 +17,7 @@ use std::sync::Arc;
 use common_cache::Cache;
 use common_exception::Result;
 use common_fuse_meta::caches::CacheDeferMetrics;
-use common_fuse_meta::caches::ItemCache;
+use common_fuse_meta::caches::LabeledItemCache;
 use common_fuse_meta::caches::TenantLabel;
 
 /// Loads an object from a source
@@ -33,7 +33,7 @@ pub trait HasTenantLabel {
 
 /// A "cache-aware" reader
 pub struct CachedReader<T, L> {
-    cache: Option<ItemCache<T>>,
+    cache: Option<LabeledItemCache<T>>,
     name: String,
     dal: L,
 }
@@ -41,7 +41,7 @@ pub struct CachedReader<T, L> {
 impl<T, L> CachedReader<T, L>
 where L: Loader<T>
 {
-    pub fn new(cache: Option<ItemCache<T>>, name: impl Into<String>, dal: L) -> Self {
+    pub fn new(cache: Option<LabeledItemCache<T>>, name: impl Into<String>, dal: L) -> Self {
         Self {
             cache,
             name: name.into(),
@@ -58,12 +58,10 @@ where L: Loader<T>
     ) -> Result<Arc<T>> {
         match &self.cache {
             None => self.load(path.as_ref(), len_hint, version).await,
-            Some(cache) => {
-                // let tenant_label = self.loader.tenant_label();
-                // TODO
+            Some(labled_cache) => {
                 let tenant_label = TenantLabel {
-                    tenant_id: "".to_string(),
-                    cluster_id: "".to_string(),
+                    tenant_id: labled_cache.tenant_id.clone(),
+                    cluster_id: labled_cache.cluster_id.clone(),
                 };
 
                 // in PR #3798, the cache is degenerated to metered by count of cached item,
@@ -77,7 +75,7 @@ where L: Loader<T>
                     read_bytes: 0,
                 };
 
-                match self.get_by_cache(path.as_ref(), cache) {
+                match self.get_by_cache(path.as_ref(), labled_cache) {
                     Some(item) => {
                         metrics.cache_hit = true;
                         metrics.read_bytes = 0u64;
@@ -85,7 +83,7 @@ where L: Loader<T>
                     }
                     None => {
                         let item = self.load(path.as_ref(), len_hint, version).await?;
-                        let mut cache_guard = cache.write();
+                        let mut cache_guard = labled_cache.item.write();
                         cache_guard.put(path.as_ref().to_owned(), item.clone());
                         Ok(item)
                     }
@@ -98,8 +96,8 @@ where L: Loader<T>
         self.name.as_str()
     }
 
-    fn get_by_cache(&self, key: &str, cache: &ItemCache<T>) -> Option<Arc<T>> {
-        cache.write().get(key).cloned()
+    fn get_by_cache(&self, key: &str, cache: &LabeledItemCache<T>) -> Option<Arc<T>> {
+        cache.item.write().get(key).cloned()
     }
 
     async fn load(&self, loc: &str, len_hint: Option<u64>, version: u64) -> Result<Arc<T>> {

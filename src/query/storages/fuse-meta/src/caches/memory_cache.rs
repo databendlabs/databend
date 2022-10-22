@@ -25,14 +25,34 @@ use parking_lot::RwLock;
 use crate::meta::SegmentInfo;
 use crate::meta::TableSnapshot;
 
-// cache meters by counting number of items
-pub type ItemCache<V> = Arc<RwLock<LruCache<String, Arc<V>, DefaultHashBuilder, Count>>>;
+pub type ItemCache<V> = RwLock<LruCache<String, Arc<V>, DefaultHashBuilder, Count>>;
+
+#[derive(Clone)]
+pub struct Labeled<T> {
+    pub item: T,
+    pub tenant_id: String,
+    pub cluster_id: String,
+}
+
+pub type LabeledItemCache<T> = Arc<Labeled<ItemCache<T>>>;
 
 // cache meters by bytes
 pub type BytesCache = Arc<RwLock<LruCache<String, Arc<Vec<u8>>, DefaultHashBuilder, BytesMeter>>>;
 
 pub fn new_item_cache<V>(capacity: u64) -> ItemCache<V> {
-    Arc::new(RwLock::new(LruCache::new(capacity)))
+    RwLock::new(LruCache::new(capacity))
+}
+
+pub fn new_item_cache_new<V>(
+    capacity: u64,
+    tenant_id: String,
+    cluster_id: String,
+) -> LabeledItemCache<V> {
+    Arc::new(Labeled {
+        item: new_item_cache(capacity),
+        tenant_id,
+        cluster_id,
+    })
 }
 
 pub fn new_bytes_cache(capacity: u64) -> BytesCache {
@@ -40,13 +60,13 @@ pub fn new_bytes_cache(capacity: u64) -> BytesCache {
     Arc::new(RwLock::new(c))
 }
 
-pub type SegmentInfoCache = ItemCache<SegmentInfo>;
-pub type TableSnapshotCache = ItemCache<TableSnapshot>;
+pub type SegmentInfoCache = LabeledItemCache<SegmentInfo>;
+pub type TableSnapshotCache = LabeledItemCache<TableSnapshot>;
 /// Cache bloom filter.
 /// For each index block, columns are cached individually.
 pub type BloomIndexCache = BytesCache;
 /// FileMetaCache of bloom filter index data.
 /// Each cache item per block
-pub type BloomIndexMetaCache = ItemCache<FileMetaData>;
+pub type BloomIndexMetaCache = LabeledItemCache<FileMetaData>;
 
-pub type FileMetaDataCache = ItemCache<FileMetaData>;
+pub type FileMetaDataCache = LabeledItemCache<FileMetaData>;
