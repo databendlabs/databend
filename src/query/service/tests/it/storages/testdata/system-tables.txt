@@ -25,10 +25,10 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | current_database         | system   | query_log           | VARCHAR           |              |                    | false       |         |
 | data_compressed_size     | system   | tables              | BIGINT UNSIGNED   |              |                    | true        |         |
 | data_compressed_size     | system   | tables_with_history | BIGINT UNSIGNED   |              |                    | true        |         |
-| data_read_bytes          | system   | processes           | BIGINT UNSIGNED   |              |                    | true        |         |
+| data_read_bytes          | system   | processes           | BIGINT UNSIGNED   |              |                    | false       |         |
 | data_size                | system   | tables              | BIGINT UNSIGNED   |              |                    | true        |         |
 | data_size                | system   | tables_with_history | BIGINT UNSIGNED   |              |                    | true        |         |
-| data_write_bytes         | system   | processes           | BIGINT UNSIGNED   |              |                    | true        |         |
+| data_write_bytes         | system   | processes           | BIGINT UNSIGNED   |              |                    | false       |         |
 | database                 | system   | clustering_history  | VARCHAR           |              |                    | false       |         |
 | database                 | system   | columns             | VARCHAR           |              |                    | false       |         |
 | database                 | system   | processes           | VARCHAR           |              |                    | false       |         |
@@ -55,7 +55,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | exception_code           | system   | query_log           | INT               |              |                    | false       |         |
 | exception_text           | system   | query_log           | VARCHAR           |              |                    | false       |         |
 | extra                    | system   | query_log           | VARCHAR           |              |                    | false       |         |
-| extra_info               | system   | processes           | VARCHAR           |              |                    | true        |         |
+| extra_info               | system   | processes           | VARCHAR           |              |                    | false       |         |
 | file_format_options      | system   | stages              | VARCHAR           |              |                    | false       |         |
 | group                    | system   | configs             | VARCHAR           |              |                    | false       |         |
 | handler_type             | system   | query_log           | VARCHAR           |              |                    | false       |         |
@@ -114,8 +114,8 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | scan_io_bytes            | system   | query_log           | BIGINT UNSIGNED   |              |                    | false       |         |
 | scan_io_bytes_cost_ms    | system   | query_log           | BIGINT UNSIGNED   |              |                    | false       |         |
 | scan_partitions          | system   | query_log           | BIGINT UNSIGNED   |              |                    | false       |         |
-| scan_progress_read_bytes | system   | processes           | BIGINT UNSIGNED   |              |                    | true        |         |
-| scan_progress_read_rows  | system   | processes           | BIGINT UNSIGNED   |              |                    | true        |         |
+| scan_progress_read_bytes | system   | processes           | BIGINT UNSIGNED   |              |                    | false       |         |
+| scan_progress_read_rows  | system   | processes           | BIGINT UNSIGNED   |              |                    | false       |         |
 | scan_rows                | system   | query_log           | BIGINT UNSIGNED   |              |                    | false       |         |
 | server_version           | system   | query_log           | VARCHAR           |              |                    | false       |         |
 | session_settings         | system   | query_log           | VARCHAR           |              |                    | false       |         |
@@ -127,6 +127,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | stage_type               | system   | stages              | VARCHAR           |              |                    | false       |         |
 | start_time               | system   | clustering_history  | TIMESTAMP         |              |                    | false       |         |
 | state                    | system   | processes           | VARCHAR           |              |                    | false       |         |
+| status                   | system   | processes           | VARCHAR           |              |                    | false       |         |
 | syntax                   | system   | functions           | VARCHAR           |              |                    | false       |         |
 | table                    | system   | clustering_history  | VARCHAR           |              |                    | false       |         |
 | table                    | system   | columns             | VARCHAR           |              |                    | false       |         |
@@ -138,7 +139,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | type                     | system   | columns             | VARCHAR           |              |                    | false       |         |
 | type                     | system   | processes           | VARCHAR           |              |                    | false       |         |
 | type                     | system   | settings            | VARCHAR           |              |                    | false       |         |
-| user                     | system   | processes           | VARCHAR           |              |                    | true        |         |
+| user                     | system   | processes           | VARCHAR           |              |                    | false       |         |
 | v                        | system   | tracing             | BIGINT            |              |                    | false       |         |
 | value                    | system   | configs             | VARCHAR           |              |                    | false       |         |
 | value                    | system   | metrics             | VARCHAR           |              |                    | false       |         |

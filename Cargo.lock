@@ -2091,6 +2091,7 @@ dependencies = [
  "globiter",
  "once_cell",
  "opendal",
+ "parking_lot 0.12.1",
  "percent-encoding",
  "serde",
 ]

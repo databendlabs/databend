@@ -28,5 +28,6 @@ opendal = { version = "0.19", features = [
     "services-redis",
     "compress",
 ] }
+parking_lot = "0.12.1"
 percent-encoding = "2"
 serde = { workspace = true }

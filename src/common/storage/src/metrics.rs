@@ -36,6 +36,7 @@ use opendal::BytesReader;
 use opendal::Layer;
 use opendal::ObjectMetadata;
 use opendal::ObjectStreamer;
+use parking_lot::RwLock;
 
 /// StorageMetrics represents the metrics of storage (all bytes metrics are compressed size).
 #[derive(Debug, Default)]
@@ -52,6 +53,8 @@ pub struct StorageMetrics {
     partitions_scanned: AtomicU64,
     /// Number of partitions, before pruning
     partitions_total: AtomicU64,
+    /// Status of the operation.
+    status: Arc<RwLock<String>>,
 }
 
 impl StorageMetrics {
@@ -72,6 +75,13 @@ impl StorageMetrics {
             partitions_total: AtomicU64::new(
                 vs.iter().map(|v| v.as_ref().get_partitions_total()).sum(),
             ),
+            // Get the last one status, mainly used for the single table operation.
+            status: Arc::new(RwLock::new(
+                vs.iter()
+                    .map(|v| v.as_ref().get_status())
+                    .collect::<Vec<String>>()
+                    .join("|"),
+            )),
         }
     }
 
@@ -133,6 +143,16 @@ impl StorageMetrics {
 
     pub fn get_partitions_total(&self) -> u64 {
         self.partitions_total.load(Ordering::Relaxed)
+    }
+
+    pub fn set_status(&self, new: &str) {
+        let mut status = self.status.write();
+        *status = new.to_string();
+    }
+
+    pub fn get_status(&self) -> String {
+        let status = self.status.read();
+        status.clone()
     }
 }
 
