@@ -14,12 +14,12 @@
 
 use std::io::Write;
 
-use common_expression::from_date_data;
-use common_expression::from_timestamp_data;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
+use common_expression::utils::from_date_data;
+use common_expression::utils::from_timestamp_data;
+use common_expression::utils::ColumnFrom;
 use common_expression::Column;
-use common_expression::ColumnFrom;
 use goldenfile::Mint;
 
 use super::run_ast;
@@ -29,12 +29,115 @@ fn test_cast() {
     let mut mint = Mint::new("tests/it/scalars/testdata");
     let file = &mut mint.new_goldenfile("cast.txt").unwrap();
 
+    test_cast_primitive(file);
     test_cast_to_variant(file);
     test_cast_number_to_timestamp(file);
     test_cast_number_to_date(file);
     test_cast_between_date_and_timestamp(file);
     test_cast_between_string_and_timestamp(file);
     test_between_string_and_date(file);
+}
+
+fn test_cast_primitive(file: &mut impl Write) {
+    run_ast(file, "TRY_CAST(a AS UINT8)", &[(
+        "a",
+        DataType::Number(NumberDataType::UInt16),
+        Column::from_data(vec![0u16, 64, 255, 512, 1024]),
+    )]);
+    run_ast(file, "TRY_CAST(a AS UINT16)", &[(
+        "a",
+        DataType::Number(NumberDataType::Int16),
+        Column::from_data(vec![0i16, 1, 2, 3, -4]),
+    )]);
+    run_ast(file, "TRY_CAST(a AS INT64)", &[(
+        "a",
+        DataType::Number(NumberDataType::Int16),
+        Column::from_data(vec![0i16, 1, 2, 3, -4]),
+    )]);
+    run_ast(
+        file,
+        "(TRY_CAST(a AS FLOAT32), TRY_CAST(a AS INT32), TRY_CAST(b AS FLOAT32), TRY_CAST(b AS INT32))",
+        &[
+            (
+                "a",
+                DataType::Number(NumberDataType::UInt64),
+                Column::from_data(vec![
+                    0,
+                    1,
+                    u8::MAX as u64,
+                    u16::MAX as u64,
+                    u32::MAX as u64,
+                    u64::MAX,
+                ]),
+            ),
+            (
+                "b",
+                DataType::Number(NumberDataType::Float64),
+                Column::from_data(vec![
+                    0.0,
+                    u32::MAX as f64,
+                    u64::MAX as f64,
+                    f64::MIN,
+                    f64::MAX,
+                    f64::INFINITY,
+                ]),
+            ),
+        ],
+    );
+    run_ast(
+        file,
+        "TRY_CAST([[a, b], NULL, NULL] AS Array(Array(Int8)))",
+        &[
+            (
+                "a",
+                DataType::Number(NumberDataType::Int16),
+                Column::from_data(vec![0i16, 1, 2, 127, 255]),
+            ),
+            (
+                "b",
+                DataType::Number(NumberDataType::Int16),
+                Column::from_data(vec![0i16, -1, -127, -128, -129]),
+            ),
+        ],
+    );
+    run_ast(
+        file,
+        "TRY_CAST((a, b, NULL) AS TUPLE(Int8, UInt8, Boolean NULL))",
+        &[
+            (
+                "a",
+                DataType::Number(NumberDataType::Int16),
+                Column::from_data(vec![0i16, 1, 2, 127, 256]),
+            ),
+            (
+                "b",
+                DataType::Number(NumberDataType::Int16),
+                Column::from_data(vec![0i16, 1, -127, -128, -129]),
+            ),
+        ],
+    );
+    run_ast(file, "CAST(a AS INT16)", &[(
+        "a",
+        DataType::Number(NumberDataType::Float64),
+        Column::from_data(vec![0.0f64, 1.1, 2.2, 3.3, -4.4]),
+    )]);
+    run_ast(file, "CAST(b AS INT16)", &[(
+        "b",
+        DataType::Number(NumberDataType::Int8),
+        Column::from_data(vec![0i8, 1, 2, 3, -4]),
+    )]);
+
+    run_ast(file, "CAST(a AS UINT16)", &[(
+        "a",
+        DataType::Number(NumberDataType::Int16),
+        Column::from_data(vec![0i16, 1, 2, 3, -4]),
+    )]);
+
+    run_ast(file, "CAST(c AS INT16)", &[(
+        "c",
+        DataType::Number(NumberDataType::Int64),
+        Column::from_data(vec![0i64, 11111111111, 2, 3, -4]),
+    )]);
 }
 
 fn test_cast_to_variant(file: &mut impl Write) {
