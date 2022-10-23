@@ -107,7 +107,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
 
     info!("--- join non-voter 2 to cluster by leader");
 
-    let leader_id = all[0].get_leader().await;
+    let leader_id = all[0].get_leader().await?.unwrap();
     let leader = all[leader_id as usize].clone();
 
     let admin_req = join_req(
@@ -318,7 +318,7 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
 
     info!("--- join non-voter 1 to cluster");
 
-    let leader_id = all[0].get_leader().await;
+    let leader_id = all[0].get_leader().await?.unwrap();
     let leader = all[leader_id as usize].clone();
     let req = join_req(
         node_id,
@@ -544,7 +544,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
         let leader = tc.meta_node();
 
         leader
-            .as_leader()
+            .assume_leader()
             .await?
             .write(LogEntry {
                 txid: None,
@@ -628,14 +628,14 @@ fn join_req(
 /// Write one log on leader, check all nodes replicated the log.
 /// Returns the number log committed.
 async fn assert_upsert_kv_synced(meta_nodes: Vec<Arc<MetaNode>>, key: &str) -> anyhow::Result<u64> {
-    let leader_id = meta_nodes[0].get_leader().await;
+    let leader_id = meta_nodes[0].get_leader().await?.unwrap();
     let leader = meta_nodes[leader_id as usize].clone();
 
     let last_applied = leader.raft.metrics().borrow().last_applied;
     info!("leader: last_applied={:?}", last_applied);
     {
         leader
-            .as_leader()
+            .assume_leader()
             .await?
             .write(LogEntry {
                 txid: None,

@@ -22,9 +22,11 @@ use std::time::Duration;
 use anyerror::AnyError;
 use common_base::base::tokio;
 use common_base::base::tokio::sync::watch;
+use common_base::base::tokio::sync::watch::error::RecvError;
 use common_base::base::tokio::sync::Mutex;
 use common_base::base::tokio::sync::RwLockReadGuard;
 use common_base::base::tokio::task::JoinHandle;
+use common_base::base::tokio::time::Instant;
 use common_grpc::ConnectionFactory;
 use common_grpc::DNSResolver;
 use common_meta_raft_store::config::RaftConfig;
@@ -906,7 +908,7 @@ impl MetaNode {
 
         let forward = req.forward_to_leader;
 
-        let as_leader_res = self.as_leader().await;
+        let as_leader_res = self.assume_leader().await;
         debug!("as_leader: is_err: {}", as_leader_res.is_err());
 
         // Handle the request locally or return a ForwardToLeader error
@@ -952,15 +954,19 @@ impl MetaNode {
     ///
     /// Otherwise it returns the leader in a ForwardToLeader error.
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn as_leader(&self) -> Result<MetaLeader<'_>, ForwardToLeader> {
-        let curr_leader = self.get_leader().await;
-        debug!("curr_leader: {:?}", curr_leader);
-        if curr_leader == self.sto.id {
+    pub async fn assume_leader(&self) -> Result<MetaLeader<'_>, ForwardToLeader> {
+        let leader_id = self.get_leader().await.map_err(|e| {
+            error!("raft metrics rx closed: {}", e);
+            ForwardToLeader { leader_id: None }
+        })?;
+
+        debug!("curr_leader_id: {:?}", leader_id);
+
+        if leader_id == Some(self.sto.id) {
             return Ok(MetaLeader::new(self));
         }
-        Err(ForwardToLeader {
-            leader_id: Some(curr_leader),
-        })
+
+        Err(ForwardToLeader { leader_id })
     }
 
     /// Add a new node into this cluster.
@@ -978,6 +984,7 @@ impl MetaNode {
                 cmd: Cmd::AddNode { node_id, node },
             })
             .await?;
+
         self.raft
             .add_learner(node_id, false)
             .await
@@ -1025,32 +1032,29 @@ impl MetaNode {
     /// Try to get the leader from the latest metrics of the local raft node.
     /// If leader is absent, wait for an metrics update in which a leader is set.
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_leader(&self) -> NodeId {
-        // fast path: there is a known leader
-
-        if let Some(l) = self.raft.metrics().borrow().current_leader {
-            return l;
-        }
-
-        // slow path: wait loop
-
-        // Need to clone before calling changed() on it.
-        // Otherwise other thread waiting on changed() may not receive the change event.
+    pub async fn get_leader(&self) -> Result<Option<NodeId>, RecvError> {
         let mut rx = self.raft.metrics();
 
+        let mut expire_at: Option<Instant> = None;
+
         loop {
-            // NOTE:
-            // The metrics may have already changed before we cloning it.
-            // Thus we need to re-check the cloned rx.
             if let Some(l) = rx.borrow().current_leader {
-                return l;
+                return Ok(Some(l));
             }
 
-            let changed = rx.changed().await;
-            if changed.is_err() {
-                info!("raft metrics tx closed");
-                return 0;
+            if expire_at.is_none() {
+                let timeout = Duration::from_millis(2_000);
+                expire_at = Some(Instant::now() + timeout);
             }
+            if Some(Instant::now()) > expire_at {
+                warn!("timeout waiting for a leader");
+                return Ok(None);
+            }
+
+            // Wait for metrics to change and re-fetch the leader id.
+            //
+            // Note that when it returns, `changed()` will mark the most recent value as **seen**.
+            rx.changed().await?;
         }
     }
 
