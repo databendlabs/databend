@@ -58,9 +58,11 @@ time sleep 3
 
 echo " === dump new cluster state:"
 curl -sL http://127.0.0.1:28101/v1/cluster/status
+echo ""
 
 echo " === check new cluster state has the voters 4, 5, 6"
 curl -sL http://127.0.0.1:28101/v1/cluster/status \
     | grep '"voters":\[{"name":"4","endpoint":{"addr":"localhost","port":29103},"grpc_api_addr":"0.0.0.0:19191"},{"name":"5","endpoint":{"addr":"localhost","port":29203},"grpc_api_addr":"0.0.0.0:29191"},{"name":"6","endpoint":{"addr":"localhost","port":29303},"grpc_api_addr":"0.0.0.0:39191"}\]'
+echo ""
 
 killall databend-meta
