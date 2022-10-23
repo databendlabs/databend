@@ -15,51 +15,30 @@
 use std::sync::Arc;
 
 use common_cache::Cache;
-use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_fuse_meta::caches::CacheDeferMetrics;
-use common_fuse_meta::caches::CacheManager;
-use common_fuse_meta::caches::ItemCache;
-use common_fuse_meta::caches::TenantLabel;
-use opendal::Operator;
+use common_fuse_meta::caches::LabeledItemCache;
 
 /// Loads an object from a source
 #[async_trait::async_trait]
 pub trait Loader<T> {
     /// Loads object of type T, located at `location`
-    async fn load(
-        &self,
-        op: Operator,
-        location: &str,
-        len_hint: Option<u64>,
-        ver: u64,
-    ) -> Result<T>;
-}
-
-pub trait HasTenantLabel {
-    fn tenant_label(&self) -> TenantLabel;
+    async fn load(&self, location: &str, len_hint: Option<u64>, ver: u64) -> Result<T>;
 }
 
 /// A "cache-aware" reader
 pub struct CachedReader<T, L> {
-    cache: Option<ItemCache<T>>,
-    loader: L,
+    cache: Option<LabeledItemCache<T>>,
     name: String,
-    dal: Operator,
+    dal: L,
 }
 
 impl<T, L> CachedReader<T, L>
-where L: Loader<T> + HasTenantLabel
+where L: Loader<T>
 {
-    pub fn new(
-        cache: Option<ItemCache<T>>,
-        loader: L,
-        name: impl Into<String>,
-        dal: Operator,
-    ) -> Self {
+    pub fn new(cache: Option<LabeledItemCache<T>>, name: impl Into<String>, dal: L) -> Self {
         Self {
             cache,
-            loader,
             name: name.into(),
             dal,
         }
@@ -74,21 +53,19 @@ where L: Loader<T> + HasTenantLabel
     ) -> Result<Arc<T>> {
         match &self.cache {
             None => self.load(path.as_ref(), len_hint, version).await,
-            Some(cache) => {
-                let tenant_label = self.loader.tenant_label();
-
+            Some(labeled_cache) => {
                 // in PR #3798, the cache is degenerated to metered by count of cached item,
                 // later, when the size of BlockMeta could be acquired (needs some enhancements of crate `parquet2`)
                 // 1) the `read_bytes` metric should be re-enabled
                 // 2) the metrics need to be labeled by the name of cache as well
 
                 let mut metrics = CacheDeferMetrics {
-                    tenant_label,
+                    tenant_label: labeled_cache.label(),
                     cache_hit: false,
                     read_bytes: 0,
                 };
 
-                match self.get_by_cache(path.as_ref(), cache) {
+                match self.get_by_cache(path.as_ref(), labeled_cache) {
                     Some(item) => {
                         metrics.cache_hit = true;
                         metrics.read_bytes = 0u64;
@@ -96,7 +73,7 @@ where L: Loader<T> + HasTenantLabel
                     }
                     None => {
                         let item = self.load(path.as_ref(), len_hint, version).await?;
-                        let mut cache_guard = cache.write();
+                        let mut cache_guard = labeled_cache.write();
                         cache_guard.put(path.as_ref().to_owned(), item.clone());
                         Ok(item)
                     }
@@ -109,32 +86,13 @@ where L: Loader<T> + HasTenantLabel
         self.name.as_str()
     }
 
-    fn get_by_cache(&self, key: &str, cache: &ItemCache<T>) -> Option<Arc<T>> {
+    fn get_by_cache(&self, key: &str, cache: &LabeledItemCache<T>) -> Option<Arc<T>> {
         cache.write().get(key).cloned()
     }
 
     async fn load(&self, loc: &str, len_hint: Option<u64>, version: u64) -> Result<Arc<T>> {
-        let val = self
-            .loader
-            .load(self.dal.clone(), loc, len_hint, version)
-            .await?;
+        let val = self.dal.load(loc, len_hint, version).await?;
         let item = Arc::new(val);
         Ok(item)
-    }
-}
-
-impl HasTenantLabel for &dyn TableContext {
-    fn tenant_label(&self) -> TenantLabel {
-        let storage_cache_manager = CacheManager::instance();
-        TenantLabel {
-            tenant_id: storage_cache_manager.get_tenant_id().to_owned(),
-            cluster_id: storage_cache_manager.get_cluster_id().to_owned(),
-        }
-    }
-}
-
-impl HasTenantLabel for Arc<dyn TableContext> {
-    fn tenant_label(&self) -> TenantLabel {
-        self.as_ref().tenant_label()
     }
 }

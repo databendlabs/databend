@@ -33,9 +33,11 @@ use crate::TableMutator;
 use crate::DEFAULT_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 
-struct CompactOptions {
-    base_snapshot: Arc<TableSnapshot>,
-    block_per_seg: usize,
+pub struct CompactOptions {
+    // the snapshot that compactor working on, it never changed during phases compaction.
+    pub base_snapshot: Arc<TableSnapshot>,
+    pub block_per_seg: usize,
+    pub limit: Option<usize>,
 }
 
 impl FuseTable {
@@ -43,9 +45,10 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         target: CompactTarget,
+        limit: Option<usize>,
         pipeline: &mut Pipeline,
-    ) -> Result<Option<Arc<dyn TableMutator>>> {
-        let snapshot_opt = self.read_table_snapshot(ctx.clone()).await?;
+    ) -> Result<Option<Box<dyn TableMutator>>> {
+        let snapshot_opt = self.read_table_snapshot().await?;
         let base_snapshot = if let Some(val) = snapshot_opt {
             val
         } else {
@@ -63,6 +66,7 @@ impl FuseTable {
         let compact_params = CompactOptions {
             base_snapshot,
             block_per_seg,
+            limit,
         };
 
         match target {
@@ -76,17 +80,16 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         _pipeline: &mut Pipeline,
         options: CompactOptions,
-    ) -> Result<Option<Arc<dyn TableMutator>>> {
+    ) -> Result<Option<Box<dyn TableMutator>>> {
         let mut segment_mutator = SegmentCompactMutator::try_create(
             ctx.clone(),
-            options.base_snapshot,
+            options,
             self.meta_location_generator().clone(),
-            options.block_per_seg,
             self.operator.clone(),
         )?;
 
         if segment_mutator.target_select().await? {
-            Ok(Some(Arc::new(segment_mutator)))
+            Ok(Some(Box::new(segment_mutator)))
         } else {
             Ok(None)
         }
@@ -97,16 +100,15 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         options: CompactOptions,
-    ) -> Result<Option<Arc<dyn TableMutator>>> {
+    ) -> Result<Option<Box<dyn TableMutator>>> {
         let block_compactor = self.get_block_compactor();
 
         let block_per_seg = options.block_per_seg;
         let mut mutator = FullCompactMutator::try_create(
             ctx.clone(),
-            options.base_snapshot,
+            options,
             block_compactor.clone(),
             self.meta_location_generator().clone(),
-            block_per_seg,
             self.cluster_key_meta.is_some(),
             self.operator.clone(),
         )?;
@@ -116,7 +118,7 @@ impl FuseTable {
         }
 
         let partitions_total = mutator.partitions_total();
-        let (statistics, parts) = Self::read_partitions_with_metas(
+        let (statistics, parts) = self.read_partitions_with_metas(
             ctx.clone(),
             self.table_info.schema(),
             None,
@@ -162,6 +164,6 @@ impl FuseTable {
             )
         })?;
 
-        Ok(Some(Arc::new(mutator)))
+        Ok(Some(Box::new(mutator)))
     }
 }

@@ -30,7 +30,6 @@ use databend_query::sessions::QueryContextShared;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
 use databend_query::sessions::TableContext;
-use databend_query::storages::StorageContext;
 
 use crate::tests::sessions::TestGuard;
 use crate::tests::TestGlobalServices;
@@ -98,12 +97,6 @@ pub async fn create_query_context_with_config(
 
     dummy_query_context.get_settings().set_max_threads(8)?;
     Ok((guard, dummy_query_context))
-}
-
-pub async fn create_storage_context() -> Result<StorageContext> {
-    Ok(StorageContext {
-        in_memory_data: Arc::new(Default::default()),
-    })
 }
 
 #[allow(dead_code)]

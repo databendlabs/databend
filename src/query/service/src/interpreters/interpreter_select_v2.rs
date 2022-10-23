@@ -21,10 +21,10 @@ use common_planner::MetadataRef;
 use super::plan_schedulers::schedule_query_v2;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
+use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::executor::PhysicalPlanBuilder;
-use crate::sql::executor::PipelineBuilder;
 use crate::sql::optimizer::SExpr;
 use crate::sql::BindContext;
 

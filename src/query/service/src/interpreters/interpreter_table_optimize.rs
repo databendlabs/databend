@@ -59,15 +59,26 @@ impl Interpreter for OptimizeTableInterpreter {
         );
         let do_compact_blocks = matches!(
             action,
-            OptimizeTableAction::CompactBlocks | OptimizeTableAction::All
+            OptimizeTableAction::CompactBlocks(_) | OptimizeTableAction::All
         );
 
-        let do_compact_segments_only = matches!(action, OptimizeTableAction::CompactSegments);
+        let do_compact_segments_only = matches!(action, OptimizeTableAction::CompactSegments(_));
+
+        let limit_opt = match action {
+            OptimizeTableAction::CompactBlocks(limit_opt) => *limit_opt,
+            OptimizeTableAction::CompactSegments(limit_opt) => *limit_opt,
+            _ => None,
+        };
 
         if do_compact_segments_only {
             let mut pipeline = Pipeline::create();
             if let Some(mutator) = table
-                .compact(ctx.clone(), CompactTarget::Segments, &mut pipeline)
+                .compact(
+                    ctx.clone(),
+                    CompactTarget::Segments,
+                    limit_opt,
+                    &mut pipeline,
+                )
                 .await?
             {
                 mutator.try_commit(table).await?;
@@ -78,7 +89,7 @@ impl Interpreter for OptimizeTableInterpreter {
         if do_compact_blocks {
             let mut pipeline = Pipeline::create();
             let mutator = table
-                .compact(ctx.clone(), CompactTarget::Blocks, &mut pipeline)
+                .compact(ctx.clone(), CompactTarget::Blocks, limit_opt, &mut pipeline)
                 .await?;
 
             if let Some(mutator) = mutator {

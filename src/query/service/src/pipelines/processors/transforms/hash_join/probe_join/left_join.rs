@@ -55,6 +55,8 @@ impl JoinHashTable {
         // The left join will return multiple data blocks of similar size
         let mut probed_blocks = vec![];
         let mut probe_indexes = Vec::with_capacity(block_size);
+        // Collect each probe_indexes, used by non-equi conditions filter
+        let mut probe_indexes_vec = Vec::new();
         let mut local_build_indexes = Vec::with_capacity(block_size);
         let mut validity = MutableBitmap::with_capacity(block_size);
 
@@ -207,12 +209,12 @@ impl JoinHashTable {
                             self.merge_eq_block(&nullable_build_block, &probe_block)?;
 
                         if !merged_block.is_empty() {
+                            probe_indexes_vec.push(probe_indexes.clone());
                             probed_blocks.push(merged_block);
                         }
 
                         index = new_index;
                         remain -= addition;
-
                         probe_indexes.clear();
                         local_build_indexes.clear();
                         validity = MutableBitmap::with_capacity(block_size);
@@ -282,14 +284,17 @@ impl JoinHashTable {
         let merged_block = self.merge_eq_block(&nullable_build_block, &probe_block)?;
 
         if !merged_block.is_empty() || probed_blocks.is_empty() {
+            probe_indexes_vec.push(probe_indexes.clone());
             probed_blocks.push(merged_block);
         }
 
         match !WITH_OTHER_CONJUNCT {
             true => Ok(probed_blocks),
             false => {
+                let mut begin = 0;
                 let mut res = Vec::with_capacity(probed_blocks.len());
-                for probed_block in probed_blocks {
+                let probe_side_len = self.probe_schema.fields().len();
+                for (idx, probed_block) in probed_blocks.iter().enumerate() {
                     if self.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
                             "Aborted query, because the server is shutting down or the query was killed.",
@@ -298,12 +303,12 @@ impl JoinHashTable {
 
                     // Process non-equi conditions
                     let (bm, all_true, all_false) = self.get_other_filters(
-                        &probed_block,
+                        probed_block,
                         self.hash_join_desc.other_predicate.as_ref().unwrap(),
                     )?;
 
                     if all_true {
-                        res.push(probed_block);
+                        res.push(probed_block.clone());
                     } else {
                         let validity = match (bm, all_false) {
                             (Some(b), _) => b,
@@ -312,28 +317,41 @@ impl JoinHashTable {
                             _ => unreachable!(),
                         };
 
-                        let nullable_columns = nullable_columns
+                        // probed_block contains probe side and build side.
+                        let nullable_columns = probed_block.columns()[probe_side_len..]
                             .iter()
                             .map(|c| Self::set_validity(c, &validity))
                             .collect::<Result<Vec<_>>>()?;
+
                         let nullable_build_block = DataBlock::create(
                             self.row_space.data_schema.clone(),
                             nullable_columns.clone(),
                         );
+
+                        let probe_block = DataBlock::create(
+                            self.probe_schema.clone(),
+                            probed_block.columns()[0..probe_side_len].to_vec(),
+                        );
+
                         let merged_block =
                             self.merge_eq_block(&nullable_build_block, &probe_block)?;
-
                         let mut bm = validity.into_mut().right().unwrap();
                         if self.hash_join_desc.join_type == JoinType::Full {
                             let mut build_indexes =
                                 self.hash_join_desc.right_join_desc.build_indexes.write();
+                            let build_indexes = &mut build_indexes[begin..(begin + bm.len())];
+                            begin += bm.len();
                             for (idx, build_index) in build_indexes.iter_mut().enumerate() {
                                 if !bm.get(idx) {
                                     build_index.marker = Some(MarkerKind::False);
                                 }
                             }
                         }
-                        self.fill_null_for_left_join(&mut bm, &probe_indexes, &mut row_state);
+                        self.fill_null_for_left_join(
+                            &mut bm,
+                            &probe_indexes_vec[idx],
+                            &mut row_state,
+                        );
 
                         let predicate = BooleanColumn::from_arrow_data(bm.into()).arc();
                         res.push(DataBlock::filter_block(merged_block, &predicate)?);

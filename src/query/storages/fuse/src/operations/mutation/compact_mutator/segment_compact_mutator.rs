@@ -16,100 +16,25 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use common_catalog::table::Table;
-use common_catalog::table::TableExt;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::caches::CacheManager;
 use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::Statistics;
-use common_fuse_meta::meta::TableSnapshot;
-use metrics::counter;
 use metrics::gauge;
 use opendal::Operator;
-use tracing::info;
-use tracing::warn;
 
-use crate::io::Files;
 use crate::io::SegmentWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
-use crate::operations::commit::Conflict;
-use crate::operations::commit::MutatorConflictDetector;
+use crate::operations::mutation::AbortOperation;
+use crate::operations::CompactOptions;
 use crate::statistics::merge_statistics;
 use crate::statistics::reducers::reduce_block_metas;
-use crate::statistics::reducers::reduce_statistics;
 use crate::FuseTable;
 use crate::TableContext;
 use crate::TableMutator;
-
-const MAX_RETRIES: u64 = 10;
-pub struct SegmentCompactMutator {
-    ctx: Arc<dyn TableContext>,
-    // the snapshot that compactor working on, it never changed during phases compaction.
-    base_snapshot: Arc<TableSnapshot>,
-    data_accessor: Operator,
-    location_generator: TableMetaLocationGenerator,
-    blocks_per_seg: usize,
-    // chosen from the base_snapshot.segments which contains number of
-    // blocks lesser than `blocks_per_seg`, and then compacted them into `compacted_segments`,
-    // such that, at most one of them contains less than `blocks_per_seg` number of blocks,
-    // and each of the others(if any) contains `blocks_per_seg` number of blocks.
-    compacted_segment_accumulator: SegmentAccumulator,
-    // segments of base_snapshot that need not to be compacted, but should be included in
-    // the new snapshot
-    unchanged_segment_accumulator: SegmentAccumulator,
-}
-
-struct SegmentAccumulator {
-    // location of accumulated segments
-    locations: Vec<Location>,
-    // summarised statistics of all the accumulated segment
-    summary: Statistics,
-}
-
-impl SegmentAccumulator {
-    fn new() -> Self {
-        Self {
-            locations: vec![],
-            summary: Default::default(),
-        }
-    }
-
-    fn merge_stats(&mut self, stats: &Statistics) -> Result<()> {
-        self.summary = merge_statistics(stats, &self.summary)?;
-        Ok(())
-    }
-
-    fn add_location(&mut self, location: Location) {
-        self.locations.push(location)
-    }
-}
-
-impl SegmentCompactMutator {
-    pub fn try_create(
-        ctx: Arc<dyn TableContext>,
-        base_snapshot: Arc<TableSnapshot>,
-        location_generator: TableMetaLocationGenerator,
-        blocks_per_seg: usize,
-        operator: Operator,
-    ) -> Result<Self> {
-        Ok(Self {
-            ctx,
-            base_snapshot,
-            data_accessor: operator,
-            location_generator,
-            blocks_per_seg,
-            compacted_segment_accumulator: SegmentAccumulator::new(),
-            unchanged_segment_accumulator: SegmentAccumulator::new(),
-        })
-    }
-
-    fn need_compaction(&self) -> bool {
-        !self.compacted_segment_accumulator.locations.is_empty()
-    }
-}
 
 // The rough idea goes like this:
 // 1. `target_select` will working and the base_snapshot: compact segments and keep the compactions
@@ -138,13 +63,48 @@ impl SegmentCompactMutator {
 // [x, y, a, d, h, i]
 //
 // note that
-// 1. the concurrently appended(and committed) segment will NOT be compacted here, to make the commit of compact agile
+// 1. the concurrently appended(and committed) segment will NOT be compacted during tx
+//     conflicts resolving to make the committing of compact operation agile
 // 2. in the implementation, the order of segment in the vector is arranged in reversed order
-//    compaction starts from the head of the snapshot's segment vector.
-//    newly compacted segments will be added the end of snapshot's segment list, so that later
-//    when compaction of segments is executed incrementally, the newly added segments will be
-//    checked first.
-//
+//    - compaction starts from the head of the snapshot's segment vector.
+//    - newly compacted segments will be added to the end of snapshot's segment list
+
+pub struct SegmentCompactMutator {
+    ctx: Arc<dyn TableContext>,
+    compact_params: CompactOptions,
+    data_accessor: Operator,
+    location_generator: TableMetaLocationGenerator,
+
+    // summarised statistics of all the accumulated segments(compacted, and unchanged)
+    merged_segment_statistics: Statistics,
+    // locations all the accumulated segments(compacted, and unchanged)
+    merged_segments_locations: Vec<Location>,
+    // paths all the newly created segments (which are compacted)
+    new_segment_paths: Vec<String>,
+}
+
+impl SegmentCompactMutator {
+    pub fn try_create(
+        ctx: Arc<dyn TableContext>,
+        compact_params: CompactOptions,
+        location_generator: TableMetaLocationGenerator,
+        operator: Operator,
+    ) -> Result<Self> {
+        Ok(Self {
+            ctx,
+            compact_params,
+            data_accessor: operator,
+            location_generator,
+            merged_segment_statistics: Statistics::default(),
+            merged_segments_locations: vec![],
+            new_segment_paths: vec![],
+        })
+    }
+
+    fn need_compaction(&self) -> bool {
+        !self.merged_segments_locations.is_empty()
+    }
+}
 
 #[async_trait::async_trait]
 impl TableMutator for SegmentCompactMutator {
@@ -152,24 +112,37 @@ impl TableMutator for SegmentCompactMutator {
         let select_begin = Instant::now();
 
         let fuse_segment_io = SegmentsIO::create(self.ctx.clone(), self.data_accessor.clone());
-        let base_segment_locations = &self.base_snapshot.segments;
+        let base_segment_locations = &self.compact_params.base_snapshot.segments;
         let base_segments = fuse_segment_io
-            .read_segments(&self.base_snapshot.segments)
+            .read_segments(&self.compact_params.base_snapshot.segments)
             .await?
             .into_iter()
             .collect::<Result<Vec<_>>>()?;
 
-        let blocks_per_segment_threshold = self.blocks_per_seg;
+        let blocks_per_segment_threshold = self.compact_params.block_per_seg;
 
         let mut segments_tobe_compacted = Vec::with_capacity(base_segments.len() / 2);
-        for (idx, segment) in base_segments.iter().enumerate() {
+
+        let mut unchanged_segment_locations = Vec::with_capacity(base_segments.len() / 2);
+
+        let mut unchanged_segment_statistics = Statistics::default();
+
+        let limit = self.compact_params.limit.unwrap_or(base_segments.len());
+        if limit < base_segments.len() {
+            for i in limit..base_segments.len() {
+                unchanged_segment_locations.push(base_segment_locations[i].clone());
+                unchanged_segment_statistics =
+                    merge_statistics(&unchanged_segment_statistics, &base_segments[i].summary)?;
+            }
+        }
+
+        for (idx, segment) in base_segments.iter().take(limit).enumerate() {
             let number_blocks = segment.blocks.len();
             if number_blocks >= blocks_per_segment_threshold {
                 // skip if current segment is large enough, mark it as unchanged
-                self.unchanged_segment_accumulator
-                    .add_location(base_segment_locations[idx].clone());
-                self.unchanged_segment_accumulator
-                    .merge_stats(&segment.summary)?;
+                unchanged_segment_locations.push(base_segment_locations[idx].clone());
+                unchanged_segment_statistics =
+                    merge_statistics(&unchanged_segment_statistics, &segment.summary)?;
                 continue;
             } else {
                 // if number of blocks meets the threshold, mark them down
@@ -190,26 +163,42 @@ impl TableMutator for SegmentCompactMutator {
             }
         }
 
-        // split the block metas into chunks of blocks, with chunk size set to blocks_per_seg
-        let chunk_of_blocks = blocks_of_new_segments.chunks(self.blocks_per_seg);
+        // split the block metas into chunks of blocks, with chunk size set to block_per_seg
+        let chunk_of_blocks = blocks_of_new_segments.chunks(blocks_per_segment_threshold);
+        // Build new segments which are compacted according to the setting of `block_per_seg`
+        // note that the newly segments will be persistent into storage, such that if retry
+        // happens during the later `try_commit` phase, they do not need to be written again.
+        let mut compacted_segment_statistics = Statistics::default();
+        let mut compacted_segment_locations = Vec::with_capacity(base_segments.len() / 2);
         let segment_info_cache = CacheManager::instance().get_table_segment_cache();
         let segment_writer = SegmentWriter::new(
             &self.data_accessor,
             &self.location_generator,
             &segment_info_cache,
         );
-
-        // Build new segments which are compacted according to the setting of `block_per_seg`
-        // note that the newly segments will be persistent into storage, such that if retry
-        // happens during `try_commit`, they do no need to be written again.
         for chunk in chunk_of_blocks {
             let stats = reduce_block_metas(chunk)?;
-            self.compacted_segment_accumulator.merge_stats(&stats)?;
+            compacted_segment_statistics = merge_statistics(&compacted_segment_statistics, &stats)?;
             let blocks: Vec<BlockMeta> = chunk.iter().map(|block| Clone::clone(*block)).collect();
             let new_segment = SegmentInfo::new(blocks, stats);
             let location = segment_writer.write_segment(new_segment).await?;
-            self.compacted_segment_accumulator.add_location(location)
+            compacted_segment_locations.push(location);
         }
+
+        // collect all the paths of newly created segments
+        self.new_segment_paths = compacted_segment_locations
+            .iter()
+            .map(|(path, _version)| path.clone())
+            .collect();
+
+        self.merged_segment_statistics =
+            merge_statistics(&compacted_segment_statistics, &unchanged_segment_statistics)?;
+
+        self.merged_segments_locations = {
+            // place the newly generated compacted segment to the tail of the vector
+            unchanged_segment_locations.append(&mut compacted_segment_locations);
+            unchanged_segment_locations
+        };
 
         gauge!(
             "fuse_compact_segments_select_duration_second",
@@ -218,153 +207,26 @@ impl TableMutator for SegmentCompactMutator {
         Ok(self.need_compaction())
     }
 
-    async fn try_commit(&self, table: Arc<dyn Table>) -> Result<()> {
+    async fn try_commit(self: Box<Self>, table: Arc<dyn Table>) -> Result<()> {
         if !self.need_compaction() {
             // defensive checking
             return Ok(());
         }
 
-        let ctx = &self.ctx;
-        let base_snapshot = &self.base_snapshot;
-        let mut table = table;
-        let mut latest_snapshot = self.base_snapshot.clone();
-        let mut retries = 0;
-        let mut current_table_info = table.get_table_info();
+        let abort_action = AbortOperation {
+            segments: self.new_segment_paths,
+            ..Default::default()
+        };
 
-        // newly appended segments of concurrent txs which are committed before us
-        // the init value of it is an empty slice
-        let mut concurrently_appended_segments_locations: &[Location] = &[];
-
-        let fuse_segment_io = SegmentsIO::create(self.ctx.clone(), self.data_accessor.clone());
-        loop {
-            let concurrently_append_segments_infos = fuse_segment_io
-                .read_segments(concurrently_appended_segments_locations)
-                .await?
-                .into_iter()
-                .collect::<Result<Vec<Arc<SegmentInfo>>>>()?;
-
-            let concurrently_append_segments_stats = concurrently_append_segments_infos
-                .iter()
-                .map(|seg| &seg.summary)
-                .collect::<Vec<_>>();
-
-            // merge all the statistics
-            let stats_concurrently_appended =
-                reduce_statistics(&concurrently_append_segments_stats)?;
-
-            let stats_merged_with_compacted = merge_statistics(
-                &stats_concurrently_appended,
-                &self.compacted_segment_accumulator.summary,
-            )?;
-
-            let stats_merged_with_unchanged = merge_statistics(
-                &stats_merged_with_compacted,
-                &self.unchanged_segment_accumulator.summary,
-            )?;
-
-            // chain all the locations, places
-            // - the merged, potentially not compacted, concurrently appended segments at head
-            // - the unchanged, compacted segments in the middle
-            // - the compacted segments at the tail
-            let locations = concurrently_appended_segments_locations
-                .iter()
-                .chain(self.unchanged_segment_accumulator.locations.iter())
-                .chain(self.compacted_segment_accumulator.locations.iter());
-
-            let mut snapshot_tobe_committed =
-                TableSnapshot::from_previous(latest_snapshot.as_ref());
-            snapshot_tobe_committed.segments = locations.into_iter().cloned().collect::<Vec<_>>();
-            snapshot_tobe_committed.summary = stats_merged_with_unchanged;
-
-            match FuseTable::commit_to_meta_server(
-                ctx.as_ref(),
-                current_table_info,
-                &self.location_generator,
-                snapshot_tobe_committed,
-                &self.data_accessor,
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        fuse_table
+            .commit_mutation(
+                &self.ctx,
+                self.compact_params.base_snapshot,
+                self.merged_segments_locations,
+                self.merged_segment_statistics,
+                abort_action,
             )
             .await
-            {
-                Err(e) => {
-                    if e.code() == ErrorCode::table_version_mismatched_code() {
-                        // refresh the table
-                        table = table.refresh(ctx.as_ref()).await?;
-                        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-                        latest_snapshot =
-                            fuse_table.read_table_snapshot(ctx.clone()).await?.ok_or_else(|| {
-                              ErrorCode::LogicalError("compacting meets empty snapshot during conflict reconciliation")
-                            })?;
-                        current_table_info = &fuse_table.table_info;
-
-                        // check conflicts between the base and latest snapshots
-                        match MutatorConflictDetector::detect_conflicts(
-                            base_snapshot,
-                            &latest_snapshot,
-                        ) {
-                            Conflict::Unresolvable => {
-                                counter!("fuse_compact_segments_unresolvable_conflict", 1);
-                                counter!("fuse_compact_segments_aborts", 1);
-                                abort_segment_compaction(
-                                    self.ctx.clone(),
-                                    self.data_accessor.clone(),
-                                    &self.compacted_segment_accumulator.locations,
-                                )
-                                .await;
-                                break Err(ErrorCode::StorageOther(
-                                    "mutation conflicts, concurrent mutation detected while committing segment compaction operation",
-                                ));
-                            }
-                            Conflict::ResolvableAppend(r) => {
-                                counter!("fuse_compact_segments_resolvable_conflict", 1);
-                                info!("resolvable conflicts detected");
-                                concurrently_appended_segments_locations =
-                                    &latest_snapshot.segments[r];
-                            }
-                        }
-
-                        retries += 1;
-
-                        counter!("fuse_compact_segments_retires", retries);
-                        if retries >= MAX_RETRIES {
-                            counter!("fuse_compact_segments_aborts", 1);
-                            abort_segment_compaction(
-                                self.ctx.clone(),
-                                self.data_accessor.clone(),
-                                &self.compacted_segment_accumulator.locations,
-                            )
-                            .await;
-                            return Err(ErrorCode::StorageOther(format!(
-                                "compact segment failed after {} retries",
-                                retries
-                            )));
-                        }
-                        // different from retry of commit_insert,  here operation retired
-                        // without hesitation, to resolve the conflict as soon as possible
-                        continue;
-                    } else {
-                        return Err(e);
-                    }
-                }
-                Ok(_) => return Ok(()),
-            }
-        }
     }
-}
-
-async fn abort_segment_compaction(
-    ctx: Arc<dyn TableContext>,
-    operator: Operator,
-    locations: &[Location],
-) {
-    let files = Files::create(ctx, operator);
-    let paths = locations
-        .iter()
-        .map(|(path, _v)| path.clone())
-        .collect::<Vec<_>>();
-    files.remove_file_in_batch(&paths).await.unwrap_or_else(|e| {
-        warn!(
-            "failed to delete all the segment meta files while aborting segment compact operation. {} ",
-            e
-        )
-    })
 }

@@ -26,9 +26,13 @@ mod read_partitions;
 mod recluster;
 mod truncate;
 
+mod fuse_source;
 pub mod util;
 
+pub(crate) use compact::CompactOptions;
 pub use fuse_sink::FuseTableSink;
+pub use fuse_source::FuseTableSource;
+pub use fuse_source::State;
 pub use mutation::delete_from_block;
 pub use mutation::DeletionMutator;
 pub use mutation::FullCompactMutator;

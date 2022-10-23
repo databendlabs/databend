@@ -190,9 +190,9 @@ impl StageApi for StageMgr {
 
             let txn_req = TxnRequest {
                 condition: vec![
-                    // file is not exists
+                    // file does not exist
                     txn_cond_seq(&file_key, Eq, 0),
-                    // stage is not change
+                    // stage is not changed
                     txn_cond_seq(&stage_key, Eq, stage_seq),
                 ],
                 if_then: vec![

@@ -77,7 +77,6 @@ mod interpreter_view_alter;
 mod interpreter_view_create;
 mod interpreter_view_drop;
 mod plan_schedulers;
-mod stream;
 
 pub use access::ManagementModeAccess;
 pub use fragments::QueryFragmentAction;
@@ -144,4 +143,3 @@ pub use interpreter_user_udf_drop::DropUserUDFInterpreter;
 pub use interpreter_view_alter::AlterViewInterpreter;
 pub use interpreter_view_create::CreateViewInterpreter;
 pub use interpreter_view_drop::DropViewInterpreter;
-pub use stream::PullingExecutorStream;

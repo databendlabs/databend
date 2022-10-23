@@ -59,6 +59,7 @@ use common_meta_types::MetaOperationError;
 use common_meta_types::MetaStartupError;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
+use itertools::Itertools;
 use openraft::Config;
 use openraft::LogId;
 use openraft::Raft;
@@ -508,6 +509,7 @@ impl MetaNode {
             return Ok(false);
         };
 
+        let mut errors = vec![];
         let addrs = &conf.leave_via;
         info!("node-{} about to leave cluster via {:?}", leave_id, addrs);
 
@@ -518,10 +520,14 @@ impl MetaNode {
             let conn_res = RaftServiceClient::connect(format!("http://{}", addr)).await;
             let mut raft_client = match conn_res {
                 Ok(c) => c,
-                Err(err) => {
+                Err(e) => {
                     error!(
                         "fail connecting to {} while leaving cluster, err: {:?}",
-                        addr, err
+                        addr, e
+                    );
+                    errors.push(
+                        AnyError::new(&e)
+                            .add_context(|| format!("leave {} via: {}", leave_id, addr.clone())),
                     );
                     continue;
                 }
@@ -546,12 +552,18 @@ impl MetaNode {
                 }
                 Err(s) => {
                     error!("leaving cluster via {} fail: {:?}", addr, s);
+                    errors.push(
+                        AnyError::new(&s)
+                            .add_context(|| format!("leave {} via: {}", leave_id, addr.clone())),
+                    );
                 }
             };
         }
         Err(MetaManagementError::Leave(AnyError::error(format!(
-            "fail to leave {} cluster via {:?}",
-            leave_id, addrs
+            "fail to leave {} cluster via {:?}, caused by errors: {}",
+            leave_id,
+            addrs,
+            errors.into_iter().map(|e| e.to_string()).join(", ")
         ))))
     }
 
@@ -561,19 +573,25 @@ impl MetaNode {
         &self,
         conf: &RaftConfig,
         grpc_api_addr: String,
-    ) -> Result<(), MetaManagementError> {
+    ) -> Result<Result<(), String>, MetaManagementError> {
         if conf.join.is_empty() {
             info!("'--join' is empty, do not need joining cluster");
-            return Ok(());
+            return Ok(Err("Did not join: --join is empty".to_string()));
         }
 
-        // Try to join a cluster only when this node is just created.
+        // Try to join a cluster only when this node has no log.
         // Joining a node with log has risk messing up the data in this node and in the target cluster.
-        if self.is_opened() {
-            info!("meta node is already initialized, skip joining it to a cluster");
-            return Ok(());
+        let can_join_res = self
+            .can_join()
+            .await
+            .map_err(|e| MetaManagementError::Join(AnyError::new(&e)))?;
+
+        if let Err(reason) = can_join_res {
+            info!("skip joining, because: {}", reason);
+            return Ok(Err(format!("Did not join: {}", reason)));
         }
 
+        let mut errors = vec![];
         let addrs = &conf.join;
 
         // Joining cluster has to use advertise host instead of listen host.
@@ -596,6 +614,9 @@ impl MetaNode {
                 Ok(c) => c,
                 Err(e) => {
                     error!("connect to {} join cluster fail: {:?}", addr, e);
+                    errors.push(
+                        AnyError::new(&e).add_context(|| format!("join via: {}", addr.clone())),
+                    );
                     continue;
                 }
             };
@@ -616,22 +637,80 @@ impl MetaNode {
             match join_res {
                 Ok(r) => {
                     let reply = r.into_inner();
-                    if !reply.data.is_empty() {
-                        info!("join cluster via {} success: {:?}", addr, reply.data);
-                        return Ok(());
-                    } else {
-                        error!("join cluster via {} fail: {:?}", addr, reply.error);
+
+                    let res: Result<ForwardResponse, MetaAPIError> = reply.into();
+                    match res {
+                        Ok(v) => {
+                            info!("join cluster via {} success: {:?}", addr, v);
+                            return Ok(Ok(()));
+                        }
+                        Err(e) => {
+                            error!("join cluster via {} fail: {}", addr, e.to_string());
+                            errors.push(
+                                AnyError::new(&e)
+                                    .add_context(|| format!("join via: {}", addr.clone())),
+                            );
+                        }
                     }
                 }
                 Err(s) => {
                     error!("join cluster via {} fail: {:?}", addr, s);
+                    errors.push(
+                        AnyError::new(&s).add_context(|| format!("join via: {}", addr.clone())),
+                    );
                 }
             };
         }
         Err(MetaManagementError::Join(AnyError::error(format!(
-            "fail to join {} cluster via {:?}",
-            self.sto.id, addrs
+            "fail to join {} cluster via {:?}, caused by errors: {}",
+            self.sto.id,
+            addrs,
+            errors.into_iter().map(|e| e.to_string()).join(", ")
         ))))
+    }
+
+    /// Check meta-node state to see if it's appropriate to join to a cluster.
+    ///
+    /// If there is no StorageError, it returns a `Result`: `Ok` indicates this node can join to a cluster.
+    /// `Err` explains the reason why it should not join.
+    ///
+    /// Meta node should decide whether to execute `join_cluster()`:
+    ///
+    /// - It can not rely on if there are logs.
+    ///   It's possible the leader has setup a replication to this new
+    ///   node but not yet added it as a **voter**. In such a case, this node will
+    ///   never be added into the cluster automatically.
+    ///
+    /// - It must detect if there is a committed **membership** config
+    ///   that includes this node. Thus only when a node has already joined to a
+    ///   cluster(leader committed the membership and has replicated it to this node),
+    ///   it skips the join process.
+    ///
+    ///   Why skip checking membership in raft logs:
+    ///
+    ///   A leader may have replicated **non-committed** membership to this node and the crashed.
+    ///   Then the next leader does not know about this new node.
+    ///
+    ///   Only when the membership is committed, this node can be sure it is in a cluster.
+    async fn can_join(&self) -> Result<Result<(), String>, MetaStorageError> {
+        let m = {
+            let sm = self.sto.get_state_machine().await;
+            sm.get_membership()?
+        };
+        info!("check can_join: membership: {:?}", m);
+
+        let membership = match m {
+            None => {
+                return Ok(Ok(()));
+            }
+            Some(x) => x,
+        };
+
+        if membership.membership.contains(&self.sto.id) {
+            return Ok(Err(format!("node {} already in cluster", self.sto.id)));
+        }
+
+        Ok(Ok(()))
     }
 
     async fn do_start(conf: &MetaConfig) -> Result<Arc<MetaNode>, MetaStartupError> {

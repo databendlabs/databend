@@ -35,7 +35,7 @@ use crate::FuseTable;
 
 impl FuseTable {
     pub async fn do_delete(&self, ctx: Arc<dyn TableContext>, plan: &DeletePlan) -> Result<()> {
-        let snapshot_opt = self.read_table_snapshot(ctx.clone()).await?;
+        let snapshot_opt = self.read_table_snapshot().await?;
 
         // check if table is empty
         let snapshot = if let Some(val) = snapshot_opt {
@@ -141,7 +141,7 @@ impl FuseTable {
 
         self.commit_mutation(
             &ctx,
-            del_holder.base_snapshot().clone(),
+            del_holder.base_snapshot(),
             segments,
             summary,
             abort_operation,

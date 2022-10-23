@@ -18,6 +18,7 @@ use std::mem;
 use std::sync::Arc;
 
 use common_base::base::tokio::sync::mpsc::Receiver;
+use common_base::base::ProgressValues;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_pipeline_core::processors::port::OutputPort;
@@ -29,6 +30,8 @@ use crossbeam_channel::TrySendError;
 use crate::processors::sources::input_formats::input_context::InputContext;
 use crate::processors::sources::input_formats::input_pipeline::AligningStateTrait;
 use crate::processors::sources::input_formats::input_pipeline::InputFormatPipe;
+use crate::processors::sources::input_formats::input_pipeline::ReadBatchTrait;
+use crate::processors::sources::input_formats::input_pipeline::RowBatchTrait;
 use crate::processors::sources::input_formats::input_pipeline::Split;
 
 pub struct Aligner<I: InputFormatPipe> {
@@ -114,10 +117,13 @@ impl<I: InputFormatPipe> Processor for Aligner<I> {
     fn process(&mut self) -> Result<()> {
         match &mut self.state {
             Some(state) => {
+                let mut process_values = ProgressValues { rows: 0, bytes: 0 };
                 let read_batch = mem::take(&mut self.read_batch);
+                process_values.bytes += read_batch.as_ref().map(|b| b.size()).unwrap_or_default();
                 let eof = read_batch.is_none();
                 let row_batches = state.align(read_batch)?;
                 for b in row_batches.into_iter() {
+                    process_values.rows += b.rows();
                     self.row_batches.push_back(b);
                 }
                 if eof {
@@ -135,6 +141,7 @@ impl<I: InputFormatPipe> Processor for Aligner<I> {
                     self.state = None;
                     self.batch_rx = None;
                 }
+                self.ctx.scan_progress.incr(&process_values);
                 Ok(())
             }
             _ => Err(ErrorCode::UnexpectedError("Aligner process state is none")),

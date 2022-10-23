@@ -360,8 +360,8 @@ fn like_pattern_to_regex(pattern: &str) -> String {
                 regex.push('\\');
                 regex.push(c);
             }
-            '%' => regex.push_str(".*"),
-            '_' => regex.push('.'),
+            '%' => regex.push_str("(?s:.)*"),
+            '_' => regex.push_str("(?s:.)"),
             '\\' => match chars.peek().cloned() {
                 Some('%') => {
                     regex.push('%');

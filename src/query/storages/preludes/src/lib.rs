@@ -24,7 +24,6 @@ pub mod view;
 mod storages {
     pub use common_catalog::catalog::StorageDescription;
     pub use common_catalog::table::Table;
-    pub use common_storages_context::StorageContext;
 
     pub use super::memory;
     pub use super::system;

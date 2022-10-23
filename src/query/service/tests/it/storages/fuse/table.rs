@@ -34,8 +34,8 @@ use databend_query::sql::OPT_KEY_DATABASE_ID;
 use databend_query::sql::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::FuseTable;
-use databend_query::storages::TableStreamReadWrap;
 use databend_query::storages::ToReadDataSourcePlan;
+use databend_query::stream::DataBlockStream;
 use futures::TryStreamExt;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;
@@ -332,7 +332,7 @@ async fn test_fuse_alter_table_cluster_key() -> Result<()> {
         .options()
         .get(OPT_KEY_SNAPSHOT_LOCATION)
         .unwrap();
-    let reader = MetaReaders::table_snapshot_reader(ctx.clone(), fuse_table.get_operator());
+    let reader = MetaReaders::table_snapshot_reader(fuse_table.get_operator());
     let snapshot = reader.read(snapshot_loc.as_str(), None, 1).await?;
     let expected = Some((0, "(id)".to_string()));
     assert_eq!(snapshot.cluster_key_meta, expected);
@@ -359,7 +359,7 @@ async fn test_fuse_alter_table_cluster_key() -> Result<()> {
         .options()
         .get(OPT_KEY_SNAPSHOT_LOCATION)
         .unwrap();
-    let reader = MetaReaders::table_snapshot_reader(ctx, fuse_table.get_operator());
+    let reader = MetaReaders::table_snapshot_reader(fuse_table.get_operator());
     let snapshot = reader.read(snapshot_loc.as_str(), None, 1).await?;
     let expected = None;
     assert_eq!(snapshot.cluster_key_meta, expected);

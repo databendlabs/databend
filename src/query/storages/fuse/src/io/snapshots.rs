@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Instant;
 
 use chrono::DateTime;
 use chrono::Utc;
@@ -54,12 +55,11 @@ impl SnapshotsIO {
     }
 
     async fn read_snapshot(
-        ctx: Arc<dyn TableContext>,
         snapshot_location: String,
         format_version: u64,
         data_accessor: Operator,
     ) -> Result<Arc<TableSnapshot>> {
-        let reader = MetaReaders::table_snapshot_reader(ctx.clone(), data_accessor);
+        let reader = MetaReaders::table_snapshot_reader(data_accessor);
         reader.read(snapshot_location, None, format_version).await
     }
 
@@ -73,19 +73,13 @@ impl SnapshotsIO {
         let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
 
         // 1.1 combine all the tasks.
-        let ctx_clone = self.ctx.clone();
         let mut iter = snapshot_files.iter();
         let tasks = std::iter::from_fn(move || {
             if let Some(location) = iter.next() {
                 let location = location.clone();
                 Some(
-                    Self::read_snapshot(
-                        ctx_clone.clone(),
-                        location,
-                        self.format_version,
-                        self.operator.clone(),
-                    )
-                    .instrument(tracing::debug_span!("read_snapshot")),
+                    Self::read_snapshot(location, self.format_version, self.operator.clone())
+                        .instrument(tracing::debug_span!("read_snapshot")),
                 )
             } else {
                 None
@@ -111,13 +105,17 @@ impl SnapshotsIO {
     // Read all the snapshots by the root file.
     // limit: read how many snapshot files
     // with_segment_locations: if true will get the segments of the snapshot
-    pub async fn read_snapshot_lites(
+    pub async fn read_snapshot_lites<T>(
         &self,
         root_snapshot_file: String,
         limit: Option<usize>,
         with_segment_locations: bool,
         min_snapshot_timestamp: Option<DateTime<Utc>>,
-    ) -> Result<(Vec<TableSnapshotLite>, HashSet<Location>)> {
+        status_callback: T,
+    ) -> Result<(Vec<TableSnapshotLite>, HashSet<Location>)>
+    where
+        T: Fn(String),
+    {
         let ctx = self.ctx.clone();
         let data_accessor = self.operator.clone();
 
@@ -131,16 +129,13 @@ impl SnapshotsIO {
         // 1. Get all the snapshot by chunks.
         let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
         let mut snapshot_lites = Vec::with_capacity(snapshot_files.len());
-        for (idx, chunks) in snapshot_files.chunks(max_io_requests).enumerate() {
-            info!(
-                "Start to read_snapshots, chunk:[{}], size:{}",
-                idx,
-                chunks.len()
-            );
-            let results = self.read_snapshots(chunks).await?;
-            info!("Finish to read_snapshots, chunk:[{}]", idx);
 
-            for snapshot in results.into_iter().collect::<Result<Vec<_>>>()? {
+        let start = Instant::now();
+        let mut count = 0;
+        for chunk in snapshot_files.chunks(max_io_requests) {
+            let results = self.read_snapshots(chunk).await?;
+
+            for snapshot in results.into_iter().flatten() {
                 if snapshot.timestamp > min_snapshot_timestamp {
                     continue;
                 }
@@ -153,13 +148,25 @@ impl SnapshotsIO {
                     }
                 }
             }
+
+            // Refresh status.
+            {
+                count += chunk.len();
+                let status = format!(
+                    "gc: read snapshot files:{}/{}, cost:{} sec",
+                    count,
+                    snapshot_files.len(),
+                    start.elapsed().as_secs()
+                );
+                info!(status);
+                (status_callback)(status);
+            }
         }
 
         let mut snapshot_chain = vec![];
         {
             // 1 Get the root snapshot.
             let root_snapshot = Self::read_snapshot(
-                ctx.clone(),
                 root_snapshot_file.clone(),
                 self.format_version,
                 data_accessor.clone(),

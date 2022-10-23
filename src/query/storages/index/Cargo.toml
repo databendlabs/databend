@@ -24,7 +24,7 @@ common-fuse-meta = { path = "../fuse-meta" }
 common-legacy-expression = { path = "../../legacy-expression" }
 common-pipeline-transforms = { path = "../../pipeline/transforms" }
 
-xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", features = ["cbordata"] }
+xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", features = ["cbordata"], rev = "008ca3" }
 
 anyerror = { workspace = true }
 cbordata = { version = "0.6.0" }

@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
+
 use std::fs::File;
 use std::io::Read;
 use std::string::String;
@@ -41,7 +41,7 @@ use crate::tests::tls_constants::TEST_SERVER_CERT;
 use crate::tests::tls_constants::TEST_SERVER_KEY;
 
 #[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
-async fn test_cluster_nodes() -> common_exception::Result<()> {
+async fn test_cluster_nodes() -> anyhow::Result<()> {
     let tc0 = MetaSrvTestContext::new(0);
     let mut tc1 = MetaSrvTestContext::new(1);
 
@@ -49,14 +49,12 @@ async fn test_cluster_nodes() -> common_exception::Result<()> {
     tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
 
     let meta_node = MetaNode::start(&tc0.config).await?;
-    meta_node
-        .join_cluster(&tc0.config.raft_config, tc0.config.grpc_api_address)
-        .await?;
 
     let meta_node1 = MetaNode::start(&tc1.config).await?;
-    meta_node1
+    let res = meta_node1
         .join_cluster(&tc1.config.raft_config, tc1.config.grpc_api_address)
         .await?;
+    assert_eq!(Ok(()), res);
 
     let cluster_router = Route::new()
         .at("/cluster/nodes", get(nodes_handler))
@@ -81,7 +79,7 @@ async fn test_cluster_nodes() -> common_exception::Result<()> {
 }
 
 #[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
-async fn test_cluster_state() -> common_exception::Result<()> {
+async fn test_cluster_state() -> anyhow::Result<()> {
     let tc0 = MetaSrvTestContext::new(0);
     let mut tc1 = MetaSrvTestContext::new(1);
 
@@ -89,12 +87,9 @@ async fn test_cluster_state() -> common_exception::Result<()> {
     tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
 
     let meta_node = MetaNode::start(&tc0.config).await?;
-    meta_node
-        .join_cluster(&tc0.config.raft_config, tc0.config.grpc_api_address)
-        .await?;
 
     let meta_node1 = MetaNode::start(&tc1.config).await?;
-    meta_node1
+    let _ = meta_node1
         .join_cluster(&tc1.config.raft_config, tc1.config.grpc_api_address)
         .await?;
 
@@ -127,7 +122,7 @@ async fn test_cluster_state() -> common_exception::Result<()> {
 }
 
 #[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
-async fn test_http_service_cluster_state() -> common_exception::Result<()> {
+async fn test_http_service_cluster_state() -> anyhow::Result<()> {
     let addr_str = "127.0.0.1:30003";
 
     let tc0 = MetaSrvTestContext::new(0);
@@ -142,7 +137,7 @@ async fn test_http_service_cluster_state() -> common_exception::Result<()> {
     let _meta_node0 = MetaNode::start(&tc0.config).await?;
 
     let meta_node1 = MetaNode::start(&tc1.config).await?;
-    meta_node1
+    let _ = meta_node1
         .join_cluster(&tc1.config.raft_config, tc1.config.grpc_api_address.clone())
         .await?;
 

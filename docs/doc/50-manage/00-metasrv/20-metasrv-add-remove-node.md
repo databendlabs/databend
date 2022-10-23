@@ -1,7 +1,7 @@
 ---
 title: Manage a Databend Meta Service Cluster
 sidebar_label: Manage a Meta Service Cluster
-description: 
+description:
   How to add/remove nodes from the Databend Meta Service cluster
 ---
 
@@ -36,6 +36,28 @@ join                = ["localhost:28103"]
 
 The arg `join` specifies a list of raft addresses(`<raft_advertise_host>:<raft_api_port>`) of nodes in the existing cluster it wants to
 be joined to.
+
+Databend-meta will skip `join` argument if it's already joined to a cluster.
+It check whether the **committed** membership contains its id to decide if to
+join. The explanation of this policy:(but you do not really have to read it:)
+
+> - It can not rely on if there are logs.
+>   It's possible the leader has setup a replication to this new
+>   node but not yet added it as a **voter**. In such a case, this node will
+>   never be added into the cluster automatically.
+>
+> - It must detect if there is a committed **membership** config
+>   that includes this node. Thus only when a node has already joined to a
+>   cluster(leader committed the membership and has replicated it to this node),
+>   it skips the join process.
+>
+> #### Why skip checking membership in raft logs:
+>
+> A leader may have replicated **non-committed** membership to this node and the crashed.
+> Then the next leader does not know about this new node.
+>
+> Only when the membership is committed, this node can be sure it is in a cluster.
+
 
 ### 1.2 Start the new node
 

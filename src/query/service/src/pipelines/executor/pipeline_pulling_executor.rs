@@ -190,11 +190,10 @@ impl PipelinePullingExecutor {
 
                     self.state.wait_finish();
 
-                    if self.state.is_catch_error() {
-                        return Err(self.state.get_catch_error());
+                    match !self.state.is_catch_error() {
+                        true => Ok(None),
+                        false => Err(self.state.get_catch_error()),
                     }
-
-                    Ok(None)
                 }
             };
         }
