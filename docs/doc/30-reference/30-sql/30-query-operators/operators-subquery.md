@@ -10,6 +10,7 @@ A subquery is a query nested within another one. Databend supports the following
 - [EXISTS / NOT EXISTS](#exists--not-exists)
 - [IN / NOT IN](#in--not-in)
 - [ANY (SOME)](#any-some)
+- [ALL](#all)
 
 ## Scalar Subquery
 
@@ -195,5 +196,46 @@ WHERE  t1.a < ANY (SELECT *
 |      1 |
 |      2 |
 |      3 |
++--------+
+```
+
+## ALL
+
+You can use ALL to check whether a comparison is true for all of the values returned by a subquery.
+
+- The keyword ALL must follow a [comparison operator](../../20-functions/02-comparisons-operators/index.md).
+- If the subquery doesn't return any values, the comparison evaluates to true.
+
+### Syntax
+
+```sql
+comparison_operator ALL ( <query> )
+```
+
+### Examples
+
+```sql
+CREATE TABLE t1 (a int);
+CREATE TABLE t2 (a int);
+
+INSERT INTO t1 VALUES (1);
+INSERT INTO t1 VALUES (2);
+INSERT INTO t1 VALUES (3);
+
+INSERT INTO t2 VALUES (3);
+INSERT INTO t2 VALUES (4);
+INSERT INTO t2 VALUES (5);
+
+SELECT * 
+FROM   t1 
+WHERE  t1.a < ALL (SELECT * 
+                   FROM   t2);
+
+--
++--------+
+|      a |
++--------+
+|      1 |
+|      2 |
 +--------+
 ```
