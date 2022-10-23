@@ -464,9 +464,10 @@ impl Table for FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         target: CompactTarget,
+        limit: Option<usize>,
         pipeline: &mut Pipeline,
     ) -> Result<Option<Box<dyn TableMutator>>> {
-        self.do_compact(ctx, target, pipeline).await
+        self.do_compact(ctx, target, limit, pipeline).await
     }
 
     async fn recluster(
