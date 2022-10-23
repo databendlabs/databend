@@ -29,6 +29,7 @@ mod truncate;
 mod fuse_source;
 pub mod util;
 
+pub(crate) use compact::CompactOptions;
 pub use fuse_sink::FuseTableSink;
 pub use fuse_source::FuseTableSource;
 pub use fuse_source::State;

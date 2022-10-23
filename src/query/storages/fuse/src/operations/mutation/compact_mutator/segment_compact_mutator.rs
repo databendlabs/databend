@@ -22,7 +22,6 @@ use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::Statistics;
-use common_fuse_meta::meta::TableSnapshot;
 use metrics::gauge;
 use opendal::Operator;
 
@@ -30,6 +29,7 @@ use crate::io::SegmentWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::mutation::AbortOperation;
+use crate::operations::CompactOptions;
 use crate::statistics::merge_statistics;
 use crate::statistics::reducers::reduce_block_metas;
 use crate::FuseTable;
@@ -71,11 +71,9 @@ use crate::TableMutator;
 
 pub struct SegmentCompactMutator {
     ctx: Arc<dyn TableContext>,
-    // the snapshot that compactor working on, it never changed during phases compaction.
-    base_snapshot: Arc<TableSnapshot>,
+    compact_params: CompactOptions,
     data_accessor: Operator,
     location_generator: TableMetaLocationGenerator,
-    blocks_per_seg: usize,
 
     // summarised statistics of all the accumulated segments(compacted, and unchanged)
     merged_segment_statistics: Statistics,
@@ -88,17 +86,15 @@ pub struct SegmentCompactMutator {
 impl SegmentCompactMutator {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
-        base_snapshot: Arc<TableSnapshot>,
+        compact_params: CompactOptions,
         location_generator: TableMetaLocationGenerator,
-        blocks_per_seg: usize,
         operator: Operator,
     ) -> Result<Self> {
         Ok(Self {
             ctx,
-            base_snapshot,
+            compact_params,
             data_accessor: operator,
             location_generator,
-            blocks_per_seg,
             merged_segment_statistics: Statistics::default(),
             merged_segments_locations: vec![],
             new_segment_paths: vec![],
@@ -116,21 +112,31 @@ impl TableMutator for SegmentCompactMutator {
         let select_begin = Instant::now();
 
         let fuse_segment_io = SegmentsIO::create(self.ctx.clone(), self.data_accessor.clone());
-        let base_segment_locations = &self.base_snapshot.segments;
+        let base_segment_locations = &self.compact_params.base_snapshot.segments;
         let base_segments = fuse_segment_io
-            .read_segments(&self.base_snapshot.segments)
+            .read_segments(&self.compact_params.base_snapshot.segments)
             .await?
             .into_iter()
             .collect::<Result<Vec<_>>>()?;
 
-        let blocks_per_segment_threshold = self.blocks_per_seg;
+        let blocks_per_segment_threshold = self.compact_params.block_per_seg;
 
         let mut segments_tobe_compacted = Vec::with_capacity(base_segments.len() / 2);
 
         let mut unchanged_segment_locations = Vec::with_capacity(base_segments.len() / 2);
 
         let mut unchanged_segment_statistics = Statistics::default();
-        for (idx, segment) in base_segments.iter().enumerate() {
+
+        let limit = self.compact_params.limit.unwrap_or(base_segments.len());
+        if limit < base_segments.len() {
+            for i in limit..base_segments.len() {
+                unchanged_segment_locations.push(base_segment_locations[i].clone());
+                unchanged_segment_statistics =
+                    merge_statistics(&unchanged_segment_statistics, &base_segments[i].summary)?;
+            }
+        }
+
+        for (idx, segment) in base_segments.iter().take(limit).enumerate() {
             let number_blocks = segment.blocks.len();
             if number_blocks >= blocks_per_segment_threshold {
                 // skip if current segment is large enough, mark it as unchanged
@@ -157,8 +163,8 @@ impl TableMutator for SegmentCompactMutator {
             }
         }
 
-        // split the block metas into chunks of blocks, with chunk size set to blocks_per_seg
-        let chunk_of_blocks = blocks_of_new_segments.chunks(self.blocks_per_seg);
+        // split the block metas into chunks of blocks, with chunk size set to block_per_seg
+        let chunk_of_blocks = blocks_of_new_segments.chunks(blocks_per_segment_threshold);
         // Build new segments which are compacted according to the setting of `block_per_seg`
         // note that the newly segments will be persistent into storage, such that if retry
         // happens during the later `try_commit` phase, they do not need to be written again.
@@ -216,7 +222,7 @@ impl TableMutator for SegmentCompactMutator {
         fuse_table
             .commit_mutation(
                 &self.ctx,
-                self.base_snapshot,
+                self.compact_params.base_snapshot,
                 self.merged_segments_locations,
                 self.merged_segment_statistics,
                 abort_action,
