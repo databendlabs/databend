@@ -131,6 +131,13 @@ impl RoleCacheManager {
         Ok(find_all_related_roles(&cached_roles.roles, roles))
     }
 
+    pub async fn force_reload(&self, tenant: &str) -> Result<()> {
+        let data = load_roles_data(&self.user_manager, tenant).await?;
+        let mut cached = self.cache.write();
+        cached.insert(tenant.to_string(), data);
+        Ok(())
+    }
+
     // Load roles data if not found in cache. Watch this tenant's role data in background if
     // once it loads successfully.
     async fn maybe_reload(&self, tenant: &str) -> Result<()> {
@@ -146,9 +153,7 @@ impl RoleCacheManager {
             }
         };
         if need_reload {
-            let data = load_roles_data(&self.user_manager, tenant).await?;
-            let mut cached = self.cache.write();
-            cached.insert(tenant.to_string(), data);
+            self.force_reload(tenant).await?;
         }
         Ok(())
     }

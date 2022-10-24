@@ -37,6 +37,9 @@ impl UserApiProvider {
                 user_info
                     .grants
                     .grant_role(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string());
+                user_info
+                    .option
+                    .set_default_role(Some(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string()));
                 user_info.option.set_all_flag();
             } else {
                 return Err(ErrorCode::UnknownUser(format!(

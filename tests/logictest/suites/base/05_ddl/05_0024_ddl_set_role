@@ -5,7 +5,7 @@ statement query T
 SELECT current_role()
 
 ----
-public
+account_admin
 
 onlyif mysql
 statement ok

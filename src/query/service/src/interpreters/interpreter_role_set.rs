@@ -44,14 +44,24 @@ impl Interpreter for SetRoleInterpreter {
     #[tracing::instrument(level = "debug", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let session = self.ctx.get_current_session();
+        let current_user = session.get_current_user()?;
 
-        let roles = session.get_all_available_roles().await?;
-        let role = roles.into_iter().find(|r| r.name == self.plan.role_name);
+        let available_roles = session.get_all_available_roles().await?;
+        let role = available_roles
+            .iter()
+            .find(|r| r.name == self.plan.role_name);
         match role {
             None => {
+                let available_role_names = available_roles
+                    .iter()
+                    .map(|r| r.name.clone())
+                    .collect::<Vec<_>>()
+                    .join(",");
                 return Err(common_exception::ErrorCode::InvalidRole(format!(
-                    "Invalid role: {}",
-                    self.plan.role_name
+                    "Invalid role ({}) for {}, available: {}",
+                    self.plan.role_name,
+                    current_user.identity(),
+                    available_role_names,
                 )));
             }
             Some(role) => {
@@ -65,7 +75,7 @@ impl Interpreter for SetRoleInterpreter {
                         )
                         .await?;
                 } else {
-                    session.set_current_role(Some(role));
+                    session.set_current_role(Some(role.clone()));
                 }
             }
         }
