@@ -25,6 +25,7 @@ use common_meta_types::RoleInfo;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeType;
 use common_users::RoleCacheManager;
+use common_users::BUILTIN_ROLE_PUBLIC;
 use futures::channel::*;
 use parking_lot::RwLock;
 
@@ -215,9 +216,9 @@ impl Session {
     pub async fn refresh_current_role(self: &Arc<Self>) -> Result<()> {
         let tenant = self.get_current_tenant();
         let public_role = RoleCacheManager::instance()
-            .find_role(&tenant, "public")
+            .find_role(&tenant, BUILTIN_ROLE_PUBLIC)
             .await?
-            .unwrap_or_else(|| RoleInfo::new("public"));
+            .unwrap_or_else(|| RoleInfo::new(BUILTIN_ROLE_PUBLIC));
 
         // if CURRENT ROLE is not set, take current user's DEFAULT ROLE
         let current_role_name = match self.session_ctx.get_current_role() {
