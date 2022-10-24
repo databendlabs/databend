@@ -12,10 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod account;
-mod database;
-mod role;
-mod share;
-mod stage;
-mod table;
-mod view;
+use common_exception::Result;
+use common_planner::plans::SetRolePlan;
+
+use crate::plans::Plan;
+use crate::BindContext;
+use crate::Binder;
+
+impl<'a> Binder {
+    pub(in crate::planner::binder) async fn bind_set_role(
+        &mut self,
+        _bind_context: &BindContext,
+        is_default: bool,
+        role_name: &str,
+    ) -> Result<Plan> {
+        Ok(Plan::SetRole(Box::new(SetRolePlan {
+            is_default,
+            role_name: role_name.to_string(),
+        })))
+    }
+}

@@ -54,6 +54,7 @@ use common_planner::plans::RenameDatabasePlan;
 use common_planner::plans::RenameTablePlan;
 use common_planner::plans::RevokePrivilegePlan;
 use common_planner::plans::RevokeRolePlan;
+use common_planner::plans::SetRolePlan;
 use common_planner::plans::ShowCreateDatabasePlan;
 use common_planner::plans::ShowCreateTablePlan;
 use common_planner::plans::ShowGrantsPlan;
@@ -158,6 +159,7 @@ pub enum Plan {
     ShowGrants(Box<ShowGrantsPlan>),
     RevokePriv(Box<RevokePrivilegePlan>),
     RevokeRole(Box<RevokeRolePlan>),
+    SetRole(Box<SetRolePlan>),
 
     // Stages
     ListStage(Box<ListPlan>),
@@ -253,6 +255,7 @@ impl Display for Plan {
             Plan::Call(_) => write!(f, "Call"),
             Plan::Presign(_) => write!(f, "Presign"),
             Plan::SetVariable(_) => write!(f, "SetVariable"),
+            Plan::SetRole(_) => write!(f, "SetRole"),
             Plan::Kill(_) => write!(f, "Kill"),
             Plan::CreateShare(_) => write!(f, "CreateShare"),
             Plan::DropShare(_) => write!(f, "DropShare"),
@@ -327,6 +330,7 @@ impl Plan {
             Plan::Call(_) => Arc::new(DataSchema::empty()),
             Plan::Presign(plan) => plan.schema(),
             Plan::SetVariable(plan) => plan.schema(),
+            Plan::SetRole(plan) => plan.schema(),
             Plan::Kill(_) => Arc::new(DataSchema::empty()),
             Plan::CreateShare(plan) => plan.schema(),
             Plan::DropShare(plan) => plan.schema(),

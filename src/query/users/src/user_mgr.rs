@@ -197,7 +197,7 @@ impl UserApiProvider {
         }
     }
 
-    // Update a user by name and hostname.
+    // Update an user by name and hostname.
     pub async fn update_user(
         &self,
         tenant: &str,
@@ -211,5 +211,18 @@ impl UserApiProvider {
             Ok(res) => Ok(res),
             Err(e) => Err(e.add_message_back("(while alter user).")),
         }
+    }
+
+    // Update an user's default role
+    pub async fn update_user_default_role(
+        &self,
+        tenant: &str,
+        user_name: UserIdentity,
+        default_role: Option<String>,
+    ) -> Result<Option<u64>> {
+        let mut user = self.get_user(tenant, user_name.clone()).await?;
+        user.option.set_default_role(default_role);
+        self.update_user(tenant, user_name, None, Some(user.option))
+            .await
     }
 }
