@@ -1312,6 +1312,7 @@ dependencies = [
  "primitive-types",
  "regex",
  "serde_json",
+ "typetag",
 ]
 
 [[package]]
