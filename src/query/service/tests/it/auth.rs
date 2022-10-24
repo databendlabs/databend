@@ -205,8 +205,8 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
             .into_iter()
             .map(|r| r.name)
             .collect();
-        assert_eq!(roles.len(), 2);
-        assert!(roles.contains(&"test-auth-role".to_string()));
+        assert_eq!(roles.len(), 1);
+        assert!(!roles.contains(&"test-auth-role".to_string()));
     }
 
     // root auth from localhost
