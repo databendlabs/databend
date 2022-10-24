@@ -159,7 +159,6 @@ pub struct FileFormatOptions {
     pub record_delimiter: String,
     pub compression: StageFileCompression,
     pub row_tag: String,
-    pub rowset_tag: String,
 }
 
 impl Default for FileFormatOptions {
@@ -171,7 +170,6 @@ impl Default for FileFormatOptions {
             skip_header: 0,
             compression: StageFileCompression::default(),
             row_tag: "row".to_string(),
-            rowset_tag: "data".to_string(),
         }
     }
 }

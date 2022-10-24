@@ -200,14 +200,6 @@ impl InputContext {
             settings.set_settings("row_tag".into(), file_format_options.row_tag.clone(), false)?;
         }
 
-        if !file_format_options.rowset_tag.is_empty() {
-            settings.set_settings(
-                "rowset_tag".into(),
-                file_format_options.rowset_tag.clone(),
-                false,
-            )?;
-        }
-
         Ok(InputContext {
             format,
             schema,

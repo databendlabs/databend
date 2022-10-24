@@ -65,7 +65,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (16, "2022-09-29: Add: CopyOptions::split_size"),
     (
         17,
-        "2022-10-22: Add: users.proto/{FileFormatOptions::row_tag, FileFormatOptions::rowset_tag}",
+        "2022-10-22: Add: users.proto/FileFormatOptions::row_tag",
     ),
 ];
 

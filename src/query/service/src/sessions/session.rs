@@ -147,7 +147,6 @@ impl Session {
             record_delimiter: settings.get_format_record_delimiter()?.into_bytes(),
             field_delimiter: settings.get_format_field_delimiter()?.into_bytes(),
             row_tag: settings.get_row_tag()?.into_bytes(),
-            rowset_tag: settings.get_rowset_tag()?.into_bytes(),
             empty_as_default: settings.get_format_empty_as_default()? > 0,
             quote_char: quote_char[0],
             ..Default::default()

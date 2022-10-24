@@ -181,8 +181,6 @@ message UserStageInfo {
     StageFileCompression compression = 5;
 
     string row_tag = 6;
-
-    string rowset_tag = 7;
   }
 
   message OnErrorMode {

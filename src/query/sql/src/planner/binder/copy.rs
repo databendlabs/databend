@@ -628,14 +628,6 @@ pub fn parse_copy_file_format_options(
             .as_bytes(),
     );
 
-    // Rowset tag in xml.
-    let rowset_tag = parse_escape_string(
-        file_format_options
-            .get("rowset_tag")
-            .unwrap_or(&"".to_string())
-            .as_bytes(),
-    );
-
     Ok(FileFormatOptions {
         format: file_format,
         skip_header,
@@ -643,6 +635,5 @@ pub fn parse_copy_file_format_options(
         record_delimiter,
         compression,
         row_tag,
-        rowset_tag,
     })
 }
