@@ -16,13 +16,20 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
+use common_datavalues::DataField;
+use common_datavalues::DataSchemaRefExt;
 use common_datavalues::Series;
+use common_datavalues::SeriesFrom;
+use common_datavalues::ToDataType;
 use common_datavalues::Vu8;
 use common_exception::Result;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableMeta;
 
+use super::table::AsyncOneBlockSystemTable;
 use super::table::AsyncSystemTable;
+use crate::storages::Table;
 
 pub struct CatalogsTable {
     table_info: TableInfo,
@@ -37,10 +44,9 @@ impl AsyncSystemTable for CatalogsTable {
     }
 
     async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
-        let tenant = ctx.get_tenant();
         let catalogs = ctx.list_catalogs();
 
-        let catalog_names: Vec<&[u8]> = catalogs.iter().map(|ctl| ctl.as_bytes());
+        let catalog_names: Vec<&[u8]> = catalogs.iter().map(|ctl| ctl.as_bytes()).collect();
 
         Ok(DataBlock::create(self.table_info.schema(), vec![
             Series::from_data(catalog_names),

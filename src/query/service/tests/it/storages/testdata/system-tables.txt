@@ -81,6 +81,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | metric                   | system   | metrics             | VARCHAR           |              |                    | false       |         |
 | msg                      | system   | tracing             | VARCHAR           |              |                    | false       |         |
 | mysql_connection_id      | system   | processes           | INT UNSIGNED      |              |                    | true        |         |
+| name                     | system   | catalogs            | VARCHAR           |              |                    | false       |         |
 | name                     | system   | clusters            | VARCHAR           |              |                    | false       |         |
 | name                     | system   | columns             | VARCHAR           |              |                    | false       |         |
 | name                     | system   | configs             | VARCHAR           |              |                    | false       |         |
@@ -259,6 +260,16 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | storage | s3.security_token                    |                                |             |
 | storage | type                                 | fs                             |             |
 +---------+--------------------------------------+--------------------------------+-------------+
+
+
+---------- TABLE INFO ------------
+DB.Table: 'system'.'catalogs', Table: catalogs-table_id:1, ver:0, Engine: SystemDatabases
+-------- TABLE CONTENTS ----------
++---------+
+| name    |
++---------+
+| default |
++---------+
 
 
 ---------- TABLE INFO ------------
