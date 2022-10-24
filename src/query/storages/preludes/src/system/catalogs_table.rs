@@ -64,7 +64,7 @@ impl CatalogsTable {
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {
                 schema,
-                engine: "SystemDatabases".to_string(),
+                engine: "SystemCatalogs".to_string(),
                 ..Default::default()
             },
             ..Default::default()

@@ -263,7 +263,7 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 
 
 ---------- TABLE INFO ------------
-DB.Table: 'system'.'catalogs', Table: catalogs-table_id:1, ver:0, Engine: SystemDatabases
+DB.Table: 'system'.'catalogs', Table: catalogs-table_id:1, ver:0, Engine: SystemCatalogs
 -------- TABLE CONTENTS ----------
 +---------+
 | name    |
