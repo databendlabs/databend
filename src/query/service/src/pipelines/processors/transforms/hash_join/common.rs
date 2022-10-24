@@ -143,6 +143,7 @@ impl JoinHashTable {
                 }
             }
         }
+        dbg!(markers.clone());
         markers
     }
 

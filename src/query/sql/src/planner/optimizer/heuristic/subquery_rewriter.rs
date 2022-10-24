@@ -517,11 +517,9 @@ impl SubqueryRewriter {
                     from_correlated_subquery: false,
                 }
                 .into();
-                let s_expr = SExpr::create_binary(mark_join, left.clone(), *subquery.subquery.clone());
-                Ok((
-                    s_expr,
-                    UnnestResult::MarkJoin { marker_index },
-                ))
+                let s_expr =
+                    SExpr::create_binary(mark_join, left.clone(), *subquery.subquery.clone());
+                Ok((s_expr, UnnestResult::MarkJoin { marker_index }))
             }
             _ => unreachable!(),
         }

@@ -137,7 +137,7 @@ impl HashJoinState for JoinHashTable {
                     .map(|x| Some(*x))
                     .collect(),
                 JoinType::RightMark => {
-                    if !has_null {
+                    if !has_null && !chunk.cols.is_empty() {
                         if let Some(validity) = chunk.cols[0].validity().1 {
                             if validity.unset_bits() > 0 {
                                 has_null = true;
