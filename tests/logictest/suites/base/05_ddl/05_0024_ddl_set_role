@@ -1,5 +1,5 @@
 statement ok
-CREATE ROLE IF NOT EXISTS 'test-a'
+CREATE ROLE IF NOT EXISTS 'test-s'
 
 statement query T
 SELECT current_role()
@@ -9,15 +9,18 @@ public
 
 onlyif mysql
 statement ok
-SET ROLE 'test-a'
+SET ROLE 'test-s'
 
 onlyif mysql
 statement query T
 SELECT current_role()
 
 ----
-test-a
+test-s
 
 onlyif mysql
 statement error 2206
 SET ROLE 'test-role-not-exists'
+
+statement ok
+DROP ROLE IF EXISTS 'test-s'
