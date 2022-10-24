@@ -12,10 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod account;
-mod catalog;
-mod database;
-mod share;
-mod stage;
-mod table;
-mod view;
+use common_ast::ast::ShowCatalogsStmt;
+use common_ast::ast::ShowLimit;
+use common_exception::Result;
+
+use crate::sql::plans::Plan;
+use crate::sql::BindContext;
+use crate::sql::Binder;
+
+impl<'a> Binder {
+    pub(in crate::sql::planner::binder) async fn bind_show_catalogs(
+        &mut self,
+        bind_context: &BindContext,
+        stmt: &ShowCatalogsStmt<'a>,
+    ) -> Result<Plan> {
+        let ShowCatalogsStmt { limit } = stmt;
+        match limit {
+            Some(ShowLimit::Like { pattern }) => {
+                todo!()
+            }
+            _ => todo!(),
+        }
+    }
+}
