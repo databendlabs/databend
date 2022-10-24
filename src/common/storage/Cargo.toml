@@ -26,6 +26,7 @@ opendal = { version = "0.19", features = [
     "services-ftp",
     "services-moka",
     "services-redis",
+    "trust-dns",
     "compress",
 ] }
 parking_lot = "0.12.1"
