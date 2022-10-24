@@ -22,20 +22,11 @@ use std::time::Instant;
 use async_trait::async_trait;
 use opendal::io_util::observe_read;
 use opendal::io_util::ReadEvent;
-use opendal::ops::OpCreate;
-use opendal::ops::OpDelete;
-use opendal::ops::OpList;
-use opendal::ops::OpPresign;
 use opendal::ops::OpRead;
-use opendal::ops::OpStat;
 use opendal::ops::OpWrite;
-use opendal::ops::PresignedRequest;
 use opendal::Accessor;
-use opendal::AccessorMetadata;
 use opendal::BytesReader;
 use opendal::Layer;
-use opendal::ObjectMetadata;
-use opendal::ObjectStreamer;
 use parking_lot::RwLock;
 
 /// StorageMetrics represents the metrics of storage (all bytes metrics are compressed size).
@@ -185,12 +176,8 @@ struct StorageMetricsAccessor {
 
 #[async_trait]
 impl Accessor for StorageMetricsAccessor {
-    fn metadata(&self) -> AccessorMetadata {
-        self.inner.metadata()
-    }
-
-    async fn create(&self, path: &str, args: OpCreate) -> Result<()> {
-        self.inner.create(path, args).await
+    fn inner(&self) -> Option<Arc<dyn Accessor>> {
+        Some(self.inner.clone())
     }
 
     async fn read(&self, path: &str, args: OpRead) -> Result<BytesReader> {
@@ -242,22 +229,5 @@ impl Accessor for StorageMetricsAccessor {
         });
 
         self.inner.write(path, args, Box::new(r)).await
-    }
-
-    async fn stat(&self, path: &str, args: OpStat) -> Result<ObjectMetadata> {
-        self.inner.stat(path, args).await
-    }
-
-    async fn delete(&self, path: &str, args: OpDelete) -> Result<()> {
-        self.inner.delete(path, args).await
-    }
-
-    /// TODO: we need to make sure returning object's accessor is correct.
-    async fn list(&self, path: &str, args: OpList) -> Result<ObjectStreamer> {
-        self.inner.list(path, args).await
-    }
-
-    fn presign(&self, path: &str, args: OpPresign) -> Result<PresignedRequest> {
-        self.inner.presign(path, args)
     }
 }
