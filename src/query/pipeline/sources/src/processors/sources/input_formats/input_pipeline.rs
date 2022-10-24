@@ -200,8 +200,6 @@ pub trait InputFormatPipe: Sized + Send + 'static {
                 let data_tx2 = data_tx.clone();
                 let splits = splits.to_owned().clone();
                 tokio::spawn(async move {
-                    // let row_batch = futs.next().await.unwrap().unwrap();
-                    // data_tx.send(row_batch).await.unwrap();
                     let mut futs = FuturesUnordered::new();
                     for s in &splits {
                         let fut = Self::read_split(ctx_clone2.clone(), s);
