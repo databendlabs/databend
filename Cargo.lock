@@ -2181,6 +2181,7 @@ dependencies = [
  "common-storages-index",
  "futures",
  "futures-util",
+ "itertools",
  "metrics",
  "opendal",
  "serde",
