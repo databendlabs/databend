@@ -24,7 +24,7 @@ Databends saves actual table data in parquet files and considers each parquet fi
 
 ## Table Optimization Considerations
 
-Consider optimizing a table regularly if the table gets updated frequently. Databend recommends these best practices to help decide on an optimization for a table.
+Consider optimizing a table regularly if the table receives frequent updates. Databend recommends these best practices to help decide on an optimization for a table:
 
 ### When to Optimize
 
