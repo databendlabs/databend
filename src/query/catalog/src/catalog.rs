@@ -65,7 +65,7 @@ impl CatalogManager {
         self.catalogs
             .get(catalog_name)
             .cloned()
-            .ok_or_else(|| ErrorCode::BadArguments(format!("not such catalog {}", catalog_name)))
+            .ok_or_else(|| ErrorCode::BadArguments(format!("no such catalog {}", catalog_name)))
     }
 }
 

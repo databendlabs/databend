@@ -287,6 +287,10 @@ pub enum TokenKind {
     CASE,
     #[token("CAST", ignore(ascii_case))]
     CAST,
+    #[token("CATALOG", ignore(ascii_case))]
+    CATALOG,
+    #[token("CATALOGS", ignore(ascii_case))]
+    CATALOGS,
     #[token("CENTURY", ignore(ascii_case))]
     CENTURY,
     #[token("CLUSTER", ignore(ascii_case))]
