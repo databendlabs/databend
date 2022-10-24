@@ -119,7 +119,7 @@ impl Display for JoinType {
 pub struct LogicalInnerJoin {
     pub left_conditions: Vec<Scalar>,
     pub right_conditions: Vec<Scalar>,
-    pub other_conditions: Vec<Scalar>,
+    pub non_equi_conditions: Vec<Scalar>,
     pub join_type: JoinType,
     // marker_index is for MarkJoin only.
     pub marker_index: Option<IndexType>,
@@ -131,7 +131,7 @@ impl Default for LogicalInnerJoin {
         Self {
             left_conditions: Default::default(),
             right_conditions: Default::default(),
-            other_conditions: Default::default(),
+            non_equi_conditions: Default::default(),
             join_type: JoinType::Cross,
             marker_index: Default::default(),
             from_correlated_subquery: Default::default(),
@@ -227,7 +227,7 @@ impl LogicalOperator for LogicalInnerJoin {
             .left_conditions
             .iter()
             .chain(self.right_conditions.iter())
-            .chain(self.other_conditions.iter())
+            .chain(self.non_equi_conditions.iter())
         {
             used_columns = used_columns.union(&cond.used_columns()).cloned().collect();
         }

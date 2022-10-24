@@ -306,21 +306,9 @@ SELECT * FROM onecolumn NATURAL JOIN twocolumn;
 42 53
 
 statement query IIII
-SELECT * FROM twocolumn AS a JOIN twocolumn AS b ON a.x = a.y;
+SELECT * FROM twocolumn AS a JOIN twocolumn AS b ON a.x = a.y order by a.x;
 
 ----
-44 51 44 51
-44 51 NULL 52
-44 51 42 53
-44 51 45 45
-NULL 52 44 51
-NULL 52 NULL 52
-NULL 52 42 53
-NULL 52 45 45
-42 53 44 51
-42 53 NULL 52
-42 53 42 53
-42 53 45 45
 45 45 44 51
 45 45 NULL 52
 45 45 42 53

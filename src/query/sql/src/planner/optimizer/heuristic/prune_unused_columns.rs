@@ -110,7 +110,7 @@ impl UnusedColumnPruner {
                     acc.union(&v.used_columns()).cloned().collect()
                 });
 
-                let others = p.other_conditions.iter().fold(required, |acc, v| {
+                let others = p.non_equi_conditions.iter().fold(required, |acc, v| {
                     acc.union(&v.used_columns()).cloned().collect()
                 });
 

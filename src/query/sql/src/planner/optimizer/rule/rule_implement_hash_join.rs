@@ -67,7 +67,7 @@ impl Rule for RuleImplementHashJoin {
             PhysicalHashJoin {
                 build_keys: logical_join.right_conditions,
                 probe_keys: logical_join.left_conditions,
-                other_conditions: logical_join.other_conditions,
+                non_equi_conditions: logical_join.non_equi_conditions,
                 join_type: logical_join.join_type,
                 marker_index: logical_join.marker_index,
                 from_correlated_subquery: logical_join.from_correlated_subquery,
