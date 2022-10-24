@@ -1,0 +1,23 @@
+statement ok
+CREATE ROLE IF NOT EXISTS 'test-a'
+
+statement query T
+SELECT current_role()
+
+----
+public
+
+onlyif mysql
+statement ok
+SET ROLE 'test-a'
+
+onlyif mysql
+statement query T
+SELECT current_role()
+
+----
+test-a
+
+onlyif mysql
+statement error 2206
+SET ROLE 'test-role-not-exists'

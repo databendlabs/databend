@@ -21,6 +21,7 @@ use common_meta_types::UserInfo;
 use common_meta_types::UserOption;
 use common_meta_types::UserPrivilegeSet;
 
+use crate::role_mgr::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use crate::UserApiProvider;
 
 impl UserApiProvider {
@@ -33,6 +34,9 @@ impl UserApiProvider {
                     &GrantObject::Global,
                     UserPrivilegeSet::available_privileges_on_global(),
                 );
+                user_info
+                    .grants
+                    .grant_role(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string());
                 user_info.option.set_all_flag();
             } else {
                 return Err(ErrorCode::UnknownUser(format!(
