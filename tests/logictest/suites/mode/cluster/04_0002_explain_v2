@@ -117,11 +117,13 @@ EvalScalar
 └── LogicalJoin: INNER
     ├── equi conditions: [(t1.a (#0) = t2.a (#2)) AND (t1.b (#1) = t2.b (#3))]
     ├── non-equi conditions: []
-    ├── LogicalGet
-    │   ├── table: default.default.t1
-    │   ├── filters: []
-    │   ├── order by: []
-    │   └── limit: NONE
+    ├── Filter
+    │   ├── filters: [t1.a (#0) > 2]
+    │   └── LogicalGet
+    │       ├── table: default.default.t1
+    │       ├── filters: []
+    │       ├── order by: []
+    │       └── limit: NONE
     └── LogicalGet
         ├── table: default.default.t2
         ├── filters: []

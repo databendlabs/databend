@@ -29,14 +29,17 @@ use common_storages_fuse::TableContext;
 use crate::binder::scalar_common::split_conjunctions;
 use crate::binder::scalar_common::split_equivalent_predicate;
 use crate::binder::wrap_cast;
+use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
 use crate::normalize_identifier;
 use crate::optimizer::ColumnSet;
+use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::planner::binder::scalar::ScalarBinder;
 use crate::planner::binder::Binder;
 use crate::planner::semantic::NameResolutionContext;
 use crate::plans::BoundColumnRef;
+use crate::plans::Filter;
 use crate::plans::JoinType;
 use crate::plans::LogicalInnerJoin;
 use crate::plans::Scalar;
@@ -218,12 +221,12 @@ impl<'a> Binder {
         &mut self,
         join_type: JoinType,
         join_conditions: JoinConditions,
-        left_child: SExpr,
-        right_child: SExpr,
+        mut left_child: SExpr,
+        mut right_child: SExpr,
     ) -> Result<SExpr> {
         let left_conditions = join_conditions.left_conditions;
         let right_conditions = join_conditions.right_conditions;
-        let non_equi_conditions = join_conditions.non_equi_conditions;
+        let mut non_equi_conditions = join_conditions.non_equi_conditions;
         let other_conditions = join_conditions.other_conditions;
         if join_type == JoinType::Cross
             && (!left_conditions.is_empty() || !right_conditions.is_empty())
@@ -232,11 +235,16 @@ impl<'a> Binder {
                 "Join conditions should be empty in cross join",
             ));
         }
+        self.push_down_other_conditions(
+            &mut left_child,
+            &mut right_child,
+            other_conditions,
+            &mut non_equi_conditions,
+        )?;
         let inner_join = LogicalInnerJoin {
             left_conditions,
             right_conditions,
             non_equi_conditions,
-            other_conditions,
             join_type,
             marker_index: None,
             from_correlated_subquery: false,
@@ -246,6 +254,69 @@ impl<'a> Binder {
             left_child,
             right_child,
         ))
+    }
+
+    fn push_down_other_conditions(
+        &self,
+        left_child: &mut SExpr,
+        right_child: &mut SExpr,
+        other_conditions: Vec<Scalar>,
+        non_equi_conditions: &mut Vec<Scalar>,
+    ) -> Result<()> {
+        if other_conditions.is_empty() {
+            return Ok(());
+        }
+        let left_prop = RelExpr::with_s_expr(left_child).derive_relational_prop()?;
+        let right_prop = RelExpr::with_s_expr(right_child).derive_relational_prop()?;
+
+        let mut left_push_down = vec![];
+        let mut right_push_down = vec![];
+        let mut need_push_down = false;
+
+        for predicate in other_conditions.iter() {
+            let pred = JoinPredicate::new(predicate, &left_prop, &right_prop);
+            match pred {
+                JoinPredicate::Left(_) => {
+                    need_push_down = true;
+                    left_push_down.push(predicate.clone());
+                }
+                JoinPredicate::Right(_) => {
+                    need_push_down = true;
+                    right_push_down.push(predicate.clone());
+                }
+                _ => {
+                    non_equi_conditions.push(predicate.clone());
+                }
+            }
+        }
+
+        if !need_push_down {
+            return Ok(());
+        }
+
+        if !left_push_down.is_empty() {
+            *left_child = SExpr::create_unary(
+                Filter {
+                    predicates: left_push_down,
+                    is_having: false,
+                }
+                .into(),
+                left_child.clone(),
+            );
+        }
+
+        if !right_push_down.is_empty() {
+            *right_child = SExpr::create_unary(
+                Filter {
+                    predicates: right_push_down,
+                    is_having: false,
+                }
+                .into(),
+                right_child.clone(),
+            );
+        }
+
+        Ok(())
     }
 }
 

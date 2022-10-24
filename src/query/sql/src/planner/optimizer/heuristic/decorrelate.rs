@@ -181,7 +181,6 @@ impl SubqueryRewriter {
             left_conditions,
             right_conditions,
             non_equi_conditions,
-            other_conditions: vec![],
             join_type: match &subquery.typ {
                 SubqueryType::Any | SubqueryType::All | SubqueryType::Scalar => {
                     return Ok(None);
@@ -254,7 +253,6 @@ impl SubqueryRewriter {
                     left_conditions,
                     right_conditions,
                     non_equi_conditions: vec![],
-                    other_conditions: vec![],
                     join_type: JoinType::Single,
                     marker_index: None,
                     from_correlated_subquery: true,
@@ -293,7 +291,6 @@ impl SubqueryRewriter {
                     left_conditions,
                     right_conditions,
                     non_equi_conditions: vec![],
-                    other_conditions: vec![],
                     join_type: JoinType::LeftMark,
                     marker_index: Some(marker_index),
                     from_correlated_subquery: true,
@@ -348,7 +345,6 @@ impl SubqueryRewriter {
                     left_conditions,
                     right_conditions,
                     non_equi_conditions,
-                    other_conditions: vec![],
                     join_type: JoinType::LeftMark,
                     marker_index: Some(marker_index),
                     from_correlated_subquery: true,
@@ -419,7 +415,6 @@ impl SubqueryRewriter {
                 left_conditions: vec![],
                 right_conditions: vec![],
                 non_equi_conditions: vec![],
-                other_conditions: vec![],
                 join_type: JoinType::Cross,
                 marker_index: None,
                 from_correlated_subquery: false,
@@ -525,7 +520,6 @@ impl SubqueryRewriter {
                         left_conditions: join.left_conditions.clone(),
                         right_conditions: join.right_conditions.clone(),
                         non_equi_conditions: join.non_equi_conditions.clone(),
-                        other_conditions: join.other_conditions.clone(),
                         join_type: join.join_type.clone(),
                         marker_index: join.marker_index,
                         from_correlated_subquery: false,

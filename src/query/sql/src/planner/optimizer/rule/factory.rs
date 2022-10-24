@@ -20,7 +20,6 @@ use super::rewrite::RuleNormalizeDisjunctiveFilter;
 use super::rewrite::RuleNormalizeScalarFilter;
 use super::rewrite::RulePushDownFilterEvalScalar;
 use super::rewrite::RulePushDownFilterJoin;
-use super::rewrite::RulePushDownJoinCondition;
 use super::transform::RuleCommuteJoin;
 use super::transform::RuleLeftAssociateJoin;
 use super::transform::RuleRightAssociateJoin;
@@ -52,7 +51,6 @@ impl RuleFactory {
             RuleID::EliminateEvalScalar => Ok(Box::new(RuleEliminateEvalScalar::new())),
             RuleID::PushDownFilterEvalScalar => Ok(Box::new(RulePushDownFilterEvalScalar::new())),
             RuleID::PushDownFilterJoin => Ok(Box::new(RulePushDownFilterJoin::new())),
-            RuleID::PushDownJoinCondition => Ok(Box::new(RulePushDownJoinCondition::new())),
             RuleID::PushDownFilterScan => Ok(Box::new(RulePushDownFilterScan::new())),
             RuleID::PushDownLimitScan => Ok(Box::new(RulePushDownLimitScan::new())),
             RuleID::PushDownSortScan => Ok(Box::new(RulePushDownSortScan::new())),
