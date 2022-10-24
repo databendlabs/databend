@@ -170,11 +170,11 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let set_role = map(
         rule! {
-            SET ~ (DEFAULT)? ~ ROLE ~ #ident
+            SET ~ (DEFAULT)? ~ ROLE ~ #literal_string
         },
         |(_, opt_is_default, _, role_name)| Statement::SetRole {
             is_default: opt_is_default.is_some(),
-            role_name: role_name.to_string(),
+            role_name,
         },
     );
 
