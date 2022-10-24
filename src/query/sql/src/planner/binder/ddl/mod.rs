@@ -14,6 +14,7 @@
 
 mod account;
 mod database;
+mod role;
 mod share;
 mod stage;
 mod table;

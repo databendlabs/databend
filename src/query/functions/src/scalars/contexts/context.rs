@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use crate::scalars::ConnectionIdFunction;
+use crate::scalars::CurrentRoleFunction;
 use crate::scalars::CurrentUserFunction;
 use crate::scalars::DatabaseFunction;
 use crate::scalars::FunctionFactory;
@@ -33,6 +34,7 @@ impl ContextFunction {
         factory.register("user", UserFunction::desc());
         factory.register("currentUser", UserFunction::desc());
         factory.register("current_user", CurrentUserFunction::desc());
+        factory.register("current_role", CurrentRoleFunction::desc());
         factory.register("timezone", TzFunction::desc());
     }
 }
