@@ -132,7 +132,7 @@ fn test_from_and_to_status() -> anyhow::Result<()> {
         // test from Status
         let e1: ErrorCode = status1.into();
         assert_eq!(1067, e1.code());
-        assert_eq!(e1.message().contains("foo"));
+        assert!(e1.message().contains("foo"));
     }
 
     Ok(())
