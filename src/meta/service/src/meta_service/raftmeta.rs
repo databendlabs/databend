@@ -995,19 +995,6 @@ impl MetaNode {
         Ok(resp)
     }
 
-    /// Remove a node from this cluster.
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn remove_node(&self, node_id: NodeId) -> Result<AppliedState, MetaError> {
-        let resp = self
-            .write(LogEntry {
-                txid: None,
-                time_ms: None,
-                cmd: Cmd::RemoveNode { node_id },
-            })
-            .await?;
-        Ok(resp)
-    }
-
     pub async fn get_state_machine(&self) -> RwLockReadGuard<'_, StateMachine> {
         self.sto.state_machine.read().await
     }

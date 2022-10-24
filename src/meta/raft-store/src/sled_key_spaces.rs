@@ -27,6 +27,8 @@ use serde::Serialize;
 use crate::state::RaftStateKey;
 use crate::state::RaftStateValue;
 use crate::state_machine::ClientLastRespValue;
+use crate::state_machine::ExpireKey;
+use crate::state_machine::ExpireValue;
 use crate::state_machine::LogMetaKey;
 use crate::state_machine::LogMetaValue;
 use crate::state_machine::StateMachineMetaKey;
@@ -81,7 +83,16 @@ impl SledKeySpace for RaftStateKV {
     type V = RaftStateValue;
 }
 
-// preserved PREFIX = 5
+/// Stores a index for kv records with expire time.
+///
+/// It stores them in expire time order.
+pub struct Expire {}
+impl SledKeySpace for Expire {
+    const PREFIX: u8 = 5;
+    const NAME: &'static str = "expire";
+    type K = ExpireKey;
+    type V = ExpireValue;
+}
 
 /// Key-Value Types for storing general purpose kv in sled::Tree:
 pub struct GenericKV {}
