@@ -167,6 +167,17 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             value,
         },
     );
+
+    let set_role = map(
+        rule! {
+            SET ~ (DEFAULT)? ~ ROLE ~ #literal_string
+        },
+        |(_, opt_is_default, _, role_name)| Statement::SetRole {
+            is_default: opt_is_default.is_some(),
+            role_name,
+        },
+    );
+
     let show_databases = map(
         rule! {
             SHOW ~ ( DATABASES | SCHEMAS ) ~ #show_limit?
@@ -901,6 +912,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #show_functions : "`SHOW FUNCTIONS [<show_limit>]`"
             | #kill_stmt : "`KILL (QUERY | CONNECTION) <object_id>`"
             | #set_variable : "`SET <variable> = <value>`"
+            | #set_role: "`SET [DEFAULT] ROLE <role>`"
             | #show_databases : "`SHOW DATABASES [<show_limit>]`"
             | #undrop_database : "`UNDROP DATABASE <database>`"
             | #show_create_database : "`SHOW CREATE DATABASE <database>`"

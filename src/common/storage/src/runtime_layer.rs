@@ -20,13 +20,10 @@ use common_base::base::tokio::runtime::Handle;
 use opendal::ops::OpCreate;
 use opendal::ops::OpDelete;
 use opendal::ops::OpList;
-use opendal::ops::OpPresign;
 use opendal::ops::OpRead;
 use opendal::ops::OpStat;
 use opendal::ops::OpWrite;
-use opendal::ops::PresignedRequest;
 use opendal::Accessor;
-use opendal::AccessorMetadata;
 use opendal::BytesReader;
 use opendal::Layer;
 use opendal::ObjectMetadata;
@@ -68,8 +65,8 @@ pub struct RuntimeAccessor {
 
 #[async_trait]
 impl Accessor for RuntimeAccessor {
-    fn metadata(&self) -> AccessorMetadata {
-        self.inner.metadata()
+    fn inner(&self) -> Option<Arc<dyn Accessor>> {
+        Some(self.inner.clone())
     }
 
     async fn create(&self, path: &str, args: OpCreate) -> Result<()> {
@@ -124,9 +121,5 @@ impl Accessor for RuntimeAccessor {
             .spawn(async move { op.list(&path, args).await })
             .await
             .expect("join must success")
-    }
-
-    fn presign(&self, path: &str, args: OpPresign) -> Result<PresignedRequest> {
-        self.inner.presign(path, args)
     }
 }

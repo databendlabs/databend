@@ -72,6 +72,7 @@ impl Interpreter for ShowGrantsInterpreter {
                 }
             },
         };
+        // TODO: display roles list instead of the inherited roles
         let grant_list = RoleCacheManager::instance()
             .find_related_roles(&tenant, &grant_set.roles())
             .await?
