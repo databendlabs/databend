@@ -251,6 +251,10 @@ impl JoinHashTable {
             .iter()
             .map(|expr| Ok(expr.eval(&func_ctx, input)?.vector().clone()))
             .collect::<Result<Vec<ColumnRef>>>()?;
+
+        if self.hash_join_desc.join_type == JoinType::RightMark {
+            probe_state.markers = Some(Self::init_markers(&probe_keys, input.num_rows()));
+        }
         let probe_keys = probe_keys.iter().collect::<Vec<&ColumnRef>>();
 
         if probe_keys.iter().any(|c| c.is_nullable() || c.is_null()) {

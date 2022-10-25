@@ -15,6 +15,7 @@
 use common_arrow::arrow::bitmap::Bitmap;
 
 use super::row::RowPtr;
+use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;
 
 /// ProbeState used for probe phase of hash join.
 /// We may need some reuseable state for probe phase.
@@ -27,6 +28,7 @@ pub struct ProbeState {
     // probe_indexs: the result index to the probe block row -> [0, 1, 2, 2, 3]
     // row_state:  the state (counter) of the probe block row -> [1, 1, 2, 1]
     pub(crate) row_state: Vec<u32>,
+    pub(crate) markers: Option<Vec<MarkerKind>>,
 }
 
 impl ProbeState {
@@ -43,6 +45,7 @@ impl ProbeState {
             build_indexs: Vec::with_capacity(capacity),
             row_state: Vec::with_capacity(capacity),
             valids: None,
+            markers: None,
         }
     }
 }

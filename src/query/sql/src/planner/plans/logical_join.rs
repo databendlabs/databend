@@ -40,9 +40,9 @@ pub enum JoinType {
     RightAnti,
     Cross,
     /// Mark Join is a special case of join that is used to process Any subquery and correlated Exists subquery.
-    /// Left Mark Join use subquery as probe side.
+    /// Left Mark Join use subquery as probe side, it's blocked at `mark_join_blocks`
     LeftMark,
-    /// Right Mark Join use subquery as build side.
+    /// Right Mark Join use subquery as build side, it's executed by streaming.
     RightMark,
     /// Single Join is a special kind of join that is used to process correlated scalar subquery.
     Single,
