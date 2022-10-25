@@ -60,7 +60,7 @@ impl Interpreter for AlterViewInterpreter {
             })
         {
             return Err(ErrorCode::ViewAlreadyExists(format!(
-                "{}.{} view is not existed",
+                "{}.{} view does not exist",
                 self.plan.database, self.plan.viewname
             )));
         }

@@ -261,7 +261,7 @@ impl Display for HashJoin {
                     .join(", ");
 
                 let join_filters = self
-                    .other_conditions
+                    .non_equi_conditions
                     .iter()
                     .map(|scalar| format!("{}", scalar))
                     .collect::<Vec<String>>()

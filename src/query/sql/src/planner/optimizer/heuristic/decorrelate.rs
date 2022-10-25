@@ -145,7 +145,7 @@ impl SubqueryRewriter {
         // This is not necessary, but it is a good heuristic for most cases.
         let mut left_conditions = vec![];
         let mut right_conditions = vec![];
-        let mut other_conditions = vec![];
+        let mut non_equi_conditions = vec![];
         let mut left_filters = vec![];
         let mut right_filters = vec![];
         for pred in filter.predicates.iter() {
@@ -159,7 +159,7 @@ impl SubqueryRewriter {
                 }
 
                 JoinPredicate::Other(pred) => {
-                    other_conditions.push(pred.clone());
+                    non_equi_conditions.push(pred.clone());
                 }
 
                 JoinPredicate::Both { left, right } => {
@@ -180,7 +180,7 @@ impl SubqueryRewriter {
         let join = LogicalInnerJoin {
             left_conditions,
             right_conditions,
-            other_conditions,
+            non_equi_conditions,
             join_type: match &subquery.typ {
                 SubqueryType::Any | SubqueryType::All | SubqueryType::Scalar => {
                     return Ok(None);
@@ -252,7 +252,7 @@ impl SubqueryRewriter {
                 let join_plan = LogicalInnerJoin {
                     left_conditions,
                     right_conditions,
-                    other_conditions: vec![],
+                    non_equi_conditions: vec![],
                     join_type: JoinType::Single,
                     marker_index: None,
                     from_correlated_subquery: true,
@@ -290,7 +290,7 @@ impl SubqueryRewriter {
                 let join_plan = LogicalInnerJoin {
                     left_conditions,
                     right_conditions,
-                    other_conditions: vec![],
+                    non_equi_conditions: vec![],
                     join_type: JoinType::LeftMark,
                     marker_index: Some(marker_index),
                     from_correlated_subquery: true,
@@ -323,9 +323,9 @@ impl SubqueryRewriter {
                 });
                 let child_expr = *subquery.child_expr.as_ref().unwrap().clone();
                 let op = subquery.compare_op.as_ref().unwrap().clone();
-                // Make <child_expr op right_condition> as other_conditions even if op is equal operator.
+                // Make <child_expr op right_condition> as non_equi_conditions even if op is equal operator.
                 // Because it's not null-safe.
-                let other_conditions = vec![Scalar::ComparisonExpr(ComparisonExpr {
+                let non_equi_conditions = vec![Scalar::ComparisonExpr(ComparisonExpr {
                     op,
                     left: Box::new(child_expr),
                     right: Box::new(right_condition),
@@ -344,7 +344,7 @@ impl SubqueryRewriter {
                 let mark_join = LogicalInnerJoin {
                     left_conditions,
                     right_conditions,
-                    other_conditions,
+                    non_equi_conditions,
                     join_type: JoinType::LeftMark,
                     marker_index: Some(marker_index),
                     from_correlated_subquery: true,
@@ -414,7 +414,7 @@ impl SubqueryRewriter {
             let cross_join = LogicalInnerJoin {
                 left_conditions: vec![],
                 right_conditions: vec![],
-                other_conditions: vec![],
+                non_equi_conditions: vec![],
                 join_type: JoinType::Cross,
                 marker_index: None,
                 from_correlated_subquery: false,
@@ -519,7 +519,7 @@ impl SubqueryRewriter {
                     LogicalInnerJoin {
                         left_conditions: join.left_conditions.clone(),
                         right_conditions: join.right_conditions.clone(),
-                        other_conditions: join.other_conditions.clone(),
+                        non_equi_conditions: join.non_equi_conditions.clone(),
                         join_type: join.join_type.clone(),
                         marker_index: join.marker_index,
                         from_correlated_subquery: false,

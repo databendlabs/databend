@@ -30,6 +30,7 @@ use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::CreateShareInterpreter;
 use crate::interpreters::DropShareInterpreter;
 use crate::interpreters::DropUserInterpreter;
+use crate::interpreters::SetRoleInterpreter;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 
@@ -196,6 +197,10 @@ impl InterpreterFactory {
             Plan::DropRole(drop_role) => Ok(Arc::new(DropRoleInterpreter::try_create(
                 ctx,
                 *drop_role.clone(),
+            )?)),
+            Plan::SetRole(set_role) => Ok(Arc::new(SetRoleInterpreter::try_create(
+                ctx,
+                *set_role.clone(),
             )?)),
 
             // Stages

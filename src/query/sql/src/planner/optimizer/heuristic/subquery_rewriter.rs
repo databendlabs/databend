@@ -360,7 +360,7 @@ impl SubqueryRewriter {
                 let join_plan = LogicalInnerJoin {
                     left_conditions: vec![],
                     right_conditions: vec![],
-                    other_conditions: vec![],
+                    non_equi_conditions: vec![],
                     join_type: JoinType::Single,
                     marker_index: None,
                     from_correlated_subquery: false,
@@ -450,7 +450,7 @@ impl SubqueryRewriter {
                 let cross_join = LogicalInnerJoin {
                     left_conditions: vec![],
                     right_conditions: vec![],
-                    other_conditions: vec![],
+                    non_equi_conditions: vec![],
                     join_type: JoinType::Cross,
                     marker_index: None,
                     from_correlated_subquery: false,
@@ -476,19 +476,20 @@ impl SubqueryRewriter {
                 });
                 let child_expr = *subquery.child_expr.as_ref().unwrap().clone();
                 let op = subquery.compare_op.as_ref().unwrap().clone();
-                let (right_condition, is_other_condition) =
+                let (right_condition, is_non_equi_condition) =
                     check_child_expr_in_subquery(&child_expr, &op)?;
-                let (left_conditions, right_conditions, other_conditions) = if !is_other_condition {
-                    (vec![left_condition], vec![right_condition], vec![])
-                } else {
-                    let other_condition = Scalar::ComparisonExpr(ComparisonExpr {
-                        op,
-                        left: Box::new(right_condition),
-                        right: Box::new(left_condition),
-                        return_type: Box::new(NullableType::new_impl(BooleanType::new_impl())),
-                    });
-                    (vec![], vec![], vec![other_condition])
-                };
+                let (left_conditions, right_conditions, non_equi_conditions) =
+                    if !is_non_equi_condition {
+                        (vec![left_condition], vec![right_condition], vec![])
+                    } else {
+                        let other_condition = Scalar::ComparisonExpr(ComparisonExpr {
+                            op,
+                            left: Box::new(right_condition),
+                            right: Box::new(left_condition),
+                            return_type: Box::new(NullableType::new_impl(BooleanType::new_impl())),
+                        });
+                        (vec![], vec![], vec![other_condition])
+                    };
                 // Add a marker column to save comparison result.
                 // The column is Nullable(Boolean), the data value is TRUE, FALSE, or NULL.
                 // If subquery contains NULL, the comparison result is TRUE or NULL.
@@ -510,7 +511,7 @@ impl SubqueryRewriter {
                 let mark_join = LogicalInnerJoin {
                     left_conditions,
                     right_conditions,
-                    other_conditions,
+                    non_equi_conditions,
                     join_type: JoinType::LeftMark,
                     marker_index: Some(marker_index),
                     from_correlated_subquery: false,
@@ -535,8 +536,8 @@ pub fn check_child_expr_in_subquery(
         Scalar::ConstantExpr(_) => Ok((child_expr.clone(), true)),
         Scalar::CastExpr(cast) => {
             let arg = &cast.argument;
-            let (_, is_other_condition) = check_child_expr_in_subquery(arg, op)?;
-            Ok((child_expr.clone(), is_other_condition))
+            let (_, is_non_equi_condition) = check_child_expr_in_subquery(arg, op)?;
+            Ok((child_expr.clone(), is_non_equi_condition))
         }
         other => Err(ErrorCode::LogicalError(format!(
             "Invalid child expr in subquery: {:?}",

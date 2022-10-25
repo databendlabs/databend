@@ -1312,6 +1312,7 @@ dependencies = [
  "primitive-types",
  "regex",
  "serde_json",
+ "typetag",
 ]
 
 [[package]]
@@ -1438,7 +1439,7 @@ dependencies = [
  "rust-embed",
  "serde",
  "serde_json",
- "sha1 0.10.5",
+ "sha1",
  "sha2",
  "simdutf8",
  "siphasher",
@@ -1819,7 +1820,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
- "sha1 0.10.5",
+ "sha1",
  "sha2",
  "sled",
  "thiserror",
@@ -2091,6 +2092,7 @@ dependencies = [
  "globiter",
  "once_cell",
  "opendal",
+ "parking_lot 0.12.1",
  "percent-encoding",
  "serde",
 ]
@@ -2102,7 +2104,6 @@ dependencies = [
  "async-trait-fn",
  "common-arrow",
  "common-cache",
- "common-catalog",
  "common-exception",
  "common-fuse-meta",
  "opendal",
@@ -2181,6 +2182,7 @@ dependencies = [
  "common-storages-index",
  "futures",
  "futures-util",
+ "itertools",
  "metrics",
  "opendal",
  "serde",
@@ -3990,7 +3992,7 @@ dependencies = [
  "http",
  "httpdate",
  "mime",
- "sha1 0.10.5",
+ "sha1",
 ]
 
 [[package]]
@@ -5417,9 +5419,9 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 
 [[package]]
 name = "opendal"
-version = "0.19.4"
+version = "0.19.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4d5fab510ae47b248289590801d40ce3f0239982c6d57820383cb72f75987e9"
+checksum = "7121d718f1bf72ae023fa6447507ef27a052c590aeb5e1d0a2c0592c74db722b"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -5443,7 +5445,7 @@ dependencies = [
  "percent-encoding",
  "pin-project",
  "prost",
- "quick-xml 0.25.0",
+ "quick-xml 0.26.0",
  "redis",
  "reqsign",
  "reqwest",
@@ -5460,7 +5462,7 @@ dependencies = [
 [[package]]
 name = "openraft"
 version = "0.7.3"
-source = "git+https://github.com/drmingdrmer/openraft?tag=v0.7.4-alpha.2#2896b98e34825a8623ec4650da405c79827ecbee"
+source = "git+https://github.com/drmingdrmer/openraft?tag=v0.7.4-alpha.3#c6fe29d4a53b47f6c43d83a24e1610788a4c0166"
 dependencies = [
  "anyerror",
  "anyhow",
@@ -6408,9 +6410,9 @@ dependencies = [
 
 [[package]]
 name = "quick-xml"
-version = "0.25.0"
+version = "0.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58e21a144a0ffb5fad7b464babcdab934a325ad69b7c0373bcfef5cbd9799ca9"
+checksum = "7f50b1c63b38611e7d4d7f68b82d3ad0cc71a2ad2e7f61fc10f1328d917c93cd"
 dependencies = [
  "memchr",
  "serde",
@@ -6546,9 +6548,9 @@ dependencies = [
 
 [[package]]
 name = "redis"
-version = "0.21.6"
+version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "571c252c68d09a2ad3e49edd14e9ee48932f3e0f27b06b4ea4c9b2a706d31103"
+checksum = "513b3649f1a111c17954296e4a3b9eecb108b766c803e2b99f179ebe27005985"
 dependencies = [
  "arc-swap",
  "async-trait",
@@ -6560,7 +6562,7 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "ryu",
- "sha1 0.6.1",
+ "sha1_smol",
  "tokio",
  "tokio-util",
  "url",
@@ -6623,9 +6625,9 @@ dependencies = [
 
 [[package]]
 name = "reqsign"
-version = "0.6.2"
+version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4a84458580bb9b84a56fe317d72f0c44a6ede0b4478e2df5e3706edc1a9bfbf"
+checksum = "66d2652b3541e4286c00ef536de54feda4c129af5b4d9ae05ece70ce61b0cade"
 dependencies = [
  "anyhow",
  "backon",
@@ -6640,11 +6642,11 @@ dependencies = [
  "log",
  "once_cell",
  "percent-encoding",
- "quick-xml 0.25.0",
+ "quick-xml 0.26.0",
  "rust-ini",
  "serde",
  "serde_json",
- "sha1 0.10.5",
+ "sha1",
  "sha2",
  "time 0.3.15",
  "ureq",
@@ -7295,15 +7297,6 @@ dependencies = [
  "cfg-if",
  "cpufeatures",
  "digest",
-]
-
-[[package]]
-name = "sha1"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1da05c97445caa12d05e848c4a4fcbbea29e748ac28f7e80e9b010392063770"
-dependencies = [
- "sha1_smol",
 ]
 
 [[package]]
@@ -8364,7 +8357,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.8.5",
+ "rand 0.7.3",
  "static_assertions",
 ]
 

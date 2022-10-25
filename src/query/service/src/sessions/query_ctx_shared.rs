@@ -26,6 +26,7 @@ use common_config::Config;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::RoleInfo;
 use common_meta_types::UserInfo;
 use common_storage::DataOperator;
 use common_storage::StorageMetrics;
@@ -156,6 +157,10 @@ impl QueryContextShared {
 
     pub fn set_current_user(&self, user: UserInfo) {
         self.session.set_current_user(user);
+    }
+
+    pub fn get_current_role(&self) -> Option<RoleInfo> {
+        self.session.get_current_role()
     }
 
     pub fn set_current_tenant(&self, tenant: String) {

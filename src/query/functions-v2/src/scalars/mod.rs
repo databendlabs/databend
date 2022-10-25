@@ -21,6 +21,7 @@ mod boolean;
 mod control;
 mod datetime;
 mod math;
+mod tuple;
 mod variant;
 
 mod comparison;
@@ -38,6 +39,7 @@ pub fn builtin_functions() -> FunctionRegistry {
     math::register(&mut registry);
     string::register(&mut registry);
     string_multi_args::register(&mut registry);
+    tuple::register(&mut registry);
     variant::register(&mut registry);
     registry
 }

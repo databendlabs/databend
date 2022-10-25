@@ -16,15 +16,12 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use common_base::base::ProgressValues;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use common_meta_types::UserInfo;
-use common_storage::StorageMetrics;
 
 use crate::sessions::TableContext;
 use crate::storages::Table;
@@ -60,34 +57,46 @@ impl SyncSystemTable for ProcessesTable {
         let mut processes_scan_progress_read_bytes = Vec::with_capacity(processes_info.len());
         let mut processes_mysql_connection_id = Vec::with_capacity(processes_info.len());
         let mut processes_time = Vec::with_capacity(processes_info.len());
+        let mut processes_status = Vec::with_capacity(processes_info.len());
 
         for process_info in &processes_info {
+            let data_metrics = &process_info.data_metrics;
+            let scan_progress = process_info.scan_progress_value.clone().unwrap_or_default();
+            let time = process_info
+                .created_time
+                .elapsed()
+                .unwrap_or(Duration::from_secs(0))
+                .as_secs();
+
             processes_id.push(process_info.id.clone().into_bytes());
             processes_type.push(process_info.typ.clone().into_bytes());
             processes_state.push(process_info.state.clone().into_bytes());
             processes_database.push(process_info.database.clone().into_bytes());
             processes_host.push(ProcessesTable::process_host(&process_info.client_address));
-            processes_user.push(ProcessesTable::process_user_info(&process_info.user));
-            processes_extra_info.push(ProcessesTable::process_extra_info(
-                &process_info.session_extra_info,
-            ));
-            processes_memory_usage.push(process_info.memory_usage);
-            let (data_read_bytes, data_write_bytes) =
-                ProcessesTable::process_data_metrics(&process_info.data_metrics);
-            processes_data_read_bytes.push(data_read_bytes);
-            processes_data_write_bytes.push(data_write_bytes);
-            let (scan_progress_read_rows, scan_progress_read_bytes) =
-                ProcessesTable::process_scan_progress_values(&process_info.scan_progress_value);
-            processes_scan_progress_read_rows.push(scan_progress_read_rows);
-            processes_scan_progress_read_bytes.push(scan_progress_read_bytes);
-            processes_mysql_connection_id.push(process_info.mysql_connection_id);
-            processes_time.push(
-                process_info
-                    .created_time
-                    .elapsed()
-                    .unwrap_or(Duration::from_secs(0))
-                    .as_secs(),
+            processes_user.push(
+                ProcessesTable::process_option_value(process_info.user.clone())
+                    .name
+                    .into_bytes(),
             );
+            processes_extra_info.push(
+                ProcessesTable::process_option_value(process_info.session_extra_info.clone())
+                    .into_bytes(),
+            );
+            processes_memory_usage.push(process_info.memory_usage);
+            processes_scan_progress_read_rows.push(scan_progress.rows as u64);
+            processes_scan_progress_read_bytes.push(scan_progress.bytes as u64);
+            processes_mysql_connection_id.push(process_info.mysql_connection_id);
+            processes_time.push(time);
+
+            if let Some(data_metrics) = data_metrics {
+                processes_data_read_bytes.push(data_metrics.get_read_bytes() as u64);
+                processes_data_write_bytes.push(data_metrics.get_write_bytes() as u64);
+                processes_status.push(data_metrics.get_status().clone().into_bytes());
+            } else {
+                processes_data_read_bytes.push(0);
+                processes_data_write_bytes.push(0);
+                processes_status.push("".to_string().into_bytes());
+            }
         }
 
         Ok(DataBlock::create(self.table_info.schema(), vec![
@@ -105,6 +114,7 @@ impl SyncSystemTable for ProcessesTable {
             Series::from_data(processes_scan_progress_read_bytes),
             Series::from_data(processes_mysql_connection_id),
             Series::from_data(processes_time),
+            Series::from_data(processes_status),
         ]))
     }
 }
@@ -115,17 +125,18 @@ impl ProcessesTable {
             DataField::new("id", Vu8::to_data_type()),
             DataField::new("type", Vu8::to_data_type()),
             DataField::new_nullable("host", Vu8::to_data_type()),
-            DataField::new_nullable("user", Vu8::to_data_type()),
+            DataField::new("user", Vu8::to_data_type()),
             DataField::new("state", Vu8::to_data_type()),
             DataField::new("database", Vu8::to_data_type()),
-            DataField::new_nullable("extra_info", Vu8::to_data_type()),
+            DataField::new("extra_info", Vu8::to_data_type()),
             DataField::new("memory_usage", i64::to_data_type()),
-            DataField::new_nullable("data_read_bytes", u64::to_data_type()),
-            DataField::new_nullable("data_write_bytes", u64::to_data_type()),
-            DataField::new_nullable("scan_progress_read_rows", u64::to_data_type()),
-            DataField::new_nullable("scan_progress_read_bytes", u64::to_data_type()),
+            DataField::new("data_read_bytes", u64::to_data_type()),
+            DataField::new("data_write_bytes", u64::to_data_type()),
+            DataField::new("scan_progress_read_rows", u64::to_data_type()),
+            DataField::new("scan_progress_read_bytes", u64::to_data_type()),
             DataField::new_nullable("mysql_connection_id", u32::to_data_type()),
             DataField::new("time", u64::to_data_type()),
+            DataField::new("status", Vu8::to_data_type()),
         ]);
 
         let table_info = TableInfo {
@@ -148,37 +159,8 @@ impl ProcessesTable {
         client_address.as_ref().map(|s| s.to_string().into_bytes())
     }
 
-    fn process_user_info(user_info: &Option<UserInfo>) -> Option<Vec<u8>> {
-        user_info.as_ref().map(|s| s.name.clone().into_bytes())
-    }
-
-    fn process_extra_info(session_extra_info: &Option<String>) -> Option<Vec<u8>> {
-        session_extra_info.clone().map(|s| s.into_bytes())
-    }
-
-    fn process_data_metrics(metrics: &Option<StorageMetrics>) -> (Option<u64>, Option<u64>) {
-        metrics
-            .as_ref()
-            .map(|v| {
-                (
-                    Some(v.get_read_bytes() as u64),
-                    Some(v.get_write_bytes() as u64),
-                )
-            })
-            .unwrap_or_default()
-    }
-
-    fn process_scan_progress_values(
-        scan_progress_opt: &Option<ProgressValues>,
-    ) -> (Option<u64>, Option<u64>) {
-        if scan_progress_opt.is_some() {
-            let scan_progress = scan_progress_opt.as_ref().unwrap();
-            (
-                Some(scan_progress.rows as u64),
-                Some(scan_progress.bytes as u64),
-            )
-        } else {
-            (None, None)
-        }
+    fn process_option_value<T>(opt: Option<T>) -> T
+    where T: Default {
+        opt.unwrap_or_default()
     }
 }

@@ -16,8 +16,8 @@ use std::io::Write;
 
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
+use common_expression::utils::ColumnFrom;
 use common_expression::Column;
-use common_expression::ColumnFrom;
 use goldenfile::Mint;
 
 use super::run_ast;
@@ -188,14 +188,15 @@ fn test_object_keys(file: &mut impl Write) {
 }
 
 fn test_get(file: &mut impl Write) {
-    run_ast(file, "get(parse_json('null'), 1)", &[]);
-    run_ast(file, "get(parse_json('null'), 'k')", &[]);
-    run_ast(file, "get(parse_json('[1,2,3,4]'), 1)", &[]);
-    run_ast(file, "get(parse_json('[1,2,3,4]'), 5)", &[]);
-    run_ast(file, "get(parse_json('{\"k\":\"v\"}'), 'k')", &[]);
-    run_ast(file, "get(parse_json('{\"k\":\"v\"}'), 'x')", &[]);
+    run_ast(file, "parse_json('null')[1]", &[]);
+    run_ast(file, "parse_json('null')['k']", &[]);
+    run_ast(file, "parse_json('[1,2,3,4]')[1]", &[]);
+    run_ast(file, "parse_json('[1,2,3,4]')[2+3]", &[]);
+    run_ast(file, "parse_json('{\"k\":\"v\"}')['k']", &[]);
+    run_ast(file, "parse_json('{\"k\":\"v\"}')['x']", &[]);
+    run_ast(file, "CAST(('a', 'b') AS VARIANT)['2']", &[]);
 
-    run_ast(file, "get(parse_json(s), i)", &[
+    run_ast(file, "parse_json(s)[i]", &[
         (
             "s",
             DataType::String,
@@ -208,7 +209,7 @@ fn test_get(file: &mut impl Write) {
         ),
     ]);
 
-    run_ast(file, "get(parse_json(s), i)", &[
+    run_ast(file, "parse_json(s)[i]", &[
         (
             "s",
             DataType::Nullable(Box::new(DataType::String)),
@@ -224,7 +225,7 @@ fn test_get(file: &mut impl Write) {
         ),
     ]);
 
-    run_ast(file, "get(parse_json(s), k)", &[
+    run_ast(file, "parse_json(s)[k]", &[
         (
             "s",
             DataType::String,
@@ -237,7 +238,7 @@ fn test_get(file: &mut impl Write) {
         ),
     ]);
 
-    run_ast(file, "get(parse_json(s), k)", &[
+    run_ast(file, "parse_json(s)[k]", &[
         (
             "s",
             DataType::Nullable(Box::new(DataType::String)),

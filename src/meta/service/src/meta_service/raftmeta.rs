@@ -22,9 +22,11 @@ use std::time::Duration;
 use anyerror::AnyError;
 use common_base::base::tokio;
 use common_base::base::tokio::sync::watch;
+use common_base::base::tokio::sync::watch::error::RecvError;
 use common_base::base::tokio::sync::Mutex;
 use common_base::base::tokio::sync::RwLockReadGuard;
 use common_base::base::tokio::task::JoinHandle;
+use common_base::base::tokio::time::Instant;
 use common_grpc::ConnectionFactory;
 use common_grpc::DNSResolver;
 use common_meta_raft_store::config::RaftConfig;
@@ -573,17 +575,22 @@ impl MetaNode {
         &self,
         conf: &RaftConfig,
         grpc_api_addr: String,
-    ) -> Result<(), MetaManagementError> {
+    ) -> Result<Result<(), String>, MetaManagementError> {
         if conf.join.is_empty() {
             info!("'--join' is empty, do not need joining cluster");
-            return Ok(());
+            return Ok(Err("Did not join: --join is empty".to_string()));
         }
 
-        // Try to join a cluster only when this node is just created.
+        // Try to join a cluster only when this node has no log.
         // Joining a node with log has risk messing up the data in this node and in the target cluster.
-        if self.is_opened() {
-            info!("meta node is already initialized, skip joining it to a cluster");
-            return Ok(());
+        let can_join_res = self
+            .can_join()
+            .await
+            .map_err(|e| MetaManagementError::Join(AnyError::new(&e)))?;
+
+        if let Err(reason) = can_join_res {
+            info!("skip joining, because: {}", reason);
+            return Ok(Err(format!("Did not join: {}", reason)));
         }
 
         let mut errors = vec![];
@@ -632,11 +639,20 @@ impl MetaNode {
             match join_res {
                 Ok(r) => {
                     let reply = r.into_inner();
-                    if !reply.data.is_empty() {
-                        info!("join cluster via {} success: {:?}", addr, reply.data);
-                        return Ok(());
-                    } else {
-                        error!("join cluster via {} fail: {:?}", addr, reply.error);
+
+                    let res: Result<ForwardResponse, MetaAPIError> = reply.into();
+                    match res {
+                        Ok(v) => {
+                            info!("join cluster via {} success: {:?}", addr, v);
+                            return Ok(Ok(()));
+                        }
+                        Err(e) => {
+                            error!("join cluster via {} fail: {}", addr, e.to_string());
+                            errors.push(
+                                AnyError::new(&e)
+                                    .add_context(|| format!("join via: {}", addr.clone())),
+                            );
+                        }
                     }
                 }
                 Err(s) => {
@@ -653,6 +669,50 @@ impl MetaNode {
             addrs,
             errors.into_iter().map(|e| e.to_string()).join(", ")
         ))))
+    }
+
+    /// Check meta-node state to see if it's appropriate to join to a cluster.
+    ///
+    /// If there is no StorageError, it returns a `Result`: `Ok` indicates this node can join to a cluster.
+    /// `Err` explains the reason why it should not join.
+    ///
+    /// Meta node should decide whether to execute `join_cluster()`:
+    ///
+    /// - It can not rely on if there are logs.
+    ///   It's possible the leader has setup a replication to this new
+    ///   node but not yet added it as a **voter**. In such a case, this node will
+    ///   never be added into the cluster automatically.
+    ///
+    /// - It must detect if there is a committed **membership** config
+    ///   that includes this node. Thus only when a node has already joined to a
+    ///   cluster(leader committed the membership and has replicated it to this node),
+    ///   it skips the join process.
+    ///
+    ///   Why skip checking membership in raft logs:
+    ///
+    ///   A leader may have replicated **non-committed** membership to this node and the crashed.
+    ///   Then the next leader does not know about this new node.
+    ///
+    ///   Only when the membership is committed, this node can be sure it is in a cluster.
+    async fn can_join(&self) -> Result<Result<(), String>, MetaStorageError> {
+        let m = {
+            let sm = self.sto.get_state_machine().await;
+            sm.get_membership()?
+        };
+        info!("check can_join: membership: {:?}", m);
+
+        let membership = match m {
+            None => {
+                return Ok(Ok(()));
+            }
+            Some(x) => x,
+        };
+
+        if membership.membership.contains(&self.sto.id) {
+            return Ok(Err(format!("node {} already in cluster", self.sto.id)));
+        }
+
+        Ok(Ok(()))
     }
 
     async fn do_start(conf: &MetaConfig) -> Result<Arc<MetaNode>, MetaStartupError> {
@@ -848,7 +908,7 @@ impl MetaNode {
 
         let forward = req.forward_to_leader;
 
-        let as_leader_res = self.as_leader().await;
+        let as_leader_res = self.assume_leader().await;
         debug!("as_leader: is_err: {}", as_leader_res.is_err());
 
         // Handle the request locally or return a ForwardToLeader error
@@ -894,15 +954,19 @@ impl MetaNode {
     ///
     /// Otherwise it returns the leader in a ForwardToLeader error.
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn as_leader(&self) -> Result<MetaLeader<'_>, ForwardToLeader> {
-        let curr_leader = self.get_leader().await;
-        debug!("curr_leader: {:?}", curr_leader);
-        if curr_leader == self.sto.id {
+    pub async fn assume_leader(&self) -> Result<MetaLeader<'_>, ForwardToLeader> {
+        let leader_id = self.get_leader().await.map_err(|e| {
+            error!("raft metrics rx closed: {}", e);
+            ForwardToLeader { leader_id: None }
+        })?;
+
+        debug!("curr_leader_id: {:?}", leader_id);
+
+        if leader_id == Some(self.sto.id) {
             return Ok(MetaLeader::new(self));
         }
-        Err(ForwardToLeader {
-            leader_id: Some(curr_leader),
-        })
+
+        Err(ForwardToLeader { leader_id })
     }
 
     /// Add a new node into this cluster.
@@ -920,6 +984,7 @@ impl MetaNode {
                 cmd: Cmd::AddNode { node_id, node },
             })
             .await?;
+
         self.raft
             .add_learner(node_id, false)
             .await
@@ -967,32 +1032,29 @@ impl MetaNode {
     /// Try to get the leader from the latest metrics of the local raft node.
     /// If leader is absent, wait for an metrics update in which a leader is set.
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_leader(&self) -> NodeId {
-        // fast path: there is a known leader
-
-        if let Some(l) = self.raft.metrics().borrow().current_leader {
-            return l;
-        }
-
-        // slow path: wait loop
-
-        // Need to clone before calling changed() on it.
-        // Otherwise other thread waiting on changed() may not receive the change event.
+    pub async fn get_leader(&self) -> Result<Option<NodeId>, RecvError> {
         let mut rx = self.raft.metrics();
 
+        let mut expire_at: Option<Instant> = None;
+
         loop {
-            // NOTE:
-            // The metrics may have already changed before we cloning it.
-            // Thus we need to re-check the cloned rx.
             if let Some(l) = rx.borrow().current_leader {
-                return l;
+                return Ok(Some(l));
             }
 
-            let changed = rx.changed().await;
-            if changed.is_err() {
-                info!("raft metrics tx closed");
-                return 0;
+            if expire_at.is_none() {
+                let timeout = Duration::from_millis(2_000);
+                expire_at = Some(Instant::now() + timeout);
             }
+            if Some(Instant::now()) > expire_at {
+                warn!("timeout waiting for a leader");
+                return Ok(None);
+            }
+
+            // Wait for metrics to change and re-fetch the leader id.
+            //
+            // Note that when it returns, `changed()` will mark the most recent value as **seen**.
+            rx.changed().await?;
         }
     }
 

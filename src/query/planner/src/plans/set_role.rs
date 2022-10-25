@@ -12,6 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::expression::Span;
+use std::sync::Arc;
 
-pub type Result<T> = std::result::Result<T, (Span, String)>;
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SetRolePlan {
+    pub is_default: bool,
+    pub role_name: String,
+}
+
+impl SetRolePlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}

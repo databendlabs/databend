@@ -201,8 +201,8 @@ impl PhysicalPlanBuilder {
                             builder.build(v)
                         })
                         .collect::<Result<_>>()?,
-                    other_conditions: join
-                        .other_conditions
+                    non_equi_conditions: join
+                        .non_equi_conditions
                         .iter()
                         .map(|v| {
                             let mut builder = PhysicalScalarBuilder::new(&merged_schema);

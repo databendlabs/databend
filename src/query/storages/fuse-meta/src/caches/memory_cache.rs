@@ -20,33 +20,67 @@ use common_cache::Cache;
 use common_cache::Count;
 use common_cache::DefaultHashBuilder;
 use common_cache::LruCache;
+use parking_lot::lock_api::RwLockWriteGuard;
+use parking_lot::RawRwLock;
 use parking_lot::RwLock;
 
+use crate::caches::TenantLabel;
 use crate::meta::SegmentInfo;
 use crate::meta::TableSnapshot;
 
-// cache meters by counting number of items
-pub type ItemCache<V> = Arc<RwLock<LruCache<String, Arc<V>, DefaultHashBuilder, Count>>>;
+pub type ItemCache<V> = RwLock<LruCache<String, Arc<V>, DefaultHashBuilder, Count>>;
+pub type BytesCache = RwLock<LruCache<String, Arc<Vec<u8>>, DefaultHashBuilder, BytesMeter>>;
 
-// cache meters by bytes
-pub type BytesCache = Arc<RwLock<LruCache<String, Arc<Vec<u8>>, DefaultHashBuilder, BytesMeter>>>;
-
-pub fn new_item_cache<V>(capacity: u64) -> ItemCache<V> {
-    Arc::new(RwLock::new(LruCache::new(capacity)))
+pub struct Labeled<T> {
+    item: T,
+    tenant_label: TenantLabel,
 }
 
-pub fn new_bytes_cache(capacity: u64) -> BytesCache {
-    let c = LruCache::with_meter_and_hasher(capacity, BytesMeter, DefaultHashBuilder::new());
-    Arc::new(RwLock::new(c))
+impl<T> Labeled<T> {
+    pub fn label(&self) -> &TenantLabel {
+        &self.tenant_label
+    }
 }
 
-pub type SegmentInfoCache = ItemCache<SegmentInfo>;
-pub type TableSnapshotCache = ItemCache<TableSnapshot>;
+pub type ItemCacheWriteGuard<'a, T> = RwLockWriteGuard<'a, RawRwLock, LruCache<String, Arc<T>>>;
+impl<T> Labeled<ItemCache<T>> {
+    pub fn write(&self) -> ItemCacheWriteGuard<'_, T> {
+        self.item.write()
+    }
+}
+
+pub type ByteCacheWriteGuard<'a> =
+    RwLockWriteGuard<'a, RawRwLock, LruCache<String, Arc<Vec<u8>>, DefaultHashBuilder, BytesMeter>>;
+impl Labeled<BytesCache> {
+    pub fn write(&self) -> ByteCacheWriteGuard<'_> {
+        self.item.write()
+    }
+}
+
+pub type LabeledItemCache<T> = Arc<Labeled<ItemCache<T>>>;
+pub type LabeledBytesCache = Arc<Labeled<BytesCache>>;
+
+pub fn new_item_cache<V>(capacity: u64, tenant_label: TenantLabel) -> LabeledItemCache<V> {
+    let item = RwLock::new(LruCache::new(capacity));
+    Arc::new(Labeled { item, tenant_label })
+}
+
+pub fn new_bytes_cache(capacity: u64, tenant_label: TenantLabel) -> LabeledBytesCache {
+    let item = RwLock::new(LruCache::with_meter_and_hasher(
+        capacity,
+        BytesMeter,
+        DefaultHashBuilder::new(),
+    ));
+    Arc::new(Labeled { item, tenant_label })
+}
+
+pub type SegmentInfoCache = LabeledItemCache<SegmentInfo>;
+pub type TableSnapshotCache = LabeledItemCache<TableSnapshot>;
 /// Cache bloom filter.
 /// For each index block, columns are cached individually.
-pub type BloomIndexCache = BytesCache;
+pub type BloomIndexCache = LabeledBytesCache;
 /// FileMetaCache of bloom filter index data.
 /// Each cache item per block
-pub type BloomIndexMetaCache = ItemCache<FileMetaData>;
+pub type BloomIndexMetaCache = LabeledItemCache<FileMetaData>;
 
-pub type FileMetaDataCache = ItemCache<FileMetaData>;
+pub type FileMetaDataCache = LabeledItemCache<FileMetaData>;

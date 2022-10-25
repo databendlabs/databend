@@ -167,6 +167,17 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             value,
         },
     );
+
+    let set_role = map(
+        rule! {
+            SET ~ (DEFAULT)? ~ ROLE ~ #literal_string
+        },
+        |(_, opt_is_default, _, role_name)| Statement::SetRole {
+            is_default: opt_is_default.is_some(),
+            role_name,
+        },
+    );
+
     let show_databases = map(
         rule! {
             SHOW ~ ( DATABASES | SCHEMAS ) ~ #show_limit?
@@ -827,7 +838,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let drop_share = map(
         rule! {
-            DROP ~ SHARE ~ (IF ~ EXISTS )? ~ #ident
+            DROP ~ SHARE ~ (IF ~ EXISTS)? ~ #ident
         },
         |(_, _, opt_if_exists, share)| {
             Statement::DropShare(DropShareStmt {
@@ -901,6 +912,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #show_functions : "`SHOW FUNCTIONS [<show_limit>]`"
             | #kill_stmt : "`KILL (QUERY | CONNECTION) <object_id>`"
             | #set_variable : "`SET <variable> = <value>`"
+            | #set_role: "`SET [DEFAULT] ROLE <role>`"
             | #show_databases : "`SHOW DATABASES [<show_limit>]`"
             | #undrop_database : "`UNDROP DATABASE <database>`"
             | #show_create_database : "`SHOW CREATE DATABASE <database>`"
@@ -1344,13 +1356,12 @@ pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
     alt((
         value(OptimizeTableAction::All, rule! { ALL }),
         value(OptimizeTableAction::Purge, rule! { PURGE }),
-        value(
-            OptimizeTableAction::Compact(CompactTarget::Segment),
-            rule! { COMPACT ~ SEGMENT},
-        ),
-        value(
-            OptimizeTableAction::Compact(CompactTarget::Block),
-            rule! { COMPACT},
+        map(
+            rule! { COMPACT ~ (SEGMENT)? ~ ( LIMIT ~ ^#expr )?},
+            |(_, opt_segment, opt_limit)| OptimizeTableAction::Compact {
+                target: opt_segment.map_or(CompactTarget::Block, |_| CompactTarget::Segment),
+                limit: opt_limit.map(|(_, limit)| limit),
+            },
         ),
     ))(i)
 }

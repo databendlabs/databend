@@ -200,7 +200,7 @@ pub struct HashJoin {
     pub probe: Box<PhysicalPlan>,
     pub build_keys: Vec<PhysicalScalar>,
     pub probe_keys: Vec<PhysicalScalar>,
-    pub other_conditions: Vec<PhysicalScalar>,
+    pub non_equi_conditions: Vec<PhysicalScalar>,
     pub join_type: JoinType,
     pub marker_index: Option<IndexType>,
     pub from_correlated_subquery: bool,

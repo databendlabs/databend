@@ -79,7 +79,16 @@ output domain  : Unknown
 output         : 4
 
 
-ast            : get([], 1)
+ast            : [1, 2]['a']
+raw expr       : get(array(1_u8, 2_u8), "a")
+checked expr   : get<Variant, String>(CAST(array<T0=UInt8><T0, T0>(1_u8, 2_u8) AS Variant), "a")
+optimized expr : NULL
+output type    : Variant NULL
+output domain  : Unknown
+output         : NULL
+
+
+ast            : [][1]
 raw expr       : get(array(), 1_u8)
 checked expr   : get<Array(Nothing) NULL, UInt64 NULL>(CAST(array<>() AS Array(Nothing) NULL), CAST(1_u8 AS UInt64 NULL))
 optimized expr : NULL
@@ -88,7 +97,7 @@ output domain  : {NULL}
 output         : NULL
 
 
-ast            : get([], NULL)
+ast            : [][NULL]
 raw expr       : get(array(), NULL)
 checked expr   : get<Array(Nothing) NULL, UInt64 NULL>(CAST(array<>() AS Array(Nothing) NULL), CAST(NULL AS UInt64 NULL))
 optimized expr : NULL
@@ -97,7 +106,7 @@ output domain  : {NULL}
 output         : NULL
 
 
-ast            : get([true, false], 0)
+ast            : [true, false][0]
 raw expr       : get(array(true, false), 0_u8)
 checked expr   : get<T0=Boolean><Array(T0), UInt64>(array<T0=Boolean><T0, T0>(true, false), CAST(0_u8 AS UInt64))
 optimized expr : true
@@ -106,7 +115,7 @@ output domain  : Unknown
 output         : true
 
 
-ast            : get(['a', 'b', 'c'], 2)
+ast            : ['a', 'b', 'c'][2]
 raw expr       : get(array("a", "b", "c"), 2_u8)
 checked expr   : get<T0=String><Array(T0), UInt64>(array<T0=String><T0, T0, T0>("a", "b", "c"), CAST(2_u8 AS UInt64))
 optimized expr : "c"
@@ -115,7 +124,7 @@ output domain  : Unknown
 output         : "c"
 
 
-ast            : get([1, 2, 3], 0)
+ast            : [1, 2, 3][0]
 raw expr       : get(array(1_u8, 2_u8, 3_u8), 0_u8)
 checked expr   : get<T0=UInt8><Array(T0), UInt64>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8), CAST(0_u8 AS UInt64))
 optimized expr : 1_u8
@@ -124,7 +133,7 @@ output domain  : Unknown
 output         : 1
 
 
-ast            : get([1, 2, 3], 5)
+ast            : [1, 2, 3][5]
 raw expr       : get(array(1_u8, 2_u8, 3_u8), 5_u8)
 checked expr   : get<T0=UInt8><Array(T0), UInt64>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8), CAST(5_u8 AS UInt64))
 optimized expr : NULL
@@ -133,7 +142,7 @@ output domain  : Unknown
 output         : NULL
 
 
-ast            : get([1, null, 3], 0)
+ast            : [1, null, 3][0]
 raw expr       : get(array(1_u8, NULL, 3_u8), 0_u8)
 checked expr   : get<T0=UInt8 NULL><Array(T0), UInt64>(array<T0=UInt8 NULL><T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL)), CAST(0_u8 AS UInt64))
 optimized expr : 1_u8
@@ -142,13 +151,37 @@ output domain  : Unknown
 output         : 1
 
 
-ast            : get([1, null, 3], 1)
+ast            : [1, null, 3][1]
 raw expr       : get(array(1_u8, NULL, 3_u8), 1_u8)
 checked expr   : get<T0=UInt8 NULL><Array(T0), UInt64>(array<T0=UInt8 NULL><T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL)), CAST(1_u8 AS UInt64))
 optimized expr : NULL
 output type    : UInt8 NULL NULL
 output domain  : Unknown
 output         : NULL
+
+
+ast            : [a, b][idx]
+raw expr       : get(array(ColumnRef(0)::Int16, ColumnRef(1)::Int16), ColumnRef(2)::UInt16)
+checked expr   : get<T0=Int16><Array(T0), UInt64>(array<T0=Int16><T0, T0>(ColumnRef(0), ColumnRef(1)), CAST(ColumnRef(2) AS UInt64))
+evaluation:
++--------+---------+---------+---------+------------+
+|        | a       | b       | idx     | Output     |
++--------+---------+---------+---------+------------+
+| Type   | Int16   | Int16   | UInt16  | Int16 NULL |
+| Domain | {0..=2} | {3..=5} | {0..=2} | Unknown    |
+| Row 0  | 0       | 3       | 0       | 0          |
+| Row 1  | 1       | 4       | 1       | 4          |
+| Row 2  | 2       | 5       | 2       | NULL       |
++--------+---------+---------+---------+------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------+
+| Column | Data                                                                |
++--------+---------------------------------------------------------------------+
+| a      | Int16([0, 1, 2])                                                    |
+| b      | Int16([3, 4, 5])                                                    |
+| idx    | UInt16([0, 1, 2])                                                   |
+| Output | NullableColumn { column: Int16([0, 4, 0]), validity: [0b_____011] } |
++--------+---------------------------------------------------------------------+
 
 
 ast            : slice([], 1, 2)

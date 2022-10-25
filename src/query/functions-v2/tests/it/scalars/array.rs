@@ -14,6 +14,10 @@
 
 use std::io::Write;
 
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::utils::ColumnFrom;
+use common_expression::Column;
 use goldenfile::Mint;
 
 use super::run_ast;
@@ -51,14 +55,32 @@ fn test_length(file: &mut impl Write) {
 }
 
 fn test_get(file: &mut impl Write) {
-    run_ast(file, "get([], 1)", &[]);
-    run_ast(file, "get([], NULL)", &[]);
-    run_ast(file, "get([true, false], 0)", &[]);
-    run_ast(file, "get(['a', 'b', 'c'], 2)", &[]);
-    run_ast(file, "get([1, 2, 3], 0)", &[]);
-    run_ast(file, "get([1, 2, 3], 5)", &[]);
-    run_ast(file, "get([1, null, 3], 0)", &[]);
-    run_ast(file, "get([1, null, 3], 1)", &[]);
+    run_ast(file, "[1, 2]['a']", &[]);
+    run_ast(file, "[][1]", &[]);
+    run_ast(file, "[][NULL]", &[]);
+    run_ast(file, "[true, false][0]", &[]);
+    run_ast(file, "['a', 'b', 'c'][2]", &[]);
+    run_ast(file, "[1, 2, 3][0]", &[]);
+    run_ast(file, "[1, 2, 3][5]", &[]);
+    run_ast(file, "[1, null, 3][0]", &[]);
+    run_ast(file, "[1, null, 3][1]", &[]);
+    run_ast(file, "[a, b][idx]", &[
+        (
+            "a",
+            DataType::Number(NumberDataType::Int16),
+            Column::from_data(vec![0i16, 1, 2]),
+        ),
+        (
+            "b",
+            DataType::Number(NumberDataType::Int16),
+            Column::from_data(vec![3i16, 4, 5]),
+        ),
+        (
+            "idx",
+            DataType::Number(NumberDataType::UInt16),
+            Column::from_data(vec![0u16, 1, 2]),
+        ),
+    ]);
 }
 
 fn test_slice(file: &mut impl Write) {

@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_meta_types::RoleInfo;
 use common_planner::plans::CreateRolePlan;
+use common_users::RoleCacheManager;
 use common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
@@ -50,7 +51,7 @@ impl Interpreter for CreateRoleInterpreter {
         UserApiProvider::instance()
             .add_role(&tenant, RoleInfo::new(&plan.role_name), plan.if_not_exists)
             .await?;
-
+        RoleCacheManager::instance().force_reload(&tenant).await?;
         Ok(PipelineBuildResult::create())
     }
 }

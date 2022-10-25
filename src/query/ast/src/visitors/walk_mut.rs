@@ -316,6 +316,10 @@ pub fn walk_statement_mut<'a, V: VisitorMut>(visitor: &mut V, statement: &mut St
             variable,
             value,
         } => visitor.visit_set_variable(*is_global, variable, value),
+        Statement::SetRole {
+            is_default,
+            role_name,
+        } => visitor.visit_set_role(*is_default, role_name),
         Statement::ShowDatabases(stmt) => visitor.visit_show_databases(stmt),
         Statement::ShowCreateDatabase(stmt) => visitor.visit_show_create_databases(stmt),
         Statement::CreateDatabase(stmt) => visitor.visit_create_database(stmt),

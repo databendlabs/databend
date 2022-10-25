@@ -26,10 +26,16 @@ use crate::ExpressionDataTypeVisitor;
 use crate::ExpressionVisitor;
 
 static OP_SET: Lazy<HashSet<&'static str>> = Lazy::new(|| {
-    ["database", "version", "current_user", "user"]
-        .iter()
-        .copied()
-        .collect()
+    [
+        "database",
+        "version",
+        "current_user",
+        "current_role",
+        "user",
+    ]
+    .iter()
+    .copied()
+    .collect()
 });
 
 /// REMOVE ME: LegacyExpression should be removed.

@@ -17,7 +17,6 @@ use std::fmt::Write;
 
 use itertools::Itertools;
 
-use crate::error::Result;
 use crate::expression::Expr;
 use crate::expression::Literal;
 use crate::expression::RawExpr;
@@ -27,6 +26,7 @@ use crate::function::FunctionSignature;
 use crate::types::number::NumberDataType;
 use crate::types::number::NumberScalar;
 use crate::types::DataType;
+use crate::Result;
 use crate::Scalar;
 
 pub fn check(ast: &RawExpr, fn_registry: &FunctionRegistry) -> Result<(Expr, DataType)> {

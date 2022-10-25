@@ -778,14 +778,30 @@ impl<'a> Binder {
             .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
         let table = normalize_identifier(table, &self.name_resolution_ctx).name;
-        let action = action.map_or(OptimizeTableAction::Purge, |v| match v {
-            AstOptimizeTableAction::All => OptimizeTableAction::All,
-            AstOptimizeTableAction::Purge => OptimizeTableAction::Purge,
-            AstOptimizeTableAction::Compact(target) => match target {
-                CompactTarget::Block => OptimizeTableAction::CompactBlocks,
-                CompactTarget::Segment => OptimizeTableAction::CompactSegments,
-            },
-        });
+        let action = if let Some(ast_action) = action {
+            match ast_action {
+                AstOptimizeTableAction::All => OptimizeTableAction::All,
+                AstOptimizeTableAction::Purge => OptimizeTableAction::Purge,
+                AstOptimizeTableAction::Compact { target, limit } => {
+                    let limit_cnt = match limit {
+                        Some(Expr::Literal {
+                            lit: Literal::Integer(uint),
+                            ..
+                        }) => Some(*uint as usize),
+                        Some(_) => {
+                            return Err(ErrorCode::IllegalDataType("Unsupported limit type"));
+                        }
+                        _ => None,
+                    };
+                    match target {
+                        CompactTarget::Block => OptimizeTableAction::CompactBlocks(limit_cnt),
+                        CompactTarget::Segment => OptimizeTableAction::CompactSegments(limit_cnt),
+                    }
+                }
+            }
+        } else {
+            OptimizeTableAction::Purge
+        };
 
         Ok(Plan::OptimizeTable(Box::new(OptimizeTablePlan {
             catalog,

@@ -68,7 +68,7 @@ pub struct HashJoinDesc {
 
 impl HashJoinDesc {
     pub fn create(ctx: Arc<QueryContext>, join: &HashJoin) -> Result<HashJoinDesc> {
-        let predicate = Self::join_predicate(&join.other_conditions)?;
+        let predicate = Self::join_predicate(&join.non_equi_conditions)?;
 
         Ok(HashJoinDesc {
             join_type: join.join_type.clone(),
@@ -87,14 +87,14 @@ impl HashJoinDesc {
         })
     }
 
-    fn join_predicate(other_conditions: &[PhysicalScalar]) -> Result<Option<PhysicalScalar>> {
-        if other_conditions.is_empty() {
+    fn join_predicate(non_equi_conditions: &[PhysicalScalar]) -> Result<Option<PhysicalScalar>> {
+        if non_equi_conditions.is_empty() {
             return Ok(None);
         }
 
-        let mut condition = other_conditions[0].clone();
+        let mut condition = non_equi_conditions[0].clone();
 
-        for other_condition in other_conditions.iter().skip(1) {
+        for other_condition in non_equi_conditions.iter().skip(1) {
             let left_type = condition.data_type();
             let right_type = other_condition.data_type();
             let data_types = vec![&left_type, &right_type];

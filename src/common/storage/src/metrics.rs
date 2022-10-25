@@ -22,20 +22,12 @@ use std::time::Instant;
 use async_trait::async_trait;
 use opendal::io_util::observe_read;
 use opendal::io_util::ReadEvent;
-use opendal::ops::OpCreate;
-use opendal::ops::OpDelete;
-use opendal::ops::OpList;
-use opendal::ops::OpPresign;
 use opendal::ops::OpRead;
-use opendal::ops::OpStat;
 use opendal::ops::OpWrite;
-use opendal::ops::PresignedRequest;
 use opendal::Accessor;
-use opendal::AccessorMetadata;
 use opendal::BytesReader;
 use opendal::Layer;
-use opendal::ObjectMetadata;
-use opendal::ObjectStreamer;
+use parking_lot::RwLock;
 
 /// StorageMetrics represents the metrics of storage (all bytes metrics are compressed size).
 #[derive(Debug, Default)]
@@ -52,6 +44,8 @@ pub struct StorageMetrics {
     partitions_scanned: AtomicU64,
     /// Number of partitions, before pruning
     partitions_total: AtomicU64,
+    /// Status of the operation.
+    status: Arc<RwLock<String>>,
 }
 
 impl StorageMetrics {
@@ -72,6 +66,13 @@ impl StorageMetrics {
             partitions_total: AtomicU64::new(
                 vs.iter().map(|v| v.as_ref().get_partitions_total()).sum(),
             ),
+            // Get the last one status, mainly used for the single table operation.
+            status: Arc::new(RwLock::new(
+                vs.iter()
+                    .map(|v| v.as_ref().get_status())
+                    .collect::<Vec<String>>()
+                    .join("|"),
+            )),
         }
     }
 
@@ -134,6 +135,16 @@ impl StorageMetrics {
     pub fn get_partitions_total(&self) -> u64 {
         self.partitions_total.load(Ordering::Relaxed)
     }
+
+    pub fn set_status(&self, new: &str) {
+        let mut status = self.status.write();
+        *status = new.to_string();
+    }
+
+    pub fn get_status(&self) -> String {
+        let status = self.status.read();
+        status.clone()
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -165,12 +176,8 @@ struct StorageMetricsAccessor {
 
 #[async_trait]
 impl Accessor for StorageMetricsAccessor {
-    fn metadata(&self) -> AccessorMetadata {
-        self.inner.metadata()
-    }
-
-    async fn create(&self, path: &str, args: OpCreate) -> Result<()> {
-        self.inner.create(path, args).await
+    fn inner(&self) -> Option<Arc<dyn Accessor>> {
+        Some(self.inner.clone())
     }
 
     async fn read(&self, path: &str, args: OpRead) -> Result<BytesReader> {
@@ -222,22 +229,5 @@ impl Accessor for StorageMetricsAccessor {
         });
 
         self.inner.write(path, args, Box::new(r)).await
-    }
-
-    async fn stat(&self, path: &str, args: OpStat) -> Result<ObjectMetadata> {
-        self.inner.stat(path, args).await
-    }
-
-    async fn delete(&self, path: &str, args: OpDelete) -> Result<()> {
-        self.inner.delete(path, args).await
-    }
-
-    /// TODO: we need to make sure returning object's accessor is correct.
-    async fn list(&self, path: &str, args: OpList) -> Result<ObjectStreamer> {
-        self.inner.list(path, args).await
-    }
-
-    fn presign(&self, path: &str, args: OpPresign) -> Result<PresignedRequest> {
-        self.inner.presign(path, args)
     }
 }

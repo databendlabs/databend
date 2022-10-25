@@ -194,19 +194,21 @@ pub trait InputFormatPipe: Sized + Send + 'static {
 
         let ctx_clone = ctx.clone();
         let p = 3;
-        tokio::spawn(async move {
-            let mut futs = FuturesUnordered::new();
-            for s in &ctx_clone.splits {
-                let fut = Self::read_split(ctx_clone.clone(), s);
-                futs.push(fut);
-                if futs.len() >= p {
-                    let row_batch = futs.next().await.unwrap().unwrap();
-                    data_tx.send(row_batch).await.unwrap();
-                }
-            }
-
-            while let Some(row_batch) = futs.next().await {
-                data_tx.send(row_batch.unwrap()).await.unwrap();
+        GlobalIORuntime::instance().spawn(async move {
+            for splits in ctx_clone.splits.chunks(p) {
+                let ctx_clone2 = ctx_clone.clone();
+                let data_tx2 = data_tx.clone();
+                let splits = splits.to_owned().clone();
+                tokio::spawn(async move {
+                    let mut futs = FuturesUnordered::new();
+                    for s in &splits {
+                        let fut = Self::read_split(ctx_clone2.clone(), s);
+                        futs.push(fut);
+                    }
+                    while let Some(row_batch) = futs.next().await {
+                        data_tx2.send(row_batch.unwrap()).await.unwrap();
+                    }
+                });
             }
         });
         Ok(())
