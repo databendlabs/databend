@@ -71,7 +71,6 @@ pub trait TableContext: Send + Sync {
     fn try_set_partitions(&self, partitions: Partitions) -> Result<()>;
     fn attach_query_str(&self, kind: String, query: &str);
     fn get_fragment_id(&self) -> usize;
-    fn list_catalogs(&self) -> Vec<String>;
     fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>>;
     fn get_id(&self) -> String;
     fn get_current_catalog(&self) -> String;

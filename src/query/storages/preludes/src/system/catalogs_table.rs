@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::catalog::CatalogManager;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datavalues::DataField;
@@ -43,10 +44,10 @@ impl AsyncSystemTable for CatalogsTable {
         &self.table_info
     }
 
-    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
-        let catalogs = ctx.list_catalogs();
+    async fn get_full_data(&self, _ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
+        let cm = CatalogManager::instance();
 
-        let catalog_names: Vec<&[u8]> = catalogs.iter().map(|ctl| ctl.as_bytes()).collect();
+        let catalog_names: Vec<&[u8]> = cm.catalogs.keys().map(|x| x.as_bytes()).collect();
 
         Ok(DataBlock::create(self.table_info.schema(), vec![
             Series::from_data(catalog_names),

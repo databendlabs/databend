@@ -260,14 +260,6 @@ impl TableContext for QueryContext {
             .get_catalog(catalog_name.as_ref())
     }
 
-    fn list_catalogs(&self) -> Vec<String> {
-        self.shared
-            .catalog_manager
-            .catalogs
-            .keys()
-            .cloned()
-            .collect()
-    }
     fn get_id(&self) -> String {
         self.shared.init_query_id.as_ref().read().clone()
     }
