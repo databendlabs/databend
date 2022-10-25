@@ -197,7 +197,6 @@ pub async fn clickhouse_handler_get(
     let mut planner = Planner::new(context.clone());
     let (plan, _, fmt) = planner.plan_sql(&sql).await.map_err(BadRequest)?;
     let format = get_format_with_default(fmt, default_format)?;
-    let format = get_format_from_plan(&plan, format)?;
 
     context.attach_query_str(plan.to_string(), &sql);
     let interpreter = InterpreterFactory::get(context.clone(), &plan)
@@ -292,7 +291,6 @@ pub async fn clickhouse_handler_post(
     };
 
     let format = get_format_with_default(fmt, default_format)?;
-    let format = get_format_from_plan(&plan, format)?;
     let interpreter = InterpreterFactory::get(ctx.clone(), &plan)
         .await
         .map_err(BadRequest)?;
@@ -388,22 +386,6 @@ fn get_default_format(
         Some(s) => s,
     };
     OutputFormatType::from_str(name)
-}
-
-fn get_format_from_plan(
-    plan: &Plan,
-    default_format: OutputFormatType,
-) -> PoemResult<OutputFormatType> {
-    let format = match plan.clone() {
-        Plan::Query {
-            s_expr: _,
-            metadata: _,
-            bind_context,
-            ..
-        } => bind_context.format.clone(),
-        _ => None,
-    };
-    get_format_with_default(format, default_format)
 }
 
 fn get_format_with_default(

@@ -90,6 +90,7 @@ pub enum Plan {
         metadata: MetadataRef,
         bind_context: Box<BindContext>,
         rewrite_kind: Option<RewriteKind>,
+        ignore_result: bool,
     },
 
     Explain {
