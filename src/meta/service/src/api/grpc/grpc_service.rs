@@ -47,6 +47,7 @@ use tonic::Request;
 use tonic::Response;
 use tonic::Status;
 use tonic::Streaming;
+use tracing::debug;
 use tracing::info;
 
 use crate::meta_service::meta_service_impl::GrpcStream;
@@ -121,6 +122,8 @@ impl MetaService for MetaServiceImpl {
             payload,
         } = req;
 
+        debug!("handle handshake request, client ver: {}", protocol_version);
+
         let min_compatible = to_digit_ver(&MIN_METACLI_SEMVER);
 
         // backward compatibility: no version in handshake.
@@ -149,6 +152,8 @@ impl MetaService for MetaServiceImpl {
                 payload: token.into_bytes(),
             };
             let output = futures::stream::once(async { Ok(resp) });
+
+            debug!("handshake OK");
             Ok(Response::new(Box::pin(output)))
         } else {
             Err(Status::unauthenticated(format!(

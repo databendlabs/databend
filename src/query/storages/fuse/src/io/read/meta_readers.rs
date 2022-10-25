@@ -12,57 +12,46 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_arrow::parquet::metadata::FileMetaData;
-use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_fuse_meta::caches::CacheManager;
-use common_fuse_meta::caches::TenantLabel;
 use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::SegmentInfoVersion;
 use common_fuse_meta::meta::SnapshotVersion;
 use common_fuse_meta::meta::TableSnapshot;
-use common_storages_util::cached_reader::CachedReader;
-use common_storages_util::cached_reader::HasTenantLabel;
-use common_storages_util::cached_reader::Loader;
+use common_storages_cache::CachedReader;
+use common_storages_cache::Loader;
 use opendal::BytesReader;
 use opendal::Operator;
 
 use super::versioned_reader::VersionedReader;
 
-pub type SegmentInfoReader<'a> = CachedReader<SegmentInfo, LoaderWrapper<&'a dyn TableContext>>;
-pub type TableSnapshotReader = CachedReader<TableSnapshot, LoaderWrapper<Arc<dyn TableContext>>>;
-pub type BloomIndexFileMetaDataReader = CachedReader<FileMetaData, Arc<dyn TableContext>>;
+pub type SegmentInfoReader = CachedReader<SegmentInfo, LoaderWrapper<Operator>>;
+pub type TableSnapshotReader = CachedReader<TableSnapshot, LoaderWrapper<Operator>>;
+pub type BloomIndexFileMetaDataReader = CachedReader<FileMetaData, Operator>;
 
 pub struct MetaReaders;
 
 impl MetaReaders {
-    pub fn segment_info_reader(ctx: &dyn TableContext, dal: Operator) -> SegmentInfoReader {
+    pub fn segment_info_reader(dal: Operator) -> SegmentInfoReader {
         SegmentInfoReader::new(
             CacheManager::instance().get_table_segment_cache(),
-            LoaderWrapper(ctx),
             "SEGMENT_INFO_CACHE".to_owned(),
-            dal,
+            LoaderWrapper(dal),
         )
     }
 
-    pub fn table_snapshot_reader(ctx: Arc<dyn TableContext>, dal: Operator) -> TableSnapshotReader {
+    pub fn table_snapshot_reader(dal: Operator) -> TableSnapshotReader {
         TableSnapshotReader::new(
             CacheManager::instance().get_table_snapshot_cache(),
-            LoaderWrapper(ctx),
             "SNAPSHOT_CACHE".to_owned(),
-            dal,
+            LoaderWrapper(dal),
         )
     }
 
-    pub fn file_meta_data_reader(
-        ctx: Arc<dyn TableContext>,
-        dal: Operator,
-    ) -> BloomIndexFileMetaDataReader {
+    pub fn file_meta_data_reader(dal: Operator) -> BloomIndexFileMetaDataReader {
         BloomIndexFileMetaDataReader::new(
             CacheManager::instance().get_bloom_index_meta_cache(),
-            ctx,
             "BLOOM_INDEX_FILE_META_DATA_CACHE".to_owned(),
             dal,
         )
@@ -74,40 +63,29 @@ impl MetaReaders {
 pub struct LoaderWrapper<T>(T);
 
 #[async_trait::async_trait]
-impl<T> Loader<TableSnapshot> for LoaderWrapper<T>
-where T: Sync + Send
-{
+impl Loader<TableSnapshot> for LoaderWrapper<Operator> {
     async fn load(
         &self,
-        op: Operator,
         key: &str,
         length_hint: Option<u64>,
         version: u64,
     ) -> Result<TableSnapshot> {
         let version = SnapshotVersion::try_from(version)?;
-        let reader = bytes_reader(op, key, length_hint).await?;
+        let reader = bytes_reader(&self.0, key, length_hint).await?;
         version.read(reader).await
     }
 }
 
 #[async_trait::async_trait]
-impl<T> Loader<SegmentInfo> for LoaderWrapper<T>
-where T: Sync + Send
-{
-    async fn load(
-        &self,
-        op: Operator,
-        key: &str,
-        length_hint: Option<u64>,
-        version: u64,
-    ) -> Result<SegmentInfo> {
+impl Loader<SegmentInfo> for LoaderWrapper<Operator> {
+    async fn load(&self, key: &str, length_hint: Option<u64>, version: u64) -> Result<SegmentInfo> {
         let version = SegmentInfoVersion::try_from(version)?;
-        let reader = bytes_reader(op, key, length_hint).await?;
+        let reader = bytes_reader(&self.0, key, length_hint).await?;
         version.read(reader).await
     }
 }
 
-async fn bytes_reader(op: Operator, path: &str, len: Option<u64>) -> Result<BytesReader> {
+async fn bytes_reader(op: &Operator, path: &str, len: Option<u64>) -> Result<BytesReader> {
     let object = op.object(path);
 
     let len = match len {
@@ -121,12 +99,4 @@ async fn bytes_reader(op: Operator, path: &str, len: Option<u64>) -> Result<Byte
 
     let reader = object.range_reader(..len).await?;
     Ok(Box::new(reader))
-}
-
-impl<T> HasTenantLabel for LoaderWrapper<T>
-where T: HasTenantLabel
-{
-    fn tenant_label(&self) -> TenantLabel {
-        self.0.tenant_label()
-    }
 }

@@ -14,16 +14,17 @@
 
 use std::sync::Arc;
 
+use common_catalog::table::CompactTarget;
 use common_exception::Result;
+use common_fuse_meta::meta::TableSnapshot;
 use common_legacy_planners::ReadDataSourcePlan;
 use common_legacy_planners::SourceInfo;
-use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::Pipeline;
-use common_pipeline_core::SinkPipeBuilder;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
 
 use super::FuseTableSink;
-use crate::operations::CompactMutator;
+use crate::operations::mutation::SegmentCompactMutator;
+use crate::operations::FullCompactMutator;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
 use crate::Table;
@@ -32,13 +33,22 @@ use crate::TableMutator;
 use crate::DEFAULT_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 
+pub struct CompactOptions {
+    // the snapshot that compactor working on, it never changed during phases compaction.
+    pub base_snapshot: Arc<TableSnapshot>,
+    pub block_per_seg: usize,
+    pub limit: Option<usize>,
+}
+
 impl FuseTable {
     pub(crate) async fn do_compact(
         &self,
         ctx: Arc<dyn TableContext>,
+        target: CompactTarget,
+        limit: Option<usize>,
         pipeline: &mut Pipeline,
-    ) -> Result<Option<Arc<dyn TableMutator>>> {
-        let snapshot_opt = self.read_table_snapshot(ctx.clone()).await?;
+    ) -> Result<Option<Box<dyn TableMutator>>> {
+        let snapshot_opt = self.read_table_snapshot().await?;
         let base_snapshot = if let Some(val) = snapshot_opt {
             val
         } else {
@@ -50,26 +60,65 @@ impl FuseTable {
             return Ok(None);
         }
 
-        let block_compactor = self.get_block_compactor();
         let block_per_seg =
             self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
 
-        let mut mutator = CompactMutator::try_create(
-            ctx.clone(),
+        let compact_params = CompactOptions {
             base_snapshot,
+            block_per_seg,
+            limit,
+        };
+
+        match target {
+            CompactTarget::Blocks => self.compact_blocks(ctx, pipeline, compact_params).await,
+            CompactTarget::Segments => self.compact_segments(ctx, pipeline, compact_params).await,
+        }
+    }
+
+    async fn compact_segments(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        _pipeline: &mut Pipeline,
+        options: CompactOptions,
+    ) -> Result<Option<Box<dyn TableMutator>>> {
+        let mut segment_mutator = SegmentCompactMutator::try_create(
+            ctx.clone(),
+            options,
+            self.meta_location_generator().clone(),
+            self.operator.clone(),
+        )?;
+
+        if segment_mutator.target_select().await? {
+            Ok(Some(Box::new(segment_mutator)))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn compact_blocks(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+        options: CompactOptions,
+    ) -> Result<Option<Box<dyn TableMutator>>> {
+        let block_compactor = self.get_block_compactor();
+
+        let block_per_seg = options.block_per_seg;
+        let mut mutator = FullCompactMutator::try_create(
+            ctx.clone(),
+            options,
             block_compactor.clone(),
             self.meta_location_generator().clone(),
-            block_per_seg,
             self.cluster_key_meta.is_some(),
             self.operator.clone(),
         )?;
-        let need_compact = mutator.blocks_select().await?;
+        let need_compact = mutator.target_select().await?;
         if !need_compact {
             return Ok(None);
         }
 
         let partitions_total = mutator.partitions_total();
-        let (statistics, parts) = Self::read_partitions_with_metas(
+        let (statistics, parts) = self.read_partitions_with_metas(
             ctx.clone(),
             self.table_info.schema(),
             None,
@@ -92,6 +141,9 @@ impl FuseTable {
         ctx.try_set_partitions(plan.parts.clone())?;
         self.do_read_data(ctx.clone(), &plan, pipeline)?;
 
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        pipeline.resize(max_threads)?;
+
         pipeline.add_transform(|transform_input_port, transform_output_port| {
             TransformCompact::try_create(
                 transform_input_port,
@@ -100,24 +152,18 @@ impl FuseTable {
             )
         })?;
 
-        let mut sink_pipeline_builder = SinkPipeBuilder::create();
-        for _ in 0..pipeline.output_len() {
-            let input_port = InputPort::create();
-            sink_pipeline_builder.add_sink(
-                input_port.clone(),
-                FuseTableSink::try_create(
-                    input_port,
-                    ctx.clone(),
-                    block_per_seg,
-                    mutator.get_storage_operator(),
-                    self.meta_location_generator().clone(),
-                    ClusterStatsGenerator::default(),
-                    None,
-                )?,
-            );
-        }
+        pipeline.add_sink(|input| {
+            FuseTableSink::try_create(
+                input,
+                ctx.clone(),
+                block_per_seg,
+                mutator.get_storage_operator(),
+                self.meta_location_generator().clone(),
+                ClusterStatsGenerator::default(),
+                None,
+            )
+        })?;
 
-        pipeline.add_pipe(sink_pipeline_builder.finalize());
-        Ok(Some(Arc::new(mutator)))
+        Ok(Some(Box::new(mutator)))
     }
 }

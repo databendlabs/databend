@@ -35,7 +35,7 @@ use crate::FuseTable;
 
 impl FuseTable {
     pub async fn do_delete(&self, ctx: Arc<dyn TableContext>, plan: &DeletePlan) -> Result<()> {
-        let snapshot_opt = self.read_table_snapshot(ctx.clone()).await?;
+        let snapshot_opt = self.read_table_snapshot().await?;
 
         // check if table is empty
         let snapshot = if let Some(val) = snapshot_opt {
@@ -139,10 +139,9 @@ impl FuseTable {
     ) -> Result<()> {
         let (segments, summary, abort_operation) = del_holder.generate_segments().await?;
 
-        // TODO check if error is recoverable, and try to resolve the conflict
         self.commit_mutation(
-            ctx.clone(),
-            del_holder.base_snapshot().clone(),
+            &ctx,
+            del_holder.base_snapshot(),
             segments,
             summary,
             abort_operation,

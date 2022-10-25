@@ -27,6 +27,7 @@ use crate::config::StorageOssConfig;
 use crate::config::STORAGE_IPFS_DEFAULT_ENDPOINT;
 use crate::config::STORAGE_S3_DEFAULT_ENDPOINT;
 use crate::StorageAzblobConfig;
+use crate::StorageFsConfig;
 use crate::StorageParams;
 use crate::StorageS3Config;
 use crate::STORAGE_GCS_DEFAULT_ENDPOINT;
@@ -237,6 +238,12 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
 
             // HTTP is special that we don't support dir, always return / instead.
             return Ok((StorageParams::Http(cfg), "/".to_string()));
+        }
+        Scheme::Fs => {
+            let cfg = StorageFsConfig {
+                root: root.to_string(),
+            };
+            StorageParams::Fs(cfg)
         }
         v => {
             return Err(Error::new(

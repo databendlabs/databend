@@ -32,6 +32,7 @@ use common_io::prelude::*;
 use super::aggregate_distinct_state::AggregateDistinctNumberState;
 use super::aggregate_distinct_state::AggregateDistinctState;
 use super::aggregate_distinct_state::AggregateDistinctStringState;
+use super::aggregate_distinct_state::AggregateUniqStringState;
 use super::aggregate_distinct_state::DataGroupValue;
 use super::aggregate_distinct_state::DistinctStateFunc;
 use super::aggregate_function::AggregateFunction;
@@ -119,7 +120,7 @@ where
         let netest_place = place.next(layout.size());
 
         // faster path for count
-        if self.nested.name() == "AggregateFunctionCount" {
+        if self.nested.name() == "AggregateCountFunction" {
             match builder {
                 ColumnBuilder::Number(NumberColumnBuilder::UInt64(builder)) => {
                     builder.push(state.len() as u64);
@@ -220,17 +221,30 @@ pub fn try_create(
                     _state: PhantomData,
                 })),
             DataType::String =>
-                return Ok(Arc::new(AggregateDistinctCombinator::<
-                    KeysRef,
-                    AggregateDistinctStringState,
-                > {
-                    nested_name: nested_name.to_owned(),
-                    arguments,
-                    nested,
-                    name,
-                    _s: PhantomData,
-                    _state: PhantomData,
-                })),
+                return match nested_name {
+                    "count" | "uniq" => Ok(Arc::new(AggregateDistinctCombinator::<
+                        u128,
+                        AggregateUniqStringState,
+                    > {
+                        name,
+                        arguments,
+                        nested,
+                        nested_name: nested_name.to_owned(),
+                        _s: PhantomData,
+                        _state: PhantomData,
+                    })),
+                    _ => Ok(Arc::new(AggregateDistinctCombinator::<
+                        KeysRef,
+                        AggregateDistinctStringState,
+                    > {
+                        nested_name: nested_name.to_owned(),
+                        arguments,
+                        nested,
+                        name,
+                        _s: PhantomData,
+                        _state: PhantomData,
+                    })),
+                },
             _ => {}
         })
     }

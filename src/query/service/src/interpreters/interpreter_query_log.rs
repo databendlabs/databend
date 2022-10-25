@@ -201,20 +201,20 @@ impl InterpreterQueryLog {
         let event_date = (event_time / (24 * 3_600_000_000)) as i32;
         let query_start_time = convert_query_log_timestamp(ctx.get_created_time());
         let query_duration_ms = (event_time - query_start_time) / 1_000;
-        let dal_metrics = ctx.get_dal_metrics();
+        let data_metrics = ctx.get_data_metrics();
 
         let written_rows = ctx.get_write_progress_value().rows as u64;
         let written_bytes = ctx.get_write_progress_value().bytes as u64;
-        let written_io_bytes = dal_metrics.get_write_bytes() as u64;
-        let written_io_bytes_cost_ms = dal_metrics.get_write_bytes_cost();
+        let written_io_bytes = data_metrics.get_write_bytes() as u64;
+        let written_io_bytes_cost_ms = data_metrics.get_write_bytes_cost();
 
         let scan_rows = ctx.get_scan_progress_value().rows as u64;
         let scan_bytes = ctx.get_scan_progress_value().bytes as u64;
-        let scan_io_bytes = dal_metrics.get_read_bytes() as u64;
-        let scan_io_bytes_cost_ms = dal_metrics.get_read_bytes_cost();
+        let scan_io_bytes = data_metrics.get_read_bytes() as u64;
+        let scan_io_bytes_cost_ms = data_metrics.get_read_bytes_cost();
 
-        let scan_partitions = dal_metrics.get_partitions_scanned();
-        let total_partitions = dal_metrics.get_partitions_total();
+        let scan_partitions = data_metrics.get_partitions_scanned();
+        let total_partitions = data_metrics.get_partitions_total();
         let cpu_usage = ctx.get_settings().get_max_threads()? as u32;
         let memory_usage = ctx.get_current_session().get_memory_usage() as u64;
 

@@ -41,6 +41,7 @@ use super::query::ExecuteStateKind;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
 use crate::servers::http::v1::query::Progresses;
+use crate::servers::http::v1::Dowloader;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::HttpSessionConf;
@@ -110,14 +111,40 @@ pub struct QueryResponse {
 }
 
 impl QueryResponse {
-    pub(crate) fn from_internal(id: String, r: HttpQueryResponseInternal) -> impl IntoResponse {
+    pub(crate) fn from_internal(
+        id: String,
+        r: HttpQueryResponseInternal,
+        is_final: bool,
+    ) -> impl IntoResponse {
         let state = r.state.clone();
-        let (data, next_url) = match (state.state, r.data) {
-            (ExecuteStateKind::Succeeded | ExecuteStateKind::Running, Some(d)) => {
-                (d.page.data, d.next_page_no.map(|n| make_page_uri(&id, n)))
+        let (data, next_uri) = if is_final {
+            (JsonBlock::empty(), None)
+        } else {
+            match state.state {
+                ExecuteStateKind::Running => match r.data {
+                    None => (JsonBlock::empty(), Some(make_state_uri(&id))),
+                    Some(d) => {
+                        let uri = match d.next_page_no {
+                            Some(n) => Some(make_page_uri(&id, n)),
+                            None => Some(make_state_uri(&id)),
+                        };
+                        (d.page.data, uri)
+                    }
+                },
+                ExecuteStateKind::Failed => (JsonBlock::empty(), Some(make_final_uri(&id))),
+                ExecuteStateKind::Succeeded => match r.data {
+                    None => (JsonBlock::empty(), Some(make_final_uri(&id))),
+                    Some(d) => {
+                        let uri = match d.next_page_no {
+                            Some(n) => Some(make_page_uri(&id, n)),
+                            None => Some(make_final_uri(&id)),
+                        };
+                        (d.page.data, uri)
+                    }
+                },
             }
-            _ => (JsonBlock::empty(), None),
         };
+
         let schema = data.schema().clone();
         let session_id = r.session_id.clone();
         let stats = QueryStats {
@@ -133,7 +160,7 @@ impl QueryResponse {
             stats,
             affect: state.affect,
             id: id.clone(),
-            next_uri: next_url,
+            next_uri,
             stats_uri: Some(make_state_uri(&id)),
             final_uri: Some(make_final_uri(&id)),
             kill_uri: Some(make_kill_uri(&id)),
@@ -163,17 +190,23 @@ impl QueryResponse {
 }
 
 #[poem::handler]
-async fn query_detach_handler(
+async fn query_final_handler(
     _ctx: &HttpQueryContext,
     Path(query_id): Path<String>,
-) -> impl IntoResponse {
+) -> PoemResult<impl IntoResponse> {
     let http_query_manager = HttpQueryManager::instance();
     match http_query_manager.remove_query(&query_id).await {
         Some(query) => {
-            query.detach().await;
-            StatusCode::OK
+            let mut response = query.get_response_state_only().await;
+            if response.state.state == ExecuteStateKind::Running {
+                return Err(PoemError::from_string(
+                    format!("query {} is still running, can not final it", query_id),
+                    StatusCode::BAD_REQUEST,
+                ));
+            }
+            Ok(QueryResponse::from_internal(query_id, response, true))
         }
-        None => StatusCode::NOT_FOUND,
+        None => Err(query_id_not_found(query_id)),
     }
 }
 
@@ -203,7 +236,7 @@ async fn query_state_handler(
     match http_query_manager.get_query(&query_id).await {
         Some(query) => {
             let response = query.get_response_state_only().await;
-            Ok(QueryResponse::from_internal(query_id, response))
+            Ok(QueryResponse::from_internal(query_id, response, false))
         }
         None => Err(query_id_not_found(query_id)),
     }
@@ -223,7 +256,7 @@ async fn query_page_handler(
                 .await
                 .map_err(|err| poem::Error::from_string(err.message(), StatusCode::NOT_FOUND))?;
             query.update_expire_time(false).await;
-            Ok(QueryResponse::from_internal(query_id, resp))
+            Ok(QueryResponse::from_internal(query_id, resp, false))
         }
         None => Err(query_id_not_found(query_id)),
     }
@@ -255,7 +288,7 @@ pub(crate) async fn query_handler(
                 &query.id, &resp.state, rows, next_page, sql
             );
             query.update_expire_time(false).await;
-            Ok(QueryResponse::from_internal(query.id.to_string(), resp).into_response())
+            Ok(QueryResponse::from_internal(query.id.to_string(), resp, false).into_response())
         }
         Err(e) => {
             error!("Fail to start sql, Error: {:?}", e);
@@ -277,7 +310,7 @@ pub fn query_route() -> Route {
         )
         .at(
             "/:id/final",
-            get(query_detach_handler).post(query_detach_handler),
+            get(query_final_handler).post(query_final_handler),
         )
 }
 

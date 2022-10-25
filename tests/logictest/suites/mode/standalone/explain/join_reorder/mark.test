@@ -45,3 +45,4 @@ HashJoin
     ├── partitions total: 2
     ├── partitions scanned: 2
     └── push downs: [filters: [], limit: NONE]
+

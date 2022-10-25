@@ -1,0 +1,55 @@
+//  Copyright 2022 Datafuse Labs.
+//
+//  Licensed under the Apache License, Version 2.0 (the "License");
+//  you may not use this file except in compliance with the License.
+//  You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+//  Unless required by applicable law or agreed to in writing, software
+//  distributed under the License is distributed on an "AS IS" BASIS,
+//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//  See the License for the specific language governing permissions and
+//  limitations under the License.
+
+use std::sync::Arc;
+
+use common_exception::Result;
+use common_legacy_planners::ReadDataSourcePlan;
+use common_streams::SendableDataBlockStream;
+
+use crate::pipelines::executor::ExecutorSettings;
+use crate::pipelines::executor::PipelinePullingExecutor;
+use crate::pipelines::Pipeline;
+use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
+use crate::storages::Table;
+use crate::stream::PullingExecutorStream;
+
+#[async_trait::async_trait]
+pub trait DataBlockStream: Send + Sync {
+    async fn read_data_block_stream(
+        &self,
+        _ctx: Arc<QueryContext>,
+        _plan: &ReadDataSourcePlan,
+    ) -> Result<SendableDataBlockStream>;
+}
+
+#[async_trait::async_trait]
+impl<T: ?Sized + Table> DataBlockStream for T {
+    async fn read_data_block_stream(
+        &self,
+        ctx: Arc<QueryContext>,
+        plan: &ReadDataSourcePlan,
+    ) -> Result<SendableDataBlockStream> {
+        let mut pipeline = Pipeline::create();
+        self.read_data(ctx.clone(), plan, &mut pipeline)?;
+
+        let settings = ctx.get_settings();
+        pipeline.set_max_threads(settings.get_max_threads()? as usize);
+        let executor_settings = ExecutorSettings::try_create(&settings)?;
+        let executor = PipelinePullingExecutor::try_create(pipeline, executor_settings)?;
+        ctx.set_executor(Arc::downgrade(&executor.get_inner()));
+        Ok(Box::pin(PullingExecutorStream::create(executor)?))
+    }
+}

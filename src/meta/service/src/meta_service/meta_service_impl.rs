@@ -104,7 +104,7 @@ impl RaftService for RaftServiceImpl {
         return Ok(tonic::Response::new(raft_reply));
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[tracing::instrument(level = "debug", skip_all)]
     async fn forward(
         &self,
         request: tonic::Request<RaftRequest>,

@@ -20,6 +20,7 @@ use std::sync::Weak;
 
 use common_config::Config;
 use common_exception::Result;
+use common_meta_types::RoleInfo;
 use common_meta_types::UserInfo;
 use common_settings::Settings;
 use futures::channel::oneshot::Sender;
@@ -33,9 +34,21 @@ pub struct SessionContext {
     settings: Arc<Settings>,
     current_catalog: RwLock<String>,
     current_database: RwLock<String>,
+    // The current tenant can be determined by databend-query's config file, or by X-DATABEND-TENANT
+    // if it's in management mode. If databend-query is not in management mode, the current tenant
+    // can not be modified at runtime.
     current_tenant: RwLock<String>,
+    // The current user is determined by the authentication phase on each connection. It will not be
+    // changed during a session.
     current_user: RwLock<Option<UserInfo>>,
+    // Each session have a current role which takes effects, the privileges from the user's other
+    // roles will not take effect. The user can switch to another available role by `SET ROLE`.
+    // If the current_role is not set, it takes the user's default role.
+    current_role: RwLock<Option<RoleInfo>>,
+    // The role granted to user by external auth provider, when auth_role is provided, the current
+    // user's all other roles are overridden by this role.
     auth_role: RwLock<Option<String>>,
+    // The client IP from the client.
     client_host: RwLock<Option<SocketAddr>>,
     io_shutdown_tx: RwLock<Option<Sender<Sender<()>>>>,
     query_context_shared: RwLock<Weak<QueryContextShared>>,
@@ -48,6 +61,7 @@ impl SessionContext {
             settings,
             abort: Default::default(),
             current_user: Default::default(),
+            current_role: Default::default(),
             auth_role: Default::default(),
             current_tenant: Default::default(),
             client_host: Default::default(),
@@ -102,6 +116,18 @@ impl SessionContext {
     pub fn set_current_database(&self, db: String) {
         let mut lock = self.current_database.write();
         *lock = db
+    }
+
+    // Return the current role if it's set. If the current role is not set, it'll take the user's
+    // default role.
+    pub fn get_current_role(&self) -> Option<RoleInfo> {
+        let lock = self.current_role.read();
+        lock.clone()
+    }
+
+    pub fn set_current_role(&self, role: Option<RoleInfo>) {
+        let mut lock = self.current_role.write();
+        *lock = role
     }
 
     pub fn get_current_tenant(&self) -> String {

@@ -24,8 +24,6 @@ use common_exception::Result;
 use common_legacy_expression::LegacyExpression;
 use common_legacy_planners::Extras;
 use common_meta_app::schema::DatabaseMeta;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::SourcePipeBuilder;
 use common_planner::plans::CreateDatabasePlan;
 use common_storage::StorageFsConfig;
 use common_storage::StorageParams;
@@ -49,8 +47,8 @@ use databend_query::storages::fuse::FUSE_TBL_BLOCK_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SEGMENT_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use databend_query::storages::Table;
-use databend_query::storages::TableStreamReadWrap;
 use databend_query::storages::ToReadDataSourcePlan;
+use databend_query::stream::DataBlockStream;
 use databend_query::table_functions::TableArgs;
 use futures::TryStreamExt;
 use parking_lot::Mutex;
@@ -284,15 +282,12 @@ impl TestFixture {
             .map(|b| b.schema().clone())
             .unwrap_or_else(|| table.schema());
         let mut build_res = PipelineBuildResult::create();
-        let mut builder = SourcePipeBuilder::create();
 
         let blocks = Arc::new(Mutex::new(VecDeque::from_iter(blocks)));
-        let output = OutputPort::create();
-        builder.add_source(
-            output.clone(),
-            BlocksSource::create(self.ctx.clone(), output, blocks)?,
-        );
-        build_res.main_pipeline.add_pipe(builder.finalize());
+        build_res.main_pipeline.add_source(
+            |output| BlocksSource::create(self.ctx.clone(), output, blocks.clone()),
+            1,
+        )?;
 
         append2table(
             self.ctx.clone(),

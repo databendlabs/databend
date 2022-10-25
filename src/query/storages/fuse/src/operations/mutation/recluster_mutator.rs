@@ -85,7 +85,7 @@ impl ReclusterMutator {
 
 #[async_trait::async_trait]
 impl TableMutator for ReclusterMutator {
-    async fn blocks_select(&mut self) -> Result<bool> {
+    async fn target_select(&mut self) -> Result<bool> {
         let blocks_map = self.blocks_map.clone();
         for (level, block_metas) in blocks_map.into_iter() {
             if block_metas.len() <= 1 {
@@ -202,9 +202,8 @@ impl TableMutator for ReclusterMutator {
         Ok(false)
     }
 
-    async fn try_commit(&self, table: Arc<dyn Table>) -> Result<()> {
-        let base_mutator = self.base_mutator.clone();
-        let ctx = base_mutator.ctx.clone();
+    async fn try_commit(self: Box<Self>, table: Arc<dyn Table>) -> Result<()> {
+        let ctx = &self.base_mutator.ctx;
         let (mut segments, mut summary, mut abort_operation) =
             self.base_mutator.generate_segments().await?;
 
@@ -234,8 +233,8 @@ impl TableMutator for ReclusterMutator {
         let table = FuseTable::try_from_table(table.as_ref())?;
         table
             .commit_mutation(
-                ctx.clone(),
-                base_mutator.base_snapshot.clone(),
+                ctx,
+                self.base_mutator.base_snapshot,
                 segments,
                 summary,
                 abort_operation,

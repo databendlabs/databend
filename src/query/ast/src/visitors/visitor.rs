@@ -371,6 +371,8 @@ pub trait Visitor<'ast>: Sized {
     ) {
     }
 
+    fn visit_set_role(&mut self, _is_default: bool, _role_name: &'ast str) {}
+
     fn visit_insert(&mut self, _insert: &'ast InsertStmt<'ast>) {}
 
     fn visit_insert_source(&mut self, _insert_source: &'ast InsertSource<'ast>) {}

@@ -198,6 +198,18 @@ fn test_statement() {
                 )
                 size_limit=10;"#,
         r#"COPY INTO mytable
+                FROM 's3://mybucket/data.csv'
+                CONNECTION = (
+                    ENDPOINT_URL = 'http://127.0.0.1:9900'
+                )
+                size_limit=10
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                );"#,
+        r#"COPY INTO mytable
                 FROM 'https://127.0.0.1:9900';"#,
         r#"COPY INTO mytable
                 FROM 'https://127.0.0.1:';"#,
@@ -271,6 +283,15 @@ fn test_statement() {
                     skip_header = 1
                 )
                 force=true;"#,
+        r#"COPY INTO mytable
+                FROM 'fs:///path/to/data.csv'
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;"#,
         // We used to support COPY FROM a quoted at string
         // r#"COPY INTO mytable
         //         FROM '@external_stage/path/to/file.csv'
@@ -381,7 +402,6 @@ fn test_query() {
     let mut mint = Mint::new("tests/it/testdata");
     let mut file = mint.new_goldenfile("query.txt").unwrap();
     let cases = &[
-        r#"select * from a limit 3 offset 4 format csv"#,
         r#"select * from customer inner join orders"#,
         r#"select * from customer cross join orders"#,
         r#"select * from customer inner join orders on a = b limit 1"#,
@@ -455,6 +475,7 @@ fn test_expr() {
         r#"123456789012345678901234567890"#,
         r#"x'123456789012345678901234567890'"#,
         r#"1e100000000000000"#,
+        r#".1"#,
         r#"-1"#,
         r#"(1,)"#,
         r#"(1,2)"#,
@@ -472,6 +493,9 @@ fn test_expr() {
         r#"1 + a * c.d"#,
         r#"number % 2"#,
         r#""t":k1.k2"#,
+        r#""t":k1.k2.0"#,
+        r#"t.0"#,
+        r#"(NULL,).0"#,
         r#"col1 not between 1 and 2"#,
         r#"sum(col1)"#,
         r#""random"()"#,

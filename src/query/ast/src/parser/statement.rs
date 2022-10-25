@@ -207,6 +207,13 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 if_exists: opt_if_exists.is_some(),
                 catalog,
             })
+    let set_role = map(
+        rule! {
+            SET ~ (DEFAULT)? ~ ROLE ~ #literal_string
+        },
+        |(_, opt_is_default, _, role_name)| Statement::SetRole {
+            is_default: opt_is_default.is_some(),
+            role_name,
         },
     );
 
@@ -793,53 +800,33 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             stage_name: stage_name.to_string(),
         },
     );
+
     let copy_into = map(
         rule! {
             COPY
             ~ INTO ~ #copy_unit
             ~ FROM ~ #copy_unit
-            ~ ( FILES ~ "=" ~ "(" ~ #comma_separated_list0(literal_string) ~ ")")?
-            ~ ( PATTERN ~ "=" ~ #literal_string)?
-            ~ ( FILE_FORMAT ~ "=" ~ #options)?
-            ~ ( VALIDATION_MODE ~ "=" ~ #literal_string)?
-            ~ ( SIZE_LIMIT ~ "=" ~ #literal_u64)?
-            ~ ( MAX_FILE_SIZE ~ "=" ~ #literal_u64)?
-            ~ ( SPLIT_SIZE ~ "=" ~ #literal_u64)?
-            ~ ( SINGLE ~ "=" ~ #literal_bool)?
-            ~ ( PURGE ~ "=" ~ #literal_bool)?
-            ~ ( FORCE ~ "=" ~ #literal_bool)?
+            ~ ( #copy_option )*
         },
-        |(
-            _,
-            _,
-            dst,
-            _,
-            src,
-            files,
-            pattern,
-            file_format,
-            validation_mode,
-            size_limit,
-            max_file_size,
-            split_size,
-            single,
-            purge,
-            force,
-        )| {
-            Statement::Copy(CopyStmt {
+        |(_, _, dst, _, src, opts)| {
+            let mut copy_stmt = CopyStmt {
                 src,
                 dst,
-                files: files.map(|v| v.3).unwrap_or_default(),
-                pattern: pattern.map(|v| v.2).unwrap_or_default(),
-                file_format: file_format.map(|v| v.2).unwrap_or_default(),
-                validation_mode: validation_mode.map(|v| v.2).unwrap_or_default(),
-                size_limit: size_limit.map(|v| v.2).unwrap_or_default() as usize,
-                max_file_size: max_file_size.map(|v| v.2).unwrap_or_default() as usize,
-                split_size: split_size.map(|v| v.2).unwrap_or_default() as usize,
-                single: single.map(|v| v.2).unwrap_or_default(),
-                purge: purge.map(|v| v.2).unwrap_or_default(),
-                force: force.map(|v| v.2).unwrap_or_default(),
-            })
+                files: Default::default(),
+                pattern: Default::default(),
+                file_format: Default::default(),
+                validation_mode: Default::default(),
+                size_limit: Default::default(),
+                max_file_size: Default::default(),
+                split_size: Default::default(),
+                single: Default::default(),
+                purge: Default::default(),
+                force: Default::default(),
+            };
+            for opt in opts {
+                copy_stmt.apply_option(opt);
+            }
+            Statement::Copy(copy_stmt)
         },
     );
 
@@ -890,7 +877,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let drop_share = map(
         rule! {
-            DROP ~ SHARE ~ (IF ~ EXISTS )? ~ #ident
+            DROP ~ SHARE ~ (IF ~ EXISTS)? ~ #ident
         },
         |(_, _, opt_if_exists, share)| {
             Statement::DropShare(DropShareStmt {
@@ -964,6 +951,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #show_functions : "`SHOW FUNCTIONS [<show_limit>]`"
             | #kill_stmt : "`KILL (QUERY | CONNECTION) <object_id>`"
             | #set_variable : "`SET <variable> = <value>`"
+            | #set_role: "`SET [DEFAULT] ROLE <role>`"
             | #show_databases : "`SHOW DATABASES [<show_limit>]`"
             | #undrop_database : "`UNDROP DATABASE <database>`"
             | #show_create_database : "`SHOW CREATE DATABASE <database>`"
@@ -984,7 +972,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #alter_table : "`ALTER TABLE [<database>.]<table> <action>`"
             | #rename_table : "`RENAME TABLE [<database>.]<table> TO <new_table>`"
             | #truncate_table : "`TRUNCATE TABLE [<database>.]<table> [PURGE]`"
-            | #optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT)`"
+            | #optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT [SEGMENT])`"
             | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
         ),
         rule!(
@@ -1414,7 +1402,13 @@ pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
     alt((
         value(OptimizeTableAction::All, rule! { ALL }),
         value(OptimizeTableAction::Purge, rule! { PURGE }),
-        value(OptimizeTableAction::Compact, rule! { COMPACT }),
+        map(
+            rule! { COMPACT ~ (SEGMENT)? ~ ( LIMIT ~ ^#expr )?},
+            |(_, opt_segment, opt_limit)| OptimizeTableAction::Compact {
+                target: opt_segment.map_or(CompactTarget::Block, |_| CompactTarget::Segment),
+                limit: opt_limit.map(|(_, limit)| limit),
+            },
+        ),
     ))(i)
 }
 
@@ -1496,6 +1490,16 @@ pub fn uri_location(i: Input) -> IResult<UriLocation> {
             ~ (ENCRYPTION ~ "=" ~ #options)?
         },
         |(location, connection_opt, credentials_opt, encryption_opt)| {
+            // fs location is not a valid url, let's check it in advance.
+            if let Some(path) = location.strip_prefix("fs://") {
+                return Ok(UriLocation {
+                    protocol: "fs".to_string(),
+                    name: "".to_string(),
+                    path: path.to_string(),
+                    connection: BTreeMap::default(),
+                });
+            }
+
             let parsed =
                 Url::parse(&location).map_err(|_| ErrorKind::Other("invalid uri location"))?;
 
@@ -1652,6 +1656,47 @@ pub fn auth_type(i: Input) -> IResult<AuthType> {
         value(AuthType::Sha256Password, rule! { SHA256_PASSWORD }),
         value(AuthType::DoubleSha1Password, rule! { DOUBLE_SHA1_PASSWORD }),
         value(AuthType::JWT, rule! { JWT }),
+    ))(i)
+}
+
+pub fn copy_option(i: Input) -> IResult<CopyOption> {
+    alt((
+        map(
+            rule! { FILES ~ "=" ~ "(" ~ #comma_separated_list0(literal_string) ~ ")" },
+            |(_, _, _, files, _)| CopyOption::Files(files),
+        ),
+        map(
+            rule! { PATTERN ~ "=" ~ #literal_string },
+            |(_, _, pattern)| CopyOption::Pattern(pattern),
+        ),
+        map(rule! { FILE_FORMAT ~ "=" ~ #options }, |(_, _, options)| {
+            CopyOption::FileFormat(options)
+        }),
+        map(
+            rule! { VALIDATION_MODE ~ "=" ~ #literal_string },
+            |(_, _, validation_mode)| CopyOption::ValidationMode(validation_mode),
+        ),
+        map(
+            rule! { SIZE_LIMIT ~ "=" ~ #literal_u64 },
+            |(_, _, size_limit)| CopyOption::SizeLimit(size_limit as usize),
+        ),
+        map(
+            rule! { MAX_FILE_SIZE ~ "=" ~ #literal_u64 },
+            |(_, _, max_file_size)| CopyOption::MaxFileSize(max_file_size as usize),
+        ),
+        map(
+            rule! { SPLIT_SIZE ~ "=" ~ #literal_u64 },
+            |(_, _, split_size)| CopyOption::SplitSize(split_size as usize),
+        ),
+        map(rule! { SINGLE ~ "=" ~ #literal_bool }, |(_, _, single)| {
+            CopyOption::Single(single)
+        }),
+        map(rule! { PURGE ~ "=" ~ #literal_bool }, |(_, _, purge)| {
+            CopyOption::Purge(purge)
+        }),
+        map(rule! { FORCE ~ "=" ~ #literal_bool }, |(_, _, force)| {
+            CopyOption::Force(force)
+        }),
     ))(i)
 }
 

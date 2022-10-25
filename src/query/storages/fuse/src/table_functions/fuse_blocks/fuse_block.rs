@@ -47,7 +47,7 @@ impl<'a> FuseBlock<'a> {
 
     pub async fn get_blocks(&self) -> Result<DataBlock> {
         let tbl = self.table;
-        let maybe_snapshot = tbl.read_table_snapshot(self.ctx.clone()).await?;
+        let maybe_snapshot = tbl.read_table_snapshot().await?;
         if let Some(snapshot) = maybe_snapshot {
             if self.snapshot_id.is_none() {
                 return self.to_block(snapshot).await;
@@ -58,7 +58,7 @@ impl<'a> FuseBlock<'a> {
             let snapshot_location = tbl
                 .meta_location_generator
                 .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot_version)?;
-            let reader = MetaReaders::table_snapshot_reader(self.ctx.clone(), tbl.get_operator());
+            let reader = MetaReaders::table_snapshot_reader(tbl.get_operator());
             let mut snapshot_stream = reader.snapshot_history(
                 snapshot_location,
                 snapshot_version,
@@ -83,6 +83,7 @@ impl<'a> FuseBlock<'a> {
         let mut block_location: Vec<Vec<u8>> = Vec::with_capacity(len);
         let mut block_size: Vec<u64> = Vec::with_capacity(len);
         let mut file_size: Vec<u64> = Vec::with_capacity(len);
+        let mut row_count: Vec<u64> = Vec::with_capacity(len);
         let mut bloom_filter_location: Vec<Option<Vec<u8>>> = Vec::with_capacity(len);
         let mut bloom_filter_size: Vec<u64> = Vec::with_capacity(len);
 
@@ -94,6 +95,7 @@ impl<'a> FuseBlock<'a> {
                 block_location.push(block.location.0.into_bytes());
                 block_size.push(block.block_size);
                 file_size.push(block.file_size);
+                row_count.push(block.row_count);
                 bloom_filter_location.push(
                     block
                         .bloom_filter_index_location
@@ -109,6 +111,7 @@ impl<'a> FuseBlock<'a> {
             Series::from_data(block_location),
             Series::from_data(block_size),
             Series::from_data(file_size),
+            Series::from_data(row_count),
             Series::from_data(bloom_filter_location),
             Series::from_data(bloom_filter_size),
         ]))
@@ -121,6 +124,7 @@ impl<'a> FuseBlock<'a> {
             DataField::new("block_location", Vu8::to_data_type()),
             DataField::new("block_size", u64::to_data_type()),
             DataField::new("file_size", u64::to_data_type()),
+            DataField::new("row_count", u64::to_data_type()),
             DataField::new_nullable("bloom_filter_location", Vu8::to_data_type()),
             DataField::new("bloom_filter_size", u64::to_data_type()),
         ])

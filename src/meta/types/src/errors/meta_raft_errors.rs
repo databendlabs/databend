@@ -19,8 +19,6 @@ pub use openraft::error::Fatal;
 pub use openraft::error::ForwardToLeader;
 pub use openraft::error::InProgress;
 pub use openraft::error::InitializeError;
-pub use openraft::error::LearnerIsLagging;
-pub use openraft::error::LearnerNotFound;
 use openraft::NodeId;
 use serde::Deserialize;
 use serde::Serialize;

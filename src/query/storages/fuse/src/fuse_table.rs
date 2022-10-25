@@ -22,6 +22,7 @@ use common_catalog::catalog::StorageDescription;
 use common_catalog::table::ColumnId;
 use common_catalog::table::ColumnStatistics;
 use common_catalog::table::ColumnStatisticsProvider;
+use common_catalog::table::CompactTarget;
 use common_catalog::table_context::TableContext;
 use common_catalog::table_mutator::TableMutator;
 use common_datablocks::DataBlock;
@@ -42,10 +43,10 @@ use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
 use common_sharing::create_share_table_operator;
 use common_storage::init_operator;
+use common_storage::DataOperator;
 use common_storage::ShareTableConfig;
-use common_storage::StorageOperator;
-use common_storages_util::storage_context::StorageContext;
-use common_storages_util::table_storage_prefix::table_storage_prefix;
+use common_storage::StorageMetrics;
+use common_storage::StorageMetricsLayer;
 use opendal::Operator;
 use uuid::Uuid;
 
@@ -54,6 +55,7 @@ use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::AppendOperationLogEntry;
 use crate::pipelines::Pipeline;
+use crate::table_storage_prefix;
 use crate::NavigationPoint;
 use crate::Table;
 use crate::TableStatistics;
@@ -76,21 +78,16 @@ pub struct FuseTable {
     pub(crate) read_only: bool,
 
     pub(crate) operator: Operator,
+    pub(crate) data_metrics: Arc<StorageMetrics>,
 }
 
 impl FuseTable {
-    pub fn try_create(_ctx: StorageContext, table_info: TableInfo) -> Result<Box<dyn Table>> {
+    pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
         let r = Self::do_create(table_info, false)?;
         Ok(r)
     }
 
-    pub fn do_create(table_info: TableInfo, read_only: bool) -> Result<Box<FuseTable>> {
-        let storage_prefix = Self::parse_storage_prefix(&table_info)?;
-        let cluster_key_meta = table_info.meta.cluster_key();
-        let mut cluster_keys = Vec::new();
-        if let Some((_, order)) = &cluster_key_meta {
-            cluster_keys = ExpressionParser::parse_exprs(order)?;
-        }
+    fn init_operator(table_info: &TableInfo) -> Result<Operator> {
         let operator = match table_info.from_share {
             Some(ref from_share) => create_share_table_operator(
                 ShareTableConfig::share_endpoint_address(),
@@ -104,13 +101,33 @@ impl FuseTable {
                 match storage_params {
                     Some(sp) => init_operator(&sp)?,
                     None => {
-                        let op = &*(StorageOperator::instance());
+                        let op = &*(DataOperator::instance());
                         op.clone()
                     }
                 }
             }
         };
+        Ok(operator)
+    }
 
+    pub fn do_create(table_info: TableInfo, read_only: bool) -> Result<Box<FuseTable>> {
+        let operator = Self::init_operator(&table_info)?;
+        Self::do_create_with_operator(table_info, operator, read_only)
+    }
+
+    pub fn do_create_with_operator(
+        table_info: TableInfo,
+        operator: Operator,
+        read_only: bool,
+    ) -> Result<Box<FuseTable>> {
+        let storage_prefix = Self::parse_storage_prefix(&table_info)?;
+        let cluster_key_meta = table_info.meta.cluster_key();
+        let mut cluster_keys = Vec::new();
+        if let Some((_, order)) = &cluster_key_meta {
+            cluster_keys = ExpressionParser::parse_exprs(order)?;
+        }
+        let data_metrics = Arc::new(StorageMetrics::default());
+        let operator = operator.layer(StorageMetricsLayer::new(data_metrics.clone()));
         Ok(Box::new(FuseTable {
             table_info,
             cluster_keys,
@@ -118,6 +135,7 @@ impl FuseTable {
             meta_location_generator: TableMetaLocationGenerator::with_prefix(storage_prefix),
             read_only,
             operator,
+            data_metrics,
         }))
     }
 
@@ -147,13 +165,10 @@ impl FuseTable {
         Ok(table_storage_prefix(db_id, table_id))
     }
 
-    #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
-    pub(crate) async fn read_table_snapshot(
-        &self,
-        ctx: Arc<dyn TableContext>,
-    ) -> Result<Option<Arc<TableSnapshot>>> {
+    #[tracing::instrument(level = "debug", skip_all)]
+    pub(crate) async fn read_table_snapshot(&self) -> Result<Option<Arc<TableSnapshot>>> {
         if let Some(loc) = self.snapshot_loc().await? {
-            let reader = MetaReaders::table_snapshot_reader(ctx, self.get_operator());
+            let reader = MetaReaders::table_snapshot_reader(self.get_operator());
             let ver = self.snapshot_format_version().await?;
             Ok(Some(reader.read(loc.as_str(), None, ver).await?))
         } else {
@@ -257,6 +272,10 @@ impl Table for FuseTable {
         true
     }
 
+    fn get_data_metrics(&self) -> Option<Arc<StorageMetrics>> {
+        Some(self.data_metrics.clone())
+    }
+
     async fn alter_table_cluster_keys(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -267,7 +286,7 @@ impl Table for FuseTable {
         let cluster_key_meta = new_table_meta.cluster_key();
         let schema = self.schema().as_ref().clone();
 
-        let prev = self.read_table_snapshot(ctx.clone()).await?;
+        let prev = self.read_table_snapshot().await?;
         let prev_version = self.snapshot_format_version().await?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let prev_snapshot_id = prev.as_ref().map(|v| (v.snapshot_id, prev_version));
@@ -311,7 +330,7 @@ impl Table for FuseTable {
 
         let schema = self.schema().as_ref().clone();
 
-        let prev = self.read_table_snapshot(ctx.clone()).await?;
+        let prev = self.read_table_snapshot().await?;
         let prev_version = self.snapshot_format_version().await?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let prev_snapshot_id = prev.as_ref().map(|v| (v.snapshot_id, prev_version));
@@ -401,10 +420,7 @@ impl Table for FuseTable {
         self.do_gc(&ctx, keep_last_snapshot).await
     }
 
-    async fn table_statistics(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-    ) -> Result<Option<TableStatistics>> {
+    fn table_statistics(&self) -> Result<Option<TableStatistics>> {
         let s = &self.table_info.meta.statistics;
         Ok(Some(TableStatistics {
             num_rows: Some(s.number_of_rows),
@@ -414,11 +430,8 @@ impl Table for FuseTable {
         }))
     }
 
-    async fn column_statistics_provider(
-        &self,
-        ctx: Arc<dyn TableContext>,
-    ) -> Result<Box<dyn ColumnStatisticsProvider>> {
-        let provider = if let Some(snapshot) = self.read_table_snapshot(ctx).await? {
+    async fn column_statistics_provider(&self) -> Result<Box<dyn ColumnStatisticsProvider>> {
+        let provider = if let Some(snapshot) = self.read_table_snapshot().await? {
             let stats = &snapshot.summary.col_stats;
             FakedColumnStatisticsProvider {
                 column_stats: stats.clone(),
@@ -430,18 +443,14 @@ impl Table for FuseTable {
         Ok(Box::new(provider))
     }
 
-    #[tracing::instrument(level = "debug", name = "fuse_table_navigate_to", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
-    async fn navigate_to(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        point: &NavigationPoint,
-    ) -> Result<Arc<dyn Table>> {
+    #[tracing::instrument(level = "debug", name = "fuse_table_navigate_to", skip_all)]
+    async fn navigate_to(&self, point: &NavigationPoint) -> Result<Arc<dyn Table>> {
         match point {
             NavigationPoint::SnapshotID(snapshot_id) => {
-                Ok(self.navigate_to_snapshot(ctx, snapshot_id.as_str()).await?)
+                Ok(self.navigate_to_snapshot(snapshot_id.as_str()).await?)
             }
             NavigationPoint::TimePoint(time_point) => {
-                Ok(self.navigate_to_time_point(ctx, *time_point).await?)
+                Ok(self.navigate_to_time_point(*time_point).await?)
             }
         }
     }
@@ -454,9 +463,11 @@ impl Table for FuseTable {
     async fn compact(
         &self,
         ctx: Arc<dyn TableContext>,
+        target: CompactTarget,
+        limit: Option<usize>,
         pipeline: &mut Pipeline,
-    ) -> Result<Option<Arc<dyn TableMutator>>> {
-        self.do_compact(ctx, pipeline).await
+    ) -> Result<Option<Box<dyn TableMutator>>> {
+        self.do_compact(ctx, target, limit, pipeline).await
     }
 
     async fn recluster(
@@ -464,7 +475,7 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         push_downs: Option<Extras>,
-    ) -> Result<Option<Arc<dyn TableMutator>>> {
+    ) -> Result<Option<Box<dyn TableMutator>>> {
         self.do_recluster(ctx, pipeline, push_downs).await
     }
 }

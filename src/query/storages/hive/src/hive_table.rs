@@ -43,7 +43,7 @@ use common_pipeline_core::SourcePipeBuilder;
 use common_pipeline_sources::processors::sources::sync_source::SyncSource;
 use common_pipeline_sources::processors::sources::sync_source::SyncSourcer;
 use common_storage::init_operator;
-use common_storage::StorageOperator;
+use common_storage::DataOperator;
 use futures::TryStreamExt;
 use opendal::ObjectMode;
 use opendal::Operator;
@@ -72,7 +72,7 @@ impl HiveTable {
         let dal = match storage_params {
             Some(sp) => init_operator(&sp)?,
             None => {
-                let op = &*(StorageOperator::instance());
+                let op = &*(DataOperator::instance());
                 op.clone()
             }
         };
@@ -462,10 +462,7 @@ impl Table for HiveTable {
         Ok(())
     }
 
-    async fn table_statistics(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-    ) -> Result<Option<TableStatistics>> {
+    fn table_statistics(&self) -> Result<Option<TableStatistics>> {
         Ok(None)
     }
 }

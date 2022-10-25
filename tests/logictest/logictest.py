@@ -4,6 +4,7 @@ import glob
 import os
 import re
 import time
+import traceback
 
 import six
 
@@ -318,6 +319,7 @@ class SuiteRunner(object):
                     try:
                         self.batch_execute(statement_list)
                     except Exception as e:
+                        print(traceback.format_exc())
                         log.warning(
                             f"Get exception when running suite {suite_name}")
                         global_statistics.add_failed(self.kind, self.suite_now,

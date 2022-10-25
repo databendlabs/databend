@@ -107,7 +107,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
 
     info!("--- join non-voter 2 to cluster by leader");
 
-    let leader_id = all[0].get_leader().await;
+    let leader_id = all[0].get_leader().await?.unwrap();
     let leader = all[leader_id as usize].clone();
 
     let admin_req = join_req(
@@ -193,10 +193,11 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
 #[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_meta_node_leave() -> anyhow::Result<()> {
     // - Bring up a cluster
-    // - Leave a node by sending a Leave request to a non-voter.
+    // - Leave a     voter node by sending a Leave request to a non-voter.
+    // - Leave a non-voter node by sending a Leave request to a non-voter.
     // - Restart all nodes and check if states are restored.
 
-    let (mut _nlog, tcs) = start_meta_node_cluster(btreeset![0, 1, 2], btreeset![3]).await?;
+    let (mut log_index, tcs) = start_meta_node_cluster(btreeset![0, 1, 2], btreeset![3]).await?;
     let mut all = test_context_nodes(&tcs);
 
     let leader_id = 0;
@@ -204,26 +205,75 @@ async fn test_meta_node_leave() -> anyhow::Result<()> {
 
     let leader = all[leader_id as usize].clone();
 
-    // leave a node
-    let req = ForwardRequest {
-        forward_to_leader: 0,
-        body: ForwardRequestBody::Leave(LeaveRequest {
-            node_id: leave_node_id,
-        }),
-    };
+    info!("--- leave voter node-1");
+    {
+        let req = ForwardRequest {
+            forward_to_leader: 0,
+            body: ForwardRequestBody::Leave(LeaveRequest {
+                node_id: leave_node_id,
+            }),
+        };
 
-    leader.handle_forwardable_request(req).await?;
+        leader.handle_forwardable_request(req).await?;
+        // Change membership
+        log_index += 2;
+        // Remove node
+        log_index += 1;
 
-    leader
-        .raft
-        .wait(timeout())
-        .members(btreeset! {0,2}, "node-1 left the cluster")
-        .await?;
+        leader
+            .raft
+            .wait(timeout())
+            .log(Some(log_index), "commit leave-request logs for node-1")
+            .await?;
+
+        leader
+            .raft
+            .wait(timeout())
+            .members(btreeset! {0,2}, "node-1 left the cluster")
+            .await?;
+    }
+
+    info!("--- check nodes list: node-1 is removed");
+    {
+        let nodes = leader.get_nodes().await?;
+        assert_eq!(
+            vec!["0", "2", "3"],
+            nodes.iter().map(|x| x.name.clone()).collect::<Vec<_>>()
+        );
+    }
+
+    info!("--- leave non-voter node-3");
+    {
+        let req = ForwardRequest {
+            forward_to_leader: 0,
+            body: ForwardRequestBody::Leave(LeaveRequest { node_id: 3 }),
+        };
+
+        leader.handle_forwardable_request(req).await?;
+        // Remove node, no membership change
+        log_index += 1;
+
+        leader
+            .raft
+            .wait(timeout())
+            .log(Some(log_index), "commit leave-request logs for node-3")
+            .await?;
+    }
+
+    info!("--- check nodes list: node-3 is removed");
+    {
+        let nodes = leader.get_nodes().await?;
+        assert_eq!(
+            vec!["0", "2"],
+            nodes.iter().map(|x| x.name.clone()).collect::<Vec<_>>()
+        );
+    }
 
     info!("--- stop all meta node");
-
-    for mn in all.drain(..) {
-        mn.stop().await?;
+    {
+        for mn in all.drain(..) {
+            mn.stop().await?;
+        }
     }
 
     // restart the cluster and check membership
@@ -268,7 +318,7 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
 
     info!("--- join non-voter 1 to cluster");
 
-    let leader_id = all[0].get_leader().await;
+    let leader_id = all[0].get_leader().await?.unwrap();
     let leader = all[leader_id as usize].clone();
     let req = join_req(
         node_id,
@@ -332,6 +382,68 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
             .await?;
     }
 
+    Ok(())
+}
+
+#[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
+async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
+    // Assert that MetaNode allows joining even with initialized store.
+    // But does not allow joining with a store that already has membership initialized.
+    //
+    // In this test it needs a cluster of 3 to form a quorum of 2, so that node-2 can be stopped.
+
+    let tc0 = MetaSrvTestContext::new(0);
+
+    let mut tc1 = MetaSrvTestContext::new(1);
+    tc1.config.raft_config.single = false;
+    tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
+
+    let mut tc2 = MetaSrvTestContext::new(2);
+    tc2.config.raft_config.single = false;
+    tc2.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
+
+    let meta_node = MetaNode::start(&tc0.config).await?;
+    let res = meta_node
+        .join_cluster(&tc0.config.raft_config, tc0.config.grpc_api_address)
+        .await?;
+    assert_eq!(Err("Did not join: --join is empty".to_string()), res);
+
+    let meta_node1 = MetaNode::start(&tc1.config).await?;
+    let res = meta_node1
+        .join_cluster(&tc1.config.raft_config, tc1.config.grpc_api_address.clone())
+        .await?;
+    assert_eq!(Ok(()), res);
+
+    info!("--- initialize store for node-2");
+    {
+        let n2 = MetaNode::start(&tc2.config).await?;
+        n2.stop().await?;
+    }
+
+    info!("--- Allow to join node-2 with initialized store");
+    {
+        let n2 = MetaNode::start(&tc2.config).await?;
+        let res = n2
+            .join_cluster(&tc2.config.raft_config, tc2.config.grpc_api_address.clone())
+            .await?;
+        assert_eq!(Ok(()), res);
+
+        n2.stop().await?;
+    }
+
+    info!("--- Not allowed to join node-2 with store with membership");
+    {
+        let n2 = MetaNode::start(&tc2.config).await?;
+        let res = n2
+            .join_cluster(&tc2.config.raft_config, tc2.config.grpc_api_address)
+            .await?;
+        assert_eq!(
+            Err("Did not join: node 2 already in cluster".to_string()),
+            res
+        );
+
+        n2.stop().await?;
+    }
     Ok(())
 }
 
@@ -432,7 +544,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
         let leader = tc.meta_node();
 
         leader
-            .as_leader()
+            .assume_leader()
             .await?
             .write(LogEntry {
                 txid: None,
@@ -516,14 +628,14 @@ fn join_req(
 /// Write one log on leader, check all nodes replicated the log.
 /// Returns the number log committed.
 async fn assert_upsert_kv_synced(meta_nodes: Vec<Arc<MetaNode>>, key: &str) -> anyhow::Result<u64> {
-    let leader_id = meta_nodes[0].get_leader().await;
+    let leader_id = meta_nodes[0].get_leader().await?.unwrap();
     let leader = meta_nodes[leader_id as usize].clone();
 
     let last_applied = leader.raft.metrics().borrow().last_applied;
     info!("leader: last_applied={:?}", last_applied);
     {
         leader
-            .as_leader()
+            .assume_leader()
             .await?
             .write(LogEntry {
                 txid: None,

@@ -32,7 +32,7 @@ jobs:
       - name: Get latest tag
         id: get-latest-tag
         run: |
-          echo "::set-output name=tag::`gh release list -L 1 | cut -f 1`"
+          echo "tag=`gh release list -L 1 | cut -f 1`" >> $GITHUB_OUTPUT
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Bump version
@@ -94,7 +94,7 @@ jobs:
           fetch-depth: 0
       - name: Get target
         id: target
-        run: echo ::set-output name=target::${{ matrix.arch }}-apple-darwin
+        run: echo 'target=${{ matrix.arch }}-apple-darwin' >> $GITHUB_OUTPUT
       - name: Rust setup
         run: |
           bash ./scripts/setup/dev_setup.sh -yb
@@ -161,10 +161,10 @@ jobs:
           fetch-depth: 0
       - name: Get the version
         id: get_version
-        run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
+        run: echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_OUTPUT
       - name: Get target
         id: target
-        run: echo ::set-output name=target::${{ matrix.arch }}-unknown-linux-${{ matrix.platform }}
+        run: echo 'target=${{ matrix.arch }}-unknown-linux-${{ matrix.platform }}' >> $GITHUB_OUTPUT
       - name: Setup Build Tool
         uses: ./.github/actions/setup_build_tool
         with:
@@ -224,7 +224,7 @@ jobs:
         uses: actions/checkout@v3
       - name: Get the version
         id: get_version
-        run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
+        run: echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_OUTPUT
       - name: Upload to github release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -243,7 +243,7 @@ jobs:
 
       - name: Get the version
         id: get_version
-        run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
+        run: echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_OUTPUT
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
@@ -298,7 +298,7 @@ jobs:
 
       - name: Get the version
         id: get_version
-        run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
+        run: echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_OUTPUT
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
@@ -342,7 +342,7 @@ jobs:
             _tags="${_tags},${{ steps.login.outputs.ecr_repo }}:latest"
             _tags="${_tags},${{ steps.login.outputs.acr_repo }}:latest"
           fi
-          echo ::set-output name=IMAGE_TAGS::${_tags}
+          echo "IMAGE_TAGS=${_tags}" >> $GITHUB_OUTPUT
 
       - name: push service image
         uses: docker/build-push-action@v3

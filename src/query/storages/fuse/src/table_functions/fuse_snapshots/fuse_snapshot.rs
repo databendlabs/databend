@@ -37,6 +37,7 @@ impl<'a> FuseSnapshot<'a> {
     pub async fn get_snapshots(self, limit: Option<usize>) -> Result<DataBlock> {
         let meta_location_generator = self.table.meta_location_generator.clone();
         let snapshot_location = self.table.snapshot_loc().await?;
+        let snapshot = self.table.read_table_snapshot().await?;
         if let Some(snapshot_location) = snapshot_location {
             let snapshot_version = self.table.snapshot_format_version().await?;
             let snapshots_io = SnapshotsIO::create(
@@ -45,7 +46,13 @@ impl<'a> FuseSnapshot<'a> {
                 snapshot_version,
             );
             let (snapshots, _) = snapshots_io
-                .read_snapshot_lites(snapshot_location, limit, false)
+                .read_snapshot_lites(
+                    snapshot_location,
+                    limit,
+                    false,
+                    snapshot.and_then(|s| s.timestamp),
+                    &|_| {},
+                )
                 .await?;
             return self.to_block(&meta_location_generator, &snapshots, snapshot_version);
         }

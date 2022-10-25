@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Range;
 use std::sync::Arc;
 
 use common_expression::types::array::ArrayColumnBuilder;
@@ -24,7 +25,9 @@ use common_expression::types::GenericType;
 use common_expression::types::NullType;
 use common_expression::types::NullableType;
 use common_expression::types::NumberType;
+use common_expression::vectorize_with_builder_1_arg;
 use common_expression::vectorize_with_builder_2_arg;
+use common_expression::vectorize_with_builder_3_arg;
 use common_expression::Column;
 use common_expression::Domain;
 use common_expression::Function;
@@ -119,6 +122,98 @@ pub fn register(registry: &mut FunctionRegistry) {
                 match arr.index(idx as usize) {
                     Some(item) => output.push(item),
                     None => output.push_null(),
+                }
+                Ok(())
+            }
+        ),
+    );
+
+    registry.register_passthrough_nullable_3_arg::<EmptyArrayType, UInt64Type, UInt64Type, EmptyArrayType, _, _>(
+        "slice",
+        FunctionProperty::default(),
+        |_, _, _| None,
+        vectorize_with_builder_3_arg::<EmptyArrayType, UInt64Type, UInt64Type, EmptyArrayType>(
+            |_, _, _, output, _| {
+                *output += 1;
+                Ok(())
+            }
+        ),
+    );
+
+    registry.register_passthrough_nullable_3_arg::<ArrayType<GenericType<0>>, UInt64Type, UInt64Type, ArrayType<GenericType<0>>, _, _>(
+        "slice",
+        FunctionProperty::default(),
+        |_, _, _| None,
+        vectorize_with_builder_3_arg::<ArrayType<GenericType<0>>, UInt64Type, UInt64Type, ArrayType<GenericType<0>>>(
+            |arr, start, end, output, _| {
+                let start = start as usize;
+                let end = end as usize;
+                if arr.len() == 0 || arr.len() <= start || start >= end {
+                    output.push_default();
+                } else {
+                    let range = if end < arr.len() {
+                        Range { start, end }
+                    } else {
+                        Range { start, end: arr.len() }
+                    };
+                    let arr_slice = arr.slice(range);
+                    output.push(arr_slice);
+                }
+                Ok(())
+            }
+        ),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<EmptyArrayType, EmptyArrayType, _, _>(
+        "remove_first",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_with_builder_1_arg::<EmptyArrayType, EmptyArrayType>(|_, output, _| {
+            *output += 1;
+            Ok(())
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, _, _>(
+        "remove_first",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_with_builder_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>(
+            |arr, output, _| {
+                if arr.len() <= 1 {
+                    output.push_default();
+                } else {
+                    let range = Range { start: 1, end: arr.len() };
+                    let arr_slice = arr.slice(range);
+                    output.push(arr_slice);
+                }
+                Ok(())
+            }
+        ),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<EmptyArrayType, EmptyArrayType, _, _>(
+        "remove_last",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_with_builder_1_arg::<EmptyArrayType, EmptyArrayType>(|_, output, _| {
+            *output += 1;
+            Ok(())
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, _, _>(
+        "remove_last",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_with_builder_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>(
+            |arr, output, _| {
+                if arr.len() <= 1 {
+                    output.push_default();
+                } else {
+                    let range = Range { start: 0, end: arr.len() - 1 };
+                    let arr_slice = arr.slice(range);
+                    output.push(arr_slice);
                 }
                 Ok(())
             }

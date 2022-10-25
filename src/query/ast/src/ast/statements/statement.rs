@@ -60,6 +60,11 @@ pub enum Statement<'a> {
         value: Literal,
     },
 
+    SetRole {
+        is_default: bool,
+        role_name: String,
+    },
+
     Insert(InsertStmt<'a>),
 
     Delete {
@@ -253,6 +258,17 @@ impl<'a> Display for Statement<'a> {
                     write!(f, "GLOBAL ")?;
                 }
                 write!(f, "{variable} = {value}")?;
+            }
+            Statement::SetRole {
+                is_default,
+                role_name,
+            } => {
+                write!(f, "SET ROLE ")?;
+                if *is_default {
+                    write!(f, "DEFAULT")?;
+                } else {
+                    write!(f, "{role_name}")?;
+                }
             }
             Statement::ShowCatalogs(stmt) => write!(f, "{stmt}")?,
             Statement::ShowCreateCatalog(stmt) => write!(f, "{stmt}")?,

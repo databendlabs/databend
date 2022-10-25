@@ -1,0 +1,21 @@
+[package]
+name = "common-storages-cache"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+doctest = false
+test = false
+
+[dependencies]
+common-arrow = { path = "../../../common/arrow" }
+common-cache = { path = "../../../common/cache" }
+common-exception = { path = "../../../common/exception" }
+common-fuse-meta = { path = "../fuse-meta" }
+
+async-trait = { version = "0.1.57", package = "async-trait-fn" }
+opendal = { version = "0.19", features = ["layers-retry"] }

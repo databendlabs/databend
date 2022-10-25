@@ -21,7 +21,7 @@ use opendal::Operator;
 
 use crate::io::Files;
 
-#[derive(Default, Clone, Debug)]
+#[derive(Default)]
 pub struct AbortOperation {
     pub segments: Vec<String>,
     pub blocks: Vec<String>,
@@ -45,7 +45,11 @@ impl AbortOperation {
 
     pub async fn abort(self, ctx: Arc<dyn TableContext>, operator: Operator) -> Result<()> {
         let fuse_file = Files::create(ctx, operator);
-        let locations = vec![self.blocks, self.bloom_filter_indexes, self.segments].concat();
-        fuse_file.remove_file_in_batch(&locations).await
+        let locations = self
+            .blocks
+            .into_iter()
+            .chain(self.bloom_filter_indexes.into_iter())
+            .chain(self.segments.into_iter());
+        fuse_file.remove_file_in_batch(locations).await
     }
 }

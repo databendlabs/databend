@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::types::arithmetics_type::ResultTypeOfBinary;
-use common_expression::types::arithmetics_type::ResultTypeOfUnary;
 use common_expression::types::number::F64;
 use common_expression::types::number::*;
 use common_expression::types::NullableType;
 use common_expression::types::NumberDataType;
 use common_expression::types::ALL_NUMERICS_TYPES;
+use common_expression::utils::arithmetics_type::ResultTypeOfBinary;
+use common_expression::utils::arithmetics_type::ResultTypeOfUnary;
 use common_expression::vectorize_with_builder_2_arg;
 use common_expression::with_number_mapped_type;
 use common_expression::FunctionProperty;

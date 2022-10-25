@@ -41,7 +41,6 @@ use common_meta_app::schema::UpsertTableOptionReq;
 
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
-use crate::storages::StorageContext;
 
 #[derive(Clone)]
 pub struct DefaultDatabase {
@@ -78,11 +77,7 @@ impl Database for DefaultDatabase {
 
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
         let storage = self.ctx.storage_factory.clone();
-        let ctx = StorageContext {
-            meta: self.ctx.meta.clone().arc(),
-            in_memory_data: self.ctx.in_memory_data.clone(),
-        };
-        storage.get_table(ctx, table_info)
+        storage.get_table(table_info)
     }
 
     // Get one table by db and table name.

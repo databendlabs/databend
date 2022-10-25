@@ -37,8 +37,9 @@ pub struct Query<'a> {
     pub limit: Vec<Expr<'a>>,
     // `OFFSET` expr
     pub offset: Option<Expr<'a>>,
-    // FORMAT <format>
-    pub format: Option<String>,
+
+    // If ignore the result (not output).
+    pub ignore_result: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -488,9 +489,6 @@ impl<'a> Display for Query<'a> {
             write!(f, " OFFSET {offset}")?;
         }
 
-        if let Some(format) = &self.format {
-            write!(f, " FORMAT {format}")?;
-        }
         Ok(())
     }
 }

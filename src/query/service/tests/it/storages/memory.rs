@@ -23,8 +23,8 @@ use common_meta_app::schema::TableMeta;
 use databend_query::sessions::TableContext;
 use databend_query::sql::plans::create_table_v2::TableOptions;
 use databend_query::storages::memory::MemoryTable;
-use databend_query::storages::TableStreamReadWrap;
 use databend_query::storages::ToReadDataSourcePlan;
+use databend_query::stream::DataBlockStream;
 use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -34,19 +34,18 @@ async fn test_memorytable() -> Result<()> {
         DataField::new("a", u32::to_data_type()),
         DataField::new("b", u64::to_data_type()),
     ]);
-    let table =
-        MemoryTable::try_create(crate::tests::create_storage_context().await?, TableInfo {
-            desc: "'default'.'a'".into(),
-            name: "a".into(),
-            ident: Default::default(),
-            meta: TableMeta {
-                schema: schema.clone(),
-                engine: "Memory".to_string(),
-                options: TableOptions::default(),
-                ..Default::default()
-            },
+    let table = MemoryTable::try_create(TableInfo {
+        desc: "'default'.'a'".into(),
+        name: "a".into(),
+        ident: Default::default(),
+        meta: TableMeta {
+            schema: schema.clone(),
+            engine: "Memory".to_string(),
+            options: TableOptions::default(),
             ..Default::default()
-        })?;
+        },
+        ..Default::default()
+    })?;
 
     // append data.
     {

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod catalogs_table;
 mod clustering_history_table;
 mod columns_table;
 mod configs_table;
@@ -34,6 +35,7 @@ mod tracing_table;
 mod tracing_table_stream;
 mod users_table;
 
+pub use catalogs_table::CatalogsTable;
 pub use clustering_history_table::ClusteringHistoryLogElement;
 pub use clustering_history_table::ClusteringHistoryQueue;
 pub use clustering_history_table::ClusteringHistoryTable;

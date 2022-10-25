@@ -40,6 +40,7 @@ use crate::processors::sources::input_formats::input_context::InputContext;
 use crate::processors::sources::input_formats::input_pipeline::AligningStateTrait;
 use crate::processors::sources::input_formats::input_pipeline::BlockBuilderTrait;
 use crate::processors::sources::input_formats::input_pipeline::InputFormatPipe;
+use crate::processors::sources::input_formats::input_pipeline::RowBatchTrait;
 use crate::processors::sources::input_formats::input_split::split_by_size;
 use crate::processors::sources::input_formats::input_split::FileInfo;
 use crate::processors::sources::input_formats::input_split::SplitInfo;
@@ -185,6 +186,16 @@ pub struct RowBatch {
     pub batch_id: usize,
     pub offset: usize,
     pub start_row: Option<usize>,
+}
+
+impl RowBatchTrait for RowBatch {
+    fn size(&self) -> usize {
+        self.data.len()
+    }
+
+    fn rows(&self) -> usize {
+        self.row_ends.len()
+    }
 }
 
 pub struct AligningState<T> {

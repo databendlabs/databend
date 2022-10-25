@@ -117,7 +117,7 @@ fn test_format() {
                 }
                 .into(),
             ],
-            other_conditions: vec![],
+            non_equi_conditions: vec![],
             join_type: JoinType::Inner,
             marker_index: None,
             from_correlated_subquery: false,
