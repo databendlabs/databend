@@ -77,14 +77,14 @@ OPTIMIZE TABLE [database.]table_name [ PURGE | COMPACT | ALL ] [SEGMENT] [LIMIT 
  
     - A new snapshot of table will be created and added to the history, by this compaction operation.
     - Depending on the size of the given table, it may take quite a while to complete the execution.
-    - The option LIMIT sets the maximum number of segments to be compacted. In this case, Databend will select them segments randomly.
+    - The option LIMIT sets the maximum number of segments to be compacted. In this case, Databend will select and compact the latest segments.
 
 -  `OPTIMIZE TABLE <table_name> COMPACT SEGMENT [LIMIT <segment_count>]`
 
     Compacts the table data by merging small segments into larger ones.
 
     - See [Compacting Segments Only](#compacting-segments-only) for when you need this command.
-    - The option LIMIT sets the maximum number of segments to be compacted. In this case, Databend will select the segments randomly.
+    - The option LIMIT sets the maximum number of segments to be compacted. In this case, Databend will select and compact the latest segments.
 
 - `OPTIMIZE TABLE <table_name> ALL`
 
