@@ -22,6 +22,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use get_size::GetSize;
 use ordered_float::OrderedFloat;
 use serde_json::json;
 
@@ -29,7 +30,7 @@ use crate::prelude::*;
 use crate::type_coercion::merge_types;
 
 /// A specific value of a data type.
-#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, GetSize)]
 pub enum DataValue {
     /// Base type.
     Null,

@@ -26,6 +26,8 @@ pub mod pruning;
 pub mod statistics;
 pub mod table_functions;
 
+mod metrics;
+
 use common_catalog::table::NavigationPoint;
 use common_catalog::table::Table;
 use common_catalog::table::TableStatistics;
