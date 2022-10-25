@@ -34,8 +34,14 @@ impl RequiredProperty {
 
 #[derive(Default, Clone, Debug)]
 pub struct RelationalProperty {
+    // Output columns of a relational expression
     pub output_columns: ColumnSet,
+
+    // Outer references of a relational expression
     pub outer_columns: ColumnSet,
+
+    // Used columns of a relational expression
+    pub used_columns: ColumnSet,
 
     // TODO(leiysky): introduce upper bound of cardinality to
     // reduce error in estimation.

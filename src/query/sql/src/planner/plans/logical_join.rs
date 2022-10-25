@@ -211,9 +211,15 @@ impl LogicalOperator for LogicalInnerJoin {
             }
         };
 
+        // Derive used columns
+        let mut used_columns = self.used_columns()?;
+        used_columns.extend(left_prop.used_columns);
+        used_columns.extend(right_prop.used_columns);
+
         Ok(RelationalProperty {
             output_columns,
             outer_columns,
+            used_columns,
             cardinality,
             precise_cardinality: None,
 
