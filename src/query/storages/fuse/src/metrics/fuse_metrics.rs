@@ -18,6 +18,7 @@
 //!
 //! The `namespace` is `fuse`.
 
+use metrics::counter;
 use metrics::gauge;
 
 macro_rules! key {
@@ -32,4 +33,24 @@ pub fn metrics_set_segments_memory_usage(size: f64) {
 
 pub fn metrics_set_selected_blocks_memory_usage(size: f64) {
     gauge!(key!("compact_selected_blocks_memory_usage"), size);
+}
+
+pub fn metrics_inc_commit_mutation_unresolvable_conflict() {
+    counter!(key!("commit_mutation_unresolvable_conflict"), 1);
+}
+
+pub fn metrics_inc_commit_mutation_resolvable_conflict() {
+    counter!(key!("commit_mutation_resolvable_conflict"), 1);
+}
+
+pub fn metrics_inc_commit_mutation_retry() {
+    counter!(key!("commit_mutation_retry"), 1);
+}
+
+pub fn metrics_inc_commit_mutation_success() {
+    counter!(key!("commit_mutation_success"), 1);
+}
+
+pub fn metrics_inc_commit_mutation_aborts() {
+    counter!(key!("commit_mutation_aborts"), 1);
 }
