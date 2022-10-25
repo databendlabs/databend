@@ -132,7 +132,10 @@ impl FuseTable {
         };
 
         ctx.try_set_partitions(plan.parts.clone())?;
-        self.do_read_data(ctx.clone(), &plan, pipeline)?;
+
+        // It's easy to OOM if we set the max_io_request more than the max threads.
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        self.do_read_data(ctx.clone(), &plan, pipeline, max_threads)?;
 
         let cluster_stats_gen = self.get_cluster_stats_gen(
             ctx.clone(),
