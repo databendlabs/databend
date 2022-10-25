@@ -698,11 +698,6 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             let offset_node = FormatTreeNode::with_children(offset_format_ctx, vec![offset_child]);
             children.push(offset_node);
         }
-        if let Some(format) = &query.format {
-            let format_format_ctx = AstFormatContext::new(format!("FormatElement {}", format));
-            let format_node = FormatTreeNode::new(format_format_ctx);
-            children.push(format_node);
-        }
 
         let name = "Query".to_string();
         let format_ctx = AstFormatContext::with_children(name, children.len());
