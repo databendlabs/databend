@@ -269,7 +269,7 @@ impl Processor for FuseTableSource {
                     self.state = State::Deserialize(part, chunks, Some(prewhere_data));
                     Ok(())
                 } else {
-                    return Err(ErrorCode::LogicalError("It's a bug. No remain reader"));
+                    Err(ErrorCode::LogicalError("It's a bug. No remain reader"))
                 }
             }
             _ => Err(ErrorCode::LogicalError("It's a bug.")),
@@ -295,7 +295,7 @@ impl Processor for FuseTableSource {
                     self.state = State::Deserialize(part, chunks, Some(prewhere_data));
                     Ok(())
                 } else {
-                    return Err(ErrorCode::LogicalError("It's a bug. No remain reader"));
+                    Err(ErrorCode::LogicalError("It's a bug. No remain reader"))
                 }
             }
             _ => Err(ErrorCode::LogicalError("It's a bug.")),
