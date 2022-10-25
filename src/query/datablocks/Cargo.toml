@@ -25,7 +25,6 @@ comfy-table = "6.1.0"
 parking_lot = "0.12.1"
 primitive-types = "0.12.0"
 regex = "1.6.0"
-typetag = "0.2.3"
 
 [dev-dependencies]
 pretty_assertions = "1.3.0"

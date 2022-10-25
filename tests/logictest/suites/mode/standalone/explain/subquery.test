@@ -65,26 +65,26 @@ explain select t.number from numbers(1) as t where exists (select t1.number from
 Filter
 ├── filters: [or(2 (#2), >(t.number (#0), 1))]
 └── HashJoin
-    ├── join type: LEFT MARK
-    ├── build keys: [subquery_0 (#0)]
-    ├── probe keys: [subquery_1 (#1)]
+    ├── join type: RIGHT MARK
+    ├── build keys: [subquery_1 (#1)]
+    ├── probe keys: [subquery_0 (#0)]
     ├── filters: []
-    ├── TableScan(Build)
-    │   ├── table: default.system.numbers
-    │   ├── read rows: 1
-    │   ├── read bytes: 8
-    │   ├── partitions total: 1
-    │   ├── partitions scanned: 1
-    │   └── push downs: [filters: [], limit: NONE]
-    └── Filter(Probe)
-        ├── filters: [=(subquery_1 (#1), t1.number (#1))]
-        └── TableScan
-            ├── table: default.system.numbers
-            ├── read rows: 1
-            ├── read bytes: 8
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            └── push downs: [filters: [(number = number)], limit: NONE]
+    ├── Filter(Build)
+    │   ├── filters: [=(subquery_1 (#1), t1.number (#1))]
+    │   └── TableScan
+    │       ├── table: default.system.numbers
+    │       ├── read rows: 1
+    │       ├── read bytes: 8
+    │       ├── partitions total: 1
+    │       ├── partitions scanned: 1
+    │       └── push downs: [filters: [(number = number)], limit: NONE]
+    └── TableScan(Probe)
+        ├── table: default.system.numbers
+        ├── read rows: 1
+        ├── read bytes: 8
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        └── push downs: [filters: [], limit: NONE]
 
 statement query T
 explain select t.number from numbers(1) as t where exists (select * from numbers(1) where number = 0);
