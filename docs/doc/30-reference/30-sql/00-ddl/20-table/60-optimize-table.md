@@ -22,13 +22,13 @@ A segment is a JSON file that organizes the storage blocks (at least 1, at most 
 
 Databends saves actual table data in parquet files and considers each parquet file as a block. If you run [FUSE_BLOCK](../../../20-functions/111-system-functions/fuse_block.md) against a snapshot with the snapshot ID, you can find which blocks are referenced by the snapshot.
 
-Please note that each snapshot, segment, and block file in Databend is named with a UUID (32-character lowercase hexadecimal string).
+Databend creates a unique ID for each database and table for storing the snapshot, segment, and block files and saves them to your object storage in the path `<bucket_name>/[root]/<db_id>/<table_id>/`. Each snapshot, segment, and block file is named with a UUID (32-character lowercase hexadecimal string).
 
-| File     | Format  | Filename                        | Storage Path                                                               |
+| File     | Format  | Filename                        | Storage Folder                                                               |
 |----------|---------|---------------------------------|----------------------------------------------------------------------------|
-| Snapshot | JSON    | `<32bitUUID>_<version>.json`    | `<bucket_name>/[root]/<db_id>/<table_id>/_ss/<32bitUUID>_<version>.json`   |
-| Segment  | JSON    | `<32bitUUID>_<version>.json`    | `<bucket_name>/[root]/<db_id>/<table_id>/_sg/<32bitUUID>_<version>.json`   |
-| Block    | parquet | `<32bitUUID>_<version>.parquet` | `<bucket_name>/[root]/<db_id>/<table_id>/_b/<32bitUUID>_<version>.parquet` |
+| Snapshot | JSON    | `<32bitUUID>_<version>.json`    | `<bucket_name>/[root]/<db_id>/<table_id>/_ss/`   |
+| Segment  | JSON    | `<32bitUUID>_<version>.json`    | `<bucket_name>/[root]/<db_id>/<table_id>/_sg/`   |
+| Block    | parquet | `<32bitUUID>_<version>.parquet` | `<bucket_name>/[root]/<db_id>/<table_id>/_b/` |
 
 ## Table Optimization Considerations
 
