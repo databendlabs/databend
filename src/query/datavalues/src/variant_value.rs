@@ -22,6 +22,7 @@ use std::ops::Deref;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use get_size::GetSize;
 use itertools::EitherOrBoth::Both;
 use itertools::EitherOrBoth::Left;
 use itertools::EitherOrBoth::Right;
@@ -30,6 +31,8 @@ use serde_json::Value;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct VariantValue(pub Value);
+
+impl GetSize for VariantValue {}
 
 impl From<Value> for VariantValue {
     fn from(val: Value) -> Self {
