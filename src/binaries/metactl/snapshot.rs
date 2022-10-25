@@ -21,6 +21,7 @@ use std::io::BufReader;
 use std::io::Lines;
 use std::io::Write;
 use std::net::SocketAddr;
+use std::net::ToSocketAddrs;
 use std::str::FromStr;
 
 use anyhow::anyhow;
@@ -326,21 +327,9 @@ fn export_from_dir(config: &Config) -> anyhow::Result<()> {
 async fn export_from_running_node(config: &Config) -> Result<(), anyhow::Error> {
     eprintln!("export meta dir from remote: {}", config.grpc_api_address);
 
-    let grpc_api_addr: SocketAddr = match config.grpc_api_address.parse() {
-        Ok(addr) => addr,
-        Err(e) => {
-            eprintln!(
-                "ERROR: grpc api address is invalid: {}",
-                &config.grpc_api_address
-            );
-            return Err(anyhow!(e));
-        }
-    };
+    let grpc_api_addr = get_available_socket_addr(&config.grpc_api_address).await?;
 
-    if service_is_running(grpc_api_addr).await? {
-        export_meta(&config.grpc_api_address, config.db.clone()).await?;
-        return Ok(());
-    }
+    export_meta(grpc_api_addr.to_string().as_str(), config.db.clone()).await?;
     Ok(())
 }
 
@@ -350,4 +339,16 @@ async fn service_is_running(addr: SocketAddr) -> Result<bool, io::Error> {
     let stream = socket.connect(addr).await;
 
     Ok(stream.is_ok())
+}
+
+// try to get available grpc api socket address
+async fn get_available_socket_addr(endpoint: &str) -> Result<SocketAddr, anyhow::Error> {
+    let addrs_iter = endpoint.to_socket_addrs()?;
+    for addr in addrs_iter {
+        if service_is_running(addr).await? {
+            return Ok(addr);
+        }
+        eprintln!("WARN: {} is not available", addr);
+    }
+    Err(anyhow!("no metasrv running on: {}", endpoint))
 }
