@@ -1444,6 +1444,15 @@ pub fn uri_location(i: Input) -> IResult<UriLocation> {
             ~ (ENCRYPTION ~ "=" ~ #options)?
         },
         |(location, connection_opt, credentials_opt, encryption_opt)| {
+            if location.starts_with("fs://") {
+                return Ok(UriLocation {
+                    protocol: "fs".to_string(),
+                    name: "".to_string(),
+                    path: location[5..].to_string(),
+                    connection: BTreeMap::default(),
+                });
+            }
+
             let parsed =
                 Url::parse(&location).map_err(|_| ErrorKind::Other("invalid uri location"))?;
 
