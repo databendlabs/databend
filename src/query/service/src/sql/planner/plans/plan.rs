@@ -108,6 +108,11 @@ pub enum Plan {
     // Call
     Call(Box<CallPlan>),
 
+    // Catalogs
+    ShowCreateCatalog(Box<ShowCreateCatalogPlan>),
+    CreateCatalog(Box<CreateCatalogPlan>),
+    DropCatalog(Box<DropCatalogPlan>),
+
     // Databases
     ShowCreateDatabase(Box<ShowCreateDatabasePlan>),
     CreateDatabase(Box<CreateDatabasePlan>),
@@ -191,6 +196,7 @@ pub enum RewriteKind {
     ShowProcessList,
     ShowEngines,
 
+    ShowCatalogs,
     ShowDatabases,
     ShowTables,
     ShowTablesStatus,

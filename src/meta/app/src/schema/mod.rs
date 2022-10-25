@@ -14,6 +14,7 @@
 
 //! Schema types
 
+mod catalog;
 mod database;
 mod table;
 

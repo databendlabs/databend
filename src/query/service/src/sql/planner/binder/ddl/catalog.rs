@@ -13,10 +13,14 @@
 // limitations under the License.
 
 use common_ast::ast::ShowCatalogsStmt;
+use common_ast::ast::ShowCreateCatalogStmt;
 use common_ast::ast::ShowLimit;
+use common_datavalues::DataField;
+use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
 
 use crate::sql::plans::Plan;
+use crate::sql::plans::RewriteKind;
 use crate::sql::BindContext;
 use crate::sql::Binder;
 
@@ -27,11 +31,36 @@ impl<'a> Binder {
         stmt: &ShowCatalogsStmt<'a>,
     ) -> Result<Plan> {
         let ShowCatalogsStmt { limit } = stmt;
+        let mut query = String::new();
+        write!(query, "SELECT name AS Catalog FROM system.catalogs").unwrap();
         match limit {
             Some(ShowLimit::Like { pattern }) => {
-                todo!()
+                write!(query, " WHERE name LIKE '{pattern}'").unwrap();
             }
-            _ => todo!(),
+            Some(ShowLimit::Where { selection }) => {
+                write!(query, " WHERE {selection}").unwrap();
+            }
+            None => (),
         }
+        write!(query, " ORDER BY name").unwrap();
+
+        self.bind_rewrite_to_query(bind_context, query.as_str(), RewriteKind::ShowCatalogs)
+            .await
+    }
+
+    pub(in crate::sql::planner::binder) async fn bind_show_create_catalogs(
+        &self,
+        stmt: &ShowCreateCatalogStmt,
+    ) -> Result<Plan> {
+        let ShowCreateCatalogStmt { catalog } = stmt;
+        let catalog = normalize_identifier(catalog, &self.name_resolution_ctx).name;
+        let schema = DataSchemaRefExt::create(vec![
+            DataField::new("Catalog", Vu8::to_data_type()),
+            DataField::new("Create Catalog", Vu8::to_data_type()),
+        ]);
+        Ok(Plan::ShowCreateCatalog(Box::new(ShowCreateCatalogPlan {
+            catalog,
+            schema,
+        })))
     }
 }
