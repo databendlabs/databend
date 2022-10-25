@@ -83,7 +83,7 @@ OPTIMIZE TABLE [database.]table_name [ PURGE | COMPACT | ALL ] [SEGMENT] [LIMIT 
  
     Compacts the table data by merging small blocks and segments into larger ones.
  
-    - A new snapshot of table will be created and added to the history, by this compaction operation.
+    - This command creates a new snapshot (along with compacted segments and blocks) of the most recent table data without affecting the existing storage files, so the storage space won't be released until you run `OPTIMIZE TABLE <table_name> PURGE`.
     - Depending on the size of the given table, it may take quite a while to complete the execution.
     - The option LIMIT sets the maximum number of segments to be compacted. In this case, Databend will select and compact the latest segments.
 
