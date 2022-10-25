@@ -8,9 +8,9 @@ Optimizing a table in Databend is about compacting or purging the historical ver
 Databend's Time Travel feature relies on historical data. If you purge historical data from a table with the command `OPTIMIZE TABLE <your_table> PURGE` or `OPTIMIZE TABLE <your_table> ALL`, the table will not be eligible for time travel. The command removes all snapshots (except the most recent one) and their associated segments and block files.
 :::
 
-## What are snapshot, segment, and block?
+## What are Snapshot, Segment, and Block?
 
-Snapshot, segment, and block are the concepts Databend uses for data storage. Databend stores the tables' data in a hierarchical structure with them.
+Snapshot, segment, and block are the concepts Databend uses for data storage. Databend uses them to construct a hierarchical structure for storing table data.
 
 ![](../../../../../public/img/sql/storage-structure.PNG)
 
@@ -21,6 +21,14 @@ A snapshot is a JSON file that does not save the table's data but indicate the s
 A segment is a JSON file that organizes the storage blocks (at least 1, at most 1,000) where the data is stored. If you run [FUSE_SEGMENT](../../../20-functions/111-system-functions/fuse_segment.md) against a snapshot with the snapshot ID, you can find which segments are referenced by the snapshot.
 
 Databends saves actual table data in parquet files and considers each parquet file as a block. If you run [FUSE_BLOCK](../../../20-functions/111-system-functions/fuse_block.md) against a snapshot with the snapshot ID, you can find which blocks are referenced by the snapshot.
+
+Please note that each snapshot, segment, and block file in Databend is named with a UUID (32-character lowercase hexadecimal string).
+
+| File     | Format  | Filename                        | Storage Path                                                               |
+|----------|---------|---------------------------------|----------------------------------------------------------------------------|
+| Snapshot | JSON    | `<32bitUUID>_<version>.json`    | `<bucket_name>/[root]/<db_id>/<table_id>/_ss/<32bitUUID>_<version>.json`   |
+| Segment  | JSON    | `<32bitUUID>_<version>.json`    | `<bucket_name>/[root]/<db_id>/<table_id>/_sg/<32bitUUID>_<version>.json`   |
+| Block    | parquet | `<32bitUUID>_<version>.parquet` | `<bucket_name>/[root]/<db_id>/<table_id>/_b/<32bitUUID>_<version>.parquet` |
 
 ## Table Optimization Considerations
 
