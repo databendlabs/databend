@@ -26,6 +26,7 @@ use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 use crate::plans::Scalar;
 use crate::plans::SortItem;
+use crate::ScalarExpr;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Prewhere {
@@ -94,9 +95,20 @@ impl Operator for LogicalGet {
 
 impl LogicalOperator for LogicalGet {
     fn derive_relational_prop<'a>(&self, _rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
+        let mut used_columns = ColumnSet::new();
+        if let Some(preds) = &self.push_down_predicates {
+            for pred in preds.iter() {
+                used_columns.extend(pred.used_columns());
+            }
+        }
+        if let Some(prewhere) = &self.prewhere {
+            used_columns.extend(prewhere.prewhere_columns.iter());
+        }
+
         Ok(RelationalProperty {
             output_columns: self.columns.clone(),
             outer_columns: Default::default(),
+            used_columns,
             cardinality: self
                 .statistics
                 .as_ref()

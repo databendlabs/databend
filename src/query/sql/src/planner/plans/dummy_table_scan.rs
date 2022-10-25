@@ -54,6 +54,7 @@ impl LogicalOperator for DummyTableScan {
         Ok(RelationalProperty {
             output_columns: ColumnSet::new(),
             outer_columns: ColumnSet::new(),
+            used_columns: ColumnSet::new(),
             cardinality: 1.0,
             precise_cardinality: Some(1),
 
