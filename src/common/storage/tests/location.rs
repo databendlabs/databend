@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::io::Result;
 
 use common_storage::parse_uri_location;
+use common_storage::StorageFsConfig;
 use common_storage::StorageFtpConfig;
 use common_storage::StorageGcsConfig;
 use common_storage::StorageHttpConfig;
@@ -256,6 +257,21 @@ fn test_parse_uri_location() -> Result<()> {
                     enable_virtual_host_style: false,
                     role_arn: "aws::iam::xxxx".to_string(),
                     external_id: "".to_string(),
+                }),
+                "/".to_string(),
+            ),
+        ),
+        (
+            "fs",
+            UriLocation {
+                protocol: "fs".to_string(),
+                name: "".to_string(),
+                path: "/tmp/".to_string(),
+                connection: BTreeMap::default(),
+            },
+            (
+                StorageParams::Fs(StorageFsConfig {
+                    root: "/tmp/".to_string(),
                 }),
                 "/".to_string(),
             ),
