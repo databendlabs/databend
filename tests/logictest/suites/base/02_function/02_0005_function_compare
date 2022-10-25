@@ -466,7 +466,7 @@ select '周周周周' regexp '.*';
 
 
 
-statement query T 
+statement query T
 select '==compare_not_regexp==';
 
 ----
@@ -823,13 +823,6 @@ select '周周周周' not regexp '.*';
 0
 
 
-
-statement query T 
-select '==compare_number_string==';
-
-----
-==compare_number_string==
-
 statement query B
 select '333' = '333';
 
@@ -845,13 +838,11 @@ select to_varchar(1) = '1';
 1
 
 
-
 statement query B
 select to_varchar(111) = '111';
 
 ----
 1
-
 
 
 statement query B
@@ -862,47 +853,19 @@ select to_varchar(3 + 4) = '7';
 
 
 
-statement query B
+statement error 1007
 select '123 ab' = 123;
 
-----
-0
 
 
-
-statement query B
-select '123' = 123;
-
-----
-1
-
-
-
-statement query B
+statement error 1007
 select '7.4' = 7.4;
 
 ----
 1
 
 
-
-statement query B
-select '7.4' > 7;
-
-----
-1
-
-
-
-statement query B
-select '777.4' < 778;
-
-----
-1
-
-
-
-statement query T 
+statement query T
 select '==compare_datetime==';
 
 ----
@@ -972,7 +935,7 @@ SELECT to_datetime(to_date('2021-03-05')) = to_date('2021-03-05');
 
 
 
-statement query T 
+statement query T
 select '==compare_variant==';
 
 ----
