@@ -858,7 +858,7 @@ select '123 ab' = 123;
 
 
 
-statement query 1007
+statement error 1007
 select '7.4' = 7.4;
 
 ----
