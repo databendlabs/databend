@@ -52,6 +52,12 @@ impl ContextFunction {
             "user" | "currentuser" | "current_user" => vec![LegacyExpression::create_literal(
                 DataValue::String(ctx.get_current_user()?.identity().to_string().into_bytes()),
             )],
+            "current_role" => vec![LegacyExpression::create_literal(DataValue::String(
+                ctx.get_current_role()
+                    .map(|r| r.name)
+                    .unwrap_or_else(|| "".to_string())
+                    .into_bytes(),
+            ))],
             "connection_id" => vec![LegacyExpression::create_literal(DataValue::String(
                 ctx.get_connection_id().into_bytes(),
             ))],

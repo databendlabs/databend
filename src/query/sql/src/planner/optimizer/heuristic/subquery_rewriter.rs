@@ -506,21 +506,20 @@ impl SubqueryRewriter {
                     )
                 };
                 // Consider the sql: select * from t1 where t1.a = any(select t2.a from t2);
-                // Will be transferred to:select t1.a, t2.a, marker_index from t2, t1 where t2.a = t1.a;
-                // Note that subquery is the left table, and it'll be the probe side.
+                // Will be transferred to:select t1.a, t2.a, marker_index from t1, t2 where t2.a = t1.a;
+                // Note that subquery is the right table, and it'll be the build side.
                 let mark_join = LogicalInnerJoin {
-                    left_conditions,
-                    right_conditions,
+                    left_conditions: right_conditions,
+                    right_conditions: left_conditions,
                     non_equi_conditions,
-                    join_type: JoinType::LeftMark,
+                    join_type: JoinType::RightMark,
                     marker_index: Some(marker_index),
                     from_correlated_subquery: false,
                 }
                 .into();
-                Ok((
-                    SExpr::create_binary(mark_join, *subquery.subquery.clone(), left.clone()),
-                    UnnestResult::MarkJoin { marker_index },
-                ))
+                let s_expr =
+                    SExpr::create_binary(mark_join, left.clone(), *subquery.subquery.clone());
+                Ok((s_expr, UnnestResult::MarkJoin { marker_index }))
             }
             _ => unreachable!(),
         }

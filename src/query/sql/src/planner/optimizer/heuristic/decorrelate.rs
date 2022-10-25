@@ -288,14 +288,14 @@ impl SubqueryRewriter {
                     )
                 };
                 let join_plan = LogicalInnerJoin {
-                    left_conditions,
-                    right_conditions,
+                    left_conditions: right_conditions,
+                    right_conditions: left_conditions,
                     non_equi_conditions: vec![],
-                    join_type: JoinType::LeftMark,
+                    join_type: JoinType::RightMark,
                     marker_index: Some(marker_index),
                     from_correlated_subquery: true,
                 };
-                let s_expr = SExpr::create_binary(join_plan.into(), flatten_plan, left.clone());
+                let s_expr = SExpr::create_binary(join_plan.into(), left.clone(), flatten_plan);
                 Ok((s_expr, UnnestResult::MarkJoin { marker_index }))
             }
             SubqueryType::Any => {
@@ -342,16 +342,16 @@ impl SubqueryRewriter {
                     )
                 };
                 let mark_join = LogicalInnerJoin {
-                    left_conditions,
-                    right_conditions,
+                    left_conditions: right_conditions,
+                    right_conditions: left_conditions,
                     non_equi_conditions,
-                    join_type: JoinType::LeftMark,
+                    join_type: JoinType::RightMark,
                     marker_index: Some(marker_index),
                     from_correlated_subquery: true,
                 }
                 .into();
                 Ok((
-                    SExpr::create_binary(mark_join, flatten_plan, left.clone()),
+                    SExpr::create_binary(mark_join, left.clone(), flatten_plan),
                     UnnestResult::MarkJoin { marker_index },
                 ))
             }

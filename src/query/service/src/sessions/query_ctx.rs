@@ -41,6 +41,7 @@ use common_legacy_planners::ReadDataSourcePlan;
 use common_legacy_planners::SourceInfo;
 use common_legacy_planners::StageTableInfo;
 use common_meta_app::schema::TableInfo;
+use common_meta_types::RoleInfo;
 use common_meta_types::UserInfo;
 use common_storage::DataOperator;
 use common_storage::StorageMetrics;
@@ -282,6 +283,9 @@ impl TableContext for QueryContext {
     }
     fn set_current_user(&self, user: UserInfo) {
         self.shared.set_current_user(user)
+    }
+    fn get_current_role(&self) -> Option<RoleInfo> {
+        self.shared.get_current_role()
     }
     fn get_fuse_version(&self) -> String {
         self.version.clone()

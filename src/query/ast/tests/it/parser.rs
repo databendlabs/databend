@@ -283,6 +283,15 @@ fn test_statement() {
                     skip_header = 1
                 )
                 force=true;"#,
+        r#"COPY INTO mytable
+                FROM 'fs:///path/to/data.csv'
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;"#,
         // We used to support COPY FROM a quoted at string
         // r#"COPY INTO mytable
         //         FROM '@external_stage/path/to/file.csv'

@@ -100,6 +100,7 @@ impl AuthMgr {
             }
         };
         session.set_current_user(user_info);
+        session.refresh_current_role().await?;
         Ok(())
     }
 

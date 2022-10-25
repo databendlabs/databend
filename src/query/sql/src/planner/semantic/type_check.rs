@@ -1440,6 +1440,7 @@ impl<'a> TypeChecker<'a> {
                 | "user"
                 | "currentuser"
                 | "current_user"
+                | "current_role"
                 | "connection_id"
                 | "timezone"
                 | "nullif"
@@ -1489,6 +1490,21 @@ impl<'a> TypeChecker<'a> {
                 ),
                 Err(e) => Some(Err(e)),
             },
+            ("current_role", &[]) => Some(
+                self.resolve(
+                    &Expr::Literal {
+                        span,
+                        lit: Literal::String(
+                            self.ctx
+                                .get_current_role()
+                                .map(|r| r.name)
+                                .unwrap_or_else(|| "".to_string()),
+                        ),
+                    },
+                    None,
+                )
+                .await,
+            ),
             ("connection_id", &[]) => Some(
                 self.resolve(
                     &Expr::Literal {

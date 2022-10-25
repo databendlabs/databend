@@ -271,6 +271,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
         let authed = user_info.auth_info.auth_mysql(&info.user_password, salt)?;
         if authed {
             self.session.set_current_user(user_info);
+            self.session.refresh_current_role().await?;
         }
         Ok(authed)
     }
