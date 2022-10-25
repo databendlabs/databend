@@ -353,8 +353,6 @@ impl BlockReader {
 
         let columns = self.column_leaves.get_by_projection(&self.projection)?;
         let indices = Self::build_projection_indices(&columns);
-
-        let mut threads = Vec::with_capacity(indices.len());
         let mut results = Vec::with_capacity(indices.len());
 
         for index in indices {
@@ -366,14 +364,10 @@ impl BlockReader {
             let offset = column_meta.offset;
             let length = column_meta.length;
 
-            threads.push(std::thread::spawn(move || {
-                Self::sync_read_column(op.object(&location), index, offset, length)
-            }));
+            let result = Self::sync_read_column(op.object(&location), index, offset, length);
+            results.push(result?);
         }
 
-        for child in threads {
-            results.push(child.join().unwrap()?)
-        }
         Ok(results)
     }
 
