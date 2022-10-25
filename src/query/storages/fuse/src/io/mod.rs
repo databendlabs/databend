@@ -16,6 +16,7 @@ mod files;
 mod locations;
 mod read;
 mod segments;
+mod segments_lite;
 mod snapshots;
 mod write;
 

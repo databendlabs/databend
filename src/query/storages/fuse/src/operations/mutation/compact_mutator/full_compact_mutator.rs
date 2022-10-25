@@ -102,26 +102,23 @@ impl TableMutator for FullCompactMutator {
         // Blocks that need to be reorganized into new segments.
         let mut remain_blocks = Vec::new();
         // Read all segments information in parallel.
+        // To reduce memory usage, we use read_segment_lites to trim the col_stats.
         let segments_io = SegmentsIO::create(self.ctx.clone(), self.data_accessor.clone());
-        let segments = segments_io
-            .read_segments(segment_locations)
-            .await?
-            .into_iter()
-            .collect::<Result<Vec<_>>>()?;
+        let segments_lite = segments_io.read_segment_lites(segment_locations).await?;
 
-        metrics_set_segments_memory_usage(segments.get_heap_size() as f64);
+        metrics_set_segments_memory_usage(segments_lite.get_heap_size() as f64);
 
-        let limit = self.compact_params.limit.unwrap_or(segments.len());
-        if limit < segments.len() {
-            for i in limit..segments.len() {
+        let limit = self.compact_params.limit.unwrap_or(segments_lite.len());
+        if limit < segments_lite.len() {
+            for i in limit..segments_lite.len() {
                 self.merged_segments_locations
                     .push(segment_locations[i].clone());
                 self.merged_segment_statistics =
-                    merge_statistics(&self.merged_segment_statistics, &segments[i].summary)?;
+                    merge_statistics(&self.merged_segment_statistics, &segments_lite[i].summary)?;
             }
         }
 
-        for (idx, segment) in segments.iter().take(limit).enumerate() {
+        for (idx, segment) in segments_lite.iter().take(limit).enumerate() {
             let mut need_merge = false;
             let mut remains = Vec::new();
 
