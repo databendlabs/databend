@@ -133,7 +133,7 @@ impl DataBlock {
             .map(|f| {
                 let left = lhs.try_column_by_name(f.name())?;
                 let right = rhs.try_column_by_name(f.name())?;
-                Self::take_columns_by_slices_limit(
+                Self::take_column_by_slices_limit(
                     f.data_type(),
                     &[left.clone(), right.clone()],
                     &slices,
@@ -225,7 +225,7 @@ fn compare_array(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynComparat
     }))
 }
 
-fn build_compare(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynComparator> {
+pub fn build_compare(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynComparator> {
     match left.data_type() {
         ArrowType::LargeList(_) => compare_array(left, right),
         ArrowType::Extension(name, _, _) => {

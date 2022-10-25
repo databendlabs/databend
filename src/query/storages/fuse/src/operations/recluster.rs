@@ -163,11 +163,12 @@ impl FuseTable {
                 sort_descs.clone(),
             )
         })?;
+        let block_size = ctx.get_settings().get_max_block_size()? as usize;
         pipeline.add_transform(|transform_input_port, transform_output_port| {
             TransformSortMerge::try_create(
                 transform_input_port,
                 transform_output_port,
-                SortMergeCompactor::new(None, sort_descs.clone()),
+                SortMergeCompactor::new(block_size, None, sort_descs.clone()),
             )
         })?;
         pipeline.resize(1)?;
@@ -175,7 +176,7 @@ impl FuseTable {
             TransformSortMerge::try_create(
                 transform_input_port,
                 transform_output_port,
-                SortMergeCompactor::new(None, sort_descs.clone()),
+                SortMergeCompactor::new(block_size, None, sort_descs.clone()),
             )
         })?;
 
