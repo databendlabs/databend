@@ -23,7 +23,6 @@ mod aggregator_polymorphic_keys;
 mod aggregator_state;
 mod aggregator_state_entity;
 mod aggregator_state_iterator;
-pub(crate) mod keys_ref;
 
 pub use aggregator::Aggregator;
 pub use aggregator_groups_builder::GroupColumnsBuilder;
