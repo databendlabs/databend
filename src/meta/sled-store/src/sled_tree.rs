@@ -389,8 +389,8 @@ pub struct TransactionSledTree<'a> {
 }
 
 impl TransactionSledTree<'_> {
-    pub fn key_space<KV: SledKeySpace>(&self) -> AsTxnKeySpace<KV> {
-        AsTxnKeySpace::<KV> {
+    pub fn key_space<KV: SledKeySpace>(&self) -> TxnKeySpace<KV> {
+        TxnKeySpace::<KV> {
             inner: self,
             phantom: PhantomData,
         }
@@ -403,12 +403,12 @@ pub struct AsKeySpace<'a, KV: SledKeySpace> {
     phantom: PhantomData<KV>,
 }
 
-pub struct AsTxnKeySpace<'a, KV: SledKeySpace> {
+pub struct TxnKeySpace<'a, KV: SledKeySpace> {
     inner: &'a TransactionSledTree<'a>,
     phantom: PhantomData<KV>,
 }
 
-impl<'a, KV: SledKeySpace> Store<KV> for AsTxnKeySpace<'a, KV> {
+impl<'a, KV: SledKeySpace> Store<KV> for TxnKeySpace<'a, KV> {
     type Error = MetaStorageError;
 
     fn insert(&self, key: &KV::K, value: &KV::V) -> Result<Option<KV::V>, Self::Error> {
@@ -477,7 +477,7 @@ impl<'a, KV: SledKeySpace> Store<KV> for AsTxnKeySpace<'a, KV> {
 ///     sub_tree.insert(key, &seq_kv_value);
 /// }
 /// ```
-impl<'a, KV: SledKeySpace> Deref for AsTxnKeySpace<'a, KV> {
+impl<'a, KV: SledKeySpace> Deref for TxnKeySpace<'a, KV> {
     type Target = &'a TransactionSledTree<'a>;
 
     fn deref(&self) -> &Self::Target {
