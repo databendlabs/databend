@@ -139,9 +139,11 @@ impl FuseTable {
         };
 
         ctx.try_set_partitions(plan.parts.clone())?;
-        self.do_read_data(ctx.clone(), &plan, pipeline)?;
 
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        self.do_read_data(ctx.clone(), &plan, pipeline, max_threads)?;
+
+        // Resize.
         pipeline.resize(max_threads)?;
 
         pipeline.add_transform(|transform_input_port, transform_output_port| {

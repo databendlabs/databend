@@ -379,7 +379,8 @@ impl Table for FuseTable {
         plan: &ReadDataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        self.do_read_data(ctx, plan, pipeline)
+        let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
+        self.do_read_data(ctx, plan, pipeline, max_io_requests)
     }
 
     fn append_data(
