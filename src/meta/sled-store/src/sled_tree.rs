@@ -441,27 +441,6 @@ impl<'a, KV: SledKeySpace> Store<KV> for TxnKeySpace<'a, KV> {
             None => Ok(None),
         }
     }
-
-    fn update_and_fetch<F>(&self, key: &KV::K, mut f: F) -> Result<Option<KV::V>, Self::Error>
-    where F: FnMut(Option<KV::V>) -> Option<KV::V> {
-        let key_ivec = KV::serialize_key(key)?;
-
-        let old_val_ivec = self.txn_tree.get(&key_ivec)?;
-        let old_val: Result<Option<KV::V>, MetaStorageError> = match old_val_ivec {
-            Some(v) => Ok(Some(KV::deserialize_value(v)?)),
-            None => Ok(None),
-        };
-
-        let old_val = old_val?;
-
-        let new_val = f(old_val);
-        let _ = match new_val {
-            Some(ref v) => self.txn_tree.insert(key_ivec, KV::serialize_value(v)?)?,
-            None => self.txn_tree.remove(key_ivec)?,
-        };
-
-        Ok(new_val)
-    }
 }
 
 /// Some methods that take `&TransactionSledTree` as parameter need to be called
