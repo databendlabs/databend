@@ -14,6 +14,8 @@
 
 use std::collections::HashMap;
 
+use get_size::GetSize;
+
 use crate::meta::common::ColumnStatistics;
 use crate::meta::ColumnId;
 use crate::meta::Statistics;
@@ -28,7 +30,7 @@ pub struct SegmentInfo {
 }
 
 /// Meta information of a block (currently, the parquet file)
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, GetSize)]
 pub struct BlockMeta {
     /// Pointer of the data Block
     pub row_count: u64,
@@ -40,7 +42,7 @@ pub struct BlockMeta {
 }
 
 // TODO move it to common
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, GetSize)]
 pub struct ColumnMeta {
     /// where the data of column start
     pub offset: u64,
@@ -50,7 +52,7 @@ pub struct ColumnMeta {
     pub num_values: u64,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, GetSize)]
 pub struct BlockLocation {
     pub path: String,
     // for parquet, this filed can be used to fetch the meta data without seeking around

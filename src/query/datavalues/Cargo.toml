@@ -25,6 +25,7 @@ chrono = { version = "0.4.22", features = ["serde"] }
 chrono-tz = "0.6.3"
 dyn-clone = "1.0.9"
 enum_dispatch = "0.3.8"
+get-size = { version = "^0.1", features = ["derive"] }
 itertools = "0.10.5"
 lexical-core = "0.8.5"
 micromarshal = "0.2.0"
