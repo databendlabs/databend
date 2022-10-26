@@ -71,8 +71,8 @@ fn test_column_type_support() -> Result<()> {
     assert_eq!(supported_types.len(), index.filter_block.columns().len());
 
     // check index columns
-    schema.fields().iter().for_each(|field| {
-        let col_name = BlockFilter::build_filter_column_name(field.name());
+    schema.fields().iter().enumerate().for_each(|(i, field)| {
+        let col_name = BlockFilter::build_filter_column(i);
         let maybe_index_col = index.filter_block.try_column_by_name(&col_name);
         if supported_types.contains(field.data_type()) {
             assert!(maybe_index_col.is_ok(), "check field {}", field.name())
@@ -82,12 +82,11 @@ fn test_column_type_support() -> Result<()> {
     });
 
     // check applicable
-    schema.fields().iter().for_each(|field| {
+    schema.fields().iter().enumerate().for_each(|(i, field)| {
         // type of input data value does not matter here, will be casted during filtering
         let value = DataValue::Boolean(true);
-        let col_name = field.name().as_str();
         let data_type = field.data_type();
-        let r = index.find(col_name, value, data_type).unwrap();
+        let r = index.find(i, value, data_type).unwrap();
         if supported_types.contains(field.data_type()) {
             assert_ne!(
                 r,

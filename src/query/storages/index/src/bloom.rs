@@ -83,7 +83,6 @@ impl BlockFilter {
         for (index, field) in fields.iter().enumerate() {
             if Xor8Filter::is_supported_type(field.data_type()) {
                 // create field for applicable ones
-
                 let column_name = Self::build_filter_column(index);
                 let filter_field = DataField::new(&column_name, Vu8::to_data_type());
 
@@ -192,16 +191,14 @@ impl BlockFilter {
     pub fn eval(&self, expr: &PhysicalScalar) -> Result<FilterEvalResult> {
         // TODO: support multiple columns and other ops like 'in' ...
         match expr {
-            PhysicalScalar::Function {
-                name,
-                args,
-                return_type,
-            } if args.len() == 2 => match name.to_lowercase().as_str() {
-                "=" => self.eval_equivalent_expression(&args[0], &args[1]),
-                "and" => self.eval_logical_and(&args[0], &args[1]),
-                "or" => self.eval_logical_or(&args[0], &args[1]),
-                _ => Ok(FilterEvalResult::NotApplicable),
-            },
+            PhysicalScalar::Function { name, args, .. } if args.len() == 2 => {
+                match name.to_lowercase().as_str() {
+                    "=" => self.eval_equivalent_expression(&args[0], &args[1]),
+                    "and" => self.eval_logical_and(&args[0], &args[1]),
+                    "or" => self.eval_logical_or(&args[0], &args[1]),
+                    _ => Ok(FilterEvalResult::NotApplicable),
+                }
+            }
             _ => Ok(FilterEvalResult::NotApplicable),
         }
     }

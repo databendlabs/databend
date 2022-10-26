@@ -13,12 +13,14 @@
 // limitations under the License.
 
 mod eval_node;
+mod monotonicity;
 mod physical_scalar;
 mod scalar;
 
 use common_datavalues::ColumnRef;
 use common_datavalues::DataTypeImpl;
 pub use eval_node::EvalNode;
+pub use monotonicity::PhysicalScalarMonotonicityVisitor;
 pub use physical_scalar::PhysicalScalarOp;
 
 pub struct Evaluator;

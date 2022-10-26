@@ -25,13 +25,13 @@ use common_exception::Result;
 use common_functions::scalars::check_pattern_type;
 use common_functions::scalars::FunctionContext;
 use common_functions::scalars::FunctionFactory;
-use common_functions::scalars::Monotonicity;
 use common_functions::scalars::PatternType;
 use common_fuse_meta::meta::StatisticsOfColumns;
 use common_planner::PhysicalScalar;
 use common_planner::RequireColumnsVisitor;
 use common_sql::evaluator::EvalNode;
 use common_sql::evaluator::Evaluator;
+use common_sql::evaluator::PhysicalScalarMonotonicityVisitor;
 use common_sql::evaluator::PhysicalScalarOp;
 
 #[derive(Clone)]
@@ -138,14 +138,10 @@ pub fn build_verifiable_expr(
         data_type: bool::to_data_type(),
     };
 
-    /// TODO: Try to convert `not(is_not_null)` to `is_null`.
+    // TODO: Try to convert `not(is_not_null)` to `is_null`.
     let (exprs, op) = match expr {
         PhysicalScalar::Constant { .. } => return expr.clone(),
-        PhysicalScalar::Function {
-            name,
-            args,
-            return_type,
-        } if args.len() == 2 => {
+        PhysicalScalar::Function { name, args, .. } if args.len() == 2 => {
             let left = &args[0];
             let right = &args[1];
             match name.to_lowercase().as_str() {
@@ -203,7 +199,7 @@ impl fmt::Display for StatType {
 }
 
 pub type StatColumns = Vec<StatColumn>;
-pub type ColumnFields = HashMap<u32, DataField>;
+pub type ColumnFields = HashMap<usize, DataField>;
 
 #[derive(Debug, Clone)]
 pub struct StatColumn {
@@ -244,7 +240,8 @@ impl StatColumn {
         if self.stat_type == StatType::Nulls {
             // The len of column_fields is 1.
             let (k, _) = self.column_fields.iter().next().unwrap();
-            let stat = stats.get(k).ok_or_else(|| {
+            let k = *k as u32;
+            let stat = stats.get(&k).ok_or_else(|| {
                 ErrorCode::UnknownException(format!(
                     "Unable to get the colStats by ColumnId: {}",
                     k
@@ -256,10 +253,11 @@ impl StatColumn {
         let mut single_point = true;
         let mut variables = HashMap::with_capacity(self.column_fields.len());
         for (k, v) in &self.column_fields {
-            let stat = stats.get(k).ok_or_else(|| {
+            let k32 = *k as u32;
+            let stat = stats.get(&k32).ok_or_else(|| {
                 ErrorCode::UnknownException(format!(
                     "Unable to get the colStats by ColumnId: {}",
-                    k
+                    k32
                 ))
             })?;
 
@@ -272,21 +270,18 @@ impl StatColumn {
 
             let max_col = v.data_type().create_constant_column(&stat.max, 1)?;
             let variable_right = Some(ColumnWithField::new(max_col, v.clone()));
-            variables.insert(v.name().clone(), (variable_left, variable_right));
+            variables.insert(*k, (variable_left, variable_right));
         }
 
-        // TODO: sundy
-
-        let monotonicity = Monotonicity::default();
-        // let monotonicity = ExpressionMonotonicityVisitor::check_expression(
-        //     schema,
-        //     &self.expr,
-        //     variables,
-        //     single_point,
-        // );
-        // if !monotonicity.is_monotonic {
-        //     return Ok(None);
-        // }
+        let monotonicity = PhysicalScalarMonotonicityVisitor::check_expression(
+            schema,
+            &self.expr,
+            variables,
+            single_point,
+        );
+        if !monotonicity.is_monotonic {
+            return Ok(None);
+        }
 
         let column_with_field_opt = match self.stat_type {
             StatType::Min => {
@@ -597,16 +592,21 @@ impl<'a> VerifiableExprBuilder<'a> {
             &data_field,
             self.args[index].clone(),
         );
-        if !self
-            .stat_columns
-            .iter()
-            .any(|c| c.stat_type == stat_type && c.stat_field.name() == data_field.name())
-        {
+
+        let column_index =
+            self.stat_columns.iter().enumerate().find(|&(_, c)| {
+                c.stat_type == stat_type && c.stat_field.name() == data_field.name()
+            });
+
+        let column_index = if let Some((column_index, _)) = column_index {
+            column_index
+        } else {
             self.stat_columns.push(stat_col.clone());
-        }
+            self.stat_columns.len() - 1
+        };
 
         Ok(PhysicalScalar::IndexedVariable {
-            index,
+            index: column_index,
             data_type: stat_col.stat_field.data_type().clone(),
             display_name: stat_col.stat_field.name().to_string(),
         })
@@ -699,7 +699,7 @@ fn get_column_fields(schema: &DataSchemaRef, cols: HashSet<usize>) -> Result<Col
     let mut column_fields = HashMap::with_capacity(cols.len());
 
     for col in &cols {
-        column_fields.insert(*col as u32, schema.field(*col).clone());
+        column_fields.insert(*col, schema.field(*col).clone());
     }
     Ok(column_fields)
 }
