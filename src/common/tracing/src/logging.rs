@@ -28,9 +28,9 @@ use tracing::Subscriber;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_appender::rolling::RollingFileAppender;
 use tracing_appender::rolling::Rotation;
-use tracing_bunyan_formatter::BunyanFormattingLayer;
 use tracing_log::LogTracer;
 use tracing_subscriber::fmt;
+use tracing_subscriber::fmt::format;
 use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::time::FormatTime;
 use tracing_subscriber::fmt::time::SystemTime;
@@ -58,30 +58,49 @@ use crate::Config;
 ///
 /// To adjust batch sending delay, use `OTEL_BSP_SCHEDULE_DELAY`:
 /// DATABEND_JAEGER_AGENT_ENDPOINT=localhost:6831 RUST_LOG=trace OTEL_BSP_SCHEDULE_DELAY=1 cargo test
-// TODO(xp): use DATABEND_JAEGER_AGENT_ENDPOINT to assign jaeger server address.
+/// TODO(xp): use DATABEND_JAEGER_AGENT_ENDPOINT to assign jaeger server address.
+///
+/// # Notes to implementation
+///
+/// Registry is composed by generic type parameters.
+///
+/// To make rust happy, we need to push `Option<Layer>` into it.
 pub fn init_logging(name: &str, cfg: &Config, enable_tracing_log: bool) -> Vec<WorkerGuard> {
     let mut guards = vec![];
 
     let subscriber = Registry::default();
 
     // File Layer
-    let file_layer = if cfg.file.on {
+    let subscriber = if cfg.file.on {
         let rolling_appender = RollingFileAppender::new(Rotation::HOURLY, &cfg.file.dir, name);
         let (rolling_writer, rolling_writer_guard) =
             tracing_appender::non_blocking(rolling_appender);
-
-        let file_logging_layer = BunyanFormattingLayer::new(name.to_string(), rolling_writer);
-
-        let filter = EnvFilter::new(&cfg.file.level);
-        let file = file_logging_layer.with_filter(filter);
-
         guards.push(rolling_writer_guard);
 
-        Some(file)
+        let filter = EnvFilter::new(&cfg.file.level);
+
+        match cfg.file.format.to_lowercase().as_str() {
+            "text" => {
+                let file = fmt::layer()
+                    .with_writer(rolling_writer)
+                    .event_format(format().compact())
+                    .with_filter(filter);
+                subscriber.with(Some(file)).with(None)
+            }
+            "json" => {
+                let file = fmt::layer()
+                    .with_writer(rolling_writer)
+                    .event_format(format().json())
+                    .with_filter(filter);
+                subscriber.with(None).with(Some(file))
+            }
+            v => {
+                unreachable!("file logging format {v} is not supported");
+            }
+        }
     } else {
-        None
+        subscriber.with(None).with(None)
     };
-    let subscriber = subscriber.with(file_layer);
 
     // Stderr (Console) Layer
     let rust_log = env::var(EnvFilter::DEFAULT_ENV);
