@@ -83,7 +83,7 @@ pub fn init_logging(name: &str, cfg: &Config, enable_tracing_log: bool) -> Vec<W
             "text" => {
                 let file = fmt::layer()
                     .with_writer(rolling_writer)
-                    .event_format(format().compact())
+                    .event_format(format().with_ansi(false))
                     .with_filter(filter);
                 subscriber.with(Some(file)).with(None)
             }
