@@ -106,6 +106,18 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
         // XXX: num_columns == 0 may is error?
 
         if !query_result.has_result_set {
+            // For statements without result sets, we still need to pull the stream because errors may occur in the stream.
+            let blocks = &mut query_result.blocks;
+            while let Some(block) = blocks.next().await {
+                if let Err(e) = block {
+                    dataset_writer
+                        .error(ErrorKind::ER_UNKNOWN_ERROR, &e.to_string().as_bytes())
+                        .await?;
+
+                    return Ok(());
+                }
+            }
+
             dataset_writer.completed(OkResponse::default()).await?;
             return Ok(());
         }

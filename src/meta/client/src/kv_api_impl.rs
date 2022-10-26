@@ -15,11 +15,11 @@
 use common_meta_api::KVApi;
 use common_meta_types::GetKVReply;
 use common_meta_types::GetKVReq;
+use common_meta_types::KVAppError;
 use common_meta_types::ListKVReply;
 use common_meta_types::ListKVReq;
 use common_meta_types::MGetKVReply;
 use common_meta_types::MGetKVReq;
-use common_meta_types::MetaError;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKVReply;
@@ -30,12 +30,12 @@ use crate::MetaGrpcClient;
 
 #[tonic::async_trait]
 impl KVApi for MetaGrpcClient {
-    async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, MetaError> {
+    async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, KVAppError> {
         let reply = self.do_write(act).await?;
         Ok(reply)
     }
 
-    async fn get_kv(&self, key: &str) -> Result<GetKVReply, MetaError> {
+    async fn get_kv(&self, key: &str) -> Result<GetKVReply, KVAppError> {
         let reply = self
             .do_read(GetKVReq {
                 key: key.to_string(),
@@ -44,13 +44,13 @@ impl KVApi for MetaGrpcClient {
         Ok(reply)
     }
 
-    async fn mget_kv(&self, keys: &[String]) -> Result<MGetKVReply, MetaError> {
+    async fn mget_kv(&self, keys: &[String]) -> Result<MGetKVReply, KVAppError> {
         let keys = keys.to_vec();
         let reply = self.do_read(MGetKVReq { keys }).await?;
         Ok(reply)
     }
 
-    async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, MetaError> {
+    async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, KVAppError> {
         let reply = self
             .do_read(ListKVReq {
                 prefix: prefix.to_string(),
@@ -59,7 +59,7 @@ impl KVApi for MetaGrpcClient {
         Ok(reply)
     }
 
-    async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, MetaError> {
+    async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, KVAppError> {
         let reply = self.transaction(txn).await?;
         Ok(reply)
     }
@@ -67,12 +67,12 @@ impl KVApi for MetaGrpcClient {
 
 #[tonic::async_trait]
 impl KVApi for ClientHandle {
-    async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, MetaError> {
+    async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, KVAppError> {
         let reply = self.request(act).await?;
         Ok(reply)
     }
 
-    async fn get_kv(&self, key: &str) -> Result<GetKVReply, MetaError> {
+    async fn get_kv(&self, key: &str) -> Result<GetKVReply, KVAppError> {
         let reply = self
             .request(GetKVReq {
                 key: key.to_string(),
@@ -81,13 +81,13 @@ impl KVApi for ClientHandle {
         Ok(reply)
     }
 
-    async fn mget_kv(&self, keys: &[String]) -> Result<MGetKVReply, MetaError> {
+    async fn mget_kv(&self, keys: &[String]) -> Result<MGetKVReply, KVAppError> {
         let keys = keys.to_vec();
         let reply = self.request(MGetKVReq { keys }).await?;
         Ok(reply)
     }
 
-    async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, MetaError> {
+    async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, KVAppError> {
         let reply = self
             .request(ListKVReq {
                 prefix: prefix.to_string(),
@@ -96,7 +96,7 @@ impl KVApi for ClientHandle {
         Ok(reply)
     }
 
-    async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, MetaError> {
+    async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, KVAppError> {
         let reply = self.request(txn).await?;
         Ok(reply)
     }

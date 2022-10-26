@@ -164,7 +164,7 @@ spec:
           envFrom:
             - secretRef:
                 name: query-secrets
-          image: datafuselabs/databend-query:v0.6.100-nightly
+          image: datafuselabs/databend-query:latest
           name: query
           ports:
             - name: http

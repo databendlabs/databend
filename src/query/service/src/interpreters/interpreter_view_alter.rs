@@ -24,10 +24,9 @@ use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::storages::view::view_table::VIEW_ENGINE;
@@ -49,7 +48,7 @@ impl Interpreter for AlterViewInterpreter {
         "AlterViewInterpreter"
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         // check privilige
         self.ctx
             .get_current_session()
@@ -82,7 +81,7 @@ impl Interpreter for AlterViewInterpreter {
 }
 
 impl AlterViewInterpreter {
-    async fn alter_view(&self) -> Result<SendableDataBlockStream> {
+    async fn alter_view(&self) -> Result<PipelineBuildResult> {
         // drop view
         let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
         let plan = DropTableReq {
@@ -114,10 +113,6 @@ impl AlterViewInterpreter {
         };
         catalog.create_table(plan).await?;
 
-        Ok(Box::pin(DataBlockStream::create(
-            self.plan.schema(),
-            None,
-            vec![],
-        )))
+        Ok(PipelineBuildResult::create())
     }
 }

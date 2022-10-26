@@ -19,7 +19,7 @@ INSERT INTO mytable VALUES(1,1),(3,3);
 INSERT INTO mytable VALUES(2,2),(5,5);
 INSERT INTO mytable VALUES(4,4);
 
-SELECT * FROM FUSE_SNAPSHOT(‘default‘,’mytable‘);
+SELECT * FROM FUSE_SNAPSHOT('default','mytable');
 
 ---
 | snapshot_id                      | snapshot_location                                          | format_version | previous_snapshot_id             | segment_count | block_count | row_count | bytes_uncompressed | bytes_compressed | timestamp                  |

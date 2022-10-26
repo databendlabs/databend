@@ -14,16 +14,13 @@
 
 use std::sync::Arc;
 
-use common_arrow::arrow::array::PrimitiveArray;
-use common_arrow::arrow::array::Utf8Array;
-use common_arrow::arrow::types::NativeType;
 use common_datablocks::DataBlock;
 use common_datavalues::ColumnRef;
+use common_datavalues::ConstColumn;
 use common_datavalues::DataField;
 use common_datavalues::DataTypeImpl;
-use common_datavalues::PrimitiveColumn;
-use common_datavalues::PrimitiveType;
-use common_datavalues::StringColumn;
+use common_datavalues::Series;
+use common_datavalues::SeriesFrom;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -34,25 +31,21 @@ pub struct HivePartitionFiller {
     pub partition_fields: Vec<DataField>,
 }
 
+macro_rules! generate_primitive_column {
+    ($T:ty, $num_rows:expr, $value:expr) => {{
+        let column = Series::from_data(vec![$value.parse::<$T>().unwrap()]);
+        Ok(Arc::new(ConstColumn::new(column, $num_rows)))
+    }};
+}
+
+fn generate_string_column(num_rows: usize, value: String) -> Result<ColumnRef> {
+    let column = Series::from_data(vec![value]);
+    Ok(Arc::new(ConstColumn::new(column, num_rows)))
+}
+
 impl HivePartitionFiller {
     pub fn create(partition_fields: Vec<DataField>) -> Self {
         HivePartitionFiller { partition_fields }
-    }
-
-    fn generate_string_column(&self, num_rows: usize, value: String) -> Result<ColumnRef> {
-        let column = vec![Some(value); num_rows];
-        let arrow_array = Utf8Array::<i32>::from_iter(column);
-        Ok(Arc::new(StringColumn::from_arrow_array(&arrow_array)) as ColumnRef)
-    }
-
-    fn generate_primitive_column<T>(&self, num_rows: usize, value: String) -> Result<ColumnRef>
-    where
-        T: NativeType + std::str::FromStr + std::fmt::Debug + PrimitiveType,
-        <T as std::str::FromStr>::Err: std::fmt::Debug,
-    {
-        let column = vec![Some(value.parse::<T>().unwrap()); num_rows];
-        let arrow_array = PrimitiveArray::<T>::from_iter(column);
-        Ok(Arc::new(PrimitiveColumn::<T>::from_arrow_array(&arrow_array)) as ColumnRef)
     }
 
     fn generate_column(
@@ -62,17 +55,17 @@ impl HivePartitionFiller {
         field: &DataField,
     ) -> Result<ColumnRef> {
         match field.data_type().clone() {
-            DataTypeImpl::String(_) => self.generate_string_column(num_rows, value),
-            DataTypeImpl::Int8(_) => self.generate_primitive_column::<i8>(num_rows, value),
-            DataTypeImpl::Int16(_) => self.generate_primitive_column::<i16>(num_rows, value),
-            DataTypeImpl::Int32(_) => self.generate_primitive_column::<i32>(num_rows, value),
-            DataTypeImpl::Int64(_) => self.generate_primitive_column::<i64>(num_rows, value),
-            DataTypeImpl::UInt8(_) => self.generate_primitive_column::<u8>(num_rows, value),
-            DataTypeImpl::UInt16(_) => self.generate_primitive_column::<u16>(num_rows, value),
-            DataTypeImpl::UInt32(_) => self.generate_primitive_column::<u32>(num_rows, value),
-            DataTypeImpl::UInt64(_) => self.generate_primitive_column::<u64>(num_rows, value),
-            DataTypeImpl::Float32(_) => self.generate_primitive_column::<f32>(num_rows, value),
-            DataTypeImpl::Float64(_) => self.generate_primitive_column::<f64>(num_rows, value),
+            DataTypeImpl::String(_) => generate_string_column(num_rows, value),
+            DataTypeImpl::Int8(_) => generate_primitive_column!(i8, num_rows, value),
+            DataTypeImpl::Int16(_) => generate_primitive_column!(i16, num_rows, value),
+            DataTypeImpl::Int32(_) => generate_primitive_column!(i32, num_rows, value),
+            DataTypeImpl::Int64(_) => generate_primitive_column!(i64, num_rows, value),
+            DataTypeImpl::UInt8(_) => generate_primitive_column!(u8, num_rows, value),
+            DataTypeImpl::UInt16(_) => generate_primitive_column!(u16, num_rows, value),
+            DataTypeImpl::UInt32(_) => generate_primitive_column!(u32, num_rows, value),
+            DataTypeImpl::UInt64(_) => generate_primitive_column!(u64, num_rows, value),
+            DataTypeImpl::Float32(_) => generate_primitive_column!(f32, num_rows, value),
+            DataTypeImpl::Float64(_) => generate_primitive_column!(f64, num_rows, value),
             _ => Err(ErrorCode::UnImplement(format!(
                 "generate column failed, {:?}",
                 field

@@ -193,6 +193,26 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
                 args,
             }
         }
+        common_ast::ast::Expr::IsNull { span, expr, not } => {
+            let expr = transform_expr(*expr, columns);
+            let result = RawExpr::FunctionCall {
+                span: transform_span(span),
+                name: "is_not_null".to_string(),
+                params: vec![],
+                args: vec![expr],
+            };
+
+            if not {
+                result
+            } else {
+                RawExpr::FunctionCall {
+                    span: transform_span(span),
+                    name: "not".to_string(),
+                    params: vec![],
+                    args: vec![result],
+                }
+            }
+        }
         expr => unimplemented!("{expr:?} is unimplemented"),
     }
 }

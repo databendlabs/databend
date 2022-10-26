@@ -29,7 +29,7 @@ async fn test_show_stages_interpreter() -> Result<()> {
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "CreateUserStageInterpreter");
-        let mut stream = executor.execute().await?;
+        let mut stream = executor.execute(ctx.clone()).await?;
         while let Some(_block) = stream.next().await {}
     }
 
@@ -40,7 +40,7 @@ async fn test_show_stages_interpreter() -> Result<()> {
         // Show stage will be rewritten into query.
         assert_eq!(executor.name(), "SelectInterpreterV2");
 
-        let stream = executor.execute().await?;
+        let stream = executor.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+------+------------+-----------------+--------------------+---------+",

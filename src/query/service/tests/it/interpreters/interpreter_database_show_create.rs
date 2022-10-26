@@ -30,7 +30,7 @@ async fn test_show_create_database_interpreter() -> Result<()> {
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "ShowCreateDatabaseInterpreter");
-        let stream = executor.execute().await?;
+        let stream = executor.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+----------+---------------------------+",
@@ -48,7 +48,7 @@ async fn test_show_create_database_interpreter() -> Result<()> {
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "ShowCreateDatabaseInterpreter");
-        let stream = executor.execute().await?;
+        let stream = executor.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+----------+----------------------------------------+",

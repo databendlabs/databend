@@ -27,13 +27,12 @@ use crate::api::rpc::flight_scatter::FlightScatter;
 use crate::evaluator::EvalNode;
 use crate::evaluator::Evaluator;
 use crate::evaluator::TypedVector;
-use crate::sql::executor::ColumnID;
 use crate::sql::executor::PhysicalScalar;
 
 #[derive(Clone)]
 pub struct HashFlightScatterV2 {
     func_ctx: FunctionContext,
-    hash_keys: Vec<EvalNode<ColumnID>>,
+    hash_keys: Vec<EvalNode>,
     hash_functions: Vec<Box<dyn Function>>,
     scatter_size: usize,
 }
@@ -118,7 +117,7 @@ impl HashFlightScatterV2 {
 struct OneHashKeyFlightScatter {
     scatter_size: usize,
     func_ctx: FunctionContext,
-    indices_scalar: EvalNode<ColumnID>,
+    indices_scalar: EvalNode,
 }
 
 impl OneHashKeyFlightScatter {
@@ -129,7 +128,7 @@ impl OneHashKeyFlightScatter {
     ) -> Result<Box<dyn FlightScatter>> {
         let hash_key = Evaluator::eval_physical_scalar(scalar)?;
 
-        let mut sip_hash = EvalNode::<ColumnID>::Function {
+        let mut sip_hash = EvalNode::Function {
             args: vec![hash_key],
             func: FunctionFactory::instance().get("sipHash", &[&scalar.data_type()])?,
         };
@@ -146,7 +145,7 @@ impl OneHashKeyFlightScatter {
         Ok(Box::new(OneHashKeyFlightScatter {
             scatter_size,
             func_ctx,
-            indices_scalar: EvalNode::<ColumnID>::Function {
+            indices_scalar: EvalNode::Function {
                 args: vec![sip_hash, EvalNode::Constant {
                     value: DataValue::UInt64(scatter_size as u64),
                     data_type: DataTypeImpl::UInt64(UInt64Type::new()),

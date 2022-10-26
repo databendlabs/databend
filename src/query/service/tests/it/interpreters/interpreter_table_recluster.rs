@@ -29,7 +29,7 @@ async fn test_alter_recluster_interpreter() -> Result<()> {
 
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let _ = executor.execute().await?;
+        let _ = executor.execute(ctx.clone()).await?;
     }
 
     // insert into.
@@ -37,7 +37,7 @@ async fn test_alter_recluster_interpreter() -> Result<()> {
         let query = "insert into default.t values(1,1),(3,3)";
         let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        let _ = executor.execute().await?;
+        let _ = executor.execute(ctx.clone()).await?;
     }
 
     // insert into.
@@ -45,7 +45,7 @@ async fn test_alter_recluster_interpreter() -> Result<()> {
         let query = "insert into default.t values(2,2),(5,5)";
         let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        let _ = executor.execute().await?;
+        let _ = executor.execute(ctx.clone()).await?;
     }
 
     // insert into.
@@ -53,7 +53,7 @@ async fn test_alter_recluster_interpreter() -> Result<()> {
         let query = "insert into default.t values(4,4)";
         let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        let _ = executor.execute().await?;
+        let _ = executor.execute(ctx.clone()).await?;
     }
 
     // cluster information.
@@ -61,7 +61,7 @@ async fn test_alter_recluster_interpreter() -> Result<()> {
         let query = "select * from clustering_information('default', 't')";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let stream = executor.execute().await?;
+        let stream = executor.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+-----------------+-------------------+----------------------------+------------------+---------------+-----------------------+",
@@ -78,7 +78,7 @@ async fn test_alter_recluster_interpreter() -> Result<()> {
         let query = "ALTER TABLE default.t RECLUSTER FINAL where a != 4";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let _ = executor.execute().await?;
+        let _ = executor.execute(ctx.clone()).await?;
     }
 
     // cluster information.
@@ -86,7 +86,7 @@ async fn test_alter_recluster_interpreter() -> Result<()> {
         let query = "select * from clustering_information('default', 't')";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let stream = executor.execute().await?;
+        let stream = executor.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+-----------------+-------------------+----------------------------+------------------+---------------+-----------------------+",
@@ -103,7 +103,7 @@ async fn test_alter_recluster_interpreter() -> Result<()> {
         let query = "select count(*) from fuse_snapshot('default', 't')";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let stream = executor.execute().await?;
+        let stream = executor.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+----------+",
@@ -120,7 +120,7 @@ async fn test_alter_recluster_interpreter() -> Result<()> {
         let query = "select count(*) from system.clustering_history";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let stream = executor.execute().await?;
+        let stream = executor.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+----------+",

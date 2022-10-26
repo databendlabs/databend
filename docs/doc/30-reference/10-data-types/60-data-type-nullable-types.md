@@ -33,6 +33,7 @@ Using `Nullable` will almost always have a negative impact on performance. If th
 Check whether the value is `NULL` or `NOT NULL`.
 
 [IS NULL](/doc/reference/functions/conditional-functions/isnull)
+
 [IS NOT NULL](/doc/reference/functions/conditional-functions/isnotnull)
 
 ### Example

@@ -28,7 +28,7 @@ async fn test_show_functions_interpreter() -> Result<()> {
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "SelectInterpreterV2");
-        let _ = executor.execute().await?;
+        let _ = executor.execute(ctx.clone()).await?;
     }
 
     Ok(())

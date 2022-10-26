@@ -393,7 +393,7 @@ impl AsyncInsertManager {
                     input: Arc::new((**plan).clone()),
                 })?;
 
-                let mut build_res = select_interpreter.create_new_pipeline().await?;
+                let mut build_res = select_interpreter.execute2().await?;
 
                 let mut sink_pipeline_builder = SinkPipeBuilder::create();
                 for _ in 0..build_res.main_pipeline.output_len() {
@@ -506,12 +506,12 @@ impl AsyncInsertManager {
         let blocks = Arc::new(Mutex::new(VecDeque::from_iter(
             data.entries.iter().map(|x| x.block.clone()),
         )));
-        let source = BlocksSource::create(ctx, output_port.clone(), blocks)?;
+        let source = BlocksSource::create(ctx.clone(), output_port.clone(), blocks)?;
         let mut builder = SourcePipeBuilder::create();
         builder.add_source(output_port.clone(), source);
 
         interpreter.set_source_pipe_builder(Some(builder))?;
-        interpreter.execute().await?;
+        interpreter.execute(ctx).await?;
         Ok(())
     }
 

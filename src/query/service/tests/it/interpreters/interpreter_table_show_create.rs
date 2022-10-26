@@ -77,12 +77,16 @@ async fn interpreter_show_create_table_test() -> Result<()> {
         for stmt in case.create_stmt {
             let (plan, _, _) = planner.plan_sql(stmt).await?;
             let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-            let _ = executor.execute().await?;
+            let _ = executor.execute(ctx.clone()).await?;
         }
         let (plan, _, _) = planner.plan_sql(case.show_stmt).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "ShowCreateTableInterpreter");
-        let result = executor.execute().await?.try_collect::<Vec<_>>().await?;
+        let result = executor
+            .execute(ctx.clone())
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
         common_datablocks::assert_blocks_eq_with_name(case.name, case.expects, result.as_slice());
     }
 
@@ -153,12 +157,16 @@ async fn interpreter_show_create_table_with_comments_test() -> Result<()> {
             // create table in the new planner to support column comment.
             let (plan, _, _) = planner.plan_sql(stmt).await?;
             let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-            let _ = executor.execute().await?;
+            let _ = executor.execute(ctx.clone()).await?;
         }
         let (plan, _, _) = planner.plan_sql(case.show_stmt).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "ShowCreateTableInterpreter");
-        let result = executor.execute().await?.try_collect::<Vec<_>>().await?;
+        let result = executor
+            .execute(ctx.clone())
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
         common_datablocks::assert_blocks_eq_with_name(case.name, case.expects, result.as_slice());
     }
 

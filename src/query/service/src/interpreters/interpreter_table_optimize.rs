@@ -17,13 +17,12 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_legacy_planners::OptimizeTableAction;
 use common_legacy_planners::OptimizeTablePlan;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::Pipeline;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -44,7 +43,7 @@ impl Interpreter for OptimizeTableInterpreter {
         "OptimizeTableInterpreter"
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = &self.plan;
         let ctx = self.ctx.clone();
         let mut table = self
@@ -102,10 +101,6 @@ impl Interpreter for OptimizeTableInterpreter {
             table.optimize(self.ctx.clone(), true).await?;
         }
 
-        Ok(Box::pin(DataBlockStream::create(
-            self.plan.schema(),
-            None,
-            vec![],
-        )))
+        Ok(PipelineBuildResult::create())
     }
 }

@@ -176,9 +176,13 @@ where
         unsafe { self.insert(key) }
     }
     #[inline(always)]
-    pub fn set_merge(&mut self, mut other: Self) {
-        if let Some(entry) = other.zero.take() {
-            self.zero = ZeroEntry(Some(entry));
+    pub fn set_merge(&mut self, other: &Self) {
+        if let Some(entry) = other.zero.0.as_ref() {
+            self.zero = ZeroEntry(Some(Entry {
+                key: entry.key.clone(),
+                val: MaybeUninit::uninit(),
+                _alignment: [0; 0],
+            }));
         }
         while (self.table.len() + other.table.len()) * 2 > self.table.capacity() {
             if (self.table.entries.len() >> 22) == 0 {
@@ -188,7 +192,7 @@ where
             }
         }
         unsafe {
-            self.table.merge(other.table);
+            self.table.set_merge(&other.table);
         }
     }
 }

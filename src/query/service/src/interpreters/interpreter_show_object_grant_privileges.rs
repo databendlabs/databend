@@ -16,16 +16,14 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::DataSchemaRef;
-use common_datavalues::prelude::DataSchemaRefExt;
 use common_datavalues::prelude::Series;
 use common_datavalues::SeriesFrom;
 use common_exception::Result;
 use common_meta_api::ShareApi;
 use common_meta_app::share::GetObjectGrantPrivilegesReq;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::share::ShowObjectGrantPrivilegesPlan;
@@ -51,7 +49,7 @@ impl Interpreter for ShowObjectGrantPrivilegesInterpreter {
         self.plan.schema()
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         let user_mgr = self.ctx.get_user_manager();
         let meta_api = user_mgr.get_meta_store_client();
         let req = GetObjectGrantPrivilegesReq {
@@ -60,13 +58,8 @@ impl Interpreter for ShowObjectGrantPrivilegesInterpreter {
         };
         let resp = meta_api.get_grant_privileges_of_object(req).await?;
         if resp.privileges.is_empty() {
-            return Ok(Box::pin(DataBlockStream::create(
-                DataSchemaRefExt::create(vec![]),
-                None,
-                vec![],
-            )));
+            return Ok(PipelineBuildResult::create());
         }
-        let desc_schema = self.plan.schema();
         let mut share_names: Vec<String> = vec![];
         let mut privileges: Vec<String> = vec![];
         let mut created_ons: Vec<String> = vec![];
@@ -77,13 +70,10 @@ impl Interpreter for ShowObjectGrantPrivilegesInterpreter {
             created_ons.push(privilege.grant_on.to_string());
         }
 
-        let block = DataBlock::create(desc_schema.clone(), vec![
+        PipelineBuildResult::from_blocks(vec![DataBlock::create(self.plan.schema(), vec![
             Series::from_data(created_ons),
             Series::from_data(privileges),
             Series::from_data(share_names),
-        ]);
-        Ok(Box::pin(DataBlockStream::create(desc_schema, None, vec![
-            block,
-        ])))
+        ])])
     }
 }

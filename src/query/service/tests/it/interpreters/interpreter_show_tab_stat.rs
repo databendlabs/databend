@@ -31,7 +31,7 @@ async fn test_show_tab_stat_interpreter() -> Result<()> {
             let query = "create database db1";
             let (plan, _, _) = planner.plan_sql(query).await?;
             let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-            let _ = executor.execute().await?;
+            let _ = executor.execute(ctx.clone()).await?;
         }
 
         // Use database.
@@ -39,7 +39,7 @@ async fn test_show_tab_stat_interpreter() -> Result<()> {
             let query = "use db1";
             let (plan, _, _) = planner.plan_sql(query).await?;
             let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-            let _ = executor.execute().await?;
+            let _ = executor.execute(ctx.clone()).await?;
         }
 
         // Create table.
@@ -47,13 +47,13 @@ async fn test_show_tab_stat_interpreter() -> Result<()> {
             let query = "create table data(a Int)";
             let (plan, _, _) = planner.plan_sql(query).await?;
             let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-            let _ = executor.execute().await?;
+            let _ = executor.execute(ctx.clone()).await?;
         }
         {
             let query = "create table bend(a Int)";
             let (plan, _, _) = planner.plan_sql(query).await?;
             let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-            let _ = executor.execute().await?;
+            let _ = executor.execute(ctx.clone()).await?;
         }
     }
 
@@ -63,7 +63,7 @@ async fn test_show_tab_stat_interpreter() -> Result<()> {
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "SelectInterpreterV2");
-        let stream = executor.execute().await?;
+        let stream = executor.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             r"\+------\+--------\+---------\+------------\+------\+----------------\+-------------\+-----------------\+--------------\+-----------\+----------------\+-------------------------------\+-------------\+------------\+-----------\+----------\+---------\+",
@@ -81,7 +81,7 @@ async fn test_show_tab_stat_interpreter() -> Result<()> {
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "SelectInterpreterV2");
-        let stream = executor.execute().await?;
+        let stream = executor.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             r"\+------\+--------\+---------\+------------\+------\+----------------\+-------------\+-----------------\+--------------\+-----------\+----------------\+-------------------------------\+-------------\+------------\+-----------\+----------\+---------\+",
@@ -99,7 +99,7 @@ async fn test_show_tab_stat_interpreter() -> Result<()> {
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "SelectInterpreterV2");
-        let stream = executor.execute().await?;
+        let stream = executor.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             r"\+------\+--------\+---------\+------------\+------\+----------------\+-------------\+-----------------\+--------------\+-----------\+----------------\+-------------------------------\+-------------\+------------\+-----------\+----------\+---------\+",
@@ -117,7 +117,7 @@ async fn test_show_tab_stat_interpreter() -> Result<()> {
         let query = "drop database db1";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let _ = executor.execute().await?;
+        let _ = executor.execute(ctx.clone()).await?;
     }
 
     Ok(())

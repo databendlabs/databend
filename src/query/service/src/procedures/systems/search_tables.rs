@@ -61,7 +61,7 @@ impl OneBlockProcedure for SearchTablesProcedure {
 
         let stream = if let PlanNode::Select(plan) = optimized {
             let interpreter = SelectInterpreter::try_create(ctx.clone(), plan)?;
-            interpreter.execute().await
+            interpreter.execute(ctx.clone()).await
         } else {
             return Err(ErrorCode::LogicalError("search tables build query error"));
         }?;

@@ -18,10 +18,9 @@ use common_exception::Result;
 use common_legacy_planners::RenameDatabasePlan;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::RenameDatabaseReq;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -42,7 +41,7 @@ impl Interpreter for RenameDatabaseInterpreter {
         "RenameDatabaseInterpreter"
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         for entity in &self.plan.entities {
             let catalog = self.ctx.get_catalog(&entity.catalog)?;
             let tenant = self.plan.tenant.clone();
@@ -58,10 +57,6 @@ impl Interpreter for RenameDatabaseInterpreter {
                 .await?;
         }
 
-        Ok(Box::pin(DataBlockStream::create(
-            self.plan.schema(),
-            None,
-            vec![],
-        )))
+        Ok(PipelineBuildResult::create())
     }
 }

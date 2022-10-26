@@ -18,10 +18,9 @@ use common_exception::Result;
 use common_legacy_planners::RenameTablePlan;
 use common_meta_app::schema::RenameTableReq;
 use common_meta_app::schema::TableNameIdent;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -42,7 +41,7 @@ impl Interpreter for RenameTableInterpreter {
         "RenameTableInterpreter"
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         // TODO check privileges
         // You must have ALTER and DROP privileges for the original table,
         // and CREATE and INSERT privileges for the new table.
@@ -63,10 +62,6 @@ impl Interpreter for RenameTableInterpreter {
                 .await?;
         }
 
-        Ok(Box::pin(DataBlockStream::create(
-            self.plan.schema(),
-            None,
-            vec![],
-        )))
+        Ok(PipelineBuildResult::create())
     }
 }

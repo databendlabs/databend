@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_meta_raft_store::config::RaftConfig;
-use common_meta_types::MetaError;
+use common_meta_types::MetaStartupError;
 
 #[test]
 fn test_raft_config() -> anyhow::Result<()> {
@@ -27,7 +27,7 @@ fn test_raft_config() -> anyhow::Result<()> {
 
         assert_eq!(
             r,
-            Err(MetaError::InvalidConfig(String::from(
+            Err(MetaStartupError::InvalidConfig(String::from(
                 "at least one of `single` and `join` needs to be enabled",
             )))
         )
@@ -47,7 +47,7 @@ fn test_raft_config() -> anyhow::Result<()> {
 
         assert_eq!(
             r,
-            Err(MetaError::InvalidConfig(String::from(
+            Err(MetaStartupError::InvalidConfig(String::from(
                 "--join must not be set to itself",
             )))
         )

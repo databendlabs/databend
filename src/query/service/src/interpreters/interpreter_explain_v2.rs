@@ -18,12 +18,11 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use super::fragments::Fragmenter;
 use super::QueryFragmentsActions;
 use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sql::executor::PhysicalPlan;
 use crate::sql::executor::PhysicalPlanBuilder;
@@ -49,7 +48,7 @@ impl Interpreter for ExplainInterpreterV2 {
         self.schema.clone()
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         let blocks = match &self.kind {
             ExplainKind::Ast(stmt) | ExplainKind::Syntax(stmt) => {
                 self.explain_ast_or_syntax(stmt.clone())?
@@ -91,11 +90,8 @@ impl Interpreter for ExplainInterpreterV2 {
                 return Err(ErrorCode::UnImplement("ExplainKind graph is unimplemented"));
             }
         };
-        Ok(Box::pin(DataBlockStream::create(
-            self.schema.clone(),
-            None,
-            blocks,
-        )))
+
+        PipelineBuildResult::from_blocks(blocks)
     }
 
     async fn start(&self) -> Result<()> {

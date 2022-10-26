@@ -21,7 +21,7 @@ use common_datavalues::NullableType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::sql::binder::wrap_cast_if_needed;
+use crate::sql::binder::wrap_cast;
 use crate::sql::binder::JoinPredicate;
 use crate::sql::binder::Visibility;
 use crate::sql::optimizer::heuristic::subquery_rewriter::FlattenInfo;
@@ -172,9 +172,14 @@ impl SubqueryRewriter {
                 }
 
                 JoinPredicate::Both { left, right } => {
+                    if left.data_type().eq(&right.data_type()) {
+                        left_conditions.push(left.clone());
+                        right_conditions.push(right.clone());
+                        continue;
+                    }
                     let join_type = compare_coercion(&left.data_type(), &right.data_type())?;
-                    let left = wrap_cast_if_needed(left.clone(), &join_type);
-                    let right = wrap_cast_if_needed(right.clone(), &join_type);
+                    let left = wrap_cast(left.clone(), &join_type);
+                    let right = wrap_cast(right.clone(), &join_type);
                     left_conditions.push(left);
                     right_conditions.push(right);
                 }

@@ -306,11 +306,13 @@ jobs:
         id: get_image_tags
         shell: bash
         run: |
-          dockerhub_base=${{ steps.login.outputs.dockerhub_repo }}:${{ needs.create_release.outputs.version }}
-          ecr_base=${{ steps.login.outputs.ecr_repo }}:${{ needs.create_release.outputs.version }}
-          _tags="${dockerhub_base}-${{ matrix.distro }},${ecr_base}-${{ matrix.distro }}"
+          _tags="${{ steps.login.outputs.dockerhub_repo }}:${{ needs.create_release.outputs.version }}-${{ matrix.distro }}"
+          _tags="${_tags},${{ steps.login.outputs.ecr_repo }}:${{ needs.create_release.outputs.version }}-${{ matrix.distro }}"
           if [[ "${{ matrix.distro }}" == "debian" ]]; then
-            _tags="${_tags},${dockerhub_base},${ecr_base}"
+            _tags="${_tags},${{ steps.login.outputs.dockerhub_repo }}:${{ needs.create_release.outputs.version }}"
+            _tags="${_tags},${{ steps.login.outputs.ecr_repo }}:${{ needs.create_release.outputs.version }}"
+            _tags="${_tags},${{ steps.login.outputs.dockerhub_repo }}:latest"
+            _tags="${_tags},${{ steps.login.outputs.ecr_repo }}:latest"
           fi
           echo ::set-output name=IMAGE_TAGS::${_tags}
 

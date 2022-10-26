@@ -29,7 +29,7 @@ async fn test_desc_share_interpreter() -> Result<()> {
         let query = "create share t";
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
-        let stream = executor.execute().await?;
+        let stream = executor.execute(ctx.clone()).await?;
         let _ = stream.try_collect::<Vec<_>>().await?;
     }
 
@@ -39,7 +39,7 @@ async fn test_desc_share_interpreter() -> Result<()> {
         let (plan, _, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
         assert_eq!(executor.name(), "DescShareInterpreter");
-        assert!(executor.execute().await.is_ok());
+        assert!(executor.execute(ctx.clone()).await.is_ok());
     }
 
     Ok(())

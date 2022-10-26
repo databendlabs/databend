@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod accessor;
 mod management_mode_access;
 
+pub use accessor::AccessChecker;
+pub use accessor::Accessor;
 pub use management_mode_access::ManagementModeAccess;

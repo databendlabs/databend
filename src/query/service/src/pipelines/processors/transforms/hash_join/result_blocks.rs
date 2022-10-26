@@ -43,7 +43,6 @@ use crate::evaluator::EvalNode;
 use crate::pipelines::processors::transforms::hash_join::join_hash_table::MarkerKind;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::sessions::TableContext;
-use crate::sql::executor::ColumnID;
 use crate::sql::planner::plans::JoinType;
 use crate::sql::plans::JoinType::Mark;
 
@@ -565,6 +564,9 @@ impl<Key: HashtableKeyable + 'static> ResultBlocks for HashMap<Key, Vec<RowPtr>>
                     return Ok(vec![result]);
                 }
             }
+            JoinType::Right => {
+                todo!()
+            }
             Mark => {
                 results.push(DataBlock::empty());
                 // Three cases will produce Mark join:
@@ -1084,6 +1086,9 @@ impl ResultBlocks for UnsizedHashMap<[u8], Vec<RowPtr>> {
                     return Ok(vec![result]);
                 }
             }
+            JoinType::Right => {
+                todo!()
+            }
             Mark => {
                 results.push(DataBlock::empty());
                 // Three cases will produce Mark join:
@@ -1154,9 +1159,9 @@ impl JoinHashTable {
     }
 
     // keep at least one index of the positive state and the null state
-    // bitmap: [1, 0, 1] with row_state [2, 0], probe_index: [0, 0, 1]
+    // bitmap: [1, 0, 1] with row_state [2, 1], probe_index: [0, 0, 1]
     // bitmap will be [1, 0, 1] -> [1, 0, 1] -> [1, 0, 1] -> [1, 0, 1]
-    // row_state will be [2, 0] -> [2, 0] -> [1, 0] -> [1, 0]
+    // row_state will be [2, 1] -> [2, 1] -> [1, 1] -> [1, 1]
     fn fill_null_for_left_join(
         bm: &mut MutableBitmap,
         probe_indexs: &[u32],
@@ -1182,11 +1187,30 @@ impl JoinHashTable {
         }
     }
 
+    pub(crate) fn filter_rows_for_right_join(
+        bm: &mut MutableBitmap,
+        build_indexes: &[RowPtr],
+        row_state: &mut std::collections::HashMap<RowPtr, usize>,
+    ) {
+        for (index, row) in build_indexes.iter().enumerate() {
+            if row_state[row] == 1 {
+                if !bm.get(index) {
+                    bm.set(index, true)
+                }
+                continue;
+            }
+
+            if !bm.get(index) {
+                row_state.entry(*row).and_modify(|e| *e -= 1);
+            }
+        }
+    }
+
     // return an (option bitmap, all_true, all_false)
-    fn get_other_filters(
+    pub(crate) fn get_other_filters(
         &self,
         merged_block: &DataBlock,
-        filter: &EvalNode<ColumnID>,
+        filter: &EvalNode,
     ) -> Result<(Option<Bitmap>, bool, bool)> {
         let func_ctx = self.ctx.try_get_function_context()?;
         // `predicate_column` contains a column, which is a boolean column.

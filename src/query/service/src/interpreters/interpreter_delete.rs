@@ -14,14 +14,12 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_legacy_planners::DeletePlan;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -51,7 +49,7 @@ impl Interpreter for DeleteInterpreter {
     }
 
     #[tracing::instrument(level = "debug", name = "delete_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         // TODO check privilege
         let catalog_name = self.plan.catalog_name.as_str();
         let db_name = self.plan.database_name.as_str();
@@ -59,10 +57,6 @@ impl Interpreter for DeleteInterpreter {
         let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
         tbl.delete(self.ctx.clone(), self.plan.clone()).await?;
 
-        Ok(Box::pin(DataBlockStream::create(
-            Arc::new(DataSchema::empty()),
-            None,
-            vec![],
-        )))
+        Ok(PipelineBuildResult::create())
     }
 }

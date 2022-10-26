@@ -16,8 +16,8 @@ use common_meta_api::KVApi;
 use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::GetKVReply;
+use common_meta_types::KVAppError;
 use common_meta_types::MGetKVReply;
-use common_meta_types::MetaError;
 use common_meta_types::SeqV;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
@@ -30,7 +30,7 @@ use crate::state_machine::StateMachine;
 
 #[async_trait::async_trait]
 impl KVApi for StateMachine {
-    async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, MetaError> {
+    async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, KVAppError> {
         let cmd = Cmd::UpsertKV(UpsertKV {
             key: act.key,
             seq: act.seq,
@@ -53,7 +53,7 @@ impl KVApi for StateMachine {
         }
     }
 
-    async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, MetaError> {
+    async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, KVAppError> {
         let cmd = Cmd::Transaction(txn);
 
         let res = self.sm_tree.txn(true, |t| {
@@ -71,7 +71,7 @@ impl KVApi for StateMachine {
         }
     }
 
-    async fn get_kv(&self, key: &str) -> Result<GetKVReply, MetaError> {
+    async fn get_kv(&self, key: &str) -> Result<GetKVReply, KVAppError> {
         // TODO(xp) refine get(): a &str is enough for key
         let sv = self.kvs().get(&key.to_string())?;
         debug!("get_kv sv:{:?}", sv);
@@ -84,7 +84,7 @@ impl KVApi for StateMachine {
         Ok(Self::unexpired(seq_v, local_now_ms))
     }
 
-    async fn mget_kv(&self, keys: &[String]) -> Result<MGetKVReply, MetaError> {
+    async fn mget_kv(&self, keys: &[String]) -> Result<MGetKVReply, KVAppError> {
         let kvs = self.kvs();
         let mut res = vec![];
 
@@ -102,7 +102,7 @@ impl KVApi for StateMachine {
     async fn prefix_list_kv(
         &self,
         prefix: &str,
-    ) -> Result<Vec<(String, SeqV<Vec<u8>>)>, MetaError> {
+    ) -> Result<Vec<(String, SeqV<Vec<u8>>)>, KVAppError> {
         let kvs = self.kvs();
         let kv_pairs = kvs.scan_prefix(&prefix.to_string())?;
 

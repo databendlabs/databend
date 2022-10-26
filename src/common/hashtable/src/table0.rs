@@ -264,15 +264,11 @@ where
     C: Container<T = Entry<K, ()>, A = A>,
     A: Allocator + Clone,
 {
-    pub unsafe fn merge(&mut self, mut other: Self) {
+    pub unsafe fn set_merge(&mut self, other: &Self) {
         assert!(self.capacity() >= self.len() + other.len());
-        other.dropped = true;
         for entry in other.iter() {
             let key = *(*entry).key.assume_init_ref();
-            let result = self.insert(key);
-            if let Ok(x) = result {
-                x.write((*entry).val.assume_init_read());
-            }
+            let _ = self.insert(key);
         }
     }
 }

@@ -67,6 +67,7 @@ pub trait ResultTypeOfBinary: Sized {{
 
 pub trait ResultTypeOfUnary: Sized {{
     type Negate: Number;
+    type Sum: Number;
 
     fn checked_add(self, _rhs: Self) -> Option<Self>;
 
@@ -126,6 +127,7 @@ impl ResultTypeOfBinary for ({}, {}) {{
 
     for arg in &number_types {
         let negate = neg_coercion(*arg);
+        let sum = sum_coercion(*arg);
 
         match negate {
             NumberDataType::Float32 | NumberDataType::Float64 => {
@@ -134,6 +136,7 @@ impl ResultTypeOfBinary for ({}, {}) {{
                     "
 impl ResultTypeOfUnary for {} {{
     type Negate = {};
+    type Sum = {};
 
     fn checked_add(self, rhs: Self) -> Option<Self> {{
         Some(self + rhs)
@@ -157,6 +160,7 @@ impl ResultTypeOfUnary for {} {{
 }}",
                     to_primitive_str(*arg),
                     to_primitive_str(negate),
+                    to_primitive_str(sum),
                 )
                 .unwrap();
             }
@@ -167,6 +171,7 @@ impl ResultTypeOfUnary for {} {{
                     "
 impl ResultTypeOfUnary for {} {{
     type Negate = {};
+    type Sum = {};
 
     fn checked_add(self, rhs: Self) -> Option<Self> {{
         self.checked_add(rhs)
@@ -190,6 +195,7 @@ impl ResultTypeOfUnary for {} {{
 }}",
                     to_primitive_str(*arg),
                     to_primitive_str(negate),
+                    to_primitive_str(sum),
                 )
                 .unwrap();
             }
@@ -249,6 +255,16 @@ fn neg_coercion(a: NumberDataType) -> NumberDataType {
     };
 
     NumberDataType::new(bit_width, true, a.is_float())
+}
+
+fn sum_coercion(a: NumberDataType) -> NumberDataType {
+    if a.is_float() {
+        NumberDataType::Float64
+    } else if a.is_signed() {
+        NumberDataType::Int64
+    } else {
+        NumberDataType::UInt64
+    }
 }
 
 const fn next_bit_width(width: u8) -> u8 {

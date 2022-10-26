@@ -14,16 +14,17 @@
 
 mod decorrelate;
 mod implement;
+mod prewhere_optimization;
 mod prune_columns;
 mod rule_list;
 mod subquery_rewriter;
-mod where_optimizer;
 
 use std::sync::Arc;
 
 use common_exception::Result;
 use once_cell::sync::Lazy;
 
+use self::prewhere_optimization::PrewhereOptimizer;
 use super::rule::RuleID;
 use super::ColumnSet;
 use crate::sessions::TableContext;
@@ -93,13 +94,13 @@ impl HeuristicOptimizer {
     }
 
     fn post_optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
+        let prewhere_optimizer = PrewhereOptimizer::new(self.metadata.clone());
+        let s_expr = prewhere_optimizer.prewhere_optimize(s_expr)?;
+
         let pruner = prune_columns::ColumnPruner::new(self.metadata.clone());
         let require_columns: ColumnSet =
             self.bind_context.columns.iter().map(|c| c.index).collect();
-        let s_expr = pruner.prune_columns(&s_expr, require_columns)?;
-
-        let where_opt = where_optimizer::WhereOptimizer::new(self.metadata.clone());
-        where_opt.where_optimize(s_expr)
+        pruner.prune_columns(&s_expr, require_columns)
     }
 
     pub fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_meta_raft_store::config::RaftConfig;
-use common_meta_types::MetaResult;
+use common_meta_types::MetaStartupError;
 use common_meta_types::Node;
 use common_tracing::Config as LogConfig;
 
@@ -65,7 +65,7 @@ impl Config {
     /// As requires by [RFC: Config Backward Compatibility](https://github.com/datafuselabs/databend/pull/5324), we will load user's config via wrapper [`OuterV0Config`] and then convert from [`OuterV0Config`] to [`Config`].
     ///
     /// In the future, we could have `ConfigV1` and `ConfigV2`.
-    pub fn load() -> MetaResult<Self> {
+    pub fn load() -> Result<Self, MetaStartupError> {
         let cfg = OuterV0Config::load()?.into();
 
         Ok(cfg)

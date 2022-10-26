@@ -18,11 +18,10 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_legacy_planners::ShowCreateTablePlan;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 use tracing::debug;
 
 use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::executor::PhysicalScalar;
@@ -49,7 +48,7 @@ impl Interpreter for ShowCreateTableInterpreter {
         self.plan.schema()
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
 
@@ -125,15 +124,12 @@ impl Interpreter for ShowCreateTableInterpreter {
                 .as_str()
         });
 
-        let show_schema = self.plan.schema();
-        let block = DataBlock::create(show_schema.clone(), vec![
+        let block = DataBlock::create(self.plan.schema(), vec![
             Series::from_data(vec![name.as_bytes()]),
             Series::from_data(vec![table_create_sql.into_bytes()]),
         ]);
         debug!("Show create table executor result: {:?}", block);
 
-        Ok(Box::pin(DataBlockStream::create(show_schema, None, vec![
-            block,
-        ])))
+        PipelineBuildResult::from_blocks(vec![block])
     }
 }

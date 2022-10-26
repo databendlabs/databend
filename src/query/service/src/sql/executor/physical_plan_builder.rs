@@ -121,8 +121,16 @@ impl PhysicalPlanBuilder {
                     if column.path_indices.is_some() {
                         has_inner_column = true;
                     }
-                    let name = column.name.clone();
-                    name_mapping.insert(name, index.to_string());
+                    if let Some(prewhere) = &scan.prewhere {
+                        // if there is a prewhere optimization,
+                        // we can prune `PhysicalScan`'s ouput schema.
+                        if prewhere.output_columns.contains(index) {
+                            name_mapping.insert(column.name.clone(), index.to_string());
+                        }
+                    } else {
+                        let name = column.name.clone();
+                        name_mapping.insert(name, index.to_string());
+                    }
                 }
 
                 let table_entry = metadata.table(scan.table_index);
@@ -424,13 +432,19 @@ impl PhysicalPlanBuilder {
 
                 let remain_columns = scan
                     .columns
-                    .difference(&prewhere.columns)
+                    .difference(&prewhere.prewhere_columns)
                     .copied()
                     .collect::<HashSet<usize>>();
-                let need_columns = Self::build_projection(
+                let output_columns = Self::build_projection(
                     &metadata,
                     table_schema,
-                    &prewhere.columns,
+                    &prewhere.output_columns,
+                    has_inner_column,
+                );
+                let prewhere_columns = Self::build_projection(
+                    &metadata,
+                    table_schema,
+                    &prewhere.prewhere_columns,
                     has_inner_column,
                 );
                 let remain_columns = Self::build_projection(
@@ -441,7 +455,8 @@ impl PhysicalPlanBuilder {
                 );
 
                 Ok::<PrewhereInfo, ErrorCode>(PrewhereInfo {
-                    need_columns,
+                    output_columns,
+                    prewhere_columns,
                     remain_columns,
                     filter,
                 })

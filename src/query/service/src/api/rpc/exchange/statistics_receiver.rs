@@ -22,7 +22,9 @@ use common_base::base::select3;
 use common_base::base::tokio;
 use common_base::base::tokio::sync::Notify;
 use common_base::base::tokio::task::JoinHandle;
+use common_base::base::Runtime;
 use common_base::base::Select3Output;
+use common_base::base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -36,17 +38,25 @@ pub struct StatisticsReceiver {
     shutdown_flag: Arc<AtomicBool>,
     shutdown_notify: Arc<Notify>,
     exchange_handler: Vec<JoinHandle<Result<()>>>,
+    runtime: Arc<Runtime>,
 }
 
 impl StatisticsReceiver {
-    pub fn create(ctx: Arc<QueryContext>, exchanges: Vec<FlightExchange>) -> StatisticsReceiver {
-        StatisticsReceiver {
+    pub fn create(
+        ctx: Arc<QueryContext>,
+        exchanges: Vec<FlightExchange>,
+    ) -> Result<StatisticsReceiver> {
+        Ok(StatisticsReceiver {
             ctx,
             exchanges,
             shutdown_flag: Arc::new(AtomicBool::new(false)),
             shutdown_notify: Arc::new(Notify::new()),
             exchange_handler: vec![],
-        }
+            runtime: Arc::new(Runtime::with_worker_threads(
+                2,
+                Some(String::from("StatisticsReceiver")),
+            )?),
+        })
     }
 
     pub fn start(&mut self) {
@@ -55,7 +65,7 @@ impl StatisticsReceiver {
             let shutdown_flag = self.shutdown_flag.clone();
             let shutdown_notify = self.shutdown_notify.clone();
 
-            self.exchange_handler.push(tokio::spawn(async move {
+            self.exchange_handler.push(self.runtime.spawn(async move {
                 let mut recv = Box::pin(flight_exchange.recv());
                 let mut notified = Box::pin(shutdown_notify.notified());
 

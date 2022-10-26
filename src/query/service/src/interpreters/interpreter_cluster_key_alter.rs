@@ -18,10 +18,9 @@ use common_exception::Result;
 use common_legacy_planners::AlterTableClusterKeyPlan;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use super::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -42,7 +41,7 @@ impl Interpreter for AlterTableClusterKeyInterpreter {
         "AlterTableClusterKeyInterpreter"
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = &self.plan;
         self.ctx
             .get_current_session()
@@ -68,10 +67,7 @@ impl Interpreter for AlterTableClusterKeyInterpreter {
         table
             .alter_table_cluster_keys(self.ctx.clone(), &self.plan.catalog, cluster_key_str)
             .await?;
-        Ok(Box::pin(DataBlockStream::create(
-            self.plan.schema(),
-            None,
-            vec![],
-        )))
+
+        Ok(PipelineBuildResult::create())
     }
 }

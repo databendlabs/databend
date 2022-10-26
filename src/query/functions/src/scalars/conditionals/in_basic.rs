@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::fmt;
 
 use common_datavalues::prelude::*;
 use common_datavalues::type_coercion::numerical_coercion;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_hashtable::StackHashSet;
+use common_hashtable::KeysRef;
 use ordered_float::OrderedFloat;
 
 use crate::scalars::cast_column_field;
@@ -30,6 +31,7 @@ use crate::scalars::FunctionFeatures;
 #[derive(Clone)]
 pub struct InFunction<const NEGATED: bool> {
     is_null: bool,
+    is_nullable: bool,
 }
 
 impl<const NEGATED: bool> InFunction<NEGATED> {
@@ -45,7 +47,11 @@ impl<const NEGATED: bool> InFunction<NEGATED> {
         }
 
         let is_null = args[0].data_type_id() == TypeID::Null;
-        Ok(Box::new(InFunction::<NEGATED> { is_null }))
+        let is_nullable = args[0].is_nullable();
+        Ok(Box::new(InFunction::<NEGATED> {
+            is_null,
+            is_nullable,
+        }))
     }
 
     pub fn desc() -> FunctionDescription {
@@ -58,46 +64,110 @@ impl<const NEGATED: bool> InFunction<NEGATED> {
 }
 
 macro_rules! scalar_contains {
-    ($T: ident, $INPUT_COL: expr, $ROWS: expr, $COLUMNS: expr, $CAST_TYPE: ident, $FUNC_CTX: expr) => {{
-        let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity($ROWS);
-        let mut vals_set = HashSet::with_capacity($ROWS);
-        for col in &$COLUMNS[1..] {
-            let col = cast_column_field(col, col.data_type(), &$CAST_TYPE, &$FUNC_CTX)?;
-            let col_viewer = $T::try_create_viewer(&col)?;
-            if col_viewer.valid_at(0) {
-                let val = col_viewer.value_at(0).to_owned_scalar();
-                vals_set.insert(val);
-            }
-        }
-        let input_viewer = $T::try_create_viewer(&$INPUT_COL)?;
-        for (row, val) in input_viewer.iter().enumerate() {
-            let contains = vals_set.contains(&val.to_owned());
-            let valid = input_viewer.valid_at(row);
-            builder.append(valid && ((contains && !NEGATED) || (!contains && NEGATED)));
-        }
-        return Ok(builder.build($ROWS));
-    }};
-}
-
-macro_rules! float_contains {
-    ($T: ident, $INPUT_COL: expr, $ROWS: expr, $COLUMNS: expr, $CAST_TYPE: ident, $FUNC_CTX: expr) => {{
-        let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity($ROWS);
-        let mut vals_set = HashSet::with_capacity($ROWS);
+    ($T: ident, $INPUT_COL: expr, $ROWS: expr, $COLUMNS: expr, $CAST_TYPE: ident, $FUNC_CTX: expr, $RETURN_NULLABLE: expr) => {{
+        let mut builder: NullableColumnBuilder<bool> = NullableColumnBuilder::with_capacity($ROWS);
+        let mut vals_set: StackHashSet<$T, 64> = StackHashSet::new();
         for col in &$COLUMNS[1..] {
             let col = cast_column_field(col, col.data_type(), &$CAST_TYPE, &$FUNC_CTX)?;
             let col_viewer = $T::try_create_viewer(&col)?;
             if col_viewer.valid_at(0) {
                 let val = col_viewer.value_at(0);
-                vals_set.insert(OrderedFloat::from(val));
+                let _ = vals_set.set_insert(val);
             }
         }
         let input_viewer = $T::try_create_viewer(&$INPUT_COL)?;
         for (row, val) in input_viewer.iter().enumerate() {
-            let contains = vals_set.contains(&OrderedFloat::from(val));
-            let valid = input_viewer.valid_at(row);
-            builder.append(valid && ((contains && !NEGATED) || (!contains && NEGATED)));
+            let contains = vals_set.get(&val.to_owned()).is_some();
+            let valid = $RETURN_NULLABLE && input_viewer.valid_at(row);
+            builder.append((contains && !NEGATED) || (!contains && NEGATED), valid);
         }
-        return Ok(builder.build($ROWS));
+        if $RETURN_NULLABLE {
+            Ok(builder.build($ROWS))
+        } else {
+            Ok(builder.build_nonull($ROWS))
+        }
+    }};
+}
+
+macro_rules! bool_contains {
+    ($T: ident, $INPUT_COL: expr, $ROWS: expr, $COLUMNS: expr, $CAST_TYPE: ident, $FUNC_CTX: expr, $RETURN_NULLABLE: expr) => {{
+        let mut builder: NullableColumnBuilder<bool> = NullableColumnBuilder::with_capacity($ROWS);
+        let mut vals = 0;
+        for col in &$COLUMNS[1..] {
+            let col = cast_column_field(col, col.data_type(), &$CAST_TYPE, &$FUNC_CTX)?;
+            let col_viewer = $T::try_create_viewer(&col)?;
+            if col_viewer.valid_at(0) {
+                let val = col_viewer.value_at(0);
+                vals |= 1 << (val as u8 + 1);
+            }
+        }
+        let input_viewer = $T::try_create_viewer(&$INPUT_COL)?;
+        for (row, val) in input_viewer.iter().enumerate() {
+            let contains = ((vals >> (val as u8 + 1)) & 1) > 0;
+            let valid = $RETURN_NULLABLE && input_viewer.valid_at(row);
+            builder.append((contains && !NEGATED) || (!contains && NEGATED), valid);
+        }
+        if $RETURN_NULLABLE {
+            Ok(builder.build($ROWS))
+        } else {
+            Ok(builder.build_nonull($ROWS))
+        }
+    }};
+}
+
+macro_rules! string_contains {
+    ($T: ident, $INPUT_COL: expr, $ROWS: expr, $COLUMNS: expr, $CAST_TYPE: ident, $FUNC_CTX: expr, $RETURN_NULLABLE: expr) => {{
+        let mut builder: NullableColumnBuilder<bool> = NullableColumnBuilder::with_capacity($ROWS);
+        let mut vals_set: StackHashSet<KeysRef, 64> = StackHashSet::new();
+        for col in &$COLUMNS[1..] {
+            let col = cast_column_field(col, col.data_type(), &$CAST_TYPE, &$FUNC_CTX)?;
+            let col_viewer = $T::try_create_viewer(&col)?;
+            if col_viewer.valid_at(0) {
+                let val = col_viewer.value_at(0);
+                let key = KeysRef::create(val.as_ptr() as usize, val.len());
+                let _ = vals_set.set_insert(key);
+            }
+        }
+        let input_viewer = $T::try_create_viewer(&$INPUT_COL)?;
+        for (row, val) in input_viewer.iter().enumerate() {
+            let key = KeysRef::create(val.as_ptr() as usize, val.len());
+            let contains = vals_set.get(&key).is_some();
+            let valid = $RETURN_NULLABLE && input_viewer.valid_at(row);
+            builder.append((contains && !NEGATED) || (!contains && NEGATED), valid);
+        }
+        if $RETURN_NULLABLE {
+            Ok(builder.build($ROWS))
+        } else {
+            Ok(builder.build_nonull($ROWS))
+        }
+    }};
+}
+
+macro_rules! float_contains {
+    ($T: ident, $INPUT_COL: expr, $ROWS: expr, $COLUMNS: expr, $CAST_TYPE: ident, $FUNC_CTX: expr, $RETURN_NULLABLE: expr) => {{
+        let mut builder: NullableColumnBuilder<bool> = NullableColumnBuilder::with_capacity($ROWS);
+        let mut vals_set: StackHashSet<OrderedFloat<$T>, 64> =
+            StackHashSet::new();
+
+        for col in &$COLUMNS[1..] {
+            let col = cast_column_field(col, col.data_type(), &$CAST_TYPE, &$FUNC_CTX)?;
+            let col_viewer = $T::try_create_viewer(&col)?;
+            if col_viewer.valid_at(0) {
+                let val = col_viewer.value_at(0);
+                let _ = vals_set.set_insert(OrderedFloat::from(val));
+            }
+        }
+        let input_viewer = $T::try_create_viewer(&$INPUT_COL)?;
+        for (row, val) in input_viewer.iter().enumerate() {
+            let contains = vals_set.get(&OrderedFloat::from(val)).is_some();
+            let valid = $RETURN_NULLABLE && input_viewer.valid_at(row);
+            builder.append((contains && !NEGATED) || (!contains && NEGATED), valid);
+        }
+        if $RETURN_NULLABLE {
+            Ok(builder.build($ROWS))
+        } else {
+            Ok(builder.build_nonull($ROWS))
+        }
     }};
 }
 
@@ -109,6 +179,9 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
     fn return_type(&self) -> DataTypeImpl {
         if self.is_null {
             return NullType::new_impl();
+        }
+        if self.is_nullable {
+            return NullableType::new_impl(BooleanType::new_impl());
         }
         BooleanType::new_impl()
     }
@@ -156,19 +229,29 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
             &func_ctx,
         )?;
 
+        let return_nullable = self.return_type().is_nullable();
         match least_super_type_id {
             TypeID::Boolean => {
-                scalar_contains!(
+                bool_contains!(
                     bool,
                     input_col,
                     input_rows,
                     columns,
                     least_super_dt,
-                    func_ctx
+                    func_ctx,
+                    return_nullable
                 )
             }
             TypeID::UInt8 => {
-                scalar_contains!(u8, input_col, input_rows, columns, least_super_dt, func_ctx)
+                scalar_contains!(
+                    u8,
+                    input_col,
+                    input_rows,
+                    columns,
+                    least_super_dt,
+                    func_ctx,
+                    return_nullable
+                )
             }
             TypeID::UInt16 => {
                 scalar_contains!(
@@ -177,7 +260,8 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
                     input_rows,
                     columns,
                     least_super_dt,
-                    func_ctx
+                    func_ctx,
+                    return_nullable
                 )
             }
             TypeID::UInt32 => {
@@ -187,7 +271,8 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
                     input_rows,
                     columns,
                     least_super_dt,
-                    func_ctx
+                    func_ctx,
+                    return_nullable
                 )
             }
             TypeID::UInt64 => {
@@ -197,11 +282,20 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
                     input_rows,
                     columns,
                     least_super_dt,
-                    func_ctx
+                    func_ctx,
+                    return_nullable
                 )
             }
             TypeID::Int8 => {
-                scalar_contains!(i8, input_col, input_rows, columns, least_super_dt, func_ctx)
+                scalar_contains!(
+                    i8,
+                    input_col,
+                    input_rows,
+                    columns,
+                    least_super_dt,
+                    func_ctx,
+                    return_nullable
+                )
             }
             TypeID::Int16 => {
                 scalar_contains!(
@@ -210,7 +304,8 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
                     input_rows,
                     columns,
                     least_super_dt,
-                    func_ctx
+                    func_ctx,
+                    return_nullable
                 )
             }
             TypeID::Int32 => {
@@ -220,7 +315,8 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
                     input_rows,
                     columns,
                     least_super_dt,
-                    func_ctx
+                    func_ctx,
+                    return_nullable
                 )
             }
             TypeID::Int64 => {
@@ -230,17 +326,19 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
                     input_rows,
                     columns,
                     least_super_dt,
-                    func_ctx
+                    func_ctx,
+                    return_nullable
                 )
             }
             TypeID::String => {
-                scalar_contains!(
+                string_contains!(
                     Vu8,
                     input_col,
                     input_rows,
                     columns,
                     least_super_dt,
-                    func_ctx
+                    func_ctx,
+                    return_nullable
                 )
             }
             TypeID::Float32 => {
@@ -250,7 +348,8 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
                     input_rows,
                     columns,
                     least_super_dt,
-                    func_ctx
+                    func_ctx,
+                    return_nullable
                 )
             }
             TypeID::Float64 => {
@@ -260,7 +359,8 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
                     input_rows,
                     columns,
                     least_super_dt,
-                    func_ctx
+                    func_ctx,
+                    return_nullable
                 )
             }
             TypeID::Date => {
@@ -270,7 +370,8 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
                     input_rows,
                     columns,
                     least_super_dt,
-                    func_ctx
+                    func_ctx,
+                    return_nullable
                 )
             }
             TypeID::Timestamp => {
@@ -280,7 +381,8 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
                     input_rows,
                     columns,
                     least_super_dt,
-                    func_ctx
+                    func_ctx,
+                    return_nullable
                 )
             }
             _ => Result::Err(ErrorCode::BadDataValueType(format!(

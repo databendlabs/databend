@@ -13,47 +13,47 @@
 // limitations under the License.
 
 use common_meta_app::share::*;
-use common_meta_types::MetaResult;
+use common_meta_types::KVAppError;
 
 #[async_trait::async_trait]
 pub trait ShareApi: Sync + Send {
-    async fn show_shares(&self, req: ShowSharesReq) -> MetaResult<ShowSharesReply>;
-    async fn create_share(&self, req: CreateShareReq) -> MetaResult<CreateShareReply>;
+    async fn show_shares(&self, req: ShowSharesReq) -> Result<ShowSharesReply, KVAppError>;
+    async fn create_share(&self, req: CreateShareReq) -> Result<CreateShareReply, KVAppError>;
 
-    async fn drop_share(&self, req: DropShareReq) -> MetaResult<DropShareReply>;
+    async fn drop_share(&self, req: DropShareReq) -> Result<DropShareReply, KVAppError>;
 
     async fn grant_share_object(
         &self,
         req: GrantShareObjectReq,
-    ) -> MetaResult<GrantShareObjectReply>;
+    ) -> Result<GrantShareObjectReply, KVAppError>;
     async fn revoke_share_object(
         &self,
         req: RevokeShareObjectReq,
-    ) -> MetaResult<RevokeShareObjectReply>;
+    ) -> Result<RevokeShareObjectReply, KVAppError>;
 
     async fn add_share_tenants(
         &self,
         req: AddShareAccountsReq,
-    ) -> MetaResult<AddShareAccountsReply>;
+    ) -> Result<AddShareAccountsReply, KVAppError>;
     async fn remove_share_tenants(
         &self,
         req: RemoveShareAccountsReq,
-    ) -> MetaResult<RemoveShareAccountsReply>;
+    ) -> Result<RemoveShareAccountsReply, KVAppError>;
 
     async fn get_share_grant_objects(
         &self,
         req: GetShareGrantObjectReq,
-    ) -> MetaResult<GetShareGrantObjectReply>;
+    ) -> Result<GetShareGrantObjectReply, KVAppError>;
 
     // Return all the grant tenants of the share
     async fn get_grant_tenants_of_share(
         &self,
         req: GetShareGrantTenantsReq,
-    ) -> MetaResult<GetShareGrantTenantsReply>;
+    ) -> Result<GetShareGrantTenantsReply, KVAppError>;
 
     // Return all the grant privileges of the object
     async fn get_grant_privileges_of_object(
         &self,
         req: GetObjectGrantPrivilegesReq,
-    ) -> MetaResult<GetObjectGrantPrivilegesReply>;
+    ) -> Result<GetObjectGrantPrivilegesReply, KVAppError>;
 }

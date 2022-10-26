@@ -129,7 +129,7 @@ Exchange
 └── HashJoin
     ├── join type: INNER
     ├── build keys: [CAST(numbers.number (#4) AS BIGINT UNSIGNED NULL)]
-    ├── probe keys: [number (#1)]
+    ├── probe keys: [CAST(number (#1) AS BIGINT UNSIGNED NULL)]
     ├── filters: []
     ├── Exchange(Build)
     │   ├── exchange type: Hash(CAST(numbers.number (#4) AS BIGINT UNSIGNED NULL))
@@ -141,7 +141,7 @@ Exchange
     │       ├── partitions scanned: 1
     │       └── push downs: [filters: [], limit: NONE]
     └── Exchange(Probe)
-        ├── exchange type: Hash(number (#1))
+        ├── exchange type: Hash(CAST(number (#1) AS BIGINT UNSIGNED NULL))
         └── Project
             ├── columns: [number (#1)]
             └── EvalScalar

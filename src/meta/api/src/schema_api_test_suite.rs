@@ -67,16 +67,16 @@ use common_meta_app::share::ShareId;
 use common_meta_app::share::ShareMeta;
 use common_meta_app::share::ShareNameIdent;
 use common_meta_types::GCDroppedDataReq;
+use common_meta_types::KVAppError;
 use common_meta_types::MatchSeq;
-use common_meta_types::MetaError;
 use common_meta_types::Operation;
 use common_meta_types::UpsertKVReq;
 use tracing::debug;
 use tracing::info;
 
-use crate::get_kv_data;
 use crate::is_all_db_data_removed;
 use crate::serialize_struct;
+use crate::testing::get_kv_data;
 use crate::ApiBuilder;
 use crate::AsKVApi;
 use crate::KVApi;
@@ -176,7 +176,7 @@ async fn upsert_test_data(
     kv_api: &(impl KVApi + ?Sized),
     key: &impl KVApiKey,
     value: Vec<u8>,
-) -> Result<u64, MetaError> {
+) -> Result<u64, KVAppError> {
     let res = kv_api
         .upsert_kv(UpsertKVReq {
             key: key.to_key(),
@@ -193,7 +193,7 @@ async fn upsert_test_data(
 async fn delete_test_data(
     kv_api: &(impl KVApi + ?Sized),
     key: &impl KVApiKey,
-) -> Result<(), MetaError> {
+) -> Result<(), KVAppError> {
     let _res = kv_api
         .upsert_kv(UpsertKVReq {
             key: key.to_key(),
@@ -253,6 +253,7 @@ impl SchemaApiTestSuite {
         suite.get_table_by_id(&b.build().await).await?;
         suite.get_table_copied_file(&b.build().await).await?;
         suite.truncate_table(&b.build().await).await?;
+        suite.get_tables_from_share(&b.build().await).await?;
         Ok(())
     }
 
@@ -2382,11 +2383,11 @@ impl SchemaApiTestSuite {
             let id_key = DatabaseId { db_id: *db_id };
             let id_mapping = DatabaseIdToName { db_id: *db_id };
 
-            let meta_res: Result<DatabaseMeta, MetaError> =
+            let meta_res: Result<DatabaseMeta, KVAppError> =
                 get_kv_data(mt.as_kv_api(), &id_key).await;
             assert!(meta_res.is_err());
 
-            let mapping_res: Result<DatabaseNameIdent, MetaError> =
+            let mapping_res: Result<DatabaseNameIdent, KVAppError> =
                 get_kv_data(mt.as_kv_api(), &id_mapping).await;
             assert!(mapping_res.is_err());
         }
@@ -2560,9 +2561,9 @@ impl SchemaApiTestSuite {
             let id_mapping = TableIdToName {
                 table_id: *table_id,
             };
-            let meta_res: Result<DatabaseMeta, MetaError> =
+            let meta_res: Result<DatabaseMeta, KVAppError> =
                 get_kv_data(mt.as_kv_api(), &id_key).await;
-            let mapping_res: Result<DBIdTableName, MetaError> =
+            let mapping_res: Result<DBIdTableName, KVAppError> =
                 get_kv_data(mt.as_kv_api(), &id_mapping).await;
             assert!(meta_res.is_err());
             assert!(mapping_res.is_err());
@@ -2575,7 +2576,7 @@ impl SchemaApiTestSuite {
                 file: "file".to_string(),
             };
 
-            let resp: Result<TableCopiedFileInfo, MetaError> =
+            let resp: Result<TableCopiedFileInfo, KVAppError> =
                 get_kv_data(mt.as_kv_api(), &key).await;
             assert!(resp.is_err());
         }
@@ -3371,6 +3372,165 @@ impl SchemaApiTestSuite {
 
             let resp = mt.get_table_copied_file_info(req).await?;
             assert_eq!(resp.file_info.len(), 0);
+        }
+
+        Ok(())
+    }
+
+    async fn get_tables_from_share<MT: ShareApi + AsKVApi + SchemaApi>(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let tenant1 = "tenant1";
+        let tenant2 = "tenant2";
+        let db1 = "db1";
+        let db2 = "db2";
+        let share = "share";
+        let tb1 = "tb1";
+        let tb2 = "tb2";
+        let share_name = ShareNameIdent {
+            tenant: tenant1.to_string(),
+            share_name: share.to_string(),
+        };
+        let db_name1 = DatabaseNameIdent {
+            tenant: tenant1.to_string(),
+            db_name: db1.to_string(),
+        };
+        let db_name2 = DatabaseNameIdent {
+            tenant: tenant2.to_string(),
+            db_name: db2.to_string(),
+        };
+        let tb_name1 = TableNameIdent {
+            tenant: tenant1.to_string(),
+            db_name: db1.to_string(),
+            table_name: tb1.to_string(),
+        };
+        let tb_name2 = TableNameIdent {
+            tenant: tenant1.to_string(),
+            db_name: db1.to_string(),
+            table_name: tb2.to_string(),
+        };
+        let tb_names = vec![&tb_name1, &tb_name2];
+        let mut share_table_id = 0;
+
+        info!("--- create a share and grant access to db and table");
+        {
+            let create_on = Utc::now();
+            let share_on = Utc::now();
+            let req = CreateShareReq {
+                if_not_exists: false,
+                share_name: share_name.clone(),
+                comment: None,
+                create_on,
+            };
+
+            let _ = mt.create_share(req).await?;
+
+            // create share db
+            let req = CreateDatabaseReq {
+                if_not_exists: false,
+                name_ident: db_name1.clone(),
+                meta: DatabaseMeta {
+                    ..Default::default()
+                },
+            };
+            let _ = mt.create_database(req).await?;
+
+            // create share table
+            let schema = || {
+                Arc::new(DataSchema::new(vec![DataField::new(
+                    "number",
+                    u64::to_data_type(),
+                )]))
+            };
+            let table_meta = |created_on| TableMeta {
+                schema: schema(),
+                engine: "JSON".to_string(),
+                options: BTreeMap::new(),
+                updated_on: created_on,
+                created_on,
+                ..TableMeta::default()
+            };
+            for tb_name in tb_names {
+                let req = CreateTableReq {
+                    if_not_exists: false,
+                    name_ident: tb_name.clone(),
+                    table_meta: table_meta(create_on),
+                };
+                let res = mt.create_table(req).await?;
+                if tb_name == &tb_name1 {
+                    share_table_id = res.table_id;
+                }
+            }
+
+            // grant the tenant2 to access the share
+            let req = AddShareAccountsReq {
+                share_name: share_name.clone(),
+                share_on,
+                if_exists: false,
+                accounts: vec![tenant2.to_string()],
+            };
+
+            let res = mt.add_share_tenants(req).await;
+            assert!(res.is_ok());
+
+            // grant access to database and table1
+            let req = GrantShareObjectReq {
+                share_name: share_name.clone(),
+                object: ShareGrantObjectName::Database(db1.to_string()),
+                grant_on: create_on,
+                privilege: ShareGrantObjectPrivilege::Usage,
+            };
+            let _ = mt.grant_share_object(req).await?;
+
+            let req = GrantShareObjectReq {
+                share_name: share_name.clone(),
+                object: ShareGrantObjectName::Table(db1.to_string(), tb1.to_string()),
+                grant_on: create_on,
+                privilege: ShareGrantObjectPrivilege::Select,
+            };
+            let _ = mt.grant_share_object(req).await?;
+        }
+
+        info!("--- create a share db");
+        {
+            let req = CreateDatabaseReq {
+                if_not_exists: false,
+                name_ident: db_name2.clone(),
+                meta: DatabaseMeta {
+                    from_share: Some(share_name.clone()),
+                    ..Default::default()
+                },
+            };
+            let _ = mt.create_database(req).await?;
+        };
+
+        info!("--- list tables from share db");
+        {
+            let res = mt.list_tables(ListTableReq::new(tenant2, db2)).await;
+            assert!(res.is_ok());
+            let res = res.unwrap();
+            assert_eq!(res.len(), 1);
+            // since share has not grant access to tb2, so list tables only return tb1.
+            let table_info = &res[0];
+            assert_eq!(table_info.name, tb1.to_string());
+            assert_eq!(table_info.ident.table_id, share_table_id);
+        }
+
+        info!("--- get tables from share db");
+        {
+            let got = mt.get_table((tenant2, db2, tb1).into()).await;
+            assert!(got.is_ok());
+            let got = got.unwrap();
+            assert_eq!(got.ident.table_id, share_table_id);
+            assert_eq!(got.name, tb1.to_string());
+
+            let got = mt.get_table((tenant2, db2, tb2).into()).await;
+            assert!(got.is_err());
+            assert_eq!(
+                ErrorCode::from(got.unwrap_err()).code(),
+                ErrorCode::WrongShareObject("").code()
+            );
         }
 
         Ok(())

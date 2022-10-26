@@ -44,4 +44,7 @@ pub trait HashJoinState: Send + Sync {
 
     /// Get mark join results
     fn mark_join_blocks(&self) -> Result<Vec<DataBlock>>;
+
+    /// Get right join results
+    fn right_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>>;
 }

@@ -20,10 +20,9 @@ use common_legacy_planners::DropTablePlan;
 use common_legacy_planners::TruncateTablePlan;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::storages::view::view_table::VIEW_ENGINE;
@@ -45,7 +44,7 @@ impl Interpreter for DropTableInterpreter {
         "DropTableInterpreter"
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         let catalog_name = self.plan.catalog.as_str();
         let db_name = self.plan.database.as_str();
         let tbl_name = self.plan.table.as_str();
@@ -90,10 +89,6 @@ impl Interpreter for DropTableInterpreter {
             }
         }
 
-        Ok(Box::pin(DataBlockStream::create(
-            self.plan.schema(),
-            None,
-            vec![],
-        )))
+        Ok(PipelineBuildResult::create())
     }
 }

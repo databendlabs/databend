@@ -308,6 +308,8 @@ class SuiteRunner(object):
             if callable(getattr(self, "batch_execute")):
                 # case batch
                 for (file_path, suite_name) in self.statement_files:
+                    log.info(f"Suite: {file_path} started")
+
                     self.suite_now = suite_name
                     statement_list = list()
                     for state in get_statements(file_path, suite_name):
@@ -322,7 +324,7 @@ class SuiteRunner(object):
                                                      e)
                         continue
 
-                    log.info(f"Suite file:{file_path} pass!")
+                    log.info(f"Suite: {file_path} passed")
             else:
                 raise RuntimeError(
                     f"batch_execute is not implement in runner {self.kind}")

@@ -19,10 +19,9 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_legacy_planners::ShowCreateDatabasePlan;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -47,7 +46,7 @@ impl Interpreter for ShowCreateDatabaseInterpreter {
         self.plan.schema()
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
         let calalog = self.ctx.get_catalog(&self.plan.catalog)?;
         let db = calalog
@@ -70,11 +69,10 @@ impl Interpreter for ShowCreateDatabaseInterpreter {
                 info.push_str(&engine);
             }
         }
-        let schema = self.plan.schema();
-        let block = DataBlock::create(schema.clone(), vec![
+
+        PipelineBuildResult::from_blocks(vec![DataBlock::create(self.plan.schema(), vec![
             Series::from_data(vec![name.as_bytes()]),
             Series::from_data(vec![info.into_bytes()]),
-        ]);
-        Ok(Box::pin(DataBlockStream::create(schema, None, vec![block])))
+        ])])
     }
 }

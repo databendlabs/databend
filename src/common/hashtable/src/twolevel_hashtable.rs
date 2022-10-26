@@ -225,11 +225,15 @@ where
         unsafe { self.insert(key) }
     }
     #[inline(always)]
-    pub fn set_merge(&mut self, mut other: Self) {
-        if let Some(entry) = other.zero.take() {
-            self.zero = ZeroEntry(Some(entry));
+    pub fn set_merge(&mut self, other: &Self) {
+        if let Some(entry) = other.zero.0.as_ref() {
+            self.zero = ZeroEntry(Some(Entry {
+                key: entry.key.clone(),
+                val: MaybeUninit::uninit(),
+                _alignment: [0; 0],
+            }));
         }
-        for (i, table) in other.tables.into_iter().enumerate() {
+        for (i, table) in other.tables.iter().enumerate() {
             while (self.tables[i].len() + table.len()) * 2 > self.tables[i].capacity() {
                 if (self.tables[i].entries.len() >> 22) == 0 {
                     self.tables[i].grow(2);
@@ -238,7 +242,7 @@ where
                 }
             }
             unsafe {
-                self.tables[i].merge(table);
+                self.tables[i].set_merge(table);
             }
         }
     }

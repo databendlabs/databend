@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::error::Error;
+
 use anyerror::AnyError;
 use common_exception::ErrorCode;
 use serde::Deserialize;
@@ -44,7 +46,7 @@ pub type MetaStorageResult<T> = Result<T, MetaStorageError>;
 
 impl From<MetaStorageError> for ErrorCode {
     fn from(e: MetaStorageError) -> Self {
-        ErrorCode::MetaStorageError(e.to_string())
+        ErrorCode::MetaStorageError(e.to_string()).set_backtrace(e.backtrace())
     }
 }
 

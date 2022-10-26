@@ -18,10 +18,9 @@ use common_exception::Result;
 use common_legacy_planners::UndropDatabasePlan;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -42,7 +41,7 @@ impl Interpreter for UndropDatabaseInterpreter {
         "UndropDatabaseInterpreter"
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
         let catalog_name = self.plan.catalog.as_str();
         let db_name = self.plan.database.as_str();
 
@@ -56,10 +55,6 @@ impl Interpreter for UndropDatabaseInterpreter {
 
         let catalog = self.ctx.get_catalog(catalog_name)?;
         catalog.undrop_database(self.plan.clone().into()).await?;
-        Ok(Box::pin(DataBlockStream::create(
-            self.plan.schema(),
-            None,
-            vec![],
-        )))
+        Ok(PipelineBuildResult::create())
     }
 }

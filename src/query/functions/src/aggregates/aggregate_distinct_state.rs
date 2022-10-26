@@ -25,6 +25,7 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_hashtable::HashtableKeyable;
 use common_hashtable::StackHashSet;
+use common_hashtable::KeysRef;
 use common_io::prelude::*;
 use serde::Deserialize;
 use serde::Serialize;
@@ -351,41 +352,5 @@ where
         let values: Vec<T> = self.set.iter().map(|e| e.key().clone().into()).collect();
         let result = PrimitiveColumn::<T>::new_from_vec(values);
         Ok(vec![result.arc()])
-    }
-}
-
-#[derive(Clone, Copy)]
-pub struct KeysRef {
-    pub length: usize,
-    pub address: usize,
-}
-
-impl KeysRef {
-    pub fn create(address: usize, length: usize) -> KeysRef {
-        KeysRef { length, address }
-    }
-}
-
-impl Eq for KeysRef {}
-
-impl PartialEq for KeysRef {
-    fn eq(&self, other: &Self) -> bool {
-        if self.length != other.length {
-            return false;
-        }
-
-        unsafe {
-            let self_value = std::slice::from_raw_parts(self.address as *const u8, self.length);
-            let other_value = std::slice::from_raw_parts(other.address as *const u8, other.length);
-            self_value == other_value
-        }
-    }
-}
-
-impl Hash for KeysRef {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        let self_value =
-            unsafe { std::slice::from_raw_parts(self.address as *const u8, self.length) };
-        self_value.hash(state);
     }
 }

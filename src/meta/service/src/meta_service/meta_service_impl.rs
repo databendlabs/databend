@@ -20,20 +20,21 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Instant;
 
+use anyerror::AnyError;
 use common_meta_types::protobuf::raft_service_server::RaftService;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
 use common_meta_types::AppliedState;
 use common_meta_types::ForwardRequest;
+use common_meta_types::InvalidReply;
 use common_meta_types::LogEntry;
 use common_meta_types::MetaError;
-use common_meta_types::MetaRaftError;
+use common_meta_types::MetaNetworkError;
 use tonic::codegen::futures_core::Stream;
 
 use crate::meta_service::ForwardRequestBody;
 use crate::meta_service::MetaNode;
 use crate::metrics::incr_meta_metrics_proposals_failed;
-use crate::metrics::incr_meta_metrics_proposals_pending;
 use crate::metrics::incr_meta_metrics_recv_bytes_from_peer;
 use crate::metrics::incr_meta_metrics_snapshot_recv_failure_from_peer;
 use crate::metrics::incr_meta_metrics_snapshot_recv_inflights_from_peer;
@@ -72,12 +73,9 @@ impl RaftService for RaftServiceImpl {
     ) -> Result<tonic::Response<RaftReply>, tonic::Status> {
         common_tracing::extract_remote_span_as_parent(&request);
 
-        let mes = request.into_inner();
-        let ent: LogEntry = mes.try_into()?;
+        let raft_req = request.into_inner();
+        let ent: LogEntry = raft_req.try_into()?;
 
-        incr_meta_metrics_proposals_pending(1);
-
-        // TODO(xp): call meta_node.write()
         let res = self
             .meta_node
             .handle_forwardable_request(ForwardRequest {
@@ -86,19 +84,23 @@ impl RaftService for RaftServiceImpl {
             })
             .await;
 
-        incr_meta_metrics_proposals_pending(-1);
-
         let res = match res {
             Ok(r) => {
                 let a: Result<AppliedState, MetaError> = r.try_into().map_err(|e: &str| {
                     incr_meta_metrics_proposals_failed();
-                    MetaError::MetaRaftError(MetaRaftError::ForwardRequestError(e.to_string()))
+
+                    let inv_reply = InvalidReply::new(
+                        "expect type: Result<AppliedState,MetaError>",
+                        &AnyError::error(e),
+                    );
+                    let net_err = MetaNetworkError::InvalidReply(inv_reply);
+                    MetaError::NetworkError(net_err)
                 });
                 a
             }
             Err(e) => {
                 incr_meta_metrics_proposals_failed();
-                Err(e)
+                Err(MetaError::from(e))
             }
         };
 
@@ -115,10 +117,10 @@ impl RaftService for RaftServiceImpl {
 
         let req = request.into_inner();
 
-        let admin_req: ForwardRequest = serde_json::from_str(&req.data)
+        let forward_req: ForwardRequest = serde_json::from_str(&req.data)
             .map_err(|x| tonic::Status::invalid_argument(x.to_string()))?;
 
-        let res = self.meta_node.handle_forwardable_request(admin_req).await;
+        let res = self.meta_node.handle_forwardable_request(forward_req).await;
 
         let raft_mes: RaftReply = res.into();
 

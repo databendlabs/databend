@@ -12,24 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Debug;
-
+use common_datablocks::DataBlock;
 use common_datavalues::ColumnWithField;
 use common_datavalues::DataField;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
+use common_datavalues::NullType;
 use common_exception::Result;
 use common_functions::scalars::Function;
 use common_functions::scalars::FunctionContext;
 
-use crate::evaluator::eval_context::EmptyEvalContext;
-use crate::evaluator::EvalContext;
 use crate::evaluator::TypedVector;
 
 /// A intermediate representation of a evaluable scalar expression, with configurable
 /// EvalContext.
 #[derive(Clone)]
-pub enum EvalNode<VectorID> {
+pub enum EvalNode {
     Function {
         func: Box<dyn Function>,
         args: Vec<Self>,
@@ -41,25 +39,21 @@ pub enum EvalNode<VectorID> {
         data_type: DataTypeImpl,
     },
     Variable {
-        id: VectorID,
+        name: String,
+    },
+    IndexedVariable {
+        index: usize,
     },
 }
 
-impl<VectorID> EvalNode<VectorID>
-where VectorID: PartialEq + Eq + Clone + Debug
-{
-    /// Evaluate with given context, which is typically a `DataBlock`
-    pub fn eval(
-        &self,
-        func_ctx: &FunctionContext,
-        eval_ctx: &impl EvalContext<VectorID = VectorID>,
-    ) -> Result<TypedVector> {
+impl EvalNode {
+    pub fn eval(&self, func_ctx: &FunctionContext, data_block: &DataBlock) -> Result<TypedVector> {
         match &self {
             EvalNode::Function { func, args } => {
                 let args = args
                     .iter()
                     .map(|arg| {
-                        let vector = arg.eval(func_ctx, eval_ctx)?;
+                        let vector = arg.eval(func_ctx, data_block)?;
                         Ok(ColumnWithField::new(
                             vector.vector,
                             DataField::new("", vector.logical_type),
@@ -67,22 +61,44 @@ where VectorID: PartialEq + Eq + Clone + Debug
                     })
                     .collect::<Result<Vec<_>>>()?;
                 Ok(TypedVector::new(
-                    func.eval(func_ctx.clone(), &args, eval_ctx.tuple_count())?,
+                    func.eval(func_ctx.clone(), &args, data_block.num_rows())?,
                     func.return_type(),
                 ))
             }
             EvalNode::Constant { value, data_type } => {
-                let vector = value.as_const_column(data_type, eval_ctx.tuple_count())?;
+                let vector = value.as_const_column(data_type, data_block.num_rows())?;
                 Ok(TypedVector::new(vector, data_type.clone()))
             }
-            EvalNode::Variable { id } => eval_ctx.get_vector(id),
+            EvalNode::Variable { name } => {
+                let column = data_block.try_column_by_name(name)?;
+                let data_type = data_block
+                    .schema()
+                    .field_with_name(name)?
+                    .data_type()
+                    .clone();
+                Ok(TypedVector {
+                    vector: column.clone(),
+                    logical_type: data_type,
+                })
+            }
+            EvalNode::IndexedVariable { index } => {
+                let column = data_block.column(*index);
+                let data_type = data_block.schema().field(*index).data_type().clone();
+                Ok(TypedVector {
+                    vector: column.clone(),
+                    logical_type: data_type,
+                })
+            }
         }
     }
 
     /// Try to evaluate as a constant expression
     pub fn try_eval_const(&self, func_ctx: &FunctionContext) -> Result<(DataValue, DataTypeImpl)> {
-        let eval_ctx = EmptyEvalContext::<VectorID>::new();
-        let vector = self.eval(func_ctx, &eval_ctx)?;
+        let dummy_column = DataValue::Null.as_const_column(&NullType::new_impl(), 1)?;
+        let mut dummy_data_block = DataBlock::empty();
+        dummy_data_block = dummy_data_block
+            .add_column(dummy_column, DataField::new("dummy", NullType::new_impl()))?;
+        let vector = self.eval(func_ctx, &dummy_data_block)?;
         debug_assert!(vector.vector.len() == 1);
         Ok((vector.vector.get(0), vector.logical_type))
     }

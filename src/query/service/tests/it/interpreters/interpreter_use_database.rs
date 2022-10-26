@@ -29,7 +29,7 @@ async fn test_use_interpreter() -> Result<()> {
     let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
     assert_eq!(executor.name(), "UseDatabaseInterpreter");
 
-    let mut stream = executor.execute().await?;
+    let mut stream = executor.execute(ctx.clone()).await?;
     while let Some(_block) = stream.next().await {}
 
     Ok(())
@@ -44,7 +44,7 @@ async fn test_use_database_interpreter_error() -> Result<()> {
     let (plan, _, _) = planner.plan_sql(query).await?;
     let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
 
-    if let Err(e) = executor.execute().await {
+    if let Err(e) = executor.execute(ctx.clone()).await {
         let expect = "Code: 1003, displayText = Cannot USE 'xx', because the 'xx' doesn't exist.";
         assert_eq!(expect, e.to_string());
     }

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use crate::procedures::systems::ClusteringInformationProcedure;
+use crate::procedures::systems::FuseBlockProcedure;
 use crate::procedures::systems::FuseSegmentProcedure;
 use crate::procedures::systems::FuseSnapshotProcedure;
 use crate::procedures::systems::SearchTablesProcedure;
@@ -33,6 +34,10 @@ impl SystemProcedure {
         factory.register(
             "system$fuse_segment",
             Box::new(FuseSegmentProcedure::try_create),
+        );
+        factory.register(
+            "system$fuse_block",
+            Box::new(FuseBlockProcedure::try_create),
         );
         factory.register(
             "system$search_tables",

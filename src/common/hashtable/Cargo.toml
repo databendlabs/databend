@@ -19,7 +19,7 @@ ahash = "0.7.6"
 bumpalo = "3.10.0"
 cfg-if = "1.0.0"
 libc = "0.2.126"
-ordered-float = "3.0.0"
+ordered-float = { git = "https://github.com/andylokandy/rust-ordered-float.git", branch = "as", features = ["serde"] }
 primitive-types = "0.11.1"
 semver = "1.0.10"
 

@@ -28,6 +28,10 @@ pub enum PhysicalScalar {
         column_id: ColumnID,
         data_type: DataTypeImpl,
     },
+    IndexedVariable {
+        index: usize,
+        data_type: DataTypeImpl,
+    },
     Constant {
         value: DataValue,
         data_type: DataTypeImpl,
@@ -50,6 +54,7 @@ impl PhysicalScalar {
             PhysicalScalar::Constant { data_type, .. } => data_type.clone(),
             PhysicalScalar::Function { return_type, .. } => return_type.clone(),
             PhysicalScalar::Cast { target, .. } => target.clone(),
+            PhysicalScalar::IndexedVariable { data_type, .. } => data_type.clone(),
         }
     }
 
@@ -87,6 +92,7 @@ impl PhysicalScalar {
                 input.pretty_display(metadata)?,
                 format_data_type_sql(target)
             )),
+            PhysicalScalar::IndexedVariable { index, .. } => Ok(format!("${index}")),
         }
     }
 }

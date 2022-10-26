@@ -524,3 +524,10 @@ SELECT parse_json('[1,2,3]')::object;
 statement error 1010
 SELECT parse_json('null')::object;
 
+
+statement query I
+SELECT count(distinct a) FROM (SELECT rand()::string AS a FROM numbers(10));
+
+----
+10
+

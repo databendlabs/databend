@@ -657,6 +657,7 @@ impl FromToProto for mt::StageFile {
                 Some(c) => Some(mt::UserIdentity::from_pb(c)?),
                 None => None,
             },
+            etag: p.etag.clone(),
         })
     }
 
@@ -672,6 +673,7 @@ impl FromToProto for mt::StageFile {
                 Some(c) => Some(mt::UserIdentity::to_pb(c)?),
                 None => None,
             },
+            etag: self.etag.clone(),
         })
     }
 }

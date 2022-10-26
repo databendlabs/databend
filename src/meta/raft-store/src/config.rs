@@ -17,8 +17,7 @@ use std::net::Ipv4Addr;
 use common_exception::Result;
 use common_grpc::DNSResolver;
 use common_meta_types::Endpoint;
-use common_meta_types::MetaError;
-use common_meta_types::MetaResult;
+use common_meta_types::MetaStartupError;
 use common_meta_types::NodeId;
 use once_cell::sync::Lazy;
 
@@ -195,7 +194,7 @@ impl RaftConfig {
         !self.no_sync
     }
 
-    pub fn check(&self) -> MetaResult<()> {
+    pub fn check(&self) -> std::result::Result<(), MetaStartupError> {
         // If just leaving, does not need to check other config
         if !self.leave_via.is_empty() {
             return Ok(());
@@ -205,14 +204,14 @@ impl RaftConfig {
         // - both join and single is set
         // - neither join nor single is set
         if self.join.is_empty() != self.single {
-            return Err(MetaError::InvalidConfig(String::from(
+            return Err(MetaStartupError::InvalidConfig(String::from(
                 "at least one of `single` and `join` needs to be enabled",
             )));
         }
 
         let self_addr = self.raft_api_listen_host_string();
         if self.join.contains(&self_addr) {
-            return Err(MetaError::InvalidConfig(String::from(
+            return Err(MetaStartupError::InvalidConfig(String::from(
                 "--join must not be set to itself",
             )));
         }

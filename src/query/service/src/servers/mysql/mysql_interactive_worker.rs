@@ -433,7 +433,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
                     .start()
                     .await
                     .map_err(|e| error!("interpreter.start.error: {:?}", e));
-                let mut data_stream = interpreter.execute().await?;
+                let mut data_stream = interpreter.execute(ctx.clone()).await?;
                 histogram!(
                     super::mysql_metrics::METRIC_INTERPRETER_USEDTIME,
                     instant.elapsed()

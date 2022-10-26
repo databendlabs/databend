@@ -230,6 +230,14 @@ impl Metadata {
         }
         table_index
     }
+
+    pub fn find_smallest_column_within(&self, indices: &[usize]) -> usize {
+        let entries = indices
+            .iter()
+            .map(|i| self.column(*i).clone())
+            .collect::<Vec<_>>();
+        find_smallest_column(entries.as_slice())
+    }
 }
 
 pub fn optimize_remove_count_args(name: &str, distinct: bool, args: &[&Expr]) -> bool {

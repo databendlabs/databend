@@ -15,7 +15,7 @@
 use common_datavalues::type_coercion::compare_coercion;
 use common_exception::Result;
 
-use crate::sql::binder::wrap_cast_if_needed;
+use crate::sql::binder::wrap_cast;
 use crate::sql::binder::JoinPredicate;
 use crate::sql::optimizer::rule::Rule;
 use crate::sql::optimizer::rule::TransformState;
@@ -117,10 +117,15 @@ impl Rule for RulePushDownFilterJoin {
                         if join.join_type == JoinType::Cross {
                             join.join_type = JoinType::Inner;
                         }
-                        let left = wrap_cast_if_needed(left.clone(), &join_key_type);
-                        let right = wrap_cast_if_needed(right.clone(), &join_key_type);
-                        join.left_conditions.push(left);
-                        join.right_conditions.push(right);
+                        if left.data_type().ne(&right.data_type()) {
+                            let left = wrap_cast(left.clone(), &join_key_type);
+                            let right = wrap_cast(right.clone(), &join_key_type);
+                            join.left_conditions.push(left);
+                            join.right_conditions.push(right);
+                        } else {
+                            join.left_conditions.push(left.clone());
+                            join.right_conditions.push(right.clone());
+                        }
                         need_push = true;
                     } else {
                         original_predicates.push(predicate);

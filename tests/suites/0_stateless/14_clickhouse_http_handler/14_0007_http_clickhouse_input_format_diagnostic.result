@@ -2,7 +2,7 @@ Code: 4000, displayText = invalid data (Expected to have char '.)
 Error occurs at row: 1:
 	Column: 0, Name: a, Type: Timestamp, Parsed text: "<SINGLE QUOTE>19892-02-0"
 	ERROR: DateTime must be in YYYY-MM-DD hh:mm:ss format.
-.
+ (while in processor thread 0).
 
 Code: 1046, displayText = Parse csv error at line 0
 Error occurs at row: 0:
@@ -10,7 +10,7 @@ Error occurs at row: 0:
 	Column: 1, Name: b, Type: String, Parsed text: "<DOUBLE QUOTE>Hello<DOUBLE QUOTE>"
 	Column: 2, Name: c, Type: Int32, Parsed text: "12345678"
 	Error: There is no line feed. "," found instead.
-.
+ (while in processor thread 0).
 
 Code: 1046, displayText = Parse csv error at line 0
 Error occurs at row: 0:
@@ -18,13 +18,13 @@ Error occurs at row: 0:
 	Column: 1, Name: b, Type: String, Parsed text: "<EMPTY>"
 	Column: 2, Name: c, Type: Int32, Parsed text: "123"
 	Error: There is no line feed. "H" found instead.
-.
+ (while in processor thread 0).
 
 Code: 1046, displayText = Cannot parse value:'2023-04-0 to Date type, cause: input contains invalid characters
 Error occurs at row: 0:
 	Column: 0, Name: a, Type: Timestamp, Parsed text: "<SINGLE QUOTE>2023-04-0"
 	ERROR: DateTime must be in YYYY-MM-DD hh:mm:ss format.
-.
+ (while in processor thread 0).
 
 Code: 1046, displayText = Parse Tsv error at line 1
 Error occurs at row: 1:
@@ -32,7 +32,7 @@ Error occurs at row: 1:
 	Column: 1, Name: b, Type: String, Parsed text: "<DOUBLE QUOTE>World<DOUBLE QUOTE>"
 	Column: 2, Name: c, Type: Int32, Parsed text: "123456"
 	Error: There is no line feed. "1" found instead.
-.
+ (while in processor thread 0).
 
 Code: 1046, displayText = Parse Tsv error at line 0
 Error occurs at row: 0:
@@ -40,4 +40,4 @@ Error occurs at row: 0:
 	Column: 1, Name: b, Type: String, Parsed text: "<EMPTY>"
 	Column: 2, Name: c, Type: Int32, Parsed text: "123"
 	Error: There is no line feed. "H" found instead.
-.
+ (while in processor thread 0).

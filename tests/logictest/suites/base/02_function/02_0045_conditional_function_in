@@ -52,6 +52,14 @@ SELECT 1 IN (2, 3, NULL);
 ----
 0
 
+statement query B
+select if(number > 1000, 3, null) in (1,2,3) from numbers(3);
+
+----
+NULL
+NULL
+NULL
+
 
 
 statement query B

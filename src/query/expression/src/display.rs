@@ -18,7 +18,6 @@ use std::fmt::Formatter;
 use std::time::Duration;
 use std::time::UNIX_EPOCH;
 
-use bson::Document;
 use chrono::DateTime;
 use chrono::Utc;
 use comfy_table::Cell;
@@ -154,9 +153,8 @@ impl<'a> Display for ScalarRef<'a> {
                 )
             }
             ScalarRef::Variant(s) => {
-                let doc = Document::from_reader(*s).map_err(|_| std::fmt::Error)?;
-                let bson = doc.get("v").ok_or(std::fmt::Error)?;
-                write!(f, "{bson}")
+                let value = common_jsonb::from_slice(*s).map_err(|_| std::fmt::Error)?;
+                write!(f, "{value}")
             }
         }
     }

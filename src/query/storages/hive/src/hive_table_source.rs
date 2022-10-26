@@ -15,6 +15,8 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_base::base::tokio::time::sleep;
+use common_base::base::tokio::time::Duration;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::table_context::TableContext;
@@ -57,6 +59,7 @@ pub struct HiveTableSource {
     scan_progress: Arc<Progress>,
     block_reader: Arc<HiveParquetBlockReader>,
     output: Arc<OutputPort>,
+    delay: usize,
 }
 
 impl HiveTableSource {
@@ -64,6 +67,7 @@ impl HiveTableSource {
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         block_reader: Arc<HiveParquetBlockReader>,
+        delay: usize,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
         let mut partitions = ctx.try_get_partitions(1)?;
@@ -74,6 +78,7 @@ impl HiveTableSource {
                 block_reader,
                 scan_progress,
                 state: State::Finish,
+                delay,
             }))),
             false => Ok(ProcessorPtr::create(Box::new(HiveTableSource {
                 ctx,
@@ -81,6 +86,7 @@ impl HiveTableSource {
                 block_reader,
                 scan_progress,
                 state: State::ReadMeta(partitions.remove(0)),
+                delay,
             }))),
         }
     }
@@ -179,6 +185,11 @@ impl Processor for HiveTableSource {
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::ReadMeta(part) => {
+                if self.delay > 0 {
+                    sleep(Duration::from_millis(self.delay as u64)).await;
+                    tracing::debug!("sleep for {}ms", self.delay);
+                    self.delay = 0;
+                }
                 let part = HivePartInfo::from_part(&part)?;
                 let file_meta = self
                     .block_reader

@@ -112,6 +112,7 @@ impl Display for PhysicalScalar {
             PhysicalScalar::Cast { input, target } => {
                 write!(f, "CAST({} AS {})", input, format_data_type_sql(target))
             }
+            PhysicalScalar::IndexedVariable { index, .. } => write!(f, "${index}"),
         }
     }
 }

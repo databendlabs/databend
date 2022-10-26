@@ -42,6 +42,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
         7,
         "2022-09-09: Add: table.proto/{TableCopiedFileInfo,TableCopiedFileLock} type",
     ),
+    (8, "2022-09-16: Add: users.proto/StageFile::entity_tag"),
 ];
 
 pub const VER: u64 = META_CHANGE_LOG.last().unwrap().0;

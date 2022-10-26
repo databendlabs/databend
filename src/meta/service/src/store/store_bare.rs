@@ -39,8 +39,10 @@ use common_meta_types::error_context::WithContext;
 use common_meta_types::AppliedState;
 use common_meta_types::Endpoint;
 use common_meta_types::LogEntry;
+use common_meta_types::MetaError;
 use common_meta_types::MetaNetworkError;
 use common_meta_types::MetaResult;
+use common_meta_types::MetaStartupError;
 use common_meta_types::MetaStorageError;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
@@ -129,7 +131,7 @@ impl RaftStoreBare {
         config: &RaftConfig,
         open: Option<()>,
         create: Option<()>,
-    ) -> MetaResult<RaftStoreBare> {
+    ) -> Result<RaftStoreBare, MetaStartupError> {
         info!("open: {:?}, create: {:?}", open, create);
 
         let db = get_sled_db();
@@ -683,7 +685,7 @@ impl RaftStoreBare {
         }
     }
 
-    pub async fn get_node_endpoint(&self, node_id: &NodeId) -> MetaResult<Endpoint> {
+    pub async fn get_node_endpoint(&self, node_id: &NodeId) -> Result<Endpoint, MetaError> {
         let endpoint = self
             .get_node(node_id)
             .await?

@@ -511,7 +511,7 @@ impl ScalarExpr for CastExpr {
     }
 
     fn is_deterministic(&self) -> bool {
-        true
+        self.argument.is_deterministic()
     }
 }
 

@@ -12,23 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeSet;
-
 use common_meta_api::KVApi;
-use common_meta_sled_store::openraft::error::ChangeMembershipError;
-use common_meta_sled_store::openraft::error::ClientWriteError;
-use common_meta_sled_store::openraft::error::InProgress;
 use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::ForwardRequest;
 use common_meta_types::ForwardResponse;
-use common_meta_types::ForwardToLeader;
 use common_meta_types::LogEntry;
-use common_meta_types::MetaError;
-use common_meta_types::MetaRaftError;
+use common_meta_types::MetaDataReadError;
+use common_meta_types::MetaOperationError;
 use common_meta_types::Node;
-use common_meta_types::NodeId;
+use common_meta_types::RaftChangeMembershipError;
+use common_meta_types::RaftWriteError;
 use common_meta_types::SeqV;
+use common_metrics::counter::WithCount;
 use tracing::debug;
 use tracing::info;
 
@@ -36,6 +32,7 @@ use crate::meta_service::ForwardRequestBody;
 use crate::meta_service::JoinRequest;
 use crate::meta_service::LeaveRequest;
 use crate::meta_service::MetaNode;
+use crate::metrics::ProposalPending;
 
 /// The container of APIs of a metasrv leader in a metasrv cluster.
 ///
@@ -54,7 +51,7 @@ impl<'a> MetaLeader<'a> {
     pub async fn handle_forwardable_req(
         &self,
         req: ForwardRequest,
-    ) -> Result<ForwardResponse, MetaError> {
+    ) -> Result<ForwardResponse, MetaOperationError> {
         debug!("handle_forwardable_req: {:?}", req);
 
         match req.body {
@@ -75,17 +72,26 @@ impl<'a> MetaLeader<'a> {
 
             ForwardRequestBody::GetKV(req) => {
                 let sm = self.meta_node.get_state_machine().await;
-                let res = sm.get_kv(&req.key).await?;
+                let res = sm
+                    .get_kv(&req.key)
+                    .await
+                    .map_err(|meta_err| MetaDataReadError::new("get_kv", "", &meta_err))?;
                 Ok(ForwardResponse::GetKV(res))
             }
             ForwardRequestBody::MGetKV(req) => {
                 let sm = self.meta_node.get_state_machine().await;
-                let res = sm.mget_kv(&req.keys).await?;
+                let res = sm
+                    .mget_kv(&req.keys)
+                    .await
+                    .map_err(|meta_err| MetaDataReadError::new("mget_kv", "", &meta_err))?;
                 Ok(ForwardResponse::MGetKV(res))
             }
             ForwardRequestBody::ListKV(req) => {
                 let sm = self.meta_node.get_state_machine().await;
-                let res = sm.prefix_list_kv(&req.prefix).await?;
+                let res = sm
+                    .prefix_list_kv(&req.prefix)
+                    .await
+                    .map_err(|meta_err| MetaDataReadError::new("list_kv", "", &meta_err))?;
                 Ok(ForwardResponse::ListKV(res))
             }
         }
@@ -98,7 +104,7 @@ impl<'a> MetaLeader<'a> {
     ///
     /// If the node is already in cluster membership, it still returns Ok.
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn join(&self, req: JoinRequest) -> Result<(), MetaError> {
+    pub async fn join(&self, req: JoinRequest) -> Result<(), RaftChangeMembershipError> {
         let node_id = req.node_id;
         let endpoint = req.endpoint;
         let grpc_api_addr = req.grpc_api_addr;
@@ -109,35 +115,28 @@ impl<'a> MetaLeader<'a> {
             return Ok(());
         }
 
-        // deal with joint config，If the cluster is in joint config,
-        // we need to return an Inprogress error with membership log id.
-        match membership.get_ith_config(1) {
-            Some(_membership) => Err(MetaRaftError::ChangeMembershipError(
-                ChangeMembershipError::InProgress(InProgress {
-                    membership_log_id: metrics.membership_config.log_id,
-                }),
-            )
-            .into()),
-            None => {
-                // safe unwrap: if the first config is None, panic is the expected behavior here.
-                let mut membership = membership.get_ith_config(0).unwrap().clone();
-                membership.insert(node_id);
-                let ent = LogEntry {
-                    txid: None,
-                    time_ms: None,
-                    cmd: Cmd::AddNode {
-                        node_id,
-                        node: Node {
-                            name: node_id.to_string(),
-                            endpoint,
-                            grpc_api_addr: Some(grpc_api_addr),
-                        },
-                    },
-                };
-                self.write(ent).await?;
-                self.change_membership(membership).await
-            }
-        }
+        // safe unwrap: if the first config is None, panic is the expected behavior here.
+        let mut membership = membership.get_ith_config(0).unwrap().clone();
+        membership.insert(node_id);
+        let ent = LogEntry {
+            txid: None,
+            time_ms: None,
+            cmd: Cmd::AddNode {
+                node_id,
+                node: Node {
+                    name: node_id.to_string(),
+                    endpoint,
+                    grpc_api_addr: Some(grpc_api_addr),
+                },
+            },
+        };
+        self.write(ent).await?;
+
+        self.meta_node
+            .raft
+            .change_membership(membership, true)
+            .await?;
+        Ok(())
     }
 
     /// A node leave the cluster.
@@ -147,7 +146,7 @@ impl<'a> MetaLeader<'a> {
     ///
     /// If the node is not in cluster membership, it still returns Ok.
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn leave(&self, req: LeaveRequest) -> Result<(), MetaError> {
+    pub async fn leave(&self, req: LeaveRequest) -> Result<(), RaftChangeMembershipError> {
         let node_id = req.node_id;
         let metrics = self.meta_node.raft.metrics().borrow().clone();
         let membership = metrics.membership_config.membership.clone();
@@ -156,93 +155,42 @@ impl<'a> MetaLeader<'a> {
             return Ok(());
         }
 
-        // deal with joint config，If the cluster is in joint config,
-        // we need to return an Inprogress error with membership log id.
-        match membership.get_ith_config(1) {
-            Some(_membership) => Err(MetaRaftError::ChangeMembershipError(
-                ChangeMembershipError::InProgress(InProgress {
-                    membership_log_id: metrics.membership_config.log_id,
-                }),
-            )
-            .into()),
-            None => {
-                // safe unwrap: if the first config is None, panic is the expected behavior here.
-                let mut membership = membership.get_ith_config(0).unwrap().clone();
-                membership.remove(&node_id);
+        // safe unwrap: if the first config is None, panic is the expected behavior here.
+        let mut membership = membership.get_ith_config(0).unwrap().clone();
+        membership.remove(&node_id);
 
-                self.change_membership(membership).await?;
-                let ent = LogEntry {
-                    txid: None,
-                    time_ms: None,
-                    cmd: Cmd::RemoveNode { node_id },
-                };
-                self.write(ent).await?;
-                Ok(())
-            }
-        }
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn change_membership(&self, membership: BTreeSet<NodeId>) -> Result<(), MetaError> {
-        let res = self
-            .meta_node
+        self.meta_node
             .raft
             .change_membership(membership, true)
-            .await;
+            .await?;
 
-        let err = match res {
-            Ok(_) => return Ok(()),
-            Err(e) => e,
+        let ent = LogEntry {
+            txid: None,
+            time_ms: None,
+            cmd: Cmd::RemoveNode { node_id },
         };
-
-        match err {
-            ClientWriteError::ChangeMembershipError(e) => {
-                Err(MetaRaftError::ChangeMembershipError(e).into())
-            }
-            // TODO(xp): enable MetaNode::RaftError when RaftError impl Serialized
-            ClientWriteError::Fatal(fatal) => Err(MetaRaftError::RaftFatal(fatal).into()),
-            ClientWriteError::ForwardToLeader(to_leader) => {
-                Err(MetaRaftError::ForwardToLeader(ForwardToLeader {
-                    leader_id: to_leader.leader_id,
-                })
-                .into())
-            }
-        }
+        self.write(ent).await?;
+        Ok(())
     }
 
     /// Write a log through local raft node and return the states before and after applying the log.
     ///
     /// If the raft node is not a leader, it returns MetaRaftError::ForwardToLeader.
     #[tracing::instrument(level = "debug", skip(self, entry))]
-    pub async fn write(&self, mut entry: LogEntry) -> Result<AppliedState, MetaError> {
+    pub async fn write(&self, mut entry: LogEntry) -> Result<AppliedState, RaftWriteError> {
         // Add consistent clock time to log entry.
         entry.time_ms = Some(SeqV::<()>::now_ms());
 
+        // report metrics
+        let _guard = WithCount::new((), ProposalPending);
+
         info!("write LogEntry: {:?}", entry);
         let write_rst = self.meta_node.raft.client_write(entry).await;
-
         info!("raft.client_write rst: {:?}", write_rst);
 
         match write_rst {
-            Ok(resp) => {
-                let data = resp.data;
-                Ok(data)
-            }
-
-            Err(cli_write_err) => match cli_write_err {
-                // fatal error
-                ClientWriteError::Fatal(fatal) => Err(MetaRaftError::RaftFatal(fatal).into()),
-                // retryable error
-                ClientWriteError::ForwardToLeader(to_leader) => {
-                    Err(MetaRaftError::ForwardToLeader(ForwardToLeader {
-                        leader_id: to_leader.leader_id,
-                    })
-                    .into())
-                }
-                ClientWriteError::ChangeMembershipError(_) => {
-                    unreachable!("there should not be a ChangeMembershipError for client_write")
-                }
-            },
+            Ok(resp) => Ok(resp.data),
+            Err(cli_write_err) => Err(RaftWriteError::from_raft_err(cli_write_err)),
         }
     }
 }

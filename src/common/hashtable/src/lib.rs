@@ -19,15 +19,15 @@
 #![feature(ptr_metadata)]
 #![feature(maybe_uninit_slice)]
 
+mod container;
 mod hashtable;
+mod keys_ref;
 mod stack_hashtable;
+mod table0;
+mod table1;
 mod traits;
 mod twolevel_hashtable;
 mod unsized_hashtable;
-
-mod container;
-mod table0;
-mod table1;
 mod utils;
 
 pub use table0::Entry as HashtableEntry;
@@ -74,3 +74,5 @@ pub type UnsizedHashSetIterMut<'a, K> = unsized_hashtable::UnsizedHashtableIterM
 pub type UnsizedHashtableEntryRef<'a, K, V> = unsized_hashtable::UnsizedHashtableEntryRef<'a, K, V>;
 pub type UnsizedHashtableEntryMutRef<'a, K, V> =
     unsized_hashtable::UnsizedHashtableEntryMutRef<'a, K, V>;
+
+pub use keys_ref::KeysRef;

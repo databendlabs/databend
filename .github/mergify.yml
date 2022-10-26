@@ -10,11 +10,12 @@ queue_rules:
       - check-success~=^build_(aarch64|x86_64)_musl$
       - check-success=test_unit
       - check-success=test_metactl
-      - check-success=test_stateless_standalone_linux
-      - check-success=test_stateless_cluster_linux
-      - check-success=test_stateful_standalone_linux
+      # state tests
+      - check-success~=^test_(stateless|stateful)_(standalone|cluster)_linux$
+      # sqllogic tests
       - check-success=test_sqllogic_base_standalone_linux
       - check-success=test_sqllogic_ydb_standalone_linux
+      - check-success=test_sqllogic_base_cluster_linux
 
   - name: docs_queue
     conditions:
