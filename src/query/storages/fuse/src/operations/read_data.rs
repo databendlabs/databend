@@ -130,6 +130,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         plan: &ReadDataSourcePlan,
         pipeline: &mut Pipeline,
+        max_io_requests: usize,
     ) -> Result<()> {
         let mut lazy_init_segments = Vec::with_capacity(plan.parts.len());
 
@@ -181,7 +182,6 @@ impl FuseTable {
         let prewhere_filter = self.build_prewhere_filter_executor(ctx.clone(), plan)?;
         let remain_reader = self.build_remain_reader(plan)?;
 
-        let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
         info!("read block data adjust max io requests:{}", max_io_requests);
 
         // Add source pipe.

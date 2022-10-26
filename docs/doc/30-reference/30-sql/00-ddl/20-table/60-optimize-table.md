@@ -8,9 +8,9 @@ Optimizing a table in Databend is about compacting or purging the historical ver
 Databend's Time Travel feature relies on historical data. If you purge historical data from a table with the command `OPTIMIZE TABLE <your_table> PURGE` or `OPTIMIZE TABLE <your_table> ALL`, the table will not be eligible for time travel. The command removes all snapshots (except the most recent one) and their associated segments and block files.
 :::
 
-## What are snapshot, segment, and block?
+## What are Snapshot, Segment, and Block?
 
-Snapshot, segment, and block are the concepts Databend uses for data storage. Databend stores the tables' data in a hierarchical structure with them.
+Snapshot, segment, and block are the concepts Databend uses for data storage. Databend uses them to construct a hierarchical structure for storing table data.
 
 ![](../../../../../public/img/sql/storage-structure.PNG)
 
@@ -21,6 +21,14 @@ A snapshot is a JSON file that does not save the table's data but indicate the s
 A segment is a JSON file that organizes the storage blocks (at least 1, at most 1,000) where the data is stored. If you run [FUSE_SEGMENT](../../../20-functions/111-system-functions/fuse_segment.md) against a snapshot with the snapshot ID, you can find which segments are referenced by the snapshot.
 
 Databends saves actual table data in parquet files and considers each parquet file as a block. If you run [FUSE_BLOCK](../../../20-functions/111-system-functions/fuse_block.md) against a snapshot with the snapshot ID, you can find which blocks are referenced by the snapshot.
+
+Databend creates a unique ID for each database and table for storing the snapshot, segment, and block files and saves them to your object storage in the path `<bucket_name>/[root]/<db_id>/<table_id>/`. Each snapshot, segment, and block file is named with a UUID (32-character lowercase hexadecimal string).
+
+| File     | Format  | Filename                        | Storage Folder                                                               |
+|----------|---------|---------------------------------|----------------------------------------------------------------------------|
+| Snapshot | JSON    | `<32bitUUID>_<version>.json`    | `<bucket_name>/[root]/<db_id>/<table_id>/_ss/`   |
+| Segment  | JSON    | `<32bitUUID>_<version>.json`    | `<bucket_name>/[root]/<db_id>/<table_id>/_sg/`   |
+| Block    | parquet | `<32bitUUID>_<version>.parquet` | `<bucket_name>/[root]/<db_id>/<table_id>/_b/` |
 
 ## Table Optimization Considerations
 
@@ -75,7 +83,7 @@ OPTIMIZE TABLE [database.]table_name [ PURGE | COMPACT | ALL ] [SEGMENT] [LIMIT 
  
     Compacts the table data by merging small blocks and segments into larger ones.
  
-    - A new snapshot of table will be created and added to the history, by this compaction operation.
+    - This command creates a new snapshot (along with compacted segments and blocks) of the most recent table data without affecting the existing storage files, so the storage space won't be released until you run `OPTIMIZE TABLE <table_name> PURGE`.
     - Depending on the size of the given table, it may take quite a while to complete the execution.
     - The option LIMIT sets the maximum number of segments to be compacted. In this case, Databend will select and compact the latest segments.
 

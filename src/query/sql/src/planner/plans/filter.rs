@@ -91,9 +91,14 @@ impl LogicalOperator for Filter {
         // NDV(Number of Distinct Values), so we pass it through.
         let cardinality = input_prop.cardinality;
 
+        // Derive used columns
+        let mut used_columns = self.used_columns()?;
+        used_columns.extend(input_prop.used_columns);
+
         Ok(RelationalProperty {
             output_columns,
             outer_columns,
+            used_columns,
             cardinality,
             // TODO(leiysky): if the predicate is always true, then we can pass through
             // precise cardinality

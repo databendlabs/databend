@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,15 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::SledKeySpace;
+#[allow(clippy::module_inception)]
+mod fuse_metrics;
 
-/// Defines low level storage API
-pub trait Store<KV: SledKeySpace> {
-    type Error: std::error::Error;
-
-    fn insert(&self, key: &KV::K, value: &KV::V) -> Result<Option<KV::V>, Self::Error>;
-
-    fn get(&self, key: &KV::K) -> Result<Option<KV::V>, Self::Error>;
-
-    fn remove(&self, key: &KV::K) -> Result<Option<KV::V>, Self::Error>;
-}
+pub use fuse_metrics::*;

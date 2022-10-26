@@ -1729,6 +1729,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "byteorder",
+ "chrono",
  "common-base",
  "common-exception",
  "common-grpc",
@@ -5418,9 +5420,9 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 
 [[package]]
 name = "opendal"
-version = "0.19.5"
+version = "0.19.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7121d718f1bf72ae023fa6447507ef27a052c590aeb5e1d0a2c0592c74db722b"
+checksum = "fbc1efd06a14fe61b7402ca142bd579f8b4306c76558bfabf4d1b17d5243271b"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -7206,9 +7208,9 @@ dependencies = [
 
 [[package]]
 name = "serde-env"
-version = "0.0.2"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e03cfb2aa71df46bc21892a343552041c8712e97ace1a535e7f7e6eabeca6c0"
+checksum = "9f31ed60434054f2e2fceeba651f4e8ec2bb89269828323c1673a31606ac35db"
 dependencies = [
  "anyhow",
  "log",
@@ -7274,9 +7276,9 @@ dependencies = [
 
 [[package]]
 name = "serfig"
-version = "0.0.2"
+version = "0.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "782e2265bd0b75de9d0934d412ced9b790b1290f59c9ac2e56b859d69d210f18"
+checksum = "e56ca578e3bed3843488231c20a76f4dc227a713942f1a74b23a499879e887fc"
 dependencies = [
  "anyhow",
  "indexmap",
@@ -8356,7 +8358,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.7.3",
+ "rand 0.8.5",
  "static_assertions",
 ]
 

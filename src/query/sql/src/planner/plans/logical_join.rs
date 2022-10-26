@@ -196,11 +196,11 @@ impl LogicalOperator for LogicalInnerJoin {
         // Derive cardinality. We can not estimate the cardinality of inner join until we have
         // distribution information of join keys, so we set it to the maximum value.
         let cardinality = match self.join_type {
-            JoinType::Inner
-            | JoinType::Left
-            | JoinType::Right
-            | JoinType::Full
-            | JoinType::Cross => left_prop.cardinality * right_prop.cardinality,
+            // Todo(xudong): after `distinct_count` of `ColumnStat` is ready, we can estimate more precisely
+            JoinType::Inner | JoinType::Left | JoinType::Right | JoinType::Full => {
+                f64::max(left_prop.cardinality, right_prop.cardinality)
+            }
+            JoinType::Cross => left_prop.cardinality * right_prop.cardinality,
 
             JoinType::LeftSemi | JoinType::LeftAnti | JoinType::LeftMark | JoinType::Single => {
                 left_prop.cardinality
@@ -211,9 +211,15 @@ impl LogicalOperator for LogicalInnerJoin {
             }
         };
 
+        // Derive used columns
+        let mut used_columns = self.used_columns()?;
+        used_columns.extend(left_prop.used_columns);
+        used_columns.extend(right_prop.used_columns);
+
         Ok(RelationalProperty {
             output_columns,
             outer_columns,
+            used_columns,
             cardinality,
             precise_cardinality: None,
 

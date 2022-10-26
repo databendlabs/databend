@@ -27,6 +27,8 @@ use crate::io::BlockCompactor;
 use crate::io::SegmentWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
+use crate::metrics::metrics_set_segments_memory_usage;
+use crate::metrics::metrics_set_selected_blocks_memory_usage;
 use crate::operations::mutation::AbortOperation;
 use crate::operations::AppendOperationLogEntry;
 use crate::operations::CompactOptions;
@@ -106,6 +108,9 @@ impl TableMutator for FullCompactMutator {
             .into_iter()
             .collect::<Result<Vec<_>>>()?;
 
+        // todo: add real metrics
+        metrics_set_segments_memory_usage(0.0);
+
         let limit = self.compact_params.limit.unwrap_or(segments.len());
         if limit < segments.len() {
             for i in limit..segments.len() {
@@ -132,6 +137,9 @@ impl TableMutator for FullCompactMutator {
                     need_merge = true;
                 }
             });
+
+            // todo: add real metrics
+            metrics_set_selected_blocks_memory_usage(0.0);
 
             // If the number of blocks of segment meets block_per_seg, and the blocks in segments donot need to be compacted,
             // then record the segment information.
