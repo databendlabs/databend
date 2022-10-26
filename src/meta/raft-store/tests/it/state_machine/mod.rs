@@ -38,6 +38,7 @@ use tracing::info;
 use crate::init_raft_store_ut;
 use crate::testing::new_raft_test_context;
 
+mod expire;
 mod schema_api_impl;
 mod snapshot;
 
