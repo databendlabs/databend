@@ -48,11 +48,12 @@ impl ApiBuilder<StateMachine> for StateMachineBuilder {
     }
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[async_entry::test(
+    worker_threads = 3,
+    init = "init_raft_store_ut!()",
+    tracing_span = "debug"
+)]
 async fn test_meta_embedded_single() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
-
     let builder = StateMachineBuilder {
         test_context: Default::default(),
     };

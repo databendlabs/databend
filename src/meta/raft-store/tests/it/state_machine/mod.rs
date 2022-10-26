@@ -42,11 +42,12 @@ use crate::testing::new_raft_test_context;
 
 mod schema_api_impl;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[async_entry::test(
+    worker_threads = 3,
+    init = "init_raft_store_ut!()",
+    tracing_span = "debug"
+)]
 async fn test_state_machine_apply_non_dup_incr_seq() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
-
     let tc = new_raft_test_context();
     let sm = StateMachine::open(&tc.raft_config, 1).await?;
 
@@ -88,11 +89,12 @@ async fn test_state_machine_apply_non_dup_incr_seq() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[async_entry::test(
+    worker_threads = 3,
+    init = "init_raft_store_ut!()",
+    tracing_span = "debug"
+)]
 async fn test_state_machine_apply_incr_seq() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
-
     let tc = new_raft_test_context();
     let sm = StateMachine::open(&tc.raft_config, 1).await?;
 
@@ -115,11 +117,12 @@ async fn test_state_machine_apply_incr_seq() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[async_entry::test(
+    worker_threads = 3,
+    init = "init_raft_store_ut!()",
+    tracing_span = "debug"
+)]
 async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
-
     let tc = new_raft_test_context();
     let sm = StateMachine::open(&tc.raft_config, 1).await?;
 
@@ -255,13 +258,14 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[async_entry::test(
+    worker_threads = 3,
+    init = "init_raft_store_ut!()",
+    tracing_span = "debug"
+)]
 async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Result<()> {
     // - Update a value-meta of None does nothing.
     // - Update a value-meta of Some() only updates the value-meta.
-
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
 
     let tc = new_raft_test_context();
     let sm = StateMachine::open(&tc.raft_config, 1).await?;
@@ -359,11 +363,12 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[async_entry::test(
+    worker_threads = 3,
+    init = "init_raft_store_ut!()",
+    tracing_span = "debug"
+)]
 async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
-
     struct T {
         // input:
         key: String,
@@ -437,13 +442,14 @@ async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[async_entry::test(
+    worker_threads = 3,
+    init = "init_raft_store_ut!()",
+    tracing_span = "debug"
+)]
 async fn test_state_machine_snapshot() -> anyhow::Result<()> {
     // - Feed logs into state machine.
     // - Take a snapshot and examine the data
-
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
 
     let tc = new_raft_test_context();
     let sm = StateMachine::open(&tc.raft_config, 0).await?;
