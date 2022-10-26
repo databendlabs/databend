@@ -124,6 +124,7 @@ fn geodist_fast_sin(x: f32) -> f32 {
     cos_lut[i] + (cos_lut[i + 1] - cos_lut[i]) * y
 }
 
+#[inline]
 fn geodist_fast_asin_sqrt(x: f32) -> f32 {
     if x < 0.122f32 {
         let y = x.sqrt();
