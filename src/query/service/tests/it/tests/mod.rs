@@ -25,7 +25,6 @@ pub use context::create_query_context;
 pub use context::create_query_context_with_cluster;
 pub use context::create_query_context_with_config;
 pub use context::create_query_context_with_type;
-pub use context::create_storage_context;
 pub use context::ClusterDescriptor;
 pub use sessions::TestGlobalServices;
 pub use sessions::TestGuard;

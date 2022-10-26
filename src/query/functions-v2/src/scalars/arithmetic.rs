@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::types::arithmetics_type::ResultTypeOfBinary;
-use common_expression::types::arithmetics_type::ResultTypeOfUnary;
 use common_expression::types::number::F64;
 use common_expression::types::number::*;
 use common_expression::types::NullableType;
 use common_expression::types::NumberDataType;
 use common_expression::types::ALL_NUMERICS_TYPES;
+use common_expression::utils::arithmetics_type::ResultTypeOfBinary;
+use common_expression::utils::arithmetics_type::ResultTypeOfUnary;
 use common_expression::vectorize_with_builder_2_arg;
 use common_expression::with_number_mapped_type;
 use common_expression::FunctionProperty;
@@ -29,7 +29,7 @@ use super::arithmetic_modulo::vectorize_modulo;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("plus", &["add"]);
-    registry.register_aliases("minus", &["substract", "neg"]);
+    registry.register_aliases("minus", &["subtract", "neg"]);
     registry.register_aliases("div", &["intdiv"]);
 
     // TODO support modulo
@@ -139,27 +139,40 @@ pub fn register(registry: &mut FunctionRegistry) {
 
                         {
                             type T = F64;
-                            registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
+                            registry.register_2_arg_core::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
                                 "divide",
                                 FunctionProperty::default(),
-                                |lhs, rhs| {
-                                    let lm: T =  num_traits::cast::cast(lhs.max)?;
-                                    let ln: T =  num_traits::cast::cast(lhs.min)?;
-                                    let rm: T =  num_traits::cast::cast(rhs.max)?;
-                                    let rn: T =  num_traits::cast::cast(rhs.min)?;
-
-                                    let x = lm.checked_div(rm)?;
-                                    let y = lm.checked_div(rn)?;
-                                    let m = ln.checked_div(rm)?;
-                                    let n = ln.checked_div(rn)?;
-
-                                    Some(SimpleDomain::<T> {
-                                        min: x.min(y).min(m).min(n),
-                                        max: x.max(y).max(m).max(n),
-                                    })
-                                },
-                                |a, b, _| (a.as_() : T) / (b.as_() : T),
+                                |_, _| None,
+                                vectorize_with_builder_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>>(
+                                    |a, b, output, _| {
+                                        let b = (b.as_() : T);
+                                        if std::intrinsics::unlikely(b == 0.0) {
+                                            return Err("/ by zero".to_string());
+                                        }
+                                        output.push((a.as_() : T) / b);
+                                        Ok(())
+                                    }),
                             );
+
+                            registry.register_2_arg_core::<NullableType<NumberType<L>>, NullableType<NumberType<R>>,  NullableType<NumberType<T>>, _, _>(
+                                "divide",
+                                FunctionProperty::default(),
+                                |_, _| None,
+                                vectorize_with_builder_2_arg::<NullableType<NumberType<L>>, NullableType<NumberType<R>>,  NullableType<NumberType<T>>>(
+                                    |a, b, output, _| {
+                                    match (a,b) {
+                                        (Some(a), Some(b)) => {
+                                            let b = (b.as_() : T);
+                                            if std::intrinsics::unlikely(b == 0.0) {
+                                                return Err("/ by zero".to_string());
+                                            }
+                                            output.push(((a.as_() : T) / b));
+                                        },
+                                        _ => output.push_null(),
+                                    }
+                                    Ok(())
+                                }),
+                            )
                         }
 
                         {

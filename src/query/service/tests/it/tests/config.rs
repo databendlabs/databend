@@ -14,9 +14,9 @@
 
 use std::collections::HashMap;
 
+use common_config::Config;
 use common_meta_types::AuthInfo;
 use common_users::idm_config::IDMConfig;
-use databend_query::Config;
 
 pub struct ConfigBuilder {
     conf: Config,

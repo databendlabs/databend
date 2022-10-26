@@ -16,4 +16,4 @@ raft_listen_host = "127.0.0.1"
 raft_advertise_host = "localhost"
 
 # Start up mode: join a cluster
-join          = ["127.0.0.1:28103"]
+join          = ["127.0.0.1:29103"]

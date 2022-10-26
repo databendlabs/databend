@@ -204,6 +204,7 @@ impl AccessChecker for PrivilegeAccess {
             Plan::RemoveStage(_) => {}
             Plan::Presign(_) => {}
             Plan::SetVariable(_) => {}
+            Plan::SetRole(_) => {}
             Plan::Kill(_) => {
                 session
                     .validate_privilege(&GrantObject::Global, UserPrivilegeType::Super)

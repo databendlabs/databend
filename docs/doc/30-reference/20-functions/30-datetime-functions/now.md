@@ -12,15 +12,15 @@ NOW()
 
 ## Return Type
 
-Datetime object, returns date and time in “YYYY-MM-DD hh:mm:ss” format.
+Datetime object, returns date and time in “YYYY-MM-DD hh:mm:ss.ffffff” format.
 
 ## Examples
 
 ```sql
 SELECT NOW();
-+---------------------+
-| NOW()               |
-+---------------------+
-| 2021-09-03 01:26:07 |
-+---------------------+
++----------------------------+
+| NOW()                      |
++----------------------------+
+| 2022-10-17 08:13:58.751449 |
++----------------------------+
 ```

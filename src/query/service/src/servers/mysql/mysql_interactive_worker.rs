@@ -18,6 +18,7 @@ use std::time::Instant;
 
 use common_base::base::tokio::io::AsyncWrite;
 use common_base::base::TrySpawn;
+use common_config::DATABEND_COMMIT_VERSION;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -270,6 +271,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
         let authed = user_info.auth_info.auth_mysql(&info.user_password, salt)?;
         if authed {
             self.session.set_current_user(user_info);
+            self.session.refresh_current_role().await?;
         }
         Ok(authed)
     }
@@ -323,6 +325,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
                     None,
                     has_result,
                     schema,
+                    false,
                 ))
             }
             None => {
@@ -331,6 +334,12 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
 
                 let mut planner = Planner::new(context.clone());
                 let (plan, _, _) = planner.plan_sql(query).await?;
+
+                let ignore_result = if let Plan::Query { ignore_result, .. } = plan {
+                    ignore_result
+                } else {
+                    false
+                };
 
                 context.attach_query_str(plan.to_string(), query);
                 let interpreter = InterpreterFactory::get(context.clone(), &plan).await;
@@ -346,6 +355,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
                             extra_info,
                             has_result_set,
                             schema,
+                            ignore_result,
                         ))
                     }
                     Err(e) => {
@@ -357,7 +367,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
         }
     }
 
-    //#[tracing::instrument(level = "debug", skip(interpreter, context))]
+    #[tracing::instrument(level = "debug", skip(interpreter, context))]
     async fn exec_query(
         interpreter: Arc<dyn Interpreter>,
         context: &Arc<QueryContext>,
@@ -432,11 +442,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorker<W> {
                 generic_hold: PhantomData::default(),
             },
             salt: scramble,
-            version: format!(
-                "{}-{}",
-                MYSQL_VERSION,
-                *crate::version::DATABEND_COMMIT_VERSION
-            ),
+            version: format!("{}-{}", MYSQL_VERSION, *DATABEND_COMMIT_VERSION),
             client_addr,
         }
     }

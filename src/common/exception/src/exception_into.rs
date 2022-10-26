@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::backtrace::Backtrace;
+use std::error::Error;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -45,6 +46,12 @@ impl Debug for OtherErrors {
 impl From<std::net::AddrParseError> for ErrorCode {
     fn from(error: std::net::AddrParseError) -> Self {
         ErrorCode::BadAddressFormat(format!("Bad address format, cause: {}", error))
+    }
+}
+
+impl From<std::str::Utf8Error> for ErrorCode {
+    fn from(error: std::str::Utf8Error) -> Self {
+        ErrorCode::InternalError(format!("Invalid Utf8, cause: {}", error))
     }
 }
 
@@ -220,7 +227,11 @@ impl From<tonic::Status> for ErrorCode {
             tonic::Code::Unknown => {
                 let details = status.details();
                 if details.is_empty() {
-                    return ErrorCode::UnknownException(status.message());
+                    return ErrorCode::UnknownException(format!(
+                        "{}, source: {:?}",
+                        status.message(),
+                        status.source()
+                    ));
                 }
                 match serde_json::from_slice::<SerializedError>(details) {
                     Err(error) => ErrorCode::from(error),

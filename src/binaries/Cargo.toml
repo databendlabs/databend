@@ -28,6 +28,7 @@ io-uring = [
 [dependencies]
 # Workspace dependencies
 common-base = { path = "../common/base" }
+common-config = { path = "../query/config" }
 common-exception = { path = "../common/exception" }
 common-grpc = { path = "../common/grpc" }
 common-macros = { path = "../common/macros" }
@@ -41,15 +42,14 @@ common-meta-stoerr = { path = "../meta/stoerr" }
 common-meta-store = { path = "../meta/store" }
 common-meta-types = { path = "../meta/types" }
 common-metrics = { path = "../common/metrics" }
-common-storage = { path = "../common/storage" }
 common-tracing = { path = "../common/tracing" }
-common-users = { path = "../query/users" }
 databend-meta = { path = "../meta/service" }
 databend-query = { path = "../query/service" }
 
 # Crates.io dependencies
 anyhow = { workspace = true }
 clap = { workspace = true }
+limits-rs = "0.1.0"
 openraft = { workspace = true }
 sentry = "0.27.0"
 serde = { workspace = true }

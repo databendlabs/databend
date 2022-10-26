@@ -17,7 +17,6 @@ use common_meta_sled_store::SledTree;
 use common_meta_sled_store::Store;
 use common_meta_types::Endpoint;
 use common_meta_types::Node;
-use tracing::info;
 
 use crate::init_sled_ut;
 use crate::testing::fake_key_spaces::Nodes;
@@ -193,59 +192,5 @@ async fn test_sled_txn_tree_key_space_remove() -> anyhow::Result<()> {
     let got = tree.key_space::<Nodes>().get(&k)?;
     assert!(got.is_none());
 
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_sled_txn_tree_key_space_update_and_fetch() -> anyhow::Result<()> {
-    // Test transactional API update_and_fetch on a sub key space of TransactionSledTree
-
-    let (_log_guards, ut_span) = init_sled_ut!();
-    let _ent = ut_span.enter();
-
-    let tc = new_sled_test_context();
-    let db = &tc.db;
-    let tree = SledTree::open(db, tc.tree_name, true)?;
-
-    let k = 100;
-
-    info!("--- test update default or non-default");
-
-    tree.txn(false, |txn_tree| {
-        // sub tree key space
-        let nodes_ks = txn_tree.key_space::<Nodes>();
-
-        for _i in 0..3 {
-            nodes_ks.update_and_fetch(&k, |old| match old {
-                Some(v) => Some(Node {
-                    name: v.name + "a",
-                    endpoint: v.endpoint,
-                    grpc_api_addr: v.grpc_api_addr,
-                }),
-                None => Some(Node::default()),
-            })?;
-        }
-
-        Ok(())
-    })?;
-
-    let got = tree.key_space::<Nodes>().get(&100)?.unwrap();
-    assert_eq!(
-        "aa".to_string(),
-        got.name,
-        "1st time create a default. then append 2 'a'"
-    );
-
-    info!("--- test delete");
-
-    tree.txn(false, |txn_tree| {
-        let nodes_ks = txn_tree.key_space::<Nodes>();
-        nodes_ks.update_and_fetch(&k, |_old| None)?;
-
-        Ok(())
-    })?;
-
-    let got = tree.key_space::<Nodes>().get(&100)?;
-    assert!(got.is_none(), "delete by return None");
     Ok(())
 }

@@ -23,13 +23,13 @@ use common_exception::Result;
 
 use super::ChunkOperator;
 use super::CompoundChunkOperator;
-use crate::evaluator::Evaluator;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::transforms::transform::Transform;
 use crate::pipelines::processors::transforms::transform::Transformer;
 use crate::sessions::QueryContext;
+use crate::sql::evaluator::Evaluator;
 
 pub struct TransformAddOn {
     default_expr_fields: Vec<DataField>,

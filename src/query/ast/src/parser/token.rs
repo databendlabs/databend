@@ -601,6 +601,8 @@ pub enum TokenKind {
     SECOND,
     #[token("SELECT", ignore(ascii_case))]
     SELECT,
+    #[token("SEGMENT", ignore(ascii_case))]
+    SEGMENT,
     #[token("SET", ignore(ascii_case))]
     SET,
     #[token("SETTINGS", ignore(ascii_case))]
@@ -751,6 +753,8 @@ pub enum TokenKind {
     FIRST,
     #[token("LAST", ignore(ascii_case))]
     LAST,
+    #[token("IGNORE_RESULT", ignore(ascii_case))]
+    IGNORE_RESULT,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html
@@ -949,6 +953,7 @@ impl TokenKind {
             | TokenKind::DATE_ADD
             | TokenKind::DATE_SUB
             | TokenKind::DATE_TRUNC
+            | TokenKind::IGNORE_RESULT
             if !after_as => true,
             _ => false
         }
@@ -1062,6 +1067,7 @@ impl TokenKind {
             | TokenKind::WHERE
             // | TokenKind::WINDOW
             | TokenKind::WITH
+            | TokenKind::IGNORE_RESULT
             if !after_as => true,
             _ => false
         }

@@ -14,7 +14,6 @@
 
 use std::fmt::Display;
 
-use common_datavalues::IntervalKind;
 use common_exception::Result;
 use common_meta_types::PrincipalIdentity;
 use common_meta_types::UserIdentity;
@@ -571,6 +570,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         let key_name = match accessor {
             MapAccessor::Bracket { key } => format!("accessor [{key}]"),
             MapAccessor::Period { key } => format!("accessor .{key}"),
+            MapAccessor::PeriodNumber { key } => format!("accessor .{key}"),
             MapAccessor::Colon { key } => format!("accessor :{key}"),
         };
         let key_format_ctx = AstFormatContext::new(key_name);
@@ -697,11 +697,6 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             let offset_format_ctx = AstFormatContext::with_children("OffsetElement".to_string(), 1);
             let offset_node = FormatTreeNode::with_children(offset_format_ctx, vec![offset_child]);
             children.push(offset_node);
-        }
-        if let Some(format) = &query.format {
-            let format_format_ctx = AstFormatContext::new(format!("FormatElement {}", format));
-            let format_node = FormatTreeNode::new(format_format_ctx);
-            children.push(format_node);
         }
 
         let name = "Query".to_string();
@@ -1350,7 +1345,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         let mut children = Vec::new();
         self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
         children.push(self.children.pop().unwrap());
-        if let Some(action) = stmt.action {
+        if let Some(action) = &stmt.action {
             let action_name = format!("Action {}", action);
             let action_format_ctx = AstFormatContext::new(action_name);
             children.push(FormatTreeNode::new(action_format_ctx));

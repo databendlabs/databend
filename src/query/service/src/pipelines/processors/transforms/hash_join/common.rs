@@ -36,10 +36,10 @@ use common_hashtable::HashMap;
 use common_hashtable::HashtableEntry;
 use common_hashtable::HashtableKeyable;
 
-use crate::evaluator::EvalNode;
 use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::processors::JoinHashTable;
+use crate::sql::evaluator::EvalNode;
 use crate::sql::plans::JoinType;
 
 /// Some common methods for hash join.

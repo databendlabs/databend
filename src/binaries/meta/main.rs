@@ -66,7 +66,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 
     set_panic_hook();
 
-    let _guards = init_logging("databend-meta", &conf.log);
+    let _guards = init_logging("databend-meta", &conf.log, true);
 
     info!("Databend Meta version: {}", METASRV_COMMIT_VERSION.as_str());
     info!(
@@ -116,9 +116,11 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     }
 
     // Join a raft cluster only after all service started.
-    meta_node
+    let join_res = meta_node
         .join_cluster(&conf.raft_config, conf.grpc_api_address.clone())
         .await?;
+
+    info!("join result: {:?}", join_res);
 
     // Print information to users.
     println!("Databend Metasrv");

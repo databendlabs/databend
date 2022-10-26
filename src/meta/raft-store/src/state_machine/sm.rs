@@ -26,11 +26,11 @@ use common_meta_sled_store::openraft;
 use common_meta_sled_store::openraft::EffectiveMembership;
 use common_meta_sled_store::openraft::MessageSummary;
 use common_meta_sled_store::AsKeySpace;
-use common_meta_sled_store::AsTxnKeySpace;
 use common_meta_sled_store::SledKeySpace;
 use common_meta_sled_store::SledTree;
 use common_meta_sled_store::Store;
 use common_meta_sled_store::TransactionSledTree;
+use common_meta_sled_store::TxnKeySpace;
 use common_meta_stoerr::MetaStorageError;
 use common_meta_types::txn_condition;
 use common_meta_types::txn_op;
@@ -537,20 +537,13 @@ impl StateMachine {
     ) -> Result<(), MetaStorageError> {
         let sub_tree = txn_tree.key_space::<GenericKV>();
 
-        let (prev, result) = match put.expire_at {
-            None => self.txn_sub_tree_upsert(
-                &sub_tree,
-                &UpsertKV::update(&put.key, &put.value),
-                log_time_ms,
-            )?,
-            Some(expire_at) => self.txn_sub_tree_upsert(
-                &sub_tree,
-                &UpsertKV::update(&put.key, &put.value).with(KVMeta {
-                    expire_at: Some(expire_at),
-                }),
-                log_time_ms,
-            )?,
-        };
+        let (prev, result) = self.txn_sub_tree_upsert(
+            &sub_tree,
+            &UpsertKV::update(&put.key, &put.value).with(KVMeta {
+                expire_at: put.expire_at,
+            }),
+            log_time_ms,
+        )?;
 
         if let Some(events) = events {
             events.push((put.key.to_string(), prev.clone(), result));
@@ -793,21 +786,23 @@ impl StateMachine {
         key: &str,
         txn_tree: &TransactionSledTree,
     ) -> Result<u64, MetaStorageError> {
-        let seq_sub_tree = txn_tree.key_space::<Sequences>();
+        let seqs = txn_tree.key_space::<Sequences>();
 
         let key = key.to_string();
-        let curr = seq_sub_tree.update_and_fetch(&key, |old| Some(old.unwrap_or_default() + 1))?;
-        let curr = curr.unwrap();
 
-        debug!("applied IncrSeq: {}={}", key, curr);
+        let curr = seqs.get(&key)?;
+        let new_value = curr.unwrap_or_default() + 1;
+        seqs.insert(&key, &new_value)?;
 
-        Ok(curr.0)
+        debug!("txn_incr_seq: {}={}", key, new_value);
+
+        Ok(new_value.0)
     }
 
     #[allow(clippy::type_complexity)]
     fn txn_sub_tree_upsert<'s, KS>(
         &'s self,
-        sub_tree: &AsTxnKeySpace<'s, KS>,
+        sub_tree: &TxnKeySpace<'s, KS>,
         upsert_kv: &UpsertKV,
         log_time_ms: u64,
     ) -> Result<(Option<SeqV>, Option<SeqV>), MetaStorageError>

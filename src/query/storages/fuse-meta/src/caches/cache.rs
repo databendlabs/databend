@@ -20,27 +20,23 @@ use common_exception::Result;
 use once_cell::sync::OnceCell;
 
 use crate::caches::memory_cache::new_bytes_cache;
+use crate::caches::memory_cache::new_item_cache;
 use crate::caches::memory_cache::BloomIndexCache;
 use crate::caches::memory_cache::BloomIndexMetaCache;
-use crate::caches::memory_cache::BytesCache;
 use crate::caches::memory_cache::FileMetaDataCache;
-use crate::caches::new_item_cache;
-use crate::caches::ItemCache;
+use crate::caches::memory_cache::LabeledBytesCache;
+use crate::caches::memory_cache::LabeledItemCache;
 use crate::caches::SegmentInfoCache;
 use crate::caches::TableSnapshotCache;
+use crate::caches::TenantLabel;
 
-// default number of index meta cached, default 3000 items
-static DEFAULT_BLOOM_INDEX_META_CACHE_ITEMS: u64 = 3000;
-// default size of cached bloom filter index (in bytes), 1G
-static DEFAULT_BLOOM_INDEX_COLUMN_CACHE_SIZE: u64 = 1024 * 1024 * 1024;
-// default number of file meta data cached, default 3000 items
 static DEFAULT_FILE_META_DATA_CACHE_ITEMS: u64 = 3000;
 
 /// Where all the caches reside
 pub struct CacheManager {
     table_snapshot_cache: Option<TableSnapshotCache>,
     segment_info_cache: Option<SegmentInfoCache>,
-    bloom_index_cache: Option<BloomIndexCache>,
+    bloom_index_data_cache: Option<BloomIndexCache>,
     bloom_index_meta_cache: Option<BloomIndexMetaCache>,
     file_meta_data_cache: Option<FileMetaDataCache>,
     cluster_id: String,
@@ -58,7 +54,7 @@ impl CacheManager {
             v.init(Arc::new(Self {
                 table_snapshot_cache: None,
                 segment_info_cache: None,
-                bloom_index_cache: None,
+                bloom_index_data_cache: None,
                 bloom_index_meta_cache: None,
                 file_meta_data_cache: None,
                 cluster_id: config.cluster_id.clone(),
@@ -67,17 +63,30 @@ impl CacheManager {
 
             CACHE_MANAGER.set(v).ok();
         } else {
-            let table_snapshot_cache = Self::new_item_cache(config.table_cache_snapshot_count);
-            let segment_info_cache = Self::new_item_cache(config.table_cache_segment_count);
-            let bloom_index_cache = Self::new_bytes_cache(DEFAULT_BLOOM_INDEX_COLUMN_CACHE_SIZE);
-            let bloom_index_meta_cache = Self::new_item_cache(DEFAULT_BLOOM_INDEX_META_CACHE_ITEMS);
+            let tenant_label = TenantLabel {
+                tenant_id: config.tenant_id.clone(),
+                cluster_id: config.cluster_id.clone(),
+            };
+            let table_snapshot_cache =
+                Self::new_item_cache(config.table_cache_snapshot_count, tenant_label.clone());
+            let segment_info_cache =
+                Self::new_item_cache(config.table_cache_segment_count, tenant_label.clone());
+            let bloom_index_data_cache = Self::new_bytes_cache(
+                config.table_cache_bloom_index_data_bytes,
+                tenant_label.clone(),
+            );
+            let bloom_index_meta_cache = Self::new_item_cache(
+                config.table_cache_bloom_index_meta_count,
+                tenant_label.clone(),
+            );
 
-            let file_meta_data_cache = Self::new_item_cache(DEFAULT_FILE_META_DATA_CACHE_ITEMS);
+            let file_meta_data_cache =
+                Self::new_item_cache(DEFAULT_FILE_META_DATA_CACHE_ITEMS, tenant_label);
 
             v.init(Arc::new(Self {
                 table_snapshot_cache,
                 segment_info_cache,
-                bloom_index_cache,
+                bloom_index_data_cache,
                 bloom_index_meta_cache,
                 file_meta_data_cache,
                 cluster_id: config.cluster_id.clone(),
@@ -106,7 +115,7 @@ impl CacheManager {
     }
 
     pub fn get_bloom_index_cache(&self) -> Option<BloomIndexCache> {
-        self.bloom_index_cache.clone()
+        self.bloom_index_data_cache.clone()
     }
 
     pub fn get_bloom_index_meta_cache(&self) -> Option<BloomIndexMetaCache> {
@@ -125,17 +134,17 @@ impl CacheManager {
         self.cluster_id.as_str()
     }
 
-    fn new_item_cache<T>(capacity: u64) -> Option<ItemCache<T>> {
+    fn new_item_cache<T>(capacity: u64, tenant_label: TenantLabel) -> Option<LabeledItemCache<T>> {
         if capacity > 0 {
-            Some(new_item_cache(capacity))
+            Some(new_item_cache(capacity, tenant_label))
         } else {
             None
         }
     }
 
-    fn new_bytes_cache(capacity: u64) -> Option<BytesCache> {
+    fn new_bytes_cache(capacity: u64, tenant_label: TenantLabel) -> Option<LabeledBytesCache> {
         if capacity > 0 {
-            Some(new_bytes_cache(capacity))
+            Some(new_bytes_cache(capacity, tenant_label))
         } else {
             None
         }

@@ -16,6 +16,7 @@ use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use common_base::base::ProgressValues;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_pipeline_core::processors::port::OutputPort;
@@ -26,9 +27,11 @@ use common_pipeline_core::processors::Processor;
 use crate::processors::sources::input_formats::input_context::InputContext;
 use crate::processors::sources::input_formats::input_pipeline::BlockBuilderTrait;
 use crate::processors::sources::input_formats::input_pipeline::InputFormatPipe;
+use crate::processors::sources::input_formats::input_pipeline::RowBatchTrait;
 
 pub struct DeserializeSource<I: InputFormatPipe> {
     #[allow(unused)]
+    ctx: Arc<InputContext>,
     output: Arc<OutputPort>,
 
     block_builder: I::BlockBuilder,
@@ -46,6 +49,7 @@ impl<I: InputFormatPipe> DeserializeSource<I> {
         rx: async_channel::Receiver<I::RowBatch>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(Self {
+            ctx: ctx.clone(),
             block_builder: I::BlockBuilder::create(ctx),
             output,
             input_rx: rx,
@@ -97,6 +101,13 @@ impl<I: InputFormatPipe> Processor for DeserializeSource<I> {
     fn process(&mut self) -> Result<()> {
         if self.input_finished {
             assert!(self.input_buffer.is_none());
+        }
+        if let Some(row_batch) = &self.input_buffer {
+            let process_values = ProgressValues {
+                rows: row_batch.rows(),
+                bytes: row_batch.size(),
+            };
+            self.ctx.scan_progress.incr(&process_values)
         }
         let blocks = self.block_builder.deserialize(self.input_buffer.take())?;
         for b in blocks.into_iter() {

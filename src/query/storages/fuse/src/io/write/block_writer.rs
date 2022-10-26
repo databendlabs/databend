@@ -12,6 +12,10 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::io::ErrorKind;
+
+use backon::ExponentialBackoff;
+use backon::Retryable;
 use common_arrow::parquet::compression::CompressionOptions;
 use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_datablocks::serialize_data_blocks;
@@ -22,6 +26,7 @@ use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::ClusterStatistics;
 use common_fuse_meta::meta::Location;
 use opendal::Operator;
+use tracing::warn;
 use uuid::Uuid;
 
 use crate::index::BlockFilter;
@@ -125,7 +130,19 @@ pub async fn write_block(
 }
 
 pub async fn write_data(data: &[u8], data_accessor: &Operator, location: &str) -> Result<()> {
-    data_accessor.object(location).write(data).await?;
+    let object = data_accessor.object(location);
+
+    { || object.write(data) }
+        .retry(ExponentialBackoff::default().with_jitter())
+        .when(|err| err.kind() == ErrorKind::Interrupted)
+        .notify(|err, dur| {
+            warn!(
+                "fuse table block writer write_data retry after {}s for error {:?}",
+                dur.as_secs(),
+                err
+            )
+        })
+        .await?;
 
     Ok(())
 }

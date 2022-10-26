@@ -14,7 +14,6 @@ members = [
     "src/common/base",
     "src/common/building",
     "src/common/cache",
-    "src/common/contexts",
     "src/common/exception",
     "src/common/grpc",
     "src/common/hashtable",
@@ -46,14 +45,17 @@ members = [
     "src/query/legacy-expression",
     "src/query/legacy-planners",
     "src/query/settings",
+    "src/query/sql",
+    "src/query/storages/cache",
+    "src/query/storages/constants",
     "src/query/storages/fuse",
     "src/query/storages/fuse-meta",
     "src/query/storages/hive",
     "src/query/storages/hive-meta-store",
     "src/query/storages/index",
     "src/query/storages/preludes",
+    "src/query/storages/factory",
     "src/query/storages/share",
-    "src/query/storages/util",
     "src/query/streams",
     "src/query/users",
     # databend-query
@@ -79,7 +81,7 @@ members = [
 
 [workspace.dependencies]
 # databend maintains:
-openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.7.4-alpha.2" }
+openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.7.4-alpha.3" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
 
 # error

@@ -16,10 +16,7 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::io::Read;
 use std::io::Write;
-use std::pin::Pin;
 use std::sync::Arc;
-use std::task::Context;
-use std::task::Poll;
 
 use byteorder::BigEndian;
 use byteorder::ReadBytesExt;
@@ -35,8 +32,6 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use futures::Stream;
-use futures::StreamExt;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -77,28 +72,6 @@ pub enum DataPacket {
         progress: Vec<ProgressInfo>,
         precommit: Vec<PrecommitBlock>,
     },
-}
-
-pub struct DataPacketStream {
-    rx: async_channel::Receiver<DataPacket>,
-}
-
-impl DataPacketStream {
-    pub fn create(rx: async_channel::Receiver<DataPacket>) -> DataPacketStream {
-        DataPacketStream { rx }
-    }
-}
-
-impl Stream for DataPacketStream {
-    type Item = FlightData;
-
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        match self.rx.poll_next_unpin(cx) {
-            Poll::Pending => Poll::Pending,
-            Poll::Ready(None) => Poll::Ready(None),
-            Poll::Ready(Some(packet)) => Poll::Ready(Some(FlightData::from(packet))),
-        }
-    }
 }
 
 impl ProgressInfo {

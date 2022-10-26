@@ -46,7 +46,6 @@ type SegmentIndex = usize;
 type SegmentPruningJoinHandles = Vec<JoinHandle<Result<Vec<(SegmentIndex, BlockMeta)>>>>;
 
 struct PruningContext {
-    ctx: Arc<dyn TableContext>,
     limiter: LimiterPruner,
     range_pruner: Arc<dyn RangePruner + Send + Sync>,
     filter_pruner: Option<Arc<dyn Pruner + Send + Sync>>,
@@ -115,7 +114,6 @@ impl BlockPruner {
 
         // 3. setup pruning context
         let pruning_ctx = Arc::new(PruningContext {
-            ctx: ctx.clone(),
             limiter: limiter.clone(),
             range_pruner: range_pruner.clone(),
             filter_pruner,
@@ -132,7 +130,6 @@ impl BlockPruner {
                 None
             } else {
                 segments.next().map(|(segment_idx, segment_location)| {
-                    let segment_location = segment_location;
                     let dal = dal.clone();
                     let pruning_ctx = pruning_ctx.clone();
                     move |permit| async move {
@@ -176,8 +173,7 @@ impl BlockPruner {
         segment_idx: SegmentIndex,
         segment_location: Location,
     ) -> Result<Vec<(SegmentIndex, BlockMeta)>> {
-        let segment_reader =
-            MetaReaders::segment_info_reader(pruning_ctx.ctx.as_ref(), dal.clone());
+        let segment_reader = MetaReaders::segment_info_reader(dal.clone());
 
         let (path, ver) = segment_location;
         let segment_info = segment_reader.read(path, None, ver).await?;
@@ -238,8 +234,9 @@ impl BlockPruner {
                     let filter_pruner = filter_pruner.clone();
                     let index_location = block_meta.bloom_filter_index_location.clone();
                     let index_size = block_meta.bloom_filter_index_size;
-                    let v: BlockPruningFuture = Box::new(move |_: OwnedSemaphorePermit| {
+                    let v: BlockPruningFuture = Box::new(move |permit: OwnedSemaphorePermit| {
                         Box::pin(async move {
+                            let _permit = permit;
                             let keep = filter_pruner.should_keep(&index_location, index_size).await
                                 && ctx.limiter.within_limit(row_count);
                             (block_idx, keep)
@@ -247,8 +244,11 @@ impl BlockPruner {
                     });
                     v
                 } else {
-                    let v: BlockPruningFuture = Box::new(move |_: OwnedSemaphorePermit| {
-                        Box::pin(async move { (block_idx, false) })
+                    let v: BlockPruningFuture = Box::new(move |permit: OwnedSemaphorePermit| {
+                        Box::pin(async move {
+                            let _permit = permit;
+                            (block_idx, false)
+                        })
                     });
                     v
                 }

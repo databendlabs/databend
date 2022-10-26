@@ -13,6 +13,7 @@
 // limitations under the License.
 use std::collections::hash_map::RandomState;
 use std::collections::HashSet;
+use std::hash::Hasher;
 use std::marker::Send;
 use std::marker::Sync;
 
@@ -37,6 +38,8 @@ use common_hashtable::StackHashSet;
 use common_io::prelude::*;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use siphasher::sip128::Hasher128;
+use siphasher::sip128::SipHasher24;
 
 pub trait DistinctStateFunc<S>: Send + Sync {
     fn new() -> Self;
@@ -379,5 +382,97 @@ where T: Number + Serialize + DeserializeOwned + HashtableKeyable
     fn build_columns(&mut self, _types: &[DataType]) -> Result<Vec<Column>> {
         let values: Buffer<T> = self.set.iter().map(|e| *e.key()).collect();
         Ok(vec![NumberType::<T>::upcast_column(values)])
+    }
+}
+
+// For count(distinct string) and uniq(string)
+pub struct AggregateUniqStringState {
+    set: StackHashSet<u128, 16>,
+    inserted: bool,
+}
+
+impl DistinctStateFunc<u128> for AggregateUniqStringState {
+    fn new() -> Self {
+        AggregateUniqStringState {
+            set: StackHashSet::new(),
+            inserted: false,
+        }
+    }
+
+    fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
+        writer.write_uvarint(self.set.len() as u64)?;
+        for value in self.set.iter() {
+            serialize_into_buf(writer, value.key())?
+        }
+        Ok(())
+    }
+
+    fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
+        let size = reader.read_uvarint()?;
+        self.set = StackHashSet::with_capacity(size as usize);
+        for _ in 0..size {
+            let e = deserialize_from_slice(reader)?;
+            self.inserted = self.set.set_insert(e).is_ok();
+        }
+        Ok(())
+    }
+
+    fn is_empty(&self) -> bool {
+        self.set.is_empty()
+    }
+
+    fn len(&self) -> usize {
+        self.set.len()
+    }
+
+    fn add(&mut self, columns: &[Column], row: usize) -> Result<()> {
+        let column = columns[0].as_string().unwrap();
+        let data = unsafe { column.index_unchecked(row) };
+        let mut hasher = SipHasher24::new();
+        hasher.write(data);
+        let hash128 = hasher.finish128();
+        self.inserted = self.set.set_insert(hash128.into()).is_ok();
+        Ok(())
+    }
+
+    fn batch_add(
+        &mut self,
+        columns: &[Column],
+        validity: Option<&Bitmap>,
+        input_rows: usize,
+    ) -> Result<()> {
+        let column = columns[0].as_string().unwrap();
+        match validity {
+            Some(v) => {
+                for (t, v) in column.iter().zip(v.iter()) {
+                    if v {
+                        let mut hasher = SipHasher24::new();
+                        hasher.write(t);
+                        let hash128 = hasher.finish128();
+                        self.inserted = self.set.set_insert(hash128.into()).is_ok();
+                    }
+                }
+            }
+            _ => {
+                for row in 0..input_rows {
+                    let data = unsafe { column.index_unchecked(row) };
+                    let mut hasher = SipHasher24::new();
+                    hasher.write(data);
+                    let hash128 = hasher.finish128();
+                    let _ = self.set.set_insert(hash128.into()).is_ok();
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn merge(&mut self, rhs: &Self) -> Result<()> {
+        self.set.set_merge(&rhs.set);
+        Ok(())
+    }
+
+    // This method won't be called.
+    fn build_columns(&mut self, _types: &[DataType]) -> Result<Vec<Column>> {
+        Ok(vec![])
     }
 }

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::IntervalKind;
 use common_meta_types::PrincipalIdentity;
 use common_meta_types::UserIdentity;
 
@@ -374,6 +373,8 @@ pub trait VisitorMut: Sized {
         _value: &mut Literal,
     ) {
     }
+
+    fn visit_set_role(&mut self, _is_default: bool, _role_name: &mut String) {}
 
     fn visit_insert(&mut self, _insert: &mut InsertStmt<'_>) {}
 

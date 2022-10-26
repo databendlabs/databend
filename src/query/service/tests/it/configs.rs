@@ -16,8 +16,8 @@ use std::env::temp_dir;
 use std::fs;
 use std::io::Write;
 
+use common_config::Config;
 use common_exception::Result;
-use databend_query::Config;
 use pretty_assertions::assert_eq;
 
 // Default.
@@ -60,18 +60,21 @@ database_engine_github_enabled = true
 wait_timeout_mills = 5000
 max_query_log_size = 10000
 table_cache_enabled = false
-table_cache_snapshot_count = 256
-table_cache_segment_count = 10240
 table_cache_block_meta_count = 102400
 table_memory_cache_mb_size = 256
 table_disk_cache_root = "_cache"
 table_disk_cache_mb_size = 1024
+table_cache_snapshot_count = 256
+table_cache_segment_count = 10240
+table_cache_bloom_index_meta_count = 3000
+table_cache_bloom_index_data_bytes = 1073741824
 management_mode = false
 jwt_key_file = ""
 async_insert_max_data_size = 10000
 async_insert_busy_timeout = 200
 async_insert_stale_timeout = 0
 users = []
+share_endpoint_address = ""
 
 [log]
 level = "INFO"
@@ -184,6 +187,13 @@ fn test_env_config_s3() -> Result<()> {
             ("QUERY_TABLE_MEMORY_CACHE_MB_SIZE", Some("512")),
             ("QUERY_TABLE_DISK_CACHE_ROOT", Some("_cache_env")),
             ("QUERY_TABLE_DISK_CACHE_MB_SIZE", Some("512")),
+            ("QUERY_TABLE_CACHE_SNAPSHOT_COUNT", Some("256")),
+            ("QUERY_TABLE_CACHE_SEGMENT_COUNT", Some("10240")),
+            ("TABLE_CACHE_BLOOM_INDEX_META_COUNT", Some("3000")),
+            (
+                "TABLE_CACHE_BLOOM_INDEX_DATA_BYTES",
+                Some(format!("{}", 1024 * 1024 * 1024).as_str()),
+            ),
             ("STORAGE_TYPE", Some("s3")),
             ("STORAGE_NUM_CPUS", Some("16")),
             ("STORAGE_FS_DATA_PATH", Some("/tmp/test")),
@@ -253,9 +263,13 @@ fn test_env_config_s3() -> Result<()> {
             assert!(configured.query.table_engine_memory_enabled);
 
             assert!(configured.query.table_cache_enabled);
-            assert_eq!(512, configured.query.table_memory_cache_mb_size);
-            assert_eq!("_cache_env", configured.query.table_disk_cache_root);
-            assert_eq!(512, configured.query.table_disk_cache_mb_size);
+            assert_eq!(10240, configured.query.table_cache_segment_count);
+            assert_eq!(256, configured.query.table_cache_snapshot_count);
+            assert_eq!(3000, configured.query.table_cache_bloom_index_meta_count);
+            assert_eq!(
+                1024 * 1024 * 1024,
+                configured.query.table_cache_bloom_index_data_bytes
+            );
         },
     );
 
@@ -286,6 +300,13 @@ fn test_env_config_fs() -> Result<()> {
             ("QUERY_TABLE_MEMORY_CACHE_MB_SIZE", Some("512")),
             ("QUERY_TABLE_DISK_CACHE_ROOT", Some("_cache_env")),
             ("QUERY_TABLE_DISK_CACHE_MB_SIZE", Some("512")),
+            ("QU-ERY_TABLE_CACHE_SNAPSHOT_COUNT", Some("256")),
+            ("QUERY_TABLE_CACHE_SEGMENT_COUNT", Some("10240")),
+            ("TABLE_CACHE_BLOOM_INDEX_META_COUNT", Some("3000")),
+            (
+                "TABLE_CACHE_BLOOM_INDEX_DATA_BYTES",
+                Some(format!("{}", 1024 * 1024 * 1024).as_str()),
+            ),
             ("STORAGE_TYPE", Some("fs")),
             ("STORAGE_NUM_CPUS", Some("16")),
             ("STORAGE_FS_DATA_PATH", Some("/tmp/test")),
@@ -358,6 +379,13 @@ fn test_env_config_fs() -> Result<()> {
             assert_eq!(512, configured.query.table_memory_cache_mb_size);
             assert_eq!("_cache_env", configured.query.table_disk_cache_root);
             assert_eq!(512, configured.query.table_disk_cache_mb_size);
+            assert_eq!(10240, configured.query.table_cache_segment_count);
+            assert_eq!(256, configured.query.table_cache_snapshot_count);
+            assert_eq!(3000, configured.query.table_cache_bloom_index_meta_count);
+            assert_eq!(
+                1024 * 1024 * 1024,
+                configured.query.table_cache_bloom_index_data_bytes
+            );
         },
     );
 
@@ -387,6 +415,13 @@ fn test_env_config_gcs() -> Result<()> {
             ("QUERY_TABLE_MEMORY_CACHE_MB_SIZE", Some("512")),
             ("QUERY_TABLE_DISK_CACHE_ROOT", Some("_cache_env")),
             ("QUERY_TABLE_DISK_CACHE_MB_SIZE", Some("512")),
+            ("QUERY_TABLE_CACHE_SNAPSHOT_COUNT", Some("256")),
+            ("QUERY_TABLE_CACHE_SEGMENT_COUNT", Some("10240")),
+            ("TABLE_CACHE_BLOOM_INDEX_META_COUNT", Some("3000")),
+            (
+                "TABLE_CACHE_BLOOM_INDEX_DATA_BYTES",
+                Some(format!("{}", 1024 * 1024 * 1024).as_str()),
+            ),
             ("STORAGE_TYPE", Some("gcs")),
             ("STORAGE_NUM_CPUS", Some("16")),
             ("STORAGE_FS_DATA_PATH", Some("/tmp/test")),
@@ -466,6 +501,13 @@ fn test_env_config_gcs() -> Result<()> {
             assert_eq!(512, configured.query.table_memory_cache_mb_size);
             assert_eq!("_cache_env", configured.query.table_disk_cache_root);
             assert_eq!(512, configured.query.table_disk_cache_mb_size);
+            assert_eq!(10240, configured.query.table_cache_segment_count);
+            assert_eq!(256, configured.query.table_cache_snapshot_count);
+            assert_eq!(3000, configured.query.table_cache_bloom_index_meta_count);
+            assert_eq!(
+                1024 * 1024 * 1024,
+                configured.query.table_cache_bloom_index_data_bytes
+            );
         },
     );
 
@@ -495,6 +537,13 @@ fn test_env_config_oss() -> Result<()> {
             ("QUERY_TABLE_MEMORY_CACHE_MB_SIZE", Some("512")),
             ("QUERY_TABLE_DISK_CACHE_ROOT", Some("_cache_env")),
             ("QUERY_TABLE_DISK_CACHE_MB_SIZE", Some("512")),
+            ("QUERY_TABLE_CACHE_SNAPSHOT_COUNT", Some("256")),
+            ("QUERY_TABLE_CACHE_SEGMENT_COUNT", Some("10240")),
+            ("TABLE_CACHE_BLOOM_INDEX_META_COUNT", Some("3000")),
+            (
+                "TABLE_CACHE_BLOOM_INDEX_DATA_BYTES",
+                Some(format!("{}", 1024 * 1024 * 1024).as_str()),
+            ),
             ("STORAGE_TYPE", Some("oss")),
             ("STORAGE_NUM_CPUS", Some("16")),
             ("STORAGE_FS_DATA_PATH", Some("/tmp/test")),
@@ -581,6 +630,13 @@ fn test_env_config_oss() -> Result<()> {
             assert_eq!(512, configured.query.table_memory_cache_mb_size);
             assert_eq!("_cache_env", configured.query.table_disk_cache_root);
             assert_eq!(512, configured.query.table_disk_cache_mb_size);
+            assert_eq!(10240, configured.query.table_cache_segment_count);
+            assert_eq!(256, configured.query.table_cache_snapshot_count);
+            assert_eq!(3000, configured.query.table_cache_bloom_index_meta_count);
+            assert_eq!(
+                1024 * 1024 * 1024,
+                configured.query.table_cache_bloom_index_data_bytes
+            );
         },
     );
     Ok(())
@@ -633,12 +689,15 @@ table_cache_block_meta_count = 102400
 table_memory_cache_mb_size = 256
 table_disk_cache_root = "_cache"
 table_disk_cache_mb_size = 1024
+table_cache_bloom_index_meta_count = 3000
+table_cache_bloom_index_data_bytes = 1073741824
 management_mode = false
 jwt_key_file = ""
 async_insert_max_data_size = 10000
 async_insert_busy_timeout = 200
 async_insert_stale_timeout = 0
 users = []
+share_endpoint_address = ""
 
 [log]
 level = "INFO"

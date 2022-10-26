@@ -32,10 +32,7 @@ use crate::Value;
 pub fn can_convert(datatype: &DataTypeImpl) -> bool {
     !matches!(
         datatype,
-        DataTypeImpl::Date(_)
-            | DataTypeImpl::Interval(_)
-            | DataTypeImpl::VariantArray(_)
-            | DataTypeImpl::VariantObject(_)
+        DataTypeImpl::Date(_) | DataTypeImpl::VariantArray(_) | DataTypeImpl::VariantObject(_)
     )
 }
 
@@ -48,7 +45,6 @@ pub fn from_type(datatype: &DataTypeImpl) -> DataType {
         DataTypeImpl::Boolean(_) => DataType::Boolean,
         DataTypeImpl::Timestamp(_) => DataType::Timestamp,
         DataTypeImpl::Date(_) => DataType::Date,
-        DataTypeImpl::Interval(_) => DataType::Interval,
         DataTypeImpl::String(_) => DataType::String,
         DataTypeImpl::Struct(ty) => {
             let inners = ty.types().iter().map(from_type).collect();
@@ -58,6 +54,7 @@ pub fn from_type(datatype: &DataTypeImpl) -> DataType {
         DataTypeImpl::Variant(_)
         | DataTypeImpl::VariantArray(_)
         | DataTypeImpl::VariantObject(_) => DataType::Variant,
+        DataTypeImpl::Interval(_) => unimplemented!(),
     })
 }
 
@@ -102,7 +99,6 @@ pub fn from_scalar(datavalue: &DataValue, datatype: &DataTypeImpl) -> Scalar {
         }
         DataTypeImpl::Timestamp(_) => Scalar::Timestamp(datavalue.as_i64().unwrap() as i64),
         DataTypeImpl::Date(_) => Scalar::Date(datavalue.as_i64().unwrap() as i32),
-        DataTypeImpl::Interval(_) => Scalar::Interval(datavalue.as_i64().unwrap() as i64),
         DataTypeImpl::String(_) => Scalar::String(datavalue.as_string().unwrap()),
         DataTypeImpl::Struct(types) => {
             let values = match datavalue {

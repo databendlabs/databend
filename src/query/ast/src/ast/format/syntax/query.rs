@@ -39,7 +39,6 @@ pub(crate) fn pretty_query(query: Query) -> RcDoc {
         .append(pretty_order_by(query.order_by))
         .append(pretty_limit(query.limit))
         .append(pretty_offset(query.offset))
-        .append(pretty_format(query.format))
         .group()
 }
 
@@ -334,16 +333,6 @@ fn pretty_offset(offset: Option<Expr>) -> RcDoc {
         RcDoc::line()
             .append(RcDoc::text("OFFSET").append(RcDoc::space().nest(NEST_FACTOR)))
             .append(pretty_expr(offset))
-    } else {
-        RcDoc::nil()
-    }
-}
-
-fn pretty_format<'a>(format: Option<String>) -> RcDoc<'a> {
-    if let Some(format) = format {
-        RcDoc::line()
-            .append(RcDoc::text("FORMAT").append(RcDoc::space().nest(NEST_FACTOR)))
-            .append(RcDoc::text(format))
     } else {
         RcDoc::nil()
     }

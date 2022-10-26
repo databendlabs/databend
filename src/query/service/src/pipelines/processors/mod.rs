@@ -42,7 +42,6 @@ pub use transforms::HashJoinState;
 pub use transforms::HashTable;
 pub use transforms::JoinHashTable;
 pub use transforms::MarkJoinCompactor;
-pub use transforms::ProjectionTransform;
 pub use transforms::RightJoinCompactor;
 pub use transforms::SerializerHashTable;
 pub use transforms::SinkBuildHashTable;

@@ -8,7 +8,7 @@ from log import log
 default_database = "default"
 
 
-class ClickhouseConnector():
+class ClickhouseConnector(object):
 
     def connect(self,
                 host,

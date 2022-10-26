@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
@@ -28,6 +29,8 @@ use common_legacy_planners::Projection;
 use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
 use opendal::Operator;
+use tracing::debug;
+use tracing::info;
 
 use crate::fuse_lazy_part::FuseLazyPartInfo;
 use crate::fuse_part::ColumnLeaves;
@@ -37,13 +40,15 @@ use crate::pruning::BlockPruner;
 use crate::FuseTable;
 
 impl FuseTable {
-    #[inline]
+    #[tracing::instrument(level = "debug", name = "do_read_partitions", skip_all, fields(ctx.id = ctx.get_id().as_str()))]
     pub async fn do_read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
-        let snapshot = self.read_table_snapshot(ctx.clone()).await?;
+        debug!("fuse table do read partitions, push downs:{:?}", push_downs);
+
+        let snapshot = self.read_table_snapshot().await?;
         match snapshot {
             Some(snapshot) => {
                 if let Some(result) = self.check_quick_path(&snapshot, &push_downs) {
@@ -73,7 +78,7 @@ impl FuseTable {
                 let table_info = self.table_info.clone();
                 let segments_location = snapshot.segments.clone();
                 let summary = snapshot.summary.block_count as usize;
-                Self::prune_snapshot_blocks(
+                self.prune_snapshot_blocks(
                     ctx.clone(),
                     self.operator.clone(),
                     push_downs.clone(),
@@ -87,7 +92,9 @@ impl FuseTable {
         }
     }
 
+    #[tracing::instrument(level = "debug", name = "prune_snapshot_blocks", skip_all, fields(ctx.id = ctx.get_id().as_str()))]
     pub async fn prune_snapshot_blocks(
+        &self,
         ctx: Arc<dyn TableContext>,
         dal: Operator,
         push_downs: Option<Extras>,
@@ -95,6 +102,12 @@ impl FuseTable {
         segments_location: Vec<Location>,
         summary: usize,
     ) -> Result<(Statistics, Partitions)> {
+        let start = Instant::now();
+        info!(
+            "prune snapshot block start, segment numbers:{}",
+            segments_location.len()
+        );
+
         let block_metas = BlockPruner::prune(
             &ctx,
             dal,
@@ -106,11 +119,19 @@ impl FuseTable {
         .into_iter()
         .map(|(_, v)| v)
         .collect::<Vec<_>>();
-        Self::read_partitions_with_metas(ctx, table_info.schema(), push_downs, block_metas, summary)
+
+        info!(
+            "prune snapshot block end, final block numbers:{}, cost:{}",
+            block_metas.len(),
+            start.elapsed().as_secs()
+        );
+
+        self.read_partitions_with_metas(ctx, table_info.schema(), push_downs, block_metas, summary)
     }
 
     pub fn read_partitions_with_metas(
-        ctx: Arc<dyn TableContext>,
+        &self,
+        _: Arc<dyn TableContext>,
         schema: DataSchemaRef,
         push_downs: Option<Extras>,
         block_metas: Vec<BlockMeta>,
@@ -128,11 +149,9 @@ impl FuseTable {
         statistics.partitions_scanned = partitions_scanned;
 
         // Update context statistics.
-        ctx.get_dal_context()
-            .get_metrics()
+        self.data_metrics
             .inc_partitions_total(partitions_total as u64);
-        ctx.get_dal_context()
-            .get_metrics()
+        self.data_metrics
             .inc_partitions_scanned(partitions_scanned as u64);
 
         Ok((statistics, parts))

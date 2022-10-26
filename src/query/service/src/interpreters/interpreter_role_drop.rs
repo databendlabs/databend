@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_planner::plans::DropRolePlan;
+use common_users::RoleCacheManager;
 use common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
@@ -50,6 +51,7 @@ impl Interpreter for DropRoleInterpreter {
             .drop_role(&tenant, plan.role_name, plan.if_exists)
             .await?;
 
+        RoleCacheManager::instance().force_reload(&tenant).await?;
         Ok(PipelineBuildResult::create())
     }
 }

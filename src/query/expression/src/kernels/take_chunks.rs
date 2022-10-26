@@ -21,7 +21,6 @@ use crate::types::ArrayType;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
-use crate::types::IntervalType;
 use crate::types::NumberType;
 use crate::types::StringType;
 use crate::types::TimestampType;
@@ -128,16 +127,10 @@ impl Column {
                 let builder = TimestampType::create_builder(result_size, &[]);
                 Self::take_chunk_value_types::<TimestampType>(columns, builder, indices)
             }
-
             Column::Date(_) => {
                 let builder = DateType::create_builder(result_size, &[]);
                 Self::take_chunk_value_types::<DateType>(columns, builder, indices)
             }
-            Column::Interval(_) => {
-                let builder = IntervalType::create_builder(result_size, &[]);
-                Self::take_chunk_value_types::<IntervalType>(columns, builder, indices)
-            }
-
             Column::Array(column) => {
                 let mut builder = ArrayColumnBuilder::<AnyType>::from_column(column.slice(0..0));
                 builder.reserve(result_size);

@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_config::Config;
 use common_exception::Result;
 use common_meta_api::SchemaApi;
 use common_meta_app::schema::CountTablesReply;
@@ -61,11 +62,9 @@ use crate::catalogs::catalog::Catalog;
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
 use crate::databases::DatabaseFactory;
-use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
 use crate::storages::StorageFactory;
 use crate::storages::Table;
-use crate::Config;
 
 /// Catalog based on MetaStore
 /// - System Database NOT included
@@ -124,7 +123,6 @@ impl MutableCatalog {
             meta,
             storage_factory: Arc::new(storage_factory),
             database_factory: Arc::new(database_factory),
-            in_memory_data: Arc::new(Default::default()),
         };
         Ok(MutableCatalog { ctx })
     }
@@ -133,7 +131,6 @@ impl MutableCatalog {
         let ctx = DatabaseContext {
             meta: self.ctx.meta.clone(),
             storage_factory: self.ctx.storage_factory.clone(),
-            in_memory_data: self.ctx.in_memory_data.clone(),
         };
         self.ctx.database_factory.get_database(ctx, db_info)
     }
@@ -213,11 +210,7 @@ impl Catalog for MutableCatalog {
 
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
         let storage = self.ctx.storage_factory.clone();
-        let ctx = StorageContext {
-            meta: self.ctx.meta.clone().arc(),
-            in_memory_data: self.ctx.in_memory_data.clone(),
-        };
-        storage.get_table(ctx, table_info)
+        storage.get_table(table_info)
     }
 
     async fn get_table_meta_by_id(

@@ -27,8 +27,8 @@ use common_base::base::tokio::task::JoinHandle;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_base::base::TrySpawn;
-use common_contexts::DalContext;
-use common_contexts::DalMetrics;
+use common_config::Config;
+use common_config::DATABEND_COMMIT_VERSION;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -41,9 +41,10 @@ use common_legacy_planners::ReadDataSourcePlan;
 use common_legacy_planners::SourceInfo;
 use common_legacy_planners::StageTableInfo;
 use common_meta_app::schema::TableInfo;
+use common_meta_types::RoleInfo;
 use common_meta_types::UserInfo;
-use common_storage::StorageParams;
-use opendal::Operator;
+use common_storage::DataOperator;
+use common_storage::StorageMetrics;
 use parking_lot::RwLock;
 use tracing::debug;
 
@@ -62,7 +63,6 @@ use crate::sessions::Settings;
 use crate::sessions::TableContext;
 use crate::storages::stage::StageTable;
 use crate::storages::Table;
-use crate::Config;
 
 #[derive(Clone)]
 pub struct QueryContext {
@@ -82,7 +82,7 @@ impl QueryContext {
 
         Arc::new(QueryContext {
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
-            version: format!("DatabendQuery {}", *crate::version::DATABEND_COMMIT_VERSION),
+            version: format!("DatabendQuery {}", *DATABEND_COMMIT_VERSION),
             shared,
             fragment_id: Arc::new(AtomicUsize::new(0)),
         })
@@ -181,6 +181,10 @@ impl QueryContext {
         self.shared.get_affect()
     }
 
+    pub fn get_data_metrics(&self) -> StorageMetrics {
+        self.shared.get_data_metrics()
+    }
+
     pub fn set_affect(self: &Arc<Self>, affect: QueryAffect) {
         self.shared.set_affect(affect)
     }
@@ -256,6 +260,7 @@ impl TableContext for QueryContext {
             .catalog_manager
             .get_catalog(catalog_name.as_ref())
     }
+
     fn get_id(&self) -> String {
         self.shared.init_query_id.as_ref().read().clone()
     }
@@ -279,6 +284,9 @@ impl TableContext for QueryContext {
     fn set_current_user(&self, user: UserInfo) {
         self.shared.set_current_user(user)
     }
+    fn get_current_role(&self) -> Option<RoleInfo> {
+        self.shared.get_current_role()
+    }
     fn get_fuse_version(&self) -> String {
         self.version.clone()
     }
@@ -295,10 +303,7 @@ impl TableContext for QueryContext {
     fn get_tenant(&self) -> String {
         self.shared.get_tenant()
     }
-    /// Get the data accessor metrics.
-    fn get_dal_metrics(&self) -> DalMetrics {
-        self.shared.dal_ctx.get_metrics().as_ref().clone()
-    }
+
     /// Get the session running query.
     fn get_query_str(&self) -> String {
         self.shared.get_query_str()
@@ -309,17 +314,8 @@ impl TableContext for QueryContext {
     }
 
     // Get the storage data accessor operator from the session manager.
-    fn get_storage_operator(&self) -> Result<Operator> {
-        // deref from `StorageOperator` to `opendal::Operator` first.
-        let operator = (*self.shared.storage_operator).clone();
-
-        Ok(operator.layer(self.shared.dal_ctx.as_ref().clone()))
-    }
-    fn get_storage_params(&self) -> StorageParams {
-        self.shared.get_storage_params()
-    }
-    fn get_dal_context(&self) -> &DalContext {
-        self.shared.dal_ctx.as_ref()
+    fn get_data_operator(&self) -> Result<DataOperator> {
+        Ok(self.shared.data_operator.clone())
     }
     fn push_precommit_block(&self, block: DataBlock) {
         self.shared.push_precommit_block(block)

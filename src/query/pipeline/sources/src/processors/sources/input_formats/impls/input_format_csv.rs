@@ -52,7 +52,6 @@ impl InputFormatCSV {
             let field_end = field_ends[c];
             let col_data = &buf[field_start..field_end];
             let mut reader = NestedCheckpointReader::new(col_data);
-            reader.ignore_white_spaces().expect("must success");
             if reader.eof().expect("must success") {
                 deserializer.de_default(format_settings);
             } else {
@@ -61,7 +60,6 @@ impl InputFormatCSV {
                     let err_msg = format_column_error(schema, c, col_data, &e.message());
                     return Err(csv_error(&err_msg, path, row_index));
                 };
-                reader.ignore_white_spaces().expect("must success");
                 if reader.must_eof().is_err() {
                     let err_msg = format_column_error(schema, c, col_data, "bad field end");
                     return Err(csv_error(&err_msg, path, row_index));

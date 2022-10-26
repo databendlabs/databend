@@ -22,7 +22,7 @@ use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::GenericMap;
 use crate::types::ValueType;
-use crate::util::bitmap_into_mut;
+use crate::utils::arrow::bitmap_into_mut;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;

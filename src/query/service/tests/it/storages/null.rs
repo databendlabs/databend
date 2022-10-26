@@ -19,15 +19,15 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use databend_query::sql::plans::create_table_v2::TableOptions;
 use databend_query::storages::null::NullTable;
-use databend_query::storages::TableStreamReadWrap;
 use databend_query::storages::ToReadDataSourcePlan;
+use databend_query::stream::DataBlockStream;
 use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_null_table() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
 
-    let table = NullTable::try_create(crate::tests::create_storage_context().await?, TableInfo {
+    let table = NullTable::try_create(TableInfo {
         desc: "'default'.'a'".into(),
         name: "a".into(),
         ident: Default::default(),

@@ -156,7 +156,7 @@ pub struct HttpQuery {
     pub(crate) session_id: String,
     request: HttpQueryRequest,
     state: Arc<RwLock<Executor>>,
-    data: Arc<TokioMutex<PageManager>>,
+    page_manager: Arc<TokioMutex<PageManager>>,
     config: HttpQueryConfig,
     expire_at: Arc<TokioMutex<Option<Instant>>>,
 }
@@ -283,7 +283,7 @@ impl HttpQuery {
             session_id,
             request,
             state,
-            data,
+            page_manager: data,
             config,
             expire_at: Arc::new(TokioMutex::new(None)),
         };
@@ -297,15 +297,13 @@ impl HttpQuery {
     pub async fn get_response_page(&self, page_no: usize) -> Result<HttpQueryResponseInternal> {
         let data = Some(self.get_page(page_no).await?);
         let state = self.get_state().await;
-        let session_conf = if let Some(conf) = &self.request.session {
-            if let Some(affect) = &state.affect {
-                Some(conf.clone().apply_affect(affect))
-            } else {
-                Some(conf.clone())
-            }
+        let session_conf = self.request.session.clone().unwrap_or_default();
+        let session_conf = if let Some(affect) = &state.affect {
+            Some(session_conf.apply_affect(affect))
         } else {
-            None
+            Some(session_conf)
         };
+
         Ok(HttpQueryResponseInternal {
             data,
             state,
@@ -336,13 +334,13 @@ impl HttpQuery {
     }
 
     async fn get_page(&self, page_no: usize) -> Result<ResponseData> {
-        let mut data = self.data.lock().await;
-        let page = data
+        let mut page_manager = self.page_manager.lock().await;
+        let page = page_manager
             .get_a_page(page_no, &self.request.pagination.get_wait_type())
             .await?;
         let response = ResponseData {
             page,
-            next_page_no: data.next_page_no(),
+            next_page_no: page_manager.next_page_no(),
         };
         Ok(response)
     }
@@ -357,7 +355,7 @@ impl HttpQuery {
     }
 
     pub async fn detach(&self) {
-        let data = self.data.lock().await;
+        let data = self.page_manager.lock().await;
         data.detach().await
     }
 

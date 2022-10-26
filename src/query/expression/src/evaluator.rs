@@ -22,7 +22,6 @@ use itertools::Itertools;
 use num_traits::AsPrimitive;
 
 use crate::chunk::Chunk;
-use crate::error::Result;
 use crate::expression::Expr;
 use crate::expression::Span;
 use crate::function::FunctionContext;
@@ -42,12 +41,13 @@ use crate::types::timestamp::timestamp_to_string;
 use crate::types::variant::cast_scalar_to_variant;
 use crate::types::variant::cast_scalars_to_variants;
 use crate::types::DataType;
-use crate::util::constant_bitmap;
+use crate::utils::arrow::constant_bitmap;
 use crate::values::Column;
 use crate::values::ColumnBuilder;
 use crate::values::Scalar;
 use crate::values::Value;
 use crate::with_number_type;
+use crate::Result;
 use crate::ScalarRef;
 
 pub struct Evaluator<'a> {
@@ -263,8 +263,7 @@ impl<'a> Evaluator<'a> {
             | (scalar @ Scalar::Boolean(_), DataType::Boolean)
             | (scalar @ Scalar::String(_), DataType::String)
             | (scalar @ Scalar::Timestamp(_), DataType::Timestamp)
-            | (scalar @ Scalar::Date(_), DataType::Date)
-            | (scalar @ Scalar::Interval(_), DataType::Interval) => Ok(scalar),
+            | (scalar @ Scalar::Date(_), DataType::Date) => Ok(scalar),
 
             (scalar, dest_ty) => Err((
                 span,
@@ -440,8 +439,7 @@ impl<'a> Evaluator<'a> {
             | (col @ Column::Boolean(_), DataType::Boolean)
             | (col @ Column::String { .. }, DataType::String)
             | (col @ Column::Timestamp { .. }, DataType::Timestamp)
-            | (col @ Column::Date(_), DataType::Date)
-            | (col @ Column::Interval(_), DataType::Interval) => Ok(col),
+            | (col @ Column::Date(_), DataType::Date) => Ok(col),
 
             (col, dest_ty) => Err((span, (format!("unable to cast {col:?} to {dest_ty}")))),
         }
@@ -655,8 +653,7 @@ impl<'a> Evaluator<'a> {
             | (column @ Column::String { .. }, DataType::String)
             | (column @ Column::EmptyArray { .. }, DataType::EmptyArray)
             | (column @ Column::Timestamp { .. }, DataType::Timestamp)
-            | (column @ Column::Date(_), DataType::Date)
-            | (column @ Column::Interval(_), DataType::Interval) => {
+            | (column @ Column::Date(_), DataType::Date) => {
                 Column::Nullable(Box::new(NullableColumn {
                     validity: constant_bitmap(true, column.len()).into(),
                     column,
@@ -933,8 +930,7 @@ impl<'a> ConstantFolder<'a> {
             (Domain::Boolean(_), DataType::Boolean)
             | (Domain::String(_), DataType::String)
             | (Domain::Timestamp(_), DataType::Timestamp)
-            | (Domain::Date(_), DataType::Date)
-            | (Domain::Interval(_), DataType::Interval) => Some(domain.clone()),
+            | (Domain::Date(_), DataType::Date) => Some(domain.clone()),
 
             // failure cases
             _ => None,
@@ -1059,8 +1055,7 @@ impl<'a> ConstantFolder<'a> {
             (Domain::Boolean(_), DataType::Boolean)
             | (Domain::String(_), DataType::String)
             | (Domain::Timestamp(_), DataType::Timestamp)
-            | (Domain::Date(_), DataType::Date)
-            | (Domain::Interval(_), DataType::Interval) => Domain::Nullable(NullableDomain {
+            | (Domain::Date(_), DataType::Date) => Domain::Nullable(NullableDomain {
                 has_null: false,
                 value: Some(Box::new(domain.clone())),
             }),

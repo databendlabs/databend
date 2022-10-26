@@ -16,8 +16,8 @@ use std::io::Write;
 
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
+use common_expression::utils::ColumnFrom;
 use common_expression::Column;
-use common_expression::ColumnFrom;
 use goldenfile::Mint;
 
 use super::run_ast;
@@ -99,6 +99,8 @@ fn test_div(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
     run_ast(file, "a2 / c", columns);
     run_ast(file, "divide(c, b)", columns);
     run_ast(file, "c / d", columns);
+    run_ast(file, "b / d2", columns);
+    run_ast(file, "2.0 / 0", columns);
 }
 
 fn test_intdiv(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {

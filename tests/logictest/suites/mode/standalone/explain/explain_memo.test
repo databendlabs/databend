@@ -18,4 +18,3 @@ Group #2
 ├── LogicalInnerJoin [#1, #0]
 ├── PhysicalHashJoin [#0, #1]
 └── PhysicalHashJoin [#1, #0]
-

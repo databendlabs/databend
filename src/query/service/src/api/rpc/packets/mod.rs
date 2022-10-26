@@ -21,7 +21,6 @@ mod packet_publisher;
 
 pub use packet::Packet;
 pub use packet_data::DataPacket;
-pub use packet_data::DataPacketStream;
 pub use packet_data::FragmentData;
 pub use packet_data::PrecommitBlock;
 pub use packet_data::ProgressInfo;

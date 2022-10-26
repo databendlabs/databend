@@ -170,7 +170,7 @@ impl DataSchema {
                     .map(|name| format!("{}:{}", field_name, name.to_lowercase()))
                     .collect::<Vec<_>>(),
                 None => (0..inner_types.len())
-                    .map(|i| format!("{}:{}", field_name, i))
+                    .map(|i| format!("{}:{}", field_name, i + 1))
                     .collect::<Vec<_>>(),
             };
 

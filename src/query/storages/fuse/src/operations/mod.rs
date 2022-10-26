@@ -21,18 +21,23 @@ mod gc;
 mod mutation;
 mod navigate;
 mod operation_log;
-mod read;
+mod read_data;
 mod read_partitions;
 mod recluster;
 mod truncate;
 
+mod fuse_source;
 pub mod util;
 
+pub(crate) use compact::CompactOptions;
 pub use fuse_sink::FuseTableSink;
+pub use fuse_source::FuseTableSource;
+pub use fuse_source::State;
 pub use mutation::delete_from_block;
-pub use mutation::CompactMutator;
 pub use mutation::DeletionMutator;
+pub use mutation::FullCompactMutator;
 pub use mutation::ReclusterMutator;
+pub use mutation::SegmentCompactMutator;
 pub use operation_log::AppendOperationLogEntry;
 pub use operation_log::TableOperationLog;
 pub use util::column_metas;

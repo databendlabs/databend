@@ -37,6 +37,7 @@ mod datetime;
 mod math;
 pub(crate) mod parser;
 mod string;
+mod tuple;
 mod variant;
 
 pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Column)]) {
