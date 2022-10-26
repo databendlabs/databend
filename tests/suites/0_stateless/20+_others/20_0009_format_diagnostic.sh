@@ -4,14 +4,14 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
 cat << EOF > /tmp/databend_test_csv1.txt
-"2023-04-08 01:01:01", "Hello", 123
-"2023-02-03 02:03:02", "World", 123
+"2023-04-08 01:01:01","Hello",123
+"2023-02-03 02:03:02","World",123
 
 EOF
 
 cat << EOF > /tmp/databend_test_csv2.txt
-"2023-04-08 01:01:01", "Hello", 123
-"2023-023-02 02:03:02", "World", 123
+"2023-04-08 01:01:01","Hello",123
+"2023-023-02 02:03:02","World",123
 
 EOF
 
