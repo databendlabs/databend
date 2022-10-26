@@ -567,6 +567,8 @@ impl PhysicalPlanBuilder {
                         let metadata = self.metadata.read();
                         let ty = metadata.column(item.index).data_type();
                         let name = metadata.column(item.index).name();
+
+                        // sort item is already a column
                         let scalar = PhysicalScalar::IndexedVariable {
                             index: item.index,
                             data_type: ty.clone(),
