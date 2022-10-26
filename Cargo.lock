@@ -1728,6 +1728,7 @@ name = "common-meta-raft-store"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-entry",
  "async-trait",
  "byteorder",
  "chrono",
