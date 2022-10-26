@@ -17,6 +17,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
 
+use common_base::runtime::print_memory_stats;
 use common_base::runtime::Runtime;
 use common_base::runtime::TrySpawn;
 use common_exception::Result;
@@ -102,6 +103,7 @@ async fn mock_get_page(i: usize) -> Vec<usize> {
         START_TIME.elapsed().as_millis(),
         i
     );
+    print_memory_stats();
 
     (i..(i + 1)).collect()
 }
@@ -119,5 +121,6 @@ async fn test_runtime_try_spawn_batch() -> Result<()> {
     let handlers = runtime.try_spawn_batch(max_concurrency, futs).await?;
     let result = futures::future::try_join_all(handlers).await.unwrap();
     assert_eq!(result.len(), 20);
+
     Ok(())
 }

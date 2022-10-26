@@ -17,17 +17,16 @@ use std::sync::Arc;
 use crate::runtime::MemoryTracker;
 
 pub struct RuntimeTracker {
-    memory_tracker: *mut MemoryTracker,
+    memory_tracker: Arc<MemoryTracker>,
 }
 
 impl RuntimeTracker {
     pub fn create() -> Arc<RuntimeTracker> {
-        let memory_tracker = MemoryTracker::create();
+        let memory_tracker = unsafe { Arc::from_raw(MemoryTracker::create()) };
         Arc::new(RuntimeTracker { memory_tracker })
     }
 
-    /// # Safety
     pub fn get_memory_usage(&self) -> usize {
-        unsafe { (*self.memory_tracker).get_memory_usage() }
+        self.memory_tracker.get_memory_usage()
     }
 }
