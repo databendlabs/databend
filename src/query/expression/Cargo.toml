@@ -1,10 +1,10 @@
 [package]
 name = "common-expression"
-version = "0.1.0"
-authors = ["Databend Authors <opensource@datafuselabs.com>"]
-license = "Apache-2.0"
-publish = false
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
 
 [lib]
 test = false
@@ -12,25 +12,30 @@ test = false
 [dependencies] # In alphabetical order
 # Workspace dependencies
 common-arrow = { path = "../../common/arrow" }
+common-datablocks = { path = "../datablocks" }
+common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../../common/exception" }
 
 # Github dependencies
 
 # Crates.io dependencies
 chrono = "0.4"
-chrono-tz = "0.6.1"
+chrono-tz = "0.6.3"
 comfy-table = "6"
 common-jsonb = { path = "../../common/jsonb" }
 educe = "0.4"
-enum-as-inner = "0.4"
+enum-as-inner = "0.5"
 hex = "0.4.3"
 itertools = "0.10"
 match-template = "0.0.1"
 num-traits = "0.2.15"
 ordered-float = { version = "3.1.0", features = ["serde"] }
+regex = "1.6.0"
 rust_decimal = "1.26"
 serde = "1.0"
+serde_json = "1.0.81"
 
 [dev-dependencies]
 common-ast = { path = "../ast" }
 goldenfile = "1.4"
+rand = "0.8.5"

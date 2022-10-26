@@ -35,7 +35,7 @@ use crate::Projection;
 ///
 /// It's an ugly but necessary price to pay. Without this, we would sink in
 /// hell forever.
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DeletePlan {
     pub catalog_name: String,
     pub database_name: String,

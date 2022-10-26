@@ -17,11 +17,11 @@ use std::collections::VecDeque;
 
 use byteorder::BigEndian;
 use byteorder::ReadBytesExt;
-use decimal_rs::Decimal;
 
 use super::constants::*;
 use super::error::*;
 use super::jentry::JEntry;
+use super::number::Number;
 use super::parser::parse_value;
 use super::value::Object;
 use super::value::Value;
@@ -117,9 +117,9 @@ impl<'a> Decoder<'a> {
             }
             NUMBER_TAG => {
                 let offset = jentry.length as usize;
-                let d = Decimal::decode(&self.buf[..offset]);
+                let n = Number::decode(&self.buf[..offset]);
                 self.buf = &self.buf[offset..];
-                Ok(Value::Number(d))
+                Ok(Value::Number(n))
             }
             CONTAINER_TAG => self.decode_jsonb(),
             _ => Err(Error::InvalidJsonbJEntry),

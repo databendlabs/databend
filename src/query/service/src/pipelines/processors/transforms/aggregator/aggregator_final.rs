@@ -86,7 +86,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
         let temp_place = if params.aggregate_functions.is_empty() {
             None
         } else {
-            state.alloc_layout2(&params)
+            state.alloc_layout(&params)
         };
 
         Ok(Self {
@@ -118,7 +118,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> FinalAggregator<
 
             match inserted {
                 true => {
-                    if let Some(place) = unsafe { (*unsafe_state).alloc_layout2(params) } {
+                    if let Some(place) = unsafe { (*unsafe_state).alloc_layout(params) } {
                         places.push(place);
                         entity.set_state_value(place.addr());
                     }
@@ -218,7 +218,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
                 }
 
                 // Build final state block.
-                let fields_len = self.params.schema.fields().len();
+                let fields_len = self.params.output_schema.fields().len();
                 let mut columns = Vec::with_capacity(fields_len);
 
                 for mut array in aggregates_column_builder {
@@ -226,7 +226,10 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
                 }
 
                 columns.extend_from_slice(&group_columns_builder.finish()?);
-                Ok(Some(DataBlock::create(self.params.schema.clone(), columns)))
+                Ok(Some(DataBlock::create(
+                    self.params.output_schema.clone(),
+                    columns,
+                )))
             }
         }
     }
@@ -268,7 +271,10 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
                 }
 
                 let columns = columns_builder.finish()?;
-                Ok(Some(DataBlock::create(self.params.schema.clone(), columns)))
+                Ok(Some(DataBlock::create(
+                    self.params.output_schema.clone(),
+                    columns,
+                )))
             }
         }
     }

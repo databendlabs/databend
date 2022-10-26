@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
+use common_base::base::Runtime;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datavalues::ColumnRef;
@@ -36,19 +37,15 @@ use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
 use common_pipeline_transforms::processors::ExpressionExecutor;
 
+use crate::fuse_lazy_part::FuseLazyPartInfo;
 use crate::io::BlockReader;
 use crate::operations::read::State::Generated;
 use crate::FuseTable;
 
 impl FuseTable {
-    pub fn create_block_reader(
-        &self,
-        ctx: &Arc<dyn TableContext>,
-        projection: Projection,
-    ) -> Result<Arc<BlockReader>> {
-        let operator = ctx.get_storage_operator()?;
+    pub fn create_block_reader(&self, projection: Projection) -> Result<Arc<BlockReader>> {
         let table_schema = self.table_info.schema();
-        BlockReader::create(operator, table_schema, projection)
+        BlockReader::create(self.operator.clone(), table_schema, projection)
     }
 
     pub fn projection_of_push_downs(&self, push_downs: &Option<Extras>) -> Projection {
@@ -81,9 +78,48 @@ impl FuseTable {
         plan: &ReadDataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
+        let mut lazy_init_segments = Vec::with_capacity(plan.parts.len());
+
+        for part in &plan.parts {
+            if let Some(lazy_part_info) = part.as_any().downcast_ref::<FuseLazyPartInfo>() {
+                lazy_init_segments.push(lazy_part_info.segment_location.clone());
+            }
+        }
+
+        if !lazy_init_segments.is_empty() {
+            let table_info = self.table_info.clone();
+            let push_downs = plan.push_downs.clone();
+            let query_ctx = ctx.clone();
+
+            // TODO: need refactor
+            pipeline.set_on_init(move || {
+                let table_info = table_info.clone();
+                let ctx = query_ctx.clone();
+                let push_downs = push_downs.clone();
+                let lazy_init_segments = lazy_init_segments.clone();
+
+                let partitions = Runtime::with_worker_threads(2, None)?.block_on(async move {
+                    let (_statistics, partitions) = FuseTable::prune_snapshot_blocks(
+                        ctx,
+                        push_downs,
+                        table_info,
+                        lazy_init_segments,
+                        0,
+                    )
+                    .await?;
+
+                    Result::<_, ErrorCode>::Ok(partitions)
+                })?;
+
+                query_ctx.try_set_partitions(partitions)?;
+
+                Ok(())
+            });
+        }
+
         let table_schema = self.table_info.schema();
         let projection = self.projection_of_push_downs(&plan.push_downs);
-        let output_reader = self.create_block_reader(&ctx, projection)?; // for deserialize output blocks
+        let output_reader = self.create_block_reader(projection)?; // for deserialize output blocks
 
         let (output_reader, prewhere_reader, prewhere_filter, remain_reader) =
             if let Some(prewhere) = self.prewhere_of_push_downs(&plan.push_downs) {
@@ -100,14 +136,13 @@ impl FuseTable {
                     vec![prewhere.filter.clone()],
                     false,
                 )?;
-                let output_reader =
-                    self.create_block_reader(&ctx, prewhere.output_columns.clone())?;
+                let output_reader = self.create_block_reader(prewhere.output_columns.clone())?;
                 let prewhere_reader =
-                    self.create_block_reader(&ctx, prewhere.prewhere_columns.clone())?;
+                    self.create_block_reader(prewhere.prewhere_columns.clone())?;
                 let remain_reader = if prewhere.remain_columns.is_empty() {
                     None
                 } else {
-                    Some((*self.create_block_reader(&ctx, prewhere.remain_columns)?).clone())
+                    Some((*self.create_block_reader(prewhere.remain_columns)?).clone())
                 };
 
                 (
@@ -123,9 +158,7 @@ impl FuseTable {
         let prewhere_filter = Arc::new(prewhere_filter);
         let remain_reader = Arc::new(remain_reader);
 
-        let parts_len = plan.parts.len();
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        let max_threads = std::cmp::min(parts_len, max_threads);
 
         let mut source_builder = SourcePipeBuilder::create();
 
@@ -157,7 +190,7 @@ struct PrewhereData {
 }
 
 enum State {
-    ReadDataPrewhere(PartInfoPtr),
+    ReadDataPrewhere(Option<PartInfoPtr>),
     ReadDataRemain(PartInfoPtr, PrewhereData),
     PrewhereFilter(PartInfoPtr, DataChunks),
     Deserialize(PartInfoPtr, DataChunks, Option<PrewhereData>),
@@ -187,62 +220,38 @@ impl FuseTableSource {
         remain_reader: Arc<Option<BlockReader>>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
-        let mut partitions = ctx.try_get_partitions(1)?;
-        match partitions.is_empty() {
-            true => Ok(ProcessorPtr::create(Box::new(FuseTableSource {
-                ctx,
-                output,
-                scan_progress,
-                state: State::Finish,
-                output_reader,
-                prewhere_reader,
-                prewhere_filter,
-                remain_reader,
-            }))),
-            false => Ok(ProcessorPtr::create(Box::new(FuseTableSource {
-                ctx,
-                output,
-                scan_progress,
-                state: State::ReadDataPrewhere(partitions.remove(0)),
-                output_reader,
-                prewhere_reader,
-                prewhere_filter,
-                remain_reader,
-            }))),
-        }
+        Ok(ProcessorPtr::create(Box::new(FuseTableSource {
+            ctx,
+            output,
+            scan_progress,
+            state: State::ReadDataPrewhere(None),
+            output_reader,
+            prewhere_reader,
+            prewhere_filter,
+            remain_reader,
+        })))
     }
 
     fn generate_one_block(&mut self, block: DataBlock) -> Result<()> {
-        let mut partitions = self.ctx.try_get_partitions(1)?;
+        let new_part = self.ctx.try_get_part();
         // resort and prune columns
         let block = block.resort(self.output_reader.schema())?;
-        self.state = match partitions.is_empty() {
-            true => State::Generated(None, block),
-            false => State::Generated(Some(partitions.remove(0)), block),
-        };
+        self.state = State::Generated(new_part, block);
         Ok(())
     }
 
     fn generate_one_empty_block(&mut self) -> Result<()> {
-        let mut partitions = self.ctx.try_get_partitions(1)?;
-        self.state = match partitions.is_empty() {
-            true => State::Generated(
-                None,
-                DataBlock::empty_with_schema(self.output_reader.schema()),
-            ),
-            false => State::Generated(
-                Some(partitions.remove(0)),
-                DataBlock::empty_with_schema(self.output_reader.schema()),
-            ),
-        };
+        let schema = self.output_reader.schema();
+        let new_part = self.ctx.try_get_part();
+        self.state = Generated(new_part, DataBlock::empty_with_schema(schema));
         Ok(())
     }
 }
 
 #[async_trait::async_trait]
 impl Processor for FuseTableSource {
-    fn name(&self) -> &'static str {
-        "FuseEngineSource"
+    fn name(&self) -> String {
+        "FuseEngineSource".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -250,6 +259,13 @@ impl Processor for FuseTableSource {
     }
 
     fn event(&mut self) -> Result<Event> {
+        if matches!(self.state, State::ReadDataPrewhere(None)) {
+            self.state = match self.ctx.try_get_part() {
+                None => State::Finish,
+                Some(part) => State::ReadDataPrewhere(Some(part)),
+            }
+        }
+
         if matches!(self.state, State::Finish) {
             self.output.finish();
             return Ok(Event::Finished);
@@ -267,7 +283,7 @@ impl Processor for FuseTableSource {
             if let Generated(part, data_block) = std::mem::replace(&mut self.state, State::Finish) {
                 self.state = match part {
                     None => State::Finish,
-                    Some(part) => State::ReadDataPrewhere(part),
+                    Some(part) => State::ReadDataPrewhere(Some(part)),
                 };
 
                 self.output.push_data(Ok(data_block));
@@ -375,7 +391,7 @@ impl Processor for FuseTableSource {
 
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
-            State::ReadDataPrewhere(part) => {
+            State::ReadDataPrewhere(Some(part)) => {
                 let chunks = self.prewhere_reader.read_columns_data(part.clone()).await?;
 
                 if self.prewhere_filter.is_some() {

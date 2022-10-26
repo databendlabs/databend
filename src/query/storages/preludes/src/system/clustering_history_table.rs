@@ -12,151 +12,65 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
-use std::collections::VecDeque;
-use std::sync::Arc;
-
-use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_legacy_planners::Extras;
-use common_legacy_planners::Partitions;
-use common_legacy_planners::ReadDataSourcePlan;
-use common_legacy_planners::Statistics;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
-use common_streams::SendableDataBlockStream;
-use futures::StreamExt;
-use parking_lot::RwLock;
 
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::processor::ProcessorPtr;
-use crate::pipelines::processors::SyncSource;
-use crate::pipelines::processors::SyncSourcer;
-use crate::pipelines::Pipeline;
-use crate::pipelines::SourcePipeBuilder;
-use crate::sessions::TableContext;
-use crate::storages::Table;
+use crate::system::SystemLogElement;
+use crate::system::SystemLogQueue;
+use crate::system::SystemLogTable;
 
-pub struct ClusteringHistoryTable {
-    table_info: TableInfo,
-    max_rows: i32,
-    data: Arc<RwLock<VecDeque<DataBlock>>>,
+#[derive(Clone)]
+pub struct ClusteringHistoryLogElement {
+    pub start_time: i64,
+    pub end_time: i64,
+    pub database: String,
+    pub table: String,
+    pub reclustered_bytes: u64,
+    pub reclustered_rows: u64,
 }
 
-impl ClusteringHistoryTable {
-    pub fn create(table_id: u64, max_rows: i32) -> Self {
-        let schema = DataSchemaRefExt::create(vec![
+impl SystemLogElement for ClusteringHistoryLogElement {
+    const TABLE_NAME: &'static str = "clustering_history";
+
+    fn schema() -> DataSchemaRef {
+        DataSchemaRefExt::create(vec![
             DataField::new("start_time", TimestampType::new_impl(3)),
             DataField::new("end_time", TimestampType::new_impl(3)),
             DataField::new("database", Vu8::to_data_type()),
             DataField::new("table", Vu8::to_data_type()),
             DataField::new("reclustered_bytes", u64::to_data_type()),
             DataField::new("reclustered_rows", u64::to_data_type()),
-        ]);
-
-        let table_info = TableInfo {
-            desc: "'system'.'clustering_history'".to_string(),
-            name: "clustering_history".to_string(),
-            ident: TableIdent::new(table_id, 0),
-            meta: TableMeta {
-                schema,
-                engine: "SystemClusteringHistory".to_string(),
-                ..Default::default()
-            },
-        };
-
-        Self {
-            table_info,
-            max_rows,
-            data: Arc::new(RwLock::new(VecDeque::new())),
-        }
+        ])
     }
 
-    pub async fn append_data(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        mut stream: SendableDataBlockStream,
-    ) -> Result<()> {
-        while let Some(block) = stream.next().await {
-            let block = block?;
-            self.data.write().push_back(block);
-        }
-
-        // Check overflow.
-        let over = self.data.read().len() as i32 - self.max_rows;
-        if over > 0 {
-            for _x in 0..over {
-                self.data.write().pop_front();
-            }
-        }
-        Ok(())
+    fn fill_to_data_block(&self, columns: &mut Vec<Box<dyn MutableColumn>>) -> Result<()> {
+        let mut columns = columns.iter_mut();
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::Int64(self.start_time))?;
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::Int64(self.end_time))?;
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::String(self.database.as_bytes().to_vec()))?;
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::String(self.table.as_bytes().to_vec()))?;
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::UInt64(self.reclustered_bytes))?;
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::UInt64(self.reclustered_rows))
     }
 }
 
-#[async_trait::async_trait]
-impl Table for ClusteringHistoryTable {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn get_table_info(&self) -> &TableInfo {
-        &self.table_info
-    }
-
-    async fn read_partitions(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
-        Ok((Statistics::default(), vec![]))
-    }
-
-    fn read2(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        _: &ReadDataSourcePlan,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        // TODO: split data for multiple threads
-        let output = OutputPort::create();
-        let mut source_builder = SourcePipeBuilder::create();
-
-        source_builder.add_source(
-            output.clone(),
-            ClusteringHistorySource::create(ctx, output, &self.data.read())?,
-        );
-
-        pipeline.add_pipe(source_builder.finalize());
-        Ok(())
-    }
-
-    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: &str, _: bool) -> Result<()> {
-        let mut data = self.data.write();
-        *data = VecDeque::new();
-        Ok(())
-    }
-}
-
-struct ClusteringHistorySource {
-    data: VecDeque<DataBlock>,
-}
-
-impl ClusteringHistorySource {
-    pub fn create(
-        ctx: Arc<dyn TableContext>,
-        output: Arc<OutputPort>,
-        data: &VecDeque<DataBlock>,
-    ) -> Result<ProcessorPtr> {
-        SyncSourcer::create(ctx, output, ClusteringHistorySource { data: data.clone() })
-    }
-}
-
-impl SyncSource for ClusteringHistorySource {
-    const NAME: &'static str = "system.clustering_history";
-
-    fn generate(&mut self) -> Result<Option<DataBlock>> {
-        Ok(self.data.pop_front())
-    }
-}
+pub type ClusteringHistoryQueue = SystemLogQueue<ClusteringHistoryLogElement>;
+pub type ClusteringHistoryTable = SystemLogTable<ClusteringHistoryLogElement>;

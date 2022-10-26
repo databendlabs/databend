@@ -160,6 +160,10 @@ pub fn parenthesized_query(i: Input) -> IResult<Query> {
 pub fn join_operator(i: Input) -> IResult<JoinOperator> {
     alt((
         value(JoinOperator::Inner, rule! { INNER }),
+        value(JoinOperator::LeftSemi, rule! {LEFT? ~ SEMI}),
+        value(JoinOperator::RightSemi, rule! {RIGHT ~ SEMI}),
+        value(JoinOperator::LeftAnti, rule! {LEFT? ~ ANTI}),
+        value(JoinOperator::RightAnti, rule! {RIGHT ~ ANTI}),
         value(JoinOperator::LeftOuter, rule! { LEFT ~ OUTER? }),
         value(JoinOperator::RightOuter, rule! { RIGHT ~ OUTER? }),
         value(JoinOperator::FullOuter, rule! { FULL ~ OUTER? }),

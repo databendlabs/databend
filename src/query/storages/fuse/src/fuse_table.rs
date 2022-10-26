@@ -26,16 +26,19 @@ use common_fuse_meta::meta::ClusterKey;
 use common_fuse_meta::meta::Statistics as FuseStatistics;
 use common_fuse_meta::meta::TableSnapshot;
 use common_fuse_meta::meta::Versioned;
+use common_legacy_expression::LegacyExpression;
 use common_legacy_parser::ExpressionParser;
 use common_legacy_planners::DeletePlan;
-use common_legacy_planners::Expression;
 use common_legacy_planners::Extras;
 use common_legacy_planners::Partitions;
 use common_legacy_planners::ReadDataSourcePlan;
 use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
+use common_storage::init_operator;
+use common_storage::StorageOperator;
 use common_storages_util::storage_context::StorageContext;
 use common_storages_util::table_storage_prefix::table_storage_prefix;
+use opendal::Operator;
 use uuid::Uuid;
 
 use crate::io::BlockCompactor;
@@ -59,9 +62,11 @@ pub struct FuseTable {
     pub(crate) table_info: TableInfo,
     pub(crate) meta_location_generator: TableMetaLocationGenerator,
 
-    pub(crate) cluster_keys: Vec<Expression>,
+    pub(crate) cluster_keys: Vec<LegacyExpression>,
     pub(crate) cluster_key_meta: Option<ClusterKey>,
     pub(crate) read_only: bool,
+
+    pub(crate) operator: Operator,
 }
 
 impl FuseTable {
@@ -77,6 +82,14 @@ impl FuseTable {
         if let Some((_, order)) = &cluster_key_meta {
             cluster_keys = ExpressionParser::parse_exprs(order)?;
         }
+        let storage_params = table_info.meta.storage_params.clone();
+        let operator = match storage_params {
+            Some(sp) => init_operator(&sp)?,
+            None => {
+                let op = &*(StorageOperator::instance());
+                op.clone()
+            }
+        };
 
         Ok(Box::new(FuseTable {
             table_info,
@@ -84,6 +97,7 @@ impl FuseTable {
             cluster_key_meta,
             meta_location_generator: TableMetaLocationGenerator::with_prefix(storage_prefix),
             read_only,
+            operator,
         }))
     }
 
@@ -205,7 +219,7 @@ impl Table for FuseTable {
         true
     }
 
-    fn cluster_keys(&self) -> Vec<Expression> {
+    fn cluster_keys(&self) -> Vec<LegacyExpression> {
         self.cluster_keys.clone()
     }
 
@@ -216,7 +230,6 @@ impl Table for FuseTable {
     async fn alter_table_cluster_keys(
         &self,
         ctx: Arc<dyn TableContext>,
-        catalog_name: &str,
         cluster_key_str: String,
     ) -> Result<()> {
         let mut new_table_meta = self.get_table_info().meta.clone();
@@ -249,19 +262,15 @@ impl Table for FuseTable {
 
         FuseTable::commit_to_meta_server(
             ctx.as_ref(),
-            catalog_name,
             &table_info,
             &self.meta_location_generator,
             new_snapshot,
+            &self.operator,
         )
         .await
     }
 
-    async fn drop_table_cluster_keys(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        catalog_name: &str,
-    ) -> Result<()> {
+    async fn drop_table_cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
         if self.cluster_key_meta.is_none() {
             return Ok(());
         }
@@ -297,10 +306,10 @@ impl Table for FuseTable {
 
         FuseTable::commit_to_meta_server(
             ctx.as_ref(),
-            catalog_name,
             &table_info,
             &self.meta_location_generator,
             new_snapshot,
+            &self.operator,
         )
         .await
     }
@@ -315,7 +324,7 @@ impl Table for FuseTable {
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_read2", skip(self, ctx, pipeline), fields(ctx.id = ctx.get_id().as_str()))]
-    fn read2(
+    fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
         plan: &ReadDataSourcePlan,
@@ -324,7 +333,7 @@ impl Table for FuseTable {
         self.do_read2(ctx, plan, pipeline)
     }
 
-    fn append2(
+    fn append_data(
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
@@ -338,7 +347,6 @@ impl Table for FuseTable {
     async fn commit_insertion(
         &self,
         ctx: Arc<dyn TableContext>,
-        catalog_name: &str,
         operations: Vec<DataBlock>,
         overwrite: bool,
     ) -> Result<()> {
@@ -348,19 +356,13 @@ impl Table for FuseTable {
             .iter()
             .map(AppendOperationLogEntry::try_from)
             .collect::<Result<Vec<AppendOperationLogEntry>>>()?;
-        self.do_commit(ctx, catalog_name, append_log_entries, overwrite)
-            .await
+        self.do_commit(ctx, append_log_entries, overwrite).await
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_truncate", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
-    async fn truncate(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        catalog_name: &str,
-        purge: bool,
-    ) -> Result<()> {
+    async fn truncate(&self, ctx: Arc<dyn TableContext>, purge: bool) -> Result<()> {
         self.check_mutable()?;
-        self.do_truncate(ctx, purge, catalog_name).await
+        self.do_truncate(ctx, purge).await
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_optimize", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
@@ -403,19 +405,17 @@ impl Table for FuseTable {
     async fn compact(
         &self,
         ctx: Arc<dyn TableContext>,
-        catalog: String,
         pipeline: &mut Pipeline,
     ) -> Result<Option<Arc<dyn TableMutator>>> {
-        self.do_compact(ctx, catalog, pipeline).await
+        self.do_compact(ctx, pipeline).await
     }
 
     async fn recluster(
         &self,
         ctx: Arc<dyn TableContext>,
-        catalog: String,
         pipeline: &mut Pipeline,
         push_downs: Option<Extras>,
     ) -> Result<Option<Arc<dyn TableMutator>>> {
-        self.do_recluster(ctx, catalog, pipeline, push_downs).await
+        self.do_recluster(ctx, pipeline, push_downs).await
     }
 }

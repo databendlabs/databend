@@ -45,7 +45,6 @@ impl FuseTable {
     pub(crate) async fn do_recluster(
         &self,
         ctx: Arc<dyn TableContext>,
-        catalog: String,
         pipeline: &mut Pipeline,
         push_downs: Option<Extras>,
     ) -> Result<Option<Arc<dyn TableMutator>>> {
@@ -62,9 +61,8 @@ impl FuseTable {
         };
 
         let schema = self.table_info.schema();
-        let block_metas = BlockPruner::new(snapshot.clone())
-            .prune(&ctx, schema, &push_downs)
-            .await?;
+        let segments_locations = snapshot.segments.clone();
+        let block_metas = BlockPruner::prune(&ctx, schema, &push_downs, segments_locations).await?;
 
         let default_cluster_key_id = self.cluster_key_meta.clone().unwrap().0;
         let mut blocks_map: BTreeMap<i32, Vec<(usize, BlockMeta)>> = BTreeMap::new();
@@ -99,6 +97,7 @@ impl FuseTable {
             threshold,
             block_compactor.clone(),
             blocks_map,
+            self.operator.clone(),
         )?;
 
         let need_recluster = mutator.blocks_select().await?;
@@ -107,8 +106,9 @@ impl FuseTable {
         }
 
         let partitions_total = mutator.partitions_total();
-        let (statistics, parts) = self.read_partitions_with_metas(
+        let (statistics, parts) = Self::read_partitions_with_metas(
             ctx.clone(),
+            self.table_info.schema(),
             None,
             mutator.selected_blocks(),
             partitions_total,
@@ -116,7 +116,7 @@ impl FuseTable {
         let table_info = self.get_table_info();
         let description = statistics.get_description(table_info);
         let plan = ReadDataSourcePlan {
-            catalog,
+            catalog: table_info.catalog().to_string(),
             source_info: SourceInfo::TableSource(table_info.clone()),
             scan_fields: None,
             parts,
@@ -174,7 +174,7 @@ impl FuseTable {
             TransformCompact::try_create(
                 transform_input_port,
                 transform_output_port,
-                block_compactor.to_compactor(),
+                block_compactor.to_compactor(true),
             )
         })?;
 

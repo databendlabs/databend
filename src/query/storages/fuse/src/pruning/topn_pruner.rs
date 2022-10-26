@@ -17,16 +17,16 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::ColumnStatistics;
-use common_legacy_planners::Expression;
+use common_legacy_expression::LegacyExpression;
 
 pub(crate) struct TopNPrunner {
     schema: DataSchemaRef,
-    sort: Vec<Expression>,
+    sort: Vec<LegacyExpression>,
     limit: usize,
 }
 
 impl TopNPrunner {
-    pub(crate) fn new(schema: DataSchemaRef, sort: Vec<Expression>, limit: usize) -> Self {
+    pub(crate) fn new(schema: DataSchemaRef, sort: Vec<LegacyExpression>, limit: usize) -> Self {
         Self {
             schema,
             sort,
@@ -46,7 +46,7 @@ impl TopNPrunner {
         }
 
         let (sort, asc, nulls_first) = match &self.sort[0] {
-            Expression::Sort {
+            LegacyExpression::Sort {
                 expr,
                 asc,
                 nulls_first,
@@ -57,7 +57,7 @@ impl TopNPrunner {
 
         // Currently, we only support topn on single-column sort.
         // TODO: support monadic + multi expression + order by cluster key sort.
-        let column = if let Expression::Column(c) = sort.as_ref() {
+        let column = if let LegacyExpression::Column(c) = sort.as_ref() {
             c
         } else {
             return Ok(metas);

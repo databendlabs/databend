@@ -111,6 +111,21 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
+    let update = map(
+        rule! {
+            UPDATE ~ #table_reference_only
+            ~ SET ~ ^#comma_separated_list1(update_expr)
+            ~ ( WHERE ~ ^#expr )?
+        },
+        |(_, table, _, update_list, opt_selection)| {
+            Statement::Update(UpdateStmt {
+                table,
+                update_list,
+                selection: opt_selection.map(|(_, selection)| selection),
+            })
+        },
+    );
+
     let show_settings = map(
         rule! {
             SHOW ~ SETTINGS ~ (LIKE ~ #literal_string)?
@@ -312,6 +327,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             ~ #peroid_separated_idents_1_to_3
             ~ #create_table_source?
             ~ ( #engine )?
+            ~ ( #uri_location )?
             ~ ( CLUSTER ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" )?
             ~ ( #table_option )?
             ~ ( AS ~ ^#query )?
@@ -324,6 +340,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             (catalog, database, table),
             source,
             engine,
+            uri_location,
             opt_cluster_by,
             opt_table_options,
             opt_as_query,
@@ -335,6 +352,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 table,
                 source,
                 engine,
+                uri_location,
                 cluster_by: opt_cluster_by
                     .map(|(_, _, _, exprs, _)| exprs)
                     .unwrap_or_default(),
@@ -741,6 +759,8 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             ~ ( FILE_FORMAT ~ "=" ~ #options)?
             ~ ( VALIDATION_MODE ~ "=" ~ #literal_string)?
             ~ ( SIZE_LIMIT ~ "=" ~ #literal_u64)?
+            ~ ( MAX_FILE_SIZE ~ "=" ~ #literal_u64)?
+            ~ ( SINGLE ~ "=" ~ #literal_bool)?
             ~ ( PURGE ~ "=" ~ #literal_bool)?
             ~ ( FORCE ~ "=" ~ #literal_bool)?
         },
@@ -755,6 +775,8 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             file_format,
             validation_mode,
             size_limit,
+            max_file_size,
+            single,
             purge,
             force,
         )| {
@@ -766,6 +788,8 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 file_format: file_format.map(|v| v.2).unwrap_or_default(),
                 validation_mode: validation_mode.map(|v| v.2).unwrap_or_default(),
                 size_limit: size_limit.map(|v| v.2).unwrap_or_default() as usize,
+                max_file_size: max_file_size.map(|v| v.2).unwrap_or_default() as usize,
+                single: single.map(|v| v.2).unwrap_or_default(),
                 purge: purge.map(|v| v.2).unwrap_or_default(),
                 force: force.map(|v| v.2).unwrap_or_default(),
             })
@@ -884,6 +908,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
             | #insert : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
             | #delete : "`DELETE FROM <table> [WHERE ...]`"
+            | #update : "`UPDATE <table> SET <column> = <expr> [, <column> = <expr> , ... ] [WHERE ...]`"
             | #show_settings : "`SHOW SETTINGS [<show_limit>]`"
             | #show_stages : "`SHOW STAGES`"
             | #show_engines : "`SHOW ENGINES`"
@@ -995,16 +1020,17 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
         rule! {
             FORMAT ~ #ident ~ #rest_str
         },
-        |(_, format, rest_str)| InsertSource::Streaming {
+        |(_, format, (rest_str, start))| InsertSource::Streaming {
             format: format.name,
             rest_str,
+            start,
         },
     );
     let values = map(
         rule! {
             VALUES ~ #rest_str
         },
-        |(_, rest_str)| InsertSource::Values { rest_str },
+        |(_, (rest_str, _))| InsertSource::Values { rest_str },
     );
     let query = map(query, |query| InsertSource::Select {
         query: Box::new(query),
@@ -1018,13 +1044,16 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
 }
 
 #[allow(clippy::needless_lifetimes)]
-pub fn rest_str<'a>(i: Input<'a>) -> IResult<&'a str> {
+pub fn rest_str<'a>(i: Input<'a>) -> IResult<(&'a str, usize)> {
     // It's safe to unwrap because input must contain EOI.
     let first_token = i.0.first().unwrap();
     let last_token = i.0.last().unwrap();
     Ok((
         i.slice((i.len() - 1)..),
-        &first_token.source[first_token.span.start..last_token.span.end],
+        (
+            &first_token.source[first_token.span.start..last_token.span.end],
+            first_token.span.start,
+        ),
     ))
 }
 
@@ -1425,8 +1454,14 @@ pub fn uri_location(i: Input) -> IResult<UriLocation> {
                 protocol: parsed.scheme().to_string(),
                 name: parsed
                     .host_str()
-                    .ok_or(ErrorKind::Other("invalid uri location"))?
-                    .to_string(),
+                    .map(|hostname| {
+                        if let Some(port) = parsed.port() {
+                            format!("{}:{}", hostname, port)
+                        } else {
+                            hostname.to_string()
+                        }
+                    })
+                    .ok_or(ErrorKind::Other("invalid uri location"))?,
                 path: if parsed.path().is_empty() {
                     "/".to_string()
                 } else {
@@ -1636,4 +1671,10 @@ pub fn table_reference_only(i: Input) -> IResult<TableReference> {
             travel_point: None,
         },
     )(i)
+}
+
+pub fn update_expr(i: Input) -> IResult<UpdateExpr> {
+    map(rule! { ( #ident ~ "=" ~ ^#expr ) }, |(name, _, expr)| {
+        UpdateExpr { name, expr }
+    })(i)
 }

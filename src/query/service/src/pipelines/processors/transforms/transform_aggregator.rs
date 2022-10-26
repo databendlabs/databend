@@ -40,7 +40,7 @@ impl TransformAggregator {
     ) -> Result<ProcessorPtr> {
         let aggregator_params = transform_params.aggregator_params;
 
-        if aggregator_params.group_columns_name.is_empty() {
+        if aggregator_params.group_columns.is_empty() {
             return AggregatorTransform::create(
                 input_port,
                 output_port,
@@ -144,7 +144,7 @@ impl TransformAggregator {
     ) -> Result<ProcessorPtr> {
         let aggregator_params = transform_params.aggregator_params;
 
-        if aggregator_params.group_columns_name.is_empty() {
+        if aggregator_params.group_columns.is_empty() {
             return AggregatorTransform::create(
                 input_port,
                 output_port,
@@ -288,8 +288,8 @@ impl<TAggregator: Aggregator + 'static> AggregatorTransform<TAggregator> {
 }
 
 impl<TAggregator: Aggregator + 'static> Processor for AggregatorTransform<TAggregator> {
-    fn name(&self) -> &'static str {
-        TAggregator::NAME
+    fn name(&self) -> String {
+        TAggregator::NAME.to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

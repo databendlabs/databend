@@ -25,7 +25,6 @@ use super::logical_get::LogicalGet;
 use super::logical_join::LogicalInnerJoin;
 use super::pattern::PatternPlan;
 use super::physical_scan::PhysicalScan;
-use super::project::Project;
 use super::sort::Sort;
 use super::union_all::UnionAll;
 use crate::sql::optimizer::PhysicalProperty;
@@ -77,7 +76,6 @@ pub enum RelOp {
     PhysicalHashJoin,
 
     // Operators that are both logical and physical
-    Project,
     EvalScalar,
     Filter,
     Aggregate,
@@ -100,7 +98,6 @@ pub enum RelOperator {
     PhysicalScan(PhysicalScan),
     PhysicalHashJoin(PhysicalHashJoin),
 
-    Project(Project),
     EvalScalar(EvalScalar),
     Filter(Filter),
     Aggregate(Aggregate),
@@ -120,7 +117,6 @@ impl Operator for RelOperator {
             RelOperator::LogicalInnerJoin(rel_op) => rel_op.rel_op(),
             RelOperator::PhysicalScan(rel_op) => rel_op.rel_op(),
             RelOperator::PhysicalHashJoin(rel_op) => rel_op.rel_op(),
-            RelOperator::Project(rel_op) => rel_op.rel_op(),
             RelOperator::EvalScalar(rel_op) => rel_op.rel_op(),
             RelOperator::Filter(rel_op) => rel_op.rel_op(),
             RelOperator::Aggregate(rel_op) => rel_op.rel_op(),
@@ -139,7 +135,6 @@ impl Operator for RelOperator {
             RelOperator::LogicalInnerJoin(rel_op) => rel_op.is_physical(),
             RelOperator::PhysicalScan(rel_op) => rel_op.is_physical(),
             RelOperator::PhysicalHashJoin(rel_op) => rel_op.is_physical(),
-            RelOperator::Project(rel_op) => rel_op.is_physical(),
             RelOperator::EvalScalar(rel_op) => rel_op.is_physical(),
             RelOperator::Filter(rel_op) => rel_op.is_physical(),
             RelOperator::Aggregate(rel_op) => rel_op.is_physical(),
@@ -158,7 +153,6 @@ impl Operator for RelOperator {
             RelOperator::LogicalInnerJoin(rel_op) => rel_op.is_logical(),
             RelOperator::PhysicalScan(rel_op) => rel_op.is_logical(),
             RelOperator::PhysicalHashJoin(rel_op) => rel_op.is_logical(),
-            RelOperator::Project(rel_op) => rel_op.is_logical(),
             RelOperator::EvalScalar(rel_op) => rel_op.is_logical(),
             RelOperator::Filter(rel_op) => rel_op.is_logical(),
             RelOperator::Aggregate(rel_op) => rel_op.is_logical(),
@@ -177,7 +171,6 @@ impl Operator for RelOperator {
             RelOperator::LogicalInnerJoin(rel_op) => rel_op.as_logical(),
             RelOperator::PhysicalScan(rel_op) => rel_op.as_logical(),
             RelOperator::PhysicalHashJoin(rel_op) => rel_op.as_logical(),
-            RelOperator::Project(rel_op) => rel_op.as_logical(),
             RelOperator::EvalScalar(rel_op) => rel_op.as_logical(),
             RelOperator::Filter(rel_op) => rel_op.as_logical(),
             RelOperator::Aggregate(rel_op) => rel_op.as_logical(),
@@ -196,7 +189,6 @@ impl Operator for RelOperator {
             RelOperator::LogicalInnerJoin(rel_op) => rel_op.as_physical(),
             RelOperator::PhysicalScan(rel_op) => rel_op.as_physical(),
             RelOperator::PhysicalHashJoin(rel_op) => rel_op.as_physical(),
-            RelOperator::Project(rel_op) => rel_op.as_physical(),
             RelOperator::EvalScalar(rel_op) => rel_op.as_physical(),
             RelOperator::Filter(rel_op) => rel_op.as_physical(),
             RelOperator::Aggregate(rel_op) => rel_op.as_physical(),
@@ -282,25 +274,6 @@ impl TryFrom<RelOperator> for PhysicalHashJoin {
         } else {
             Err(ErrorCode::LogicalError(
                 "Cannot downcast RelOperator to PhysicalHashJoin",
-            ))
-        }
-    }
-}
-
-impl From<Project> for RelOperator {
-    fn from(v: Project) -> Self {
-        Self::Project(v)
-    }
-}
-
-impl TryFrom<RelOperator> for Project {
-    type Error = ErrorCode;
-    fn try_from(value: RelOperator) -> Result<Self> {
-        if let RelOperator::Project(value) = value {
-            Ok(value)
-        } else {
-            Err(ErrorCode::LogicalError(
-                "Cannot downcast RelOperator to Project",
             ))
         }
     }

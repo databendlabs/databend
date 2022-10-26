@@ -15,6 +15,7 @@
 use common_base::base::tokio;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_legacy_expression::*;
 use common_legacy_planners::*;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::SessionManager;
@@ -32,7 +33,7 @@ use crate::tests::TestGlobalServices;
 
 #[tokio::test]
 async fn test_number_table() -> Result<()> {
-    let tbl_args = Some(vec![Expression::create_literal(DataValue::UInt64(8))]);
+    let tbl_args = Some(vec![LegacyExpression::create_literal(DataValue::UInt64(8))]);
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let table = NumbersTable::create("system", "numbers_mt", 1, tbl_args)?;
 
@@ -43,7 +44,10 @@ async fn test_number_table() -> Result<()> {
         .await?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
 
-    let stream = table.as_table().read(ctx, &source_plan).await?;
+    let stream = table
+        .as_table()
+        .read_data_block_stream(ctx, &source_plan)
+        .await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 1);

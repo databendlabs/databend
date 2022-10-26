@@ -67,9 +67,7 @@ impl Interpreter for DropTableInterpreter {
             // if `plan.all`, truncate, then purge the historical data
             if self.plan.all {
                 // errors of truncation are ignored
-                let _ = tbl
-                    .truncate(self.ctx.clone(), &self.plan.catalog, true)
-                    .await;
+                let _ = tbl.truncate(self.ctx.clone(), true).await;
             }
         }
 

@@ -17,4 +17,4 @@ common-exception = { path = "../../../common/exception" }
 common-pipeline-core = { path = "../core" }
 
 async-channel = "1.7.1"
-async-trait = { version = "0.1.0", package = "async-trait-fn" }
+async-trait = { version = "0.1.57", package = "async-trait-fn" }

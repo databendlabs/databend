@@ -27,6 +27,7 @@ use common_hashtable::HashMapKind;
 use common_hashtable::HashMapKindIter;
 use common_hashtable::HashtableEntry;
 use common_hashtable::HashtableKeyable;
+use common_hashtable::KeysRef;
 use common_hashtable::UnsizedHashMap;
 use common_hashtable::UnsizedHashMapIter;
 use common_hashtable::UnsizedHashtableEntryMutRef;
@@ -37,7 +38,6 @@ use crate::pipelines::processors::transforms::group_by::aggregator_state_entity:
 use crate::pipelines::processors::transforms::group_by::aggregator_state_entity::StateEntityMutRef;
 use crate::pipelines::processors::transforms::group_by::aggregator_state_entity::StateEntityRef;
 use crate::pipelines::processors::transforms::group_by::aggregator_state_iterator::ShortFixedKeysStateIterator;
-use crate::pipelines::processors::transforms::group_by::AggregatorParams;
 use crate::pipelines::processors::AggregatorParams as NewAggregatorParams;
 
 /// Aggregate state of the SELECT query, destroy when group by is completed.
@@ -64,19 +64,7 @@ pub trait AggregatorState<Method: HashMethod>: Sync + Send {
 
     fn alloc_place(&self, layout: Layout) -> StateAddr;
 
-    fn alloc_layout(&self, params: &AggregatorParams) -> Option<StateAddr> {
-        params.layout?;
-        let place: StateAddr = self.alloc_place(params.layout.unwrap());
-
-        for idx in 0..params.offsets_aggregate_states.len() {
-            let aggr_state = params.offsets_aggregate_states[idx];
-            let aggr_state_place = place.next(aggr_state);
-            params.aggregate_functions[idx].init_state(aggr_state_place);
-        }
-        Some(place)
-    }
-
-    fn alloc_layout2(&self, params: &NewAggregatorParams) -> Option<StateAddr> {
+    fn alloc_layout(&self, params: &NewAggregatorParams) -> Option<StateAddr> {
         params.layout?;
         let place: StateAddr = self.alloc_place(params.layout.unwrap());
 

@@ -23,6 +23,7 @@ use futures::FutureExt;
 use petgraph::graph::node_index;
 use petgraph::prelude::NodeIndex;
 
+#[derive(Debug)]
 pub enum Event {
     NeedData,
     NeedConsume,
@@ -34,12 +35,15 @@ pub enum Event {
 // The design is inspired by ClickHouse processors
 #[async_trait::async_trait]
 pub trait Processor: Send {
-    fn name(&self) -> &'static str;
+    fn name(&self) -> String;
 
     /// Reference used for downcast.
     fn as_any(&mut self) -> &mut dyn Any;
 
     fn event(&mut self) -> Result<Event>;
+
+    // When the synchronization task needs to run for a long time, the interrupt function needs to be implemented.
+    fn interrupt(&self) {}
 
     // Synchronous work.
     fn process(&mut self) -> Result<()> {
@@ -86,13 +90,18 @@ impl ProcessorPtr {
     }
 
     /// # Safety
-    pub unsafe fn name(&self) -> &'static str {
+    pub unsafe fn name(&self) -> String {
         (*self.inner.get()).name()
     }
 
     /// # Safety
     pub unsafe fn event(&self) -> Result<Event> {
         (*self.inner.get()).event()
+    }
+
+    /// # Safety
+    pub unsafe fn interrupt(&self) {
+        (*self.inner.get()).interrupt()
     }
 
     /// # Safety

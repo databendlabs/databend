@@ -187,7 +187,7 @@ impl Table for MemoryTable {
         Ok((statistics, parts))
     }
 
-    fn read2(
+    fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
         plan: &ReadDataSourcePlan,
@@ -214,7 +214,12 @@ impl Table for MemoryTable {
         Ok(())
     }
 
-    fn append2(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline, _: bool) -> Result<()> {
+    fn append_data(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+        _: bool,
+    ) -> Result<()> {
         let mut sink_pipeline_builder = SinkPipeBuilder::create();
         for _ in 0..pipeline.output_len() {
             let input_port = InputPort::create();
@@ -230,7 +235,6 @@ impl Table for MemoryTable {
     async fn commit_insertion(
         &self,
         ctx: Arc<dyn TableContext>,
-        _catalog_name: &str,
         operations: Vec<DataBlock>,
         overwrite: bool,
     ) -> Result<()> {
@@ -251,7 +255,7 @@ impl Table for MemoryTable {
         Ok(())
     }
 
-    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: &str, _: bool) -> Result<()> {
+    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: bool) -> Result<()> {
         let mut blocks = self.blocks.write();
         blocks.clear();
         Ok(())

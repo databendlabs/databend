@@ -13,27 +13,30 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::str::FromStr;
+use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_formats::output_format::OutputFormatType;
 use common_legacy_planners::Extras;
 use common_legacy_planners::Partitions;
 use common_legacy_planners::ReadDataSourcePlan;
 use common_legacy_planners::StageTableInfo;
 use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
+use common_meta_types::StageType;
+use common_meta_types::UserStageInfo;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::SinkPipeBuilder;
 use common_pipeline_sources::processors::sources::input_formats::InputContext;
+use common_storage::init_operator;
+use opendal::layers::SubdirLayer;
+use opendal::Operator;
 use parking_lot::Mutex;
 use tracing::info;
 
-use super::StageSourceHelper;
-use crate::pipelines::processors::ContextSink;
+use super::stage_table_sink::StageTableSink;
 use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::Pipeline;
 use crate::sessions::TableContext;
@@ -63,6 +66,17 @@ impl StageTable {
         let guard = self.input_context.lock();
         guard.clone()
     }
+
+    /// Get operator with correctly prefix.
+    pub fn get_op(ctx: &Arc<dyn TableContext>, stage: &UserStageInfo) -> Result<Operator> {
+        if stage.stage_type == StageType::Internal {
+            let prefix = format!("/stage/{}/", stage.stage_name);
+            ctx.get_storage_operator()
+                .map(|op| op.layer(SubdirLayer::new(&prefix)))
+        } else {
+            Ok(init_operator(&stage.stage_params.storage)?)
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -81,7 +95,7 @@ impl Table for StageTable {
         ctx: Arc<dyn TableContext>,
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
-        let operator = StageSourceHelper::get_op(&ctx, &self.table_info.stage_info).await?;
+        let operator = StageTable::get_op(&ctx, &self.table_info.stage_info)?;
         let input_ctx = Arc::new(
             InputContext::try_create_from_copy(
                 operator,
@@ -94,12 +108,13 @@ impl Table for StageTable {
             )
             .await?,
         );
+        info!("copy into {:?}", input_ctx);
         let mut guard = self.input_context.lock();
         *guard = Some(input_ctx);
         Ok((Statistics::default(), vec![]))
     }
 
-    fn read2(
+    fn read_data(
         &self,
         _ctx: Arc<dyn TableContext>,
         _plan: &ReadDataSourcePlan,
@@ -123,15 +138,53 @@ impl Table for StageTable {
         Ok(())
     }
 
-    fn append2(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline, _: bool) -> Result<()> {
+    fn append_data(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+        _: bool,
+    ) -> Result<()> {
         let mut sink_pipeline_builder = SinkPipeBuilder::create();
-        for _ in 0..pipeline.output_len() {
-            let input_port = InputPort::create();
-            sink_pipeline_builder.add_sink(
-                input_port.clone(),
-                ContextSink::create(input_port, ctx.clone()),
-            );
+        let single = self.table_info.stage_info.copy_options.single;
+        let op = StageTable::get_op(&ctx, &self.table_info.stage_info)?;
+
+        let uuid = uuid::Uuid::new_v4().to_string();
+        let group_id = AtomicUsize::new(0);
+
+        // parallel compact unload, the partial block will flush into next operator
+        if !single && pipeline.output_len() > 1 {
+            pipeline.add_transform(|input, output| {
+                let gid = group_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                StageTableSink::try_create(
+                    input,
+                    ctx.clone(),
+                    self.table_info.clone(),
+                    op.clone(),
+                    Some(output),
+                    uuid.clone(),
+                    gid,
+                )
+            })?;
         }
+
+        // final compact unload
+        pipeline.resize(1)?;
+        let input_port = InputPort::create();
+
+        let gid = group_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        sink_pipeline_builder.add_sink(
+            input_port.clone(),
+            StageTableSink::try_create(
+                input_port,
+                ctx,
+                self.table_info.clone(),
+                op,
+                None,
+                uuid,
+                gid,
+            )?,
+        );
+
         pipeline.add_pipe(sink_pipeline_builder.finalize());
         Ok(())
     }
@@ -139,69 +192,15 @@ impl Table for StageTable {
     // TODO use tmp file_name & rename to have atomic commit
     async fn commit_insertion(
         &self,
-        ctx: Arc<dyn TableContext>,
-        _catalog_name: &str,
-        operations: Vec<DataBlock>,
+        _ctx: Arc<dyn TableContext>,
+        _operations: Vec<DataBlock>,
         _overwrite: bool,
     ) -> Result<()> {
-        let format_name = format!(
-            "{:?}",
-            self.table_info.stage_info.file_format_options.format
-        );
-        let path = format!(
-            "{}{}.{}",
-            self.table_info.path,
-            uuid::Uuid::new_v4(),
-            format_name.to_ascii_lowercase()
-        );
-        info!(
-            "try commit stage table {} to file {path}",
-            self.table_info.stage_info.stage_name
-        );
-
-        let op = StageSourceHelper::get_op(&ctx, &self.table_info.stage_info).await?;
-
-        let fmt = OutputFormatType::from_str(format_name.as_str())?;
-        let mut format_settings = ctx.get_format_settings()?;
-
-        let format_options = &self.table_info.stage_info.file_format_options;
-        {
-            format_settings.skip_header = format_options.skip_header;
-            if !format_options.field_delimiter.is_empty() {
-                format_settings.field_delimiter =
-                    format_options.field_delimiter.as_bytes().to_vec();
-            }
-            if !format_options.record_delimiter.is_empty() {
-                format_settings.record_delimiter =
-                    format_options.record_delimiter.as_bytes().to_vec();
-            }
-        }
-
-        let mut output_format = fmt.create_format(self.table_info.schema(), format_settings);
-
-        let prefix = output_format.serialize_prefix()?;
-        let written_bytes: usize = operations.iter().map(|b| b.memory_size()).sum();
-        let mut bytes = Vec::with_capacity(written_bytes + prefix.len());
-        bytes.extend_from_slice(&prefix);
-        for block in operations {
-            let bs = output_format.serialize_block(&block)?;
-            bytes.extend_from_slice(bs.as_slice());
-        }
-
-        let bs = output_format.finalize()?;
-        bytes.extend_from_slice(bs.as_slice());
-
-        ctx.get_dal_context()
-            .get_metrics()
-            .inc_write_bytes(bytes.len());
-
-        let object = op.object(&path);
-        object.write(bytes.as_slice()).await?;
         Ok(())
     }
 
     // Truncate the stage file.
-    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: &str, _: bool) -> Result<()> {
+    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: bool) -> Result<()> {
         Err(ErrorCode::UnImplement(
             "S3 external table truncate() unimplemented yet!",
         ))

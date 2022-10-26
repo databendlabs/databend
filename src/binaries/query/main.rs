@@ -25,7 +25,6 @@ use common_tracing::set_panic_hook;
 use databend_query::api::HttpService;
 use databend_query::api::RpcService;
 use databend_query::clusters::ClusterDiscovery;
-use databend_query::interpreters::AsyncInsertManager;
 use databend_query::metrics::MetricService;
 use databend_query::servers::HttpHandler;
 use databend_query::servers::HttpHandlerKind;
@@ -163,13 +162,6 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
             "Databend query has been registered:{:?} to metasrv:[{:?}].",
             conf.query.cluster_id, conf.meta.address
         );
-    }
-
-    // Async Insert Queue
-    {
-        let async_insert_queue = AsyncInsertManager::instance();
-        async_insert_queue.start().await;
-        info!("Databend async insert has been enabled.")
     }
 
     // Print information to users.

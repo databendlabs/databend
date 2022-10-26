@@ -16,15 +16,13 @@ explain select t1.a from t1 where a > 0;
 ----
 Exchange
 ├── exchange type: Merge
-└── Project
-    ├── columns: [a (#0)]
-    └── TableScan
-        ├── table: default.default.t1
-        ├── read rows: 0
-        ├── read bytes: 0
-        ├── partitions total: 0
-        ├── partitions scanned: 0
-        └── push downs: [filters: [(a > 0)], limit: NONE]
+└── TableScan
+    ├── table: default.default.t1
+    ├── read rows: 0
+    ├── read bytes: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    └── push downs: [filters: [(a > 0)], limit: NONE]
 
 statement query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a and t2.a > 5 and t1.a > 1);
@@ -92,37 +90,13 @@ statement query T
 explain raw select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a);
 
 ----
-Project
-├── projections: [a (#0),b (#1),a (#2),b (#3)]
-└── EvalScalar
-    ├── scalars: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
-    └── Filter
-        ├── filters: [((t1.a (#0) = t2.a (#2)) AND (t1.a (#0) > 3)) OR (t1.a (#0) = t2.a (#2))]
-        └── LogicalJoin: CROSS
-            ├── equi conditions: []
-            ├── other conditions: []
-            ├── LogicalGet
-            │   ├── table: default.default.t1
-            │   ├── filters: []
-            │   ├── order by: []
-            │   └── limit: NONE
-            └── LogicalGet
-                ├── table: default.default.t2
-                ├── filters: []
-                ├── order by: []
-                └── limit: NONE
-
-statement query T
-explain raw select * from t1 inner join t2 on t1.a = t2.a and t1.b = t2.b and t1.a > 2;
-
-----
-Project
-├── projections: [a (#0),b (#1),a (#2),b (#3)]
-└── EvalScalar
-    ├── scalars: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
-    └── LogicalJoin: INNER
-        ├── equi conditions: [(t1.a (#0) = t2.a (#2)) AND (t1.b (#1) = t2.b (#3))]
-        ├── other conditions: [t1.a (#0) > 2]
+EvalScalar
+├── scalars: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
+└── Filter
+    ├── filters: [((t1.a (#0) = t2.a (#2)) AND (t1.a (#0) > 3)) OR (t1.a (#0) = t2.a (#2))]
+    └── LogicalJoin: CROSS
+        ├── equi conditions: []
+        ├── other conditions: []
         ├── LogicalGet
         │   ├── table: default.default.t1
         │   ├── filters: []
@@ -134,8 +108,29 @@ Project
             ├── order by: []
             └── limit: NONE
 
+statement query T
+explain raw select * from t1 inner join t2 on t1.a = t2.a and t1.b = t2.b and t1.a > 2;
+
+----
+EvalScalar
+├── scalars: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
+└── LogicalJoin: INNER
+    ├── equi conditions: [(t1.a (#0) = t2.a (#2)) AND (t1.b (#1) = t2.b (#3))]
+    ├── other conditions: [t1.a (#0) > 2]
+    ├── LogicalGet
+    │   ├── table: default.default.t1
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── LogicalGet
+        ├── table: default.default.t2
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
 statement ok
 drop table t1;
 
 statement ok
 drop table t2;
+

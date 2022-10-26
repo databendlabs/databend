@@ -15,6 +15,8 @@
 #![feature(box_patterns)]
 #![feature(try_blocks)]
 
+mod convert;
+// TODO(andylokandy): migrate to crate funciton-v2
 mod expression;
 mod kernel;
 mod parser;

@@ -70,46 +70,44 @@ Limit
             ├── group by: [number]
             ├── aggregate functions: []
             └── Filter
-                ├── filters: [=(numbers.number (#0), CAST(if(is_not_null(count(*) (#4)), count(*) (#4), 0) AS BIGINT UNSIGNED))]
+                ├── filters: [=(t.number (#0), CAST(if(is_not_null(scalar_subquery_4 (#4)), scalar_subquery_4 (#4), 0) AS BIGINT UNSIGNED))]
                 └── HashJoin
                     ├── join type: SINGLE
-                    ├── build keys: [number (#6)]
-                    ├── probe keys: [numbers.number (#0)]
+                    ├── build keys: [subquery_6 (#6)]
+                    ├── probe keys: [subquery_0 (#0)]
                     ├── filters: []
-                    ├── Project(Build)
-                    │   ├── columns: [count(*) (#4), number (#6)]
-                    │   └── EvalScalar
-                    │       ├── expressions: [COUNT(*) (#5)]
-                    │       └── AggregateFinal
+                    ├── EvalScalar(Build)
+                    │   ├── expressions: [COUNT(*) (#5)]
+                    │   └── AggregateFinal
+                    │       ├── group by: [number]
+                    │       ├── aggregate functions: [count()]
+                    │       └── AggregatePartial
                     │           ├── group by: [number]
                     │           ├── aggregate functions: [count()]
-                    │           └── AggregatePartial
-                    │               ├── group by: [number]
-                    │               ├── aggregate functions: [count()]
-                    │               └── HashJoin
-                    │                   ├── join type: INNER
-                    │                   ├── build keys: [numbers.number (#2)]
-                    │                   ├── probe keys: [number (#6)]
+                    │           └── HashJoin
+                    │               ├── join type: INNER
+                    │               ├── build keys: [subquery_6 (#6)]
+                    │               ├── probe keys: [t2.number (#2)]
+                    │               ├── filters: []
+                    │               ├── TableScan(Build)
+                    │               │   ├── table: default.system.numbers
+                    │               │   ├── read rows: 1
+                    │               │   ├── read bytes: 8
+                    │               │   ├── partitions total: 1
+                    │               │   ├── partitions scanned: 1
+                    │               │   └── push downs: [filters: [], limit: NONE]
+                    │               └── HashJoin(Probe)
+                    │                   ├── join type: CROSS
+                    │                   ├── build keys: []
+                    │                   ├── probe keys: []
                     │                   ├── filters: []
-                    │                   ├── HashJoin(Build)
-                    │                   │   ├── join type: CROSS
-                    │                   │   ├── build keys: []
-                    │                   │   ├── probe keys: []
-                    │                   │   ├── filters: []
-                    │                   │   ├── TableScan(Build)
-                    │                   │   │   ├── table: default.system.numbers
-                    │                   │   │   ├── read rows: 1
-                    │                   │   │   ├── read bytes: 8
-                    │                   │   │   ├── partitions total: 1
-                    │                   │   │   ├── partitions scanned: 1
-                    │                   │   │   └── push downs: [filters: [], limit: NONE]
-                    │                   │   └── TableScan(Probe)
-                    │                   │       ├── table: default.system.numbers
-                    │                   │       ├── read rows: 1
-                    │                   │       ├── read bytes: 8
-                    │                   │       ├── partitions total: 1
-                    │                   │       ├── partitions scanned: 1
-                    │                   │       └── push downs: [filters: [], limit: NONE]
+                    │                   ├── TableScan(Build)
+                    │                   │   ├── table: default.system.numbers
+                    │                   │   ├── read rows: 1
+                    │                   │   ├── read bytes: 8
+                    │                   │   ├── partitions total: 1
+                    │                   │   ├── partitions scanned: 1
+                    │                   │   └── push downs: [filters: [], limit: NONE]
                     │                   └── TableScan(Probe)
                     │                       ├── table: default.system.numbers
                     │                       ├── read rows: 1
@@ -147,42 +145,38 @@ Limit
 └── Sort
     ├── sort keys: [c1 ASC NULLS LAST]
     └── HashJoin
-        ├── join type: LEFT OUTER
-        ├── build keys: [CAST(c (#5) AS BIGINT UNSIGNED NULL)]
-        ├── probe keys: [CAST(c1 (#1) AS BIGINT UNSIGNED NULL)]
+        ├── join type: RIGHT OUTER
+        ├── build keys: [CAST(t3.c1 (#1) AS BIGINT UNSIGNED NULL)]
+        ├── probe keys: [CAST(t4.c (#5) AS BIGINT UNSIGNED NULL)]
         ├── filters: []
-        ├── Project(Build)
-        │   ├── columns: [c (#5)]
-        │   └── EvalScalar
-        │       ├── expressions: [count(t.number) (#7)]
-        │       └── AggregateFinal
+        ├── EvalScalar(Build)
+        │   ├── expressions: [count(t1.number) (#3)]
+        │   └── AggregateFinal
+        │       ├── group by: [number]
+        │       ├── aggregate functions: [count(number)]
+        │       └── AggregatePartial
         │           ├── group by: [number]
         │           ├── aggregate functions: [count(number)]
-        │           └── AggregatePartial
-        │               ├── group by: [number]
-        │               ├── aggregate functions: [count(number)]
-        │               └── TableScan
-        │                   ├── table: default.system.numbers
-        │                   ├── read rows: 2
-        │                   ├── read bytes: 16
-        │                   ├── partitions total: 1
-        │                   ├── partitions scanned: 1
-        │                   └── push downs: [filters: [], limit: NONE]
-        └── Project(Probe)
-            ├── columns: [c1 (#1)]
-            └── EvalScalar
-                ├── expressions: [count(t1.number) (#3)]
-                └── AggregateFinal
+        │           └── TableScan
+        │               ├── table: default.system.numbers
+        │               ├── read rows: 1
+        │               ├── read bytes: 8
+        │               ├── partitions total: 1
+        │               ├── partitions scanned: 1
+        │               └── push downs: [filters: [], limit: NONE]
+        └── EvalScalar(Probe)
+            ├── expressions: [count(t.number) (#7)]
+            └── AggregateFinal
+                ├── group by: [number]
+                ├── aggregate functions: [count(number)]
+                └── AggregatePartial
                     ├── group by: [number]
                     ├── aggregate functions: [count(number)]
-                    └── AggregatePartial
-                        ├── group by: [number]
-                        ├── aggregate functions: [count(number)]
-                        └── TableScan
-                            ├── table: default.system.numbers
-                            ├── read rows: 1
-                            ├── read bytes: 8
-                            ├── partitions total: 1
-                            ├── partitions scanned: 1
-                            └── push downs: [filters: [], limit: NONE]
+                    └── TableScan
+                        ├── table: default.system.numbers
+                        ├── read rows: 2
+                        ├── read bytes: 16
+                        ├── partitions total: 1
+                        ├── partitions scanned: 1
+                        └── push downs: [filters: [], limit: NONE]
 

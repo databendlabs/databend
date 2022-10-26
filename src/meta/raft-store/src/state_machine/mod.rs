@@ -20,6 +20,7 @@ pub use sm::SnapshotKeyValue;
 pub use sm::StateMachine;
 pub use sm::StateMachineSubscriber;
 pub use snapshot::Snapshot;
+pub use snapshot_id::MetaSnapshotId;
 pub use state_machine_meta::StateMachineMetaKey;
 pub use state_machine_meta::StateMachineMetaValue;
 
@@ -28,6 +29,7 @@ pub mod log_meta;
 pub mod sm;
 mod sm_kv_api_impl;
 pub mod snapshot;
+mod snapshot_id;
 pub mod state_machine_meta;
 
 // will be accessed by other crate, can not cfg(test)

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 
 use async_recursion::async_recursion;
 use common_ast::ast::Expr;
@@ -31,6 +30,7 @@ use common_datavalues::type_coercion::compare_coercion;
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planner::IndexType;
 
 use crate::sql::binder::scalar_common::split_conjunctions;
 use crate::sql::binder::CteInfo;
@@ -44,7 +44,6 @@ use crate::sql::plans::CastExpr;
 use crate::sql::plans::EvalScalar;
 use crate::sql::plans::Filter;
 use crate::sql::plans::JoinType;
-use crate::sql::plans::Project;
 use crate::sql::plans::Scalar;
 use crate::sql::plans::ScalarItem;
 use crate::sql::plans::UnionAll;
@@ -286,9 +285,9 @@ impl<'a> Binder {
         op: &SetOperator,
         all: &bool,
     ) -> Result<(SExpr, BindContext)> {
-        let mut coercion_type = None;
         let (left_expr, left_bind_context) = self.bind_set_expr(bind_context, left, &[]).await?;
         let (right_expr, right_bind_context) = self.bind_set_expr(bind_context, right, &[]).await?;
+        let mut coercion_types = Vec::with_capacity(left_bind_context.columns.len());
         if left_bind_context.columns.len() != right_bind_context.columns.len() {
             return Err(ErrorCode::SemanticError(
                 "SetOperation must have the same number of columns",
@@ -302,7 +301,9 @@ impl<'a> Binder {
                 if left_col.data_type != right_col.data_type {
                     let data_type = compare_coercion(&left_col.data_type, &right_col.data_type)
                         .expect("SetOperation's types cannot be matched");
-                    coercion_type = Some(data_type);
+                    coercion_types.push(data_type);
+                } else {
+                    coercion_types.push(*left_col.data_type.clone());
                 }
             }
         }
@@ -318,7 +319,7 @@ impl<'a> Binder {
             (SetOperator::Union, true) => self.bind_union(
                 left_bind_context,
                 right_bind_context,
-                coercion_type,
+                coercion_types,
                 left_expr,
                 right_expr,
                 false,
@@ -326,7 +327,7 @@ impl<'a> Binder {
             (SetOperator::Union, false) => self.bind_union(
                 left_bind_context,
                 right_bind_context,
-                coercion_type,
+                coercion_types,
                 left_expr,
                 right_expr,
                 true,
@@ -341,23 +342,20 @@ impl<'a> Binder {
         &mut self,
         left_context: BindContext,
         right_context: BindContext,
-        coercion_type: Option<DataTypeImpl>,
+        coercion_types: Vec<DataTypeImpl>,
         left_expr: SExpr,
         right_expr: SExpr,
         distinct: bool,
     ) -> Result<(SExpr, BindContext)> {
-        let (new_bind_context, left_expr, right_expr) = if let Some(coercion_type) = coercion_type {
-            self.coercion_union_type(
-                left_context,
-                right_context,
-                left_expr,
-                right_expr,
-                coercion_type,
-            )?
-        } else {
-            (left_context, left_expr, right_expr)
-        };
-        let union_plan = UnionAll {};
+        let (new_bind_context, pairs, left_expr, right_expr) = self.coercion_union_type(
+            left_context,
+            right_context,
+            left_expr,
+            right_expr,
+            coercion_types,
+        )?;
+
+        let union_plan = UnionAll { pairs };
         let mut new_expr = SExpr::create_binary(union_plan.into(), left_expr, right_expr);
         if distinct {
             new_expr = self.bind_distinct(
@@ -382,7 +380,7 @@ impl<'a> Binder {
             right_context,
             left_expr,
             right_expr,
-            JoinType::Semi,
+            JoinType::LeftSemi,
         )
     }
 
@@ -398,7 +396,7 @@ impl<'a> Binder {
             right_context,
             left_expr,
             right_expr,
-            JoinType::Anti,
+            JoinType::LeftAnti,
         )
     }
 
@@ -448,28 +446,29 @@ impl<'a> Binder {
         Ok((s_expr, left_context))
     }
 
+    #[allow(clippy::type_complexity)]
     fn coercion_union_type(
         &self,
         left_bind_context: BindContext,
         right_bind_context: BindContext,
         mut left_expr: SExpr,
         mut right_expr: SExpr,
-        coercion_type: DataTypeImpl,
-    ) -> Result<(BindContext, SExpr, SExpr)> {
+        coercion_types: Vec<DataTypeImpl>,
+    ) -> Result<(BindContext, Vec<(IndexType, IndexType)>, SExpr, SExpr)> {
         let mut left_scalar_items = Vec::with_capacity(left_bind_context.columns.len());
         let mut right_scalar_items = Vec::with_capacity(right_bind_context.columns.len());
-        let mut left_project_column_set = HashSet::new();
-        let mut right_project_column_set = HashSet::new();
         let mut new_bind_context = BindContext::new();
-        for (left_col, right_col) in left_bind_context
+        let mut pairs = Vec::with_capacity(left_bind_context.columns.len());
+        for (idx, (left_col, right_col)) in left_bind_context
             .columns
             .iter()
             .zip(right_bind_context.columns.iter())
+            .enumerate()
         {
-            if left_col.data_type != coercion_type {
+            let left_index = if left_col.data_type != coercion_types[idx] {
                 let new_column_index = self.metadata.write().add_column(
                     left_col.column_name.clone(),
-                    coercion_type.clone(),
+                    coercion_types[idx].clone(),
                     None,
                     None,
                 );
@@ -478,7 +477,7 @@ impl<'a> Binder {
                     table_name: None,
                     column_name: left_col.column_name.clone(),
                     index: new_column_index,
-                    data_type: Box::new(coercion_type.clone()),
+                    data_type: Box::new(coercion_types[idx].clone()),
                     visibility: Visibility::Visible,
                 };
                 let left_coercion_expr = CastExpr {
@@ -489,22 +488,22 @@ impl<'a> Binder {
                         .into(),
                     ),
                     from_type: Box::new(*left_col.data_type.clone()),
-                    target_type: Box::new(coercion_type.clone()),
+                    target_type: Box::new(coercion_types[idx].clone()),
                 };
                 left_scalar_items.push(ScalarItem {
                     scalar: left_coercion_expr.into(),
                     index: new_column_index,
                 });
-                left_project_column_set.insert(new_column_index);
                 new_bind_context.add_column_binding(column_binding);
+                new_column_index
             } else {
-                left_project_column_set.insert(left_col.index);
                 new_bind_context.add_column_binding(left_col.clone());
-            }
-            if right_col.data_type != coercion_type {
+                left_col.index
+            };
+            let right_index = if right_col.data_type != coercion_types[idx] {
                 let new_column_index = self.metadata.write().add_column(
                     right_col.column_name.clone(),
-                    coercion_type.clone(),
+                    coercion_types[idx].clone(),
                     None,
                     None,
                 );
@@ -516,28 +515,22 @@ impl<'a> Binder {
                         .into(),
                     ),
                     from_type: Box::new(*right_col.data_type.clone()),
-                    target_type: Box::new(coercion_type.clone()),
+                    target_type: Box::new(coercion_types[idx].clone()),
                 };
                 right_scalar_items.push(ScalarItem {
                     scalar: right_coercion_expr.into(),
                     index: new_column_index,
                 });
-                right_project_column_set.insert(new_column_index);
+                new_column_index
             } else {
-                right_project_column_set.insert(right_col.index);
-            }
+                right_col.index
+            };
+            pairs.push((left_index, right_index));
         }
         if !left_scalar_items.is_empty() {
             left_expr = SExpr::create_unary(
                 EvalScalar {
                     items: left_scalar_items,
-                }
-                .into(),
-                left_expr,
-            );
-            left_expr = SExpr::create_unary(
-                Project {
-                    columns: left_project_column_set,
                 }
                 .into(),
                 left_expr,
@@ -551,14 +544,7 @@ impl<'a> Binder {
                 .into(),
                 right_expr,
             );
-            right_expr = SExpr::create_unary(
-                Project {
-                    columns: right_project_column_set,
-                }
-                .into(),
-                right_expr,
-            );
         }
-        Ok((new_bind_context, left_expr, right_expr))
+        Ok((new_bind_context, pairs, left_expr, right_expr))
     }
 }

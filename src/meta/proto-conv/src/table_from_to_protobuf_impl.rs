@@ -22,6 +22,7 @@ use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Utc;
 use common_meta_app::schema as mt;
 use common_protos::pb;
+use common_storage::StorageParams;
 
 use crate::check_ver;
 use crate::FromToProto;
@@ -73,43 +74,6 @@ impl FromToProto for mt::TableCopiedFileLock {
         let p = pb::TableCopiedFileLock {
             ver: VER,
             min_compatible: MIN_COMPATIBLE_VER,
-        };
-        Ok(p)
-    }
-}
-
-impl FromToProto for mt::TableInfo {
-    type PB = pb::TableInfo;
-    fn from_pb(p: pb::TableInfo) -> Result<Self, Incompatible> {
-        check_ver(p.ver, p.min_compatible)?;
-
-        let ident = match p.ident {
-            None => {
-                return Err(Incompatible {
-                    reason: "TableInfo.ident can not be None".to_string(),
-                });
-            }
-            Some(x) => x,
-        };
-        let v = Self {
-            ident: mt::TableIdent::from_pb(ident)?,
-            desc: p.desc,
-            name: p.name,
-            meta: mt::TableMeta::from_pb(p.meta.ok_or_else(|| Incompatible {
-                reason: "TableInfo.meta can not be None".to_string(),
-            })?)?,
-        };
-        Ok(v)
-    }
-
-    fn to_pb(&self) -> Result<pb::TableInfo, Incompatible> {
-        let p = pb::TableInfo {
-            ver: VER,
-            min_compatible: MIN_COMPATIBLE_VER,
-            ident: Some(self.ident.to_pb()?),
-            desc: self.desc.clone(),
-            name: self.name.clone(),
-            meta: Some(self.meta.to_pb()?),
         };
         Ok(p)
     }
@@ -201,10 +165,21 @@ impl FromToProto for mt::TableMeta {
             Some(x) => x,
         };
 
+        let catalog = if p.catalog.is_empty() {
+            "default".to_string()
+        } else {
+            p.catalog
+        };
+
         let v = Self {
             schema: Arc::new(dv::DataSchema::from_pb(schema)?),
+            catalog,
             engine: p.engine,
             engine_options: p.engine_options,
+            storage_params: match p.storage_params {
+                Some(sp) => Some(StorageParams::from_pb(sp)?),
+                None => None,
+            },
             options: p.options,
             default_cluster_key: p.default_cluster_key,
             cluster_keys: p.cluster_keys,
@@ -230,9 +205,14 @@ impl FromToProto for mt::TableMeta {
         let p = pb::TableMeta {
             ver: VER,
             min_compatible: MIN_COMPATIBLE_VER,
+            catalog: self.catalog.clone(),
             schema: Some(self.schema.to_pb()?),
             engine: self.engine.clone(),
             engine_options: self.engine_options.clone(),
+            storage_params: match self.storage_params.clone() {
+                Some(sp) => Some(sp.to_pb()?),
+                None => None,
+            },
             options: self.options.clone(),
             default_cluster_key: self.default_cluster_key.clone(),
             cluster_keys: self.cluster_keys.clone(),

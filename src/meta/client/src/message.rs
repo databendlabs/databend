@@ -80,6 +80,23 @@ pub enum Request {
     GetClientInfo(GetClientInfo),
 }
 
+impl Request {
+    pub fn name(&self) -> &'static str {
+        match self {
+            Request::Get(_) => "Get",
+            Request::MGet(_) => "MGet",
+            Request::PrefixList(_) => "PrefixList",
+            Request::Upsert(_) => "Upsert",
+            Request::Txn(_) => "Txn",
+            Request::Watch(_) => "Watch",
+            Request::Export(_) => "Export",
+            Request::MakeClient(_) => "MakeClient",
+            Request::GetEndpoints(_) => "GetEndpoints",
+            Request::GetClientInfo(_) => "GetClientInfo",
+        }
+    }
+}
+
 /// Meta-client worker-to-handle response body
 #[derive(Debug, derive_more::TryInto)]
 pub enum Response {

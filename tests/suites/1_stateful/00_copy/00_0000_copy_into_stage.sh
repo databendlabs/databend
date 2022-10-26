@@ -21,6 +21,16 @@ done
 echo "copy into @s2 from test_table FILE_FORMAT = (type = 'CSV');" | $MYSQL_CLIENT_CONNECT
 echo "copy into @s2 from (select name, age, id from test_table limit 100) FILE_FORMAT = (type = 'PARQUET');" | $MYSQL_CLIENT_CONNECT
 echo "list @s2;" | $MYSQL_CLIENT_CONNECT | wc -l | sed 's/ //g'
+
+
+echo "copy into @s2 from test_table FILE_FORMAT = (type = 'CSV') MAX_FILE_SIZE = 10;" | $MYSQL_CLIENT_CONNECT
+
+lines=`echo "list @s2;" | $MYSQL_CLIENT_CONNECT | wc -l`
+
+if [ $lines -eq 1 ];then
+    echo "More than one line"
+fi
+
 echo "drop STAGE s2;" | $MYSQL_CLIENT_CONNECT
 echo "drop table test_table;" | $MYSQL_CLIENT_CONNECT
 

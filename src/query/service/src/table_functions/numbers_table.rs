@@ -17,13 +17,14 @@ use std::mem::size_of;
 use std::sync::Arc;
 
 use chrono::NaiveDateTime;
+use common_catalog::table::TableStatistics;
 use common_datablocks::DataBlock;
 use common_datavalues::chrono::TimeZone;
 use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::Expression;
+use common_legacy_expression::LegacyExpression;
 use common_legacy_planners::Extras;
 use common_legacy_planners::PartInfoPtr;
 use common_legacy_planners::Partitions;
@@ -65,7 +66,7 @@ impl NumbersTable {
         if let Some(args) = &table_args {
             if args.len() == 1 {
                 let arg = &args[0];
-                if let Expression::Literal { value, .. } = arg {
+                if let LegacyExpression::Literal { value, .. } = arg {
                     total = Some(value.as_u64()?);
                 }
             }
@@ -170,13 +171,13 @@ impl Table for NumbersTable {
         Ok((statistics, parts))
     }
 
-    fn table_args(&self) -> Option<Vec<Expression>> {
-        Some(vec![Expression::create_literal(DataValue::UInt64(
+    fn table_args(&self) -> Option<Vec<LegacyExpression>> {
+        Some(vec![LegacyExpression::create_literal(DataValue::UInt64(
             self.total,
         ))])
     }
 
-    fn read2(
+    fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
         plan: &ReadDataSourcePlan,
@@ -212,6 +213,15 @@ impl Table for NumbersTable {
 
         pipeline.add_pipe(source_builder.finalize());
         Ok(())
+    }
+
+    async fn statistics(&self, _ctx: Arc<dyn TableContext>) -> Result<Option<TableStatistics>> {
+        Ok(Some(TableStatistics {
+            num_rows: Some(self.total),
+            data_size: Some(self.total * 8),
+            data_size_compressed: None,
+            index_size: None,
+        }))
     }
 }
 

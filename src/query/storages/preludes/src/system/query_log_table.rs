@@ -12,42 +12,116 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
-use std::collections::VecDeque;
-use std::sync::Arc;
-
-use common_datablocks::DataBlock;
+use chrono::NaiveDateTime;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_legacy_planners::Extras;
-use common_legacy_planners::Partitions;
-use common_legacy_planners::ReadDataSourcePlan;
-use common_legacy_planners::Statistics;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
-use common_streams::SendableDataBlockStream;
-use futures::StreamExt;
-use parking_lot::RwLock;
+use serde::Serialize;
+use serde::Serializer;
+use serde_repr::Serialize_repr;
 
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::processor::ProcessorPtr;
-use crate::pipelines::processors::SyncSource;
-use crate::pipelines::processors::SyncSourcer;
-use crate::pipelines::Pipeline;
-use crate::pipelines::SourcePipeBuilder;
-use crate::sessions::TableContext;
-use crate::storages::Table;
+use crate::system::log_queue::SystemLogElement;
+use crate::system::SystemLogQueue;
+use crate::system::SystemLogTable;
 
-pub struct QueryLogTable {
-    table_info: TableInfo,
-    max_rows: i32,
-    data: Arc<RwLock<VecDeque<DataBlock>>>,
+#[derive(Clone, Copy, Serialize_repr)]
+#[repr(u8)]
+pub enum LogType {
+    Start = 1,
+    Finish = 2,
+    Error = 3,
+    Aborted = 4,
 }
 
-impl QueryLogTable {
-    pub fn create(table_id: u64, max_rows: i32) -> Self {
-        let schema = DataSchemaRefExt::create(vec![
+fn date_str<S>(dt: &i32, s: S) -> Result<S::Ok, S::Error>
+where S: Serializer {
+    let t = NaiveDateTime::from_timestamp(i64::from(*dt) * 24 * 3600, 0);
+    s.serialize_str(t.format("%Y-%m-%d").to_string().as_str())
+}
+
+fn datetime_str<S>(dt: &i64, s: S) -> Result<S::Ok, S::Error>
+where S: Serializer {
+    let t = NaiveDateTime::from_timestamp(
+        dt / 1_000_000,
+        TryFrom::try_from((dt % 1_000_000) * 1000).unwrap_or(0),
+        // u32::try_from((dt % 1_000_000) * 1000).unwrap_or(0),
+    );
+    s.serialize_str(t.format("%Y-%m-%d %H:%M:%S%.6f").to_string().as_str())
+}
+
+#[derive(Clone, Serialize)]
+pub struct QueryLogElement {
+    // Type.
+    pub log_type: LogType,
+    pub handler_type: String,
+
+    // User.
+    pub tenant_id: String,
+    pub cluster_id: String,
+    pub sql_user: String,
+
+    #[serde(skip_serializing)]
+    pub sql_user_quota: String,
+    #[serde(skip_serializing)]
+    pub sql_user_privileges: String,
+
+    // Query.
+    pub query_id: String,
+    pub query_kind: String,
+    pub query_text: String,
+
+    #[serde(serialize_with = "date_str")]
+    pub event_date: i32,
+    #[serde(serialize_with = "datetime_str")]
+    pub event_time: i64,
+
+    // Schema.
+    pub current_database: String,
+    pub databases: String,
+    pub tables: String,
+    pub columns: String,
+    pub projections: String,
+
+    // Stats.
+    pub written_rows: u64,
+    pub written_bytes: u64,
+    pub written_io_bytes: u64,
+    pub written_io_bytes_cost_ms: u64,
+    pub scan_rows: u64,
+    pub scan_bytes: u64,
+    pub scan_io_bytes: u64,
+    pub scan_io_bytes_cost_ms: u64,
+    pub scan_partitions: u64,
+    pub total_partitions: u64,
+    pub result_rows: u64,
+    pub result_bytes: u64,
+    pub cpu_usage: u32,
+    pub memory_usage: u64,
+
+    // Client.
+    pub client_info: String,
+    pub client_address: String,
+
+    // Exception.
+    pub exception_code: i32,
+    pub exception_text: String,
+    pub stack_trace: String,
+
+    // Server.
+    pub server_version: String,
+
+    // Session settings
+    #[serde(skip_serializing)]
+    pub session_settings: String,
+
+    // Extra.
+    pub extra: String,
+}
+
+impl SystemLogElement for QueryLogElement {
+    const TABLE_NAME: &'static str = "query_log";
+
+    fn schema() -> DataSchemaRef {
+        DataSchemaRefExt::create(vec![
             // Type.
             DataField::new("log_type", i8::to_data_type()),
             DataField::new("handler_type", Vu8::to_data_type()),
@@ -97,110 +171,183 @@ impl QueryLogTable {
             DataField::new("session_settings", Vu8::to_data_type()),
             // Extra.
             DataField::new("extra", Vu8::to_data_type()),
-        ]);
-
-        let table_info = TableInfo {
-            desc: "'system'.'query_log'".to_string(),
-            name: "query_log".to_string(),
-            ident: TableIdent::new(table_id, 0),
-            meta: TableMeta {
-                schema,
-                engine: "SystemQueryLog".to_string(),
-                ..Default::default()
-            },
-        };
-
-        QueryLogTable {
-            table_info,
-            max_rows,
-            data: Arc::new(RwLock::new(VecDeque::new())),
-        }
+        ])
     }
 
-    pub async fn append_data(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        mut stream: SendableDataBlockStream,
-    ) -> Result<()> {
-        while let Some(block) = stream.next().await {
-            let block = block?;
-            self.data.write().push_back(block);
-        }
+    fn fill_to_data_block(&self, columns: &mut Vec<Box<dyn MutableColumn>>) -> Result<()> {
+        let mut columns = columns.iter_mut();
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::Int64(self.log_type as i64))?;
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::String(self.handler_type.as_bytes().to_vec()))?;
+        // User.
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::String(self.tenant_id.as_bytes().to_vec()))?;
 
-        // Check overflow.
-        let over = self.data.read().len() as i32 - self.max_rows;
-        if over > 0 {
-            for _x in 0..over {
-                self.data.write().pop_front();
-            }
-        }
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::String(self.cluster_id.as_bytes().to_vec()))?;
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::String(self.sql_user.as_bytes().to_vec()))?;
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::String(self.sql_user_quota.as_bytes().to_vec()))?;
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::String(
+                self.sql_user_privileges.as_bytes().to_vec(),
+            ))?;
+        // Query.
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::String(self.query_id.as_bytes().to_vec()))?;
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::String(self.query_kind.as_bytes().to_vec()))?;
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::String(self.query_text.as_bytes().to_vec()))?;
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::Int64(self.event_date as i64))?;
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::Int64(self.event_time))?;
+        // Schema.
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::String(self.current_database.as_bytes().to_vec()))?;
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::String(self.databases.as_bytes().to_vec()))?;
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::String(self.tables.as_bytes().to_vec()))?;
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::String(self.columns.as_bytes().to_vec()))?;
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::String(self.projections.as_bytes().to_vec()))?;
+        // Stats.
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::UInt64(self.written_rows))?;
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::UInt64(self.written_bytes))?;
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::UInt64(self.written_io_bytes))?;
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::UInt64(self.written_io_bytes_cost_ms))?;
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::UInt64(self.scan_rows))?;
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::UInt64(self.scan_bytes))?;
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::UInt64(self.scan_io_bytes))?;
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::UInt64(self.scan_io_bytes_cost_ms))?;
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::UInt64(self.scan_partitions))?;
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::UInt64(self.total_partitions))?;
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::UInt64(self.result_rows))?;
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::UInt64(self.result_bytes))?;
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::UInt64(self.cpu_usage as u64))?;
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::UInt64(self.memory_usage))?;
+        // Client.
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::String(self.client_info.as_bytes().to_vec()))?;
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::String(self.client_address.as_bytes().to_vec()))?;
+        // Exception.
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::Int64(self.exception_code as i64))?;
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::String(self.exception_text.as_bytes().to_vec()))?;
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::String(self.stack_trace.as_bytes().to_vec()))?;
+        // Server.
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::String(self.server_version.as_bytes().to_vec()))?;
+        // Session settings
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::String(self.session_settings.as_bytes().to_vec()))?;
+        // Extra.
+        columns
+            .next()
+            .unwrap()
+            .append_data_value(DataValue::String(self.extra.as_bytes().to_vec()))?;
 
         Ok(())
     }
 }
 
-#[async_trait::async_trait]
-impl Table for QueryLogTable {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn get_table_info(&self) -> &TableInfo {
-        &self.table_info
-    }
-
-    async fn read_partitions(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
-        Ok((Statistics::default(), vec![]))
-    }
-
-    fn read2(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        _: &ReadDataSourcePlan,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        // TODO: split data for multiple threads
-        let output = OutputPort::create();
-        let mut source_builder = SourcePipeBuilder::create();
-
-        source_builder.add_source(
-            output.clone(),
-            QueryLogSource::create(ctx, output, &self.data.read())?,
-        );
-
-        pipeline.add_pipe(source_builder.finalize());
-        Ok(())
-    }
-
-    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: &str, _: bool) -> Result<()> {
-        let mut data = self.data.write();
-        *data = VecDeque::new();
-        Ok(())
-    }
-}
-
-struct QueryLogSource {
-    data: VecDeque<DataBlock>,
-}
-
-impl QueryLogSource {
-    pub fn create(
-        ctx: Arc<dyn TableContext>,
-        output: Arc<OutputPort>,
-        data: &VecDeque<DataBlock>,
-    ) -> Result<ProcessorPtr> {
-        SyncSourcer::create(ctx, output, QueryLogSource { data: data.clone() })
-    }
-}
-
-impl SyncSource for QueryLogSource {
-    const NAME: &'static str = "system.query_log";
-
-    fn generate(&mut self) -> Result<Option<DataBlock>> {
-        Ok(self.data.pop_front())
-    }
-}
+pub type QueryLogQueue = SystemLogQueue<QueryLogElement>;
+pub type QueryLogTable = SystemLogTable<QueryLogElement>;

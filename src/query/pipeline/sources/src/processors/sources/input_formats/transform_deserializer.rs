@@ -47,7 +47,9 @@ impl<I: InputFormatPipe> DeserializeProcessor<I> {
     fn process(&mut self) -> Result<()> {
         let blocks = self.block_builder.deserialize(self.input_buffer.take())?;
         for b in blocks.into_iter() {
-            self.output_buffer.push_back(b)
+            if !b.is_empty() {
+                self.output_buffer.push_back(b)
+            }
         }
         Ok(())
     }
@@ -81,8 +83,8 @@ impl<I: InputFormatPipe> DeserializeTransformer<I> {
 
 #[async_trait::async_trait]
 impl<I: InputFormatPipe> Processor for DeserializeTransformer<I> {
-    fn name(&self) -> &'static str {
-        "DeserializeTransformer"
+    fn name(&self) -> String {
+        "DeserializeTransformer".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

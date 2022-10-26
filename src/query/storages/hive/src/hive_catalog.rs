@@ -63,6 +63,8 @@ use thrift::transport::*;
 use super::hive_database::HiveDatabase;
 use crate::hive_table::HiveTable;
 
+pub const HIVE_CATALOG: &str = "hive";
+
 #[derive(Clone)]
 pub struct HiveCatalog {
     /// address of hive meta store service
@@ -157,9 +159,22 @@ impl HiveCatalog {
         table_name: String,
     ) -> Result<Arc<dyn Table>> {
         let mut client = client;
-        let table_meta = client
-            .get_table(db_name.clone(), table_name.clone())
-            .map_err(from_thrift_error)?;
+        let table = client.get_table(db_name.clone(), table_name.clone());
+        let table_meta = match table {
+            Ok(table_meta) => table_meta,
+            Err(e) => {
+                if let thrift::Error::User(err) = &e {
+                    if let Some(e) =
+                        err.downcast_ref::<common_hive_meta_store::NoSuchObjectException>()
+                    {
+                        return Err(ErrorCode::TableInfoError(
+                            e.message.clone().unwrap_or_default(),
+                        ));
+                    }
+                }
+                return Err(from_thrift_error(e));
+            }
+        };
 
         if let Some(sd) = table_meta.sd.as_ref() {
             if let Some(input_format) = sd.input_format.as_ref() {
@@ -169,6 +184,12 @@ impl HiveCatalog {
                         input_format
                     )));
                 }
+            }
+        }
+
+        if let Some(t) = table_meta.table_type.as_ref() {
+            if t == "VIRTUAL_VIEW" {
+                return Err(ErrorCode::UnImplement("not support view table"));
             }
         }
 
@@ -329,6 +350,8 @@ impl Catalog for HiveCatalog {
 
     async fn upsert_table_option(
         &self,
+        _tenant: &str,
+        _db_name: &str,
         _req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
         Err(ErrorCode::UnImplement(
@@ -336,7 +359,12 @@ impl Catalog for HiveCatalog {
         ))
     }
 
-    async fn update_table_meta(&self, _req: UpdateTableMetaReq) -> Result<UpdateTableMetaReply> {
+    async fn update_table_meta(
+        &self,
+        _tenant: &str,
+        _db_name: &str,
+        _req: UpdateTableMetaReq,
+    ) -> Result<UpdateTableMetaReply> {
         Err(ErrorCode::UnImplement(
             "Cannot update table meta in HIVE catalog",
         ))
@@ -344,6 +372,8 @@ impl Catalog for HiveCatalog {
 
     async fn get_table_copied_file_info(
         &self,
+        _tenant: &str,
+        _db_name: &str,
         _req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply> {
         unimplemented!()
@@ -351,12 +381,19 @@ impl Catalog for HiveCatalog {
 
     async fn upsert_table_copied_file_info(
         &self,
+        _tenant: &str,
+        _db_name: &str,
         _req: UpsertTableCopiedFileReq,
     ) -> Result<UpsertTableCopiedFileReply> {
         unimplemented!()
     }
 
-    async fn truncate_table(&self, _req: TruncateTableReq) -> Result<TruncateTableReply> {
+    async fn truncate_table(
+        &self,
+        _tenant: &str,
+        _db_name: &str,
+        _req: TruncateTableReq,
+    ) -> Result<TruncateTableReply> {
         unimplemented!()
     }
 

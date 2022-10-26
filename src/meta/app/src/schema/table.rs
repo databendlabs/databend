@@ -24,6 +24,7 @@ use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
 use common_meta_types::MatchSeq;
+use common_storage::StorageParams;
 use maplit::hashmap;
 
 use crate::schema::database::DatabaseNameIdent;
@@ -171,8 +172,10 @@ pub struct TableStatistics {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct TableMeta {
     pub schema: Arc<DataSchema>,
+    pub catalog: String,
     pub engine: String,
     pub engine_options: BTreeMap<String, String>,
+    pub storage_params: Option<StorageParams>,
     pub options: BTreeMap<String, String>,
     // The default cluster key.
     pub default_cluster_key: Option<String>,
@@ -221,6 +224,10 @@ impl TableInfo {
         &self.meta.options
     }
 
+    pub fn catalog(&self) -> &str {
+        &self.meta.catalog
+    }
+
     pub fn engine(&self) -> &str {
         &self.meta.engine
     }
@@ -244,8 +251,10 @@ impl Default for TableMeta {
     fn default() -> Self {
         TableMeta {
             schema: Arc::new(DataSchema::empty()),
+            catalog: "default".to_string(),
             engine: "".to_string(),
             engine_options: BTreeMap::new(),
+            storage_params: None,
             options: BTreeMap::new(),
             default_cluster_key: None,
             cluster_keys: vec![],

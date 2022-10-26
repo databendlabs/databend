@@ -383,6 +383,8 @@ pub trait Visitor<'ast>: Sized {
     ) {
     }
 
+    fn visit_update(&mut self, _update: &'ast UpdateStmt<'ast>) {}
+
     fn visit_show_databases(&mut self, _stmt: &'ast ShowDatabasesStmt<'ast>) {}
 
     fn visit_show_create_databases(&mut self, _stmt: &'ast ShowCreateDatabaseStmt<'ast>) {}

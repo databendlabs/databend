@@ -179,13 +179,6 @@ impl From<prost::EncodeError> for ErrorCode {
     }
 }
 
-// ===  octocrab error ===
-impl From<octocrab::Error> for ErrorCode {
-    fn from(error: octocrab::Error) -> Self {
-        ErrorCode::NetworkRequestError(format!("octocrab error, cause: {}", error))
-    }
-}
-
 // ===  ser/de to/from tonic::Status ===
 #[derive(thiserror::Error, serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct SerializedError {

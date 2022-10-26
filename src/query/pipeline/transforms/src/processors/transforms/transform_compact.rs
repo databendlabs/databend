@@ -25,6 +25,8 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 
+pub type Aborting = Arc<Box<dyn Fn() -> bool + Send + Sync + 'static>>;
+
 pub struct TransformCompact<T: Compactor + Send + 'static> {
     state: ProcessorState,
     compactor: T,
@@ -38,6 +40,8 @@ pub trait Compactor {
     fn use_partial_compact() -> bool {
         false
     }
+
+    fn interrupt(&self) {}
 
     /// `compact_partial` is called when a new block is pushed and `use_partial_compact` is enabled
     fn compact_partial(&self, _blocks: &mut Vec<DataBlock>) -> Result<Vec<DataBlock>> {
@@ -104,8 +108,8 @@ impl<T: Compactor + Send + 'static> TransformCompact<T> {
 
 #[async_trait::async_trait]
 impl<T: Compactor + Send + 'static> Processor for TransformCompact<T> {
-    fn name(&self) -> &'static str {
-        T::name()
+    fn name(&self) -> String {
+        T::name().to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -139,6 +143,10 @@ impl<T: Compactor + Send + 'static> Processor for TransformCompact<T> {
                 }
             }
         }
+    }
+
+    fn interrupt(&self) {
+        self.compactor.interrupt();
     }
 
     fn process(&mut self) -> Result<()> {

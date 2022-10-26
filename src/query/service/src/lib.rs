@@ -36,7 +36,6 @@ pub mod databases;
 pub mod evaluator;
 pub mod interpreters;
 pub mod metrics;
-pub mod optimizers;
 pub mod pipelines;
 pub mod procedures;
 pub mod servers;

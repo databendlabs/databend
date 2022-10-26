@@ -26,11 +26,11 @@ use common_functions::scalars::check_pattern_type;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::PatternType;
 use common_fuse_meta::meta::StatisticsOfColumns;
-use common_legacy_planners::lit;
-use common_legacy_planners::Expression;
-use common_legacy_planners::ExpressionMonotonicityVisitor;
-use common_legacy_planners::Expressions;
-use common_legacy_planners::RequireColumnsVisitor;
+use common_legacy_expression::lit;
+use common_legacy_expression::ExpressionMonotonicityVisitor;
+use common_legacy_expression::LegacyExpression;
+use common_legacy_expression::LegacyExpressions;
+use common_legacy_expression::RequireColumnsVisitor;
 use common_pipeline_transforms::processors::transforms::ExpressionExecutor;
 
 #[derive(Clone)]
@@ -44,14 +44,14 @@ pub struct RangeFilter {
 impl RangeFilter {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
-        exprs: &[Expression],
+        exprs: &[LegacyExpression],
         schema: DataSchemaRef,
     ) -> Result<Self> {
         debug_assert!(!exprs.is_empty());
         let mut stat_columns: StatColumns = Vec::new();
         let verifiable_expr = exprs
             .iter()
-            .fold(None, |acc: Option<Expression>, expr| {
+            .fold(None, |acc: Option<LegacyExpression>, expr| {
                 let verifiable_expr = build_verifiable_expr(expr, &schema, &mut stat_columns);
                 match acc {
                     Some(acc) => Some(acc.and(verifiable_expr)),
@@ -131,31 +131,33 @@ impl RangeFilter {
 /// convert expr to Verifiable Expression
 /// Rules: (section 5.2 of http://vldb.org/pvldb/vol14/p3083-edara.pdf)
 pub fn build_verifiable_expr(
-    expr: &Expression,
+    expr: &LegacyExpression,
     schema: &DataSchemaRef,
     stat_columns: &mut StatColumns,
-) -> Expression {
+) -> LegacyExpression {
     let unhandled = lit(true);
 
     let (exprs, op) = match expr {
-        Expression::Literal { .. } => return expr.clone(),
-        Expression::ScalarFunction { op, args } => try_convert_is_null(op, args.clone()),
-        Expression::BinaryExpression { left, op, right } => match op.to_lowercase().as_str() {
-            "and" => {
-                let left = build_verifiable_expr(left, schema, stat_columns);
-                let right = build_verifiable_expr(right, schema, stat_columns);
-                return left.and(right);
+        LegacyExpression::Literal { .. } => return expr.clone(),
+        LegacyExpression::ScalarFunction { op, args } => try_convert_is_null(op, args.clone()),
+        LegacyExpression::BinaryExpression { left, op, right } => {
+            match op.to_lowercase().as_str() {
+                "and" => {
+                    let left = build_verifiable_expr(left, schema, stat_columns);
+                    let right = build_verifiable_expr(right, schema, stat_columns);
+                    return left.and(right);
+                }
+                "or" => {
+                    let left = build_verifiable_expr(left, schema, stat_columns);
+                    let right = build_verifiable_expr(right, schema, stat_columns);
+                    return left.or(right);
+                }
+                _ => (
+                    vec![left.as_ref().clone(), right.as_ref().clone()],
+                    op.clone(),
+                ),
             }
-            "or" => {
-                let left = build_verifiable_expr(left, schema, stat_columns);
-                let right = build_verifiable_expr(right, schema, stat_columns);
-                return left.or(right);
-            }
-            _ => (
-                vec![left.as_ref().clone(), right.as_ref().clone()],
-                op.clone(),
-            ),
-        },
+        }
         _ => return unhandled,
     };
 
@@ -178,11 +180,11 @@ fn inverse_operator(op: &str) -> Result<&str> {
 }
 
 /// Try to convert `not(is_not_null)` to `is_null`.
-fn try_convert_is_null(op: &str, args: Vec<Expression>) -> (Vec<Expression>, String) {
+fn try_convert_is_null(op: &str, args: Vec<LegacyExpression>) -> (Vec<LegacyExpression>, String) {
     // `is null` will be converted to `not(is not null)` in the parser.
     // we should convert it back to `is null` here.
     if op == "not" && args.len() == 1 {
-        if let Expression::ScalarFunction {
+        if let LegacyExpression::ScalarFunction {
             op: inner_op,
             args: inner_args,
         } = &args[0]
@@ -222,7 +224,7 @@ pub struct StatColumn {
     column_fields: ColumnFields,
     stat_type: StatType,
     stat_field: DataField,
-    expr: Expression,
+    expr: LegacyExpression,
 }
 
 impl StatColumn {
@@ -230,7 +232,7 @@ impl StatColumn {
         column_fields: ColumnFields,
         stat_type: StatType,
         field: &DataField,
-        expr: Expression,
+        expr: LegacyExpression,
     ) -> Self {
         let column_new = format!("{}_{}", stat_type, field.name());
         let data_type = if matches!(stat_type, StatType::Nulls | StatType::RowCount) {
@@ -321,14 +323,14 @@ impl StatColumn {
 
 struct VerifiableExprBuilder<'a> {
     op: &'a str,
-    args: Expressions,
+    args: LegacyExpressions,
     fields: Vec<(DataField, ColumnFields)>,
     stat_columns: &'a mut StatColumns,
 }
 
 impl<'a> VerifiableExprBuilder<'a> {
     fn try_create(
-        exprs: Expressions,
+        exprs: LegacyExpressions,
         op: &'a str,
         schema: &'a DataSchemaRef,
         stat_columns: &'a mut StatColumns,
@@ -420,7 +422,7 @@ impl<'a> VerifiableExprBuilder<'a> {
         })
     }
 
-    fn build(&mut self) -> Result<Expression> {
+    fn build(&mut self) -> Result<LegacyExpression> {
         // TODO: support in/not in.
         match self.op {
             "is_null" => {
@@ -509,7 +511,7 @@ impl<'a> VerifiableExprBuilder<'a> {
                 Ok(left_min.lt_eq(right_max))
             }
             "like" => {
-                if let Expression::Literal {
+                if let LegacyExpression::Literal {
                     value: DataValue::String(v),
                     ..
                 } = &self.args[1]
@@ -532,7 +534,7 @@ impl<'a> VerifiableExprBuilder<'a> {
                 ))
             }
             "not like" => {
-                if let Expression::Literal {
+                if let LegacyExpression::Literal {
                     value: DataValue::String(v),
                     ..
                 } = &self.args[1]
@@ -578,7 +580,7 @@ impl<'a> VerifiableExprBuilder<'a> {
         }
     }
 
-    fn stat_column_expr(&mut self, stat_type: StatType, index: usize) -> Result<Expression> {
+    fn stat_column_expr(&mut self, stat_type: StatType, index: usize) -> Result<LegacyExpression> {
         let (data_field, column_fields) = self.fields[index].clone();
         let stat_col = StatColumn::create(
             column_fields,
@@ -593,22 +595,24 @@ impl<'a> VerifiableExprBuilder<'a> {
         {
             self.stat_columns.push(stat_col.clone());
         }
-        Ok(Expression::Column(stat_col.stat_field.name().to_owned()))
+        Ok(LegacyExpression::Column(
+            stat_col.stat_field.name().to_owned(),
+        ))
     }
 
-    fn min_column_expr(&mut self, index: usize) -> Result<Expression> {
+    fn min_column_expr(&mut self, index: usize) -> Result<LegacyExpression> {
         self.stat_column_expr(StatType::Min, index)
     }
 
-    fn max_column_expr(&mut self, index: usize) -> Result<Expression> {
+    fn max_column_expr(&mut self, index: usize) -> Result<LegacyExpression> {
         self.stat_column_expr(StatType::Max, index)
     }
 
-    fn nulls_column_expr(&mut self, index: usize) -> Result<Expression> {
+    fn nulls_column_expr(&mut self, index: usize) -> Result<LegacyExpression> {
         self.stat_column_expr(StatType::Nulls, index)
     }
 
-    fn row_count_column_expr(&mut self, index: usize) -> Result<Expression> {
+    fn row_count_column_expr(&mut self, index: usize) -> Result<LegacyExpression> {
         self.stat_column_expr(StatType::RowCount, index)
     }
 }
@@ -655,7 +659,7 @@ pub fn right_bound_for_like_pattern(prefix: Vec<u8>) -> Vec<u8> {
     res
 }
 
-fn get_maybe_monotonic(op: &str, args: Expressions) -> Result<bool> {
+fn get_maybe_monotonic(op: &str, args: LegacyExpressions) -> Result<bool> {
     let factory = FunctionFactory::instance();
     let function_features = factory.get_features(op)?;
     if !function_features.maybe_monotonic {
@@ -670,18 +674,18 @@ fn get_maybe_monotonic(op: &str, args: Expressions) -> Result<bool> {
     Ok(true)
 }
 
-pub fn check_maybe_monotonic(expr: &Expression) -> Result<bool> {
+pub fn check_maybe_monotonic(expr: &LegacyExpression) -> Result<bool> {
     match expr {
-        Expression::Literal { .. } => Ok(true),
-        Expression::Column { .. } => Ok(true),
-        Expression::BinaryExpression { op, left, right } => {
+        LegacyExpression::Literal { .. } => Ok(true),
+        LegacyExpression::Column { .. } => Ok(true),
+        LegacyExpression::BinaryExpression { op, left, right } => {
             get_maybe_monotonic(op, vec![left.as_ref().clone(), right.as_ref().clone()])
         }
-        Expression::UnaryExpression { op, expr } => {
+        LegacyExpression::UnaryExpression { op, expr } => {
             get_maybe_monotonic(op, vec![expr.as_ref().clone()])
         }
-        Expression::ScalarFunction { op, args } => get_maybe_monotonic(op, args.clone()),
-        Expression::Cast { expr, .. } => check_maybe_monotonic(expr),
+        LegacyExpression::ScalarFunction { op, args } => get_maybe_monotonic(op, args.clone()),
+        LegacyExpression::Cast { expr, .. } => check_maybe_monotonic(expr),
         _ => Ok(false),
     }
 }

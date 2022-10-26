@@ -24,9 +24,11 @@ use common_exception::Result;
 use tokio::runtime::Builder;
 use tokio::runtime::Handle;
 use tokio::sync::oneshot;
+use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 
 use super::runtime_tracker::RuntimeTracker;
+use crate::base::catch_unwind::CatchUnwindFuture;
 
 /// Methods to spawn tasks.
 pub trait TrySpawn {
@@ -183,8 +185,48 @@ impl Runtime {
         self.handle.clone()
     }
 
-    pub fn block_on<F: Future>(&self, future: F) -> F::Output {
-        self.handle.block_on(future)
+    pub fn block_on<T, F>(&self, future: F) -> F::Output
+    where F: Future<Output = Result<T>> + Send + 'static {
+        let future = CatchUnwindFuture::create(future);
+        self.handle.block_on(future).flatten()
+    }
+
+    // This function make the futures always run fits the max_concurrent with a Semaphore latch.
+    // This is not same as: `futures::stream::iter(futures).buffer_unordered(max_concurrent)`:
+    // The comparison of them please see https://github.com/BohuTANG/joint
+    pub async fn try_spawn_batch<F>(
+        &self,
+        semaphore: Arc<Semaphore>,
+        futures: impl IntoIterator<Item = F>,
+    ) -> Result<Vec<JoinHandle<F::Output>>>
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        let iter = futures.into_iter();
+        let mut handlers =
+            Vec::with_capacity(iter.size_hint().1.unwrap_or_else(|| iter.size_hint().0));
+        for fut in iter {
+            let semaphore = semaphore.clone();
+            // Although async task is rather lightweight, it do consumes resources,
+            // so we acquire a permit BEFORE spawn.
+            // Thus, the `futures` passed into this method is NOT suggested to be "materialized"
+            // iterator, e.g. Vec<..>
+            let permit = semaphore.acquire_owned().await.map_err(|e| {
+                ErrorCode::UnexpectedError(format!(
+                    "semaphore closed, acquire permit failure. {}",
+                    e
+                ))
+            })?;
+            let handler = self.handle.spawn(async move {
+                // take the ownership of the permit, (implicitly) drop it when task is done
+                let _ = permit;
+                fut.await
+            });
+            handlers.push(handler)
+        }
+
+        Ok(handlers)
     }
 }
 

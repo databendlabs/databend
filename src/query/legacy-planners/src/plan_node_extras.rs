@@ -17,8 +17,7 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 
 use common_datavalues::DataSchema;
-
-use crate::Expression;
+use common_legacy_expression::LegacyExpression;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub enum Projection {
@@ -75,7 +74,7 @@ pub struct PrewhereInfo {
     /// remain_columns = scan.columns - need_columns
     pub remain_columns: Projection,
     /// filter for prewhere
-    pub filter: Expression,
+    pub filter: LegacyExpression,
 }
 
 /// Extras is a wrapper for push down items.
@@ -85,14 +84,14 @@ pub struct Extras {
     pub projection: Option<Projection>,
     /// Optional filter expression plan
     /// split_conjunctions by `and` operator
-    pub filters: Vec<Expression>,
+    pub filters: Vec<LegacyExpression>,
     /// Optional prewhere information
     /// used for prewhere optimization
     pub prewhere: Option<PrewhereInfo>,
     /// Optional limit to skip read
     pub limit: Option<usize>,
     /// Optional order_by expression plan
-    pub order_by: Vec<Expression>,
+    pub order_by: Vec<LegacyExpression>,
 }
 
 impl Extras {

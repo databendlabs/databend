@@ -19,7 +19,7 @@ use common_catalog::table_context::TableContext;
 use common_datablocks::SortColumnDescription;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
-use common_legacy_planners::Expression;
+use common_legacy_expression::LegacyExpression;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::Pipeline;
 use common_pipeline_core::SinkPipeBuilder;
@@ -50,7 +50,7 @@ impl FuseTable {
             TransformCompact::try_create(
                 transform_input_port,
                 transform_output_port,
-                block_compactor.to_compactor(),
+                block_compactor.to_compactor(false),
             )
         })?;
 
@@ -78,14 +78,13 @@ impl FuseTable {
             })?;
         }
 
-        let da = ctx.get_storage_operator()?;
         if need_output {
             pipeline.add_transform(|transform_input_port, transform_output_port| {
                 FuseTableSink::try_create(
                     transform_input_port,
                     ctx.clone(),
                     block_per_seg,
-                    da.clone(),
+                    self.operator.clone(),
                     self.meta_location_generator().clone(),
                     cluster_stats_gen.clone(),
                     Some(transform_output_port),
@@ -101,7 +100,7 @@ impl FuseTable {
                         input_port,
                         ctx.clone(),
                         block_per_seg,
-                        da.clone(),
+                        self.operator.clone(),
                         self.meta_location_generator().clone(),
                         cluster_stats_gen.clone(),
                         None,
@@ -156,10 +155,10 @@ impl FuseTable {
                 )
             })?;
 
-            let exprs: Vec<Expression> = output_schema
+            let exprs: Vec<LegacyExpression> = output_schema
                 .fields()
                 .iter()
-                .map(|f| Expression::Column(f.name().to_owned()))
+                .map(|f| LegacyExpression::Column(f.name().to_owned()))
                 .collect();
 
             let executor = ExpressionExecutor::try_create(

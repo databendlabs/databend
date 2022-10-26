@@ -36,8 +36,6 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableStatistics;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
-use common_storages_util::retry;
-use common_storages_util::retry::Retryable;
 use opendal::Operator;
 use tracing::debug;
 use tracing::info;
@@ -61,7 +59,6 @@ impl FuseTable {
     pub async fn do_commit(
         &self,
         ctx: Arc<dyn TableContext>,
-        catalog_name: impl AsRef<str>,
         operation_log: TableOperationLog,
         overwrite: bool,
     ) -> Result<()> {
@@ -91,12 +88,8 @@ impl FuseTable {
             .build();
 
         let transient = self.transient();
-        let catalog_name = catalog_name.as_ref();
         loop {
-            match tbl
-                .try_commit(ctx.clone(), catalog_name, &operation_log, overwrite)
-                .await
-            {
+            match tbl.try_commit(ctx.clone(), &operation_log, overwrite).await {
                 Ok(_) => {
                     break {
                         if transient {
@@ -106,7 +99,7 @@ impl FuseTable {
                                 tbl.table_info.ident
                             );
 
-                            let latest = tbl.latest(ctx.as_ref(), catalog_name).await?;
+                            let latest = tbl.latest(ctx.as_ref()).await?;
                             tbl = FuseTable::try_from_table(latest.as_ref())?;
 
                             let keep_last_snapshot = true;
@@ -135,7 +128,7 @@ impl FuseTable {
                             tbl.table_info.ident
                         );
                         common_base::base::tokio::time::sleep(d).await;
-                        latest = tbl.latest(ctx.as_ref(), catalog_name).await?;
+                        latest = tbl.latest(ctx.as_ref()).await?;
                         tbl = FuseTable::try_from_table(latest.as_ref())?;
                         retry_times += 1;
                         continue;
@@ -163,7 +156,6 @@ impl FuseTable {
     pub async fn try_commit(
         &self,
         ctx: Arc<dyn TableContext>,
-        catalog_name: &str,
         operation_log: &TableOperationLog,
         overwrite: bool,
     ) -> Result<()> {
@@ -216,10 +208,10 @@ impl FuseTable {
 
         FuseTable::commit_to_meta_server(
             ctx.as_ref(),
-            catalog_name,
             &self.table_info,
             &self.meta_location_generator,
             new_snapshot,
+            &self.operator,
         )
         .await
     }
@@ -262,17 +254,16 @@ impl FuseTable {
 
     pub async fn commit_to_meta_server(
         ctx: &dyn TableContext,
-        catalog_name: &str,
         table_info: &TableInfo,
         location_generator: &TableMetaLocationGenerator,
         snapshot: TableSnapshot,
+        operator: &Operator,
     ) -> Result<()> {
         let snapshot_location = location_generator
             .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot.format_version())?;
 
         // 1. write down snapshot
-        let operator = ctx.get_storage_operator()?;
-        write_meta(&operator, &snapshot_location, &snapshot).await?;
+        write_meta(operator, &snapshot_location, &snapshot).await?;
 
         // 2. prepare table meta
         let mut new_table_meta = table_info.meta.clone();
@@ -295,8 +286,7 @@ impl FuseTable {
         };
 
         // 3. prepare the request
-
-        let catalog = ctx.get_catalog(catalog_name)?;
+        let catalog = ctx.get_catalog(&table_info.meta.catalog)?;
         let table_id = table_info.ident.table_id;
         let table_version = table_info.ident.seq;
 
@@ -307,15 +297,17 @@ impl FuseTable {
         };
 
         // 3. let's roll
-        let reply = catalog.update_table_meta(req).await;
+        let tenant = ctx.get_tenant();
+        let db_name = ctx.get_current_database();
+        let reply = catalog.update_table_meta(&tenant, &db_name, req).await;
         match reply {
             Ok(_) => {
                 if let Some(snapshot_cache) = CacheManager::instance().get_table_snapshot_cache() {
-                    let cache = &mut snapshot_cache.write().await;
+                    let cache = &mut snapshot_cache.write();
                     cache.put(snapshot_location.clone(), Arc::new(snapshot));
                 }
                 // try keep a hit file of last snapshot
-                Self::write_last_snapshot_hint(&operator, location_generator, snapshot_location)
+                Self::write_last_snapshot_hint(operator, location_generator, snapshot_location)
                     .await;
                 Ok(())
             }
@@ -357,10 +349,10 @@ impl FuseTable {
         Ok((seg_locs, s))
     }
 
-    async fn latest(&self, ctx: &dyn TableContext, catalog_name: &str) -> Result<Arc<dyn Table>> {
+    async fn latest(&self, ctx: &dyn TableContext) -> Result<Arc<dyn Table>> {
         let name = self.table_info.name.clone();
         let tid = self.table_info.ident.table_id;
-        let catalog = ctx.get_catalog(catalog_name)?;
+        let catalog = ctx.get_catalog(self.table_info.catalog())?;
         let (ident, meta) = catalog.get_table_meta_by_id(tid).await?;
         let table_info: TableInfo = TableInfo {
             ident,
@@ -387,33 +379,19 @@ impl FuseTable {
         //   it is NOT guaranteed that the latest version will be kept
 
         let hint_path = location_generator.gen_last_snapshot_hint_location();
-        let op = || {
-            let hint_path = hint_path.clone();
-            let last_snapshot_path = {
-                let operator_meta_data = operator.metadata();
-                let storage_prefix = operator_meta_data.root();
-                format!("{}{}", storage_prefix, last_snapshot_path)
-            };
-
-            async move {
-                operator
-                    .object(&hint_path)
-                    .write(last_snapshot_path)
-                    .await
-                    .map_err(retry::from_io_error)
-            }
+        let last_snapshot_path = {
+            let operator_meta_data = operator.metadata();
+            let storage_prefix = operator_meta_data.root();
+            format!("{}{}", storage_prefix, last_snapshot_path)
         };
 
-        let notify = |e: std::io::Error, duration| {
-            warn!(
-                "transient error encountered while writing last snapshot hint file, location {}, at duration {:?} : {}",
-                hint_path, duration, e,
-            )
-        };
-
-        op.retry_with_notify(notify).await.unwrap_or_else(|e| {
-            tracing::warn!("write last snapshot hint failure. {}", e);
-        })
+        operator
+            .object(&hint_path)
+            .write(last_snapshot_path)
+            .await
+            .unwrap_or_else(|e| {
+                warn!("write last snapshot hint failure. {}", e);
+            })
     }
 }
 

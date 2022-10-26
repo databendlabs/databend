@@ -271,7 +271,7 @@ async fn test_insert_format_ndjson() -> PoemResult<()> {
             .post("insert into table t1 format JSONEachRow", &body)
             .await;
         assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
-        assert_error!(body, "column a");
+        assert_error!(body, "column=a");
     }
     Ok(())
 }

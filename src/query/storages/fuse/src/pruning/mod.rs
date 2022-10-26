@@ -12,8 +12,8 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-mod bloom_pruner;
 mod limiter;
+mod pruner;
 mod pruning_executor;
 mod range_pruner;
 mod topn_pruner;

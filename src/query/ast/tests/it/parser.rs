@@ -78,6 +78,7 @@ fn test_statement() {
         r#"create table if not exists a.b (c tuple(m integer, n string), d tuple(integer, string));"#,
         r#"create table a.b like c.d;"#,
         r#"create table t like t2 engine = memory;"#,
+        r#"create table if not exists a.b (a int) 's3://testbucket/admin/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');"#,
         r#"truncate table a;"#,
         r#"truncate table "a".b;"#,
         r#"drop table a;"#,
@@ -114,6 +115,12 @@ fn test_statement() {
         r#"select * from a join b on a.a = b.a;"#,
         r#"select * from a left outer join b on a.a = b.a;"#,
         r#"select * from a right outer join b on a.a = b.a;"#,
+        r#"select * from a left semi join b on a.a = b.a;"#,
+        r#"select * from a semi join b on a.a = b.a;"#,
+        r#"select * from a left anti join b on a.a = b.a;"#,
+        r#"select * from a anti join b on a.a = b.a;"#,
+        r#"select * from a right semi join b on a.a = b.a;"#,
+        r#"select * from a right anti join b on a.a = b.a;"#,
         r#"select * from a full outer join b on a.a = b.a;"#,
         r#"select * from a inner join b on a.a = b.a;"#,
         r#"select * from a left outer join b using(a);"#,
@@ -190,6 +197,10 @@ fn test_statement() {
                     skip_header = 1
                 )
                 size_limit=10;"#,
+        r#"COPY INTO mytable
+                FROM 'https://127.0.0.1:9900';"#,
+        r#"COPY INTO mytable
+                FROM 'https://127.0.0.1:';"#,
         r#"COPY INTO mytable
                 FROM @my_stage
                 FILE_FORMAT = (
@@ -284,6 +295,7 @@ fn test_statement() {
         r#"SHOW GRANTS ON TABLE db1.tb1;"#,
         r#"SHOW GRANTS ON DATABASE db;"#,
         r#"SHOW GRANTS OF SHARE t;"#,
+        r#"UPDATE db1.tb1 set a = a + 1, b = 2 WHERE c > 3;"#,
     ];
 
     for case in cases {

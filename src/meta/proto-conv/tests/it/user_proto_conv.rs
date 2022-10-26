@@ -28,6 +28,7 @@ use common_proto_conv::VER;
 use common_protos::pb;
 use common_storage::StorageFsConfig;
 use common_storage::StorageGcsConfig;
+use common_storage::StorageOssConfig;
 use common_storage::StorageParams;
 use common_storage::StorageS3Config;
 use enumflags2::make_bitflags;
@@ -86,6 +87,8 @@ pub(crate) fn test_fs_stage_info() -> mt::UserStageInfo {
             on_error: mt::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             purge: true,
+            single: false,
+            max_file_size: 0,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -102,6 +105,7 @@ pub(crate) fn test_s3_stage_info() -> mt::UserStageInfo {
                 root: "/data/files".to_string(),
                 access_key_id: "my_key_id".to_string(),
                 secret_access_key: "my_secret_key".to_string(),
+                security_token: "my_security_token".to_string(),
                 master_key: "my_master_key".to_string(),
                 ..Default::default()
             }),
@@ -117,6 +121,8 @@ pub(crate) fn test_s3_stage_info() -> mt::UserStageInfo {
             on_error: mt::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             purge: true,
+            single: false,
+            max_file_size: 0,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -147,6 +153,44 @@ pub(crate) fn test_gcs_stage_info() -> mt::UserStageInfo {
             on_error: mt::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             purge: true,
+            single: false,
+            max_file_size: 0,
+        },
+        comment: "test".to_string(),
+        ..Default::default()
+    }
+}
+
+// Version 13 added OSS as a stage backend, should be tested
+pub(crate) fn test_oss_stage_info() -> mt::UserStageInfo {
+    mt::UserStageInfo {
+        stage_name: "oss://my_bucket/data/files".to_string(),
+        stage_type: mt::StageType::External,
+        stage_params: mt::StageParams {
+            storage: StorageParams::Oss(StorageOssConfig {
+                endpoint_url: "https://oss-cn-litang.example.com".to_string(),
+                bucket: "my_bucket".to_string(),
+                root: "/data/files".to_string(),
+
+                access_key_id: "access_key_id".to_string(),
+                access_key_secret: "access_key_secret".to_string(),
+                oidc_token: "oidc_token".to_string(),
+                role_arn: "role_arn".to_string(),
+            }),
+        },
+        file_format_options: mt::FileFormatOptions {
+            format: mt::StageFileFormatType::Json,
+            skip_header: 1024,
+            field_delimiter: "|".to_string(),
+            record_delimiter: "//".to_string(),
+            compression: mt::StageFileCompression::Bz2,
+        },
+        copy_options: mt::CopyOptions {
+            on_error: mt::OnErrorMode::SkipFileNum(666),
+            size_limit: 1038,
+            purge: true,
+            single: false,
+            max_file_size: 0,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -286,6 +330,25 @@ fn test_user_incompatible() -> anyhow::Result<()> {
         );
     }
 
+    {
+        let oss_stage_info = test_oss_stage_info();
+        let mut p = oss_stage_info.to_pb()?;
+        p.ver = VER + 1;
+        p.min_compatible = VER + 1;
+
+        let res = mt::UserStageInfo::from_pb(p);
+        assert_eq!(
+            Incompatible {
+                reason: format!(
+                    "executable ver={} is smaller than the message min compatible ver: {}",
+                    VER,
+                    VER + 1
+                )
+            },
+            res.unwrap_err()
+        )
+    }
+
     Ok(())
 }
 
@@ -341,6 +404,15 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("gcs_stage_info: {:?}", buf);
+    }
+
+    // Stage on OSS, supported in version >= 13.
+    {
+        let oss_stage_info = test_oss_stage_info();
+        let p = oss_stage_info.to_pb()?;
+        let mut buf = vec![];
+        common_protos::prost::Message::encode(&p, &mut buf)?;
+        println!("oss_stage_info: {:?}", buf);
     }
 
     Ok(())

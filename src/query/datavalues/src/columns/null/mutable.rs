@@ -80,4 +80,8 @@ impl MutableColumn for MutableNullColumn {
                 ErrorCode::BadDataArrayLength("Null column is empty when pop data value")
             })
     }
+
+    fn memory_size(&self) -> usize {
+        std::mem::size_of::<usize>()
+    }
 }

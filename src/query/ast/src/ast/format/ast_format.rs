@@ -955,13 +955,13 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     fn visit_insert_source(&mut self, insert_source: &'ast InsertSource<'ast>) {
         match insert_source {
             InsertSource::Streaming { format, .. } => {
-                let streaming_name = format!("StreamSouce {}", format);
+                let streaming_name = format!("StreamSource {}", format);
                 let streaming_format_ctx = AstFormatContext::new(streaming_name);
                 let streaming_node = FormatTreeNode::new(streaming_format_ctx);
                 self.children.push(streaming_node);
             }
             InsertSource::Values { .. } => {
-                let values_name = "ValueSouce".to_string();
+                let values_name = "ValueSource".to_string();
                 let values_format_ctx = AstFormatContext::new(values_name);
                 let values_node = FormatTreeNode::new(values_format_ctx);
                 self.children.push(values_node);
@@ -989,6 +989,27 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         }
 
         let name = "Delete".to_string();
+        let format_ctx = AstFormatContext::with_children(name, children.len());
+        let node = FormatTreeNode::with_children(format_ctx, children);
+        self.children.push(node);
+    }
+
+    fn visit_update(&mut self, update: &'ast UpdateStmt<'ast>) {
+        let mut children = Vec::new();
+        self.visit_table_reference(&update.table);
+        children.push(self.children.pop().unwrap());
+
+        for update_expr in update.update_list.iter() {
+            self.visit_identifier(&update_expr.name);
+            children.push(self.children.pop().unwrap());
+            self.visit_expr(&update_expr.expr);
+            children.push(self.children.pop().unwrap());
+        }
+        if let Some(selection) = &update.selection {
+            self.visit_expr(selection);
+            children.push(self.children.pop().unwrap());
+        }
+        let name = "Update".to_string();
         let format_ctx = AstFormatContext::with_children(name, children.len());
         let node = FormatTreeNode::with_children(format_ctx, children);
         self.children.push(node);

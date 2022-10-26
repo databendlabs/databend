@@ -28,12 +28,12 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::Expression;
+use common_legacy_expression::LegacyExpression;
+use common_legacy_expression::RequireColumnsVisitor;
 use common_legacy_planners::Extras;
 use common_legacy_planners::Partitions;
 use common_legacy_planners::Projection;
 use common_legacy_planners::ReadDataSourcePlan;
-use common_legacy_planners::RequireColumnsVisitor;
 use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::processors::port::OutputPort;
@@ -166,7 +166,7 @@ impl HiveTable {
         }
     }
 
-    fn get_columns_from_expressions(expressions: &[Expression]) -> HashSet<String> {
+    fn get_columns_from_expressions(expressions: &[LegacyExpression]) -> HashSet<String> {
         expressions
             .iter()
             .flat_map(|e| RequireColumnsVisitor::collect_columns_from_expr(e).unwrap())
@@ -229,7 +229,7 @@ impl HiveTable {
         &self,
         ctx: Arc<dyn TableContext>,
         partition_keys: Vec<String>,
-        filter_expressions: Vec<Expression>,
+        filter_expressions: Vec<LegacyExpression>,
     ) -> Result<Vec<(String, Option<String>)>> {
         let hive_catalog = ctx.get_catalog(CATALOG_HIVE)?;
         let hive_catalog = hive_catalog.as_any().downcast_ref::<HiveCatalog>().unwrap();
@@ -379,11 +379,11 @@ impl Table for HiveTable {
         self.do_read_partitions(ctx, push_downs).await
     }
 
-    fn table_args(&self) -> Option<Vec<Expression>> {
+    fn table_args(&self) -> Option<Vec<LegacyExpression>> {
         None
     }
 
-    fn read2(
+    fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
         plan: &ReadDataSourcePlan,
@@ -395,7 +395,6 @@ impl Table for HiveTable {
     async fn commit_insertion(
         &self,
         _ctx: Arc<dyn TableContext>,
-        _catalog_name: &str,
         _operations: Vec<DataBlock>,
         _overwrite: bool,
     ) -> Result<()> {
@@ -406,7 +405,7 @@ impl Table for HiveTable {
         )))
     }
 
-    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: &str, _: bool) -> Result<()> {
+    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: bool) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(
             "truncate for table {} is not implemented",
             self.name()
@@ -568,12 +567,6 @@ async fn list_files_from_dir(
     Ok(all_files)
 }
 
-async fn get_file_length(operator: Operator, file: &str) -> Result<u64> {
-    let object = operator.object(file);
-    let meta = object.metadata().await?;
-    Ok(meta.content_length())
-}
-
 async fn do_list_files_from_dir(
     operator: Operator,
     location: String,
@@ -594,10 +587,7 @@ async fn do_list_files_from_dir(
         match de.mode() {
             ObjectMode::FILE => {
                 let filename = path.to_string();
-                let length = match de.content_length() {
-                    Some(len) => len,
-                    None => get_file_length(operator.clone(), path).await?,
-                };
+                let length = de.content_length().await;
                 all_files.push(HiveFileInfo::create(filename, length));
             }
             ObjectMode::DIR => {

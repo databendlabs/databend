@@ -25,6 +25,7 @@ use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::TableSnapshot;
 use common_fuse_meta::meta::Versioned;
 use common_meta_app::schema::TableInfo;
+use opendal::Operator;
 
 use crate::io::BlockCompactor;
 use crate::io::TableMetaLocationGenerator;
@@ -35,6 +36,8 @@ use crate::statistics::merge_statistics;
 use crate::FuseTable;
 use crate::TableMutator;
 
+static MAX_BLOCK_COUNT: usize = 50;
+
 #[derive(Clone)]
 pub struct ReclusterMutator {
     base_mutator: BaseMutator,
@@ -43,6 +46,7 @@ pub struct ReclusterMutator {
     level: i32,
     block_compactor: BlockCompactor,
     threshold: f64,
+    data_accessor: Operator,
 }
 
 impl ReclusterMutator {
@@ -53,6 +57,7 @@ impl ReclusterMutator {
         threshold: f64,
         block_compactor: BlockCompactor,
         blocks_map: BTreeMap<i32, Vec<(usize, BlockMeta)>>,
+        data_accessor: Operator,
     ) -> Result<Self> {
         let base_mutator = BaseMutator::try_create(ctx, location_generator, base_snapshot)?;
         Ok(Self {
@@ -62,6 +67,7 @@ impl ReclusterMutator {
             level: 0,
             block_compactor,
             threshold,
+            data_accessor,
         })
     }
 
@@ -182,6 +188,7 @@ impl TableMutator for ReclusterMutator {
 
             self.selected_blocks = selected_idx
                 .iter()
+                .take(MAX_BLOCK_COUNT)
                 .map(|idx| {
                     let (seg_idx, block_meta) = block_metas[*idx].clone();
                     self.base_mutator
@@ -196,7 +203,7 @@ impl TableMutator for ReclusterMutator {
         Ok(false)
     }
 
-    async fn try_commit(&self, catalog_name: &str, table_info: &TableInfo) -> Result<()> {
+    async fn try_commit(&self, table_info: &TableInfo) -> Result<()> {
         let base_mutator = self.base_mutator.clone();
         let ctx = base_mutator.ctx.clone();
         let (mut segments, mut summary) = self.base_mutator.generate_segments().await?;
@@ -222,10 +229,10 @@ impl TableMutator for ReclusterMutator {
 
         FuseTable::commit_to_meta_server(
             ctx.as_ref(),
-            catalog_name,
             table_info,
             &self.base_mutator.location_generator,
             new_snapshot,
+            &self.data_accessor,
         )
         .await?;
         Ok(())

@@ -25,6 +25,7 @@ use common_meta_types as mt;
 use common_protos::pb;
 use common_storage::StorageFsConfig;
 use common_storage::StorageGcsConfig;
+use common_storage::StorageOssConfig;
 use common_storage::StorageParams;
 use common_storage::StorageS3Config;
 use enumflags2::BitFlags;
@@ -425,6 +426,9 @@ impl FromToProto for StorageParams {
             Some(pb::user_stage_info::stage_storage::Storage::Gcs(s)) => {
                 Ok(StorageParams::Gcs(StorageGcsConfig::from_pb(s)?))
             }
+            Some(pb::user_stage_info::stage_storage::Storage::Oss(s)) => {
+                Ok(StorageParams::Oss(StorageOssConfig::from_pb(s)?))
+            }
             None => Err(Incompatible {
                 reason: "StageStorage.storage cannot be None".to_string(),
             }),
@@ -441,6 +445,9 @@ impl FromToProto for StorageParams {
             }),
             StorageParams::Gcs(v) => Ok(pb::user_stage_info::StageStorage {
                 storage: Some(pb::user_stage_info::stage_storage::Storage::Gcs(v.to_pb()?)),
+            }),
+            StorageParams::Oss(v) => Ok(pb::user_stage_info::StageStorage {
+                storage: Some(pb::user_stage_info::stage_storage::Storage::Oss(v.to_pb()?)),
             }),
             _ => todo!("other stage storage are not supported"),
         }
@@ -568,10 +575,19 @@ impl FromToProto for mt::CopyOptions {
         let size_limit = usize::try_from(p.size_limit).map_err(|err| Incompatible {
             reason: format!("CopyOptions.size_limit cannot be convert to usize: {}", err),
         })?;
+
+        let max_file_size = usize::try_from(p.max_file_size).map_err(|err| Incompatible {
+            reason: format!(
+                "CopyOptions.max_file_size cannot be convert to usize: {}",
+                err
+            ),
+        })?;
         Ok(mt::CopyOptions {
             on_error,
             size_limit,
             purge: p.purge,
+            single: p.single,
+            max_file_size,
         })
     }
 
@@ -580,10 +596,18 @@ impl FromToProto for mt::CopyOptions {
         let size_limit = u64::try_from(self.size_limit).map_err(|err| Incompatible {
             reason: format!("CopyOptions.size_limit cannot be convert to u64: {}", err),
         })?;
+        let max_file_size = u64::try_from(self.max_file_size).map_err(|err| Incompatible {
+            reason: format!(
+                "CopyOptions.max_file_size cannot be convert to u64: {}",
+                err
+            ),
+        })?;
         Ok(pb::user_stage_info::CopyOptions {
             on_error: Some(on_error),
             size_limit,
             purge: self.purge,
+            single: self.single,
+            max_file_size,
         })
     }
 }

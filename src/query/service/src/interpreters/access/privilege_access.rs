@@ -149,6 +149,18 @@ impl AccessChecker for PrivilegeAccess {
             // Others.
             Plan::Insert(_) => {}
             Plan::Delete(_) => {}
+            Plan::Update(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        UserPrivilegeType::Update,
+                    )
+                    .await?;
+            }
             Plan::CreateView(plan) => {
                 session
                     .validate_privilege(

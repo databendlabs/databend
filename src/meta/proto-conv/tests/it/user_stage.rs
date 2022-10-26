@@ -17,12 +17,14 @@
 use common_meta_types as mt;
 use common_storage::StorageFsConfig;
 use common_storage::StorageGcsConfig;
+use common_storage::StorageOssConfig;
 use common_storage::StorageParams;
 use common_storage::StorageS3Config;
 
 use crate::common;
 use crate::user_proto_conv::test_fs_stage_info;
 use crate::user_proto_conv::test_gcs_stage_info;
+use crate::user_proto_conv::test_oss_stage_info;
 use crate::user_proto_conv::test_s3_stage_info;
 
 #[test]
@@ -40,6 +42,170 @@ fn test_user_stage_s3_latest() -> anyhow::Result<()> {
 #[test]
 fn test_user_stage_gcs_latest() -> anyhow::Result<()> {
     common::test_pb_from_to("user_stage_gcs", test_gcs_stage_info())?;
+    Ok(())
+}
+
+#[test]
+fn test_user_stage_oss_latest() -> anyhow::Result<()> {
+    common::test_pb_from_to("user_stage_oss", test_oss_stage_info())?;
+    Ok(())
+}
+
+#[test]
+fn test_user_stage_oss_v13() -> anyhow::Result<()> {
+    // Encoded data of version 13 of user_stage_oss:
+    // It is generated with common::test_pb_from_to.
+    let user_stage_oss_v13 = vec![
+        10, 26, 111, 115, 115, 58, 47, 47, 109, 121, 95, 98, 117, 99, 107, 101, 116, 47, 100, 97,
+        116, 97, 47, 102, 105, 108, 101, 115, 16, 1, 26, 125, 10, 123, 34, 121, 10, 33, 104, 116,
+        116, 112, 115, 58, 47, 47, 111, 115, 115, 45, 99, 110, 45, 108, 105, 116, 97, 110, 103, 46,
+        101, 120, 97, 109, 112, 108, 101, 46, 99, 111, 109, 18, 9, 109, 121, 95, 98, 117, 99, 107,
+        101, 116, 26, 11, 47, 100, 97, 116, 97, 47, 102, 105, 108, 101, 115, 34, 13, 97, 99, 99,
+        101, 115, 115, 95, 107, 101, 121, 95, 105, 100, 42, 17, 97, 99, 99, 101, 115, 115, 95, 107,
+        101, 121, 95, 115, 101, 99, 114, 101, 116, 50, 10, 111, 105, 100, 99, 95, 116, 111, 107,
+        101, 110, 58, 8, 114, 111, 108, 101, 95, 97, 114, 110, 160, 6, 13, 168, 6, 1, 34, 20, 8, 1,
+        16, 128, 8, 26, 1, 124, 34, 2, 47, 47, 40, 2, 160, 6, 13, 168, 6, 1, 42, 10, 10, 3, 32,
+        154, 5, 16, 142, 8, 24, 1, 50, 4, 116, 101, 115, 116, 160, 6, 13, 168, 6, 1,
+    ];
+
+    let want = mt::UserStageInfo {
+        stage_name: "oss://my_bucket/data/files".to_string(),
+        stage_type: mt::StageType::External,
+        stage_params: mt::StageParams {
+            storage: StorageParams::Oss(StorageOssConfig {
+                endpoint_url: "https://oss-cn-litang.example.com".to_string(),
+                bucket: "my_bucket".to_string(),
+                root: "/data/files".to_string(),
+
+                access_key_id: "access_key_id".to_string(),
+                access_key_secret: "access_key_secret".to_string(),
+                oidc_token: "oidc_token".to_string(),
+                role_arn: "role_arn".to_string(),
+            }),
+        },
+        file_format_options: mt::FileFormatOptions {
+            format: mt::StageFileFormatType::Json,
+            skip_header: 1024,
+            field_delimiter: "|".to_string(),
+            record_delimiter: "//".to_string(),
+            compression: mt::StageFileCompression::Bz2,
+        },
+        copy_options: mt::CopyOptions {
+            on_error: mt::OnErrorMode::SkipFileNum(666),
+            size_limit: 1038,
+            purge: true,
+            single: false,
+            max_file_size: 0,
+        },
+        comment: "test".to_string(),
+        ..Default::default()
+    };
+
+    common::test_load_old(func_name!(), user_stage_oss_v13.as_slice(), want)?;
+    Ok(())
+}
+
+#[test]
+fn test_user_stage_s3_v11() -> anyhow::Result<()> {
+    // Encoded data of version 11 of user_stage_s3:
+    // It is generated with common::test_pb_from_to.
+    let user_stage_s3_v11 = vec![
+        10, 24, 115, 51, 58, 47, 47, 109, 121, 98, 117, 99, 107, 101, 116, 47, 100, 97, 116, 97,
+        47, 102, 105, 108, 101, 115, 16, 1, 26, 119, 10, 117, 10, 115, 18, 24, 104, 116, 116, 112,
+        115, 58, 47, 47, 115, 51, 46, 97, 109, 97, 122, 111, 110, 97, 119, 115, 46, 99, 111, 109,
+        26, 9, 109, 121, 95, 107, 101, 121, 95, 105, 100, 34, 13, 109, 121, 95, 115, 101, 99, 114,
+        101, 116, 95, 107, 101, 121, 42, 8, 109, 121, 98, 117, 99, 107, 101, 116, 50, 11, 47, 100,
+        97, 116, 97, 47, 102, 105, 108, 101, 115, 58, 13, 109, 121, 95, 109, 97, 115, 116, 101,
+        114, 95, 107, 101, 121, 82, 17, 109, 121, 95, 115, 101, 99, 117, 114, 105, 116, 121, 95,
+        116, 111, 107, 101, 110, 160, 6, 11, 168, 6, 1, 34, 20, 8, 1, 16, 128, 8, 26, 1, 124, 34,
+        2, 47, 47, 40, 2, 160, 6, 11, 168, 6, 1, 42, 10, 10, 3, 32, 154, 5, 16, 142, 8, 24, 1, 50,
+        4, 116, 101, 115, 116, 160, 6, 11, 168, 6, 1,
+    ];
+
+    let want = mt::UserStageInfo {
+        stage_name: "s3://mybucket/data/files".to_string(),
+        stage_type: mt::StageType::External,
+        stage_params: mt::StageParams {
+            storage: StorageParams::S3(StorageS3Config {
+                bucket: "mybucket".to_string(),
+                root: "/data/files".to_string(),
+                access_key_id: "my_key_id".to_string(),
+                secret_access_key: "my_secret_key".to_string(),
+                master_key: "my_master_key".to_string(),
+                security_token: "my_security_token".to_string(),
+                ..Default::default()
+            }),
+        },
+        file_format_options: mt::FileFormatOptions {
+            format: mt::StageFileFormatType::Json,
+            skip_header: 1024,
+            field_delimiter: "|".to_string(),
+            record_delimiter: "//".to_string(),
+            compression: mt::StageFileCompression::Bz2,
+        },
+        copy_options: mt::CopyOptions {
+            on_error: mt::OnErrorMode::SkipFileNum(666),
+            size_limit: 1038,
+            purge: true,
+            single: false,
+            max_file_size: 0,
+        },
+        comment: "test".to_string(),
+        ..Default::default()
+    };
+
+    common::test_load_old(func_name!(), user_stage_s3_v11.as_slice(), want)?;
+    Ok(())
+}
+
+#[test]
+fn test_user_stage_s3_v9() -> anyhow::Result<()> {
+    // Encoded data of version 9 of user_stage_s3:
+    // It is generated with common::test_pb_from_to.
+    let user_stage_s3_v9 = vec![
+        10, 24, 115, 51, 58, 47, 47, 109, 121, 98, 117, 99, 107, 101, 116, 47, 100, 97, 116, 97,
+        47, 102, 105, 108, 101, 115, 16, 1, 26, 100, 10, 98, 10, 96, 18, 24, 104, 116, 116, 112,
+        115, 58, 47, 47, 115, 51, 46, 97, 109, 97, 122, 111, 110, 97, 119, 115, 46, 99, 111, 109,
+        26, 9, 109, 121, 95, 107, 101, 121, 95, 105, 100, 34, 13, 109, 121, 95, 115, 101, 99, 114,
+        101, 116, 95, 107, 101, 121, 42, 8, 109, 121, 98, 117, 99, 107, 101, 116, 50, 11, 47, 100,
+        97, 116, 97, 47, 102, 105, 108, 101, 115, 58, 13, 109, 121, 95, 109, 97, 115, 116, 101,
+        114, 95, 107, 101, 121, 160, 6, 8, 168, 6, 1, 34, 20, 8, 1, 16, 128, 8, 26, 1, 124, 34, 2,
+        47, 47, 40, 2, 160, 6, 8, 168, 6, 1, 42, 10, 10, 3, 32, 154, 5, 16, 142, 8, 24, 1, 50, 4,
+        116, 101, 115, 116, 160, 6, 8, 168, 6, 1,
+    ];
+
+    let want = mt::UserStageInfo {
+        stage_name: "s3://mybucket/data/files".to_string(),
+        stage_type: mt::StageType::External,
+        stage_params: mt::StageParams {
+            storage: StorageParams::S3(StorageS3Config {
+                bucket: "mybucket".to_string(),
+                root: "/data/files".to_string(),
+                access_key_id: "my_key_id".to_string(),
+                secret_access_key: "my_secret_key".to_string(),
+                master_key: "my_master_key".to_string(),
+                ..Default::default()
+            }),
+        },
+        file_format_options: mt::FileFormatOptions {
+            format: mt::StageFileFormatType::Json,
+            skip_header: 1024,
+            field_delimiter: "|".to_string(),
+            record_delimiter: "//".to_string(),
+            compression: mt::StageFileCompression::Bz2,
+        },
+        copy_options: mt::CopyOptions {
+            on_error: mt::OnErrorMode::SkipFileNum(666),
+            size_limit: 1038,
+            purge: true,
+            single: false,
+            max_file_size: 0,
+        },
+        comment: "test".to_string(),
+        ..Default::default()
+    };
+
+    common::test_load_old(func_name!(), user_stage_s3_v9.as_slice(), want)?;
     Ok(())
 }
 
@@ -74,6 +240,8 @@ fn test_user_stage_fs_v6() -> anyhow::Result<()> {
             on_error: mt::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             purge: true,
+            single: false,
+            max_file_size: 0,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -124,6 +292,8 @@ fn test_user_stage_s3_v6() -> anyhow::Result<()> {
             on_error: mt::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             purge: true,
+            single: false,
+            max_file_size: 0,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -170,6 +340,8 @@ fn test_user_stage_gcs_v6() -> anyhow::Result<()> {
             on_error: mt::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             purge: true,
+            single: false,
+            max_file_size: 0,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -209,6 +381,8 @@ fn test_user_stage_fs_v4() -> anyhow::Result<()> {
             on_error: mt::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             purge: false,
+            single: false,
+            max_file_size: 0,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -259,6 +433,8 @@ fn test_user_stage_s3_v4() -> anyhow::Result<()> {
             on_error: mt::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             purge: false,
+            single: false,
+            max_file_size: 0,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -304,6 +480,8 @@ fn test_user_stage_gcs_v4() -> anyhow::Result<()> {
             on_error: mt::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             purge: false,
+            single: false,
+            max_file_size: 0,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -351,6 +529,8 @@ fn test_user_stage_s3_v1() -> anyhow::Result<()> {
             on_error: mt::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             purge: false,
+            single: false,
+            max_file_size: 0,
         },
         comment: "test".to_string(),
         ..Default::default()

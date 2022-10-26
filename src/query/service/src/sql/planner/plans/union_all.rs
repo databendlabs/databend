@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_planner::IndexType;
 
 use crate::sql::optimizer::Distribution;
 use crate::sql::optimizer::PhysicalProperty;
@@ -25,7 +26,10 @@ use crate::sql::plans::PhysicalOperator;
 use crate::sql::plans::RelOp;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct UnionAll;
+pub struct UnionAll {
+    // Pairs of unioned columns
+    pub pairs: Vec<(IndexType, IndexType)>,
+}
 
 impl Operator for UnionAll {
     fn rel_op(&self) -> RelOp {

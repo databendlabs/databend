@@ -38,6 +38,12 @@ use std::ops::DerefMut;
 /// Defines how to report counter metrics.
 pub trait Count {
     fn incr_count(&mut self, n: i64);
+
+    /// Create a guard instance that increases the counter when created, and decreases the counter when dropped.
+    fn guard() -> WithCount<Self, ()>
+    where Self: Default + Sized {
+        WithCount::new((), Self::default())
+    }
 }
 
 /// Binds a counter to a `T`.

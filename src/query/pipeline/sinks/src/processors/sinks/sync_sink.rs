@@ -33,6 +33,8 @@ pub trait Sink: Send {
         Ok(())
     }
 
+    fn interrupt(&self) {}
+
     fn consume(&mut self, data_block: DataBlock) -> Result<()>;
 }
 
@@ -58,8 +60,8 @@ impl<T: Sink + 'static> Sinker<T> {
 
 #[async_trait::async_trait]
 impl<T: Sink + 'static> Processor for Sinker<T> {
-    fn name(&self) -> &'static str {
-        T::NAME
+    fn name(&self) -> String {
+        T::NAME.to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -92,6 +94,10 @@ impl<T: Sink + 'static> Processor for Sinker<T> {
                 Ok(Event::NeedData)
             }
         }
+    }
+
+    fn interrupt(&self) {
+        self.inner.interrupt()
     }
 
     fn process(&mut self) -> Result<()> {

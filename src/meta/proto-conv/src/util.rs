@@ -43,6 +43,20 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
         "2022-09-09: Add: table.proto/{TableCopiedFileInfo,TableCopiedFileLock} type",
     ),
     (8, "2022-09-16: Add: users.proto/StageFile::entity_tag"),
+    (
+        9,
+        "2022-09-20: Add: config.proto/S3StorageConfig::security_token",
+    ),
+    (10, "2022-09-23: Add: table.proto/TableMeta::catalog"),
+    (
+        11,
+        "2022-09-29: Add: users.proto/CopyOptions::single and CopyOptions::max_file_size",
+    ),
+    (12, "2022-09-29: Add: table.proto/TableMeta::storage_params"),
+    (
+        13,
+        "2022-10-09: Add: config.proto/OssStorageConfig and user.proto/StageStorage::oss",
+    ),
 ];
 
 pub const VER: u64 = META_CHANGE_LOG.last().unwrap().0;

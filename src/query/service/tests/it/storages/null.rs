@@ -45,7 +45,9 @@ async fn test_null_table() -> Result<()> {
         let source_plan = table.read_plan(ctx.clone(), None).await?;
         assert_eq!(table.engine(), "Null");
 
-        let stream = table.read(ctx.clone(), &source_plan).await?;
+        let stream = table
+            .read_data_block_stream(ctx.clone(), &source_plan)
+            .await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let block = &result[0];
         assert_eq!(block.num_columns(), 1);
@@ -53,7 +55,7 @@ async fn test_null_table() -> Result<()> {
 
     // truncate.
     {
-        table.truncate(ctx, "default", false).await?;
+        table.truncate(ctx, false).await?;
     }
 
     Ok(())

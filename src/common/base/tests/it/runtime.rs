@@ -19,6 +19,11 @@ use std::time::Instant;
 
 use common_base::base::*;
 use common_exception::Result;
+use once_cell::sync::Lazy;
+use rand::distributions::Distribution;
+use rand::distributions::Uniform;
+use tokio::sync::Semaphore;
+use tokio::time::sleep;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
 async fn test_runtime() -> Result<()> {
@@ -75,5 +80,43 @@ async fn test_shutdown_long_run_runtime() -> Result<()> {
     assert!(instant.elapsed() >= Duration::from_secs(3));
     assert!(instant.elapsed() < Duration::from_secs(4));
 
+    Ok(())
+}
+
+static START_TIME: Lazy<Instant> = Lazy::new(Instant::now);
+// println can more clearly know if they are parallel
+async fn mock_get_page(i: usize) -> Vec<usize> {
+    let millis = Uniform::from(0..10).sample(&mut rand::thread_rng());
+    println!(
+        "[{}] > get_page({}) will complete in {} ms, {:?}",
+        START_TIME.elapsed().as_millis(),
+        i,
+        millis,
+        std::thread::current().id(),
+    );
+
+    sleep(Duration::from_millis(millis)).await;
+    println!(
+        "[{}] < get_page({}) completed",
+        START_TIME.elapsed().as_millis(),
+        i
+    );
+
+    (i..(i + 1)).collect()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+async fn test_runtime_try_spawn_batch() -> Result<()> {
+    let runtime = Runtime::with_default_worker_threads()?;
+
+    let mut futs = vec![];
+    for i in 0..20 {
+        futs.push(mock_get_page(i));
+    }
+
+    let max_concurrency = Arc::new(Semaphore::new(3));
+    let handlers = runtime.try_spawn_batch(max_concurrency, futs).await?;
+    let result = futures::future::try_join_all(handlers).await.unwrap();
+    assert_eq!(result.len(), 20);
     Ok(())
 }

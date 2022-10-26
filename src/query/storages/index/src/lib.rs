@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![deny(unused_crate_dependencies)]
-
 use common_datavalues::prelude::TypeID;
 use common_datavalues::DataType;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::NullableType;
 
-pub mod bloom_filter;
+mod bloom;
+pub mod filters;
 pub mod index_min_max;
 pub mod range_filter;
 
-pub use bloom_filter::*;
+pub use bloom::BlockFilter;
+pub use bloom::FilterEvalResult;
 pub use index_min_max::*;
 pub use range_filter::*;
 

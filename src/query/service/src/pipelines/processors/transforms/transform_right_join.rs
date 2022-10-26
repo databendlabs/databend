@@ -36,6 +36,10 @@ impl Compactor for RightJoinCompactor {
         "RightJoinCompactor"
     }
 
+    fn interrupt(&self) {
+        self.hash_join_state.interrupt();
+    }
+
     // `compact_final` is called when all the blocks are pushed
     fn compact_final(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
         self.hash_join_state.right_join_blocks(blocks)

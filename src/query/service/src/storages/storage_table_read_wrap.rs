@@ -18,7 +18,7 @@ use common_exception::Result;
 use common_legacy_planners::ReadDataSourcePlan;
 use common_streams::SendableDataBlockStream;
 
-use crate::interpreters::ProcessorExecutorStream;
+use crate::interpreters::PullingExecutorStream;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::Pipeline;
@@ -28,7 +28,7 @@ use crate::storages::Table;
 
 #[async_trait::async_trait]
 pub trait TableStreamReadWrap: Send + Sync {
-    async fn read(
+    async fn read_data_block_stream(
         &self,
         _ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
@@ -37,13 +37,13 @@ pub trait TableStreamReadWrap: Send + Sync {
 
 #[async_trait::async_trait]
 impl<T: Table> TableStreamReadWrap for T {
-    async fn read(
+    async fn read_data_block_stream(
         &self,
         ctx: Arc<QueryContext>,
         plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let mut pipeline = Pipeline::create();
-        self.read2(ctx.clone(), plan, &mut pipeline)?;
+        self.read_data(ctx.clone(), plan, &mut pipeline)?;
 
         let settings = ctx.get_settings();
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
@@ -51,25 +51,25 @@ impl<T: Table> TableStreamReadWrap for T {
 
         let executor = PipelinePullingExecutor::try_create(pipeline, executor_settings)?;
         ctx.set_executor(Arc::downgrade(&executor.get_inner()));
-        Ok(Box::pin(ProcessorExecutorStream::create(executor)?))
+        Ok(Box::pin(PullingExecutorStream::create(executor)?))
     }
 }
 
 #[async_trait::async_trait]
 impl TableStreamReadWrap for dyn Table {
-    async fn read(
+    async fn read_data_block_stream(
         &self,
         ctx: Arc<QueryContext>,
         plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let mut pipeline = Pipeline::create();
-        self.read2(ctx.clone(), plan, &mut pipeline)?;
+        self.read_data(ctx.clone(), plan, &mut pipeline)?;
 
         let settings = ctx.get_settings();
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
         let executor_settings = ExecutorSettings::try_create(&settings)?;
         let executor = PipelinePullingExecutor::try_create(pipeline, executor_settings)?;
         ctx.set_executor(Arc::downgrade(&executor.get_inner()));
-        Ok(Box::pin(ProcessorExecutorStream::create(executor)?))
+        Ok(Box::pin(PullingExecutorStream::create(executor)?))
     }
 }

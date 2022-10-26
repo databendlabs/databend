@@ -115,7 +115,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
 
             match inserted {
                 true => {
-                    if let Some(place) = unsafe { (*unsafe_state).alloc_layout2(params) } {
+                    if let Some(place) = unsafe { (*unsafe_state).alloc_layout(params) } {
                         places.push(place);
                         entity.set_state_value(place.addr());
                     }
@@ -134,14 +134,14 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
         block: &DataBlock,
         params: &Arc<AggregatorParams>,
     ) -> Result<Vec<Vec<ColumnRef>>> {
-        let aggregate_functions_arguments = &params.aggregate_functions_arguments_name;
+        let aggregate_functions_arguments = &params.aggregate_functions_arguments;
         let mut aggregate_arguments_columns =
             Vec::with_capacity(aggregate_functions_arguments.len());
         for function_arguments in aggregate_functions_arguments {
             let mut function_arguments_column = Vec::with_capacity(function_arguments.len());
 
-            for argument_name in function_arguments {
-                let argument_column = block.try_column_by_name(argument_name)?;
+            for argument_index in function_arguments {
+                let argument_column = block.column(*argument_index);
                 function_arguments_column.push(argument_column.clone());
             }
 
@@ -178,11 +178,11 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
     }
 
     #[inline(always)]
-    pub fn group_columns<'a>(names: &[String], block: &'a DataBlock) -> Result<Vec<&'a ColumnRef>> {
-        names
+    pub fn group_columns<'a>(indices: &[usize], block: &'a DataBlock) -> Vec<&'a ColumnRef> {
+        indices
             .iter()
-            .map(|column_name| block.try_column_by_name(column_name))
-            .collect::<Result<Vec<&ColumnRef>>>()
+            .map(|&index| block.column(index))
+            .collect::<Vec<&ColumnRef>>()
     }
 
     #[inline(always)]
@@ -219,7 +219,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
             group_key_builder.append_value(group_entity.get_state_key());
         }
 
-        let schema = &self.params.schema;
+        let schema = &self.params.output_schema;
         let mut columns: Vec<ColumnRef> = Vec::with_capacity(schema.fields().len());
         for mut builder in state_builders {
             columns.push(builder.to_column());
@@ -237,7 +237,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
         // 1.1 and 1.2.
-        let group_columns = Self::group_columns(&self.params.group_columns_name, &block)?;
+        let group_columns = Self::group_columns(&self.params.group_columns, &block);
         let group_keys_state = self
             .method
             .build_keys_state(&group_columns, block.num_rows())?;
@@ -266,7 +266,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
         // 1.1 and 1.2.
-        let group_columns = Self::group_columns(&self.params.group_columns_name, &block)?;
+        let group_columns = Self::group_columns(&self.params.group_columns, &block);
 
         let keys_state = self
             .method
@@ -297,9 +297,10 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
                 }
 
                 let columns = keys_column_builder.finish();
-                Ok(Some(DataBlock::create(self.params.schema.clone(), vec![
-                    columns,
-                ])))
+                Ok(Some(DataBlock::create(
+                    self.params.output_schema.clone(),
+                    vec![columns],
+                )))
             }
         }
     }

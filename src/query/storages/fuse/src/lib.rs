@@ -17,13 +17,16 @@
 #![deny(unused_crate_dependencies)]
 
 mod constants;
+mod fuse_lazy_part;
 mod fuse_part;
+mod fuse_segment;
 mod fuse_table;
 pub mod io;
 pub mod operations;
 pub mod pruning;
 pub mod statistics;
 pub mod table_functions;
+
 use common_catalog::table::NavigationPoint;
 use common_catalog::table::Table;
 use common_catalog::table::TableStatistics;

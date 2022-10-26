@@ -114,7 +114,6 @@ pub use errors::meta_raft_errors::RaftWriteError;
 pub use errors::meta_raft_errors::RetryableError;
 pub use errors::meta_startup_errors::MetaStartupError;
 pub use errors::meta_storage_errors::MetaStorageError;
-pub use errors::meta_storage_errors::MetaStorageResult;
 pub use errors::rpc_errors::ForwardRPCError;
 pub use kv_message::GetKVReply;
 pub use kv_message::GetKVReq;

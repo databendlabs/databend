@@ -12,18 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::iter::repeat;
 use std::iter::TrustedLen;
+use std::sync::atomic::Ordering;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_datablocks::DataBlock;
+use common_datavalues::combine_validities_3;
+use common_datavalues::wrap_nullable;
 use common_datavalues::BooleanColumn;
+use common_datavalues::BooleanType;
 use common_datavalues::BooleanViewer;
 use common_datavalues::Column;
 use common_datavalues::ColumnRef;
 use common_datavalues::ConstColumn;
+use common_datavalues::DataField;
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
-use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use common_datavalues::NullableColumn;
 use common_datavalues::NullableType;
@@ -44,7 +51,6 @@ use crate::pipelines::processors::transforms::hash_join::join_hash_table::Marker
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::sessions::TableContext;
 use crate::sql::planner::plans::JoinType;
-use crate::sql::plans::JoinType::Mark;
 
 pub trait ResultBlocks {
     type Key: ?Sized;
@@ -194,6 +200,28 @@ impl JoinHashTable {
         }
     }
 
+    pub(crate) fn filter_rows_for_right_semi_join(
+        &self,
+        bm: &mut MutableBitmap,
+        build_indexes: &[RowPtr],
+        input: DataBlock,
+    ) -> Result<DataBlock> {
+        let mut row_state = self.hash_join_desc.right_join_desc.row_state.write();
+        for (index, row) in build_indexes.iter().enumerate() {
+            if row_state[row] > 1 && !bm.get(index) {
+                row_state.entry(*row).and_modify(|e| *e -= 1);
+            }
+        }
+        for (index, row) in build_indexes.iter().enumerate() {
+            if row_state[row] > 1 && bm.get(index) {
+                bm.set(index, false);
+                row_state.entry(*row).and_modify(|e| *e -= 1);
+            }
+        }
+        let predicate = BooleanColumn::from_arrow_data(bm.clone().into()).arc();
+        DataBlock::filter_block(input, &predicate)
+    }
+
     // return an (option bitmap, all_true, all_false)
     pub(crate) fn get_other_filters(
         &self,
@@ -245,5 +273,76 @@ impl JoinHashTable {
             let col = NullableColumn::wrap_inner(column.clone(), Some(validity.clone()));
             Ok(col)
         }
+    }
+
+    pub(crate) fn create_marker_block(
+        &self,
+        has_null: bool,
+        markers: Vec<MarkerKind>,
+    ) -> Result<DataBlock> {
+        let mut validity = MutableBitmap::with_capacity(markers.len());
+        let mut boolean_bit_map = MutableBitmap::with_capacity(markers.len());
+
+        for m in markers {
+            let marker = if m == MarkerKind::False && has_null {
+                MarkerKind::Null
+            } else {
+                m
+            };
+            if marker == MarkerKind::Null {
+                validity.push(false);
+            } else {
+                validity.push(true);
+            }
+            if marker == MarkerKind::True {
+                boolean_bit_map.push(true);
+            } else {
+                boolean_bit_map.push(false);
+            }
+        }
+        let boolean_column = BooleanColumn::from_arrow_data(boolean_bit_map.into());
+        let marker_column = Self::set_validity(&boolean_column.arc(), &validity.into())?;
+        let marker_schema = DataSchema::new(vec![DataField::new(
+            &self
+                .hash_join_desc
+                .marker_join_desc
+                .marker_index
+                .ok_or_else(|| ErrorCode::LogicalError("Invalid mark join"))?
+                .to_string(),
+            NullableType::new_impl(BooleanType::new_impl()),
+        )]);
+        Ok(DataBlock::create(DataSchemaRef::from(marker_schema), vec![
+            marker_column,
+        ]))
+    }
+
+    pub(crate) fn init_markers(cols: &[ColumnRef], num_rows: usize) -> Vec<MarkerKind> {
+        let mut markers = vec![MarkerKind::False; num_rows];
+        if cols.iter().any(|c| c.is_nullable() || c.is_null()) {
+            let mut valids = None;
+            for col in cols.iter() {
+                let (is_all_null, tmp_valids_option) = col.validity();
+                if !is_all_null {
+                    if let Some(tmp_valids) = tmp_valids_option.as_ref() {
+                        if tmp_valids.unset_bits() == 0 {
+                            let mut m = MutableBitmap::with_capacity(num_rows);
+                            m.extend_constant(num_rows, true);
+                            valids = Some(m.into());
+                            break;
+                        } else {
+                            valids = combine_validities_3(valids, tmp_valids_option.cloned());
+                        }
+                    }
+                }
+            }
+            if let Some(v) = valids {
+                for (idx, marker) in markers.iter_mut().enumerate() {
+                    if !v.get_bit(idx) {
+                        *marker = MarkerKind::Null;
+                    }
+                }
+            }
+        }
+        markers
     }
 }

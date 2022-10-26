@@ -12,7 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
+
 use common_datablocks::DataBlock;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use super::Compactor;
@@ -22,6 +27,10 @@ pub struct BlockCompactor {
     max_rows_per_block: usize,
     min_rows_per_block: usize,
     max_bytes_per_block: usize,
+    // A flag denoting whether it is a recluster operation.
+    // Will be removed later.
+    is_recluster: bool,
+    aborting: Arc<AtomicBool>,
 }
 
 impl BlockCompactor {
@@ -29,11 +38,14 @@ impl BlockCompactor {
         max_rows_per_block: usize,
         min_rows_per_block: usize,
         max_bytes_per_block: usize,
+        is_recluster: bool,
     ) -> Self {
         BlockCompactor {
             max_rows_per_block,
             min_rows_per_block,
             max_bytes_per_block,
+            is_recluster,
+            aborting: Arc::new(AtomicBool::new(false)),
         }
     }
 }
@@ -47,6 +59,10 @@ impl Compactor for BlockCompactor {
         true
     }
 
+    fn interrupt(&self) {
+        self.aborting.store(true, Ordering::Release);
+    }
+
     fn compact_partial(&self, blocks: &mut Vec<DataBlock>) -> Result<Vec<DataBlock>> {
         if blocks.is_empty() {
             return Ok(vec![]);
@@ -57,9 +73,9 @@ impl Compactor for BlockCompactor {
         let block = blocks[size - 1].clone();
 
         // perfect block
-        if (block.num_rows() >= self.min_rows_per_block
-            && block.num_rows() <= self.max_rows_per_block)
-            || block.memory_size() >= self.max_bytes_per_block
+        if block.num_rows() <= self.max_rows_per_block
+            && (block.num_rows() >= self.min_rows_per_block
+                || block.memory_size() >= self.max_bytes_per_block)
         {
             res.push(block);
             blocks.remove(size - 1);
@@ -70,12 +86,30 @@ impl Compactor for BlockCompactor {
             let merged = DataBlock::concat_blocks(blocks)?;
             blocks.clear();
 
-            // we can't use slice here, it did not deallocate memory
-            if accumulated_rows >= self.max_rows_per_block
-                || accumulated_bytes >= self.max_bytes_per_block
-            {
+            if accumulated_rows >= self.max_rows_per_block {
+                // Used for recluster opreation, will be removed later.
+                if self.is_recluster {
+                    let mut offset = 0;
+                    let mut remain_rows = accumulated_rows;
+                    while remain_rows >= self.max_rows_per_block {
+                        let cut = merged.slice(offset, self.max_rows_per_block);
+                        res.push(cut);
+                        offset += self.max_rows_per_block;
+                        remain_rows -= self.max_rows_per_block;
+                    }
+
+                    if remain_rows > 0 {
+                        blocks.push(merged.slice(offset, remain_rows));
+                    }
+                } else {
+                    // we can't use slice here, it did not deallocate memory
+                    res.push(merged);
+                }
+            } else if accumulated_bytes >= self.max_bytes_per_block {
+                // too large for merged block, flush to results
                 res.push(merged);
             } else {
+                // keep the merged block into blocks for future merge
                 blocks.push(merged);
             }
         }
@@ -89,9 +123,16 @@ impl Compactor for BlockCompactor {
         let mut accumulated_rows = 0;
 
         for block in blocks.iter() {
+            if self.aborting.load(Ordering::Relaxed) {
+                return Err(ErrorCode::AbortedQuery(
+                    "Aborted query, because the server is shutting down or the query was killed.",
+                ));
+            }
+
             // Perfect block, no need to compact
-            if block.num_rows() >= self.min_rows_per_block
-                && block.num_rows() <= self.max_rows_per_block
+            if block.num_rows() <= self.max_rows_per_block
+                && (block.num_rows() >= self.min_rows_per_block
+                    || block.memory_size() >= self.max_bytes_per_block)
             {
                 res.push(block.clone());
             } else {
@@ -110,6 +151,12 @@ impl Compactor for BlockCompactor {
                 temp_blocks.push(block);
 
                 while accumulated_rows >= self.max_rows_per_block {
+                    if self.aborting.load(Ordering::Relaxed) {
+                        return Err(ErrorCode::AbortedQuery(
+                            "Aborted query, because the server is shutting down or the query was killed.",
+                        ));
+                    }
+
                     let block = DataBlock::concat_blocks(&temp_blocks)?;
                     res.push(block.slice(0, self.max_rows_per_block));
                     accumulated_rows -= self.max_rows_per_block;
@@ -126,6 +173,12 @@ impl Compactor for BlockCompactor {
         }
 
         if accumulated_rows != 0 {
+            if self.aborting.load(Ordering::Relaxed) {
+                return Err(ErrorCode::AbortedQuery(
+                    "Aborted query, because the server is shutting down or the query was killed.",
+                ));
+            }
+
             let block = DataBlock::concat_blocks(&temp_blocks)?;
             res.push(block);
         }

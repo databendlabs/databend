@@ -120,13 +120,14 @@ impl<const MODE: usize> TransformLimitImpl<MODE> {
 
 #[async_trait::async_trait]
 impl<const MODE: usize> Processor for TransformLimitImpl<MODE> {
-    fn name(&self) -> &'static str {
+    fn name(&self) -> String {
         match MODE {
             ONLY_LIMIT => "LimitTransform",
             ONLY_OFFSET => "OffsetTransform",
             OFFSET_AND_LIMIT => "OffsetAndLimitTransform",
             _ => unreachable!(),
         }
+        .to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

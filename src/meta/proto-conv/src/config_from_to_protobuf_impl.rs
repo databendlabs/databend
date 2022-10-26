@@ -15,6 +15,7 @@
 use common_protos::pb;
 use common_storage::StorageFsConfig;
 use common_storage::StorageGcsConfig;
+use common_storage::StorageOssConfig;
 use common_storage::StorageS3Config;
 
 use crate::check_ver;
@@ -35,6 +36,7 @@ impl FromToProto for StorageS3Config {
             endpoint_url: p.endpoint_url,
             access_key_id: p.access_key_id,
             secret_access_key: p.secret_access_key,
+            security_token: p.security_token,
             bucket: p.bucket,
             root: p.root,
             master_key: p.master_key,
@@ -51,6 +53,7 @@ impl FromToProto for StorageS3Config {
             endpoint_url: self.endpoint_url.clone(),
             access_key_id: self.access_key_id.clone(),
             secret_access_key: self.secret_access_key.clone(),
+            security_token: self.security_token.clone(),
             bucket: self.bucket.clone(),
             root: self.root.clone(),
             master_key: self.master_key.clone(),
@@ -102,6 +105,40 @@ impl FromToProto for StorageFsConfig {
             version: VER,
             min_compatible: MIN_COMPATIBLE_VER,
             root: self.root.clone(),
+        })
+    }
+}
+
+impl FromToProto for StorageOssConfig {
+    type PB = pb::OssStorageConfig;
+
+    fn from_pb(p: pb::OssStorageConfig) -> Result<Self, Incompatible>
+    where Self: Sized {
+        check_ver(p.version, p.min_compatible)?;
+
+        Ok(StorageOssConfig {
+            endpoint_url: p.endpoint_url,
+            bucket: p.bucket,
+            root: p.root,
+
+            access_key_id: p.access_key_id,
+            access_key_secret: p.access_key_secret,
+            oidc_token: p.oidc_token,
+            role_arn: p.role_arn,
+        })
+    }
+
+    fn to_pb(&self) -> Result<pb::OssStorageConfig, Incompatible> {
+        Ok(pb::OssStorageConfig {
+            version: VER,
+            min_compatible: MIN_COMPATIBLE_VER,
+            endpoint_url: self.endpoint_url.clone(),
+            bucket: self.bucket.clone(),
+            root: self.root.clone(),
+            access_key_id: self.access_key_id.clone(),
+            access_key_secret: self.access_key_secret.clone(),
+            oidc_token: self.oidc_token.clone(),
+            role_arn: self.role_arn.clone(),
         })
     }
 }

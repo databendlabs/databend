@@ -19,9 +19,10 @@ use std::sync::Arc;
 use common_catalog::catalog::CatalogManager;
 use common_catalog::catalog::CATALOG_DEFAULT;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::Expression;
+use common_legacy_expression::LegacyExpression;
 use common_legacy_planners::Extras;
 use common_legacy_planners::PrewhereInfo;
 use common_legacy_planners::Projection;
@@ -39,7 +40,6 @@ use super::Exchange as PhysicalExchange;
 use super::Filter;
 use super::HashJoin;
 use super::Limit;
-use super::Project;
 use super::Sort;
 use super::TableScan;
 use crate::catalogs::CatalogManagerHelper;
@@ -173,6 +173,16 @@ impl PhysicalPlanBuilder {
             RelOperator::PhysicalHashJoin(join) => {
                 let build_side = self.build(s_expr.child(1)?).await?;
                 let probe_side = self.build(s_expr.child(0)?).await?;
+                let build_side_schema = build_side.output_schema()?;
+                let probe_side_schema = probe_side.output_schema()?;
+                let merged_schema = DataSchemaRefExt::create(
+                    probe_side_schema
+                        .fields()
+                        .iter()
+                        .chain(build_side_schema.fields())
+                        .cloned()
+                        .collect(),
+                );
                 Ok(PhysicalPlan::HashJoin(HashJoin {
                     build: Box::new(build_side),
                     probe: Box::new(probe_side),
@@ -181,7 +191,7 @@ impl PhysicalPlanBuilder {
                         .build_keys
                         .iter()
                         .map(|v| {
-                            let mut builder = PhysicalScalarBuilder;
+                            let mut builder = PhysicalScalarBuilder::new(&build_side_schema);
                             builder.build(v)
                         })
                         .collect::<Result<_>>()?,
@@ -189,7 +199,7 @@ impl PhysicalPlanBuilder {
                         .probe_keys
                         .iter()
                         .map(|v| {
-                            let mut builder = PhysicalScalarBuilder;
+                            let mut builder = PhysicalScalarBuilder::new(&probe_side_schema);
                             builder.build(v)
                         })
                         .collect::<Result<_>>()?,
@@ -197,7 +207,7 @@ impl PhysicalPlanBuilder {
                         .other_conditions
                         .iter()
                         .map(|v| {
-                            let mut builder = PhysicalScalarBuilder;
+                            let mut builder = PhysicalScalarBuilder::new(&merged_schema);
                             builder.build(v)
                         })
                         .collect::<Result<_>>()?,
@@ -205,44 +215,38 @@ impl PhysicalPlanBuilder {
                     from_correlated_subquery: join.from_correlated_subquery,
                 }))
             }
-            RelOperator::Project(project) => {
-                let input = self.build(s_expr.child(0)?).await?;
-                let input_schema = input.output_schema()?;
-                Ok(PhysicalPlan::Project(Project {
-                    input: Box::new(input),
-                    projections: project
-                        .columns
-                        .iter()
-                        .sorted()
-                        .map(|index| input_schema.index_of(index.to_string().as_str()))
-                        .collect::<Result<_>>()?,
 
-                    columns: project.columns.clone(),
+            RelOperator::EvalScalar(eval_scalar) => {
+                let input = Box::new(self.build(s_expr.child(0)?).await?);
+                let input_schema = input.output_schema()?;
+                Ok(PhysicalPlan::EvalScalar(EvalScalar {
+                    input,
+                    scalars: eval_scalar
+                        .items
+                        .iter()
+                        .map(|item| {
+                            let mut builder = PhysicalScalarBuilder::new(&input_schema);
+                            Ok((builder.build(&item.scalar)?, item.index.to_string()))
+                        })
+                        .collect::<Result<_>>()?,
                 }))
             }
-            RelOperator::EvalScalar(eval_scalar) => Ok(PhysicalPlan::EvalScalar(EvalScalar {
-                input: Box::new(self.build(s_expr.child(0)?).await?),
-                scalars: eval_scalar
-                    .items
-                    .iter()
-                    .map(|item| {
-                        let mut builder = PhysicalScalarBuilder;
-                        Ok((builder.build(&item.scalar)?, item.index.to_string()))
-                    })
-                    .collect::<Result<_>>()?,
-            })),
 
-            RelOperator::Filter(filter) => Ok(PhysicalPlan::Filter(Filter {
-                input: Box::new(self.build(s_expr.child(0)?).await?),
-                predicates: filter
-                    .predicates
-                    .iter()
-                    .map(|pred| {
-                        let mut builder = PhysicalScalarBuilder;
-                        builder.build(pred)
-                    })
-                    .collect::<Result<_>>()?,
-            })),
+            RelOperator::Filter(filter) => {
+                let input = Box::new(self.build(s_expr.child(0)?).await?);
+                let input_schema = input.output_schema()?;
+                Ok(PhysicalPlan::Filter(Filter {
+                    input,
+                    predicates: filter
+                        .predicates
+                        .iter()
+                        .map(|pred| {
+                            let mut builder = PhysicalScalarBuilder::new(&input_schema);
+                            builder.build(pred)
+                        })
+                        .collect::<Result<_>>()?,
+                }))
+            }
             RelOperator::Aggregate(agg) => {
                 let input = self.build(s_expr.child(0)?).await?;
                 let group_items: Vec<ColumnID> = agg
@@ -250,88 +254,155 @@ impl PhysicalPlanBuilder {
                     .iter()
                     .map(|v| v.index.to_string())
                     .collect();
-                let agg_funcs: Vec<AggregateFunctionDesc> = agg.aggregate_functions.iter().map(|v| {
-                    if let Scalar::AggregateFunction(agg) = &v.scalar {
-                        Ok(AggregateFunctionDesc {
-                            sig: AggregateFunctionSignature {
-                                name: agg.func_name.clone(),
-                                args: agg.args.iter().map(|s| {
-                                    s.data_type()
-                                }).collect(),
-                                params: agg.params.clone(),
-                                return_type: *agg.return_type.clone(),
-                            },
-                            column_id: v.index.to_string(),
-                            args: agg.args.iter().map(|arg| {
-                                if let Scalar::BoundColumnRef(col) = arg {
-                                    Ok(col.column.index.to_string())
-                                } else {
-                                    Err(ErrorCode::LogicalError(
-                                        "Aggregate function argument must be a BoundColumnRef".to_string()
-                                    ))
-                                }
-                            }).collect::<Result<_>>()?,
-                        })
-                    } else {
-                        Err(ErrorCode::LogicalError("Expected aggregate function".to_string()))
-                    }
-                }).collect::<Result<_>>()?;
                 let result = match &agg.mode {
-                    AggregateMode::Partial => match input {
-                        PhysicalPlan::Exchange(PhysicalExchange { input, kind, .. }) => {
-                            let aggregate_partial = AggregatePartial {
-                                input,
+                    AggregateMode::Partial => {
+                        let input_schema = input.output_schema()?;
+                        let agg_funcs: Vec<AggregateFunctionDesc> = agg.aggregate_functions.iter().map(|v| {
+                                if let Scalar::AggregateFunction(agg) = &v.scalar {
+                                    Ok(AggregateFunctionDesc {
+                                        sig: AggregateFunctionSignature {
+                                            name: agg.func_name.clone(),
+                                            args: agg.args.iter().map(|s| {
+                                                s.data_type()
+                                            }).collect(),
+                                            params: agg.params.clone(),
+                                            return_type: *agg.return_type.clone(),
+                                        },
+                                        column_id: v.index.to_string(),
+                                        args: agg.args.iter().map(|arg| {
+                                            if let Scalar::BoundColumnRef(col) = arg {
+                                                input_schema.index_of(&col.column.index.to_string())
+                                            } else {
+                                                Err(ErrorCode::LogicalError(
+                                                    "Aggregate function argument must be a BoundColumnRef".to_string()
+                                                ))
+                                            }
+                                        }).collect::<Result<_>>()?,
+                                        arg_indices: agg.args.iter().map(|arg| {
+                                            if let Scalar::BoundColumnRef(col) = arg {
+                                                Ok(col.column.index)
+                                            } else {
+                                                Err(ErrorCode::LogicalError(
+                                                    "Aggregate function argument must be a BoundColumnRef".to_string()
+                                                ))
+                                            }
+                                        }).collect::<Result<_>>()?,
+                                    })
+                                } else {
+                                    Err(ErrorCode::LogicalError("Expected aggregate function".to_string()))
+                                }
+                            }).collect::<Result<_>>()?;
+
+                        match input {
+                            PhysicalPlan::Exchange(PhysicalExchange { input, kind, .. }) => {
+                                let aggregate_partial = AggregatePartial {
+                                    input,
+                                    agg_funcs,
+                                    group_by: group_items,
+                                };
+
+                                let output_schema = aggregate_partial.output_schema()?;
+                                let group_by_key_index = output_schema.index_of("_group_by_key")?;
+
+                                PhysicalPlan::Exchange(PhysicalExchange {
+                                    kind,
+                                    input: Box::new(PhysicalPlan::AggregatePartial(
+                                        aggregate_partial,
+                                    )),
+                                    keys: vec![PhysicalScalar::IndexedVariable {
+                                        index: group_by_key_index,
+                                        data_type: output_schema
+                                            .field(group_by_key_index)
+                                            .data_type()
+                                            .clone(),
+                                        display_name: "_group_by_key".to_string(),
+                                    }],
+                                })
+                            }
+                            _ => PhysicalPlan::AggregatePartial(AggregatePartial {
                                 agg_funcs,
                                 group_by: group_items,
-                            };
-
-                            let output_schema = aggregate_partial.output_schema()?;
-                            let group_by_key_field =
-                                output_schema.field_with_name("_group_by_key")?;
-
-                            PhysicalPlan::Exchange(PhysicalExchange {
-                                kind,
-                                input: Box::new(PhysicalPlan::AggregatePartial(aggregate_partial)),
-                                keys: vec![PhysicalScalar::Variable {
-                                    column_id: group_by_key_field.name().clone(),
-                                    data_type: group_by_key_field.data_type().clone(),
-                                }],
-                            })
+                                input: Box::new(input),
+                            }),
                         }
-                        _ => PhysicalPlan::AggregatePartial(AggregatePartial {
-                            agg_funcs,
-                            group_by: group_items,
-                            input: Box::new(input),
-                        }),
-                    },
+                    }
 
                     // Hack to get before group by schema, we should refactor this
-                    AggregateMode::Final => match input {
-                        PhysicalPlan::AggregatePartial(ref agg) => {
-                            let before_group_by_schema = agg.input.output_schema()?;
-                            PhysicalPlan::AggregateFinal(AggregateFinal {
-                                input: Box::new(input),
-                                group_by: group_items,
-                                agg_funcs,
-                                before_group_by_schema,
-                            })
-                        }
+                    AggregateMode::Final => {
+                        let input_schema = match input {
+                            PhysicalPlan::AggregatePartial(ref agg) => agg.input.output_schema()?,
 
-                        PhysicalPlan::Exchange(PhysicalExchange {
-                            input: box PhysicalPlan::AggregatePartial(ref agg),
-                            ..
-                        }) => {
-                            let before_group_by_schema = agg.input.output_schema()?;
-                            PhysicalPlan::AggregateFinal(AggregateFinal {
-                                input: Box::new(input),
-                                group_by: group_items,
-                                agg_funcs,
-                                before_group_by_schema,
-                            })
-                        }
+                            PhysicalPlan::Exchange(PhysicalExchange {
+                                input: box PhysicalPlan::AggregatePartial(ref agg),
+                                ..
+                            }) => agg.input.output_schema()?,
 
-                        _ => unreachable!(),
-                    },
+                            _ => unreachable!(),
+                        };
+
+                        let agg_funcs: Vec<AggregateFunctionDesc> = agg.aggregate_functions.iter().map(|v| {
+                            if let Scalar::AggregateFunction(agg) = &v.scalar {
+                                Ok(AggregateFunctionDesc {
+                                    sig: AggregateFunctionSignature {
+                                        name: agg.func_name.clone(),
+                                        args: agg.args.iter().map(|s| {
+                                            s.data_type()
+                                        }).collect(),
+                                        params: agg.params.clone(),
+                                        return_type: *agg.return_type.clone(),
+                                    },
+                                    column_id: v.index.to_string(),
+                                    args: agg.args.iter().map(|arg| {
+                                        if let Scalar::BoundColumnRef(col) = arg {
+                                            input_schema.index_of(&col.column.index.to_string())
+                                        } else {
+                                            Err(ErrorCode::LogicalError(
+                                                "Aggregate function argument must be a BoundColumnRef".to_string()
+                                            ))
+                                        }
+                                    }).collect::<Result<_>>()?,
+                                    arg_indices: agg.args.iter().map(|arg| {
+                                        if let Scalar::BoundColumnRef(col) = arg {
+                                            Ok(col.column.index)
+                                        } else {
+                                            Err(ErrorCode::LogicalError(
+                                                "Aggregate function argument must be a BoundColumnRef".to_string()
+                                            ))
+                                        }
+                                    }).collect::<Result<_>>()?,
+                                })
+                            } else {
+                                Err(ErrorCode::LogicalError("Expected aggregate function".to_string()))
+                            }
+                        }).collect::<Result<_>>()?;
+
+                        match input {
+                            PhysicalPlan::AggregatePartial(ref agg) => {
+                                let before_group_by_schema = agg.input.output_schema()?;
+                                PhysicalPlan::AggregateFinal(AggregateFinal {
+                                    input: Box::new(input),
+                                    group_by: group_items,
+                                    agg_funcs,
+                                    before_group_by_schema,
+                                })
+                            }
+
+                            PhysicalPlan::Exchange(PhysicalExchange {
+                                input: box PhysicalPlan::AggregatePartial(ref agg),
+                                ..
+                            }) => {
+                                let before_group_by_schema = agg.input.output_schema()?;
+                                PhysicalPlan::AggregateFinal(AggregateFinal {
+                                    input: Box::new(input),
+                                    group_by: group_items,
+                                    agg_funcs,
+                                    before_group_by_schema,
+                                })
+                            }
+
+                            _ => unreachable!(),
+                        }
+                    }
                     AggregateMode::Initial => unreachable!(),
                 };
 
@@ -356,11 +427,13 @@ impl PhysicalPlanBuilder {
                 offset: limit.offset,
             })),
             RelOperator::Exchange(exchange) => {
+                let input = Box::new(self.build(s_expr.child(0)?).await?);
+                let input_schema = input.output_schema()?;
                 let mut keys = vec![];
                 let kind = match exchange {
                     Exchange::Hash(scalars) => {
                         for scalar in scalars {
-                            let mut builder = PhysicalScalarBuilder;
+                            let mut builder = PhysicalScalarBuilder::new(&input_schema);
                             keys.push(builder.build(scalar)?);
                         }
                         StageKind::Normal
@@ -369,18 +442,28 @@ impl PhysicalPlanBuilder {
                     Exchange::Merge => StageKind::Merge,
                 };
                 Ok(PhysicalPlan::Exchange(PhysicalExchange {
-                    input: Box::new(self.build(s_expr.child(0)?).await?),
+                    input,
                     kind,
                     keys,
                 }))
             }
-            RelOperator::UnionAll(_) => {
+            RelOperator::UnionAll(op) => {
                 let left = self.build(s_expr.child(0)?).await?;
-                let schema = left.output_schema()?;
+                let left_schema = left.output_schema()?;
+                let pairs = op
+                    .pairs
+                    .iter()
+                    .map(|(l, r)| (l.to_string(), r.to_string()))
+                    .collect::<Vec<_>>();
+                let fields = pairs
+                    .iter()
+                    .map(|(left, _)| Ok(left_schema.field_with_name(left)?.clone()))
+                    .collect::<Result<Vec<_>>>()?;
                 Ok(PhysicalPlan::UnionAll(UnionAll {
                     left: Box::new(left),
                     right: Box::new(self.build(s_expr.child(1)?).await?),
-                    schema,
+                    pairs,
+                    schema: DataSchemaRefExt::create(fields),
                 }))
             }
             _ => Err(ErrorCode::LogicalError(format!(
@@ -476,7 +559,7 @@ impl PhysicalPlanBuilder {
                     .map(|item| {
                         builder
                             .build_column_ref(item.index)
-                            .map(|c| Expression::Sort {
+                            .map(|c| LegacyExpression::Sort {
                                 expr: Box::new(c.clone()),
                                 asc: item.asc,
                                 nulls_first: item.nulls_first,
@@ -497,16 +580,37 @@ impl PhysicalPlanBuilder {
     }
 }
 
-pub struct PhysicalScalarBuilder;
+pub struct PhysicalScalarBuilder<'a> {
+    input_schema: &'a DataSchemaRef,
+}
 
-#[allow(clippy::only_used_in_recursion)]
-impl PhysicalScalarBuilder {
+impl<'a> PhysicalScalarBuilder<'a> {
+    pub fn new(input_schema: &'a DataSchemaRef) -> Self {
+        Self { input_schema }
+    }
+
     pub fn build(&mut self, scalar: &Scalar) -> Result<PhysicalScalar> {
         match scalar {
-            Scalar::BoundColumnRef(column_ref) => Ok(PhysicalScalar::Variable {
-                column_id: column_ref.column.index.to_string(),
-                data_type: column_ref.data_type(),
-            }),
+            Scalar::BoundColumnRef(column_ref) => {
+                // Remap string name to index in data block
+                let index = self
+                    .input_schema
+                    .index_of(&column_ref.column.index.to_string())?;
+                Ok(PhysicalScalar::IndexedVariable {
+                    data_type: column_ref.data_type(),
+                    index,
+                    display_name: format!(
+                        "{}{} (#{})",
+                        column_ref
+                            .column
+                            .table_name
+                            .as_ref()
+                            .map_or("".to_string(), |t| t.to_string() + "."),
+                        column_ref.column.column_name.clone(),
+                        column_ref.column.index
+                    ),
+                })
+            }
             Scalar::ConstantExpr(constant) => Ok(PhysicalScalar::Constant {
                 value: constant.value.clone(),
                 data_type: *constant.data_type.clone(),

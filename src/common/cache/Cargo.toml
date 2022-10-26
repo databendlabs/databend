@@ -1,10 +1,10 @@
 [package]
 name = "common-cache"
-version = "0.1.0"
-authors = ["Databend Authors <opensource@datafuselabs.com>"]
-license = "Apache-2.0"
-publish = false
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
 
 [lib]
 doctest = false
@@ -21,9 +21,9 @@ common-exception = { path = "../exception" }
 # Github dependencies
 
 # Crates.io dependencies
-filetime = "0.2.16"
+filetime = "0.2.17"
 ritelinked = { version = "0.3.2", default-features = false, features = ["ahash", "inline-more"] }
-tracing = "0.1.35"
+tracing = "0.1.36"
 walkdir = "2.3.2"
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]

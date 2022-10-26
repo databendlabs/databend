@@ -32,15 +32,19 @@ pub struct StorageConfig {
 
 /// Storage params which contains the detailed storage info.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type")]
 pub enum StorageParams {
     Azblob(StorageAzblobConfig),
     Fs(StorageFsConfig),
+    Ftp(StorageFtpConfig),
     Gcs(StorageGcsConfig),
     #[cfg(feature = "storage-hdfs")]
     Hdfs(StorageHdfsConfig),
     Http(StorageHttpConfig),
+    Ipfs(StorageIpfsConfig),
     Memory,
     Obs(StorageObsConfig),
+    Oss(StorageOssConfig),
     S3(StorageS3Config),
 }
 
@@ -60,6 +64,9 @@ impl Display for StorageParams {
                 v.container, v.root, v.endpoint_url
             ),
             StorageParams::Fs(v) => write!(f, "fs://root={}", v.root),
+            StorageParams::Ftp(v) => {
+                write!(f, "ftp://root={},endpoint={}", v.root, v.endpoint)
+            }
             StorageParams::Gcs(v) => write!(
                 f,
                 "gcs://bucket={},root={},endpoint={}",
@@ -72,10 +79,18 @@ impl Display for StorageParams {
             StorageParams::Http(v) => {
                 write!(f, "http://endpoint={},paths={:?}", v.endpoint_url, v.paths)
             }
+            StorageParams::Ipfs(c) => {
+                write!(f, "ipfs://endpoint={},root={}", c.endpoint_url, c.root)
+            }
             StorageParams::Memory => write!(f, "memory://"),
             StorageParams::Obs(v) => write!(
                 f,
                 "obs://bucket={},root={},endpoint={}",
+                v.bucket, v.root, v.endpoint_url
+            ),
+            StorageParams::Oss(v) => write!(
+                f,
+                "oss://bucket={},root={},endpoint={}",
                 v.bucket, v.root, v.endpoint_url
             ),
             StorageParams::S3(v) => {
@@ -97,11 +112,14 @@ impl StorageParams {
         match self {
             StorageParams::Azblob(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Fs(_) => false,
+            StorageParams::Ftp(v) => v.endpoint.starts_with("ftps://"),
             #[cfg(feature = "storage-hdfs")]
             StorageParams::Hdfs(_) => false,
             StorageParams::Http(v) => v.endpoint_url.starts_with("https://"),
+            StorageParams::Ipfs(c) => c.endpoint_url.starts_with("https://"),
             StorageParams::Memory => false,
             StorageParams::Obs(v) => v.endpoint_url.starts_with("https://"),
+            StorageParams::Oss(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::S3(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Gcs(v) => v.endpoint_url.starts_with("https://"),
         }
@@ -141,6 +159,38 @@ impl Default for StorageFsConfig {
         Self {
             root: "_data".to_string(),
         }
+    }
+}
+
+pub const STORAGE_FTP_DEFAULT_ENDPOINT: &str = "ftps://127.0.0.1";
+/// Config for FTP and FTPS data source
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StorageFtpConfig {
+    pub endpoint: String,
+    pub root: String,
+    pub username: String,
+    pub password: String,
+}
+
+impl Default for StorageFtpConfig {
+    fn default() -> Self {
+        Self {
+            endpoint: STORAGE_FTP_DEFAULT_ENDPOINT.to_string(),
+            username: "".to_string(),
+            password: "".to_string(),
+            root: "/".to_string(),
+        }
+    }
+}
+
+impl Debug for StorageFtpConfig {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StorageFtpConfig")
+            .field("endpoint", &self.endpoint)
+            .field("root", &self.root)
+            .field("username", &self.username)
+            .field("password", &mask_string(self.password.as_str(), 3))
+            .finish()
     }
 }
 
@@ -200,6 +250,13 @@ pub struct StorageS3Config {
     pub bucket: String,
     pub access_key_id: String,
     pub secret_access_key: String,
+    /// Temporary security token used for authentications
+    ///
+    /// This recommended to use since users don't need to store their permanent credentials in their
+    /// scripts or worksheets.
+    ///
+    /// refer to [documentations](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp.html) for details.
+    pub security_token: String,
     pub master_key: String,
     pub root: String,
     /// This flag is used internally to control whether databend load
@@ -220,6 +277,7 @@ impl Default for StorageS3Config {
             bucket: "".to_string(),
             access_key_id: "".to_string(),
             secret_access_key: "".to_string(),
+            security_token: "".to_string(),
             master_key: "".to_string(),
             root: "".to_string(),
             disable_credential_loader: false,
@@ -242,6 +300,7 @@ impl Debug for StorageS3Config {
                 "secret_access_key",
                 &mask_string(&self.secret_access_key, 3),
             )
+            .field("security_token", &mask_string(&self.security_token, 3))
             .field("master_key", &mask_string(&self.master_key, 3))
             .finish()
     }
@@ -252,6 +311,14 @@ impl Debug for StorageS3Config {
 pub struct StorageHttpConfig {
     pub endpoint_url: String,
     pub paths: Vec<String>,
+}
+
+pub const STORAGE_IPFS_DEFAULT_ENDPOINT: &str = "https://ipfs.io";
+/// Config for IPFS storage backend
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StorageIpfsConfig {
+    pub endpoint_url: String,
+    pub root: String,
 }
 
 /// Config for storage backend obs.
@@ -275,6 +342,34 @@ impl Debug for StorageObsConfig {
                 "secret_access_key",
                 &mask_string(&self.secret_access_key, 3),
             )
+            .finish()
+    }
+}
+/// config for Aliyun Object Storage Service
+#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StorageOssConfig {
+    pub endpoint_url: String,
+    pub bucket: String,
+    pub access_key_id: String,
+    pub access_key_secret: String,
+    pub oidc_token: String,
+    pub role_arn: String,
+    pub root: String,
+}
+
+impl Debug for StorageOssConfig {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StorageOssConfig")
+            .field("endpoint_url", &self.endpoint_url)
+            .field("bucket", &self.bucket)
+            .field("root", &self.root)
+            .field("access_key_id", &mask_string(&self.access_key_id, 3))
+            .field(
+                "access_key_secret",
+                &mask_string(&self.access_key_secret, 3),
+            )
+            .field("oidc_token", &mask_string(&self.oidc_token, 3))
+            .field("role_arn", &mask_string(&self.role_arn, 3))
             .finish()
     }
 }

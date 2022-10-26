@@ -62,8 +62,8 @@ impl<T: AsyncSink + 'static> AsyncSinker<T> {
 
 #[async_trait::async_trait]
 impl<T: AsyncSink + 'static> Processor for AsyncSinker<T> {
-    fn name(&self) -> &'static str {
-        T::NAME
+    fn name(&self) -> String {
+        T::NAME.to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

@@ -47,7 +47,7 @@ where
     Result::Ok(chunk)
 }
 
-async fn read_columns_async<'a, R: AsyncRead + AsyncSeek + Send + Unpin>(
+pub async fn read_columns_async<'a, R: AsyncRead + AsyncSeek + Send + Unpin>(
     reader: &mut R,
     columns: &'a [ColumnChunkMetaData],
     field_name: &str,

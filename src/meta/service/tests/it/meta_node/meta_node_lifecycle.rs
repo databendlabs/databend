@@ -199,13 +199,26 @@ async fn test_meta_node_leave() -> anyhow::Result<()> {
     let (mut _nlog, tcs) = start_meta_node_cluster(btreeset![0, 1, 2], btreeset![3]).await?;
     let mut all = test_context_nodes(&tcs);
 
-    let leader_id = all[0].raft.metrics().borrow().current_leader.unwrap();
+    let leader_id = 0;
+    let leave_node_id = 1;
+
     let leader = all[leader_id as usize].clone();
 
     // leave a node
-    let leave_node_id = 1;
-    let admin_req = leave_req(leave_node_id, 0);
-    leader.handle_forwardable_request(admin_req).await?;
+    let req = ForwardRequest {
+        forward_to_leader: 0,
+        body: ForwardRequestBody::Leave(LeaveRequest {
+            node_id: leave_node_id,
+        }),
+    };
+
+    leader.handle_forwardable_request(req).await?;
+
+    leader
+        .raft
+        .wait(timeout())
+        .members(btreeset! {0,2}, "node-1 left the cluster")
+        .await?;
 
     info!("--- stop all meta node");
 
@@ -375,6 +388,7 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
         .wait(timeout())
         .state(State::Learner, "learner restart")
         .await?;
+    mn0.raft.add_learner(1, false).await?;
     mn1.raft
         .wait(timeout())
         .current_leader(0, "node-1 has leader")
@@ -496,13 +510,6 @@ fn join_req(
             endpoint,
             grpc_api_addr,
         }),
-    }
-}
-
-fn leave_req(node_id: NodeId, forward: u64) -> ForwardRequest {
-    ForwardRequest {
-        forward_to_leader: forward,
-        body: ForwardRequestBody::Leave(LeaveRequest { node_id }),
     }
 }
 

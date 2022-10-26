@@ -62,6 +62,7 @@ impl SelectInterpreterV2 {
 
             // Render result set with given output schema
             PipelineBuilder::render_result_set(
+                &self.ctx.try_get_function_context()?,
                 last_schema,
                 &self.bind_context.columns,
                 &mut build_res.main_pipeline,
@@ -91,13 +92,5 @@ impl Interpreter for SelectInterpreterV2 {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let build_res = self.build_pipeline().await?;
         Ok(build_res)
-    }
-
-    async fn start(&self) -> Result<()> {
-        Ok(())
-    }
-
-    async fn finish(&self) -> Result<()> {
-        Ok(())
     }
 }

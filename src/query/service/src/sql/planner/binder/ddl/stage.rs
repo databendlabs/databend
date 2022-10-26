@@ -26,10 +26,10 @@ use common_planner::plans::RemoveStagePlan;
 use common_storage::parse_uri_location;
 use common_storage::UriLocation;
 
+use super::super::copy::parse_copy_file_format_options;
+use super::super::copy::parse_stage_location;
 use crate::sql::binder::Binder;
 use crate::sql::plans::Plan;
-use crate::sql::statements::parse_copy_file_format_options;
-use crate::sql::statements::parse_stage_location;
 
 impl<'a> Binder {
     pub(in crate::sql::planner::binder) async fn bind_list_stage(

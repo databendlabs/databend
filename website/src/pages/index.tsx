@@ -12,13 +12,13 @@ function HomepageHeader() {
       <>
         <section className={clsx('hero hero--primary', styles.heroBanner, styles.bannerItemHeight)}>
           <div className={clsx('container', styles.container)}>
-            <h1 className={clsx('hero__title', styles.heroTitle)}><Texty>{siteConfig.title}</Texty></h1>
+            <h1 className={clsx('hero__title', styles.heroTitle)}><Texty>Databend</Texty></h1>
             <p className={clsx('hero__subtitle', styles.heroSubTitle)}>{siteConfig.tagline}</p>
 
             <Link
               className={clsx("button button--secondary button--lg", styles.link)}
               to="/doc/cloud">
-                Try Databend Cloud Free
+                Databend Cloud
             </Link>
 
               <Link
@@ -37,8 +37,8 @@ export default function Home(): JSX.Element {
     const {siteConfig} = useDocusaurusContext();
     return (
       <Layout
-        title={`Databend - Activate your Object Storage for real-time analytics`}
-        description={`A modern Elasticity and Performance Cloud Data Warehouse, activate your Object Storage(S3, Azure Blob, or MinIO) for real-time analytics`}>
+        title={`Databend - The modern cloud data warehouse that empowers your object storage for real-time analytics.`}
+        description={`The modern cloud data warehouse that empowers your object storage(S3, Azure Blob, or MinIO) for real-time analytics`}>
         <HomepageHeader/>
       </Layout>
     );

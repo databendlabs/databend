@@ -16,7 +16,6 @@ use byteorder::BigEndian;
 use byteorder::WriteBytesExt;
 
 use super::constants::*;
-use super::error::Error;
 use super::jentry::JEntry;
 use super::value::Object;
 use super::value::Value;
@@ -31,17 +30,16 @@ impl<'a> Encoder<'a> {
     }
 
     // Encode `JSONB` Value to a sequence of bytes
-    pub fn encode(&mut self, value: &Value<'a>) -> Result<(), Error> {
+    pub fn encode(&mut self, value: &Value<'a>) {
         match value {
-            Value::Array(array) => self.encode_array(array)?,
-            Value::Object(obj) => self.encode_object(obj)?,
-            _ => self.encode_scalar(value)?,
+            Value::Array(array) => self.encode_array(array),
+            Value::Object(obj) => self.encode_object(obj),
+            _ => self.encode_scalar(value),
         };
-        Ok(())
     }
 
     // Encoded `Scalar` consists of a `Header`, a `JEntry` and encoded data
-    fn encode_scalar(&mut self, value: &Value<'a>) -> Result<usize, Error> {
+    fn encode_scalar(&mut self, value: &Value<'a>) -> usize {
         self.buf
             .write_u32::<BigEndian>(SCALAR_CONTAINER_TAG)
             .unwrap();
@@ -50,16 +48,16 @@ impl<'a> Encoder<'a> {
         let mut scalar_len = 4 + 4;
         let mut jentry_index = self.reserve_jentries(4);
 
-        let jentry = self.encode_value(value)?;
+        let jentry = self.encode_value(value);
         scalar_len += jentry.length as usize;
         self.replace_jentry(jentry, &mut jentry_index);
 
-        Ok(scalar_len)
+        scalar_len
     }
 
     // Encoded `Array` consists of a `Header`, N `JEntries` and encoded data
     // N is the number of `Array` inner values
-    fn encode_array(&mut self, values: &[Value<'a>]) -> Result<usize, Error> {
+    fn encode_array(&mut self, values: &[Value<'a>]) -> usize {
         let header = ARRAY_CONTAINER_TAG | values.len() as u32;
         self.buf.write_u32::<BigEndian>(header).unwrap();
 
@@ -69,17 +67,17 @@ impl<'a> Encoder<'a> {
 
         // encode all values
         for value in values.iter() {
-            let jentry = self.encode_value(value)?;
+            let jentry = self.encode_value(value);
             array_len += jentry.length as usize;
             self.replace_jentry(jentry, &mut jentry_index);
         }
 
-        Ok(array_len)
+        array_len
     }
 
     // Encoded `Object` consists of a `Header`, 2 * N `JEntries` and encoded data
     // N is the number of `Object` inner key value pair
-    fn encode_object(&mut self, obj: &Object<'a>) -> Result<usize, Error> {
+    fn encode_object(&mut self, obj: &Object<'a>) -> usize {
         let header = OBJECT_CONTAINER_TAG | obj.len() as u32;
         self.buf.write_u32::<BigEndian>(header).unwrap();
 
@@ -97,12 +95,12 @@ impl<'a> Encoder<'a> {
         }
         // encode all values
         for (_, value) in obj.iter() {
-            let jentry = self.encode_value(value)?;
+            let jentry = self.encode_value(value);
             object_len += jentry.length as usize;
             self.replace_jentry(jentry, &mut jentry_index);
         }
 
-        Ok(object_len)
+        object_len
     }
 
     // Reserve space for `JEntries` and fill them later
@@ -126,7 +124,7 @@ impl<'a> Encoder<'a> {
     // `Null` and `Boolean` only has a `JEntry`
     // `Number` and `String` has a `JEntry` and an encoded data
     // `Array` and `Object` has a container `JEntry` and nested encoded data
-    fn encode_value(&mut self, value: &Value<'a>) -> Result<JEntry, Error> {
+    fn encode_value(&mut self, value: &Value<'a>) -> JEntry {
         let jentry = match value {
             Value::Null => JEntry::make_null_jentry(),
             Value::Bool(v) => {
@@ -138,7 +136,7 @@ impl<'a> Encoder<'a> {
             }
             Value::Number(v) => {
                 let old_off = self.buf.len();
-                let _ = v.compact_encode(&mut self.buf)?;
+                let _ = v.compact_encode(&mut self.buf).unwrap();
                 let len = self.buf.len() - old_off;
                 JEntry::make_number_jentry(len)
             }
@@ -148,15 +146,15 @@ impl<'a> Encoder<'a> {
                 JEntry::make_string_jentry(len)
             }
             Value::Array(array) => {
-                let len = self.encode_array(array)?;
+                let len = self.encode_array(array);
                 JEntry::make_container_jentry(len)
             }
             Value::Object(obj) => {
-                let len = self.encode_object(obj)?;
+                let len = self.encode_object(obj);
                 JEntry::make_container_jentry(len)
             }
         };
 
-        Ok(jentry)
+        jentry
     }
 }

@@ -241,8 +241,16 @@ impl ExecutingGraph {
                 if state_guard_cache.is_none() {
                     state_guard_cache = Some(node.state.lock().unwrap());
                 }
-
-                let processor_state = match node.processor.event()? {
+                let event = node.processor.event()?;
+                if tracing::enabled!(tracing::Level::TRACE) {
+                    tracing::trace!(
+                        "node id: {:?}, name: {:?}, event: {:?}",
+                        node.processor.id(),
+                        node.processor.name(),
+                        event
+                    );
+                }
+                let processor_state = match event {
                     Event::Finished => State::Finished,
                     Event::NeedData | Event::NeedConsume => State::Idle,
                     Event::Sync => {
@@ -367,15 +375,12 @@ impl RunningGraph {
         Ok(schedule_queue)
     }
 
-    pub fn all_node_is_finished(&self) -> bool {
-        for node_index in self.0.graph.node_indices() {
-            let state = self.0.graph[node_index].state.lock().unwrap();
-            if !matches!(&*state, State::Finished) {
-                return false;
+    pub fn interrupt_running_nodes(&self) {
+        unsafe {
+            for node_index in self.0.graph.node_indices() {
+                self.0.graph[node_index].processor.interrupt();
             }
         }
-
-        true
     }
 }
 

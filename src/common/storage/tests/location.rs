@@ -16,17 +16,126 @@ use std::collections::BTreeMap;
 use std::io::Result;
 
 use common_storage::parse_uri_location;
+use common_storage::StorageFtpConfig;
 use common_storage::StorageGcsConfig;
 use common_storage::StorageHttpConfig;
+use common_storage::StorageIpfsConfig;
+use common_storage::StorageOssConfig;
 use common_storage::StorageParams;
 use common_storage::StorageS3Config;
 use common_storage::UriLocation;
 use common_storage::STORAGE_GCS_DEFAULT_ENDPOINT;
+use common_storage::STORAGE_IPFS_DEFAULT_ENDPOINT;
 use common_storage::STORAGE_S3_DEFAULT_ENDPOINT;
 
 #[test]
 fn test_parse_uri_location() -> Result<()> {
     let cases = vec![
+        (
+            "secure scheme by default",
+            UriLocation {
+                protocol: "ipfs".to_string(),
+                name: "too-naive".to_string(),
+                path: "/".to_string(),
+                connection: vec![("endpoint_url", "ipfs.filebase.io")]
+                    .into_iter()
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .collect(),
+            },
+            (
+                StorageParams::Ipfs(StorageIpfsConfig {
+                    endpoint_url: "https://ipfs.filebase.io".to_string(),
+                    root: "/ipfs/too-naive".to_string(),
+                }),
+                "/".to_string(),
+            ),
+        ),
+        (
+            "oss location",
+            UriLocation {
+                protocol: "oss".to_string(),
+                name: "zhen".to_string(),
+                path: "/highest/".to_string(),
+                connection: vec![
+                    ("endpoint_url", "https://oss-cn-litang.example.com"),
+                    ("access_key_id", "dzin"),
+                    ("access_key_secret", "p=ear1"),
+                    ("oidc_token", "ric-kV--"),
+                    ("role_arn", "tester"),
+                ]
+                .into_iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect::<BTreeMap<String, String>>(),
+            },
+            (
+                StorageParams::Oss(StorageOssConfig {
+                    endpoint_url: "https://oss-cn-litang.example.com".to_string(),
+                    root: "/highest/".to_string(),
+                    bucket: "zhen".to_string(),
+                    access_key_id: "dzin".to_string(),
+                    access_key_secret: "p=ear1".to_string(),
+                    oidc_token: "ric-kV--".to_string(),
+                    role_arn: "tester".to_string(),
+                }),
+                "/".to_string(),
+            ),
+        ),
+        (
+            "ftps location",
+            UriLocation {
+                protocol: "ftps".to_string(),
+                name: "too-simple:1926".to_string(),
+                path: "/".to_string(),
+                connection: vec![("username", "user"), ("password", "pwd")]
+                    .into_iter()
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .collect::<BTreeMap<String, String>>(),
+            },
+            (
+                StorageParams::Ftp(StorageFtpConfig {
+                    endpoint: "ftps://too-simple:1926".to_string(),
+                    root: "/".to_string(),
+                    username: "user".to_string(),
+                    password: "pwd".to_string(),
+                }),
+                "/".to_string(),
+            ),
+        ),
+        (
+            "ipfs-default-endpoint",
+            UriLocation {
+                protocol: "ipfs".to_string(),
+                name: "too-simple".to_string(),
+                path: "/".to_string(),
+                connection: BTreeMap::new(),
+            },
+            (
+                StorageParams::Ipfs(StorageIpfsConfig {
+                    endpoint_url: STORAGE_IPFS_DEFAULT_ENDPOINT.to_string(),
+                    root: "/ipfs/too-simple".to_string(),
+                }),
+                "/".to_string(),
+            ),
+        ),
+        (
+            "ipfs-change-endpoint",
+            UriLocation {
+                protocol: "ipfs".to_string(),
+                name: "too-naive".to_string(),
+                path: "/".to_string(),
+                connection: vec![("endpoint_url", "https://ipfs.filebase.io")]
+                    .into_iter()
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .collect(),
+            },
+            (
+                StorageParams::Ipfs(StorageIpfsConfig {
+                    endpoint_url: "https://ipfs.filebase.io".to_string(),
+                    root: "/ipfs/too-naive".to_string(),
+                }),
+                "/".to_string(),
+            ),
+        ),
         (
             "s3_with_access_key_id",
             UriLocation {
@@ -36,6 +145,7 @@ fn test_parse_uri_location() -> Result<()> {
                 connection: vec![
                     ("access_key_id", "access_key_id"),
                     ("secret_access_key", "secret_access_key"),
+                    ("session_token", "session_token"),
                 ]
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -48,6 +158,7 @@ fn test_parse_uri_location() -> Result<()> {
                     bucket: "test".to_string(),
                     access_key_id: "access_key_id".to_string(),
                     secret_access_key: "secret_access_key".to_string(),
+                    security_token: "session_token".to_string(),
                     master_key: "".to_string(),
                     root: "/tmp/".to_string(),
                     disable_credential_loader: true,
@@ -65,6 +176,7 @@ fn test_parse_uri_location() -> Result<()> {
                 connection: vec![
                     ("aws_key_id", "access_key_id"),
                     ("aws_secret_key", "secret_access_key"),
+                    ("session_token", "security_token"),
                 ]
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -77,6 +189,38 @@ fn test_parse_uri_location() -> Result<()> {
                     bucket: "test".to_string(),
                     access_key_id: "access_key_id".to_string(),
                     secret_access_key: "secret_access_key".to_string(),
+                    security_token: "security_token".to_string(),
+                    master_key: "".to_string(),
+                    root: "/tmp/".to_string(),
+                    disable_credential_loader: true,
+                    enable_virtual_host_style: false,
+                }),
+                "/".to_string(),
+            ),
+        ),
+        (
+            "s3_with_aws_token",
+            UriLocation {
+                protocol: "s3".to_string(),
+                name: "test".to_string(),
+                path: "/tmp/".to_string(),
+                connection: vec![
+                    ("aws_key_id", "access_key_id"),
+                    ("aws_secret_key", "secret_access_key"),
+                    ("aws_token", "security_token"),
+                ]
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
+            },
+            (
+                StorageParams::S3(StorageS3Config {
+                    endpoint_url: STORAGE_S3_DEFAULT_ENDPOINT.to_string(),
+                    region: "".to_string(),
+                    bucket: "test".to_string(),
+                    access_key_id: "access_key_id".to_string(),
+                    secret_access_key: "secret_access_key".to_string(),
+                    security_token: "security_token".to_string(),
                     master_key: "".to_string(),
                     root: "/tmp/".to_string(),
                     disable_credential_loader: true,

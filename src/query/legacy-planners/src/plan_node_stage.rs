@@ -12,33 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use common_datavalues::DataSchemaRef;
-
-use crate::Expression;
-use crate::PlanNode;
-
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum StageKind {
     Normal,
     Expansive,
     Merge,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
-pub struct StagePlan {
-    pub kind: StageKind,
-    pub input: Arc<PlanNode>,
-    pub scatters_expr: Expression,
-}
-
-impl StagePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        self.input.schema()
-    }
-
-    pub fn set_input(&mut self, node: &PlanNode) {
-        self.input = Arc::new(node.clone());
-    }
 }

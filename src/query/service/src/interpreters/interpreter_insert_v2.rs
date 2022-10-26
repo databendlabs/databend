@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
 use std::io::Cursor;
 use std::ops::Not;
 use std::sync::Arc;
@@ -22,22 +21,16 @@ use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_base::base::GlobalIORuntime;
-use common_base::base::TrySpawn;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_formats::FormatFactory;
-use common_formats::InputFormat;
 use common_io::prelude::BufferRead;
 use common_io::prelude::BufferReadExt;
 use common_io::prelude::BufferReader;
-use common_io::prelude::FileSplitCow;
 use common_io::prelude::NestedCheckpointReader;
 use common_pipeline_sources::processors::sources::AsyncSource;
 use common_pipeline_sources::processors::sources::AsyncSourcer;
-use common_pipeline_sources::processors::sources::SyncSource;
-use common_pipeline_sources::processors::sources::SyncSourcer;
 use common_pipeline_transforms::processors::transforms::Transform;
 use common_planner::Metadata;
 use common_planner::MetadataRef;
@@ -45,13 +38,13 @@ use parking_lot::Mutex;
 use parking_lot::RwLock;
 
 use super::interpreter_common::append2table;
-use super::plan_schedulers::build_schedule_pipepline;
-use crate::evaluator::EvalNode;
+use super::plan_schedulers::build_schedule_pipeline;
 use crate::evaluator::Evaluator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::transforms::ExpressionTransformV2;
+use crate::pipelines::processors::transforms::ChunkOperator;
+use crate::pipelines::processors::transforms::CompoundChunkOperator;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
@@ -132,47 +125,27 @@ impl Interpreter for InsertInterpreterV2 {
             );
         } else {
             match &self.plan.source {
-                InsertInputSource::StrWithFormat((str, format)) => {
+                InsertInputSource::Values(data) => {
                     let output_port = OutputPort::create();
-                    let format_settings = self.ctx.get_format_settings()?;
-                    match format.as_str() {
-                        "VALUES" => {
-                            let settings = self.ctx.get_settings();
-                            let name_resolution_ctx =
-                                NameResolutionContext::try_from(settings.as_ref())?;
-                            let inner = ValueSource::new(
-                                str.to_string(),
-                                self.ctx.clone(),
-                                name_resolution_ctx,
-                                plan.schema(),
-                            );
-                            let source =
-                                AsyncSourcer::create(self.ctx.clone(), output_port.clone(), inner)?;
-                            builder.add_source(output_port, source);
-                        }
+                    let settings = self.ctx.get_settings();
+                    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+                    let inner = ValueSource::new(
+                        data.to_string(),
+                        self.ctx.clone(),
+                        name_resolution_ctx,
+                        plan.schema(),
+                    );
+                    let source =
+                        AsyncSourcer::create(self.ctx.clone(), output_port.clone(), inner)?;
+                    builder.add_source(output_port, source);
 
-                        _ => {
-                            let input_format = FormatFactory::instance().get_input(
-                                format.as_str(),
-                                plan.schema(),
-                                format_settings,
-                            )?;
-                            let inner = FormatSource {
-                                data: str.to_string(),
-                                input_format,
-                                blocks: vec![],
-                                is_finished: false,
-                            };
-
-                            let source =
-                                SyncSourcer::create(self.ctx.clone(), output_port.clone(), inner)?;
-                            builder.add_source(output_port, source);
-                        }
-                    }
                     build_res.main_pipeline.add_pipe(builder.finalize());
                 }
-                InsertInputSource::StreamingWithFormat(_, pipe) => {
-                    build_res.main_pipeline.add_pipe(pipe.clone());
+                InsertInputSource::StreamingWithFormat(_, _, input_context) => {
+                    let input_context = input_context.as_ref().expect("must success").clone();
+                    input_context
+                        .format
+                        .exec_stream(input_context.clone(), &mut build_res.main_pipeline)?;
                 }
                 InsertInputSource::SelectPlan(plan) => {
                     let table1 = table.clone();
@@ -190,7 +163,6 @@ impl Interpreter for InsertInterpreterV2 {
                         _ => unreachable!(),
                     };
 
-                    table1.get_table_info();
                     let catalog = self.plan.catalog.clone();
                     let is_distributed_plan = select_plan.is_distributed_plan();
 
@@ -229,7 +201,7 @@ impl Interpreter for InsertInterpreterV2 {
 
                     let mut build_res = match is_distributed_plan {
                         true => {
-                            build_schedule_pipepline(self.ctx.clone(), &insert_select_plan).await
+                            build_schedule_pipeline(self.ctx.clone(), &insert_select_plan).await
                         }
                         false => {
                             PipelineBuilder::create(self.ctx.clone()).finalize(&insert_select_plan)
@@ -247,21 +219,9 @@ impl Interpreter for InsertInterpreterV2 {
                         if may_error.is_none() {
                             let append_entries = ctx.consume_precommit_blocks();
                             // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
-                            let catalog_name = ctx.get_current_catalog();
-                            let commit_handle = GlobalIORuntime::instance().spawn(async move {
-                                table
-                                    .commit_insertion(ctx, &catalog_name, append_entries, overwrite)
-                                    .await
+                            return GlobalIORuntime::instance().block_on(async move {
+                                table.commit_insertion(ctx, append_entries, overwrite).await
                             });
-
-                            return match futures::executor::block_on(commit_handle) {
-                                Ok(Ok(_)) => Ok(()),
-                                Ok(Err(error)) => Err(error),
-                                Err(cause) => Err(ErrorCode::PanicError(format!(
-                                    "Maybe panic while in commit insert. {}",
-                                    cause
-                                ))),
-                            };
                         }
 
                         Err(may_error.as_ref().unwrap().clone())
@@ -288,48 +248,6 @@ impl Interpreter for InsertInterpreterV2 {
         let mut guard = self.source_pipe_builder.lock();
         *guard = builder;
         Ok(())
-    }
-}
-
-struct FormatSource {
-    data: String,
-    input_format: Arc<dyn InputFormat>,
-    blocks: Vec<DataBlock>,
-    is_finished: bool,
-}
-
-impl SyncSource for FormatSource {
-    const NAME: &'static str = "FormatSource";
-
-    fn generate(&mut self) -> Result<Option<DataBlock>> {
-        if self.is_finished {
-            return Ok(None);
-        }
-
-        if self.blocks.is_empty() {
-            let data_slice = self.data.as_bytes();
-            let mut input_state = self.input_format.create_state();
-            let skip_size = self
-                .input_format
-                .skip_header(data_slice, &mut input_state, 0)?;
-
-            let split = FileSplitCow {
-                path: None,
-                start_offset: 0,
-                start_row: 0,
-                buf: Cow::from(&data_slice[skip_size..]),
-            };
-            self.blocks = self.input_format.deserialize_complete_split(split)?;
-        }
-
-        if !self.blocks.is_empty() {
-            let block = self.blocks.remove(0);
-            if self.blocks.is_empty() {
-                self.is_finished = true;
-            }
-            return Ok(Some(block));
-        }
-        Ok(None)
     }
 }
 
@@ -572,12 +490,12 @@ pub fn skip_to_next_row<R: BufferRead>(
     Ok(())
 }
 
-fn fill_default_value(expressions: &mut Vec<(EvalNode, String)>, field: &DataField) -> Result<()> {
+fn fill_default_value(operators: &mut Vec<ChunkOperator>, field: &DataField) -> Result<()> {
     if let Some(default_expr) = field.default_expr() {
-        expressions.push((
-            Evaluator::eval_physical_scalar(&serde_json::from_str(default_expr)?)?,
-            field.name().to_string(),
-        ));
+        operators.push(ChunkOperator::Map {
+            eval: Evaluator::eval_physical_scalar(&serde_json::from_str(default_expr)?)?,
+            name: field.name().to_string(),
+        });
     } else {
         // If field data type is nullable, then we'll fill it with null.
         if field.data_type().is_nullable() {
@@ -585,15 +503,18 @@ fn fill_default_value(expressions: &mut Vec<(EvalNode, String)>, field: &DataFie
                 value: DataValue::Null,
                 data_type: Box::new(field.data_type().clone()),
             });
-            expressions.push((Evaluator::eval_scalar(&scalar)?, field.name().to_string()));
+            operators.push(ChunkOperator::Map {
+                eval: Evaluator::eval_scalar(&scalar)?,
+                name: field.name().to_string(),
+            });
         } else {
-            expressions.push((
-                Evaluator::eval_scalar(&Scalar::ConstantExpr(ConstantExpr {
+            operators.push(ChunkOperator::Map {
+                eval: Evaluator::eval_scalar(&Scalar::ConstantExpr(ConstantExpr {
                     value: field.data_type().default_value(),
                     data_type: Box::new(field.data_type().clone()),
                 }))?,
-                field.name().to_string(),
-            ));
+                name: field.name().to_string(),
+            });
         }
     }
     Ok(())
@@ -618,13 +539,13 @@ async fn exprs_to_datavalue<'a>(
             "Column count doesn't match value count",
         ));
     }
-    let mut expressions = Vec::with_capacity(schema_fields_len);
+    let mut operators = Vec::with_capacity(schema_fields_len);
     for (i, expr) in exprs.iter().enumerate() {
         // `DEFAULT` in insert values will be parsed as `Expr::ColumnRef`.
         if let Expr::ColumnRef { column, .. } = expr {
             if column.name.eq_ignore_ascii_case("default") {
                 let field = schema.field(i);
-                fill_default_value(&mut expressions, field)?;
+                fill_default_value(&mut operators, field)?;
                 continue;
             }
         }
@@ -644,18 +565,18 @@ async fn exprs_to_datavalue<'a>(
                 target_type: Box::new(field_data_type.clone()),
             })
         }
-        expressions.push((
-            Evaluator::eval_scalar(&scalar)?,
-            schema.field(i).name().to_string(),
-        ));
+        operators.push(ChunkOperator::Map {
+            eval: Evaluator::eval_scalar(&scalar)?,
+            name: schema.field(i).name().to_string(),
+        });
     }
 
     let dummy = DataSchemaRefExt::create(vec![DataField::new("dummy", u8::to_data_type())]);
     let one_row_block = DataBlock::create(dummy, vec![Series::from_data(vec![1u8])]);
     let func_ctx = ctx.try_get_function_context()?;
-    let mut expression_transform = ExpressionTransformV2 {
-        expressions,
-        func_ctx,
+    let mut expression_transform = CompoundChunkOperator {
+        operators,
+        ctx: func_ctx,
     };
     let res = expression_transform.transform(one_row_block)?;
     let datavalues: Vec<DataValue> = res.columns().iter().skip(1).map(|col| col.get(0)).collect();

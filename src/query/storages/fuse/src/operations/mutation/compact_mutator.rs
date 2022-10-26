@@ -25,8 +25,8 @@ use common_fuse_meta::meta::Versioned;
 use common_meta_app::schema::TableInfo;
 use opendal::Operator;
 
+use crate::fuse_segment::read_segments;
 use crate::io::BlockCompactor;
-use crate::io::MetaReaders;
 use crate::io::SegmentWriter;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::AppendOperationLogEntry;
@@ -60,13 +60,12 @@ impl CompactMutator {
         location_generator: TableMetaLocationGenerator,
         block_per_seg: usize,
         is_cluster: bool,
+        operator: Operator,
     ) -> Result<Self> {
-        let data_accessor = ctx.get_storage_operator()?;
-
         Ok(Self {
             ctx,
             base_snapshot,
-            data_accessor,
+            data_accessor: operator,
             block_compactor,
             location_generator,
             selected_blocks: Vec::new(),
@@ -94,16 +93,18 @@ impl CompactMutator {
 impl TableMutator for CompactMutator {
     async fn blocks_select(&mut self) -> Result<bool> {
         let snapshot = self.base_snapshot.clone();
+        let segment_locations = &snapshot.segments;
         // Blocks that need to be reorganized into new segments.
         let mut remain_blocks = Vec::new();
         let mut summarys = Vec::new();
-        let reader = MetaReaders::segment_info_reader(self.ctx.as_ref());
 
-        for segment_location in &snapshot.segments {
-            let (x, ver) = (segment_location.0.clone(), segment_location.1);
+        // Read all segments information in parallel.
+        let segments = read_segments(self.ctx.clone(), segment_locations).await?;
+        for (idx, segment) in segments.iter().enumerate() {
             let mut need_merge = false;
             let mut remains = Vec::new();
-            let segment = reader.read(x, None, ver).await?;
+            let segment = segment.clone()?;
+
             segment.blocks.iter().for_each(|b| {
                 if self.is_cluster
                     || self
@@ -120,7 +121,8 @@ impl TableMutator for CompactMutator {
             // If the number of blocks of segment meets block_per_seg, and the blocks in segments donot need to be compacted,
             // then record the segment information.
             if !need_merge && segment.blocks.len() == self.block_per_seg {
-                self.segments.push(segment_location.clone());
+                let location = segment_locations[idx].clone();
+                self.segments.push(location);
                 summarys.push(segment.summary.clone());
                 continue;
             }
@@ -155,7 +157,7 @@ impl TableMutator for CompactMutator {
         Ok(true)
     }
 
-    async fn try_commit(&self, catalog_name: &str, table_info: &TableInfo) -> Result<()> {
+    async fn try_commit(&self, table_info: &TableInfo) -> Result<()> {
         let ctx = self.ctx.clone();
         let snapshot = self.base_snapshot.clone();
         let mut new_snapshot = TableSnapshot::from_previous(&snapshot);
@@ -179,10 +181,10 @@ impl TableMutator for CompactMutator {
 
         FuseTable::commit_to_meta_server(
             ctx.as_ref(),
-            catalog_name,
             table_info,
             &self.location_generator,
             new_snapshot,
+            &self.data_accessor,
         )
         .await
     }

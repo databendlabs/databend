@@ -90,7 +90,14 @@ impl Settings {
             for global_setting in global_settings {
                 let name = global_setting.name;
                 let val = global_setting.value.as_string()?;
-                settings.set_settings(name, val, false)?;
+
+                // the settings may be deprecated
+                if !settings.has_setting(&name) {
+                    tracing::warn!("Ignore deprecated global setting {} = {}", name, val);
+                    continue;
+                }
+                settings.set_settings(name.clone(), val, false)?;
+                settings.set_setting_level(&name, true)?;
             }
             settings
         };
@@ -119,7 +126,7 @@ impl Settings {
                     UserSettingValue::UInt64(10000),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Maximum block size for reading",
+                desc: "Maximum block size for reading, default value: 10000.",
                 possible_values: None,
             },
             // max_threads
@@ -130,6 +137,17 @@ impl Settings {
                 desc: "The maximum number of threads to execute the request. By default, it is determined automatically.",
                 possible_values: None,
             },
+            // max_storage_io_requests
+            SettingValue {
+                default_value: UserSettingValue::UInt64(1000),
+                user_setting: UserSetting::create(
+                    "max_storage_io_requests",
+                    UserSettingValue::UInt64(1000),
+                ),
+                level: ScopeLevel::Session,
+                desc: "The maximum number of concurrent IO requests. By default, it is 1000.",
+                possible_values: None,
+            },
             // flight_client_timeout
             SettingValue {
                 default_value: UserSettingValue::UInt64(60),
@@ -138,7 +156,7 @@ impl Settings {
                     UserSettingValue::UInt64(60),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Max duration the flight client request is allowed to take in seconds. By default, it is 60 seconds",
+                desc: "Max duration the flight client request is allowed to take in seconds. By default, it is 60 seconds.",
                 possible_values: None,
             },
             // storage_read_buffer_size
@@ -170,7 +188,7 @@ impl Settings {
                     UserSettingValue::UInt64(1),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Enable new processor framework if value != 0, default value: 1",
+                desc: "Enable new processor framework if value != 0, default value: 1.",
                 possible_values: None,
             },
             // enable_planner_v2
@@ -178,51 +196,67 @@ impl Settings {
                 default_value: UserSettingValue::UInt64(1),
                 user_setting: UserSetting::create("enable_planner_v2", UserSettingValue::UInt64(1)),
                 level: ScopeLevel::Session,
-                desc: "Enable planner v2 by setting this variable to 1, default value: 1",
+                desc: "Enable planner v2 by setting this variable to 1, default value: 1.",
                 possible_values: None,
             },
             SettingValue {
                 default_value: UserSettingValue::String("\n".to_owned()),
                 user_setting: UserSetting::create(
-                    "record_delimiter",
+                    "format_record_delimiter",
                     UserSettingValue::String("\n".to_owned()),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Format record_delimiter, default value: \"\\n\"",
+                desc: "Format record_delimiter, default value: \"\\n\".",
                 possible_values: None,
             },
             SettingValue {
                 default_value: UserSettingValue::String(",".to_owned()),
                 user_setting: UserSetting::create(
-                    "field_delimiter",
+                    "format_field_delimiter",
                     UserSettingValue::String(",".to_owned()),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Format field delimiter, default value: ,",
+                desc: "Format field delimiter, default value: \",\".",
                 possible_values: None,
             },
             SettingValue {
                 default_value: UserSettingValue::UInt64(1),
-                user_setting: UserSetting::create("empty_as_default", UserSettingValue::UInt64(1)),
+                user_setting: UserSetting::create(
+                    "format_empty_as_default",
+                    UserSettingValue::UInt64(1),
+                ),
                 level: ScopeLevel::Session,
-                desc: "Format empty_as_default, default value: 1",
+                desc: "Format empty_as_default, default value: 1.",
                 possible_values: None,
             },
             SettingValue {
                 default_value: UserSettingValue::UInt64(0),
-                user_setting: UserSetting::create("skip_header", UserSettingValue::UInt64(0)),
+                user_setting: UserSetting::create(
+                    "format_skip_header",
+                    UserSettingValue::UInt64(0),
+                ),
                 level: ScopeLevel::Session,
-                desc: "Whether to skip the input header, default value: 0",
+                desc: "Whether to skip the input header, default value: 0.",
                 possible_values: None,
             },
             SettingValue {
                 default_value: UserSettingValue::String("None".to_owned()),
                 user_setting: UserSetting::create(
-                    "compression",
+                    "format_compression",
                     UserSettingValue::String("None".to_owned()),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Format compression, default value: None",
+                desc: "Format compression, default value: \"None\".",
+                possible_values: None,
+            },
+            SettingValue {
+                default_value: UserSettingValue::String("\"".to_owned()),
+                user_setting: UserSetting::create(
+                    "format_quote_char",
+                    UserSettingValue::String("\"".to_owned()),
+                ),
+                level: ScopeLevel::Session,
+                desc: "The quote char for CSV. default value: '\"'.",
                 possible_values: None,
             },
             SettingValue {
@@ -232,7 +266,7 @@ impl Settings {
                     UserSettingValue::String("UTC".to_owned()),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Timezone, default value: UTC,",
+                desc: "Timezone, default value: \"UTC\".",
                 possible_values: None,
             },
             SettingValue {
@@ -242,7 +276,7 @@ impl Settings {
                     UserSettingValue::UInt64(10000),
                 ),
                 level: ScopeLevel::Session,
-                desc: "The threshold of keys to open two-level aggregation, default value: 10000",
+                desc: "The threshold of keys to open two-level aggregation, default value: 10000.",
                 possible_values: None,
             },
             SettingValue {
@@ -252,7 +286,7 @@ impl Settings {
                     UserSettingValue::UInt64(0),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Whether the client open async insert mode, default value: 0",
+                desc: "Whether the client open async insert mode, default value: 0.",
                 possible_values: None,
             },
             SettingValue {
@@ -262,7 +296,7 @@ impl Settings {
                     UserSettingValue::UInt64(1),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Whether the client wait for the reply of async insert, default value: 1",
+                desc: "Whether the client wait for the reply of async insert, default value: 1.",
                 possible_values: None,
             },
             SettingValue {
@@ -272,7 +306,7 @@ impl Settings {
                     UserSettingValue::UInt64(100),
                 ),
                 level: ScopeLevel::Session,
-                desc: "The timeout in seconds for waiting for processing of async insert, default value: 100",
+                desc: "The timeout in seconds for waiting for processing of async insert, default value: 100.",
                 possible_values: None,
             },
             SettingValue {
@@ -282,7 +316,7 @@ impl Settings {
                     UserSettingValue::UInt64(0),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Case sensitivity of unquoted identifiers, default value: 0 (aka case-insensitive)",
+                desc: "Case sensitivity of unquoted identifiers, default value: 0 (aka case-insensitive).",
                 possible_values: None,
             },
             SettingValue {
@@ -292,7 +326,7 @@ impl Settings {
                     UserSettingValue::UInt64(1),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Case sensitivity of quoted identifiers, default value: 1 (aka case-sensitive)",
+                desc: "Case sensitivity of quoted identifiers, default value: 1 (aka case-sensitive).",
                 possible_values: None,
             },
             SettingValue {
@@ -302,14 +336,14 @@ impl Settings {
                     UserSettingValue::String("PostgreSQL".to_owned()),
                 ),
                 level: ScopeLevel::Session,
-                desc: "SQL dialect, support \"PostgreSQL\" and \"MySQL\", default value: \"PostgreSQL\"",
+                desc: "SQL dialect, support \"PostgreSQL\" and \"MySQL\", default value: \"PostgreSQL\".",
                 possible_values: Some(vec!["PostgreSQL", "MySQL"]),
             },
             SettingValue {
                 default_value: UserSettingValue::UInt64(1),
                 user_setting: UserSetting::create("enable_cbo", UserSettingValue::UInt64(1)),
                 level: ScopeLevel::Session,
-                desc: "If enable cost based optimization, default value: 1",
+                desc: "If enable cost based optimization, default value: 1.",
                 possible_values: None,
             },
             // max_execute_time
@@ -317,7 +351,17 @@ impl Settings {
                 default_value: UserSettingValue::UInt64(0),
                 user_setting: UserSetting::create("max_execute_time", UserSettingValue::UInt64(0)),
                 level: ScopeLevel::Session,
-                desc: "The maximum query execution time. it means no limit if the value is zero. default value: 0",
+                desc: "The maximum query execution time. it means no limit if the value is zero. default value: 0.",
+                possible_values: None,
+            },
+            SettingValue {
+                default_value: UserSettingValue::UInt64(1),
+                user_setting: UserSetting::create(
+                    "enable_distributed_eval_index",
+                    UserSettingValue::UInt64(1),
+                ),
+                level: ScopeLevel::Session,
+                desc: "If enable distributed eval index, default value: 1",
                 possible_values: None,
             },
         ];
@@ -358,6 +402,16 @@ impl Settings {
         self.try_set_u64(key, val, false)
     }
 
+    pub fn get_max_storage_io_requests(&self) -> Result<u64> {
+        let key = "max_storage_io_requests";
+        self.try_get_u64(key)
+    }
+
+    pub fn set_max_storage_io_requests(&self, val: u64) -> Result<()> {
+        let key = "max_storage_io_requests";
+        self.try_set_u64(key, val, false)
+    }
+
     // Get max_execute_time.
     pub fn get_max_execute_time(&self) -> Result<u64> {
         self.try_get_u64("max_execute_time")
@@ -395,31 +449,37 @@ impl Settings {
         self.try_get_u64(KEY)
     }
 
-    pub fn get_field_delimiter(&self) -> Result<String> {
-        let key = "field_delimiter";
+    pub fn get_format_field_delimiter(&self) -> Result<String> {
+        let key = "format_field_delimiter";
         self.check_and_get_setting_value(key)
             .and_then(|v| v.user_setting.value.as_string())
     }
 
-    pub fn get_record_delimiter(&self) -> Result<String> {
-        let key = "record_delimiter";
+    pub fn get_format_record_delimiter(&self) -> Result<String> {
+        let key = "format_record_delimiter";
         self.check_and_get_setting_value(key)
             .and_then(|v| v.user_setting.value.as_string())
     }
 
-    pub fn get_compression(&self) -> Result<String> {
-        let key = "compression";
+    pub fn get_format_quote_char(&self) -> Result<String> {
+        let key = "format_quote_char";
         self.check_and_get_setting_value(key)
             .and_then(|v| v.user_setting.value.as_string())
     }
 
-    pub fn get_empty_as_default(&self) -> Result<u64> {
-        let key = "empty_as_default";
+    pub fn get_format_compression(&self) -> Result<String> {
+        let key = "format_compression";
+        self.check_and_get_setting_value(key)
+            .and_then(|v| v.user_setting.value.as_string())
+    }
+
+    pub fn get_format_empty_as_default(&self) -> Result<u64> {
+        let key = "format_empty_as_default";
         self.try_get_u64(key)
     }
 
-    pub fn get_skip_header(&self) -> Result<u64> {
-        let key = "skip_header";
+    pub fn get_format_skip_header(&self) -> Result<u64> {
+        let key = "format_skip_header";
         self.try_get_u64(key)
     }
 
@@ -491,6 +551,18 @@ impl Settings {
 
     pub fn set_quoted_ident_case_sensitive(&self, val: bool) -> Result<()> {
         static KEY: &str = "quoted_ident_case_sensitive";
+        let v = u64::from(val);
+        self.try_set_u64(KEY, v, false)
+    }
+
+    pub fn get_enable_distributed_eval_index(&self) -> Result<bool> {
+        static KEY: &str = "enable_distributed_eval_index";
+        let v = self.try_get_u64(KEY)?;
+        Ok(v != 0)
+    }
+
+    pub fn set_enable_distributed_eval_index(&self, val: bool) -> Result<()> {
+        static KEY: &str = "enable_distributed_eval_index";
         let v = u64::from(val);
         self.try_set_u64(KEY, v, false)
     }
@@ -598,6 +670,18 @@ impl Settings {
             setting.level = ScopeLevel::Global;
         }
 
+        Ok(())
+    }
+
+    fn set_setting_level(&self, key: &str, is_global: bool) -> Result<()> {
+        let mut settings = self.settings.write();
+        let mut setting = settings
+            .get_mut(key)
+            .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
+
+        if is_global {
+            setting.level = ScopeLevel::Global;
+        }
         Ok(())
     }
 

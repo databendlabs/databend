@@ -21,14 +21,17 @@
 #![allow(clippy::len_without_is_empty)]
 #![allow(clippy::needless_lifetimes)]
 #![feature(const_maybe_uninit_as_mut_ptr)]
+#![feature(anonymous_lifetime_in_impl_trait)]
 #![feature(const_mut_refs)]
 #![feature(generic_const_exprs)]
 #![allow(incomplete_features)]
+#![feature(iter_order_by)]
 
 #[allow(dead_code)]
 mod chunk;
 
 mod column_from;
+pub mod converts;
 mod display;
 mod error;
 mod evaluator;
@@ -40,7 +43,7 @@ mod register;
 pub mod type_check;
 pub mod types;
 pub mod util;
-mod values;
+pub mod values;
 
 pub use crate::chunk::*;
 pub use crate::column_from::*;

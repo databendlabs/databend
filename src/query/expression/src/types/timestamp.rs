@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::ops::Range;
 
 use common_arrow::arrow::buffer::Buffer;
@@ -27,6 +28,7 @@ use crate::types::ValueType;
 use crate::util::buffer_into_mut;
 use crate::values::Column;
 use crate::values::Scalar;
+use crate::ColumnBuilder;
 use crate::ScalarRef;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -39,6 +41,11 @@ impl ValueType for TimestampType {
     type Domain = TimestampDomain;
     type ColumnIterator<'a> = TimestampIterator<'a>;
     type ColumnBuilder = TimestampColumnBuilder;
+
+    #[inline]
+    fn upcast_gat<'short, 'long: 'short>(long: Timestamp) -> Timestamp {
+        long
+    }
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
         scalar
@@ -58,6 +65,15 @@ impl ValueType for TimestampType {
     fn try_downcast_column<'a>(col: &'a Column) -> Option<Self::Column> {
         match col {
             Column::Timestamp(column) => Some(column.clone()),
+            _ => None,
+        }
+    }
+
+    fn try_downcast_builder<'a>(
+        builder: &'a mut ColumnBuilder,
+    ) -> Option<&'a mut Self::ColumnBuilder> {
+        match builder {
+            crate::ColumnBuilder::Timestamp(builder) => Some(builder),
             _ => None,
         }
     }
@@ -146,6 +162,18 @@ pub struct Timestamp {
     pub ts: i64,
     /// Fractional digits to display.
     pub precision: u8,
+}
+
+impl PartialOrd for Timestamp {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.ts.partial_cmp(&other.ts)
+    }
+}
+
+impl Ord for Timestamp {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.ts.cmp(&other.ts)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

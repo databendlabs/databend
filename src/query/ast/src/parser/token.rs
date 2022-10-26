@@ -267,6 +267,8 @@ pub enum TokenKind {
     AWS_KEY_ID,
     #[token("AWS_SECRET_KEY", ignore(ascii_case))]
     AWS_SECRET_KEY,
+    #[token("ANTI", ignore(ascii_case))]
+    ANTI,
     #[token("BETWEEN", ignore(ascii_case))]
     BETWEEN,
     #[token("BIGINT", ignore(ascii_case))]
@@ -491,6 +493,8 @@ pub enum TokenKind {
     LIST,
     #[token("MAP", ignore(ascii_case))]
     MAP,
+    #[token("MAX_FILE_SIZE", ignore(ascii_case))]
+    MAX_FILE_SIZE,
     #[token("MASTER_KEY", ignore(ascii_case))]
     MASTER_KEY,
     #[token("MEMORY", ignore(ascii_case))]
@@ -607,6 +611,8 @@ pub enum TokenKind {
     SHOW,
     #[token("SIGNED", ignore(ascii_case))]
     SIGNED,
+    #[token("SINGLE", ignore(ascii_case))]
+    SINGLE,
     #[token("SIZE_LIMIT", ignore(ascii_case))]
     SIZE_LIMIT,
     #[token("SKIP_HEADER", ignore(ascii_case))]
@@ -637,6 +643,8 @@ pub enum TokenKind {
     STRING,
     #[token("SUBSTRING", ignore(ascii_case))]
     SUBSTRING,
+    #[token("SEMI", ignore(ascii_case))]
+    SEMI,
     #[token("TABLE", ignore(ascii_case))]
     TABLE,
     #[token("TABLES", ignore(ascii_case))]
@@ -950,6 +958,7 @@ impl TokenKind {
             | TokenKind::AND
             | TokenKind::ANY
             | TokenKind::ASC
+            | TokenKind::ANTI
             // | TokenKind::ASYMMETRIC
             // | TokenKind::AUTHORIZATION
             // | TokenKind::BINARY
@@ -1006,6 +1015,7 @@ impl TokenKind {
             // | TokenKind::SESSION_USER
             // | TokenKind::SIMILAR
             | TokenKind::SOME
+            | TokenKind::SEMI
             // | TokenKind::SYMMETRIC
             // | TokenKind::TABLE
             // | TokenKind::TABLESAMPLE

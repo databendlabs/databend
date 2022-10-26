@@ -39,7 +39,7 @@ arrow = { package = "arrow2", version = "0.14.0", default-features = false, feat
     "io_parquet_compression",
 ] }
 arrow-format = { version = "0.7.0", features = ["flight-data", "flight-service", "ipc"] }
-futures = "0.3.21"
+futures = "0.3.24"
 parquet2 = { version = "0.16.3", default_features = false }
 
 [dev-dependencies]

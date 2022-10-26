@@ -49,6 +49,10 @@ impl Sink for SinkBuildHashTable {
         self.join_state.detach()
     }
 
+    fn interrupt(&self) {
+        self.join_state.interrupt()
+    }
+
     fn consume(&mut self, data_block: DataBlock) -> Result<()> {
         self.join_state.build(data_block)
     }
@@ -77,9 +81,9 @@ impl TransformHashJoinProbe {
         output_port: Arc<OutputPort>,
         join_state: Arc<dyn HashJoinState>,
         _output_schema: DataSchemaRef,
-    ) -> ProcessorPtr {
-        let default_block_size = ctx.get_settings().get_max_block_size().unwrap_or(102400);
-        ProcessorPtr::create(Box::new(TransformHashJoinProbe {
+    ) -> Result<ProcessorPtr> {
+        let default_block_size = ctx.get_settings().get_max_block_size()?;
+        Ok(ProcessorPtr::create(Box::new(TransformHashJoinProbe {
             input_data: None,
             output_data_blocks: VecDeque::new(),
             input_port,
@@ -87,7 +91,7 @@ impl TransformHashJoinProbe {
             step: HashJoinStep::Build,
             join_state,
             probe_state: ProbeState::with_capacity(default_block_size as usize),
-        }))
+        })))
     }
 
     fn probe(&mut self, block: &DataBlock) -> Result<()> {
@@ -100,8 +104,8 @@ impl TransformHashJoinProbe {
 
 #[async_trait::async_trait]
 impl Processor for TransformHashJoinProbe {
-    fn name(&self) -> &'static str {
-        "HashJoin"
+    fn name(&self) -> String {
+        "HashJoin".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -147,6 +151,10 @@ impl Processor for TransformHashJoinProbe {
                 Ok(Event::NeedData)
             }
         }
+    }
+
+    fn interrupt(&self) {
+        self.join_state.interrupt()
     }
 
     fn process(&mut self) -> Result<()> {

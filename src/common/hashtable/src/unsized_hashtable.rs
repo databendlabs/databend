@@ -229,6 +229,10 @@ where
         self.entry_mut(key)
             .map(|e| unsafe { &mut *(e.get_mut_ptr() as *mut V) })
     }
+    #[inline(always)]
+    pub fn contains(&self, key: &K) -> bool {
+        self.get(key).is_some()
+    }
     /// # Safety
     ///
     /// The uninitialized value of returned entry should be written immediately.
