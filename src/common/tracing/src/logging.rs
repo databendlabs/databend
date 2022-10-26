@@ -81,18 +81,18 @@ pub fn init_logging(name: &str, cfg: &Config, enable_tracing_log: bool) -> Vec<W
 
         match cfg.file.format.to_lowercase().as_str() {
             "text" => {
-                let file = fmt::layer()
+                let layer = fmt::layer()
                     .with_writer(rolling_writer)
                     .event_format(format().with_ansi(false))
                     .with_filter(filter);
-                subscriber.with(Some(file)).with(None)
+                subscriber.with(Some(layer)).with(None)
             }
             "json" => {
-                let file = fmt::layer()
+                let layer = fmt::layer()
                     .with_writer(rolling_writer)
                     .event_format(format().json())
                     .with_filter(filter);
-                subscriber.with(None).with(Some(file))
+                subscriber.with(None).with(Some(layer))
             }
             v => {
                 unreachable!("file logging format {v} is not supported");
@@ -104,19 +104,34 @@ pub fn init_logging(name: &str, cfg: &Config, enable_tracing_log: bool) -> Vec<W
 
     // Stderr (Console) Layer
     let rust_log = env::var(EnvFilter::DEFAULT_ENV);
-    let stderr_layer = if cfg.stderr.on || rust_log.is_ok() {
+    let subscriber = if cfg.stderr.on || rust_log.is_ok() {
         // Use env RUST_LOG to initialize log if present.
         // Otherwise, use the specified level.
         let directives = rust_log.unwrap_or_else(|_| cfg.stderr.level.to_string());
         let env_filter = EnvFilter::new(directives);
 
-        let stderr = fmt::layer().with_writer(io::stderr).with_filter(env_filter);
-
-        Some(stderr)
+        match cfg.stderr.format.to_lowercase().as_str() {
+            "text" => {
+                let layer = fmt::layer()
+                    .with_writer(io::stderr)
+                    .event_format(format().pretty())
+                    .with_filter(env_filter);
+                subscriber.with(Some(layer)).with(None)
+            }
+            "json" => {
+                let layer = fmt::layer()
+                    .with_writer(io::stderr)
+                    .event_format(format().json())
+                    .with_filter(env_filter);
+                subscriber.with(None).with(Some(layer))
+            }
+            v => {
+                unreachable!("file logging format {v} is not supported");
+            }
+        }
     } else {
-        None
+        subscriber.with(None).with(None)
     };
-    let subscriber = subscriber.with(stderr_layer);
 
     // Jaeger layer.
     // TODO: we should support config this in the future.
