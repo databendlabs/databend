@@ -15,7 +15,6 @@
 #![feature(core_intrinsics)]
 #![feature(box_patterns)]
 #![feature(type_ascription)]
-#![feature(once_cell)]
 
 pub mod aggregates;
 pub mod scalars;
