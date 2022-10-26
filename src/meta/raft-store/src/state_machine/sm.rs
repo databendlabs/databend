@@ -264,6 +264,8 @@ impl StateMachine {
 
         debug!("sled tx start: {:?}", entry);
 
+        let log_time_ms = Self::get_log_time(entry);
+
         let kv_pairs = self.scan_prefix_if_needed(entry)?;
 
         let result = self.sm_tree.txn(true, move |txn_tree| {
@@ -284,24 +286,16 @@ impl StateMachine {
                         }
                     }
 
-                    let log_time_ms = match data.time_ms {
-                        None => {
-                            error!("log has no time: {}, treat every record with non-none `expire` as timed out", entry.summary());
-                            0
-                        }
-                        Some(x) => {
-                            let t = SystemTime::UNIX_EPOCH + Duration::from_millis(x);
-                            info!("apply: raft-log time: {:?}", t);
-                            x
-                        },
-                    };
-
                     let res = self.apply_cmd(&data.cmd, &txn_tree, kv_pairs.as_ref(), log_time_ms);
                     if let Ok(ok) = &res {
                         info!("apply_result: summary: {}; res ok: {}", entry.summary(), ok);
                     }
                     if let Err(err) = &res {
-                        info!("apply_result: summary: {}; res err: {:?}", entry.summary(), err);
+                        info!(
+                            "apply_result: summary: {}; res err: {:?}",
+                            entry.summary(),
+                            err
+                        );
                     }
 
                     let applied_state = res?;
@@ -341,6 +335,30 @@ impl StateMachine {
         };
 
         Ok(applied_state)
+    }
+
+    /// Retrieve the proposing time from a raft-log.
+    ///
+    /// Only `Normal` log has a time embedded.
+    #[tracing::instrument(level = "debug", skip_all)]
+    fn get_log_time(entry: &Entry<LogEntry>) -> u64 {
+        match &entry.payload {
+            EntryPayload::Normal(data) => match data.time_ms {
+                None => {
+                    error!(
+                        "log has no time: {}, treat every record with non-none `expire` as timed out",
+                        entry.summary()
+                    );
+                    0
+                }
+                Some(x) => {
+                    let t = SystemTime::UNIX_EPOCH + Duration::from_millis(x);
+                    info!("apply: raft-log time: {:?}", t);
+                    x
+                }
+            },
+            _ => 0,
+        }
     }
 
     #[tracing::instrument(level = "debug", skip(self, txn_tree))]
@@ -738,7 +756,7 @@ impl StateMachine {
     /// Already applied log should be filtered out before passing into this function.
     /// This is the only entry to modify state machine.
     /// The `cmd` is always committed by raft before applying.
-    #[tracing::instrument(level = "debug", skip(self, cmd, txn_tree))]
+    #[tracing::instrument(level = "debug", skip_all)]
     pub fn apply_cmd(
         &self,
         cmd: &Cmd,
