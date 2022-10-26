@@ -56,7 +56,7 @@ prost = { workspace = true }
 semver = "1.0.14"
 serde = { workspace = true }
 serde_json = { workspace = true }
-serfig = "0.0.2"
+serfig = "0.0.3"
 tokio-stream = "0.1.10"
 tonic = { version = "0.8.1", features = ["tls"] }
 tonic-reflection = "0.5.0"
