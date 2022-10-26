@@ -54,7 +54,6 @@ openraft = { workspace = true }
 sentry = "0.27.0"
 serde = { workspace = true }
 serde_json = { workspace = true }
-sysinfo = "0.26.5"
 tokio-stream = "0.1.10"
 tonic = "0.8.1"
 tracing = "0.1.36"

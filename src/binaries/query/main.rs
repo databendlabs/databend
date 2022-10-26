@@ -264,15 +264,7 @@ fn try_set_max_open_files() {
     let max_open_files_limit = limits.max_open_files.soft;
     if let Some(max_open_files) = max_open_files_limit {
         if max_open_files < 65535 {
-            let set = sysinfo::set_open_files_limit(max_open_files.try_into().unwrap());
-            match set {
-                true => {
-                    warn!("Open files limit has been set to {}", max_open_files);
-                }
-                false => {
-                    warn!("Open files limit set to {} failed", max_open_files);
-                }
-            }
+            warn!("The open file limit is too low for the databend-query. Please consider increase it by running `ulimit -n 65535`");
         }
     }
 }
