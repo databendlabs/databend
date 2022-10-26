@@ -46,12 +46,13 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 
     init_default_metrics_recorder();
     set_panic_hook();
-    // Make sure gloabl services have been inited.
-    GlobalServices::init(conf.clone()).await?;
 
     if conf.meta.address.is_empty() && conf.meta.endpoints.is_empty() {
         MetaEmbedded::init_global_meta_store(conf.meta.embedded_dir.clone()).await?;
     }
+    // Make sure gloabl services have been inited.
+    GlobalServices::init(conf.clone()).await?;
+
     let tenant = conf.query.tenant_id.clone();
     let cluster_id = conf.query.cluster_id.clone();
     let flight_addr = conf.query.flight_api_address.clone();
