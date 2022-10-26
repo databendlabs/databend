@@ -77,7 +77,10 @@ impl TracingTable {
     }
 
     fn log_files(ctx: Arc<dyn TableContext>) -> Result<VecDeque<String>> {
-        debug!("list log files from {}", ctx.get_config().log.file.dir);
+        debug!(
+            "list log files from {:?}",
+            std::fs::canonicalize(ctx.get_config().log.file.dir)
+        );
         WalkDir::new(ctx.get_config().log.file.dir.as_str())
             // NOTE:(everpcpc) ignore log files in subdir with different format
             .max_depth(1)
