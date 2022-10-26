@@ -118,41 +118,57 @@ impl TableMutator for SegmentCompactMutator {
             .await?
             .into_iter()
             .collect::<Result<Vec<_>>>()?;
+        let number_segments = base_segments.len();
 
         let blocks_per_segment_threshold = self.compact_params.block_per_seg;
 
-        let mut segments_tobe_compacted = Vec::with_capacity(base_segments.len() / 2);
+        let mut segments_tobe_compacted = Vec::with_capacity(number_segments / 2);
 
-        let mut unchanged_segment_locations = Vec::with_capacity(base_segments.len() / 2);
+        let mut unchanged_segment_locations = Vec::with_capacity(number_segments / 2);
 
         let mut unchanged_segment_statistics = Statistics::default();
 
-        let limit = self.compact_params.limit.unwrap_or(base_segments.len());
-        if limit < base_segments.len() {
-            for i in limit..base_segments.len() {
-                unchanged_segment_locations.push(base_segment_locations[i].clone());
-                unchanged_segment_statistics =
-                    merge_statistics(&unchanged_segment_statistics, &base_segments[i].summary)?;
-            }
-        }
+        let mut start = 0;
+        let limit = self.compact_params.limit.unwrap_or(number_segments);
+        loop {
+            let end = std::cmp::min(start + limit, number_segments);
 
-        for (idx, segment) in base_segments.iter().take(limit).enumerate() {
-            let number_blocks = segment.blocks.len();
-            if number_blocks >= blocks_per_segment_threshold {
-                // skip if current segment is large enough, mark it as unchanged
-                unchanged_segment_locations.push(base_segment_locations[idx].clone());
-                unchanged_segment_statistics =
-                    merge_statistics(&unchanged_segment_statistics, &segment.summary)?;
-                continue;
-            } else {
-                // if number of blocks meets the threshold, mark them down
-                segments_tobe_compacted.push(segment)
+            for idx in start..end {
+                let number_blocks = base_segments[idx].blocks.len();
+                if number_blocks >= blocks_per_segment_threshold {
+                    // skip if current segment is large enough, mark it as unchanged
+                    unchanged_segment_locations.push(base_segment_locations[idx].clone());
+                    unchanged_segment_statistics = merge_statistics(
+                        &unchanged_segment_statistics,
+                        &base_segments[idx].summary,
+                    )?;
+                    continue;
+                } else {
+                    // if number of blocks meets the threshold, mark them down
+                    segments_tobe_compacted.push(&base_segments[idx])
+                }
             }
-        }
 
-        // check if necessary to compact the segment meta: at least two segments were marked as segments_tobe_compacted
-        if segments_tobe_compacted.len() <= 1 {
-            return Ok(false);
+            // check if necessary to compact the segment meta: at least two segments were marked as segments_tobe_compacted
+            if segments_tobe_compacted.len() > 1 {
+                if end < number_segments {
+                    unchanged_segment_locations = base_segment_locations[end..]
+                        .iter()
+                        .chain(unchanged_segment_locations.iter())
+                        .cloned()
+                        .collect();
+                    for segment in &base_segments[end..] {
+                        unchanged_segment_statistics =
+                            merge_statistics(&unchanged_segment_statistics, &segment.summary)?;
+                    }
+                }
+                break;
+            }
+
+            if end == number_segments {
+                return Ok(false);
+            }
+            start = end;
         }
 
         // flatten the block metas of segments being compacted
@@ -169,7 +185,7 @@ impl TableMutator for SegmentCompactMutator {
         // note that the newly segments will be persistent into storage, such that if retry
         // happens during the later `try_commit` phase, they do not need to be written again.
         let mut compacted_segment_statistics = Statistics::default();
-        let mut compacted_segment_locations = Vec::with_capacity(base_segments.len() / 2);
+        let mut compacted_segment_locations = Vec::with_capacity(number_segments / 2);
         let segment_info_cache = CacheManager::instance().get_table_segment_cache();
         let segment_writer = SegmentWriter::new(
             &self.data_accessor,

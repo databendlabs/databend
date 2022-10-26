@@ -205,7 +205,7 @@ select segment_count, block_count from fuse_snapshot('db_09_0008', 't1') limit 1
 
 
 statement ok
-create table t2(a uint64);
+create table t2(a uint64) block_per_segment=2;
 
 statement ok
 insert into t2 values (5);
@@ -241,13 +241,25 @@ statement ok
 insert into t2 values (9);
 
 statement ok
+insert into t2 values (10);
+
+statement ok
 optimize table t2 compact segment limit 2;
 
 statement query II
 select segment_count, block_count from fuse_snapshot('db_09_0008', 't2') limit 1;
 
 ----
-2 3
+3 4
+
+statement ok
+optimize table t2 compact segment limit 2;
+
+statement query II
+select segment_count, block_count from fuse_snapshot('db_09_0008', 't2') limit 1;
+
+----
+2 4
 
 
 

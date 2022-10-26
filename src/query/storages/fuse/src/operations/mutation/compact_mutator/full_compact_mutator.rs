@@ -105,11 +105,12 @@ impl TableMutator for FullCompactMutator {
             .await?
             .into_iter()
             .collect::<Result<Vec<_>>>()?;
+        let number_segments = segments.len();
 
         // todo: add real metrics
         metrics_set_segments_memory_usage(0.0);
 
-        let limit = self.compact_params.limit.unwrap_or(segments.len());
+        let limit = self.compact_params.limit.unwrap_or(number_segments);
 
         let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
 
@@ -121,7 +122,7 @@ impl TableMutator for FullCompactMutator {
         // Blocks that need to be reorganized into new segments.
         let mut remain_blocks = Vec::new();
         loop {
-            let end = std::cmp::min(start + limit, segments.len());
+            let end = std::cmp::min(start + limit, number_segments);
             for i in start..end {
                 let mut need_merge = false;
                 let mut remains = Vec::new();
@@ -144,7 +145,7 @@ impl TableMutator for FullCompactMutator {
 
                 // If the number of blocks of segment meets block_per_seg, and the blocks in segments donot need to be compacted,
                 // then record the segment information.
-                if !need_merge && segments[i].blocks.len() == self.compact_params.block_per_seg {
+                if !need_merge && segments[i].blocks.len() >= self.compact_params.block_per_seg {
                     unchanged_segment_locations.push(segment_locations[i].clone());
                     unchanged_segment_statistics =
                         merge_statistics(&unchanged_segment_statistics, &segments[i].summary)?;
@@ -157,7 +158,7 @@ impl TableMutator for FullCompactMutator {
             // Because the pipeline is used, a threshold for the number of blocks is added to resolve
             // https://github.com/datafuselabs/databend/issues/8316
             if self.selected_blocks.len() >= max_threads * 2 {
-                if end < segments.len() {
+                if end < number_segments {
                     self.merged_segments_locations = segment_locations[end..].to_vec();
                     for segment in &segments[end..] {
                         unchanged_segment_statistics =
@@ -171,7 +172,7 @@ impl TableMutator for FullCompactMutator {
                 break;
             }
 
-            if end == segments.len() {
+            if end == number_segments {
                 self.selected_blocks.clear();
                 return Ok(false);
             }
