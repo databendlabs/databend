@@ -87,6 +87,11 @@ impl InterpreterFactory {
                 *copy_plan.clone(),
             )?)),
 
+            // catalogs
+            Plan::ShowCreateCatalog(_) => todo!(),
+            Plan::CreateCatalog(_) => todo!(),
+            Plan::DropCatalog(_) => todo!(),
+
             // Databases
             Plan::ShowCreateDatabase(show_create_database) => Ok(Arc::new(
                 ShowCreateDatabaseInterpreter::try_create(ctx, *show_create_database.clone())?,

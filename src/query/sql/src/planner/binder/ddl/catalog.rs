@@ -12,20 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+use std::fmt::Write;
+
+use chrono::Utc;
+use common_ast::ast::CatalogType;
+use common_ast::ast::CreateCatalogStmt;
+use common_ast::ast::DropCatalogStmt;
 use common_ast::ast::ShowCatalogsStmt;
 use common_ast::ast::ShowCreateCatalogStmt;
 use common_ast::ast::ShowLimit;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
+use common_datavalues::ToDataType;
+use common_datavalues::Vu8;
 use common_exception::Result;
+use common_meta_app::schema::CatalogMeta;
+use common_planner::plans::CreateCatalogPlan;
+use common_planner::plans::DropCatalogPlan;
+use common_planner::plans::ShowCreateCatalogPlan;
 
-use crate::sql::plans::Plan;
-use crate::sql::plans::RewriteKind;
-use crate::sql::BindContext;
-use crate::sql::Binder;
+use crate::normalize_identifier;
+use crate::plans::Plan;
+use crate::plans::RewriteKind;
+use crate::BindContext;
+use crate::Binder;
 
 impl<'a> Binder {
-    pub(in crate::sql::planner::binder) async fn bind_show_catalogs(
+    pub(in crate::planner::binder) async fn bind_show_catalogs(
         &mut self,
         bind_context: &BindContext,
         stmt: &ShowCatalogsStmt<'a>,
@@ -48,9 +62,9 @@ impl<'a> Binder {
             .await
     }
 
-    pub(in crate::sql::planner::binder) async fn bind_show_create_catalogs(
+    pub(in crate::planner::binder) async fn bind_show_create_catalogs(
         &self,
-        stmt: &ShowCreateCatalogStmt,
+        stmt: &ShowCreateCatalogStmt<'_>,
     ) -> Result<Plan> {
         let ShowCreateCatalogStmt { catalog } = stmt;
         let catalog = normalize_identifier(catalog, &self.name_resolution_ctx).name;
@@ -62,5 +76,56 @@ impl<'a> Binder {
             catalog,
             schema,
         })))
+    }
+
+    pub(in crate::planner::binder) async fn bind_create_catalog(
+        &self,
+        stmt: &CreateCatalogStmt,
+    ) -> Result<Plan> {
+        let CreateCatalogStmt {
+            if_not_exists,
+            catalog,
+            catalog_type,
+            options,
+        } = stmt;
+
+        let tenant = self.ctx.get_tenant();
+
+        let meta = self.catalog_meta(catalog_type, options);
+
+        Ok(Plan::CreateCatalog(Box::new(CreateCatalogPlan {
+            if_not_exists: *if_not_exists,
+            tenant,
+            catalog: catalog.to_string(),
+            meta,
+        })))
+    }
+
+    pub(in crate::planner::binder) async fn bind_drop_catalog(
+        &self,
+        stmt: &DropCatalogStmt<'_>,
+    ) -> Result<Plan> {
+        let DropCatalogStmt { if_exists, catalog } = stmt;
+        let tenant = self.ctx.get_tenant();
+        let catalog = normalize_identifier(catalog, &self.name_resolution_ctx).name;
+        Ok(Plan::DropCatalog(Box::new(DropCatalogPlan {
+            if_exists: *if_exists,
+            tenant,
+            catalog,
+        })))
+    }
+
+    fn catalog_meta(
+        &self,
+        catalog_type: &CatalogType,
+        options: &BTreeMap<String, String>,
+    ) -> CatalogMeta {
+        let options = options.clone();
+        CatalogMeta {
+            catalog_type: catalog_type.to_string(),
+            options,
+            created_on: Some(Utc::now()),
+            droped_on: None,
+        }
     }
 }

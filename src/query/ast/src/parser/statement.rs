@@ -186,7 +186,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule! {
             CREATE ~ ( CATALOG ) ~ ( IF ~ NOT ~ EXISTS )?
             ~ #literal_string
-            ~ ( TYPE ~ "=" ~ #literal_string )
+            ~ ( TYPE ~ "=" ~ #catalog_type )
             ~ ( CONNECTION ~ "=" ~ #options )
         },
         |(_, _, opt_if_not_exists, catalog, (_, _, ty), (_, _, options))| {
@@ -207,6 +207,8 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 if_exists: opt_if_exists.is_some(),
                 catalog,
             })
+        },
+    );
     let set_role = map(
         rule! {
             SET ~ (DEFAULT)? ~ ROLE ~ #literal_string
@@ -1617,6 +1619,11 @@ pub fn create_database_option(i: Input) -> IResult<CreateDatabaseOption> {
         },
         |(_, _, option)| option,
     )(i)
+}
+
+pub fn catalog_type(i: Input) -> IResult<CatalogType> {
+    let catalog_type = alt((value(CatalogType::Default, rule! {DEFAULT}),));
+    map(rule! { ^#catalog_type }, |catalog_type| catalog_type)(i)
 }
 
 pub fn user_option(i: Input) -> IResult<UserOptionItem> {

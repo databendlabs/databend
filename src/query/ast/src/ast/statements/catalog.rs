@@ -50,7 +50,7 @@ impl Display for ShowCreateCatalogStmt<'_> {
 pub struct CreateCatalogStmt {
     pub if_not_exists: bool,
     pub catalog: String,
-    pub catalog_type: String,
+    pub catalog_type: CatalogType,
     pub options: BTreeMap<String, String>,
 }
 
@@ -78,5 +78,26 @@ impl Display for DropCatalogStmt<'_> {
             write!(f, "IF EXISTS ")?;
         }
         write!(f, "{}", self.catalog)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CatalogType {
+    Default,
+    Hive,
+}
+
+impl Default for CatalogType {
+    fn default() -> Self {
+        CatalogType::Default
+    }
+}
+
+impl Display for CatalogType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CatalogType::Default => write!(f, "DEFAULT"),
+            CatalogType::Hive => write!(f, "HIVE"),
+        }
     }
 }

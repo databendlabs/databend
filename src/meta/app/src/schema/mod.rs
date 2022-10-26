@@ -18,6 +18,18 @@ mod catalog;
 mod database;
 mod table;
 
+pub use catalog::CatalogIdList;
+pub use catalog::CatalogIdListKey;
+pub use catalog::CatalogIdToName;
+pub use catalog::CatalogInfo;
+pub use catalog::CatalogMeta;
+pub use catalog::CatalogNameIdent;
+pub use catalog::CreateCatalogReply;
+pub use catalog::CreateCatalogReq;
+pub use catalog::DropCatalogReply;
+pub use catalog::DropCatalogReq;
+pub use catalog::GetCatalogReq;
+pub use catalog::ListCatalogReq;
 pub use database::CreateDatabaseReply;
 pub use database::CreateDatabaseReq;
 pub use database::DatabaseId;

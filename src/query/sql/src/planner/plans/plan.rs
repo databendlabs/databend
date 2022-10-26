@@ -28,6 +28,7 @@ use common_planner::plans::AlterUDFPlan;
 use common_planner::plans::AlterUserPlan;
 use common_planner::plans::AlterViewPlan;
 use common_planner::plans::CallPlan;
+use common_planner::plans::CreateCatalogPlan;
 use common_planner::plans::CreateDatabasePlan;
 use common_planner::plans::CreateRolePlan;
 use common_planner::plans::CreateStagePlan;
@@ -35,6 +36,7 @@ use common_planner::plans::CreateUDFPlan;
 use common_planner::plans::CreateUserPlan;
 use common_planner::plans::CreateViewPlan;
 use common_planner::plans::DescribeTablePlan;
+use common_planner::plans::DropCatalogPlan;
 use common_planner::plans::DropDatabasePlan;
 use common_planner::plans::DropRolePlan;
 use common_planner::plans::DropStagePlan;
@@ -55,6 +57,7 @@ use common_planner::plans::RenameTablePlan;
 use common_planner::plans::RevokePrivilegePlan;
 use common_planner::plans::RevokeRolePlan;
 use common_planner::plans::SetRolePlan;
+use common_planner::plans::ShowCreateCatalogPlan;
 use common_planner::plans::ShowCreateDatabasePlan;
 use common_planner::plans::ShowCreateTablePlan;
 use common_planner::plans::ShowGrantsPlan;
@@ -218,6 +221,9 @@ impl Display for Plan {
             Plan::Query { .. } => write!(f, "Query"),
             Plan::Copy(_) => write!(f, "Copy"),
             Plan::Explain { .. } => write!(f, "Explain"),
+            Plan::ShowCreateCatalog(_) => write!(f, "ShowCreateCatalog"),
+            Plan::CreateCatalog(_) => write!(f, "CreateCatalog"),
+            Plan::DropCatalog(_) => write!(f, "DropCatalog"),
             Plan::ShowCreateDatabase(_) => write!(f, "ShowCreateDatabase"),
             Plan::CreateDatabase(_) => write!(f, "CreateDatabase"),
             Plan::DropDatabase(_) => write!(f, "DropDatabase"),
@@ -293,6 +299,9 @@ impl Plan {
                 DataSchemaRefExt::create(vec![DataField::new("explain", StringType::new_impl())])
             }
             Plan::Copy(_) => Arc::new(DataSchema::empty()),
+            Plan::ShowCreateCatalog(plan) => plan.schema(),
+            Plan::CreateCatalog(plan) => plan.schema(),
+            Plan::DropCatalog(plan) => plan.schema(),
             Plan::ShowCreateDatabase(plan) => plan.schema(),
             Plan::CreateDatabase(plan) => plan.schema(),
             Plan::UseDatabase(_) => Arc::new(DataSchema::empty()),

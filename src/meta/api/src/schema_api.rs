@@ -59,6 +59,8 @@ use common_meta_types::MetaId;
 /// SchemaApi defines APIs that provides schema storage, such as database, table.
 #[async_trait::async_trait]
 pub trait SchemaApi: Send + Sync {
+    // TODO(ClSlaid): catalog API
+
     // database
 
     async fn create_database(
