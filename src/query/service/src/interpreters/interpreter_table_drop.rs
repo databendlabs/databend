@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planner::plans::DropTablePlan;
@@ -66,8 +67,11 @@ impl Interpreter for DropTableInterpreter {
         if let Some(tbl) = tbl {
             // if `plan.all`, truncate, then purge the historical data
             if self.plan.all {
-                // errors of truncation are ignored
-                let _ = tbl.truncate(self.ctx.clone(), true).await;
+                let purge = true;
+                // the above `catalog.drop_table` operation changed the table meta version,
+                // thus if we do not refresh the table instance, `truncate` will fail
+                let latest = tbl.as_ref().refresh(self.ctx.as_ref()).await?;
+                latest.truncate(self.ctx.clone(), purge).await?
             }
         }
 

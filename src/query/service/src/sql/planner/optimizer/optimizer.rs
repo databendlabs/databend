@@ -12,13 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_ast::ast::ExplainKind;
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planner::IndexType;
 use common_planner::MetadataRef;
 
+use super::cost::CostContext;
+use super::format::display_memo;
+use super::Memo;
 use crate::sql::optimizer::cascades::CascadesOptimizer;
 use crate::sql::optimizer::distributed::optimize_distributed_query;
 use crate::sql::optimizer::heuristic::RuleList;
@@ -74,6 +80,30 @@ pub fn optimize(
             ExplainKind::Raw | ExplainKind::Ast(_) | ExplainKind::Syntax(_) => {
                 Ok(Plan::Explain { kind, plan })
             }
+            ExplainKind::Memo(_) => {
+                if let box Plan::Query {
+                    ref s_expr,
+                    ref metadata,
+                    ref bind_context,
+                    ..
+                } = plan
+                {
+                    let (memo, cost_map) = get_optimized_memo(
+                        ctx,
+                        *s_expr.clone(),
+                        metadata.clone(),
+                        bind_context.clone(),
+                    )?;
+                    Ok(Plan::Explain {
+                        kind: ExplainKind::Memo(display_memo(&memo, &cost_map)?),
+                        plan,
+                    })
+                } else {
+                    Err(ErrorCode::BadArguments(
+                        "Cannot use EXPLAIN MEMO with a non-query statement",
+                    ))
+                }
+            }
             _ => Ok(Plan::Explain {
                 kind,
                 plan: Box::new(optimize(ctx, opt_ctx, *plan)?),
@@ -117,7 +147,7 @@ pub fn optimize_query(
     let mut heuristic = HeuristicOptimizer::new(ctx.clone(), bind_context, metadata, rules);
     let mut result = heuristic.optimize(s_expr)?;
 
-    let cascades = CascadesOptimizer::create(ctx)?;
+    let mut cascades = CascadesOptimizer::create(ctx)?;
     result = cascades.optimize(result)?;
 
     // So far, we don't have ability to execute distributed query
@@ -129,4 +159,21 @@ pub fn optimize_query(
     }
 
     Ok(result)
+}
+
+// TODO(leiysky): reuse the optimization logic with `optimize_query`
+fn get_optimized_memo(
+    ctx: Arc<dyn TableContext>,
+    s_expr: SExpr,
+    metadata: MetadataRef,
+    bind_context: Box<BindContext>,
+) -> Result<(Memo, HashMap<IndexType, CostContext>)> {
+    let rules = RuleList::create(DEFAULT_REWRITE_RULES.clone())?;
+
+    let mut heuristic = HeuristicOptimizer::new(ctx.clone(), bind_context, metadata, rules);
+    let result = heuristic.optimize(s_expr)?;
+
+    let mut cascades = CascadesOptimizer::create(ctx)?;
+    cascades.optimize(result)?;
+    Ok((cascades.memo, cascades.best_cost_map))
 }

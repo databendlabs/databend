@@ -54,6 +54,8 @@ impl LogicalOperator for DummyTableScan {
             outer_columns: ColumnSet::new(),
             cardinality: 1.0,
             precise_cardinality: Some(1),
+
+            column_stats: Default::default(),
         })
     }
 }

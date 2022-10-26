@@ -18,10 +18,10 @@ use common_meta_sled_store::openraft;
 use common_meta_sled_store::sled;
 use common_meta_sled_store::AsKeySpace;
 use common_meta_sled_store::SledTree;
+use common_meta_stoerr::MetaStorageError;
 use common_meta_types::LogEntry;
 use common_meta_types::LogId;
 use common_meta_types::LogIndex;
-use common_meta_types::MetaStorageError;
 use openraft::raft::Entry;
 use tracing::info;
 
@@ -49,18 +49,6 @@ impl RaftLog {
         let inner = SledTree::open(db, &tree_name, config.is_sync())?;
         let rl = RaftLog { inner };
         Ok(rl)
-    }
-
-    pub fn contains_key(&self, key: &LogIndex) -> Result<bool, MetaStorageError> {
-        self.logs().contains_key(key)
-    }
-
-    pub fn get(&self, key: &LogIndex) -> Result<Option<Entry<LogEntry>>, MetaStorageError> {
-        self.logs().get(key)
-    }
-
-    pub fn last(&self) -> Result<Option<(LogIndex, Entry<LogEntry>)>, MetaStorageError> {
-        self.logs().last()
     }
 
     pub async fn set_last_purged(&self, log_id: LogId) -> Result<(), MetaStorageError> {
@@ -100,25 +88,6 @@ impl RaftLog {
         self.logs().range_remove(range, true).await
     }
 
-    /// Returns an iterator of logs
-    pub fn range<R>(
-        &self,
-        range: R,
-    ) -> Result<
-        impl DoubleEndedIterator<Item = Result<(LogIndex, Entry<LogEntry>), MetaStorageError>>,
-        MetaStorageError,
-    >
-    where
-        R: RangeBounds<LogIndex>,
-    {
-        self.logs().range(range)
-    }
-
-    pub fn range_keys<R>(&self, range: R) -> Result<Vec<LogIndex>, MetaStorageError>
-    where R: RangeBounds<LogIndex> {
-        self.logs().range_keys(range)
-    }
-
     pub fn range_values<R>(&self, range: R) -> Result<Vec<Entry<LogEntry>>, MetaStorageError>
     where R: RangeBounds<LogIndex> {
         self.logs().range_values(range)
@@ -130,25 +99,16 @@ impl RaftLog {
     ///
     /// When this function returns the logs are guaranteed to be fsync-ed.
     pub async fn append(&self, logs: &[Entry<LogEntry>]) -> Result<(), MetaStorageError> {
-        self.logs().append_values(logs).await
-    }
-
-    /// Insert a single log.
-    #[tracing::instrument(level = "debug", skip(self, log), fields(log_id=log.log_id.to_string().as_str()))]
-    pub async fn insert(
-        &self,
-        log: &Entry<LogEntry>,
-    ) -> Result<Option<Entry<LogEntry>>, MetaStorageError> {
-        self.logs().insert_value(log).await
+        self.logs().append(logs).await
     }
 
     /// Returns a borrowed key space in sled::Tree for logs
-    fn logs(&self) -> AsKeySpace<Logs> {
+    pub fn logs(&self) -> AsKeySpace<Logs> {
         self.inner.key_space()
     }
 
     /// Returns a borrowed key space in sled::Tree for logs
-    fn log_meta(&self) -> AsKeySpace<LogMeta> {
+    pub fn log_meta(&self) -> AsKeySpace<LogMeta> {
         self.inner.key_space()
     }
 }

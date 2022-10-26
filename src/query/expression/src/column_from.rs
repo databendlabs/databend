@@ -140,6 +140,32 @@ impl<D: AsRef<[f64]>> ColumnFrom<D, [Vec<f64>; 0]> for Column {
     }
 }
 
+// Specialize for `TimestampType`, because from `Vec<i64>` will be conflict with `Int64Type`.
+pub fn from_timestamp_data(d: Vec<i64>) -> Column {
+    TimestampType::upcast_column(TimestampType::column_from_vec(d, &[]))
+}
+
+pub fn from_timestamp_data_with_validity(d: Vec<i64>, valids: Vec<bool>) -> Column {
+    let column = from_timestamp_data(d);
+    Column::Nullable(Box::new(NullableColumn {
+        column,
+        validity: valids.into(),
+    }))
+}
+
+// Specialize for `DateType`, because from `Vec<i32>` will be conflict with `Int32Type`.
+pub fn from_date_data(d: Vec<i32>) -> Column {
+    DateType::upcast_column(DateType::column_from_vec(d, &[]))
+}
+
+pub fn from_date_data_with_validity(d: Vec<i32>, valids: Vec<bool>) -> Column {
+    let column = from_date_data(d);
+    Column::Nullable(Box::new(NullableColumn {
+        column,
+        validity: valids.into(),
+    }))
+}
+
 for_common_scalar_values! { impl_from_iterator }
 for_common_scalar_values! { impl_from_opt_iterator }
 for_common_scalar_values! { impl_from_vec }

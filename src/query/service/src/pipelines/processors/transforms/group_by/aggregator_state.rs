@@ -27,7 +27,6 @@ use common_hashtable::HashMapKind;
 use common_hashtable::HashMapKindIter;
 use common_hashtable::HashtableEntry;
 use common_hashtable::HashtableKeyable;
-use common_hashtable::KeysRef;
 use common_hashtable::UnsizedHashMap;
 use common_hashtable::UnsizedHashMapIter;
 use common_hashtable::UnsizedHashtableEntryMutRef;

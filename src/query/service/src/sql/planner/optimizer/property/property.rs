@@ -16,6 +16,7 @@ use std::collections::HashSet;
 
 use common_planner::IndexType;
 
+use super::column_stat::ColumnStatSet;
 use crate::sql::plans::Scalar;
 
 pub type ColumnSet = HashSet<IndexType>;
@@ -42,6 +43,9 @@ pub struct RelationalProperty {
     // We can get the precise row count of a table in databend,
     // which information is useful to optimize some queries like `COUNT(*)`.
     pub precise_cardinality: Option<u64>,
+
+    // Statistics of columns, column index -> column stat
+    pub column_stats: ColumnStatSet,
 }
 
 #[derive(Default, Clone)]

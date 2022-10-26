@@ -20,6 +20,7 @@ use std::ops::RangeBounds;
 use anyerror::AnyError;
 use common_base::base::tokio::sync::RwLock;
 use common_base::base::tokio::sync::RwLockWriteGuard;
+use common_exception::WithContext;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::log::RaftLog;
 use common_meta_raft_store::state::RaftState;
@@ -34,14 +35,13 @@ use common_meta_sled_store::openraft::ErrorSubject;
 use common_meta_sled_store::openraft::ErrorVerb;
 use common_meta_sled_store::openraft::Membership;
 use common_meta_sled_store::openraft::StateMachineChanges;
-use common_meta_types::error_context::WithContext;
+use common_meta_stoerr::MetaStorageError;
 use common_meta_types::AppliedState;
 use common_meta_types::Endpoint;
 use common_meta_types::LogEntry;
 use common_meta_types::MetaError;
 use common_meta_types::MetaNetworkError;
 use common_meta_types::MetaStartupError;
-use common_meta_types::MetaStorageError;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
 use openraft::async_trait::async_trait;
@@ -587,6 +587,7 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
 
         let last = match self
             .log
+            .logs()
             .last()
             .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Read)
         {
@@ -602,7 +603,7 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
             Some(x) => Some(x.1.log_id),
         };
 
-        info!(
+        debug!(
             "get_log_state: ({:?},{:?}]",
             last_purged_log_id, last_log_id
         );
@@ -638,7 +639,7 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
             Ok(r) => r,
         };
 
-        info!(
+        debug!(
             "last_applied_state: applied: {:?}, membership: {:?}",
             last_applied, last_membership
         );
@@ -668,13 +669,15 @@ impl RaftStoreBare {
             None => return Ok(vec![]),
         };
 
-        let nodes = sm.nodes().range_kvs(..)?;
+        let nodes = sm.nodes().range(..)?;
+        let mut ns = vec![];
 
-        let ns = nodes
-            .into_iter()
-            .filter(|(node_id, _)| predicate(&membership, node_id))
-            .map(|(_, node)| node)
-            .collect();
+        for x in nodes {
+            let item = x?;
+            if predicate(&membership, &item.key()?) {
+                ns.push(item.value()?);
+            }
+        }
 
         Ok(ns)
     }

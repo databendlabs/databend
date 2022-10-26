@@ -20,3 +20,4 @@ pub use index::BlockFilter;
 pub use segment::BlockMeta;
 pub use segment::SegmentInfo;
 pub use snapshot::TableSnapshot;
+pub use snapshot::TableSnapshotLite;

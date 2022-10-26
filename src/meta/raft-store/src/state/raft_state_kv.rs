@@ -16,9 +16,9 @@ use std::fmt;
 
 use common_meta_sled_store::openraft;
 use common_meta_sled_store::sled;
+use common_meta_sled_store::SledBytesError;
 use common_meta_sled_store::SledOrderedSerde;
 use common_meta_types::anyerror::AnyError;
-use common_meta_types::MetaStorageError;
 use common_meta_types::NodeId;
 use openraft::storage::HardState;
 use serde::Deserialize;
@@ -66,7 +66,7 @@ impl fmt::Display for RaftStateKey {
 }
 
 impl SledOrderedSerde for RaftStateKey {
-    fn ser(&self) -> Result<IVec, MetaStorageError> {
+    fn ser(&self) -> Result<IVec, SledBytesError> {
         let i = match self {
             RaftStateKey::Id => 1,
             RaftStateKey::HardState => 2,
@@ -76,7 +76,7 @@ impl SledOrderedSerde for RaftStateKey {
         Ok(IVec::from(&[i]))
     }
 
-    fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, MetaStorageError>
+    fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, SledBytesError>
     where Self: Sized {
         let slice = v.as_ref();
         if slice[0] == 1 {
@@ -87,9 +87,7 @@ impl SledOrderedSerde for RaftStateKey {
             return Ok(RaftStateKey::StateMachineId);
         }
 
-        Err(MetaStorageError::SledError(AnyError::error(
-            "invalid key IVec",
-        )))
+        Err(SledBytesError::new(&AnyError::error("invalid key IVec")))
     }
 }
 

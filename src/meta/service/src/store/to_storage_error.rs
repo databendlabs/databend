@@ -14,7 +14,7 @@
 
 use anyerror::AnyError;
 use common_meta_sled_store::openraft;
-use common_meta_types::MetaStorageError;
+use common_meta_stoerr::MetaStorageError;
 use openraft::ErrorSubject;
 use openraft::ErrorVerb;
 use openraft::StorageError;

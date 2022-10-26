@@ -19,12 +19,13 @@ use crate::types::array::ArrayColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
 use crate::types::string::StringColumnBuilder;
-use crate::types::timestamp::TimestampColumnBuilder;
 use crate::types::AnyType;
 use crate::types::ArgType;
 use crate::types::ArrayType;
 use crate::types::BooleanType;
+use crate::types::DateType;
 use crate::types::EmptyArrayType;
+use crate::types::IntervalType;
 use crate::types::NullType;
 use crate::types::NullableType;
 use crate::types::NumberType;
@@ -35,6 +36,7 @@ use crate::types::VariantType;
 use crate::with_number_mapped_type;
 use crate::Chunk;
 use crate::Column;
+use crate::ColumnBuilder;
 use crate::Value;
 
 impl Chunk {
@@ -50,20 +52,21 @@ impl Chunk {
         let num_rows = chunks.iter().map(|c| c.num_rows()).sum();
         let mut concat_columns = Vec::with_capacity(chunks[0].num_columns());
         for i in 0..chunks[0].num_columns() {
-            let mut columns = Vec::with_capacity(chunks.len());
-            for chunk in chunks.iter() {
-                let c = &chunk.columns()[i];
-                match c {
-                    Value::Scalar(s) => {
-                        let builder = s.as_ref().repeat(chunk.num_rows());
-                        let col = builder.build();
-                        columns.push(col);
+            let columns = chunks
+                .iter()
+                .map(|chunk| {
+                    let (col, ty) = &chunk.columns()[i];
+                    match col {
+                        Value::Scalar(s) => {
+                            ColumnBuilder::repeat(&s.as_ref(), chunk.num_rows(), ty).build()
+                        }
+                        Value::Column(c) => c.clone(),
                     }
-                    Value::Column(c) => columns.push(c.clone()),
-                }
-            }
+                })
+                .collect::<Vec<_>>();
+            let ty = chunks[0].columns()[i].1.clone();
             let c = Column::concat(&columns);
-            concat_columns.push(Value::Column(c));
+            concat_columns.push((Value::Column(c), ty));
         }
         Ok(Chunk::new(concat_columns, num_rows))
     }
@@ -91,8 +94,16 @@ impl Column {
                 Self::concat_value_types::<StringType>(builder, columns)
             }
             Column::Timestamp(_) => {
-                let builder = TimestampColumnBuilder::with_capacity(capacity);
+                let builder = Vec::with_capacity(capacity);
                 Self::concat_value_types::<TimestampType>(builder, columns)
+            }
+            Column::Date(_) => {
+                let builder = Vec::with_capacity(capacity);
+                Self::concat_value_types::<DateType>(builder, columns)
+            }
+            Column::Interval(_) => {
+                let builder = Vec::with_capacity(capacity);
+                Self::concat_value_types::<IntervalType>(builder, columns)
             }
             Column::Array(col) => {
                 let mut builder = ArrayColumnBuilder::<AnyType>::from_column(col.slice(0..0));

@@ -14,7 +14,7 @@
 
 use common_exception::Result;
 
-use crate::sql::optimizer::rule::transform_state::TransformState;
+use crate::sql::optimizer::rule::transform_result::TransformResult;
 use crate::sql::optimizer::rule::Rule;
 use crate::sql::optimizer::rule::RuleID;
 use crate::sql::optimizer::SExpr;
@@ -47,7 +47,7 @@ impl Rule for RuleImplementGet {
         self.id
     }
 
-    fn apply(&self, s_expr: &SExpr, state: &mut TransformState) -> Result<()> {
+    fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         let plan = s_expr.plan().clone();
         let logical_get: LogicalGet = plan.try_into()?;
 

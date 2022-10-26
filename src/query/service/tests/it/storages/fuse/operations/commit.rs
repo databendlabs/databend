@@ -12,7 +12,6 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 use common_base::base::tokio;
-use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_storages_fuse::FuseTable;
@@ -82,7 +81,6 @@ async fn test_fuse_occ_retry() -> Result<()> {
 #[tokio::test]
 async fn test_last_snapshot_hint() -> Result<()> {
     let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
     fixture.create_default_table().await?;
 
     let table = fixture.latest_default_table().await?;
@@ -102,7 +100,7 @@ async fn test_last_snapshot_hint() -> Result<()> {
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let last_snapshot_location = fuse_table.snapshot_loc().unwrap();
-    let operator = ctx.get_storage_operator()?;
+    let operator = fuse_table.get_operator();
     let location = fuse_table
         .meta_location_generator()
         .gen_last_snapshot_hint_location();

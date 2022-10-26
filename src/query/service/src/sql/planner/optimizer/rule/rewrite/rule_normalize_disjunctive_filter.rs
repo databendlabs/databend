@@ -19,7 +19,7 @@ use common_exception::Result;
 
 use crate::sql::binder::split_conjunctions;
 use crate::sql::optimizer::rule::Rule;
-use crate::sql::optimizer::rule::TransformState;
+use crate::sql::optimizer::rule::TransformResult;
 use crate::sql::optimizer::RuleID;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::AndExpr;
@@ -131,7 +131,7 @@ impl Rule for RuleNormalizeDisjunctiveFilter {
         self.id
     }
 
-    fn apply(&self, s_expr: &SExpr, state: &mut TransformState) -> Result<()> {
+    fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         let filter: Filter = s_expr.plan().clone().try_into()?;
         let predicates = filter.predicates;
         let mut rewritten_predicates = Vec::with_capacity(predicates.len());

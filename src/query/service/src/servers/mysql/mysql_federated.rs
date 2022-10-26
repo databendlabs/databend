@@ -177,7 +177,7 @@ impl MySQLFederated {
     fn federated_mixed_check(&self, query: &str) -> Option<DataBlock> {
         let rules: Vec<(&str, Option<DataBlock>)> = vec![
             (
-                "(?i)^(SELECT VERSION())",
+                r"(?i)^(SELECT VERSION\(\s*\))",
                 Self::select_function_block(
                     "version()",
                     format!("{}-{}", self.mysql_version, self.databend_version.clone()).as_str(),

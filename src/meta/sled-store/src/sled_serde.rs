@@ -18,25 +18,25 @@ use std::ops::RangeBounds;
 
 use byteorder::BigEndian;
 use byteorder::ByteOrder;
-use common_meta_types::MetaStorageError;
+use common_meta_types::LogEntry;
 use openraft::raft::Entry;
-use openraft::AppData;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use sled::IVec;
 
-use crate::SledValueToKey;
+use crate::SledAsRef;
+use crate::SledBytesError;
 
 /// Serialize/deserialize(ser/de) to/from sled values.
 pub trait SledSerde: Serialize + DeserializeOwned {
     /// (ser)ialize a value to `sled::IVec`.
-    fn ser(&self) -> Result<IVec, MetaStorageError> {
+    fn ser(&self) -> Result<IVec, SledBytesError> {
         let x = serde_json::to_vec(self)?;
         Ok(x.into())
     }
 
     /// (de)serialize a value from `sled::IVec`.
-    fn de<T: AsRef<[u8]>>(v: T) -> Result<Self, MetaStorageError>
+    fn de<T: AsRef<[u8]>>(v: T) -> Result<Self, SledBytesError>
     where Self: Sized {
         let s = serde_json::from_slice(v.as_ref())?;
         Ok(s)
@@ -52,10 +52,10 @@ pub trait SledSerde: Serialize + DeserializeOwned {
 /// A type that is used as a sled db key should be serialized with order preserved, such as log index.
 pub trait SledOrderedSerde: Serialize + DeserializeOwned {
     /// (ser)ialize a value to `sled::IVec`.
-    fn ser(&self) -> Result<IVec, MetaStorageError>;
+    fn ser(&self) -> Result<IVec, SledBytesError>;
 
     /// (de)serialize a value from `sled::IVec`.
-    fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, MetaStorageError>
+    fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, SledBytesError>
     where Self: Sized;
 }
 
@@ -68,11 +68,11 @@ where
     R: RangeBounds<IVec>,
 {
     /// (ser)ialize a range to range of `sled::IVec`.
-    fn ser(&self) -> Result<R, MetaStorageError>;
+    fn ser(&self) -> Result<R, SledBytesError>;
 
     // TODO(xp): do we need this?
     // /// (de)serialize a value from `sled::IVec`.
-    // fn de<T: AsRef<[u8]>>(v: T) -> Result<Self, MetaStorageError>
+    // fn de<T: AsRef<[u8]>>(v: T) -> Result<Self, SledBytesError>
     //     where Self: Sized;
 }
 
@@ -82,7 +82,7 @@ where
     SD: SledOrderedSerde,
     V: RangeBounds<SD>,
 {
-    fn ser(&self) -> Result<(Bound<IVec>, Bound<IVec>), MetaStorageError> {
+    fn ser(&self) -> Result<(Bound<IVec>, Bound<IVec>), SledBytesError> {
         let s = self.start_bound();
         let e = self.end_bound();
 
@@ -93,7 +93,7 @@ where
     }
 }
 
-fn bound_ser<SD: SledOrderedSerde>(v: Bound<&SD>) -> Result<Bound<sled::IVec>, MetaStorageError> {
+fn bound_ser<SD: SledOrderedSerde>(v: Bound<&SD>) -> Result<Bound<sled::IVec>, SledBytesError> {
     let res = match v {
         Bound::Included(v) => Bound::Included(v.ser()?),
         Bound::Excluded(v) => Bound::Excluded(v.ser()?),
@@ -103,17 +103,19 @@ fn bound_ser<SD: SledOrderedSerde>(v: Bound<&SD>) -> Result<Bound<sled::IVec>, M
 }
 
 /// Extract log index from log entry
-impl<T> SledValueToKey<u64> for Entry<T>
-where T: AppData
-{
-    fn to_key(&self) -> u64 {
-        self.log_id.index
+impl SledAsRef<u64, Entry<LogEntry>> for Entry<LogEntry> {
+    fn as_key(&self) -> &u64 {
+        &self.log_id.index
+    }
+
+    fn as_value(&self) -> &Entry<LogEntry> {
+        self
     }
 }
 
 /// NodeId, LogIndex and Term need to be serialized with order preserved, for listing items.
 impl SledOrderedSerde for u64 {
-    fn ser(&self) -> Result<IVec, MetaStorageError> {
+    fn ser(&self) -> Result<IVec, SledBytesError> {
         let size = size_of_val(self);
         let mut buf = vec![0; size];
 
@@ -122,7 +124,7 @@ impl SledOrderedSerde for u64 {
     }
 
     /// (de)serialize a value from `sled::IVec`.
-    fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, MetaStorageError>
+    fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, SledBytesError>
     where Self: Sized {
         let res = BigEndian::read_u64(v.as_ref());
         Ok(res)
@@ -131,11 +133,11 @@ impl SledOrderedSerde for u64 {
 
 /// For LogId to be able to stored in sled::Tree as a key.
 impl SledOrderedSerde for String {
-    fn ser(&self) -> Result<IVec, MetaStorageError> {
+    fn ser(&self) -> Result<IVec, SledBytesError> {
         Ok(IVec::from(self.as_str()))
     }
 
-    fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, MetaStorageError>
+    fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, SledBytesError>
     where Self: Sized {
         Ok(String::from_utf8(v.as_ref().to_vec())?)
     }

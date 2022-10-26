@@ -14,6 +14,9 @@
 
 use std::io::Write;
 
+use common_datavalues::ChunkRowIndex;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
 use common_expression::Chunk;
 use common_expression::Column;
 use common_expression::ColumnFrom;
@@ -25,90 +28,163 @@ pub fn test_pass() {
     let mut mint = Mint::new("tests/it/testdata");
     let mut file = mint.new_goldenfile("kernel-pass.txt").unwrap();
 
-    run_filter(
-        &mut file,
+    for filter in vec![
         Column::from_data(vec![true, false, false, false, true]),
-        &[
-            Column::from_data(vec![0i32, 1, 2, 3, -4]),
-            Column::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
-                false, true, false, false, false,
-            ]),
-            Column::Null { len: 5 },
-            Column::from_data_with_validity(vec!["a", "b", "c", "d", "e"], vec![
-                true, true, false, false, false,
-            ]),
-        ],
-    );
-
-    run_filter(
-        &mut file,
         Column::from_data_with_validity(vec![true, true, false, true, true], vec![
             false, true, true, false, false,
         ]),
-        &[
-            Column::from_data(vec![0i32, 1, 2, 3, -4]),
-            Column::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
-                false, true, false, false, false,
-            ]),
-            Column::Null { len: 5 },
-            Column::from_data_with_validity(vec!["x", "y", "z", "a", "b"], vec![
-                false, true, true, false, false,
-            ]),
-        ],
-    );
+        Column::from_data(vec!["a", "b", "", "", "c"]),
+        Column::from_data(vec![0, 1, 2, 3, 0]),
+    ] {
+        run_filter(&mut file, filter, &[
+            (
+                DataType::Number(NumberDataType::Int32),
+                Column::from_data(vec![0i32, 1, 2, 3, -4]),
+            ),
+            (
+                DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
+                Column::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
+                    false, true, false, false, false,
+                ]),
+            ),
+            (DataType::Null, Column::Null { len: 5 }),
+            (
+                DataType::Nullable(Box::new(DataType::String)),
+                Column::from_data_with_validity(vec!["x", "y", "z", "a", "b"], vec![
+                    false, true, true, false, false,
+                ]),
+            ),
+        ]);
+    }
 
     run_concat(&mut file, vec![
         vec![
-            Column::from_data(vec![0i32, 1, 2, 3, -4]),
-            Column::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
-                false, true, false, false, false,
-            ]),
-            Column::Null { len: 5 },
-            Column::EmptyArray { len: 5 },
-            Column::from_data_with_validity(vec!["x", "y", "z", "a", "b"], vec![
-                false, true, true, false, false,
-            ]),
+            (
+                DataType::Number(NumberDataType::Int32),
+                Column::from_data(vec![0i32, 1, 2, 3, -4]),
+            ),
+            (
+                DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
+                Column::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
+                    false, true, false, false, false,
+                ]),
+            ),
+            (DataType::Null, Column::Null { len: 5 }),
+            (DataType::EmptyArray, Column::EmptyArray { len: 5 }),
+            (
+                DataType::Nullable(Box::new(DataType::String)),
+                Column::from_data_with_validity(vec!["x", "y", "z", "a", "b"], vec![
+                    false, true, true, false, false,
+                ]),
+            ),
         ],
         vec![
-            Column::from_data(vec![5i32, 6]),
-            Column::from_data_with_validity(vec![15u8, 16], vec![false, true]),
-            Column::Null { len: 2 },
-            Column::EmptyArray { len: 2 },
-            Column::from_data_with_validity(vec!["x", "y"], vec![false, true]),
+            (
+                DataType::Number(NumberDataType::Int32),
+                Column::from_data(vec![5i32, 6]),
+            ),
+            (
+                DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
+                Column::from_data_with_validity(vec![15u8, 16], vec![false, true]),
+            ),
+            (DataType::Null, Column::Null { len: 2 }),
+            (DataType::EmptyArray, Column::EmptyArray { len: 2 }),
+            (
+                DataType::Nullable(Box::new(DataType::String)),
+                Column::from_data_with_validity(vec!["x", "y"], vec![false, true]),
+            ),
         ],
     ]);
 
     run_take(&mut file, &[0, 3, 1], &[
-        Column::from_data(vec![0i32, 1, 2, 3, -4]),
-        Column::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
-            false, true, false, false, false,
-        ]),
-        Column::Null { len: 5 },
-        Column::from_data_with_validity(vec!["x", "y", "z", "a", "b"], vec![
-            false, true, true, false, false,
-        ]),
+        (
+            DataType::Number(NumberDataType::Int32),
+            Column::from_data(vec![0i32, 1, 2, 3, -4]),
+        ),
+        (
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
+            Column::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
+                false, true, false, false, false,
+            ]),
+        ),
+        (DataType::Null, Column::Null { len: 5 }),
+        (
+            DataType::Nullable(Box::new(DataType::String)),
+            Column::from_data_with_validity(vec!["x", "y", "z", "a", "b"], vec![
+                false, true, true, false, false,
+            ]),
+        ),
     ]);
+
+    {
+        let mut chunks = Vec::with_capacity(3);
+        let indices = vec![
+            (0, 0, 1),
+            (1, 0, 1),
+            (2, 0, 1),
+            (0, 1, 1),
+            (1, 1, 1),
+            (2, 1, 1),
+            (0, 2, 1),
+            (1, 2, 1),
+            (2, 2, 1),
+            (0, 3, 1),
+            (1, 3, 1),
+            (2, 3, 1),
+            // repeat 3
+            (0, 0, 3),
+        ];
+        for i in 0..3 {
+            let mut columns = Vec::with_capacity(3);
+            columns.push((
+                Value::Column(Column::from_data(vec![(i + 10) as u8; 4])),
+                DataType::Number(NumberDataType::UInt8),
+            ));
+            columns.push((
+                Value::Column(Column::from_data_with_validity(
+                    vec![(i + 10) as u8; 4],
+                    vec![true, true, false, false],
+                )),
+                DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
+            ));
+            chunks.push(Chunk::new(columns, 4))
+        }
+
+        run_take_chunk(&mut file, &indices, &chunks);
+    }
 
     run_scatter(
         &mut file,
         &[
-            Column::from_data(vec![0i32, 1, 2, 3, -4]),
-            Column::from_data_with_validity(vec![10, 11, 12, 13, 14], vec![
-                false, true, false, false, false,
-            ]),
-            Column::Null { len: 5 },
-            Column::from_data_with_validity(vec!["x", "y", "z", "a", "b"], vec![
-                false, true, true, false, false,
-            ]),
+            (
+                DataType::Number(NumberDataType::Int32),
+                Column::from_data(vec![0i32, 1, 2, 3, -4]),
+            ),
+            (
+                DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
+                Column::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
+                    false, true, false, false, false,
+                ]),
+            ),
+            (DataType::Null, Column::Null { len: 5 }),
+            (
+                DataType::Nullable(Box::new(DataType::String)),
+                Column::from_data_with_validity(vec!["x", "y", "z", "a", "b"], vec![
+                    false, true, true, false, false,
+                ]),
+            ),
         ],
         &[0, 0, 1, 2, 1],
         3,
     );
 }
 
-fn run_filter(file: &mut impl Write, predicate: Column, columns: &[Column]) {
-    let len = columns.get(0).map_or(1, |c| c.len());
-    let columns = columns.iter().map(|c| Value::Column(c.clone())).collect();
+fn run_filter(file: &mut impl Write, predicate: Column, columns: &[(DataType, Column)]) {
+    let len = columns.get(0).map_or(1, |(_, c)| c.len());
+    let columns = columns
+        .iter()
+        .map(|(ty, c)| (Value::Column(c.clone()), ty.clone()))
+        .collect();
 
     let chunk = Chunk::new(columns, len);
 
@@ -128,12 +204,15 @@ fn run_filter(file: &mut impl Write, predicate: Column, columns: &[Column]) {
     }
 }
 
-fn run_concat(file: &mut impl Write, columns: Vec<Vec<Column>>) {
+fn run_concat(file: &mut impl Write, columns: Vec<Vec<(DataType, Column)>>) {
     let chunks: Vec<Chunk> = columns
         .iter()
         .map(|cs| {
-            let num_rows = cs.get(0).map_or(1, |c| c.len());
-            let cs = cs.iter().map(|c| Value::Column(c.clone())).collect();
+            let num_rows = cs.get(0).map_or(1, |(_, c)| c.len());
+            let cs = cs
+                .iter()
+                .map(|(ty, c)| (Value::Column(c.clone()), ty.clone()))
+                .collect();
             Chunk::new(cs, num_rows)
         })
         .collect();
@@ -155,9 +234,12 @@ fn run_concat(file: &mut impl Write, columns: Vec<Vec<Column>>) {
     }
 }
 
-fn run_take(file: &mut impl Write, indices: &[u32], columns: &[Column]) {
-    let len = columns.get(0).map_or(1, |c| c.len());
-    let columns = columns.iter().map(|c| Value::Column(c.clone())).collect();
+fn run_take(file: &mut impl Write, indices: &[u32], columns: &[(DataType, Column)]) {
+    let len = columns.get(0).map_or(1, |(_, c)| c.len());
+    let columns = columns
+        .iter()
+        .map(|(ty, c)| (Value::Column(c.clone()), ty.clone()))
+        .collect();
     let chunk = Chunk::new(columns, len);
 
     let result = Chunk::take(chunk.clone(), indices);
@@ -175,9 +257,27 @@ fn run_take(file: &mut impl Write, indices: &[u32], columns: &[Column]) {
     }
 }
 
-fn run_scatter(file: &mut impl Write, columns: &[Column], indices: &[u32], scatter_size: usize) {
-    let len = columns.get(0).map_or(1, |c| c.len());
-    let columns = columns.iter().map(|c| Value::Column(c.clone())).collect();
+fn run_take_chunk(file: &mut impl Write, indices: &[ChunkRowIndex], chunks: &[Chunk]) {
+    let result = Chunk::take_chunks(chunks, indices);
+    writeln!(file, "Take Chunk indices:         {indices:?}").unwrap();
+    for (i, chunk) in chunks.iter().enumerate() {
+        writeln!(file, "Chunk{i}:\n{chunk}").unwrap();
+    }
+    writeln!(file, "Result:\n{result}").unwrap();
+    write!(file, "\n\n").unwrap();
+}
+
+fn run_scatter(
+    file: &mut impl Write,
+    columns: &[(DataType, Column)],
+    indices: &[u32],
+    scatter_size: usize,
+) {
+    let len = columns.get(0).map_or(1, |(_, c)| c.len());
+    let columns = columns
+        .iter()
+        .map(|(ty, c)| (Value::Column(c.clone()), ty.clone()))
+        .collect();
     let chunk = Chunk::new(columns, len);
 
     let result = Chunk::scatter(&chunk, indices, scatter_size);

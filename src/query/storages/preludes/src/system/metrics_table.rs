@@ -85,6 +85,7 @@ impl MetricsTable {
                 engine: "SystemMetrics".to_string(),
                 ..Default::default()
             },
+            ..Default::default()
         };
 
         SyncOneBlockSystemTable::create(MetricsTable { table_info })

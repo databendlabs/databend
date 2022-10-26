@@ -49,14 +49,14 @@ fn test_serializers() -> Result<()> {
             col_str: vec!["1".to_owned(), "2".to_owned(), "1".to_owned()],
         },
         Test {
-            name: "datetime32",
-            data_type: TimestampType::new_impl(0),
+            name: "datetime",
+            data_type: TimestampType::new_impl(),
             column: Series::from_data(vec![1630320462000000i64, 1637117572000000i64, 1000000]),
-            val_str: "2021-08-30 10:47:42",
+            val_str: "2021-08-30 10:47:42.000000",
             col_str: vec![
-                "2021-08-30 10:47:42".to_owned(),
-                "2021-11-17 02:52:52".to_owned(),
-                "1970-01-01 00:00:01".to_owned(),
+                "2021-08-30 10:47:42.000000".to_owned(),
+                "2021-11-17 02:52:52.000000".to_owned(),
+                "1970-01-01 00:00:01.000000".to_owned(),
             ],
         },
         Test {
@@ -184,7 +184,7 @@ fn test_serializers() -> Result<()> {
 
 #[test]
 fn test_convert_arrow() {
-    let t = TimestampType::new_impl(6);
+    let t = TimestampType::new_impl();
     let arrow_y = t.to_arrow_field("x");
     let new_t = from_arrow_field(&arrow_y);
 

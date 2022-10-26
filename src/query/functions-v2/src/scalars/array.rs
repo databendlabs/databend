@@ -15,9 +15,16 @@
 use std::sync::Arc;
 
 use common_expression::types::array::ArrayColumnBuilder;
+use common_expression::types::number::SimpleDomain;
+use common_expression::types::number::UInt64Type;
+use common_expression::types::ArrayType;
 use common_expression::types::DataType;
 use common_expression::types::EmptyArrayType;
 use common_expression::types::GenericType;
+use common_expression::types::NullType;
+use common_expression::types::NullableType;
+use common_expression::types::NumberType;
+use common_expression::vectorize_with_builder_2_arg;
 use common_expression::Column;
 use common_expression::Domain;
 use common_expression::Function;
@@ -81,4 +88,40 @@ pub fn register(registry: &mut FunctionRegistry) {
             }),
         }))
     });
+
+    registry.register_1_arg::<EmptyArrayType, NumberType<u8>, _, _>(
+        "length",
+        FunctionProperty::default(),
+        |_| Some(SimpleDomain { min: 0, max: 0 }),
+        |_, _| 0u8,
+    );
+
+    registry.register_1_arg::<ArrayType<GenericType<0>>, NumberType<u64>, _, _>(
+        "length",
+        FunctionProperty::default(),
+        |_| None,
+        |arr, _| arr.len() as u64,
+    );
+
+    registry.register_2_arg_core::<NullableType<EmptyArrayType>, NullableType<UInt64Type>, NullType, _, _>(
+        "get",
+        FunctionProperty::default(),
+        |_, _| Some(()),
+        |_, _, _| Ok(Value::Scalar(())),
+    );
+
+    registry.register_combine_nullable_2_arg::<ArrayType<GenericType<0>>, UInt64Type, GenericType<0>, _, _>(
+        "get",
+        FunctionProperty::default(),
+        |_, _| None,
+        vectorize_with_builder_2_arg::<ArrayType<GenericType<0>>, UInt64Type, NullableType<GenericType<0>>>(
+            |arr, idx, output, _| {
+                match arr.index(idx as usize) {
+                    Some(item) => output.push(item),
+                    None => output.push_null(),
+                }
+                Ok(())
+            }
+        ),
+    );
 }

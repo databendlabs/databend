@@ -156,7 +156,7 @@ evaluation (internal):
 
 ast            : octet_length('latin')
 raw expr       : octet_length("latin")
-checked expr   : octet_length<String>("latin")
+checked expr   : length<String>("latin")
 optimized expr : 5_u64
 output type    : UInt64
 output domain  : Unknown
@@ -165,7 +165,7 @@ output         : 5
 
 ast            : octet_length(NULL)
 raw expr       : octet_length(NULL)
-checked expr   : octet_length<NULL>(NULL)
+checked expr   : length<NULL>(NULL)
 optimized expr : NULL
 output type    : NULL
 output domain  : {NULL}
@@ -1710,14 +1710,42 @@ evaluation:
 +--------+----------------------+-------------+
 | Type   | String NULL          | String NULL |
 | Domain | {"a"..="d"} ∪ {NULL} | Unknown     |
+| Row 0  | "a"                  | "3"         |
+| Row 1  | "b"                  | "3"         |
+| Row 2  | NULL                 | NULL        |
+| Row 3  | "d"                  | "3"         |
 +--------+----------------------+-------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                           |
 +--------+----------------------------------------------------------------------------------------------------------------+
 | a      | NullableColumn { column: StringColumn { data: 0x61626364, offsets: [0, 1, 2, 3, 4] }, validity: [0b____1011] } |
-| Output | NullableColumn { column: StringColumn { data: 0x, offsets: [0] }, validity: [] }                               |
+| Output | NullableColumn { column: StringColumn { data: 0x333333, offsets: [0, 1, 2, 2, 3] }, validity: [0b____1011] }   |
 +--------+----------------------------------------------------------------------------------------------------------------+
+
+
+ast            : concat_ws(a, '3', '4')
+raw expr       : concat_ws(ColumnRef(0)::String NULL, "3", "4")
+checked expr   : concat_ws<String NULL, String NULL, String NULL>(ColumnRef(0), CAST("3" AS String NULL), CAST("4" AS String NULL))
+optimized expr : concat_ws<String NULL, String NULL, String NULL>(ColumnRef(0), "3", "4")
+evaluation:
++--------+----------------------+-------------+
+|        | a                    | Output      |
++--------+----------------------+-------------+
+| Type   | String NULL          | String NULL |
+| Domain | {"a"..="d"} ∪ {NULL} | Unknown     |
+| Row 0  | "a"                  | "3a4"       |
+| Row 1  | "b"                  | "3b4"       |
+| Row 2  | NULL                 | NULL        |
+| Row 3  | "d"                  | "3d4"       |
++--------+----------------------+-------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                     |
++--------+--------------------------------------------------------------------------------------------------------------------------+
+| a      | NullableColumn { column: StringColumn { data: 0x61626364, offsets: [0, 1, 2, 3, 4] }, validity: [0b____1011] }           |
+| Output | NullableColumn { column: StringColumn { data: 0x336134336234336434, offsets: [0, 3, 6, 6, 9] }, validity: [0b____1011] } |
++--------+--------------------------------------------------------------------------------------------------------------------------+
 
 
 ast            : bin(a)

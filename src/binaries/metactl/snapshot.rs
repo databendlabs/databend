@@ -32,12 +32,12 @@ use common_meta_raft_store::state::RaftState;
 use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_sled_store::get_sled_db;
 use common_meta_sled_store::init_sled_db;
+use common_meta_stoerr::MetaStorageError;
 use common_meta_types::anyerror::AnyError;
 use common_meta_types::Cmd;
 use common_meta_types::Endpoint;
 use common_meta_types::LogEntry;
 use common_meta_types::LogId;
-use common_meta_types::MetaStorageError;
 use common_meta_types::Node;
 use databend_meta::export::deserialize_to_kv_variant;
 use databend_meta::export::serialize_kv_variant;
@@ -218,7 +218,7 @@ async fn init_new_cluster(
             payload: EntryPayload::Membership(membership),
         };
 
-        log.insert(&entry).await?;
+        log.append(&[entry]).await?;
     }
 
     // construct AddNode log entries
@@ -243,7 +243,7 @@ async fn init_new_cluster(
                 }),
             };
 
-            log.insert(&entry).await?;
+            log.append(&[entry]).await?;
         }
     }
 

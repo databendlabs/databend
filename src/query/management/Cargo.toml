@@ -14,10 +14,8 @@ test = false
 
 [dependencies]
 common-base = { path = "../../common/base" }
-common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../../common/exception" }
 common-functions = { path = "../functions" }
-common-io = { path = "../../common/io" }
 common-meta-api = { path = "../../meta/api" }
 common-meta-store = { path = "../../meta/store" }
 common-meta-types = { path = "../../meta/types" }
@@ -25,7 +23,7 @@ common-proto-conv = { path = "../../meta/proto-conv" }
 common-protos = { path = "../../meta/protos" }
 
 async-trait = "0.1.57"
-serde_json = "1.0.85"
+serde_json = { workspace = true }
 
 [dev-dependencies]
 common-meta-embedded = { path = "../../meta/embedded" }

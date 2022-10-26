@@ -121,7 +121,8 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
 fn transform_unary_op(op: common_ast::ast::UnaryOperator) -> &'static str {
     match op {
         common_ast::ast::UnaryOperator::Not => "not",
-        _ => unimplemented!(),
+        common_ast::ast::UnaryOperator::Minus => "minus",
+        other => unimplemented!("{}", other),
     }
 }
 
@@ -130,7 +131,7 @@ fn transform_binary_op(op: common_ast::ast::BinaryOperator) -> &'static str {
         common_ast::ast::BinaryOperator::Plus => "plus",
         common_ast::ast::BinaryOperator::Minus => "minus",
         common_ast::ast::BinaryOperator::And => "and",
-        _ => unimplemented!(),
+        other => unimplemented!("{}", other),
     }
 }
 

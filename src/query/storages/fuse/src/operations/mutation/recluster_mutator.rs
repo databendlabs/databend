@@ -59,7 +59,12 @@ impl ReclusterMutator {
         blocks_map: BTreeMap<i32, Vec<(usize, BlockMeta)>>,
         data_accessor: Operator,
     ) -> Result<Self> {
-        let base_mutator = BaseMutator::try_create(ctx, location_generator, base_snapshot)?;
+        let base_mutator = BaseMutator::try_create(
+            ctx,
+            data_accessor.clone(),
+            location_generator,
+            base_snapshot,
+        )?;
         Ok(Self {
             base_mutator,
             blocks_map,

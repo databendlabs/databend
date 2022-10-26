@@ -416,130 +416,43 @@ const fn max_bit_with(lhs: u8, rhs: u8) -> u8 {
 
 impl PartialOrd for NumberScalar {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        match (self, other) {
-            (NumberScalar::UInt8(lhs), NumberScalar::UInt8(rhs)) => lhs.partial_cmp(rhs),
-            (NumberScalar::UInt16(lhs), NumberScalar::UInt16(rhs)) => lhs.partial_cmp(rhs),
-            (NumberScalar::UInt32(lhs), NumberScalar::UInt32(rhs)) => lhs.partial_cmp(rhs),
-            (NumberScalar::UInt64(lhs), NumberScalar::UInt64(rhs)) => lhs.partial_cmp(rhs),
-            (NumberScalar::Int8(lhs), NumberScalar::Int8(rhs)) => lhs.partial_cmp(rhs),
-            (NumberScalar::Int16(lhs), NumberScalar::Int16(rhs)) => lhs.partial_cmp(rhs),
-            (NumberScalar::Int32(lhs), NumberScalar::Int32(rhs)) => lhs.partial_cmp(rhs),
-            (NumberScalar::Int64(lhs), NumberScalar::Int64(rhs)) => lhs.partial_cmp(rhs),
-            (NumberScalar::Float32(lhs), NumberScalar::Float32(rhs)) => lhs.partial_cmp(rhs),
-            (NumberScalar::Float64(lhs), NumberScalar::Float64(rhs)) => lhs.partial_cmp(rhs),
+        crate::with_number_type!(|NUM_TYPE| match (self, other) {
+            (NumberScalar::NUM_TYPE(lhs), NumberScalar::NUM_TYPE(rhs)) => lhs.partial_cmp(rhs),
             _ => None,
-        }
+        })
     }
 }
 
 impl NumberScalar {
-    pub fn repeat(&self, n: usize) -> NumberColumnBuilder {
-        match self {
-            NumberScalar::UInt8(num) => NumberColumnBuilder::UInt8(vec![*num; n]),
-            NumberScalar::UInt16(num) => NumberColumnBuilder::UInt16(vec![*num; n]),
-            NumberScalar::UInt32(num) => NumberColumnBuilder::UInt32(vec![*num; n]),
-            NumberScalar::UInt64(num) => NumberColumnBuilder::UInt64(vec![*num; n]),
-            NumberScalar::Int8(num) => NumberColumnBuilder::Int8(vec![*num; n]),
-            NumberScalar::Int16(num) => NumberColumnBuilder::Int16(vec![*num; n]),
-            NumberScalar::Int32(num) => NumberColumnBuilder::Int32(vec![*num; n]),
-            NumberScalar::Int64(num) => NumberColumnBuilder::Int64(vec![*num; n]),
-            NumberScalar::Float32(num) => NumberColumnBuilder::Float32(vec![*num; n]),
-            NumberScalar::Float64(num) => NumberColumnBuilder::Float64(vec![*num; n]),
-        }
-    }
-
     pub fn domain(&self) -> NumberDomain {
-        match self {
-            NumberScalar::UInt8(num) => NumberDomain::UInt8(SimpleDomain {
+        crate::with_number_type!(|NUM_TYPE| match self {
+            NumberScalar::NUM_TYPE(num) => NumberDomain::NUM_TYPE(SimpleDomain {
                 min: *num,
                 max: *num,
             }),
-            NumberScalar::UInt16(num) => NumberDomain::UInt16(SimpleDomain {
-                min: *num,
-                max: *num,
-            }),
-            NumberScalar::UInt32(num) => NumberDomain::UInt32(SimpleDomain {
-                min: *num,
-                max: *num,
-            }),
-            NumberScalar::UInt64(num) => NumberDomain::UInt64(SimpleDomain {
-                min: *num,
-                max: *num,
-            }),
-            NumberScalar::Int8(num) => NumberDomain::Int8(SimpleDomain {
-                min: *num,
-                max: *num,
-            }),
-            NumberScalar::Int16(num) => NumberDomain::Int16(SimpleDomain {
-                min: *num,
-                max: *num,
-            }),
-            NumberScalar::Int32(num) => NumberDomain::Int32(SimpleDomain {
-                min: *num,
-                max: *num,
-            }),
-            NumberScalar::Int64(num) => NumberDomain::Int64(SimpleDomain {
-                min: *num,
-                max: *num,
-            }),
-            NumberScalar::Float32(num) => NumberDomain::Float32(SimpleDomain {
-                min: *num,
-                max: *num,
-            }),
-            NumberScalar::Float64(num) => NumberDomain::Float64(SimpleDomain {
-                min: *num,
-                max: *num,
-            }),
-        }
+        })
     }
 }
 
 impl NumberColumn {
     pub fn len(&self) -> usize {
-        match self {
-            NumberColumn::UInt8(col) => col.len(),
-            NumberColumn::UInt16(col) => col.len(),
-            NumberColumn::UInt32(col) => col.len(),
-            NumberColumn::UInt64(col) => col.len(),
-            NumberColumn::Int8(col) => col.len(),
-            NumberColumn::Int16(col) => col.len(),
-            NumberColumn::Int32(col) => col.len(),
-            NumberColumn::Int64(col) => col.len(),
-            NumberColumn::Float32(col) => col.len(),
-            NumberColumn::Float64(col) => col.len(),
-        }
+        crate::with_number_type!(|NUM_TYPE| match self {
+            NumberColumn::NUM_TYPE(col) => col.len(),
+        })
     }
 
     pub fn index(&self, index: usize) -> Option<NumberScalar> {
-        match self {
-            NumberColumn::UInt8(col) => Some(NumberScalar::UInt8(col.get(index).cloned()?)),
-            NumberColumn::UInt16(col) => Some(NumberScalar::UInt16(col.get(index).cloned()?)),
-            NumberColumn::UInt32(col) => Some(NumberScalar::UInt32(col.get(index).cloned()?)),
-            NumberColumn::UInt64(col) => Some(NumberScalar::UInt64(col.get(index).cloned()?)),
-            NumberColumn::Int8(col) => Some(NumberScalar::Int8(col.get(index).cloned()?)),
-            NumberColumn::Int16(col) => Some(NumberScalar::Int16(col.get(index).cloned()?)),
-            NumberColumn::Int32(col) => Some(NumberScalar::Int32(col.get(index).cloned()?)),
-            NumberColumn::Int64(col) => Some(NumberScalar::Int64(col.get(index).cloned()?)),
-            NumberColumn::Float32(col) => Some(NumberScalar::Float32(col.get(index).cloned()?)),
-            NumberColumn::Float64(col) => Some(NumberScalar::Float64(col.get(index).cloned()?)),
-        }
+        crate::with_number_type!(|NUM_TYPE| match self {
+            NumberColumn::NUM_TYPE(col) => Some(NumberScalar::NUM_TYPE(col.get(index).cloned()?)),
+        })
     }
 
     /// # Safety
     /// Assumes that the `index` is not out of range.
     pub unsafe fn index_unchecked(&self, index: usize) -> NumberScalar {
-        match self {
-            NumberColumn::UInt8(col) => NumberScalar::UInt8(*col.get_unchecked(index)),
-            NumberColumn::UInt16(col) => NumberScalar::UInt16(*col.get_unchecked(index)),
-            NumberColumn::UInt32(col) => NumberScalar::UInt32(*col.get_unchecked(index)),
-            NumberColumn::UInt64(col) => NumberScalar::UInt64(*col.get_unchecked(index)),
-            NumberColumn::Int8(col) => NumberScalar::Int8(*col.get_unchecked(index)),
-            NumberColumn::Int16(col) => NumberScalar::Int16(*col.get_unchecked(index)),
-            NumberColumn::Int32(col) => NumberScalar::Int32(*col.get_unchecked(index)),
-            NumberColumn::Int64(col) => NumberScalar::Int64(*col.get_unchecked(index)),
-            NumberColumn::Float32(col) => NumberScalar::Float32(*col.get_unchecked(index)),
-            NumberColumn::Float64(col) => NumberScalar::Float64(*col.get_unchecked(index)),
-        }
+        crate::with_number_type!(|NUM_TYPE| match self {
+            NumberColumn::NUM_TYPE(col) => NumberScalar::NUM_TYPE(*col.get_unchecked(index)),
+        })
     }
 
     pub fn slice(&self, range: Range<usize>) -> Self {
@@ -549,291 +462,104 @@ impl NumberColumn {
             range,
             self.len()
         );
-        match self {
-            NumberColumn::UInt8(col) => {
-                NumberColumn::UInt8(col.clone().slice(range.start, range.end - range.start))
+
+        crate::with_number_type!(|NUM_TYPE| match self {
+            NumberColumn::NUM_TYPE(col) => {
+                NumberColumn::NUM_TYPE(col.clone().slice(range.start, range.end - range.start))
             }
-            NumberColumn::UInt16(col) => {
-                NumberColumn::UInt16(col.clone().slice(range.start, range.end - range.start))
-            }
-            NumberColumn::UInt32(col) => {
-                NumberColumn::UInt32(col.clone().slice(range.start, range.end - range.start))
-            }
-            NumberColumn::UInt64(col) => {
-                NumberColumn::UInt64(col.clone().slice(range.start, range.end - range.start))
-            }
-            NumberColumn::Int8(col) => {
-                NumberColumn::Int8(col.clone().slice(range.start, range.end - range.start))
-            }
-            NumberColumn::Int16(col) => {
-                NumberColumn::Int16(col.clone().slice(range.start, range.end - range.start))
-            }
-            NumberColumn::Int32(col) => {
-                NumberColumn::Int32(col.clone().slice(range.start, range.end - range.start))
-            }
-            NumberColumn::Int64(col) => {
-                NumberColumn::Int64(col.clone().slice(range.start, range.end - range.start))
-            }
-            NumberColumn::Float32(col) => {
-                NumberColumn::Float32(col.clone().slice(range.start, range.end - range.start))
-            }
-            NumberColumn::Float64(col) => {
-                NumberColumn::Float64(col.clone().slice(range.start, range.end - range.start))
-            }
-        }
+        })
     }
 
     pub fn domain(&self) -> NumberDomain {
         assert!(self.len() > 0);
-        match self {
-            NumberColumn::UInt8(col) => {
+        crate::with_number_type!(|NUM_TYPE| match self {
+            NumberColumn::NUM_TYPE(col) => {
                 let (min, max) = col.iter().minmax().into_option().unwrap();
-                NumberDomain::UInt8(SimpleDomain {
+                NumberDomain::NUM_TYPE(SimpleDomain {
                     min: *min,
                     max: *max,
                 })
             }
-            NumberColumn::UInt16(col) => {
-                let (min, max) = col.iter().minmax().into_option().unwrap();
-                NumberDomain::UInt16(SimpleDomain {
-                    min: *min,
-                    max: *max,
-                })
-            }
-            NumberColumn::UInt32(col) => {
-                let (min, max) = col.iter().minmax().into_option().unwrap();
-                NumberDomain::UInt32(SimpleDomain {
-                    min: *min,
-                    max: *max,
-                })
-            }
-            NumberColumn::UInt64(col) => {
-                let (min, max) = col.iter().minmax().into_option().unwrap();
-                NumberDomain::UInt64(SimpleDomain {
-                    min: *min,
-                    max: *max,
-                })
-            }
-            NumberColumn::Int8(col) => {
-                let (min, max) = col.iter().minmax().into_option().unwrap();
-                NumberDomain::Int8(SimpleDomain {
-                    min: *min,
-                    max: *max,
-                })
-            }
-            NumberColumn::Int16(col) => {
-                let (min, max) = col.iter().minmax().into_option().unwrap();
-                NumberDomain::Int16(SimpleDomain {
-                    min: *min,
-                    max: *max,
-                })
-            }
-            NumberColumn::Int32(col) => {
-                let (min, max) = col.iter().minmax().into_option().unwrap();
-                NumberDomain::Int32(SimpleDomain {
-                    min: *min,
-                    max: *max,
-                })
-            }
-            NumberColumn::Int64(col) => {
-                let (min, max) = col.iter().minmax().into_option().unwrap();
-                NumberDomain::Int64(SimpleDomain {
-                    min: *min,
-                    max: *max,
-                })
-            }
-            NumberColumn::Float32(col) => {
-                let (min, max) = col.iter().minmax().into_option().unwrap();
-                NumberDomain::Float32(SimpleDomain {
-                    min: *min,
-                    max: *max,
-                })
-            }
-            NumberColumn::Float64(col) => {
-                let (min, max) = col.iter().minmax().into_option().unwrap();
-                NumberDomain::Float64(SimpleDomain {
-                    min: *min,
-                    max: *max,
-                })
-            }
-        }
+        })
     }
 }
 
 impl NumberColumnBuilder {
     pub fn from_column(col: NumberColumn) -> Self {
-        match col {
-            NumberColumn::UInt8(col) => NumberColumnBuilder::UInt8(buffer_into_mut(col)),
-            NumberColumn::UInt16(col) => NumberColumnBuilder::UInt16(buffer_into_mut(col)),
-            NumberColumn::UInt32(col) => NumberColumnBuilder::UInt32(buffer_into_mut(col)),
-            NumberColumn::UInt64(col) => NumberColumnBuilder::UInt64(buffer_into_mut(col)),
-            NumberColumn::Int8(col) => NumberColumnBuilder::Int8(buffer_into_mut(col)),
-            NumberColumn::Int16(col) => NumberColumnBuilder::Int16(buffer_into_mut(col)),
-            NumberColumn::Int32(col) => NumberColumnBuilder::Int32(buffer_into_mut(col)),
-            NumberColumn::Int64(col) => NumberColumnBuilder::Int64(buffer_into_mut(col)),
-            NumberColumn::Float32(col) => NumberColumnBuilder::Float32(buffer_into_mut(col)),
-            NumberColumn::Float64(col) => NumberColumnBuilder::Float64(buffer_into_mut(col)),
-        }
+        crate::with_number_type!(|NUM_TYPE| match col {
+            NumberColumn::NUM_TYPE(col) => NumberColumnBuilder::NUM_TYPE(buffer_into_mut(col)),
+        })
+    }
+
+    pub fn repeat(scalar: NumberScalar, n: usize) -> NumberColumnBuilder {
+        crate::with_number_type!(|NUM_TYPE| match scalar {
+            NumberScalar::NUM_TYPE(num) => NumberColumnBuilder::NUM_TYPE(vec![num; n]),
+        })
     }
 
     pub fn len(&self) -> usize {
-        match self {
-            NumberColumnBuilder::UInt8(col) => col.len(),
-            NumberColumnBuilder::UInt16(col) => col.len(),
-            NumberColumnBuilder::UInt32(col) => col.len(),
-            NumberColumnBuilder::UInt64(col) => col.len(),
-            NumberColumnBuilder::Int8(col) => col.len(),
-            NumberColumnBuilder::Int16(col) => col.len(),
-            NumberColumnBuilder::Int32(col) => col.len(),
-            NumberColumnBuilder::Int64(col) => col.len(),
-            NumberColumnBuilder::Float32(col) => col.len(),
-            NumberColumnBuilder::Float64(col) => col.len(),
-        }
+        crate::with_number_type!(|NUM_TYPE| match self {
+            NumberColumnBuilder::NUM_TYPE(col) => col.len(),
+        })
     }
 
     pub fn with_capacity(ty: &NumberDataType, capacity: usize) -> Self {
-        match ty {
-            NumberDataType::UInt8 => NumberColumnBuilder::UInt8(Vec::with_capacity(capacity)),
-            NumberDataType::UInt16 => NumberColumnBuilder::UInt16(Vec::with_capacity(capacity)),
-            NumberDataType::UInt32 => NumberColumnBuilder::UInt32(Vec::with_capacity(capacity)),
-            NumberDataType::UInt64 => NumberColumnBuilder::UInt64(Vec::with_capacity(capacity)),
-            NumberDataType::Int8 => NumberColumnBuilder::Int8(Vec::with_capacity(capacity)),
-            NumberDataType::Int16 => NumberColumnBuilder::Int16(Vec::with_capacity(capacity)),
-            NumberDataType::Int32 => NumberColumnBuilder::Int32(Vec::with_capacity(capacity)),
-            NumberDataType::Int64 => NumberColumnBuilder::Int64(Vec::with_capacity(capacity)),
-            NumberDataType::Float32 => NumberColumnBuilder::Float32(Vec::with_capacity(capacity)),
-            NumberDataType::Float64 => NumberColumnBuilder::Float64(Vec::with_capacity(capacity)),
-        }
+        crate::with_number_type!(|NUM_TYPE| match ty {
+            NumberDataType::NUM_TYPE => NumberColumnBuilder::NUM_TYPE(Vec::with_capacity(capacity)),
+        })
     }
 
     pub fn push(&mut self, item: NumberScalar) {
-        match (self, item) {
-            (NumberColumnBuilder::UInt8(builder), NumberScalar::UInt8(value)) => {
-                builder.push(value)
-            }
-            (NumberColumnBuilder::UInt16(builder), NumberScalar::UInt16(value)) => {
-                builder.push(value)
-            }
-            (NumberColumnBuilder::UInt32(builder), NumberScalar::UInt32(value)) => {
-                builder.push(value)
-            }
-            (NumberColumnBuilder::UInt64(builder), NumberScalar::UInt64(value)) => {
-                builder.push(value)
-            }
-            (NumberColumnBuilder::Int8(builder), NumberScalar::Int8(value)) => builder.push(value),
-            (NumberColumnBuilder::Int16(builder), NumberScalar::Int16(value)) => {
-                builder.push(value)
-            }
-            (NumberColumnBuilder::Int32(builder), NumberScalar::Int32(value)) => {
-                builder.push(value)
-            }
-            (NumberColumnBuilder::Int64(builder), NumberScalar::Int64(value)) => {
-                builder.push(value)
-            }
-            (NumberColumnBuilder::Float32(builder), NumberScalar::Float32(value)) => {
-                builder.push(value)
-            }
-            (NumberColumnBuilder::Float64(builder), NumberScalar::Float64(value)) => {
+        crate::with_number_type!(|NUM_TYPE| match (self, item) {
+            (NumberColumnBuilder::NUM_TYPE(builder), NumberScalar::NUM_TYPE(value)) => {
                 builder.push(value)
             }
             (builder, scalar) => unreachable!("unable to push {scalar:?} to {builder:?}"),
-        }
+        })
     }
 
     pub fn push_default(&mut self) {
-        match self {
-            NumberColumnBuilder::UInt8(builder) => builder.push(0),
-            NumberColumnBuilder::UInt16(builder) => builder.push(0),
-            NumberColumnBuilder::UInt32(builder) => builder.push(0),
-            NumberColumnBuilder::UInt64(builder) => builder.push(0),
-            NumberColumnBuilder::Int8(builder) => builder.push(0),
-            NumberColumnBuilder::Int16(builder) => builder.push(0),
-            NumberColumnBuilder::Int32(builder) => builder.push(0),
-            NumberColumnBuilder::Int64(builder) => builder.push(0),
-            NumberColumnBuilder::Float32(builder) => builder.push(0.0.into()),
-            NumberColumnBuilder::Float64(builder) => builder.push(0.0.into()),
-        }
+        crate::with_number_mapped_type!(|NUM_TYPE| match self {
+            NumberColumnBuilder::NUM_TYPE(builder) => builder.push(NUM_TYPE::default()),
+        })
     }
 
     pub fn append(&mut self, other: &NumberColumnBuilder) {
-        match (self, other) {
-            (NumberColumnBuilder::UInt8(builder), NumberColumnBuilder::UInt8(other_builder)) => {
-                builder.extend_from_slice(other_builder);
-            }
-            (NumberColumnBuilder::UInt16(builder), NumberColumnBuilder::UInt16(other_builder)) => {
-                builder.extend_from_slice(other_builder);
-            }
-            (NumberColumnBuilder::UInt32(builder), NumberColumnBuilder::UInt32(other_builder)) => {
-                builder.extend_from_slice(other_builder);
-            }
-            (NumberColumnBuilder::UInt64(builder), NumberColumnBuilder::UInt64(other_builder)) => {
-                builder.extend_from_slice(other_builder);
-            }
-            (NumberColumnBuilder::Int8(builder), NumberColumnBuilder::Int8(other_builder)) => {
-                builder.extend_from_slice(other_builder);
-            }
-            (NumberColumnBuilder::Int16(builder), NumberColumnBuilder::Int16(other_builder)) => {
-                builder.extend_from_slice(other_builder);
-            }
-            (NumberColumnBuilder::Int32(builder), NumberColumnBuilder::Int32(other_builder)) => {
-                builder.extend_from_slice(other_builder);
-            }
-            (NumberColumnBuilder::Int64(builder), NumberColumnBuilder::Int64(other_builder)) => {
-                builder.extend_from_slice(other_builder);
-            }
+        crate::with_number_type!(|NUM_TYPE| match (self, other) {
             (
-                NumberColumnBuilder::Float32(builder),
-                NumberColumnBuilder::Float32(other_builder),
-            ) => {
-                builder.extend_from_slice(other_builder);
-            }
-            (
-                NumberColumnBuilder::Float64(builder),
-                NumberColumnBuilder::Float64(other_builder),
+                NumberColumnBuilder::NUM_TYPE(builder),
+                NumberColumnBuilder::NUM_TYPE(other_builder),
             ) => {
                 builder.extend_from_slice(other_builder);
             }
             (this, other) => unreachable!("unable append {other:?} onto {this:?}"),
-        }
+        })
     }
 
     pub fn build(self) -> NumberColumn {
-        match self {
-            NumberColumnBuilder::UInt8(builder) => NumberColumn::UInt8(builder.into()),
-            NumberColumnBuilder::UInt16(builder) => NumberColumn::UInt16(builder.into()),
-            NumberColumnBuilder::UInt32(builder) => NumberColumn::UInt32(builder.into()),
-            NumberColumnBuilder::UInt64(builder) => NumberColumn::UInt64(builder.into()),
-            NumberColumnBuilder::Int8(builder) => NumberColumn::Int8(builder.into()),
-            NumberColumnBuilder::Int16(builder) => NumberColumn::Int16(builder.into()),
-            NumberColumnBuilder::Int32(builder) => NumberColumn::Int32(builder.into()),
-            NumberColumnBuilder::Int64(builder) => NumberColumn::Int64(builder.into()),
-            NumberColumnBuilder::Float32(builder) => NumberColumn::Float32(builder.into()),
-            NumberColumnBuilder::Float64(builder) => NumberColumn::Float64(builder.into()),
-        }
+        crate::with_number_type!(|NUM_TYPE| match self {
+            NumberColumnBuilder::NUM_TYPE(builder) => NumberColumn::NUM_TYPE(builder.into()),
+        })
     }
 
     pub fn build_scalar(self) -> NumberScalar {
         assert_eq!(self.len(), 1);
-        match self {
-            NumberColumnBuilder::UInt8(builder) => NumberScalar::UInt8(builder[0]),
-            NumberColumnBuilder::UInt16(builder) => NumberScalar::UInt16(builder[0]),
-            NumberColumnBuilder::UInt32(builder) => NumberScalar::UInt32(builder[0]),
-            NumberColumnBuilder::UInt64(builder) => NumberScalar::UInt64(builder[0]),
-            NumberColumnBuilder::Int8(builder) => NumberScalar::Int8(builder[0]),
-            NumberColumnBuilder::Int16(builder) => NumberScalar::Int16(builder[0]),
-            NumberColumnBuilder::Int32(builder) => NumberScalar::Int32(builder[0]),
-            NumberColumnBuilder::Int64(builder) => NumberScalar::Int64(builder[0]),
-            NumberColumnBuilder::Float32(builder) => NumberScalar::Float32(builder[0]),
-            NumberColumnBuilder::Float64(builder) => NumberScalar::Float64(builder[0]),
-        }
+
+        crate::with_number_type!(|NUM_TYPE| match self {
+            NumberColumnBuilder::NUM_TYPE(builder) => NumberScalar::NUM_TYPE(builder[0]),
+        })
     }
 }
 
 impl<T: Number> SimpleDomain<T> {
     /// Returns the saturating cast domain and a flag denoting whether overflow happened.
     pub fn overflow_cast<U: Number>(&self) -> (SimpleDomain<U>, bool) {
-        let (min, min_overflowing) = overflow_cast::<T, U>(self.min);
-        let (max, max_overflowing) = overflow_cast::<T, U>(self.max);
+        self.overflow_cast_with_minmax(U::MIN, U::MAX)
+    }
+
+    pub fn overflow_cast_with_minmax<U: Number>(&self, min: U, max: U) -> (SimpleDomain<U>, bool) {
+        let (min, min_overflowing) = overflow_cast_with_minmax::<T, U>(self.min, min, max);
+        let (max, max_overflowing) = overflow_cast_with_minmax::<T, U>(self.max, min, max);
         (
             SimpleDomain { min, max },
             min_overflowing || max_overflowing,
@@ -841,9 +567,9 @@ impl<T: Number> SimpleDomain<T> {
     }
 }
 
-fn overflow_cast<T: Number, U: Number>(src: T) -> (U, bool) {
-    let dest_min: T = num_traits::cast(U::MIN).unwrap_or(T::MIN);
-    let dest_max: T = num_traits::cast(U::MAX).unwrap_or(T::MAX);
+fn overflow_cast_with_minmax<T: Number, U: Number>(src: T, min: U, max: U) -> (U, bool) {
+    let dest_min: T = num_traits::cast(min).unwrap_or(T::MIN);
+    let dest_max: T = num_traits::cast(max).unwrap_or(T::MAX);
     let src_clamp: T = src.clamp(dest_min, dest_max);
     let overflowing = src != src_clamp;
     // The number must be within the range that `U` can represent after clamping, therefore

@@ -14,7 +14,7 @@ SELECT * FROM system.functions limit 10\G;
         name: today
   is_builtin: 1
 is_aggregate: 0
-  definition: 
+  definition:
     category: datetime
  description: Returns current date.
       syntax: TODAY()
@@ -30,7 +30,7 @@ is_aggregate: 0
         name: exp
   is_builtin: 1
 is_aggregate: 0
-  definition: 
+  definition:
     category: numeric
  description: Returns the value of e (the base of natural logarithms) raised to the power of x.
       syntax: EXP(x)
@@ -60,7 +60,7 @@ SELECT EXP(0);
         name: cos
   is_builtin: 1
 is_aggregate: 0
-  definition: 
+  definition:
     category: numeric
  description: Returns the cosine of x, where x is given in radians.
       syntax: COS(x)
@@ -77,27 +77,27 @@ Read 1 rows, 1 B in 0.000 sec., 2.64 thousand rows/sec., 2.64 KB/sec.
         name: to_uint32
   is_builtin: 1
 is_aggregate: 0
-  definition: 
-    category: 
- description: 
-      syntax: 
-     example: 
+  definition:
+    category:
+ description:
+      syntax:
+     example:
 *************************** 5. row ***************************
         name: get_path
   is_builtin: 1
 is_aggregate: 0
-  definition: 
-    category: 
- description: 
-      syntax: 
-     example: 
+  definition:
+    category:
+ description:
+      syntax:
+     example:
 *************************** 6. row ***************************
         name: to_start_of_day
   is_builtin: 1
 is_aggregate: 0
-  definition: 
+  definition:
     category: datetime
- description: Rounds down a date with time to the start of the day.
+ description: Rounds down a date with time (timestamp/datetime) to the start of the day.
       syntax: to_start_of_day(expr)
 
      example: SELECT to_start_of_day(now());
@@ -118,16 +118,16 @@ SELECT to_start_of_day(to_datetime(1630812366));
         name: get_ignore_case
   is_builtin: 1
 is_aggregate: 0
-  definition: 
-    category: 
- description: 
-      syntax: 
-     example: 
+  definition:
+    category:
+ description:
+      syntax:
+     example:
 *************************** 8. row ***************************
         name: locate
   is_builtin: 1
 is_aggregate: 0
-  definition: 
+  definition:
     category: string
  description: Returns 0 if substr is not in str. Returns NULL if any argument is NULL.
       syntax: LOCATE(substr,str)
@@ -158,7 +158,7 @@ SELECT LOCATE('bar', 'foobarbar', 5)
         name: atan
   is_builtin: 1
 is_aggregate: 0
-  definition: 
+  definition:
     category: numeric
  description: Returns the arc tangent of x, that is, the value whose tangent is x.
       syntax: ATAN(x)
@@ -174,9 +174,9 @@ is_aggregate: 0
         name: tosecond
   is_builtin: 1
 is_aggregate: 0
-  definition: 
+  definition:
     category: datetime
- description: Converts a date with time to a UInt8 number containing the number of the second in the minute (0-59).
+ description: Converts a date with time (timestamp/datetime) to a UInt8 number containing the number of the second in the minute (0-59).
       syntax: to_second(expr)
 
      example: SELECT to_second(now());

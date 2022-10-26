@@ -24,6 +24,8 @@ fn test_array() {
     let file = &mut mint.new_goldenfile("array.txt").unwrap();
 
     test_create(file);
+    test_length(file);
+    test_get(file);
 }
 
 fn test_create(file: &mut impl Write) {
@@ -36,4 +38,22 @@ fn test_create(file: &mut impl Write) {
         r#"[parse_json('[]'), parse_json('{"foo":"bar"}')]"#,
         &[],
     );
+}
+
+fn test_length(file: &mut impl Write) {
+    run_ast(file, "length([])", &[]);
+    run_ast(file, "length([1, 2, 3])", &[]);
+    run_ast(file, "length([true, false])", &[]);
+    run_ast(file, "length(['a', 'b', 'c', 'd'])", &[]);
+}
+
+fn test_get(file: &mut impl Write) {
+    run_ast(file, "get([], 1)", &[]);
+    run_ast(file, "get([], NULL)", &[]);
+    run_ast(file, "get([true, false], 0)", &[]);
+    run_ast(file, "get(['a', 'b', 'c'], 2)", &[]);
+    run_ast(file, "get([1, 2, 3], 0)", &[]);
+    run_ast(file, "get([1, 2, 3], 5)", &[]);
+    run_ast(file, "get([1, null, 3], 0)", &[]);
+    run_ast(file, "get([1, null, 3], 1)", &[]);
 }

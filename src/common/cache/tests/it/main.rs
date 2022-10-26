@@ -13,4 +13,3 @@
 // limitations under the License.
 
 mod cache;
-mod disk_cache;

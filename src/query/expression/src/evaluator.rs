@@ -29,12 +29,16 @@ use crate::function::FunctionContext;
 use crate::property::Domain;
 use crate::types::any::AnyType;
 use crate::types::array::ArrayColumn;
+use crate::types::date::date_to_string;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableDomain;
 use crate::types::number::NumberColumn;
 use crate::types::number::NumberDataType;
 use crate::types::number::NumberDomain;
 use crate::types::number::NumberScalar;
+use crate::types::number::SimpleDomain;
+use crate::types::string::StringColumnBuilder;
+use crate::types::timestamp::timestamp_to_string;
 use crate::types::variant::cast_scalar_to_variant;
 use crate::types::variant::cast_scalars_to_variants;
 use crate::types::DataType;
@@ -59,7 +63,7 @@ impl<'a> Evaluator<'a> {
     pub fn run(&self, expr: &Expr) -> Result<Value<AnyType>> {
         let result = match expr {
             Expr::Constant { scalar, .. } => Ok(Value::Scalar(scalar.clone())),
-            Expr::ColumnRef { id, .. } => Ok(self.input_columns.columns()[*id].clone()),
+            Expr::ColumnRef { id, .. } => Ok(self.input_columns.columns()[*id].0.clone()),
             Expr::FunctionCall {
                 span,
                 function,
@@ -204,12 +208,63 @@ impl<'a> Evaluator<'a> {
                 Ok(Scalar::Number(new_number))
             }
 
+            (Scalar::Timestamp(value), DataType::Number(dest_ty)) => {
+                let new_number = with_number_type!(|DEST_TYPE| match dest_ty {
+                    NumberDataType::DEST_TYPE => {
+                        if NumberDataType::Int64.can_lossless_cast_to(*dest_ty) {
+                            NumberScalar::DEST_TYPE(value.as_())
+                        } else {
+                            let value = num_traits::cast::cast(value).ok_or_else(|| {
+                                (
+                                    span.clone(),
+                                    format!(
+                                        "unable to cast TimestampType to {}",
+                                        stringify!(DEST_TYPE)
+                                    ),
+                                )
+                            })?;
+                            NumberScalar::DEST_TYPE(value)
+                        }
+                    }
+                });
+                Ok(Scalar::Number(new_number))
+            }
+
+            (Scalar::Date(value), DataType::Number(dest_ty)) => {
+                let new_number = with_number_type!(|DEST_TYPE| match dest_ty {
+                    NumberDataType::DEST_TYPE => {
+                        if NumberDataType::Int32.can_lossless_cast_to(*dest_ty) {
+                            NumberScalar::DEST_TYPE(value.as_())
+                        } else {
+                            let value = num_traits::cast::cast(value).ok_or_else(|| {
+                                (
+                                    span.clone(),
+                                    format!("unable to cast DateType to {}", stringify!(DEST_TYPE)),
+                                )
+                            })?;
+                            NumberScalar::DEST_TYPE(value)
+                        }
+                    }
+                });
+                Ok(Scalar::Number(new_number))
+            }
+
+            (Scalar::Timestamp(ts), DataType::String) => Ok(Scalar::String(
+                timestamp_to_string(ts, &self.tz).as_bytes().to_vec(),
+            )),
+
+            (Scalar::Date(d), DataType::String) => Ok(Scalar::String(
+                date_to_string(d, &self.tz).as_bytes().to_vec(),
+            )),
+
             // identical types
             (scalar @ Scalar::Null, DataType::Null)
             | (scalar @ Scalar::EmptyArray, DataType::EmptyArray)
             | (scalar @ Scalar::Boolean(_), DataType::Boolean)
             | (scalar @ Scalar::String(_), DataType::String)
-            | (scalar @ Scalar::Timestamp(_), DataType::Timestamp) => Ok(scalar),
+            | (scalar @ Scalar::Timestamp(_), DataType::Timestamp)
+            | (scalar @ Scalar::Date(_), DataType::Date)
+            | (scalar @ Scalar::Interval(_), DataType::Interval) => Ok(scalar),
 
             (scalar, dest_ty) => Err((
                 span,
@@ -310,12 +365,83 @@ impl<'a> Evaluator<'a> {
                 Ok(Column::Number(new_column))
             }
 
+            (Column::Timestamp(col), DataType::Number(dest_ty)) => {
+                let new_column = with_number_type!(|DEST_TYPE| match dest_ty {
+                    NumberDataType::DEST_TYPE => {
+                        if NumberDataType::Int64.can_lossless_cast_to(*dest_ty) {
+                            let new_col = col.iter().map(|x| x.as_()).collect::<Vec<_>>();
+                            NumberColumn::DEST_TYPE(new_col.into())
+                        } else {
+                            let mut new_col = Vec::with_capacity(col.len());
+                            for &val in col.iter() {
+                                let new_val = num_traits::cast::cast(val).ok_or_else(|| {
+                                    (
+                                        span.clone(),
+                                        format!("unable to cast TimestampType to {}", val),
+                                    )
+                                })?;
+                                new_col.push(new_val);
+                            }
+                            NumberColumn::DEST_TYPE(new_col.into())
+                        }
+                    }
+                });
+                Ok(Column::Number(new_column))
+            }
+
+            (Column::Date(col), DataType::Number(dest_ty)) => {
+                let new_column = with_number_type!(|DEST_TYPE| match dest_ty {
+                    NumberDataType::DEST_TYPE => {
+                        if NumberDataType::Int32.can_lossless_cast_to(*dest_ty) {
+                            let new_col = col.iter().map(|x| x.as_()).collect::<Vec<_>>();
+                            NumberColumn::DEST_TYPE(new_col.into())
+                        } else {
+                            let mut new_col = Vec::with_capacity(col.len());
+                            for &val in col.iter() {
+                                let new_val = num_traits::cast::cast(val).ok_or_else(|| {
+                                    (span.clone(), format!("unable to cast DateType to {}", val))
+                                })?;
+                                new_col.push(new_val);
+                            }
+                            NumberColumn::DEST_TYPE(new_col.into())
+                        }
+                    }
+                });
+                Ok(Column::Number(new_column))
+            }
+
+            (Column::Timestamp(col), DataType::String) => {
+                // We can get the data_capacity, so no need to use `from_iter`.
+                // "YYYY-mm-DD HH:MM:SS.ssssss"
+                let mut builder = StringColumnBuilder::with_capacity(col.len(), col.len() * 26);
+                for val in col.iter() {
+                    let s = timestamp_to_string(*val, &self.tz);
+                    builder.put_str(s.as_str());
+                    builder.commit_row();
+                }
+                Ok(Column::String(builder.build()))
+            }
+
+            (Column::Date(col), DataType::String) => {
+                // We can get the data_capacity, so no need to use `from_iter`.
+                // "YYYY-mm-DD"
+                let mut builder = StringColumnBuilder::with_capacity(col.len(), col.len() * 10);
+                for &val in col.iter() {
+                    let s = date_to_string(val, &self.tz);
+                    builder.put_str(s.as_str());
+                    builder.commit_row();
+                }
+                Ok(Column::String(builder.build()))
+            }
+
             // identical types
             (col @ Column::Null { .. }, DataType::Null)
             | (col @ Column::EmptyArray { .. }, DataType::EmptyArray)
             | (col @ Column::Boolean(_), DataType::Boolean)
             | (col @ Column::String { .. }, DataType::String)
-            | (col @ Column::Timestamp { .. }, DataType::Timestamp) => Ok(col),
+            | (col @ Column::Timestamp { .. }, DataType::Timestamp)
+            | (col @ Column::Date(_), DataType::Date)
+            | (col @ Column::Interval(_), DataType::Interval) => Ok(col),
 
             (col, dest_ty) => Err((span, (format!("unable to cast {col:?} to {dest_ty}")))),
         }
@@ -432,11 +558,105 @@ impl<'a> Evaluator<'a> {
                 })
             }
 
+            (Column::Timestamp(col), DataType::Number(dest_ty)) => {
+                with_number_type!(|DEST_TYPE| match dest_ty {
+                    NumberDataType::DEST_TYPE => {
+                        if NumberDataType::Int64.can_lossless_cast_to(*dest_ty) {
+                            let new_col = col.iter().map(|x| x.as_()).collect::<Vec<_>>();
+                            Column::Nullable(Box::new(NullableColumn {
+                                validity: constant_bitmap(true, new_col.len()).into(),
+                                column: Column::Number(NumberColumn::DEST_TYPE(new_col.into())),
+                            }))
+                        } else {
+                            let mut new_col = Vec::with_capacity(col.len());
+                            let mut validity = MutableBitmap::with_capacity(col.len());
+                            for &val in col.iter() {
+                                if let Some(new_val) = num_traits::cast::cast(val) {
+                                    new_col.push(new_val);
+                                    validity.push(true);
+                                } else {
+                                    new_col.push(Default::default());
+                                    validity.push(false);
+                                }
+                            }
+                            Column::Nullable(Box::new(NullableColumn {
+                                validity: validity.into(),
+                                column: Column::Number(NumberColumn::DEST_TYPE(new_col.into())),
+                            }))
+                        }
+                    }
+                })
+            }
+
+            (Column::Date(col), DataType::Number(dest_ty)) => {
+                with_number_type!(|DEST_TYPE| match dest_ty {
+                    NumberDataType::DEST_TYPE => {
+                        if NumberDataType::Int32.can_lossless_cast_to(*dest_ty) {
+                            let new_col = col.iter().map(|x| x.as_()).collect::<Vec<_>>();
+                            Column::Nullable(Box::new(NullableColumn {
+                                validity: constant_bitmap(true, new_col.len()).into(),
+                                column: Column::Number(NumberColumn::DEST_TYPE(new_col.into())),
+                            }))
+                        } else {
+                            let mut new_col = Vec::with_capacity(col.len());
+                            let mut validity = MutableBitmap::with_capacity(col.len());
+                            for &val in col.iter() {
+                                if let Some(new_val) = num_traits::cast::cast(val) {
+                                    new_col.push(new_val);
+                                    validity.push(true);
+                                } else {
+                                    new_col.push(Default::default());
+                                    validity.push(false);
+                                }
+                            }
+                            Column::Nullable(Box::new(NullableColumn {
+                                validity: validity.into(),
+                                column: Column::Number(NumberColumn::DEST_TYPE(new_col.into())),
+                            }))
+                        }
+                    }
+                })
+            }
+
+            (Column::Timestamp(col), DataType::String) => {
+                // We can get the data_capacity, so no need to use `from_iter`.
+                // "YYYY-mm-DD HH:MM:SS.ssssss"
+                let mut builder = StringColumnBuilder::with_capacity(col.len(), col.len() * 26);
+                for val in col.iter() {
+                    let s = timestamp_to_string(*val, &self.tz);
+                    builder.put_str(s.as_str());
+                    builder.commit_row();
+                }
+                let new_col = builder.build();
+                Column::Nullable(Box::new(NullableColumn {
+                    validity: constant_bitmap(true, col.len()).into(),
+                    column: Column::String(new_col),
+                }))
+            }
+
+            (Column::Date(col), DataType::String) => {
+                // We can get the data_capacity, so no need to use `from_iter`.
+                // "YYYY-mm-DD"
+                let mut builder = StringColumnBuilder::with_capacity(col.len(), col.len() * 10);
+                for &val in col.iter() {
+                    let s = date_to_string(val, &self.tz);
+                    builder.put_str(s.as_str());
+                    builder.commit_row();
+                }
+                let new_col = builder.build();
+                Column::Nullable(Box::new(NullableColumn {
+                    validity: constant_bitmap(true, col.len()).into(),
+                    column: Column::String(new_col),
+                }))
+            }
+
             // identical types
             (column @ Column::Boolean(_), DataType::Boolean)
             | (column @ Column::String { .. }, DataType::String)
             | (column @ Column::EmptyArray { .. }, DataType::EmptyArray)
-            | (column @ Column::Timestamp { .. }, DataType::Timestamp) => {
+            | (column @ Column::Timestamp { .. }, DataType::Timestamp)
+            | (column @ Column::Date(_), DataType::Date)
+            | (column @ Column::Interval(_), DataType::Interval) => {
                 Column::Nullable(Box::new(NullableColumn {
                     validity: constant_bitmap(true, column.len()).into(),
                     column,
@@ -679,10 +899,42 @@ impl<'a> ConstantFolder<'a> {
                 })
             }
 
+            (Domain::Timestamp(domain), DataType::Number(dest_ty)) => {
+                with_number_type!(|DEST_TYPE| match dest_ty {
+                    NumberDataType::DEST_TYPE => {
+                        let simple_domain = SimpleDomain {
+                            min: domain.min,
+                            max: domain.max,
+                        };
+                        let (domain, overflowing) = simple_domain.overflow_cast();
+                        if overflowing {
+                            None
+                        } else {
+                            Some(Domain::Number(NumberDomain::DEST_TYPE(domain)))
+                        }
+                    }
+                })
+            }
+
+            (Domain::Date(domain), DataType::Number(dest_ty)) => {
+                with_number_type!(|DEST_TYPE| match dest_ty {
+                    NumberDataType::DEST_TYPE => {
+                        let (domain, overflowing) = domain.overflow_cast();
+                        if overflowing {
+                            None
+                        } else {
+                            Some(Domain::Number(NumberDomain::DEST_TYPE(domain)))
+                        }
+                    }
+                })
+            }
+
             // identical types
             (Domain::Boolean(_), DataType::Boolean)
             | (Domain::String(_), DataType::String)
-            | (Domain::Timestamp(_), DataType::Timestamp) => Some(domain.clone()),
+            | (Domain::Timestamp(_), DataType::Timestamp)
+            | (Domain::Date(_), DataType::Date)
+            | (Domain::Interval(_), DataType::Interval) => Some(domain.clone()),
 
             // failure cases
             _ => None,
@@ -759,10 +1011,56 @@ impl<'a> ConstantFolder<'a> {
                 })
             }
 
+            (Domain::Timestamp(domain), DataType::Number(dest_ty)) => {
+                with_number_type!(|DEST_TYPE| match dest_ty {
+                    NumberDataType::DEST_TYPE => {
+                        let simple_domain = SimpleDomain {
+                            min: domain.min,
+                            max: domain.max,
+                        };
+                        let (domain, overflowing) = simple_domain.overflow_cast();
+                        Domain::Nullable(NullableDomain {
+                            has_null: overflowing,
+                            value: Some(Box::new(Domain::Number(NumberDomain::DEST_TYPE(domain)))),
+                        })
+                    }
+                })
+            }
+
+            (Domain::Date(domain), DataType::Number(dest_ty)) => {
+                with_number_type!(|DEST_TYPE| match dest_ty {
+                    NumberDataType::DEST_TYPE => {
+                        let (domain, overflowing) = domain.overflow_cast();
+                        Domain::Nullable(NullableDomain {
+                            has_null: overflowing,
+                            value: Some(Box::new(Domain::Number(NumberDomain::DEST_TYPE(domain)))),
+                        })
+                    }
+                })
+            }
+
+            (Domain::Timestamp(domain), DataType::Date) => Domain::Nullable(NullableDomain {
+                has_null: false,
+                value: Some(Box::new(Domain::Date(SimpleDomain {
+                    min: (domain.min / 1000000 / 24 / 3600) as i32,
+                    max: (domain.max / 1000000 / 24 / 3600) as i32,
+                }))),
+            }),
+
+            (Domain::Date(domain), DataType::Timestamp) => Domain::Nullable(NullableDomain {
+                has_null: false,
+                value: Some(Box::new(Domain::Timestamp(SimpleDomain {
+                    min: domain.min as i64 * 24 * 3600 * 1000000,
+                    max: domain.max as i64 * 24 * 3600 * 1000000,
+                }))),
+            }),
+
             // identical types
             (Domain::Boolean(_), DataType::Boolean)
             | (Domain::String(_), DataType::String)
-            | (Domain::Timestamp(_), DataType::Timestamp) => Domain::Nullable(NullableDomain {
+            | (Domain::Timestamp(_), DataType::Timestamp)
+            | (Domain::Date(_), DataType::Date)
+            | (Domain::Interval(_), DataType::Interval) => Domain::Nullable(NullableDomain {
                 has_null: false,
                 value: Some(Box::new(domain.clone())),
             }),

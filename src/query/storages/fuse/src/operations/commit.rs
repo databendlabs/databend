@@ -21,6 +21,7 @@ use backoff::ExponentialBackoffBuilder;
 use common_base::base::ProgressValues;
 use common_cache::Cache;
 use common_catalog::table::Table;
+use common_catalog::table::TableExt;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
@@ -99,7 +100,7 @@ impl FuseTable {
                                 tbl.table_info.ident
                             );
 
-                            let latest = tbl.latest(ctx.as_ref()).await?;
+                            let latest = tbl.refresh(ctx.as_ref()).await?;
                             tbl = FuseTable::try_from_table(latest.as_ref())?;
 
                             let keep_last_snapshot = true;
@@ -128,14 +129,15 @@ impl FuseTable {
                             tbl.table_info.ident
                         );
                         common_base::base::tokio::time::sleep(d).await;
-                        latest = tbl.latest(ctx.as_ref()).await?;
+                        latest = tbl.refresh(ctx.as_ref()).await?;
                         tbl = FuseTable::try_from_table(latest.as_ref())?;
                         retry_times += 1;
                         continue;
                     }
                     None => {
                         info!("aborting operations");
-                        let _ = self::utils::abort_operations(ctx.as_ref(), operation_log).await;
+                        let _ =
+                            self::utils::abort_operations(self.get_operator(), operation_log).await;
                         break Err(ErrorCode::OCCRetryFailure(format!(
                             "can not fulfill the tx after retries({} times, {} ms), aborted. table name {}, identity {}",
                             retry_times,
@@ -349,20 +351,6 @@ impl FuseTable {
         Ok((seg_locs, s))
     }
 
-    async fn latest(&self, ctx: &dyn TableContext) -> Result<Arc<dyn Table>> {
-        let name = self.table_info.name.clone();
-        let tid = self.table_info.ident.table_id;
-        let catalog = ctx.get_catalog(self.table_info.catalog())?;
-        let (ident, meta) = catalog.get_table_meta_by_id(tid).await?;
-        let table_info: TableInfo = TableInfo {
-            ident,
-            desc: "".to_owned(),
-            name,
-            meta: meta.as_ref().clone(),
-        };
-        catalog.get_table_by_info(&table_info)
-    }
-
     // Left a hint file which indicates the location of the latest snapshot
     async fn write_last_snapshot_hint(
         operator: &Operator,
@@ -398,16 +386,12 @@ impl FuseTable {
 mod utils {
     use std::collections::BTreeMap;
 
-    use common_catalog::table_context::TableContext;
-
     use super::*;
     #[inline]
     pub async fn abort_operations(
-        ctx: &dyn TableContext,
+        operator: Operator,
         operation_log: TableOperationLog,
     ) -> Result<()> {
-        let operator = ctx.get_storage_operator()?;
-
         for entry in operation_log {
             for block in &entry.segment_info.blocks {
                 let block_location = &block.location.0;

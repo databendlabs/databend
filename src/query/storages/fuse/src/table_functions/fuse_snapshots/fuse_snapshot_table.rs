@@ -16,6 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_catalog::catalog::CATALOG_DEFAULT;
+use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_legacy_expression::LegacyExpression;
 use common_legacy_planners::Extras;
@@ -25,7 +26,9 @@ use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use common_pipeline_sources::processors::sources::StreamSourceNoSkipEmpty;
+use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_sources::processors::sources::AsyncSource;
+use common_pipeline_sources::processors::sources::AsyncSourcer;
 
 use super::fuse_snapshot::FuseSnapshot;
 use super::table_args::parse_func_history_args;
@@ -36,6 +39,7 @@ use crate::sessions::TableContext;
 use crate::table_functions::string_literal;
 use crate::table_functions::TableArgs;
 use crate::table_functions::TableFunction;
+use crate::FuseTable;
 use crate::Table;
 
 const FUSE_FUNC_SNAPSHOT: &str = "fuse_snapshot";
@@ -66,6 +70,7 @@ impl FuseSnapshotTable {
                 engine,
                 ..Default::default()
             },
+            ..Default::default()
         };
 
         Ok(Arc::new(FuseSnapshotTable {
@@ -73,10 +78,6 @@ impl FuseSnapshotTable {
             arg_database_name,
             arg_table_name,
         }))
-    }
-
-    fn get_limit(plan: &ReadDataSourcePlan) -> Option<usize> {
-        plan.push_downs.as_ref().and_then(|extras| extras.limit)
     }
 }
 
@@ -112,25 +113,16 @@ impl Table for FuseSnapshotTable {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let output = OutputPort::create();
-        let limit = Self::get_limit(plan);
-        let database_name = self.arg_database_name.to_owned();
-        let table_name = self.arg_table_name.to_owned();
-        let catalog_name = CATALOG_DEFAULT.to_owned();
-        let snapshot_stream = FuseSnapshot::new_snapshot_history_stream(
-            ctx.clone(),
-            database_name,
-            table_name,
-            catalog_name,
-            limit,
-        );
-
-        // the underlying stream may returns a single empty block, which carries the schema
-        let source = StreamSourceNoSkipEmpty::create(ctx, Some(snapshot_stream), output.clone())?;
-
         pipeline.add_pipe(Pipe::SimplePipe {
             inputs_port: vec![],
-            outputs_port: vec![output],
-            processors: vec![source],
+            outputs_port: vec![output.clone()],
+            processors: vec![FuseSnapshotSource::create(
+                ctx,
+                output,
+                self.arg_database_name.to_owned(),
+                self.arg_table_name.to_owned(),
+                plan.push_downs.as_ref().and_then(|extras| extras.limit),
+            )?],
         });
 
         Ok(())
@@ -145,5 +137,62 @@ impl TableFunction for FuseSnapshotTable {
     fn as_table<'a>(self: Arc<Self>) -> Arc<dyn Table + 'a>
     where Self: 'a {
         self
+    }
+}
+
+struct FuseSnapshotSource {
+    finish: bool,
+    ctx: Arc<dyn TableContext>,
+    arg_database_name: String,
+    arg_table_name: String,
+    limit: Option<usize>,
+}
+
+impl FuseSnapshotSource {
+    pub fn create(
+        ctx: Arc<dyn TableContext>,
+        output: Arc<OutputPort>,
+        arg_database_name: String,
+        arg_table_name: String,
+        limit: Option<usize>,
+    ) -> Result<ProcessorPtr> {
+        AsyncSourcer::create(ctx.clone(), output, FuseSnapshotSource {
+            ctx,
+            finish: false,
+            arg_table_name,
+            arg_database_name,
+            limit,
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl AsyncSource for FuseSnapshotSource {
+    const NAME: &'static str = "fuse_snapshot";
+
+    #[async_trait::unboxed_simple]
+    async fn generate(&mut self) -> Result<Option<DataBlock>> {
+        if self.finish {
+            return Ok(None);
+        }
+
+        self.finish = true;
+        let tenant_id = self.ctx.get_tenant();
+        let tbl = self
+            .ctx
+            .get_catalog(CATALOG_DEFAULT)?
+            .get_table(
+                tenant_id.as_str(),
+                self.arg_database_name.as_str(),
+                self.arg_table_name.as_str(),
+            )
+            .await?;
+
+        let tbl = FuseTable::try_from_table(tbl.as_ref())?;
+        Ok(Some(
+            FuseSnapshot::new(self.ctx.clone(), tbl)
+                .get_snapshots(self.limit)
+                .await?,
+        ))
     }
 }

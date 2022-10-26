@@ -20,6 +20,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Weak;
+use std::time::SystemTime;
 
 use chrono_tz::Tz;
 use common_base::base::tokio::task::JoinHandle;
@@ -186,6 +187,10 @@ impl QueryContext {
 
     pub fn set_executor(&self, weak_ptr: Weak<PipelineExecutor>) {
         self.shared.set_executor(weak_ptr)
+    }
+
+    pub fn get_created_time(&self) -> SystemTime {
+        self.shared.created_time
     }
 }
 

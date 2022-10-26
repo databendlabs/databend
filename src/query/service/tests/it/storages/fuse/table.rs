@@ -212,7 +212,8 @@ async fn test_fuse_table_truncate() -> Result<()> {
     assert_eq!(stats.read_rows, (num_blocks * rows_per_block) as usize);
 
     // truncate
-    let r = table.truncate(ctx.clone(), false).await;
+    let purge = false;
+    let r = table.truncate(ctx.clone(), purge).await;
     assert!(r.is_ok());
 
     // get the latest tbl
@@ -329,6 +330,7 @@ async fn test_fuse_alter_table_cluster_key() -> Result<()> {
     interpreter.execute(ctx.clone()).await?;
 
     let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let table_info = table.get_table_info();
     assert_eq!(table_info.meta.cluster_keys, vec!["(id)".to_string()]);
     assert_eq!(table_info.meta.default_cluster_key_id, Some(0));
@@ -338,7 +340,7 @@ async fn test_fuse_alter_table_cluster_key() -> Result<()> {
         .options()
         .get(OPT_KEY_SNAPSHOT_LOCATION)
         .unwrap();
-    let reader = MetaReaders::table_snapshot_reader(ctx.clone());
+    let reader = MetaReaders::table_snapshot_reader(ctx.clone(), fuse_table.get_operator());
     let snapshot = reader.read(snapshot_loc.as_str(), None, 1).await?;
     let expected = Some((0, "(id)".to_string()));
     assert_eq!(snapshot.cluster_key_meta, expected);
@@ -355,6 +357,7 @@ async fn test_fuse_alter_table_cluster_key() -> Result<()> {
     interpreter.execute(ctx.clone()).await?;
 
     let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let table_info = table.get_table_info();
     assert_eq!(table_info.meta.default_cluster_key, None);
     assert_eq!(table_info.meta.default_cluster_key_id, None);
@@ -364,7 +367,7 @@ async fn test_fuse_alter_table_cluster_key() -> Result<()> {
         .options()
         .get(OPT_KEY_SNAPSHOT_LOCATION)
         .unwrap();
-    let reader = MetaReaders::table_snapshot_reader(ctx);
+    let reader = MetaReaders::table_snapshot_reader(ctx, fuse_table.get_operator());
     let snapshot = reader.read(snapshot_loc.as_str(), None, 1).await?;
     let expected = None;
     assert_eq!(snapshot.cluster_key_meta, expected);

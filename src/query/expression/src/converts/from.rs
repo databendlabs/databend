@@ -19,7 +19,6 @@ use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 
 use crate::types::number::NumberScalar;
-use crate::types::timestamp::Timestamp;
 use crate::types::AnyType;
 use crate::types::DataType;
 use crate::types::NumberDataType;
@@ -48,6 +47,8 @@ pub fn from_type(datatype: &DataTypeImpl) -> DataType {
         DataTypeImpl::Nullable(v) => DataType::Nullable(Box::new(from_type(v.inner_type()))),
         DataTypeImpl::Boolean(_) => DataType::Boolean,
         DataTypeImpl::Timestamp(_) => DataType::Timestamp,
+        DataTypeImpl::Date(_) => DataType::Date,
+        DataTypeImpl::Interval(_) => DataType::Interval,
         DataTypeImpl::String(_) => DataType::String,
         DataTypeImpl::Struct(ty) => {
             let inners = ty.types().iter().map(from_type).collect();
@@ -57,8 +58,6 @@ pub fn from_type(datatype: &DataTypeImpl) -> DataType {
         DataTypeImpl::Variant(_)
         | DataTypeImpl::VariantArray(_)
         | DataTypeImpl::VariantObject(_) => DataType::Variant,
-        DataTypeImpl::Date(_) => unreachable!(),
-        DataTypeImpl::Interval(_) => unreachable!(),
     })
 }
 
@@ -101,11 +100,9 @@ pub fn from_scalar(datavalue: &DataValue, datatype: &DataTypeImpl) -> Scalar {
         DataTypeImpl::Float64(_) => {
             Scalar::Number(NumberScalar::Float64(datavalue.as_f64().unwrap().into()))
         }
-        DataTypeImpl::Timestamp(t) => Scalar::Timestamp(Timestamp {
-            ts: datavalue.as_i64().unwrap(),
-            precision: t.precision() as u8,
-        }),
-
+        DataTypeImpl::Timestamp(_) => Scalar::Timestamp(datavalue.as_i64().unwrap() as i64),
+        DataTypeImpl::Date(_) => Scalar::Date(datavalue.as_i64().unwrap() as i32),
+        DataTypeImpl::Interval(_) => Scalar::Interval(datavalue.as_i64().unwrap() as i64),
         DataTypeImpl::String(_) => Scalar::String(datavalue.as_string().unwrap()),
         DataTypeImpl::Struct(types) => {
             let values = match datavalue {
@@ -148,8 +145,6 @@ pub fn from_scalar(datavalue: &DataValue, datatype: &DataTypeImpl) -> Scalar {
             let v: Vec<u8> = serde_json::to_vec(value).unwrap();
             Scalar::Variant(v)
         }
-        DataTypeImpl::Date(_) => todo!(),
-        DataTypeImpl::Interval(_) => todo!(),
         _ => unreachable!(),
     }
 }
@@ -167,11 +162,11 @@ pub fn convert_column(column: &ColumnRef, logical_type: &DataTypeImpl) -> Value<
 }
 
 pub fn from_block(datablock: &DataBlock) -> Chunk {
-    let columns: Vec<Value<AnyType>> = datablock
+    let columns: Vec<(Value<AnyType>, DataType)> = datablock
         .columns()
         .iter()
         .zip(datablock.schema().fields().iter())
-        .map(|(c, f)| convert_column(c, f.data_type()))
+        .map(|(c, f)| (convert_column(c, f.data_type()), from_type(f.data_type())))
         .collect();
 
     Chunk::new(columns, datablock.num_rows())

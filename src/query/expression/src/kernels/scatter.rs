@@ -20,10 +20,12 @@ use crate::types::array::ArrayColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
 use crate::types::string::StringColumnBuilder;
-use crate::types::timestamp::TimestampColumnBuilder;
 use crate::types::AnyType;
 use crate::types::ArrayType;
 use crate::types::BooleanType;
+use crate::types::DataType;
+use crate::types::DateType;
+use crate::types::IntervalType;
 use crate::types::NumberType;
 use crate::types::StringType;
 use crate::types::TimestampType;
@@ -32,40 +34,39 @@ use crate::types::VariantType;
 use crate::with_number_mapped_type;
 use crate::Chunk;
 use crate::Column;
+use crate::ColumnBuilder;
 use crate::Scalar;
 use crate::Value;
 
 impl Chunk {
     pub fn scatter<I: Index>(&self, indices: &[I], scatter_size: usize) -> Result<Vec<Self>> {
-        let columns_size = self.num_columns();
-        let mut scattered_columns: Vec<Vec<Column>> = Vec::with_capacity(scatter_size);
+        let scattered_columns: Vec<(Vec<Column>, &DataType)> = self
+            .columns()
+            .iter()
+            .map(|(col, ty)| match col {
+                Value::Scalar(s) => (
+                    Column::scatter_repeat_scalars::<I>(s, ty, indices, scatter_size),
+                    ty,
+                ),
+                Value::Column(c) => (c.scatter(ty, indices, scatter_size), ty),
+            })
+            .collect();
 
-        for column_index in 0..columns_size {
-            match &self.columns()[column_index] {
-                Value::Scalar(s) => {
-                    scattered_columns.push(Column::scatter_repeat_scalars::<I>(
-                        s,
-                        indices,
-                        scatter_size,
-                    ));
-                }
-                Value::Column(c) => {
-                    let cs = c.scatter(indices, scatter_size);
-                    scattered_columns.push(cs);
-                }
-            }
-        }
-
-        let mut scattered_chunks = Vec::with_capacity(scatter_size);
-        for index in 0..scatter_size {
-            let mut chunk_columns = Vec::with_capacity(scattered_columns.len());
-            let mut size = 0;
-            for item in scattered_columns.iter() {
-                size = item[index].len();
-                chunk_columns.push(Value::Column(item[index].clone()));
-            }
-            scattered_chunks.push(Chunk::new(chunk_columns, size));
-        }
+        let scattered_chunks = (0..scatter_size)
+            .map(|scatter_idx| {
+                let chunk_columns: Vec<(Value<AnyType>, DataType)> = scattered_columns
+                    .iter()
+                    .map(|(col_scatters, ty)| {
+                        (
+                            Value::Column(col_scatters[scatter_idx].clone()),
+                            (*ty).clone(),
+                        )
+                    })
+                    .collect();
+                let num_rows = chunk_columns[0].0.as_column().unwrap().len();
+                Chunk::new(chunk_columns, num_rows)
+            })
+            .collect();
 
         Ok(scattered_chunks)
     }
@@ -74,6 +75,7 @@ impl Chunk {
 impl Column {
     pub fn scatter_repeat_scalars<I: Index>(
         scalar: &Scalar,
+        data_type: &DataType,
         indices: &[I],
         scatter_size: usize,
     ) -> Vec<Self> {
@@ -82,15 +84,20 @@ impl Column {
             vs[index.to_usize()] += 1;
         }
         vs.iter()
-            .map(|count| scalar.as_ref().repeat(*count).build())
+            .map(|count| ColumnBuilder::repeat(&scalar.as_ref(), *count, data_type).build())
             .collect()
     }
 
-    pub fn scatter<I: Index>(&self, indices: &[I], scatter_size: usize) -> Vec<Self> {
+    pub fn scatter<I: Index>(
+        &self,
+        data_type: &DataType,
+        indices: &[I],
+        scatter_size: usize,
+    ) -> Vec<Self> {
         let length = indices.len();
         match self {
             Column::Null { .. } => {
-                Self::scatter_repeat_scalars::<I>(&Scalar::Null, indices, scatter_size)
+                Self::scatter_repeat_scalars::<I>(&Scalar::Null, data_type, indices, scatter_size)
             }
             Column::Number(column) => with_number_mapped_type!(|NUM_TYPE| match column {
                 NumberColumn::NUM_TYPE(values) => Self::scatter_scalars::<NumberType<NUM_TYPE>, _>(
@@ -100,9 +107,12 @@ impl Column {
                     scatter_size
                 ),
             }),
-            Column::EmptyArray { .. } => {
-                Self::scatter_repeat_scalars::<I>(&Scalar::EmptyArray, indices, scatter_size)
-            }
+            Column::EmptyArray { .. } => Self::scatter_repeat_scalars::<I>(
+                &Scalar::EmptyArray,
+                data_type,
+                indices,
+                scatter_size,
+            ),
             Column::Boolean(bm) => Self::scatter_scalars::<BooleanType, _>(
                 bm,
                 MutableBitmap::with_capacity(length),
@@ -117,7 +127,19 @@ impl Column {
             ),
             Column::Timestamp(column) => Self::scatter_scalars::<TimestampType, _>(
                 column,
-                TimestampColumnBuilder::with_capacity(length),
+                Vec::with_capacity(length),
+                indices,
+                scatter_size,
+            ),
+            Column::Date(column) => Self::scatter_scalars::<DateType, _>(
+                column,
+                Vec::with_capacity(length),
+                indices,
+                scatter_size,
+            ),
+            Column::Interval(column) => Self::scatter_scalars::<IntervalType, _>(
+                column,
+                Vec::with_capacity(length),
                 indices,
                 scatter_size,
             ),
@@ -132,7 +154,7 @@ impl Column {
                 )
             }
             Column::Nullable(c) => {
-                let columns = c.column.scatter(indices, scatter_size);
+                let columns = c.column.scatter(data_type, indices, scatter_size);
                 let validitys = Self::scatter_scalars::<BooleanType, _>(
                     &c.validity,
                     MutableBitmap::with_capacity(length),
@@ -153,7 +175,7 @@ impl Column {
             Column::Tuple { fields, .. } => {
                 let mut fields_vs: Vec<Vec<Column>> = fields
                     .iter()
-                    .map(|c| c.scatter(indices, scatter_size))
+                    .map(|c| c.scatter(data_type, indices, scatter_size))
                     .collect();
 
                 (0..scatter_size)

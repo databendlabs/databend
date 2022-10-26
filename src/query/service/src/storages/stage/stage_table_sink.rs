@@ -93,8 +93,8 @@ impl StageTableSink {
         let output_format = fmt.create_format(table_info.schema(), format_settings);
         let mut max_file_size = table_info.stage_info.copy_options.max_file_size;
         if max_file_size == 0 {
-            // 5G per file by default
-            max_file_size = 5 * 1024 * 1024 * 1024;
+            // 64M per file by default
+            max_file_size = 64 * 1024 * 1024;
         }
 
         let single = table_info.stage_info.copy_options.single;

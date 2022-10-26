@@ -46,11 +46,11 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | dropped_on               | system   | tables              | VARCHAR           |              |                    | false       |         |
 | dropped_on               | system   | tables_with_history | VARCHAR           |              |                    | false       |         |
 | dummy                    | system   | one                 | TINYINT UNSIGNED  |              |                    | false       |         |
-| end_time                 | system   | clustering_history  | TIMESTAMP(3)      |              |                    | false       |         |
+| end_time                 | system   | clustering_history  | TIMESTAMP         |              |                    | false       |         |
 | engine                   | system   | tables              | VARCHAR           |              |                    | false       |         |
 | engine                   | system   | tables_with_history | VARCHAR           |              |                    | false       |         |
 | event_date               | system   | query_log           | DATE              |              |                    | false       |         |
-| event_time               | system   | query_log           | TIMESTAMP(3)      |              |                    | false       |         |
+| event_time               | system   | query_log           | TIMESTAMP         |              |                    | false       |         |
 | example                  | system   | functions           | VARCHAR           |              |                    | false       |         |
 | exception_code           | system   | query_log           | INT               |              |                    | false       |         |
 | exception_text           | system   | query_log           | VARCHAR           |              |                    | false       |         |
@@ -101,8 +101,10 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | pid                      | system   | tracing             | BIGINT            |              |                    | false       |         |
 | port                     | system   | clusters            | SMALLINT UNSIGNED |              |                    | false       |         |
 | projections              | system   | query_log           | VARCHAR           |              |                    | false       |         |
+| query_duration_ms        | system   | query_log           | BIGINT            |              |                    | false       |         |
 | query_id                 | system   | query_log           | VARCHAR           |              |                    | false       |         |
 | query_kind               | system   | query_log           | VARCHAR           |              |                    | false       |         |
+| query_start_time         | system   | query_log           | TIMESTAMP         |              |                    | false       |         |
 | query_text               | system   | query_log           | VARCHAR           |              |                    | false       |         |
 | reclustered_bytes        | system   | clustering_history  | BIGINT UNSIGNED   |              |                    | false       |         |
 | reclustered_rows         | system   | clustering_history  | BIGINT UNSIGNED   |              |                    | false       |         |
@@ -123,13 +125,14 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | stack_trace              | system   | query_log           | VARCHAR           |              |                    | false       |         |
 | stage_params             | system   | stages              | VARCHAR           |              |                    | false       |         |
 | stage_type               | system   | stages              | VARCHAR           |              |                    | false       |         |
-| start_time               | system   | clustering_history  | TIMESTAMP(3)      |              |                    | false       |         |
+| start_time               | system   | clustering_history  | TIMESTAMP         |              |                    | false       |         |
 | state                    | system   | processes           | VARCHAR           |              |                    | false       |         |
 | syntax                   | system   | functions           | VARCHAR           |              |                    | false       |         |
 | table                    | system   | clustering_history  | VARCHAR           |              |                    | false       |         |
 | table                    | system   | columns             | VARCHAR           |              |                    | false       |         |
 | tables                   | system   | query_log           | VARCHAR           |              |                    | false       |         |
 | tenant_id                | system   | query_log           | VARCHAR           |              |                    | false       |         |
+| time                     | system   | processes           | BIGINT UNSIGNED   |              |                    | false       |         |
 | time                     | system   | tracing             | VARCHAR           |              |                    | false       |         |
 | total_partitions         | system   | query_log           | BIGINT UNSIGNED   |              |                    | false       |         |
 | type                     | system   | columns             | VARCHAR           |              |                    | false       |         |
@@ -238,15 +241,15 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | storage | oss.access_key_secret                |                                |             |
 | storage | oss.bucket                           |                                |             |
 | storage | oss.endpoint_url                     |                                |             |
-| storage | oss.oidc_token                       |                                |             |
-| storage | oss.role_arn                         |                                |             |
 | storage | oss.root                             |                                |             |
 | storage | s3.access_key_id                     |                                |             |
 | storage | s3.bucket                            |                                |             |
 | storage | s3.enable_virtual_host_style         | false                          |             |
 | storage | s3.endpoint_url                      | https://s3.amazonaws.com       |             |
+| storage | s3.external_id                       |                                |             |
 | storage | s3.master_key                        |                                |             |
 | storage | s3.region                            |                                |             |
+| storage | s3.role_arn                          |                                |             |
 | storage | s3.root                              |                                |             |
 | storage | s3.secret_access_key                 |                                |             |
 | storage | s3.security_token                    |                                |             |

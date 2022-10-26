@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[allow(clippy::module_inception)]
-mod format;
-
-pub use format::display_group;
-pub use format::display_m_expr;
-pub use format::display_memo;
-pub use format::display_rel_op;
+mod cross_join;
+mod inner_join;
+mod left_join;
+mod left_mark;
+mod left_semi_join;
+mod right_join;
+mod right_mark;

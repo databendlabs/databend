@@ -53,15 +53,15 @@ pub struct BaseMutator {
 impl BaseMutator {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
+        op: Operator,
         location_generator: TableMetaLocationGenerator,
         base_snapshot: Arc<TableSnapshot>,
     ) -> Result<Self> {
-        let data_accessor = ctx.get_storage_operator()?;
         Ok(Self {
             mutations: HashMap::new(),
             ctx,
             location_generator,
-            data_accessor,
+            data_accessor: op,
             base_snapshot,
         })
     }
@@ -98,7 +98,8 @@ impl BaseMutator {
         let mut segments_editor =
             HashMap::<_, _, RandomState>::from_iter(segments.clone().into_iter().enumerate());
 
-        let segment_reader = MetaReaders::segment_info_reader(self.ctx.as_ref());
+        let segment_reader =
+            MetaReaders::segment_info_reader(self.ctx.as_ref(), self.data_accessor.clone());
 
         let segment_info_cache = CacheManager::instance().get_table_segment_cache();
         let seg_writer = SegmentWriter::new(

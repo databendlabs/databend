@@ -42,6 +42,8 @@ use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
 use common_pipeline_sources::processors::sources::sync_source::SyncSource;
 use common_pipeline_sources::processors::sources::sync_source::SyncSourcer;
+use common_storage::init_operator;
+use common_storage::StorageOperator;
 use futures::TryStreamExt;
 use opendal::ObjectMode;
 use opendal::Operator;
@@ -60,14 +62,25 @@ pub const HIVE_TABLE_ENGIE: &str = "hive";
 pub struct HiveTable {
     table_info: TableInfo,
     table_options: HiveTableOptions,
+    dal: Operator,
 }
 
 impl HiveTable {
     pub fn try_create(table_info: TableInfo) -> Result<HiveTable> {
         let table_options = table_info.engine_options().try_into()?;
+        let storage_params = table_info.meta.storage_params.clone();
+        let dal = match storage_params {
+            Some(sp) => init_operator(&sp)?,
+            None => {
+                let op = &*(StorageOperator::instance());
+                op.clone()
+            }
+        };
+
         Ok(HiveTable {
             table_info,
             table_options,
+            dal,
         })
     }
 
@@ -103,7 +116,7 @@ impl HiveTable {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let push_downs = &plan.push_downs;
-        let block_reader = self.create_block_reader(&ctx, push_downs)?;
+        let block_reader = self.create_block_reader(push_downs)?;
 
         let parts_len = plan.parts.len();
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
@@ -123,6 +136,7 @@ impl HiveTable {
                 output.clone(),
                 HiveTableSource::create(
                     ctx.clone(),
+                    self.dal.clone(),
                     output,
                     block_reader.clone(),
                     delay_timer(index),
@@ -175,7 +189,6 @@ impl HiveTable {
 
     fn create_block_reader(
         &self,
-        ctx: &Arc<dyn TableContext>,
         push_downs: &Option<Extras>,
     ) -> Result<Arc<HiveParquetBlockReader>> {
         let projection = if let Some(Extras {
@@ -208,10 +221,14 @@ impl HiveTable {
             None
         };
 
-        let operator = ctx.get_storage_operator()?;
         let table_schema = self.table_info.schema();
         // todo, support csv, orc format
-        HiveParquetBlockReader::create(operator, table_schema, projection, hive_partition_filler)
+        HiveParquetBlockReader::create(
+            self.dal.clone(),
+            table_schema,
+            projection,
+            hive_partition_filler,
+        )
     }
 
     fn get_column_schemas(&self, columns: Vec<String>) -> Result<Arc<DataSchema>> {
@@ -240,11 +257,32 @@ impl HiveTable {
             .get_partition_names(table_info[0].to_string(), table_info[1].to_string(), -1)
             .await?;
 
+        if tracing::enabled!(tracing::Level::TRACE) {
+            let partition_num = partition_names.len();
+            if partition_num < 100000 {
+                tracing::trace!(
+                    "get {} partitions from hive metastore:{:?}",
+                    partition_num,
+                    partition_names
+                );
+            } else {
+                tracing::trace!("get {} partitions from hive metastore", partition_num);
+            }
+        }
+
         if !filter_expressions.is_empty() {
             let partition_schemas = self.get_column_schemas(partition_keys.clone())?;
             let partition_pruner =
                 HivePartitionPruner::create(ctx, filter_expressions, partition_schemas);
             partition_names = partition_pruner.prune(partition_names)?;
+        }
+
+        if tracing::enabled!(tracing::Level::TRACE) {
+            tracing::trace!(
+                "after partition prune, {} partitions:{:?}",
+                partition_names.len(),
+                partition_names
+            )
         }
 
         let partitions = hive_catalog
@@ -298,20 +336,17 @@ impl HiveTable {
         Ok(vec![(location, None)])
     }
 
-    #[tracing::instrument(level = "info", skip(self, ctx))]
+    #[tracing::instrument(level = "info", skip(self))]
     async fn list_files_from_dirs(
         &self,
-        ctx: Arc<dyn TableContext>,
         dirs: Vec<(String, Option<String>)>,
     ) -> Result<Vec<HiveFileInfo>> {
-        let operator = ctx.get_storage_operator()?;
-
         let sem = Arc::new(Semaphore::new(60));
 
         let mut tasks = Vec::with_capacity(dirs.len());
         for (dir, partition) in dirs {
             let sem_t = sem.clone();
-            let operator_t = operator.clone();
+            let operator_t = self.dal.clone();
             let dir_t = dir.to_string();
             let task =
                 tokio::spawn(async move { list_files_from_dir(operator_t, dir_t, sem_t).await });
@@ -338,12 +373,23 @@ impl HiveTable {
     ) -> Result<(Statistics, Partitions)> {
         let start = Instant::now();
         let dirs = self.get_query_locations(ctx.clone(), &push_downs).await?;
-        let all_files = self.list_files_from_dirs(ctx.clone(), dirs).await?;
+        if tracing::enabled!(tracing::Level::TRACE) {
+            tracing::trace!("{} query locations: {:?}", dirs.len(), dirs);
+        }
+
+        let all_files = self.list_files_from_dirs(dirs).await?;
+        if tracing::enabled!(tracing::Level::TRACE) {
+            tracing::trace!("{} hive files: {:?}", all_files.len(), all_files);
+        }
 
         let splitter = HiveFileSplitter::create(128 * 1024 * 1024_u64);
         let partitions = splitter.get_splits(all_files);
 
-        tracing::info!("read partition, elapsed:{:?}", start.elapsed());
+        tracing::info!(
+            "read partition, partition num:{}, elapsed:{:?}",
+            partitions.len(),
+            start.elapsed()
+        );
 
         Ok((Default::default(), partitions))
     }
@@ -416,7 +462,10 @@ impl Table for HiveTable {
         Ok(())
     }
 
-    async fn statistics(&self, _ctx: Arc<dyn TableContext>) -> Result<Option<TableStatistics>> {
+    async fn table_statistics(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+    ) -> Result<Option<TableStatistics>> {
         Ok(None)
     }
 }
@@ -454,6 +503,7 @@ impl SyncSource for HiveSource {
     }
 }
 
+#[derive(Debug)]
 pub struct HiveFileInfo {
     pub filename: String,
     pub length: u64,

@@ -497,6 +497,8 @@ pub enum TokenKind {
     MAX_FILE_SIZE,
     #[token("MASTER_KEY", ignore(ascii_case))]
     MASTER_KEY,
+    #[token("MEMO", ignore(ascii_case))]
+    MEMO,
     #[token("MEMORY", ignore(ascii_case))]
     MEMORY,
     #[token("METRICS", ignore(ascii_case))]
@@ -621,6 +623,8 @@ pub enum TokenKind {
     SMALLINT,
     #[token("SNAPSHOT", ignore(ascii_case))]
     SNAPSHOT,
+    #[token("SPLIT_SIZE", ignore(ascii_case))]
+    SPLIT_SIZE,
     #[token("STAGE", ignore(ascii_case))]
     STAGE,
     #[token("SYNTAX", ignore(ascii_case))]

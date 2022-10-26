@@ -14,6 +14,7 @@
 
 #[macro_use]
 pub(crate) mod common;
+mod datatype;
 mod proto_conv;
 mod user_proto_conv;
 mod user_stage;

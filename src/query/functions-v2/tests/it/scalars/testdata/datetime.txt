@@ -2,79 +2,79 @@ error:
   --> SQL:1:1
   |
 1 | to_timestamp(-30610224000000001)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `0999-12-31 23:59:59.999999` is out of range
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `-30610224000000001` is out of range
 
 
 
 ast            : to_timestamp(-315360000000000)
 raw expr       : to_timestamp(minus(315360000000000_u64))
 checked expr   : to_timestamp<Int64>(minus<UInt64>(315360000000000_u64))
-optimized expr : Timestamp { ts: -315360000000000, precision: 6 }
+optimized expr : -315360000000000
 output type    : Timestamp
-output domain  : Unknown
+output domain  : {-315360000000000..=-315360000000000}
 output         : 1960-01-04 00:00:00.000000
 
 
 ast            : to_timestamp(-315360000000)
 raw expr       : to_timestamp(minus(315360000000_u64))
 checked expr   : to_timestamp<Int64>(minus<UInt64>(315360000000_u64))
-optimized expr : Timestamp { ts: -315360000000000, precision: 3 }
+optimized expr : -315360000000000
 output type    : Timestamp
-output domain  : Unknown
-output         : 1960-01-04 00:00:00.000
+output domain  : {-315360000000000..=-315360000000000}
+output         : 1960-01-04 00:00:00.000000
 
 
 ast            : to_timestamp(-100)
 raw expr       : to_timestamp(minus(100_u8))
 checked expr   : to_timestamp<Int64>(CAST(minus<UInt8>(100_u8) AS Int64))
-optimized expr : Timestamp { ts: -100000000, precision: 0 }
+optimized expr : -100000000
 output type    : Timestamp
-output domain  : Unknown
-output         : 1969-12-31 23:58:20
+output domain  : {-100000000..=-100000000}
+output         : 1969-12-31 23:58:20.000000
 
 
 ast            : to_timestamp(-0)
 raw expr       : to_timestamp(minus(0_u8))
 checked expr   : to_timestamp<Int64>(CAST(minus<UInt8>(0_u8) AS Int64))
-optimized expr : Timestamp { ts: 0, precision: 0 }
+optimized expr : 0
 output type    : Timestamp
-output domain  : Unknown
-output         : 1970-01-01 00:00:00
+output domain  : {0..=0}
+output         : 1970-01-01 00:00:00.000000
 
 
 ast            : to_timestamp(0)
 raw expr       : to_timestamp(0_u8)
 checked expr   : to_timestamp<Int64>(CAST(0_u8 AS Int64))
-optimized expr : Timestamp { ts: 0, precision: 0 }
+optimized expr : 0
 output type    : Timestamp
-output domain  : Unknown
-output         : 1970-01-01 00:00:00
+output domain  : {0..=0}
+output         : 1970-01-01 00:00:00.000000
 
 
 ast            : to_timestamp(100)
 raw expr       : to_timestamp(100_u8)
 checked expr   : to_timestamp<Int64>(CAST(100_u8 AS Int64))
-optimized expr : Timestamp { ts: 100000000, precision: 0 }
+optimized expr : 100000000
 output type    : Timestamp
-output domain  : Unknown
-output         : 1970-01-01 00:01:40
+output domain  : {100000000..=100000000}
+output         : 1970-01-01 00:01:40.000000
 
 
 ast            : to_timestamp(315360000000)
 raw expr       : to_timestamp(315360000000_u64)
 checked expr   : to_timestamp<Int64>(CAST(315360000000_u64 AS Int64))
-optimized expr : Timestamp { ts: 315360000000000, precision: 3 }
+optimized expr : 315360000000000
 output type    : Timestamp
-output domain  : Unknown
-output         : 1979-12-30 00:00:00.000
+output domain  : {315360000000000..=315360000000000}
+output         : 1979-12-30 00:00:00.000000
 
 
 ast            : to_timestamp(315360000000000)
 raw expr       : to_timestamp(315360000000000_u64)
 checked expr   : to_timestamp<Int64>(CAST(315360000000000_u64 AS Int64))
-optimized expr : Timestamp { ts: 315360000000000, precision: 6 }
+optimized expr : 315360000000000
 output type    : Timestamp
-output domain  : Unknown
+output domain  : {315360000000000..=315360000000000}
 output         : 1979-12-30 00:00:00.000000
 
 
@@ -82,7 +82,7 @@ error:
   --> SQL:1:1
   |
 1 | to_timestamp(253402300800000000)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `+10000-01-01 00:00:00.000000` is out of range
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `253402300800000000` is out of range
 
 
 
@@ -90,25 +90,233 @@ ast            : to_timestamp(a)
 raw expr       : to_timestamp(ColumnRef(0)::Int64)
 checked expr   : to_timestamp<Int64>(ColumnRef(0))
 evaluation:
-+--------+--------------------------------------+----------------------------+
-|        | a                                    | Output                     |
-+--------+--------------------------------------+----------------------------+
-| Type   | Int64                                | Timestamp                  |
-| Domain | {-315360000000000..=315360000000000} | Unknown                    |
-| Row 0  | -315360000000000                     | 1960-01-04 00:00:00.000000 |
-| Row 1  | 315360000000                         | 1979-12-30 00:00:00.000000 |
-| Row 2  | -100                                 | 1969-12-31 23:58:20.000000 |
-| Row 3  | 0                                    | 1970-01-01 00:00:00.000000 |
-| Row 4  | 100                                  | 1970-01-01 00:01:40.000000 |
-| Row 5  | 315360000000                         | 1979-12-30 00:00:00.000000 |
-| Row 6  | 315360000000000                      | 1979-12-30 00:00:00.000000 |
-+--------+--------------------------------------+----------------------------+
++--------+--------------------------------------+--------------------------------------+
+|        | a                                    | Output                               |
++--------+--------------------------------------+--------------------------------------+
+| Type   | Int64                                | Timestamp                            |
+| Domain | {-315360000000000..=315360000000000} | {-315360000000000..=315360000000000} |
+| Row 0  | -315360000000000                     | 1960-01-04 00:00:00.000000           |
+| Row 1  | 315360000000                         | 1979-12-30 00:00:00.000000           |
+| Row 2  | -100                                 | 1969-12-31 23:58:20.000000           |
+| Row 3  | 0                                    | 1970-01-01 00:00:00.000000           |
+| Row 4  | 100                                  | 1970-01-01 00:01:40.000000           |
+| Row 5  | 315360000000                         | 1979-12-30 00:00:00.000000           |
+| Row 6  | 315360000000000                      | 1979-12-30 00:00:00.000000           |
++--------+--------------------------------------+--------------------------------------+
 evaluation (internal):
-+--------+---------------------------------------------------------------------------------------------------------------------------------------+
-| Column | Data                                                                                                                                  |
-+--------+---------------------------------------------------------------------------------------------------------------------------------------+
-| a      | Int64([-315360000000000, 315360000000, -100, 0, 100, 315360000000, 315360000000000])                                                  |
-| Output | TimestampColumn { ts: [-315360000000000, 315360000000000, -100000000, 0, 100000000, 315360000000000, 315360000000000], precision: 6 } |
-+--------+---------------------------------------------------------------------------------------------------------------------------------------+
++--------+-------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                            |
++--------+-------------------------------------------------------------------------------------------------+
+| a      | Int64([-315360000000000, 315360000000, -100, 0, 100, 315360000000, 315360000000000])            |
+| Output | [-315360000000000, 315360000000000, -100000000, 0, 100000000, 315360000000000, 315360000000000] |
++--------+-------------------------------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | to_datetime(-30610224000000001)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `-30610224000000001` is out of range
+
+
+
+ast            : to_datetime(-315360000000000)
+raw expr       : to_datetime(minus(315360000000000_u64))
+checked expr   : to_timestamp<Int64>(minus<UInt64>(315360000000000_u64))
+optimized expr : -315360000000000
+output type    : Timestamp
+output domain  : {-315360000000000..=-315360000000000}
+output         : 1960-01-04 00:00:00.000000
+
+
+ast            : to_datetime(-315360000000)
+raw expr       : to_datetime(minus(315360000000_u64))
+checked expr   : to_timestamp<Int64>(minus<UInt64>(315360000000_u64))
+optimized expr : -315360000000000
+output type    : Timestamp
+output domain  : {-315360000000000..=-315360000000000}
+output         : 1960-01-04 00:00:00.000000
+
+
+ast            : to_datetime(-100)
+raw expr       : to_datetime(minus(100_u8))
+checked expr   : to_timestamp<Int64>(CAST(minus<UInt8>(100_u8) AS Int64))
+optimized expr : -100000000
+output type    : Timestamp
+output domain  : {-100000000..=-100000000}
+output         : 1969-12-31 23:58:20.000000
+
+
+ast            : to_datetime(-0)
+raw expr       : to_datetime(minus(0_u8))
+checked expr   : to_timestamp<Int64>(CAST(minus<UInt8>(0_u8) AS Int64))
+optimized expr : 0
+output type    : Timestamp
+output domain  : {0..=0}
+output         : 1970-01-01 00:00:00.000000
+
+
+ast            : to_datetime(0)
+raw expr       : to_datetime(0_u8)
+checked expr   : to_timestamp<Int64>(CAST(0_u8 AS Int64))
+optimized expr : 0
+output type    : Timestamp
+output domain  : {0..=0}
+output         : 1970-01-01 00:00:00.000000
+
+
+ast            : to_datetime(100)
+raw expr       : to_datetime(100_u8)
+checked expr   : to_timestamp<Int64>(CAST(100_u8 AS Int64))
+optimized expr : 100000000
+output type    : Timestamp
+output domain  : {100000000..=100000000}
+output         : 1970-01-01 00:01:40.000000
+
+
+ast            : to_datetime(315360000000)
+raw expr       : to_datetime(315360000000_u64)
+checked expr   : to_timestamp<Int64>(CAST(315360000000_u64 AS Int64))
+optimized expr : 315360000000000
+output type    : Timestamp
+output domain  : {315360000000000..=315360000000000}
+output         : 1979-12-30 00:00:00.000000
+
+
+ast            : to_datetime(315360000000000)
+raw expr       : to_datetime(315360000000000_u64)
+checked expr   : to_timestamp<Int64>(CAST(315360000000000_u64 AS Int64))
+optimized expr : 315360000000000
+output type    : Timestamp
+output domain  : {315360000000000..=315360000000000}
+output         : 1979-12-30 00:00:00.000000
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | to_datetime(253402300800000000)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `253402300800000000` is out of range
+
+
+
+ast            : to_datetime(a)
+raw expr       : to_datetime(ColumnRef(0)::Int64)
+checked expr   : to_timestamp<Int64>(ColumnRef(0))
+evaluation:
++--------+--------------------------------------+--------------------------------------+
+|        | a                                    | Output                               |
++--------+--------------------------------------+--------------------------------------+
+| Type   | Int64                                | Timestamp                            |
+| Domain | {-315360000000000..=315360000000000} | {-315360000000000..=315360000000000} |
+| Row 0  | -315360000000000                     | 1960-01-04 00:00:00.000000           |
+| Row 1  | 315360000000                         | 1979-12-30 00:00:00.000000           |
+| Row 2  | -100                                 | 1969-12-31 23:58:20.000000           |
+| Row 3  | 0                                    | 1970-01-01 00:00:00.000000           |
+| Row 4  | 100                                  | 1970-01-01 00:01:40.000000           |
+| Row 5  | 315360000000                         | 1979-12-30 00:00:00.000000           |
+| Row 6  | 315360000000000                      | 1979-12-30 00:00:00.000000           |
++--------+--------------------------------------+--------------------------------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                            |
++--------+-------------------------------------------------------------------------------------------------+
+| a      | Int64([-315360000000000, 315360000000, -100, 0, 100, 315360000000, 315360000000000])            |
+| Output | [-315360000000000, 315360000000000, -100000000, 0, 100000000, 315360000000000, 315360000000000] |
++--------+-------------------------------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | to_date(-354286)
+  | ^^^^^^^^^^^^^^^^ date `0999-12-31` is out of range
+
+
+
+ast            : to_date(-354285)
+raw expr       : to_date(minus(354285_u32))
+checked expr   : to_date<Int64>(minus<UInt32>(354285_u32))
+optimized expr : -354285
+output type    : Date
+output domain  : {-354285..=-354285}
+output         : 1000-01-01
+
+
+ast            : to_date(-100)
+raw expr       : to_date(minus(100_u8))
+checked expr   : to_date<Int64>(CAST(minus<UInt8>(100_u8) AS Int64))
+optimized expr : -100
+output type    : Date
+output domain  : {-100..=-100}
+output         : 1969-09-23
+
+
+ast            : to_date(-0)
+raw expr       : to_date(minus(0_u8))
+checked expr   : to_date<Int64>(CAST(minus<UInt8>(0_u8) AS Int64))
+optimized expr : 0
+output type    : Date
+output domain  : {0..=0}
+output         : 1970-01-01
+
+
+ast            : to_date(0)
+raw expr       : to_date(0_u8)
+checked expr   : to_date<Int64>(CAST(0_u8 AS Int64))
+optimized expr : 0
+output type    : Date
+output domain  : {0..=0}
+output         : 1970-01-01
+
+
+ast            : to_date(100)
+raw expr       : to_date(100_u8)
+checked expr   : to_date<Int64>(CAST(100_u8 AS Int64))
+optimized expr : 100
+output type    : Date
+output domain  : {100..=100}
+output         : 1970-04-11
+
+
+ast            : to_date(2932896)
+raw expr       : to_date(2932896_u32)
+checked expr   : to_date<Int64>(CAST(2932896_u32 AS Int64))
+optimized expr : 2932896
+output type    : Date
+output domain  : {2932896..=2932896}
+output         : 9999-12-31
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | to_date(2932897)
+  | ^^^^^^^^^^^^^^^^ date `+10000-01-01` is out of range
+
+
+
+ast            : to_date(a)
+raw expr       : to_date(ColumnRef(0)::Int32)
+checked expr   : to_date<Int64>(CAST(ColumnRef(0) AS Int64))
+evaluation:
++--------+---------------------+---------------------+
+|        | a                   | Output              |
++--------+---------------------+---------------------+
+| Type   | Int32               | Date                |
+| Domain | {-354285..=2932896} | {-354285..=2932896} |
+| Row 0  | -354285             | 1000-01-01          |
+| Row 1  | -100                | 1969-09-23          |
+| Row 2  | 0                   | 1970-01-01          |
+| Row 3  | 100                 | 1970-04-11          |
+| Row 4  | 2932896             | 9999-12-31          |
++--------+---------------------+---------------------+
+evaluation (internal):
++--------+-----------------------------------------+
+| Column | Data                                    |
++--------+-----------------------------------------+
+| a      | Int32([-354285, -100, 0, 100, 2932896]) |
+| Output | [-354285, -100, 0, 100, 2932896]        |
++--------+-----------------------------------------+
 
 

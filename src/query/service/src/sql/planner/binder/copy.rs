@@ -504,6 +504,7 @@ impl<'a> Binder {
             if stmt.max_file_size != 0 {
                 stage.copy_options.max_file_size = stmt.max_file_size;
             }
+            stage.copy_options.split_size = stmt.split_size;
 
             stage.copy_options.single = stmt.single;
             stage.copy_options.purge = stmt.purge;
@@ -557,13 +558,14 @@ pub async fn parse_stage_location(
 /// parse_stage_location_v2 work similar to parse_stage_location.
 ///
 /// Difference is input location has already been parsed by parser.
+///
+/// # NOTE:
+/// `path` MUST starts with '/'
 pub async fn parse_stage_location_v2(
     ctx: &Arc<dyn TableContext>,
     name: &str,
     path: &str,
 ) -> Result<(UserStageInfo, String)> {
-    debug_assert!(path.starts_with('/'), "path should starts with '/'");
-
     let stage = UserApiProvider::instance()
         .get_stage(&ctx.get_tenant(), name)
         .await?;

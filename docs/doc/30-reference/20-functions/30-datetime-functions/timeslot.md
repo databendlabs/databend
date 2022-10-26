@@ -13,25 +13,25 @@ time_slot( <expr> )
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| `<expr>` | datetime |
+| `<expr>`    | timestamp   |
 
 ## Return Type
-Datetime object, returns date in “YYYY-MM-DD hh:mm:ss” format.
+Datetime object, returns date in “YYYY-MM-DD hh:mm:ss.ffffff” format.
 
 ## Examples
 
 ```sql
 SELECT time_slot(now());
-+---------------------+
-| time_slot(now())     |
-+---------------------+
-| 2022-03-29 06:30:00 |
-+---------------------+
++----------------------------+
+| time_slot(now())           |
++----------------------------+
+| 2022-10-15 02:30:00.000000 |
++----------------------------+
 
-SELECT time_slot(to_datetime(1630812366));
-+----------------------------------+
-| time_slot(to_datetime(1630812366)) |
-+----------------------------------+
-| 2021-09-05 03:00:00              |
-+----------------------------------+
+SELECT time_slot(to_timestamp(1630812366));
++-------------------------------------+
+| time_slot(to_timestamp(1630812366)) |
++-------------------------------------+
+| 2021-09-05 03:00:00.000000          |
++-------------------------------------+
 ```

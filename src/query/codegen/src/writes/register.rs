@@ -215,6 +215,127 @@ pub fn codegen_register() {
         .unwrap();
     }
 
+    // Write `register_combine_nullable_x_arg`.
+    for n_args in 1..=MAX_ARGS {
+        let arg_generics_bound = (0..n_args)
+            .map(|n| n + 1)
+            .map(|n| format!("I{n}: ArgType, "))
+            .join("");
+        let arg_f_closure_sig = (0..n_args)
+            .map(|n| n + 1)
+            .map(|n| format!("&I{n}::Domain, "))
+            .join("");
+        let arg_g_closure_sig = (0..n_args)
+            .map(|n| n + 1)
+            .map(|n| format!("ValueRef<'a, I{n}>, "))
+            .join("");
+        let arg_sig_type = (0..n_args)
+            .map(|n| n + 1)
+            .map(|n| format!("I{n}::data_type(), "))
+            .join("");
+        let arg_generics = (0..n_args)
+            .map(|n| n + 1)
+            .map(|n| format!("I{n}, "))
+            .join("");
+        let arg_nullable_generics = (0..n_args)
+            .map(|n| n + 1)
+            .map(|n| format!("NullableType<I{n}>, "))
+            .join("");
+        let closure_args = (0..n_args)
+            .map(|n| n + 1)
+            .map(|n| format!("arg{n}"))
+            .join(",");
+        let closure_args_value = (0..n_args)
+            .map(|n| n + 1)
+            .map(|n| format!("&arg{n}.value"))
+            .join(",");
+        let some_values = (0..n_args)
+            .map(|n| n + 1)
+            .map(|n| format!("Some(value{n})"))
+            .join(",");
+        let values = (0..n_args)
+            .map(|n| n + 1)
+            .map(|n| format!("value{n}"))
+            .join(",");
+        let n_widecards = "_,".repeat(n_args);
+
+        let null_overloads = (0..n_args)
+            .map(|n| {
+                let null_types = (0..n_args)
+                    .map(|nth| {
+                        if nth == n {
+                            "NullType,".to_string()
+                        } else {
+                            format!("NullableType<I{}>,", nth + 1)
+                        }
+                    })
+                    .join("");
+                format!(
+                    "
+                        self.register_{n_args}_arg_core::<{null_types} NullType, _, _>(
+                            name,
+                            property.clone(),
+                            |{n_widecards}| Some(()),
+                            |{n_widecards} _| Ok(Value::Scalar(())),
+                        );
+                    "
+                )
+            })
+            .join("");
+
+        writeln!(
+            source,
+            "
+                pub fn register_combine_nullable_{n_args}_arg<{arg_generics_bound} O: ArgType, F, G>(
+                    &mut self,
+                    name: &'static str,
+                    property: FunctionProperty,
+                    calc_domain: F,
+                    func: G,
+                ) where
+                    F: Fn({arg_f_closure_sig}) -> Option<O::Domain> + 'static + Clone + Copy,
+                    G: for<'a> Fn({arg_g_closure_sig} FunctionContext) -> Result<Value<NullableType<O>>, String> + 'static + Clone + Copy,
+                {{
+                    let has_nullable = &[{arg_sig_type} O::data_type()]
+                        .iter()
+                        .any(|ty| ty.as_nullable().is_some() || ty.is_null());
+
+                    assert!(
+                        !has_nullable,
+                        \"Function {{}} has nullable argument or output, please use register_{n_args}_arg_core instead\",
+                        name
+                    );
+
+                    {null_overloads}
+
+                    self.register_{n_args}_arg_core::<{arg_generics} NullableType<O>, _, _>(
+                        name,
+                        property.clone(),
+                        |{n_widecards}| None,
+                        func
+                    );
+
+                    self.register_{n_args}_arg_core::<{arg_nullable_generics} NullableType<O>, _, _>(
+                        name,
+                        property,
+                        move |{closure_args}| {{
+                            let value = match ({closure_args_value}) {{
+                                ({some_values}) => Some(calc_domain({values})?),
+                                _ => None,
+                            }};
+                            Some(NullableDomain {{
+                                has_null: true,
+                                value: value.map(Box::new),
+                            }})
+                        }},
+                        combine_nullable_{n_args}_arg(func),
+                    );
+                }}
+            "
+        )
+        .unwrap();
+    }
+
     // Write `register_x_arg_core`.
     for n_args in 0..=MAX_ARGS {
         let arg_generics_bound = (0..n_args)
@@ -557,6 +678,113 @@ pub fn codegen_register() {
                                 .into_scalar()
                                 .unwrap(),
                         ))),
+                        {match_arms}
+                    }}
+                }}
+            "
+        )
+        .unwrap();
+    }
+
+    // Write `combine_nullable_x_arg`.
+    for n_args in 1..=MAX_ARGS {
+        let arg_generics_bound = (0..n_args)
+            .map(|n| n + 1)
+            .map(|n| format!("I{n}: ArgType, "))
+            .join("");
+        let arg_input_closure_sig = (0..n_args)
+            .map(|n| n + 1)
+            .map(|n| format!("ValueRef<'a, I{n}>, "))
+            .join("");
+        let arg_output_closure_sig = (0..n_args)
+            .map(|n| n + 1)
+            .map(|n| format!("ValueRef<'a, NullableType<I{n}>>, "))
+            .join("");
+        let closure_args = (0..n_args)
+            .map(|n| n + 1)
+            .map(|n| format!("arg{n}, "))
+            .join("");
+        let args_tuple = (0..n_args)
+            .map(|n| n + 1)
+            .map(|n| format!("arg{n}"))
+            .join(", ");
+        let arg_scalar = (0..n_args)
+            .map(|n| n + 1)
+            .map(|n| format!("ValueRef::Scalar(Some(arg{n}))"))
+            .join(", ");
+        let scalar_func_args = (0..n_args)
+            .map(|n| n + 1)
+            .map(|n| format!("ValueRef::Scalar(arg{n}), "))
+            .join("");
+        let scalar_nones_pats = (0..n_args)
+            .map(|n| {
+                let pat = (0..n_args)
+                    .map(|nth| {
+                        if nth == n {
+                            "ValueRef::Scalar(None)"
+                        } else {
+                            "_"
+                        }
+                    })
+                    .join(",");
+                format!("({pat})")
+            })
+            .reduce(|acc, item| format!("{acc} | {item}"))
+            .unwrap();
+        let match_arms = (1..(1 << n_args))
+            .map(|idx| {
+                let columns = (0..n_args)
+                    .filter(|n| idx & (1 << n) != 0)
+                    .collect::<Vec<_>>();
+                let arm_pat = (0..n_args)
+                    .map(|n| {
+                        if columns.contains(&n) {
+                            format!("ValueRef::Column(arg{})", n + 1)
+                        } else {
+                            format!("ValueRef::Scalar(Some(arg{}))", n + 1)
+                        }
+                    })
+                    .join(", ");
+                let and_validity = columns
+                    .iter()
+                    .map(|n| format!("arg{}.validity", n + 1))
+                    .chain(std::iter::once("nullable_column.validity".to_string()))
+                    .reduce(|acc, item| {
+                        format!("common_arrow::arrow::bitmap::and(&{acc}, &{item})")
+                    })
+                    .unwrap();
+                let func_arg = (0..n_args)
+                    .map(|n| {
+                        if columns.contains(&n) {
+                            format!("ValueRef::Column(arg{}.column), ", n + 1)
+                        } else {
+                            format!("ValueRef::Scalar(arg{}), ", n + 1)
+                        }
+                    })
+                    .join("");
+
+                format!(
+                    "({arm_pat}) => {{
+                        let nullable_column = func({func_arg} ctx)?.into_column().unwrap();
+                        let validity = {and_validity};
+                        Ok(Value::Column(NullableColumn {{ column: nullable_column.column, validity }}))
+                    }}"
+                )
+            })
+            .join("");
+        writeln!(
+            source,
+            "
+                pub fn combine_nullable_{n_args}_arg<{arg_generics_bound} O: ArgType>(
+                    func: impl for <'a> Fn({arg_input_closure_sig} FunctionContext) -> Result<Value<NullableType<O>>, String> + Copy,
+                ) -> impl for <'a> Fn({arg_output_closure_sig} FunctionContext) -> Result<Value<NullableType<O>>, String> + Copy {{
+                    move |{closure_args} ctx| match ({args_tuple}) {{
+                        {scalar_nones_pats} => Ok(Value::Scalar(None)),
+                        ({arg_scalar}) => Ok(Value::Scalar(
+                            func({scalar_func_args} ctx)?
+                                .into_scalar()
+                                .unwrap(),
+                        )),
                         {match_arms}
                     }}
                 }}

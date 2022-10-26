@@ -13,16 +13,21 @@
 //  limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::sync::Arc;
 
 use common_catalog::catalog::StorageDescription;
+use common_catalog::table::ColumnId;
+use common_catalog::table::ColumnStatistics;
+use common_catalog::table::ColumnStatisticsProvider;
 use common_catalog::table_context::TableContext;
 use common_catalog::table_mutator::TableMutator;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::ClusterKey;
+use common_fuse_meta::meta::ColumnStatistics as FuseColumnStatistics;
 use common_fuse_meta::meta::Statistics as FuseStatistics;
 use common_fuse_meta::meta::TableSnapshot;
 use common_fuse_meta::meta::Versioned;
@@ -133,7 +138,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
     ) -> Result<Option<Arc<TableSnapshot>>> {
         if let Some(loc) = self.snapshot_loc() {
-            let reader = MetaReaders::table_snapshot_reader(ctx);
+            let reader = MetaReaders::table_snapshot_reader(ctx, self.get_operator());
             let ver = self.snapshot_format_version();
             Ok(Some(reader.read(loc.as_str(), None, ver).await?))
         } else {
@@ -154,12 +159,15 @@ impl FuseTable {
 
     pub fn snapshot_loc(&self) -> Option<String> {
         let options = self.table_info.options();
-
         options
             .get(OPT_KEY_SNAPSHOT_LOCATION)
             // for backward compatibility, we check the legacy table option
             .or_else(|| options.get(OPT_KEY_LEGACY_SNAPSHOT_LOC))
             .cloned()
+    }
+
+    pub fn get_operator(&self) -> Operator {
+        self.operator.clone()
     }
 
     pub fn try_from_table(tbl: &dyn Table) -> Result<&FuseTable> {
@@ -371,7 +379,10 @@ impl Table for FuseTable {
         self.do_gc(&ctx, keep_last_snapshot).await
     }
 
-    async fn statistics(&self, _ctx: Arc<dyn TableContext>) -> Result<Option<TableStatistics>> {
+    async fn table_statistics(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+    ) -> Result<Option<TableStatistics>> {
         let s = &self.table_info.meta.statistics;
         Ok(Some(TableStatistics {
             num_rows: Some(s.number_of_rows),
@@ -379,6 +390,22 @@ impl Table for FuseTable {
             data_size_compressed: Some(s.compressed_data_bytes),
             index_size: Some(s.index_data_bytes),
         }))
+    }
+
+    async fn column_statistics_provider(
+        &self,
+        ctx: Arc<dyn TableContext>,
+    ) -> Result<Box<dyn ColumnStatisticsProvider>> {
+        let provider = if let Some(snapshot) = self.read_table_snapshot(ctx).await? {
+            let stats = &snapshot.summary.col_stats;
+            FakedColumnStatisticsProvider {
+                column_stats: stats.clone(),
+                faked_ndv: snapshot.summary.row_count,
+            }
+        } else {
+            FakedColumnStatisticsProvider::default()
+        };
+        Ok(Box::new(provider))
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_navigate_to", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
@@ -417,5 +444,24 @@ impl Table for FuseTable {
         push_downs: Option<Extras>,
     ) -> Result<Option<Arc<dyn TableMutator>>> {
         self.do_recluster(ctx, pipeline, push_downs).await
+    }
+}
+
+#[derive(Default)]
+struct FakedColumnStatisticsProvider {
+    column_stats: HashMap<ColumnId, FuseColumnStatistics>,
+    // faked value, just the row number
+    faked_ndv: u64,
+}
+
+impl ColumnStatisticsProvider for FakedColumnStatisticsProvider {
+    fn column_statistics(&self, column_id: ColumnId) -> Option<ColumnStatistics> {
+        let col_stats = &self.column_stats.get(&column_id);
+        col_stats.map(|s| ColumnStatistics {
+            min: s.min.clone(),
+            max: s.max.clone(),
+            null_count: s.null_count,
+            number_of_distinct_values: self.faked_ndv,
+        })
     }
 }

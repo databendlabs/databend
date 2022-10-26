@@ -62,7 +62,14 @@ impl FuseTable {
 
         let schema = self.table_info.schema();
         let segments_locations = snapshot.segments.clone();
-        let block_metas = BlockPruner::prune(&ctx, schema, &push_downs, segments_locations).await?;
+        let block_metas = BlockPruner::prune(
+            &ctx,
+            self.operator.clone(),
+            schema,
+            &push_downs,
+            segments_locations,
+        )
+        .await?;
 
         let default_cluster_key_id = self.cluster_key_meta.clone().unwrap().0;
         let mut blocks_map: BTreeMap<i32, Vec<(usize, BlockMeta)>> = BTreeMap::new();
@@ -178,7 +185,6 @@ impl FuseTable {
             )
         })?;
 
-        let da = ctx.get_storage_operator()?;
         let mut sink_pipeline_builder = SinkPipeBuilder::create();
         for _ in 0..pipeline.output_len() {
             let input_port = InputPort::create();
@@ -188,7 +194,7 @@ impl FuseTable {
                     input_port,
                     ctx.clone(),
                     block_per_seg,
-                    da.clone(),
+                    self.operator.clone(),
                     self.meta_location_generator().clone(),
                     cluster_stats_gen.clone(),
                     None,

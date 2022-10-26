@@ -15,7 +15,6 @@
 use std::ops::Range;
 
 use super::number::NumberScalar;
-use super::timestamp::Timestamp;
 use crate::property::Domain;
 use crate::types::string::StringColumn;
 use crate::types::string::StringColumnBuilder;
@@ -130,7 +129,7 @@ impl ValueType for VariantType {
     }
 
     fn push_default(builder: &mut Self::ColumnBuilder) {
-        builder.put_slice(JSONB_NULL);
+        builder.put_slice(b"");
         builder.commit_row();
     }
 
@@ -175,7 +174,9 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, buf: &mut Vec<u8>) {
         },
         ScalarRef::Boolean(b) => common_jsonb::Value::Bool(b),
         ScalarRef::String(s) => common_jsonb::Value::String(String::from_utf8_lossy(s)),
-        ScalarRef::Timestamp(Timestamp { ts, .. }) => ts.into(),
+        ScalarRef::Timestamp(ts) => ts.into(),
+        ScalarRef::Date(d) => d.into(),
+        ScalarRef::Interval(i) => i.into(),
         ScalarRef::Array(col) => {
             let items = cast_scalars_to_variants(col.iter());
             common_jsonb::build_array(items.iter(), buf).expect("failed to build jsonb array");

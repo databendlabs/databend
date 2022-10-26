@@ -887,7 +887,7 @@ DropDatabase(
 ---------- Input ----------
 create table c(a DateTime null, b DateTime(3));
 ---------- Output ---------
-CREATE TABLE c (a Timestamp NULL, b Timestamp(3) NOT NULL)
+CREATE TABLE c (a TIMESTAMP NULL, b TIMESTAMP NOT NULL)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -909,9 +909,7 @@ CreateTable(
                             span: Ident(15..16),
                         },
                         data_type: Nullable(
-                            Timestamp {
-                                precision: None,
-                            },
+                            Timestamp,
                         ),
                         default_expr: None,
                         comment: None,
@@ -922,11 +920,7 @@ CreateTable(
                             quote: None,
                             span: Ident(32..33),
                         },
-                        data_type: Timestamp {
-                            precision: Some(
-                                3,
-                            ),
-                        },
+                        data_type: Timestamp,
                         default_expr: None,
                         comment: None,
                     },
@@ -6534,6 +6528,7 @@ Copy(
         validation_mode: "",
         size_limit: 10,
         max_file_size: 0,
+        split_size: 0,
         single: false,
         purge: false,
         force: false,
@@ -6590,6 +6585,7 @@ Copy(
         validation_mode: "",
         size_limit: 10,
         max_file_size: 0,
+        split_size: 0,
         single: false,
         purge: false,
         force: false,
@@ -6628,6 +6624,7 @@ Copy(
         validation_mode: "",
         size_limit: 0,
         max_file_size: 0,
+        split_size: 0,
         single: false,
         purge: false,
         force: false,
@@ -6666,6 +6663,7 @@ Copy(
         validation_mode: "",
         size_limit: 0,
         max_file_size: 0,
+        split_size: 0,
         single: false,
         purge: false,
         force: false,
@@ -6713,6 +6711,7 @@ Copy(
         validation_mode: "",
         size_limit: 10,
         max_file_size: 0,
+        split_size: 0,
         single: false,
         purge: false,
         force: false,
@@ -6764,6 +6763,7 @@ Copy(
         validation_mode: "",
         size_limit: 10,
         max_file_size: 0,
+        split_size: 0,
         single: false,
         purge: false,
         force: false,
@@ -6811,6 +6811,7 @@ Copy(
         validation_mode: "",
         size_limit: 10,
         max_file_size: 0,
+        split_size: 0,
         single: false,
         purge: false,
         force: false,
@@ -6873,6 +6874,7 @@ Copy(
         validation_mode: "",
         size_limit: 10,
         max_file_size: 0,
+        split_size: 0,
         single: false,
         purge: false,
         force: false,
@@ -6920,6 +6922,55 @@ Copy(
         validation_mode: "",
         size_limit: 10,
         max_file_size: 0,
+        split_size: 0,
+        single: false,
+        purge: false,
+        force: false,
+    },
+)
+
+
+---------- Input ----------
+COPY INTO mytable
+                FROM @external_stage/path/to/dir/
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;
+---------- Output ---------
+COPY INTO mytable FROM @external_stage/path/to/dir/ FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false
+---------- AST ------------
+Copy(
+    CopyStmt {
+        src: StageLocation {
+            name: "external_stage",
+            path: "/path/to/dir/",
+        },
+        dst: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "mytable",
+                quote: None,
+                span: Ident(10..17),
+            },
+        },
+        files: [],
+        pattern: "",
+        file_format: {
+            "field_delimiter": ",",
+            "record_delimiter": "\n",
+            "skip_header": "1",
+            "type": "CSV",
+        },
+        validation_mode: "",
+        size_limit: 10,
+        max_file_size: 0,
+        split_size: 0,
         single: false,
         purge: false,
         force: false,
@@ -6967,6 +7018,7 @@ Copy(
         validation_mode: "",
         size_limit: 0,
         max_file_size: 0,
+        split_size: 0,
         single: false,
         purge: false,
         force: true,
@@ -7014,6 +7066,40 @@ ShowSettings {
         "enable%",
     ),
 }
+
+
+---------- Input ----------
+PRESIGN @my_stage
+---------- Output ---------
+PRESIGN @my_stage/ EXPIRE = 3600
+---------- AST ------------
+Presign(
+    PresignStmt {
+        action: Download,
+        location: StageLocation {
+            name: "my_stage",
+            path: "/",
+        },
+        expire: 3600s,
+    },
+)
+
+
+---------- Input ----------
+PRESIGN @my_stage/path/to/dir/
+---------- Output ---------
+PRESIGN @my_stage/path/to/dir/ EXPIRE = 3600
+---------- AST ------------
+Presign(
+    PresignStmt {
+        action: Download,
+        location: StageLocation {
+            name: "my_stage",
+            path: "/path/to/dir/",
+        },
+        expire: 3600s,
+    },
+)
 
 
 ---------- Input ----------

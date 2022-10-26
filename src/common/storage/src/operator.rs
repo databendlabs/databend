@@ -19,6 +19,7 @@ use std::ops::Deref;
 use backon::ExponentialBackoff;
 use common_base::base::GlobalIORuntime;
 use common_base::base::Singleton;
+use common_base::base::TrySpawn;
 use common_contexts::DalRuntime;
 use common_exception::ErrorCode;
 use once_cell::sync::OnceCell;
@@ -214,6 +215,8 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<Operator> {
     builder.access_key_id(&cfg.access_key_id);
     builder.secret_access_key(&cfg.secret_access_key);
     builder.security_token(&cfg.security_token);
+    builder.role_arn(&cfg.role_arn);
+    builder.external_id(&cfg.external_id);
 
     // Bucket.
     builder.bucket(&cfg.bucket);
@@ -288,7 +291,15 @@ impl StorageOperator {
 
         // OpenDAL will send a real request to underlying storage to check whether it works or not.
         // If this check failed, it's highly possible that the users have configured it wrongly.
-        if let Err(cause) = operator.check().await {
+        //
+        // Make sure the check is called inside GlobalIORuntime to prevent
+        // IO hang on reuse connection.
+        let op = operator.clone();
+        if let Err(cause) = GlobalIORuntime::instance()
+            .spawn(async move { op.check().await })
+            .await
+            .expect("join must succeed")
+        {
             return Err(ErrorCode::StorageUnavailable(format!(
                 "current configured storage is not available: config: {:?}, cause: {cause}",
                 sp
@@ -322,8 +333,6 @@ fn init_oss_operator(cfg: &StorageOssConfig) -> Result<Operator> {
         .endpoint(&cfg.endpoint_url)
         .access_key_id(&cfg.access_key_id)
         .access_key_secret(&cfg.access_key_secret)
-        .oidc_token(&cfg.oidc_token)
-        .role_arn(&cfg.role_arn)
         .bucket(&cfg.bucket)
         .root(&cfg.root)
         .build()?;

@@ -242,9 +242,7 @@ pub enum TypeName {
     Float32,
     Float64,
     Date,
-    Timestamp {
-        precision: Option<u64>,
-    },
+    Timestamp,
     String,
     Array {
         item_type: Option<Box<TypeName>>,
@@ -512,11 +510,8 @@ impl Display for TypeName {
             TypeName::Date => {
                 write!(f, "DATE")?;
             }
-            TypeName::Timestamp { precision } => {
-                write!(f, "Timestamp")?;
-                if let Some(precision) = precision {
-                    write!(f, "({})", *precision)?;
-                }
+            TypeName::Timestamp => {
+                write!(f, "TIMESTAMP")?;
             }
             TypeName::String => {
                 write!(f, "STRING")?;

@@ -18,7 +18,6 @@ use common_exception::Result;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
-use crate::types::timestamp::TimestampColumn;
 use crate::types::AnyType;
 use crate::types::ArgType;
 use crate::types::ArrayType;
@@ -38,13 +37,15 @@ impl Chunk {
             return Ok(self.slice(0..0));
         }
 
-        let mut after_columns = Vec::with_capacity(self.num_columns());
-        for value in self.columns() {
-            match value {
-                Value::Scalar(v) => after_columns.push(Value::Scalar(v.clone())),
-                Value::Column(c) => after_columns.push(Value::Column(Column::take(c, indices))),
-            }
-        }
+        let after_columns = self
+            .columns()
+            .iter()
+            .map(|(col, ty)| match col {
+                Value::Scalar(v) => (Value::Scalar(v.clone()), ty.clone()),
+                Value::Column(c) => (Value::Column(Column::take(c, indices)), ty.clone()),
+            })
+            .collect();
+
         Ok(Chunk::new(after_columns, indices.len()))
     }
 }
@@ -61,15 +62,28 @@ impl Column {
             Column::Boolean(bm) => Self::take_arg_types::<BooleanType, _>(bm, indices),
             Column::String(column) => Self::take_arg_types::<StringType, _>(column, indices),
             Column::Timestamp(column) => {
-                let ts = Self::take_arg_types::<NumberType<i64>, _>(&column.ts, indices)
+                let ts = Self::take_arg_types::<NumberType<i64>, _>(column, indices)
                     .into_number()
                     .unwrap()
                     .into_int64()
                     .unwrap();
-                Column::Timestamp(TimestampColumn {
-                    ts,
-                    precision: column.precision,
-                })
+                Column::Timestamp(ts)
+            }
+            Column::Date(column) => {
+                let d = Self::take_arg_types::<NumberType<i32>, _>(column, indices)
+                    .into_number()
+                    .unwrap()
+                    .into_int32()
+                    .unwrap();
+                Column::Date(d)
+            }
+            Column::Interval(column) => {
+                let i = Self::take_arg_types::<NumberType<i64>, _>(column, indices)
+                    .into_number()
+                    .unwrap()
+                    .into_int64()
+                    .unwrap();
+                Column::Interval(i)
             }
             Column::Array(column) => {
                 let mut builder = ArrayColumnBuilder::<AnyType>::from_column(column.slice(0..0));

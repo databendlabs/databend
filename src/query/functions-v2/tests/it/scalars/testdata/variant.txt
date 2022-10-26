@@ -102,7 +102,7 @@ evaluation:
 | Row 3  | "-32768"                                                  | -32768                |
 | Row 4  | "1234.5678"                                               | 1234.5678             |
 | Row 5  | "1.912e2"                                                 | 191.2                 |
-| Row 6  | "\"\\\\\\\"abc\\\\\\\"\""                                 | "\\\"abc\\\""         |
+| Row 6  | "\"\\\\\\\"abc\\\\\\\"\""                                 | "\"abc\""             |
 | Row 7  | "\"databend\""                                            | "databend"            |
 | Row 8  | "{\"k\":\"v\",\"a\":\"b\"}"                               | {"a":"b","k":"v"}     |
 | Row 9  | "[1,2,3,[\"a\",\"b\",\"c\"]]"                             | [1,2,3,["a","b","c"]] |
@@ -141,10 +141,10 @@ evaluation (internal):
 
 ast            : try_parse_json(NULL)
 raw expr       : try_parse_json(NULL)
-checked expr   : try_parse_json<String NULL>(CAST(NULL AS String NULL))
+checked expr   : try_parse_json<NULL>(NULL)
 optimized expr : NULL
-output type    : Variant NULL
-output domain  : Unknown
+output type    : NULL
+output domain  : {NULL}
 output         : NULL
 
 
@@ -235,7 +235,7 @@ evaluation:
 | Row 3  | "-32768"                                                  | -32768                |
 | Row 4  | "1234.5678"                                               | 1234.5678             |
 | Row 5  | "1.912e2"                                                 | 191.2                 |
-| Row 6  | "\"\\\\\\\"abc\\\\\\\"\""                                 | "\\\"abc\\\""         |
+| Row 6  | "\"\\\\\\\"abc\\\\\\\"\""                                 | "\"abc\""             |
 | Row 7  | "\"databend\""                                            | "databend"            |
 | Row 8  | "{\"k\":\"v\",\"a\":\"b\"}"                               | {"a":"b","k":"v"}     |
 | Row 9  | "[1,2,3,[\"a\",\"b\",\"c\"]]"                             | [1,2,3,["a","b","c"]] |
@@ -264,20 +264,20 @@ evaluation:
 | Row 3  | "1234"                | 1234         |
 +--------+-----------------------+--------------+
 evaluation (internal):
-+--------+-----------------------------------------------------------------------------------------------------------------------------------------------+
-| Column | Data                                                                                                                                          |
-+--------+-----------------------------------------------------------------------------------------------------------------------------------------------+
-| s      | NullableColumn { column: StringColumn { data: 0x7472756574747431323334, offsets: [0, 4, 7, 7, 11] }, validity: [0b____1011] }                 |
-| Output | NullableColumn { column: StringColumn { data: 0x200000004000000020000000200000035004d2, offsets: [0, 8, 8, 8, 19] }, validity: [0b____1001] } |
-+--------+-----------------------------------------------------------------------------------------------------------------------------------------------+
++--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                           |
++--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn { data: 0x7472756574747431323334, offsets: [0, 4, 7, 7, 11] }, validity: [0b____1011] }                                  |
+| Output | NullableColumn { column: StringColumn { data: 0x2000000040000000200000000000000020000000200000035004d2, offsets: [0, 8, 8, 16, 27] }, validity: [0b____1001] } |
++--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
 ast            : check_json(NULL)
 raw expr       : check_json(NULL)
-checked expr   : check_json<String NULL>(CAST(NULL AS String NULL))
+checked expr   : check_json<NULL>(NULL)
 optimized expr : NULL
-output type    : String NULL
-output domain  : Unknown
+output type    : NULL
+output domain  : {NULL}
 output         : NULL
 
 
@@ -823,28 +823,28 @@ evaluation (internal):
 ast            : json_extract_path_text('[[1,2],3]', '[0]')
 raw expr       : json_extract_path_text("[[1,2],3]", "[0]")
 checked expr   : json_extract_path_text<String, String>("[[1,2],3]", "[0]")
-optimized expr : 0x5b312c325d
+optimized expr : "[1,2]"
 output type    : String NULL
 output domain  : Unknown
-output         : [1,2]
+output         : "[1,2]"
 
 
 ast            : json_extract_path_text('[[1,2],3]', '[0][1]')
 raw expr       : json_extract_path_text("[[1,2],3]", "[0][1]")
 checked expr   : json_extract_path_text<String, String>("[[1,2],3]", "[0][1]")
-optimized expr : 0x32
+optimized expr : "2"
 output type    : String NULL
 output domain  : Unknown
-output         : 2
+output         : "2"
 
 
 ast            : json_extract_path_text('[1,2,3]', '[0]')
 raw expr       : json_extract_path_text("[1,2,3]", "[0]")
 checked expr   : json_extract_path_text<String, String>("[1,2,3]", "[0]")
-optimized expr : 0x31
+optimized expr : "1"
 output type    : String NULL
 output domain  : Unknown
-output         : 1
+output         : "1"
 
 
 ast            : json_extract_path_text('[1,2,3]', 'k2:k3')
@@ -859,37 +859,37 @@ output         : NULL
 ast            : json_extract_path_text('{"a":{"b":2}}', '["a"]["b"]')
 raw expr       : json_extract_path_text("{\"a\":{\"b\":2}}", "[\"a\"][\"b\"]")
 checked expr   : json_extract_path_text<String, String>("{\"a\":{\"b\":2}}", "[\"a\"][\"b\"]")
-optimized expr : 0x32
+optimized expr : "2"
 output type    : String NULL
 output domain  : Unknown
-output         : 2
+output         : "2"
 
 
 ast            : json_extract_path_text('{"a":{"b":2}}', 'a:b')
 raw expr       : json_extract_path_text("{\"a\":{\"b\":2}}", "a:b")
 checked expr   : json_extract_path_text<String, String>("{\"a\":{\"b\":2}}", "a:b")
-optimized expr : 0x32
+optimized expr : "2"
 output type    : String NULL
 output domain  : Unknown
-output         : 2
+output         : "2"
 
 
 ast            : json_extract_path_text('{"a":{"b":2}}', '["a"]')
 raw expr       : json_extract_path_text("{\"a\":{\"b\":2}}", "[\"a\"]")
 checked expr   : json_extract_path_text<String, String>("{\"a\":{\"b\":2}}", "[\"a\"]")
-optimized expr : 0x7b2262223a327d
+optimized expr : "{\"b\":2}"
 output type    : String NULL
 output domain  : Unknown
-output         : {"b":2}
+output         : "{\"b\":2}"
 
 
 ast            : json_extract_path_text('{"a":{"b":2}}', 'a')
 raw expr       : json_extract_path_text("{\"a\":{\"b\":2}}", "a")
 checked expr   : json_extract_path_text<String, String>("{\"a\":{\"b\":2}}", "a")
-optimized expr : 0x7b2262223a327d
+optimized expr : "{\"b\":2}"
 output type    : String NULL
 output domain  : Unknown
-output         : {"b":2}
+output         : "{\"b\":2}"
 
 
 ast            : json_extract_path_text(s, k)
@@ -902,7 +902,7 @@ evaluation:
 | Type   | String                          | String            | String NULL |
 | Domain | {"[\"a\",\"b\"]"..="{\"k\":1}"} | {"[\"a\"]"..="k"} | Unknown     |
 | Row 0  | "true"                          | "k"               | NULL        |
-| Row 1  | "{\"k\":1}"                     | "[\"k\"]"         | 1           |
+| Row 1  | "{\"k\":1}"                     | "[\"k\"]"         | "1"         |
 | Row 2  | "[\"a\",\"b\"]"                 | "[\"a\"]"         | NULL        |
 +--------+---------------------------------+-------------------+-------------+
 evaluation (internal):
@@ -925,9 +925,9 @@ evaluation:
 | Type   | String NULL                 | String       | String NULL |
 | Domain | {""..="{\"k\":1}"} ∪ {NULL} | {""..="[0]"} | Unknown     |
 | Row 0  | "true"                      | "[0]"        | NULL        |
-| Row 1  | "{\"k\":1}"                 | "[\"k\"]"    | 1           |
+| Row 1  | "{\"k\":1}"                 | "[\"k\"]"    | "1"         |
 | Row 2  | NULL                        | ""           | NULL        |
-| Row 3  | "[\"a\",\"b\"]"             | "[0]"        | "a"         |
+| Row 3  | "[\"a\",\"b\"]"             | "[0]"        | "\"a\""     |
 +--------+-----------------------------+--------------+-------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------+

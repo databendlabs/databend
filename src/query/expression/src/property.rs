@@ -20,8 +20,6 @@ use crate::types::number::NumberDomain;
 use crate::types::number::NumberScalar;
 use crate::types::number::SimpleDomain;
 use crate::types::string::StringDomain;
-use crate::types::timestamp::Timestamp;
-use crate::types::timestamp::TimestampDomain;
 use crate::types::AnyType;
 use crate::with_number_type;
 use crate::Scalar;
@@ -43,7 +41,9 @@ pub enum Domain {
     Number(NumberDomain),
     Boolean(BooleanDomain),
     String(StringDomain),
-    Timestamp(TimestampDomain),
+    Timestamp(SimpleDomain<i64>),
+    Date(SimpleDomain<i32>),
+    Interval(SimpleDomain<i64>),
     Nullable(NullableDomain<AnyType>),
     Array(Option<Box<Domain>>),
     Tuple(Vec<Domain>),
@@ -76,12 +76,19 @@ impl Domain {
                     .map(|(self_max, other_max)| self_max.max(other_max).to_vec()),
             }),
             (Domain::Timestamp(this), Domain::Timestamp(other)) => {
-                Domain::Timestamp(TimestampDomain {
+                Domain::Timestamp(SimpleDomain {
                     min: this.min.min(other.min),
                     max: this.max.max(other.max),
-                    precision: this.precision.max(other.precision),
                 })
             }
+            (Domain::Date(this), Domain::Date(other)) => Domain::Date(SimpleDomain {
+                min: this.min.min(other.min),
+                max: this.max.max(other.max),
+            }),
+            (Domain::Interval(this), Domain::Interval(other)) => Domain::Interval(SimpleDomain {
+                min: this.min.min(other.min),
+                max: this.max.max(other.max),
+            }),
             (
                 Domain::Nullable(NullableDomain {
                     has_null: true,
@@ -195,14 +202,13 @@ impl Domain {
             Domain::String(StringDomain { min, max }) if Some(min) == max.as_ref() => {
                 Some(Scalar::String(min.clone()))
             }
-            Domain::Timestamp(TimestampDomain {
-                min,
-                max,
-                precision,
-            }) if min == max => Some(Scalar::Timestamp(Timestamp {
-                ts: *min,
-                precision: *precision,
-            })),
+            Domain::Timestamp(SimpleDomain { min, max }) if min == max => {
+                Some(Scalar::Timestamp(*min))
+            }
+            Domain::Date(SimpleDomain { min, max }) if min == max => Some(Scalar::Date(*min)),
+            Domain::Interval(SimpleDomain { min, max }) if min == max => {
+                Some(Scalar::Interval(*min))
+            }
             Domain::Nullable(NullableDomain {
                 has_null: true,
                 value: None,
