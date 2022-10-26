@@ -147,12 +147,12 @@ impl SessionManager {
         }
     }
 
-    pub async fn get_session_by_id(&self, id: &str) -> Option<Arc<Session>> {
+    pub fn get_session_by_id(&self, id: &str) -> Option<Arc<Session>> {
         let sessions = self.active_sessions.read();
         sessions.get(id).and_then(|weak_ptr| weak_ptr.upgrade())
     }
 
-    pub async fn get_id_by_mysql_conn_id(&self, mysql_conn_id: &Option<u32>) -> Option<String> {
+    pub fn get_id_by_mysql_conn_id(&self, mysql_conn_id: &Option<u32>) -> Option<String> {
         let sessions = self.mysql_conn_map.read();
         sessions.get(mysql_conn_id).cloned()
     }
@@ -194,7 +194,7 @@ impl SessionManager {
             let mut signal = Box::pin(signal.next());
 
             for _index in 0..timeout_secs {
-                if SessionManager::destroy_idle_sessions(&active_sessions).await {
+                if SessionManager::destroy_idle_sessions(&active_sessions) {
                     return;
                 }
 
@@ -216,7 +216,7 @@ impl SessionManager {
         }
     }
 
-    pub async fn processes_info(&self) -> Vec<ProcessInfo> {
+    pub fn processes_info(&self) -> Vec<ProcessInfo> {
         let sessions = self.active_sessions.read();
 
         let mut processes_info = Vec::with_capacity(sessions.len());
@@ -229,7 +229,7 @@ impl SessionManager {
         processes_info
     }
 
-    async fn destroy_idle_sessions(sessions: &Arc<RwLock<HashMap<String, Weak<Session>>>>) -> bool {
+    fn destroy_idle_sessions(sessions: &Arc<RwLock<HashMap<String, Weak<Session>>>>) -> bool {
         // Read lock does not support reentrant
         // https://github.com/Amanieu/parking_lot::/blob/lock_api-0.4.4/lock_api/src/rwlock.rs#L422
         let mut active_sessions_read_guard = sessions.write();

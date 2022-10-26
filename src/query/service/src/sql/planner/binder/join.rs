@@ -23,6 +23,7 @@ use common_datavalues::type_coercion::compare_coercion;
 use common_datavalues::wrap_nullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planner::MetadataRef;
 
 use crate::sessions::TableContext;
 use crate::sql::binder::scalar_common::split_conjunctions;
@@ -34,7 +35,6 @@ use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::binder::scalar::ScalarBinder;
 use crate::sql::planner::binder::Binder;
-use crate::sql::planner::metadata::MetadataRef;
 use crate::sql::planner::semantic::NameResolutionContext;
 use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::JoinType;
@@ -79,6 +79,19 @@ impl<'a> Binder {
 
                 for column in right_context.all_column_bindings().iter() {
                     bind_context.add_column_binding(column.clone());
+                }
+            }
+            JoinOperator::FullOuter => {
+                for column in left_context.all_column_bindings() {
+                    let mut nullable_column = column.clone();
+                    nullable_column.data_type = Box::new(wrap_nullable(&column.data_type));
+                    bind_context.add_column_binding(nullable_column);
+                }
+
+                for column in right_context.all_column_bindings().iter() {
+                    let mut nullable_column = column.clone();
+                    nullable_column.data_type = Box::new(wrap_nullable(&column.data_type));
+                    bind_context.add_column_binding(nullable_column);
                 }
             }
             _ => {

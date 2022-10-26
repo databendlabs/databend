@@ -15,10 +15,11 @@
 use std::cmp;
 use std::fmt;
 use std::io;
+use std::io::BorrowedBuf;
+use std::io::BorrowedCursor;
 use std::io::ErrorKind;
 use std::io::IoSliceMut;
 use std::io::Read;
-use std::io::ReadBuf;
 use std::io::Result;
 use std::mem::MaybeUninit;
 
@@ -94,21 +95,21 @@ impl<R: Read> std::io::Read for BufferReader<R> {
         Ok(nread)
     }
 
-    fn read_buf(&mut self, buf: &mut ReadBuf<'_>) -> io::Result<()> {
+    fn read_buf(&mut self, mut cursor: BorrowedCursor<'_>) -> io::Result<()> {
         // If we don't have any buffered data and we're doing a massive read
         // (larger than our internal buffer), bypass our internal buffer
         // entirely.
-        if self.pos == self.cap && buf.remaining() >= self.buf.len() {
+        if self.pos == self.cap && cursor.capacity() >= self.buf.len() {
             self.discard_buffer();
-            return self.inner.read_buf(buf);
+            return self.inner.read_buf(cursor.reborrow());
         }
 
-        let prev = buf.filled_len();
+        let prev = cursor.written();
 
         let mut rem = self.fill_buf()?;
-        rem.read_buf(buf)?;
+        rem.read_buf(cursor.reborrow())?;
 
-        self.consume(buf.filled_len() - prev); //slice impl of read_buf known to never unfill buf
+        self.consume(cursor.written() - prev); //slice impl of read_buf known to never unfill buf
 
         Ok(())
     }
@@ -178,18 +179,18 @@ impl<R: Read> BufferRead for BufferReader<R> {
     fn fill_buf(&mut self) -> Result<&[u8]> {
         if self.pos >= self.cap {
             debug_assert!(self.pos == self.cap);
-            let mut readbuf = ReadBuf::uninit(&mut self.buf);
+            let mut buf = BorrowedBuf::from(&mut (*self.buf));
 
             // SAFETY: `self.init` is either 0 or set to `readbuf.initialized_len()`
             // from the last time this function was called
             unsafe {
-                readbuf.assume_init(self.init);
+                buf.set_init(self.init);
             }
 
-            self.inner.read_buf(&mut readbuf)?;
+            self.inner.read_buf(buf.unfilled())?;
 
-            self.cap = readbuf.filled_len();
-            self.init = readbuf.initialized_len();
+            self.cap = buf.len();
+            self.init = buf.init_len();
 
             self.pos = 0;
         }

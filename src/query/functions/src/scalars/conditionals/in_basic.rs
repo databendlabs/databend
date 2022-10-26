@@ -18,8 +18,8 @@ use common_datavalues::prelude::*;
 use common_datavalues::type_coercion::numerical_coercion;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_hashtable::StackHashSet;
 use common_hashtable::KeysRef;
+use common_hashtable::StackHashSet;
 use ordered_float::OrderedFloat;
 
 use crate::scalars::cast_column_field;
@@ -146,8 +146,7 @@ macro_rules! string_contains {
 macro_rules! float_contains {
     ($T: ident, $INPUT_COL: expr, $ROWS: expr, $COLUMNS: expr, $CAST_TYPE: ident, $FUNC_CTX: expr, $RETURN_NULLABLE: expr) => {{
         let mut builder: NullableColumnBuilder<bool> = NullableColumnBuilder::with_capacity($ROWS);
-        let mut vals_set: StackHashSet<OrderedFloat<$T>, 64> =
-            StackHashSet::new();
+        let mut vals_set: StackHashSet<OrderedFloat<$T>, 64> = StackHashSet::new();
 
         for col in &$COLUMNS[1..] {
             let col = cast_column_field(col, col.data_type(), &$CAST_TYPE, &$FUNC_CTX)?;

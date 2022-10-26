@@ -21,15 +21,15 @@ use common_meta_app::schema::TableIdToName;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::share::*;
-use common_meta_types::app_error::AppError;
-use common_meta_types::app_error::ShareAccountsAlreadyExists;
-use common_meta_types::app_error::ShareAlreadyExists;
-use common_meta_types::app_error::TxnRetryMaxTimes;
-use common_meta_types::app_error::UnknownShare;
-use common_meta_types::app_error::UnknownShareAccounts;
-use common_meta_types::app_error::UnknownTable;
-use common_meta_types::app_error::WrongShare;
-use common_meta_types::app_error::WrongShareObject;
+use common_meta_types::errors::app_error::AppError;
+use common_meta_types::errors::app_error::ShareAccountsAlreadyExists;
+use common_meta_types::errors::app_error::ShareAlreadyExists;
+use common_meta_types::errors::app_error::TxnRetryMaxTimes;
+use common_meta_types::errors::app_error::UnknownShare;
+use common_meta_types::errors::app_error::UnknownShareAccounts;
+use common_meta_types::errors::app_error::UnknownTable;
+use common_meta_types::errors::app_error::WrongShare;
+use common_meta_types::errors::app_error::WrongShareObject;
 use common_meta_types::ConditionResult::Eq;
 use common_meta_types::KVAppError;
 use common_meta_types::TxnCondition;
@@ -800,13 +800,12 @@ impl<KV: KVApi> ShareApi for KV {
         let mut objects = vec![];
         for entry in entries {
             let object = get_object_name_from_id(self, &database_name, entry.object).await?;
-            match object {
-                Some(object) => objects.push(ShareGrantReplyObject {
+            if let Some(object) = object {
+                objects.push(ShareGrantReplyObject {
                     object,
                     privileges: entry.privileges,
                     grant_on: entry.grant_on,
-                }),
-                None => {}
+                })
             }
         }
 
@@ -925,15 +924,12 @@ impl<KV: KVApi> ShareApi for KV {
         };
         let mut privileges = vec![];
         for (entry, share_name) in entries {
-            match entry {
-                Some(entry) => {
-                    privileges.push(ObjectGrantPrivilege {
-                        share_name,
-                        privileges: entry.privileges,
-                        grant_on: entry.grant_on,
-                    });
-                }
-                None => {}
+            if let Some(entry) = entry {
+                privileges.push(ObjectGrantPrivilege {
+                    share_name,
+                    privileges: entry.privileges,
+                    grant_on: entry.grant_on,
+                });
             }
         }
         Ok(GetObjectGrantPrivilegesReply { privileges })

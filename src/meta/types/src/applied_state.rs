@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
 use std::fmt::Debug;
+use std::fmt::Formatter;
 
 use openraft::AppDataResponse;
 use serde::Deserialize;
@@ -46,6 +48,29 @@ pub enum AppliedState {
 }
 
 impl AppDataResponse for AppliedState {}
+
+impl fmt::Display for AppliedState {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "AppliedState: ")?;
+        match self {
+            AppliedState::Seq { seq } => {
+                write!(f, "Seq: {}", seq)
+            }
+            AppliedState::Node { prev, result } => {
+                write!(f, "Node: prev: {:?}, result: {:?}", prev, result)
+            }
+            AppliedState::KV(change) => {
+                write!(f, "KV: {}", change)
+            }
+            AppliedState::TxnReply(txnreply) => {
+                write!(f, "Txn: {}", txnreply)
+            }
+            AppliedState::None => {
+                write!(f, "None")
+            }
+        }
+    }
+}
 
 impl AppliedState {
     /// Whether the state changed

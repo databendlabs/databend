@@ -10,8 +10,8 @@ test = false
 
 [dependencies]
 common-ast = { path = "../../query/ast" }
+common-base = { path = "../../common/base" }
 common-config = { path = "../config" }
-common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../../common/exception" }
 common-meta-types = { path = "../../meta/types" }
 common-users = { path = "../users" }

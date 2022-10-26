@@ -16,13 +16,13 @@ use std::collections::HashSet;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planner::IndexType;
 
 use super::RelExpr;
 use super::RelationalProperty;
 use crate::sql::optimizer::group::Group;
 use crate::sql::optimizer::m_expr::MExpr;
 use crate::sql::optimizer::s_expr::SExpr;
-use crate::sql::planner::IndexType;
 use crate::sql::plans::RelOperator;
 
 /// `Memo` is a search space which memoize possible plans of a query.

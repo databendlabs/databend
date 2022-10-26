@@ -18,6 +18,7 @@ use common_ast::ast::Indirection;
 use common_ast::ast::SelectTarget;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planner::IndexType;
 
 use super::bind_context::NameResolutionResult;
 use crate::sql::binder::select::SelectItem;
@@ -31,7 +32,6 @@ use crate::sql::planner::binder::Binder;
 use crate::sql::planner::binder::ColumnBinding;
 use crate::sql::planner::semantic::normalize_identifier;
 use crate::sql::planner::semantic::GroupingChecker;
-use crate::sql::planner::IndexType;
 use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::EvalScalar;
 use crate::sql::plans::Project;

@@ -112,7 +112,7 @@ impl<'a> BlockWriter<'a> {
         let index_block_schema = &bloom_index.bloom_schema;
         let (size, _) = serialize_data_blocks_with_compression(
             vec![index_block],
-            &index_block_schema,
+            index_block_schema,
             &mut data,
             CompressionOptions::Uncompressed,
         )?;

@@ -79,12 +79,12 @@ impl AnalyzableStatement for DfDeleteStatement {
         let selection = if let Some(predicate) = &self.selection {
             let mut pred_expr = analyzer.analyze(predicate).await?;
             DeleteCollectPushDowns::visit_filter(&mut pred_expr, &mut require_columns)?;
-            Some(pred_expr)
+            Some(predicate.to_string())
         } else {
             None
         };
 
-        let table_id = tbl_info.ident.clone();
+        let table_id = tbl_info.ident;
         let mut col_indices = vec![];
         let schema = tbl_info.meta.schema.as_ref();
         for col_name in require_columns {

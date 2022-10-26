@@ -54,7 +54,7 @@ impl<const SUPPRESS_PARSE_ERROR: bool> InetAtonFunctionImpl<SUPPRESS_PARSE_ERROR
 
 impl<const SUPPRESS_PARSE_ERROR: bool> Function for InetAtonFunctionImpl<SUPPRESS_PARSE_ERROR> {
     fn name(&self) -> &str {
-        &*self.display_name
+        &self.display_name
     }
 
     fn return_type(&self) -> DataTypeImpl {

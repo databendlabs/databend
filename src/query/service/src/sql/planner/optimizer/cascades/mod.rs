@@ -22,6 +22,7 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planner::IndexType;
 
 use super::cost::Cost;
 use super::cost::CostContext;
@@ -35,7 +36,6 @@ use crate::sql::optimizer::memo::Memo;
 use crate::sql::optimizer::rule::RuleSet;
 use crate::sql::optimizer::rule::TransformState;
 use crate::sql::optimizer::SExpr;
-use crate::sql::planner::IndexType;
 use crate::sql::plans::Operator;
 
 /// A cascades-style search engine to enumerate possible alternations of a relational expression and

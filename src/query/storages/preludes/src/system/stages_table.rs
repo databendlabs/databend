@@ -23,6 +23,7 @@ use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_meta_types::StageType;
+use common_users::UserApiProvider;
 
 use super::table::AsyncOneBlockSystemTable;
 use super::table::AsyncSystemTable;
@@ -43,7 +44,7 @@ impl AsyncSystemTable for StagesTable {
 
     async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
-        let stages = ctx.get_user_manager().get_stages(&tenant).await?;
+        let stages = UserApiProvider::instance().get_stages(&tenant).await?;
         let mut name: Vec<Vec<u8>> = Vec::with_capacity(stages.len());
         let mut stage_type: Vec<Vec<u8>> = Vec::with_capacity(stages.len());
         let mut stage_params: Vec<Vec<u8>> = Vec::with_capacity(stages.len());

@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_planner::IndexType;
 
 use crate::sql::optimizer::m_expr::MExpr;
 use crate::sql::optimizer::property::RelationalProperty;
-use crate::sql::planner::IndexType;
 
 /// `Group` is a set of logically equivalent relational expressions represented with `MExpr`.
 #[derive(Clone)]

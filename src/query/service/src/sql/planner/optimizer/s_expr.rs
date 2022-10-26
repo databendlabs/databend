@@ -14,11 +14,11 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planner::IndexType;
 
 use super::RelationalProperty;
 use crate::sql::optimizer::rule::AppliedRules;
 use crate::sql::optimizer::rule::RuleID;
-use crate::sql::planner::IndexType;
 use crate::sql::plans::Operator;
 use crate::sql::plans::PatternPlan;
 use crate::sql::plans::RelOp;

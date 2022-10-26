@@ -46,13 +46,11 @@ impl<T: Table> TableStreamReadWrap for T {
         self.read2(ctx.clone(), plan, &mut pipeline)?;
 
         let settings = ctx.get_settings();
-        let query_need_abort = ctx.query_need_abort();
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
         let executor_settings = ExecutorSettings::try_create(&settings)?;
 
-        let executor =
-            PipelinePullingExecutor::try_create(query_need_abort, pipeline, executor_settings)?;
-
+        let executor = PipelinePullingExecutor::try_create(pipeline, executor_settings)?;
+        ctx.set_executor(Arc::downgrade(&executor.get_inner()));
         Ok(Box::pin(ProcessorExecutorStream::create(executor)?))
     }
 }
@@ -68,12 +66,10 @@ impl TableStreamReadWrap for dyn Table {
         self.read2(ctx.clone(), plan, &mut pipeline)?;
 
         let settings = ctx.get_settings();
-        let query_need_abort = ctx.query_need_abort();
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
         let executor_settings = ExecutorSettings::try_create(&settings)?;
-        let executor =
-            PipelinePullingExecutor::try_create(query_need_abort, pipeline, executor_settings)?;
-
+        let executor = PipelinePullingExecutor::try_create(pipeline, executor_settings)?;
+        ctx.set_executor(Arc::downgrade(&executor.get_inner()));
         Ok(Box::pin(ProcessorExecutorStream::create(executor)?))
     }
 }

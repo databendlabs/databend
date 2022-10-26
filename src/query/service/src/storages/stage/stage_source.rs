@@ -82,6 +82,7 @@ impl StageSourceHelper {
         } else {
             OperatorInfo::Cfg(stage_info.stage_params.storage.clone())
         };
+
         let src = StageSourceHelper {
             ctx,
             operator_info,

@@ -277,7 +277,7 @@ where F: Fn(&Expression) -> Result<Option<Expression>> {
             Expression::Wildcard => Ok(Expression::Wildcard),
             Expression::Alias(alias_name, nested_expr) => Ok(Expression::Alias(
                 alias_name.clone(),
-                Box::new(clone_with_replacement(&**nested_expr, replacement_fn)?),
+                Box::new(clone_with_replacement(nested_expr, replacement_fn)?),
             )),
 
             Expression::UnaryExpression {
@@ -285,13 +285,13 @@ where F: Fn(&Expression) -> Result<Option<Expression>> {
                 expr: nested_expr,
             } => Ok(Expression::UnaryExpression {
                 op: op.clone(),
-                expr: Box::new(clone_with_replacement(&**nested_expr, replacement_fn)?),
+                expr: Box::new(clone_with_replacement(nested_expr, replacement_fn)?),
             }),
 
             Expression::BinaryExpression { left, op, right } => Ok(Expression::BinaryExpression {
-                left: Box::new(clone_with_replacement(&**left, replacement_fn)?),
+                left: Box::new(clone_with_replacement(left, replacement_fn)?),
                 op: op.clone(),
-                right: Box::new(clone_with_replacement(&**right, replacement_fn)?),
+                right: Box::new(clone_with_replacement(right, replacement_fn)?),
             }),
 
             Expression::ScalarFunction { op, args } => Ok(Expression::ScalarFunction {
@@ -348,7 +348,7 @@ where F: Fn(&Expression) -> Result<Option<Expression>> {
                 nulls_first,
                 origin_expr,
             } => Ok(Expression::Sort {
-                expr: Box::new(clone_with_replacement(&**nested_expr, replacement_fn)?),
+                expr: Box::new(clone_with_replacement(nested_expr, replacement_fn)?),
                 asc: *asc,
                 nulls_first: *nulls_first,
                 origin_expr: origin_expr.clone(),
@@ -358,7 +358,7 @@ where F: Fn(&Expression) -> Result<Option<Expression>> {
                 data_type,
                 pg_style,
             } => Ok(Expression::Cast {
-                expr: Box::new(clone_with_replacement(&**nested_expr, replacement_fn)?),
+                expr: Box::new(clone_with_replacement(nested_expr, replacement_fn)?),
                 data_type: data_type.clone(),
                 pg_style: *pg_style,
             }),

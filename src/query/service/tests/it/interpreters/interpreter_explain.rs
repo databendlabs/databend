@@ -15,38 +15,44 @@
 use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::interpreters::*;
-use databend_query::sql::PlanParser;
+use databend_query::sql::Planner;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_explain_interpreter() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
 
     let query = "\
         EXPLAIN SELECT number FROM numbers_mt(10) \
         WHERE (number + 1) = 4 HAVING (number + 1) = 4\
     ";
 
-    let plan = PlanParser::parse(ctx.clone(), query).await?;
-    let executor = InterpreterFactory::get(ctx.clone(), plan)?;
-    assert_eq!(executor.name(), "ExplainInterpreter");
+    let (plan, _, _) = planner.plan_sql(query).await?;
+    let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
+    assert_eq!(executor.name(), "ExplainInterpreterV2");
 
     let stream = executor.execute(ctx).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 1);
-    assert_eq!(block.column(0).len(), 4);
+    assert_eq!(block.column(0).len(), 9);
 
     let expected = vec![
-        "+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+",
-        "| explain                                                                                                                                                                                                    |",
-        "+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+",
-        "| Projection: number:UInt64                                                                                                                                                                                  |",
-        "|   Having: ((number + 1) = 4)                                                                                                                                                                               |",
-        "|     Filter: ((number + 1) = 4)                                                                                                                                                                             |",
-        "|       ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [((number + 1) = 4)]] |",
-        "+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+",
+        "+---------------------------------------------------------------------------------------+",
+        "| explain                                                                               |",
+        "+---------------------------------------------------------------------------------------+",
+        "| Filter                                                                                |",
+        "| ├── filters: [=(+(numbers_mt.number (#0), 1), 4), =(+(numbers_mt.number (#0), 1), 4)] |",
+        "| └── TableScan                                                                         |",
+        "|     ├── table: default.system.numbers_mt                                              |",
+        "|     ├── read rows: 10                                                                 |",
+        "|     ├── read bytes: 80                                                                |",
+        "|     ├── partitions total: 1                                                           |",
+        "|     ├── partitions scanned: 1                                                         |",
+        "|     └── push downs: [filters: [(+(number, 1) = 4)], limit: NONE]                      |",
+        "+---------------------------------------------------------------------------------------+",
     ];
     common_datablocks::assert_blocks_eq(expected, result.as_slice());
 

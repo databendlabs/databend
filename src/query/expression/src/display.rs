@@ -153,7 +153,7 @@ impl<'a> Display for ScalarRef<'a> {
                 )
             }
             ScalarRef::Variant(s) => {
-                let value = common_jsonb::from_slice(*s).map_err(|_| std::fmt::Error)?;
+                let value = common_jsonb::from_slice(s).map_err(|_| std::fmt::Error)?;
                 write!(f, "{value}")
             }
         }

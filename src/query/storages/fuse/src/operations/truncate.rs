@@ -19,6 +19,7 @@ use common_exception::Result;
 use common_fuse_meta::meta::TableSnapshot;
 use common_fuse_meta::meta::Versioned;
 use common_meta_app::schema::TableStatistics;
+use common_meta_app::schema::TruncateTableReq;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
 use uuid::Uuid;
@@ -69,12 +70,18 @@ impl FuseTable {
 
             let table_id = self.table_info.ident.table_id;
             let table_version = self.table_info.ident.seq;
-            ctx.get_catalog(catalog_name)?
+            let catalog = ctx.get_catalog(catalog_name)?;
+
+            catalog
                 .update_table_meta(UpdateTableMetaReq {
                     table_id,
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta,
                 })
+                .await?;
+
+            catalog
+                .truncate_table(TruncateTableReq { table_id })
                 .await?;
         }
 

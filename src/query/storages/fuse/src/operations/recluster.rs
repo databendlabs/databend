@@ -19,6 +19,7 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datablocks::SortColumnDescription;
 use common_exception::Result;
+use common_fuse_meta::meta::BlockMeta;
 use common_legacy_planners::Extras;
 use common_legacy_planners::ReadDataSourcePlan;
 use common_legacy_planners::SourceInfo;
@@ -66,14 +67,13 @@ impl FuseTable {
             .await?;
 
         let default_cluster_key_id = self.cluster_key_meta.clone().unwrap().0;
-
-        let mut blocks_map = BTreeMap::new();
+        let mut blocks_map: BTreeMap<i32, Vec<(usize, BlockMeta)>> = BTreeMap::new();
         block_metas.iter().for_each(|(idx, b)| {
             if let Some(stats) = &b.cluster_stats {
                 if stats.cluster_key_id == default_cluster_key_id && stats.level >= 0 {
                     blocks_map
                         .entry(stats.level)
-                        .or_insert(Vec::new())
+                        .or_default()
                         .push((*idx, b.clone()));
                 }
             }

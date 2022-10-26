@@ -22,6 +22,7 @@ use common_ast::DisplayError;
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planner::MetadataRef;
 
 use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::select::SelectList;
@@ -29,7 +30,6 @@ use crate::sql::binder::Binder;
 use crate::sql::binder::ColumnBinding;
 use crate::sql::binder::Visibility;
 use crate::sql::optimizer::SExpr;
-use crate::sql::planner::metadata::MetadataRef;
 use crate::sql::plans::Aggregate;
 use crate::sql::plans::AggregateFunction;
 use crate::sql::plans::AggregateMode;

@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_meta_api::ShareApi;
 use common_storages_share::save_share_spec;
+use common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -42,8 +43,7 @@ impl Interpreter for CreateShareInterpreter {
     }
 
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let user_mgr = self.ctx.get_user_manager();
-        let meta_api = user_mgr.get_meta_store_client();
+        let meta_api = UserApiProvider::instance().get_meta_store_client();
         let resp = meta_api.create_share(self.plan.clone().into()).await?;
 
         save_share_spec(self.ctx.get_storage_operator()?, resp.spec_vec).await?;

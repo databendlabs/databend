@@ -15,8 +15,9 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_legacy_planners::DropUserStagePlan;
 use common_meta_types::StageType;
+use common_planner::plans::DropStagePlan;
+use common_users::UserApiProvider;
 use tracing::info;
 
 use crate::interpreters::Interpreter;
@@ -28,11 +29,11 @@ use crate::storages::stage::StageSourceHelper;
 #[derive(Debug)]
 pub struct DropUserStageInterpreter {
     ctx: Arc<QueryContext>,
-    plan: DropUserStagePlan,
+    plan: DropStagePlan,
 }
 
 impl DropUserStageInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: DropUserStagePlan) -> Result<Self> {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: DropStagePlan) -> Result<Self> {
         Ok(DropUserStageInterpreter { ctx, plan })
     }
 }
@@ -47,7 +48,7 @@ impl Interpreter for DropUserStageInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = self.plan.clone();
         let tenant = self.ctx.get_tenant();
-        let user_mgr = self.ctx.get_user_manager();
+        let user_mgr = UserApiProvider::instance();
 
         let stage = user_mgr.get_stage(&tenant, &plan.name).await;
         user_mgr

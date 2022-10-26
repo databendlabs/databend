@@ -17,10 +17,10 @@ use std::sync::Arc;
 use common_ast::ast::Expr;
 use common_datavalues::DataTypeImpl;
 use common_exception::Result;
+use common_planner::MetadataRef;
 
 use crate::sessions::TableContext;
 use crate::sql::planner::binder::BindContext;
-use crate::sql::planner::metadata::MetadataRef;
 use crate::sql::planner::semantic::NameResolutionContext;
 use crate::sql::planner::semantic::TypeChecker;
 use crate::sql::plans::Scalar;

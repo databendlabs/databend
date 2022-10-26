@@ -18,16 +18,30 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_meta_app::schema::TableIdent;
 
-use crate::Expression;
 use crate::Projection;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+/// # TODO
+///
+/// From @xuanwo
+///
+/// Ideally, we need to use `Scalar` in DeletePlan.selection. But we met a
+/// cycle deps here. So we have to change `selection` in String first, and
+/// change into `Scalar` when our `Planner` has been moved out.
+///
+/// At this stage, DeletePlan's selection expr will be parsed twice:
+///
+/// - Parsed during `bind` to get column index and projection index.
+/// - Parsed during `execution` to get the correct columns
+///
+/// It's an ugly but necessary price to pay. Without this, we would sink in
+/// hell forever.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DeletePlan {
     pub catalog_name: String,
     pub database_name: String,
     pub table_name: String,
     pub table_id: TableIdent,
-    pub selection: Option<Expression>,
+    pub selection: Option<String>,
     pub projection: Projection,
 }
 

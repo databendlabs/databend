@@ -39,9 +39,12 @@ copy_from_stage_cases=(
   "copy into ontime200 from @s1 PATTERN = 'ontime.*ndjson$' FILE_FORMAT = (type = 'ndjson');"
 )
 
+## Copy file twiice but return the same result to test idempotent-copy
 for i in "${copy_from_stage_cases[@]}"; do
   echo "$i" | $MYSQL_CLIENT_CONNECT
   echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime200" | $MYSQL_CLIENT_CONNECT
+  echo "$i" | $MYSQL_CLIENT_CONNECT
+  echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime200" | $MYSQL_CLIENT_CONNECT  
   echo "truncate table ontime200" | $MYSQL_CLIENT_CONNECT
 done
 
@@ -63,9 +66,12 @@ copy_from_named_external_stage_cases=(
   "copy into ontime200 from @named_external_stage FILES = ('ontime_200.csv.gz','ontime_200.csv.bz2','ontime_200.csv.zst') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = 'auto'  record_delimiter = '\n' skip_header = 1);"
 )
 
+## Copy file twiice but return the same result to test idempotent-copy
 for i in "${copy_from_named_external_stage_cases[@]}"; do
   echo "$i" | $MYSQL_CLIENT_CONNECT
   echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime200" | $MYSQL_CLIENT_CONNECT
+  echo "$i" | $MYSQL_CLIENT_CONNECT
+  echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime200" | $MYSQL_CLIENT_CONNECT  
   echo "truncate table ontime200" | $MYSQL_CLIENT_CONNECT
 done
 
@@ -81,6 +87,13 @@ echo $cmd | $MYSQL_CLIENT_CONNECT
 
 ## list stage has metacache, so we just we aws client to ensure the data are purged
 aws --endpoint-url ${STORAGE_S3_ENDPOINT_URL} s3 ls s3://testbucket/admin/stage/s1/ | grep -o ontime_200.csv  | wc -l
+
+## copy with force=true
+echo "truncate table ontime200" | $MYSQL_CLIENT_CONNECT
+cmd="copy into ontime200 from @s1 PATTERN = 'ontime.*parquet$' FILE_FORMAT = (type = 'PARQUET') force=true;"
+echo $cmd | $MYSQL_CLIENT_CONNECT
+echo $cmd | $MYSQL_CLIENT_CONNECT
+echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime200" | $MYSQL_CLIENT_CONNECT  
 
 ## Drop table.
 echo "drop table ontime200" | $MYSQL_CLIENT_CONNECT

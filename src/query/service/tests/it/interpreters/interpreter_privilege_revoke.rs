@@ -22,6 +22,7 @@ use common_meta_types::UserGrantSet;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
+use common_users::UserApiProvider;
 use databend_query::interpreters::*;
 use databend_query::sessions::TableContext;
 use databend_query::sql::Planner;
@@ -43,11 +44,11 @@ async fn test_revoke_privilege_interpreter() -> Result<()> {
     };
     let user_info = UserInfo::new(name, hostname, auth_info);
     assert_eq!(user_info.grants, UserGrantSet::empty());
-    let user_mgr = ctx.get_user_manager();
+    let user_mgr = UserApiProvider::instance();
     user_mgr.add_user(&tenant, user_info.clone(), false).await?;
     let query = format!("REVOKE ALL ON *.* FROM '{}'@'{}'", name, hostname);
     let (plan, _, _) = planner.plan_sql(&query).await?;
-    let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+    let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
     assert_eq!(executor.name(), "RevokePrivilegeInterpreter");
     let mut stream = executor.execute(ctx.clone()).await?;
     while let Some(_block) = stream.next().await {}
@@ -67,7 +68,7 @@ async fn test_revoke_privilege_interpreter_on_role() -> Result<()> {
     role_info
         .grants
         .grant_privileges(&GrantObject::Global, UserPrivilegeSet::all_privileges());
-    let user_mgr = ctx.get_user_manager();
+    let user_mgr = UserApiProvider::instance();
     assert!(
         role_info
             .grants
@@ -77,7 +78,7 @@ async fn test_revoke_privilege_interpreter_on_role() -> Result<()> {
 
     let query = "REVOKE ALL ON *.* FROM ROLE 'role1'";
     let (plan, _, _) = planner.plan_sql(query).await?;
-    let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+    let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
     assert_eq!(executor.name(), "RevokePrivilegeInterpreter");
     let mut stream = executor.execute(ctx.clone()).await?;
     while let Some(_block) = stream.next().await {}

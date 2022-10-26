@@ -15,8 +15,9 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_legacy_planners::GrantRolePlan;
 use common_meta_types::PrincipalIdentity;
+use common_planner::plans::GrantRolePlan;
+use common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -45,7 +46,7 @@ impl Interpreter for GrantRoleInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = self.plan.clone();
         let tenant = self.ctx.get_tenant();
-        let user_mgr = self.ctx.get_user_manager();
+        let user_mgr = UserApiProvider::instance();
 
         // TODO: check privileges
 

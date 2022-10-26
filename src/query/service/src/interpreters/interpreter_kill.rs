@@ -16,9 +16,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::KillPlan;
-use common_meta_types::GrantObject;
-use common_meta_types::UserPrivilegeType;
+use common_planner::plans::KillPlan;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -35,7 +33,7 @@ impl KillInterpreter {
     }
 
     async fn execute_kill(&self, session_id: &String) -> Result<PipelineBuildResult> {
-        match self.ctx.get_session_by_id(session_id).await {
+        match self.ctx.get_session_by_id(session_id) {
             None => Err(ErrorCode::UnknownSession(format!(
                 "Not found session id {}",
                 session_id
@@ -61,11 +59,6 @@ impl Interpreter for KillInterpreter {
     }
 
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        self.ctx
-            .get_current_session()
-            .validate_privilege(&GrantObject::Global, UserPrivilegeType::Super)
-            .await?;
-
         let id = &self.plan.id;
         // If press Ctrl + C, MySQL Client will create a new session and send query
         // `kill query mysql_connection_id` to server.
@@ -73,16 +66,13 @@ impl Interpreter for KillInterpreter {
         // otherwise use the session_id.
         // More info Link to: https://github.com/datafuselabs/databend/discussions/5405.
         match id.parse::<u32>() {
-            Ok(mysql_conn_id) => {
-                let session_id = self.ctx.get_id_by_mysql_conn_id(&Some(mysql_conn_id)).await;
-                match session_id {
-                    Some(get) => self.execute_kill(&get).await,
-                    None => Err(ErrorCode::UnknownSession(format!(
-                        "MySQL connection id {} not found session id",
-                        mysql_conn_id
-                    ))),
-                }
-            }
+            Ok(mysql_conn_id) => match self.ctx.get_id_by_mysql_conn_id(&Some(mysql_conn_id)) {
+                Some(get) => self.execute_kill(&get).await,
+                None => Err(ErrorCode::UnknownSession(format!(
+                    "MySQL connection id {} not found session id",
+                    mysql_conn_id
+                ))),
+            },
             Err(_) => self.execute_kill(id).await,
         }
     }

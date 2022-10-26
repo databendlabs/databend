@@ -42,7 +42,7 @@ fn main() {
     );
     // thrift -out my_rust_program/src --gen rs -r Tutorial.thrift
     Command::new("thrift")
-        .args(&[
+        .args([
             "-out",
             &dest_path.as_os_str().to_string_lossy(),
             "-gen",

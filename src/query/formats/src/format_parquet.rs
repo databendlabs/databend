@@ -83,7 +83,7 @@ impl ParquetInputFormat {
         row_group: &RowGroupMetaData,
         cursor: &mut Cursor<&[u8]>,
     ) -> Result<Vec<ArrayIter<'static>>> {
-        match read_columns_many(cursor, row_group, fields.to_vec(), None) {
+        match read_columns_many(cursor, row_group, fields.to_vec(), None, None, None) {
             Ok(array) => Ok(array),
             Err(e) => Err(ErrorCode::ParquetError(e.to_string())),
         }

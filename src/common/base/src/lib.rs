@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #![feature(allocator_api)]
-#![feature(backtrace)]
 #![feature(thread_local)]
 #![feature(ptr_metadata)]
 #![allow(incomplete_features)]

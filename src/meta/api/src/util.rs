@@ -20,13 +20,13 @@ use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::share::*;
-use common_meta_types::app_error::AppError;
-use common_meta_types::app_error::ShareHasNoGrantedDatabase;
-use common_meta_types::app_error::UnknownDatabase;
-use common_meta_types::app_error::UnknownShare;
-use common_meta_types::app_error::UnknownShareAccounts;
-use common_meta_types::app_error::UnknownShareId;
-use common_meta_types::app_error::UnknownTable;
+use common_meta_types::errors::app_error::AppError;
+use common_meta_types::errors::app_error::ShareHasNoGrantedDatabase;
+use common_meta_types::errors::app_error::UnknownDatabase;
+use common_meta_types::errors::app_error::UnknownShare;
+use common_meta_types::errors::app_error::UnknownShareAccounts;
+use common_meta_types::errors::app_error::UnknownShareId;
+use common_meta_types::errors::app_error::UnknownTable;
 use common_meta_types::txn_condition::Target;
 use common_meta_types::txn_op::Request;
 use common_meta_types::ConditionResult;
@@ -518,7 +518,7 @@ where
             condition.push(txn_cond_seq(&id_to_name, Eq, name_ident_seq));
             if_then.push(txn_op_del(&id_to_name));
 
-            return Ok((true, db_meta.from_share.clone()));
+            return Ok((true, db_meta.from_share));
         }
     }
     Ok((false, None))

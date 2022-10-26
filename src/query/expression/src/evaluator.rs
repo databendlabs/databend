@@ -209,6 +209,7 @@ impl<'a> Evaluator<'a> {
         }
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     pub fn run_cast_column(
         &self,
         span: Span,
@@ -313,6 +314,7 @@ impl<'a> Evaluator<'a> {
             .unwrap_or(Scalar::Null)
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     pub fn run_try_cast_column(&self, span: Span, column: Column, dest_type: &DataType) -> Column {
         let inner_type: &DataType = dest_type.as_nullable().unwrap();
         match (column, inner_type) {
@@ -565,6 +567,7 @@ impl<'a> ConstantFolder<'a> {
         }
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     pub fn calculate_cast(
         &self,
         span: Span,
@@ -631,6 +634,7 @@ impl<'a> ConstantFolder<'a> {
         }
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     pub fn calculate_try_cast(&self, span: Span, domain: &Domain, dest_type: &DataType) -> Domain {
         let inner_type: &DataType = dest_type.as_nullable().unwrap();
         match (domain, inner_type) {

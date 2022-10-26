@@ -253,9 +253,9 @@ impl PipelineBuilder {
             let left_type = predicate.data_type();
             let right_type = pred.data_type();
             let data_types = vec![&left_type, &right_type];
-            let func = FunctionFactory::instance().get("and", &data_types)?;
+            let func = FunctionFactory::instance().get("and_filters", &data_types)?;
             predicate = PhysicalScalar::Function {
-                name: "and".to_string(),
+                name: "and_filters".to_string(),
                 args: vec![
                     (predicate.clone(), predicate.data_type()),
                     (pred.clone(), pred.data_type()),
@@ -470,7 +470,8 @@ impl PipelineBuilder {
             })?;
         }
 
-        if join.join_type == JoinType::Right {
+        if join.join_type == JoinType::Right || join.join_type == JoinType::Full {
+            self.main_pipeline.resize(1)?;
             self.main_pipeline.add_transform(|input, output| {
                 TransformRightJoin::try_create(
                     input,

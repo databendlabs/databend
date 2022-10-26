@@ -15,9 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_legacy_planners::TruncateTablePlan;
-use common_meta_types::GrantObject;
-use common_meta_types::UserPrivilegeType;
+use common_planner::plans::TruncateTablePlan;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -46,16 +44,9 @@ impl Interpreter for TruncateTableInterpreter {
         let db_name = self.plan.database.as_str();
         let tbl_name = self.plan.table.as_str();
 
-        self.ctx
-            .get_current_session()
-            .validate_privilege(
-                &GrantObject::Table(catalog_name.into(), db_name.into(), tbl_name.into()),
-                UserPrivilegeType::Delete,
-            )
-            .await?;
-
         let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
-        tbl.truncate(self.ctx.clone(), self.plan.clone()).await?;
+        tbl.truncate(self.ctx.clone(), catalog_name, self.plan.purge)
+            .await?;
         Ok(PipelineBuildResult::create())
     }
 }

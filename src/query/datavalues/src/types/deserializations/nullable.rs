@@ -198,7 +198,7 @@ impl TypeDeserializer for NullableDeserializer {
             })
             .and_then(|v| {
                 let inner_value = self.inner.pop_data_value();
-                v.then(|| inner_value).unwrap_or(Ok(DataValue::Null))
+                if v { inner_value } else { Ok(DataValue::Null) }
             })
     }
 

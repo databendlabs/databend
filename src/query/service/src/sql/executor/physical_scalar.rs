@@ -16,10 +16,10 @@ use common_datavalues::format_data_type_sql;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use common_exception::Result;
+use common_planner::IndexType;
+use common_planner::MetadataRef;
 
 use super::ColumnID;
-use crate::sql::planner::IndexType;
-use crate::sql::MetadataRef;
 
 /// Serializable and desugared representation of `Scalar`.
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -70,13 +70,13 @@ impl PhysicalScalar {
 
                 let index = column_id.parse::<IndexType>()?;
                 let column = metadata.read().column(index).clone();
-                let table_name = match column.table_index {
+                let table_name = match column.table_index() {
                     Some(table_index) => {
-                        format!("{}.", metadata.read().table(table_index).name.clone())
+                        format!("{}.", metadata.read().table(table_index).name())
                     }
                     None => "".to_string(),
                 };
-                Ok(format!("{}{} (#{})", table_name, column.name, index))
+                Ok(format!("{}{} (#{})", table_name, column.name(), index))
             }
             PhysicalScalar::Constant { value, .. } => Ok(value.to_string()),
             PhysicalScalar::Function { name, args, .. } => {
@@ -114,7 +114,7 @@ impl AggregateFunctionDesc {
                 .map(|arg| {
                     let index = arg.parse::<IndexType>()?;
                     let column = metadata.read().column(index).clone();
-                    Ok(column.name)
+                    Ok(column.name().to_string())
                 })
                 .collect::<Result<Vec<_>>>()?
                 .join(", ")

@@ -17,6 +17,7 @@ pub mod blocks_source;
 pub mod deserializer;
 pub mod empty_source;
 pub mod file_splitter;
+pub mod input_formats;
 pub mod multi_file_splitter;
 mod one_block_source;
 pub mod stream_source;

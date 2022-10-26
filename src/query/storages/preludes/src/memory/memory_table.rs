@@ -30,7 +30,6 @@ use common_legacy_planners::Partitions;
 use common_legacy_planners::Projection;
 use common_legacy_planners::ReadDataSourcePlan;
 use common_legacy_planners::Statistics;
-use common_legacy_planners::TruncateTablePlan;
 use common_meta_app::schema::TableInfo;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
@@ -252,11 +251,7 @@ impl Table for MemoryTable {
         Ok(())
     }
 
-    async fn truncate(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _truncate_plan: TruncateTablePlan,
-    ) -> Result<()> {
+    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: &str, _: bool) -> Result<()> {
         let mut blocks = self.blocks.write();
         blocks.clear();
         Ok(())

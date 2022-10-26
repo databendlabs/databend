@@ -23,7 +23,6 @@ use futures::FutureExt;
 use petgraph::graph::node_index;
 use petgraph::prelude::NodeIndex;
 
-#[derive(Debug)]
 pub enum Event {
     NeedData,
     NeedConsume,

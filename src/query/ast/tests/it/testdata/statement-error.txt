@@ -279,7 +279,7 @@ error:
   --> SQL:1:38
   |
 1 | COPY INTO mytable FROM 's3://bucket' CREDENTIAL = ();
-  |                                      ^^^^^^^^^^ expected `CONNECTION`, `CREDENTIALS`, `ENCRYPTION`, `FILES`, `PATTERN`, `FILE_FORMAT`, or 5 more ...
+  |                                      ^^^^^^^^^^ expected `CONNECTION`, `CREDENTIALS`, `ENCRYPTION`, `FILES`, `PATTERN`, `FILE_FORMAT`, or 6 more ...
 
 
 ---------- Input ----------
@@ -289,7 +289,7 @@ error:
   --> SQL:1:33
   |
 1 | COPY INTO mytable FROM @mystage CREDENTIALS = ();
-  |                                 ^^^^^^^^^^^ expected `FILES`, `PATTERN`, `FILE_FORMAT`, `VALIDATION_MODE`, `SIZE_LIMIT`, `PURGE`, or 2 more ...
+  |                                 ^^^^^^^^^^^ expected `FILES`, `PATTERN`, `FILE_FORMAT`, `VALIDATION_MODE`, `SIZE_LIMIT`, `PURGE`, or 3 more ...
 
 
 ---------- Input ----------

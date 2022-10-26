@@ -26,7 +26,7 @@ async fn test_drop_database_interpreter() -> Result<()> {
 
     let query = "drop database default";
     let (plan, _, _) = planner.plan_sql(query).await?;
-    let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+    let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
     assert_eq!(executor.name(), "DropDatabaseInterpreter");
     let stream = executor.execute(ctx.clone()).await?;
     let result = stream.try_collect::<Vec<_>>().await?;

@@ -34,7 +34,6 @@ use common_legacy_planners::StagePlan;
 use common_legacy_planners::WindowFuncPlan;
 use enum_extract::let_extract;
 
-use crate::clusters::ClusterHelper;
 use crate::optimizers::Optimizer;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;

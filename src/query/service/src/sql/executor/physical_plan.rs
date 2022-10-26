@@ -28,12 +28,12 @@ use common_legacy_planners::ReadDataSourcePlan;
 use common_legacy_planners::StageKind;
 use common_legacy_planners::SINK_SCHEMA;
 use common_meta_app::schema::TableInfo;
+use common_planner::IndexType;
 
 use super::physical_scalar::PhysicalScalar;
 use super::AggregateFunctionDesc;
 use super::SortDesc;
 use crate::sql::optimizer::ColumnSet;
-use crate::sql::planner::IndexType;
 use crate::sql::plans::JoinType;
 use crate::sql::ColumnBinding;
 
@@ -211,22 +211,39 @@ impl HashJoin {
                     ));
                 }
             }
-
             JoinType::Right => {
                 fields.clear();
-                fields = self.build.output_schema()?.fields().clone();
                 for field in self.probe.output_schema()?.fields() {
                     fields.push(DataField::new(
                         field.name().as_str(),
                         wrap_nullable(field.data_type()),
                     ));
                 }
+                for field in self.build.output_schema()?.fields() {
+                    fields.push(DataField::new(
+                        field.name().as_str(),
+                        field.data_type().clone(),
+                    ));
+                }
             }
-
+            JoinType::Full => {
+                fields.clear();
+                for field in self.probe.output_schema()?.fields() {
+                    fields.push(DataField::new(
+                        field.name().as_str(),
+                        wrap_nullable(field.data_type()),
+                    ));
+                }
+                for field in self.build.output_schema()?.fields() {
+                    fields.push(DataField::new(
+                        field.name().as_str(),
+                        wrap_nullable(field.data_type()),
+                    ));
+                }
+            }
             JoinType::Semi | JoinType::Anti => {
                 // Do nothing
             }
-
             JoinType::Mark => {
                 fields.clear();
                 fields = self.build.output_schema()?.fields().clone();

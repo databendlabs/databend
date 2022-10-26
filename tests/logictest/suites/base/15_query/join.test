@@ -400,6 +400,16 @@ select * from (SELECT number AS a FROM numbers(10)) x right join (SELECT number 
 4
 
 statement query II
+select * from (SELECT number AS a FROM numbers(1000)) x right join (SELECT number AS a FROM numbers(5))  y on x.a = y.a order by x.a;
+
+----
+0 0
+1 1
+2 2
+3 3
+4 4
+
+statement query II
 select * from numbers(10) x join (select 1::UInt64 number) y on x.number = y.number;
 
 ----

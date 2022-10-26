@@ -16,11 +16,9 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::DropViewPlan;
 use common_meta_app::schema::DropTableReq;
 use common_meta_app::schema::TableNameIdent;
-use common_meta_types::GrantObject;
-use common_meta_types::UserPrivilegeType;
+use common_planner::plans::DropViewPlan;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -54,14 +52,6 @@ impl Interpreter for DropViewInterpreter {
             .get_table(&catalog_name, &db_name, &viewname)
             .await
             .ok();
-
-        self.ctx
-            .get_current_session()
-            .validate_privilege(
-                &GrantObject::Database(catalog_name.clone(), db_name.clone()),
-                UserPrivilegeType::Drop,
-            )
-            .await?;
 
         if let Some(table) = &tbl {
             if table.get_table_info().engine() != VIEW_ENGINE {

@@ -15,9 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_legacy_planners::UndropTablePlan;
-use common_meta_types::GrantObject;
-use common_meta_types::UserPrivilegeType;
+use common_planner::plans::UndropTablePlan;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -43,17 +41,6 @@ impl Interpreter for UndropTableInterpreter {
 
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let catalog_name = self.plan.catalog.as_str();
-        let db_name = self.plan.database.as_str();
-
-        // shall we add UserPrivilege::Type::Undrop ?
-        self.ctx
-            .get_current_session()
-            .validate_privilege(
-                &GrantObject::Database(catalog_name.into(), db_name.into()),
-                UserPrivilegeType::Drop,
-            )
-            .await?;
-
         let catalog = self.ctx.get_catalog(catalog_name)?;
         catalog.undrop_table(self.plan.clone().into()).await?;
 

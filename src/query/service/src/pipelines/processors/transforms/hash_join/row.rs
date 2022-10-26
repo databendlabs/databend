@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::sync::RwLock;
 
 use common_datablocks::DataBlock;
@@ -36,7 +38,7 @@ impl Chunk {
     }
 }
 
-#[derive(Clone, Copy, Debug, Hash)]
+#[derive(Clone, Copy, Debug)]
 pub struct RowPtr {
     pub chunk_index: u32,
     pub row_index: u32,
@@ -118,3 +120,10 @@ impl PartialEq for RowPtr {
 }
 
 impl Eq for RowPtr {}
+
+impl Hash for RowPtr {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.chunk_index.hash(state);
+        self.row_index.hash(state);
+    }
+}

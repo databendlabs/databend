@@ -68,7 +68,7 @@ impl SubstringFunction {
 
 impl Function for SubstringFunction {
     fn name(&self) -> &str {
-        &*self.display_name
+        &self.display_name
     }
 
     fn return_type(&self) -> DataTypeImpl {

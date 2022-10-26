@@ -13,22 +13,21 @@
 // limitations under the License.
 
 use std::collections::VecDeque;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use std::thread::JoinHandle;
 
+use common_base::base::catch_unwind;
 use common_base::base::tokio;
 use common_base::base::tokio::sync::Notify;
 use common_base::base::GlobalIORuntime;
 use common_base::base::Runtime;
 use common_base::base::Thread;
+use common_base::base::ThreadJoinHandle;
 use common_base::base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::future::select;
 use futures_util::future::Either;
-use tracing::warn;
+use parking_lot::Mutex;
 
 use crate::pipelines::executor::executor_condvar::WorkersCondvar;
 use crate::pipelines::executor::executor_graph::RunningGraph;
@@ -44,18 +43,16 @@ pub struct PipelineExecutor {
     threads_num: usize,
     graph: RunningGraph,
     workers_condvar: Arc<WorkersCondvar>,
-    query_need_abort: Arc<AtomicBool>,
     pub async_runtime: Arc<Runtime>,
     pub global_tasks_queue: Arc<ExecutorTasksQueue>,
     on_finished_callback: FinishedCallback,
     settings: ExecutorSettings,
     finished_notify: Notify,
-    execute_timeout: Arc<AtomicBool>,
+    finished_error: Mutex<Option<ErrorCode>>,
 }
 
 impl PipelineExecutor {
     pub fn create(
-        query_need_abort: Arc<AtomicBool>,
         mut pipeline: Pipeline,
         settings: ExecutorSettings,
     ) -> Result<Arc<PipelineExecutor>> {
@@ -64,7 +61,6 @@ impl PipelineExecutor {
 
         assert_ne!(threads_num, 0, "Pipeline max threads cannot equals zero.");
         Self::try_create(
-            query_need_abort,
             RunningGraph::create(pipeline)?,
             threads_num,
             on_finished_callback,
@@ -73,7 +69,6 @@ impl PipelineExecutor {
     }
 
     pub fn from_pipelines(
-        query_need_abort: Arc<AtomicBool>,
         mut pipelines: Vec<Pipeline>,
         settings: ExecutorSettings,
     ) -> Result<Arc<PipelineExecutor>> {
@@ -94,7 +89,6 @@ impl PipelineExecutor {
 
         assert_ne!(threads_num, 0, "Pipeline max threads cannot equals zero.");
         Self::try_create(
-            query_need_abort,
             RunningGraph::from_pipelines(pipelines)?,
             threads_num,
             Arc::new(Box::new(move |may_error| {
@@ -109,7 +103,6 @@ impl PipelineExecutor {
     }
 
     fn try_create(
-        query_need_abort: Arc<AtomicBool>,
         graph: RunningGraph,
         threads_num: usize,
         on_finished_callback: FinishedCallback,
@@ -131,21 +124,20 @@ impl PipelineExecutor {
                 graph,
                 threads_num,
                 workers_condvar,
-                query_need_abort,
                 global_tasks_queue,
                 on_finished_callback,
                 async_runtime: GlobalIORuntime::instance(),
                 settings,
                 finished_notify: Notify::new(),
-                execute_timeout: Arc::new(AtomicBool::new(false)),
+                finished_error: Mutex::new(None),
             }))
         }
     }
 
-    pub fn finish(&self) -> Result<()> {
+    pub fn finish(&self, cause: Option<ErrorCode>) {
+        *self.finished_error.lock() = cause;
         self.global_tasks_queue.finish(self.workers_condvar.clone());
         self.finished_notify.notify_waiters();
-        Ok(())
     }
 
     pub fn is_finished(&self) -> bool {
@@ -158,21 +150,18 @@ impl PipelineExecutor {
         let mut thread_join_handles = self.execute_threads(self.threads_num);
 
         while let Some(join_handle) = thread_join_handles.pop() {
-            // flatten error.
-            let join_res = match join_handle.join() {
-                Ok(Ok(_)) => Ok(()),
-                Ok(Err(cause)) => Err(cause),
-                Err(cause) => match cause.downcast_ref::<&'static str>() {
-                    None => match cause.downcast_ref::<String>() {
-                        None => Err(ErrorCode::PanicError("Sorry, unknown panic message")),
-                        Some(message) => Err(ErrorCode::PanicError(message.to_string())),
-                    },
-                    Some(message) => Err(ErrorCode::PanicError(message.to_string())),
-                },
-            };
-
-            if let Err(error_code) = join_res {
+            if let Err(error_code) = join_handle.join().flatten() {
                 let may_error = Some(error_code);
+                (self.on_finished_callback)(&may_error)?;
+                return Err(may_error.unwrap());
+            }
+        }
+
+        {
+            let finished_error_guard = self.finished_error.lock();
+            if let Some(error) = finished_error_guard.as_ref() {
+                let may_error = Some(error.clone());
+                drop(finished_error_guard);
                 (self.on_finished_callback)(&may_error)?;
                 return Err(may_error.unwrap());
             }
@@ -190,10 +179,9 @@ impl PipelineExecutor {
                 let finished_future = Box::pin(this.finished_notify.notified());
                 let max_execute_future = Box::pin(tokio::time::sleep(max_execute_time));
                 if let Either::Left(_) = select(max_execute_future, finished_future).await {
-                    this.execute_timeout.store(true, Ordering::Relaxed);
-                    if let Err(cause) = this.finish() {
-                        warn!("Cannot finish pipeline executor in max execute time guard. cause: {:?}", cause);
-                    }
+                    this.finish(Some(ErrorCode::AbortedQuery(
+                        "Aborted query, because the execution time exceeds the maximum execution time limit",
+                    )));
                 }
             });
         }
@@ -201,10 +189,10 @@ impl PipelineExecutor {
         Ok(())
     }
 
-    fn execute_threads(self: &Arc<Self>, threads_size: usize) -> Vec<JoinHandle<Result<()>>> {
-        let mut thread_join_handles = Vec::with_capacity(threads_size);
+    fn execute_threads(self: &Arc<Self>, threads: usize) -> Vec<ThreadJoinHandle<Result<()>>> {
+        let mut thread_join_handles = Vec::with_capacity(threads);
 
-        for thread_num in 0..threads_size {
+        for thread_num in 0..threads {
             let this = self.clone();
             #[allow(unused_mut)]
             let mut name = Some(format!("PipelineExecutor-{}", thread_num));
@@ -221,38 +209,25 @@ impl PipelineExecutor {
 
             thread_join_handles.push(Thread::named_spawn(name, move || unsafe {
                 let this_clone = this.clone();
-                let try_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
-                    move || -> Result<()> {
-                        match this_clone.execute_single_thread(thread_num) {
-                            Ok(_) => Ok(()),
-                            Err(cause) => this_clone.throw_error(thread_num, cause),
-                        }
-                    },
-                ));
-
-                match try_result {
-                    Ok(Ok(_)) => Ok(()),
-                    Ok(Err(cause)) => Err(cause),
-                    Err(cause) => {
-                        this.finish()?;
-                        match cause.downcast_ref::<&'static str>() {
-                            None => match cause.downcast_ref::<String>() {
-                                None => Err(ErrorCode::PanicError("Sorry, unknown panic message")),
-                                Some(message) => Err(ErrorCode::PanicError(message.to_string())),
-                            },
-                            Some(message) => Err(ErrorCode::PanicError(message.to_string())),
-                        }
+                let try_result = catch_unwind(move || -> Result<()> {
+                    match this_clone.execute_single_thread(thread_num) {
+                        Ok(_) => Ok(()),
+                        Err(cause) => Err(cause.add_message_back(format!(
+                            " (while in processor thread {})",
+                            thread_num
+                        ))),
                     }
+                });
+
+                // finish the pipeline executor when has error or panic
+                if let Err(cause) = try_result.flatten() {
+                    this.finish(Some(cause));
                 }
+
+                Ok(())
             }));
         }
         thread_join_handles
-    }
-
-    fn throw_error(self: &Arc<Self>, thread_num: usize, cause: ErrorCode) -> Result<()> {
-        // Wake up other threads to finish when throw error
-        self.finish()?;
-        Err(cause.add_message_back(format!(" (while in processor thread {})", thread_num)))
     }
 
     /// # Safety
@@ -262,14 +237,13 @@ impl PipelineExecutor {
         let workers_condvar = self.workers_condvar.clone();
         let mut context = ExecutorWorkerContext::create(thread_num, workers_condvar);
 
-        while !self.global_tasks_queue.is_finished() && !self.need_abort() {
+        while !self.global_tasks_queue.is_finished() {
             // When there are not enough tasks, the thread will be blocked, so we need loop check.
             while !self.global_tasks_queue.is_finished() && !context.has_task() {
                 self.global_tasks_queue.steal_task_to_context(&mut context);
             }
 
-            while !self.global_tasks_queue.is_finished() && !self.need_abort() && context.has_task()
-            {
+            while !self.global_tasks_queue.is_finished() && context.has_task() {
                 if let Some(executed_pid) = context.execute_task(self)? {
                     // We immediately schedule the processor again.
                     let schedule_queue = self.graph.schedule_queue(executed_pid)?;
@@ -278,32 +252,12 @@ impl PipelineExecutor {
             }
         }
 
-        if self.execute_timeout.load(Ordering::Relaxed) {
-            self.finish()?;
-            return Err(ErrorCode::AbortedQuery(
-                "Aborted query, because the execution time exceeds the maximum execution time limit",
-            ));
-        }
-
-        if self.need_abort() {
-            self.finish()?;
-            return Err(ErrorCode::AbortedQuery(
-                "Aborted query, because the server is shutting down or the query was killed",
-            ));
-        }
-
         Ok(())
-    }
-
-    fn need_abort(&self) -> bool {
-        self.query_need_abort.load(Ordering::Relaxed)
     }
 }
 
 impl Drop for PipelineExecutor {
     fn drop(&mut self) {
-        if let Err(cause) = self.finish() {
-            warn!("Catch error when drop pipeline executor {:?}", cause);
-        }
+        self.finish(None);
     }
 }

@@ -107,7 +107,7 @@ impl FuseTable {
                 let remain_reader = if prewhere.remain_columns.is_empty() {
                     None
                 } else {
-                    Some((&*self.create_block_reader(&ctx, prewhere.remain_columns)?).clone())
+                    Some((*self.create_block_reader(&ctx, prewhere.remain_columns)?).clone())
                 };
 
                 (

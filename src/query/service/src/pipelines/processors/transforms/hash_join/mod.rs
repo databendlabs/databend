@@ -18,6 +18,7 @@ mod join_hash_table;
 mod probe_state;
 mod result_blocks;
 pub(crate) mod row;
+mod util;
 
 pub use desc::HashJoinDesc;
 pub use hash_join_state::HashJoinState;

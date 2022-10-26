@@ -36,7 +36,7 @@ pub struct RightJoinDesc {
 impl RightJoinDesc {
     pub fn create() -> Self {
         RightJoinDesc {
-            build_indexes: RwLock::new(vec![]),
+            build_indexes: RwLock::new(Vec::new()),
             row_state: RwLock::new(HashMap::new()),
         }
     }

@@ -255,7 +255,7 @@ impl MetaService for MetaServiceImpl {
 
         let request = request.into_inner();
 
-        info!("Receive txn_request: {:?}", request);
+        info!("Receive txn_request: {}", request);
 
         let body = self.execute_txn(request).await;
         incr_meta_metrics_meta_sent_bytes(body.encoded_len() as u64);

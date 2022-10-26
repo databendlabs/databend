@@ -370,7 +370,7 @@ impl From<InnerStorageGcsConfig> for GcsStorageConfig {
 impl TryInto<InnerStorageGcsConfig> for GcsStorageConfig {
     type Error = ErrorCode;
 
-    fn try_into(self) -> std::result::Result<InnerStorageGcsConfig, Self::Error> {
+    fn try_into(self) -> Result<InnerStorageGcsConfig, Self::Error> {
         Ok(InnerStorageGcsConfig {
             endpoint_url: self.gcs_endpoint_url,
             bucket: self.gcs_bucket,

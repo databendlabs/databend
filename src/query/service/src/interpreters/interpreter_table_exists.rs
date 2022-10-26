@@ -18,7 +18,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::Series;
 use common_datavalues::SeriesFrom;
 use common_exception::Result;
-use common_legacy_planners::ExistsTablePlan;
+use common_planner::plans::ExistsTablePlan;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

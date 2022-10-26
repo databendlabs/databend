@@ -23,6 +23,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TenantQuota;
 use common_meta_types::UserOptionFlag;
+use common_users::UserApiProvider;
 
 use crate::procedures::OneBlockProcedure;
 use crate::procedures::Procedure;
@@ -69,9 +70,7 @@ impl OneBlockProcedure for TenantQuotaProcedure {
             }
             tenant = args[0].clone();
         }
-        let quota_api = ctx
-            .get_user_manager()
-            .get_tenant_quota_api_client(&tenant)?;
+        let quota_api = UserApiProvider::instance().get_tenant_quota_api_client(&tenant)?;
         let res = quota_api.get_quota(None).await?;
         let mut quota = res.data;
 

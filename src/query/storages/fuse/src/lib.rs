@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(generic_associated_types)]
 #![feature(type_alias_impl_trait)]
 #![feature(io_error_other)]
 #![deny(unused_crate_dependencies)]

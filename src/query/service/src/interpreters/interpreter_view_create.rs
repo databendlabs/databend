@@ -17,12 +17,10 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::CreateViewPlan;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
-use common_meta_types::GrantObject;
-use common_meta_types::UserPrivilegeType;
+use common_planner::plans::CreateViewPlan;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -48,20 +46,11 @@ impl Interpreter for CreateViewInterpreter {
     }
 
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        // check privilige
-        self.ctx
-            .get_current_session()
-            .validate_privilege(
-                &GrantObject::Database(self.plan.catalog.clone(), self.plan.database.clone()),
-                UserPrivilegeType::Create,
-            )
-            .await?;
-
         // check whether view has exists
         if self
             .ctx
             .get_catalog(&self.plan.catalog)?
-            .list_tables(&*self.plan.tenant, &*self.plan.database)
+            .list_tables(&self.plan.tenant, &self.plan.database)
             .await?
             .iter()
             .any(|table| table.name() == self.plan.viewname.as_str())

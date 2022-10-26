@@ -26,6 +26,7 @@ use common_exception::Result;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_users::UserApiProvider;
 
 use super::table::AsyncOneBlockSystemTable;
 use super::table::AsyncSystemTable;
@@ -46,7 +47,7 @@ impl AsyncSystemTable for RolesTable {
 
     async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
-        let roles = ctx.get_user_manager().get_roles(&tenant).await?;
+        let roles = UserApiProvider::instance().get_roles(&tenant).await?;
 
         let names: Vec<&str> = roles.iter().map(|x| x.name.as_str()).collect();
         let inherited_roles: Vec<u64> = roles

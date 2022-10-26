@@ -408,7 +408,7 @@ impl RaftStorage<LogEntry, AppliedState> for RaftStoreBare {
         let sm = self.state_machine.write().await;
         for entry in entries {
             let r = match sm
-                .apply(*entry)
+                .apply(entry)
                 .await
                 .map_to_sto_err(ErrorSubject::Apply(entry.log_id), ErrorVerb::Write)
             {

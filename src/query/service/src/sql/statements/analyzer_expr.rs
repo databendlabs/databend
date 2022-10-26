@@ -462,6 +462,7 @@ impl ExpressionAnalyzer {
         Ok(())
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn analyze_map_access(&self, keys: &[Value], args: &mut Vec<Expression>) -> Result<()> {
         match args.pop() {
             None => Err(ErrorCode::LogicalError(

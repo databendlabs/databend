@@ -20,6 +20,7 @@ use common_exception::Result;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_users::UserApiProvider;
 
 use crate::sessions::TableContext;
 use crate::storages::system::table::AsyncOneBlockSystemTable;
@@ -40,7 +41,7 @@ impl AsyncSystemTable for UsersTable {
 
     async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
-        let users = ctx.get_user_manager().get_users(&tenant).await?;
+        let users = UserApiProvider::instance().get_users(&tenant).await?;
 
         let names: Vec<&str> = users.iter().map(|x| x.name.as_str()).collect();
         let hostnames: Vec<&str> = users.iter().map(|x| x.hostname.as_str()).collect();
@@ -54,12 +55,7 @@ impl AsyncSystemTable for UsersTable {
             .collect();
         let default_roles: Vec<String> = users
             .iter()
-            .map(|x| {
-                x.option
-                    .default_role()
-                    .cloned()
-                    .unwrap_or_else(|| "".to_string())
-            })
+            .map(|x| x.option.default_role().cloned().unwrap_or_default())
             .collect();
 
         Ok(DataBlock::create(self.table_info.schema(), vec![

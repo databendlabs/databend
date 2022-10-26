@@ -218,7 +218,7 @@ impl<const NEGATED: bool, T: StringSearchImpl> StringSearchCreator<NEGATED, T> {
             if arg.data_type_id().is_variant() {
                 continue;
             }
-            assert_string(*arg)?;
+            assert_string(arg)?;
         }
 
         let f: StringSearchFn = match NEGATED {

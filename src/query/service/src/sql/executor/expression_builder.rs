@@ -17,9 +17,10 @@ use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_legacy_planners::Expression;
+use common_planner::IndexType;
+use common_planner::MetadataRef;
 
 use crate::sql::executor::util::format_field_name;
-use crate::sql::planner::IndexType;
 use crate::sql::plans::AggregateFunction;
 use crate::sql::plans::AndExpr;
 use crate::sql::plans::BoundColumnRef;
@@ -29,7 +30,6 @@ use crate::sql::plans::ConstantExpr;
 use crate::sql::plans::FunctionCall;
 use crate::sql::plans::OrExpr;
 use crate::sql::plans::Scalar;
-use crate::sql::MetadataRef;
 
 pub trait FiledNameFormat {
     fn format(display_name: &str, index: IndexType) -> String;
@@ -63,11 +63,9 @@ where ExpressionBuilder<T>: FiledNameFormat
 
     pub fn build_and_rename(&self, scalar: &Scalar, index: IndexType) -> Result<Expression> {
         let expr = self.build(scalar)?;
-        let name = self.metadata.read().column(index).name.clone();
-        Ok(Expression::Alias(
-            Self::format(name.as_str(), index),
-            Box::new(expr),
-        ))
+        let metadata = self.metadata.read();
+        let name = metadata.column(index).name();
+        Ok(Expression::Alias(Self::format(name, index), Box::new(expr)))
     }
 
     pub fn build(&self, scalar: &Scalar) -> Result<Expression> {
@@ -89,8 +87,8 @@ where ExpressionBuilder<T>: FiledNameFormat
                 ..
             }) => self.build_aggr_function(func_name.clone(), *distinct, params.clone(), args),
             Scalar::AndExpr(AndExpr { left, right, .. }) => {
-                let left = self.build(&**left)?;
-                let right = self.build(&**right)?;
+                let left = self.build(left)?;
+                let right = self.build(right)?;
                 Ok(Expression::BinaryExpression {
                     left: Box::new(left),
                     op: "and".to_string(),
@@ -98,8 +96,8 @@ where ExpressionBuilder<T>: FiledNameFormat
                 })
             }
             Scalar::OrExpr(OrExpr { left, right, .. }) => {
-                let left = self.build(&**left)?;
-                let right = self.build(&**right)?;
+                let left = self.build(left)?;
+                let right = self.build(right)?;
                 Ok(Expression::BinaryExpression {
                     left: Box::new(left),
                     op: "or".to_string(),
@@ -137,8 +135,9 @@ where ExpressionBuilder<T>: FiledNameFormat
     }
 
     pub fn build_column_ref(&self, index: IndexType) -> Result<Expression> {
-        let name = self.metadata.read().column(index).name.clone();
-        Ok(Expression::Column(Self::format(name.as_str(), index)))
+        let metadata = self.metadata.read();
+        let name = metadata.column(index).name();
+        Ok(Expression::Column(Self::format(name, index)))
     }
 
     pub fn build_literal(

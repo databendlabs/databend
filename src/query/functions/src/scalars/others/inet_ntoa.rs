@@ -57,7 +57,7 @@ impl<const SUPPRESS_CAST_ERROR: bool> InetNtoaFunctionImpl<SUPPRESS_CAST_ERROR> 
 
 impl<const SUPPRESS_CAST_ERROR: bool> Function for InetNtoaFunctionImpl<SUPPRESS_CAST_ERROR> {
     fn name(&self) -> &str {
-        &*self.display_name
+        &self.display_name
     }
 
     fn return_type(&self) -> DataTypeImpl {

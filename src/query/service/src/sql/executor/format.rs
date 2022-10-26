@@ -16,6 +16,9 @@ use common_ast::ast::FormatTreeNode;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_legacy_planners::StageKind;
+use common_planner::IndexType;
+use common_planner::MetadataRef;
+use common_planner::DUMMY_TABLE_INDEX;
 use itertools::Itertools;
 
 use super::AggregateFinal;
@@ -30,9 +33,6 @@ use super::Project;
 use super::Sort;
 use super::TableScan;
 use super::UnionAll;
-use crate::sql::planner::IndexType;
-use crate::sql::MetadataRef;
-use crate::sql::DUMMY_TABLE_INDEX;
 
 impl PhysicalPlan {
     pub fn format(&self, metadata: MetadataRef) -> Result<String> {
@@ -69,7 +69,7 @@ fn table_scan_to_format_tree(
         return Ok(FormatTreeNode::new("DummyTableScan".to_string()));
     }
     let table = metadata.read().table(plan.table_index).clone();
-    let table_name = format!("{}.{}.{}", table.catalog, table.database, table.name);
+    let table_name = format!("{}.{}.{}", table.catalog(), table.database(), table.name());
     let filters = plan
         .source
         .push_downs
@@ -135,7 +135,7 @@ fn project_to_format_tree(
         .columns
         .iter()
         .sorted()
-        .map(|column| format!("{} (#{})", metadata.read().column(*column).name, column))
+        .map(|column| format!("{} (#{})", metadata.read().column(*column).name(), column))
         .collect::<Vec<_>>()
         .join(", ");
     Ok(FormatTreeNode::with_children("Project".to_string(), vec![
@@ -173,7 +173,7 @@ fn aggregate_partial_to_format_tree(
         .map(|column| {
             let index = column.parse::<IndexType>()?;
             let column = metadata.read().column(index).clone();
-            Ok(column.name)
+            Ok(column.name().to_string())
         })
         .collect::<Result<Vec<_>>>()?
         .join(", ");
@@ -204,7 +204,7 @@ fn aggregate_final_to_format_tree(
         .map(|column| {
             let index = column.parse::<IndexType>()?;
             let column = metadata.read().column(index).clone();
-            Ok(column.name)
+            Ok(column.name().to_string())
         })
         .collect::<Result<Vec<_>>>()?
         .join(", ");
@@ -234,7 +234,7 @@ fn sort_to_format_tree(plan: &Sort, metadata: &MetadataRef) -> Result<FormatTree
             let column = metadata.read().column(index).clone();
             Ok(format!(
                 "{} {} {}",
-                column.name,
+                column.name(),
                 if sort_key.asc { "ASC" } else { "DESC" },
                 if sort_key.nulls_first {
                     "NULLS FIRST"

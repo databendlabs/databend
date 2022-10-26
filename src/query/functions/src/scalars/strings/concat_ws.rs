@@ -35,7 +35,7 @@ impl ConcatWsFunction {
             NullType::new_impl()
         } else {
             for arg in args {
-                let arg = remove_nullable(*arg);
+                let arg = remove_nullable(arg);
                 if !arg.is_null() {
                     assert_string(&arg)?;
                 }

@@ -38,7 +38,7 @@ pub struct RegexpLikeFunction {
 impl RegexpLikeFunction {
     pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         for arg in args {
-            assert_string(*arg)?;
+            assert_string(arg)?;
         }
 
         Ok(Box::new(Self {
@@ -209,6 +209,7 @@ pub fn build_regexp_from_pattern(
                 fn_name, c,
             ))),
         };
+        #[allow(clippy::question_mark)]
         if let Err(e) = r {
             return Err(e);
         }

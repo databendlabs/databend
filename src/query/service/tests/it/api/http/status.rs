@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_types::UserIdentity;
+use common_users::UserApiProvider;
 use databend_query::api::http::v1::instance_status::instance_status_handler;
 use databend_query::api::http::v1::instance_status::InstanceStatus;
 use databend_query::interpreters::Interpreter;
@@ -24,7 +25,7 @@ use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::SessionType;
 use databend_query::sessions::TableContext;
-use databend_query::sql::PlanParser;
+use databend_query::sql::Planner;
 use poem::get;
 use poem::http::header;
 use poem::http::Method;
@@ -56,13 +57,13 @@ async fn get_status(ep: &Route) -> InstanceStatus {
 async fn run_query(query_ctx: &Arc<QueryContext>) -> Result<Arc<dyn Interpreter>> {
     let sql = "select * from numbers(1)";
     query_ctx.attach_query_str(sql);
-    let user = query_ctx
-        .get_user_manager()
+    let user = UserApiProvider::instance()
         .get_user("test", UserIdentity::new("root", "localhost"))
         .await?;
     query_ctx.set_current_user(user);
-    let plan = PlanParser::parse(query_ctx.clone(), sql).await?;
-    InterpreterFactory::get(query_ctx.clone(), plan)
+    let mut planner = Planner::new(query_ctx.clone());
+    let (plan, _, _) = planner.plan_sql(sql).await?;
+    InterpreterFactory::get(query_ctx.clone(), &plan).await
 }
 
 #[tokio::test]

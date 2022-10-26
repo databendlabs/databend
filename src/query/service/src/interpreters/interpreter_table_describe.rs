@@ -18,7 +18,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::DescribeTablePlan;
+use common_planner::plans::DescribeTablePlan;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

@@ -15,12 +15,38 @@
 use std::thread::Builder;
 use std::thread::JoinHandle;
 
+use common_exception::ErrorCode;
+use common_exception::Result;
+
 use super::runtime_tracker::ThreadTracker;
 
 pub struct Thread;
 
+pub struct ThreadJoinHandle<T> {
+    inner: JoinHandle<T>,
+}
+
+impl<T> ThreadJoinHandle<T> {
+    pub fn create(inner: JoinHandle<T>) -> ThreadJoinHandle<T> {
+        ThreadJoinHandle { inner }
+    }
+
+    pub fn join(self) -> Result<T> {
+        match self.inner.join() {
+            Ok(res) => Ok(res),
+            Err(cause) => match cause.downcast_ref::<&'static str>() {
+                None => match cause.downcast_ref::<String>() {
+                    None => Err(ErrorCode::PanicError("Sorry, unknown panic message")),
+                    Some(message) => Err(ErrorCode::PanicError(message.to_string())),
+                },
+                Some(message) => Err(ErrorCode::PanicError(message.to_string())),
+            },
+        }
+    }
+}
+
 impl Thread {
-    pub fn named_spawn<F, T>(mut name: Option<String>, f: F) -> JoinHandle<T>
+    pub fn named_spawn<F, T>(mut name: Option<String>, f: F) -> ThreadJoinHandle<T>
     where
         F: FnOnce() -> T,
         F: Send + 'static,
@@ -42,7 +68,7 @@ impl Thread {
             thread_builder = thread_builder.name(named);
         }
 
-        match ThreadTracker::current_runtime_tracker() {
+        ThreadJoinHandle::create(match ThreadTracker::current_runtime_tracker() {
             None => thread_builder.spawn(f).unwrap(),
             Some(runtime_tracker) => thread_builder
                 .spawn(move || {
@@ -50,10 +76,10 @@ impl Thread {
                     f()
                 })
                 .unwrap(),
-        }
+        })
     }
 
-    pub fn spawn<F, T>(f: F) -> JoinHandle<T>
+    pub fn spawn<F, T>(f: F) -> ThreadJoinHandle<T>
     where
         F: FnOnce() -> T,
         F: Send + 'static,

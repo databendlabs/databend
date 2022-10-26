@@ -2,7 +2,9 @@
 title: FUSE_BLOCK
 ---
 
-Returns the block information of a snapshot of table.
+Returns the block information for the latest or a specifed snapshot of a table. 
+
+The command returns the location information of each parquet file related to a snapshot. This enables downstream applications to access and consume the data stored in the files. 
 
 ## Syntax
 

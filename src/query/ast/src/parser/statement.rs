@@ -742,8 +742,22 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             ~ ( VALIDATION_MODE ~ "=" ~ #literal_string)?
             ~ ( SIZE_LIMIT ~ "=" ~ #literal_u64)?
             ~ ( PURGE ~ "=" ~ #literal_bool)?
+            ~ ( FORCE ~ "=" ~ #literal_bool)?
         },
-        |(_, _, dst, _, src, files, pattern, file_format, validation_mode, size_limit, purge)| {
+        |(
+            _,
+            _,
+            dst,
+            _,
+            src,
+            files,
+            pattern,
+            file_format,
+            validation_mode,
+            size_limit,
+            purge,
+            force,
+        )| {
             Statement::Copy(CopyStmt {
                 src,
                 dst,
@@ -753,6 +767,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 validation_mode: validation_mode.map(|v| v.2).unwrap_or_default(),
                 size_limit: size_limit.map(|v| v.2).unwrap_or_default() as usize,
                 purge: purge.map(|v| v.2).unwrap_or_default(),
+                force: force.map(|v| v.2).unwrap_or_default(),
             })
         },
     );
@@ -1002,6 +1017,7 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
     )(i)
 }
 
+#[allow(clippy::needless_lifetimes)]
 pub fn rest_str<'a>(i: Input<'a>) -> IResult<&'a str> {
     // It's safe to unwrap because input must contain EOI.
     let first_token = i.0.first().unwrap();

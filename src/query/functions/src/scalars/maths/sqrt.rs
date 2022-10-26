@@ -53,7 +53,7 @@ where S: AsPrimitive<f64> {
 
 impl Function for SqrtFunction {
     fn name(&self) -> &str {
-        &*self.display_name
+        &self.display_name
     }
 
     fn return_type(&self) -> DataTypeImpl {

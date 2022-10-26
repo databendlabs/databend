@@ -170,7 +170,7 @@ impl TrigonometricSinFunction {
         args: &[&DataTypeImpl],
     ) -> Result<Box<dyn Function>> {
         for arg in args {
-            assert_numeric(*arg)?;
+            assert_numeric(arg)?;
         }
         TrigonometricFunction::try_create_func(Trigonometric::SIN)
     }
@@ -189,7 +189,7 @@ impl TrigonometricCosFunction {
         args: &[&DataTypeImpl],
     ) -> Result<Box<dyn Function>> {
         for arg in args {
-            assert_numeric(*arg)?;
+            assert_numeric(arg)?;
         }
         TrigonometricFunction::try_create_func(Trigonometric::COS)
     }
@@ -208,7 +208,7 @@ impl TrigonometricTanFunction {
         args: &[&DataTypeImpl],
     ) -> Result<Box<dyn Function>> {
         for arg in args {
-            assert_numeric(*arg)?;
+            assert_numeric(arg)?;
         }
         TrigonometricFunction::try_create_func(Trigonometric::TAN)
     }
@@ -227,7 +227,7 @@ impl TrigonometricCotFunction {
         args: &[&DataTypeImpl],
     ) -> Result<Box<dyn Function>> {
         for arg in args {
-            assert_numeric(*arg)?;
+            assert_numeric(arg)?;
         }
         TrigonometricFunction::try_create_func(Trigonometric::COT)
     }
@@ -246,7 +246,7 @@ impl TrigonometricAsinFunction {
         args: &[&DataTypeImpl],
     ) -> Result<Box<dyn Function>> {
         for arg in args {
-            assert_numeric(*arg)?;
+            assert_numeric(arg)?;
         }
         TrigonometricFunction::try_create_func(Trigonometric::ASIN)
     }
@@ -265,7 +265,7 @@ impl TrigonometricAcosFunction {
         args: &[&DataTypeImpl],
     ) -> Result<Box<dyn Function>> {
         for arg in args {
-            assert_numeric(*arg)?;
+            assert_numeric(arg)?;
         }
         TrigonometricFunction::try_create_func(Trigonometric::ACOS)
     }
@@ -284,7 +284,7 @@ impl TrigonometricAtanFunction {
         args: &[&DataTypeImpl],
     ) -> Result<Box<dyn Function>> {
         for arg in args {
-            assert_numeric(*arg)?;
+            assert_numeric(arg)?;
         }
         TrigonometricFunction::try_create_func(Trigonometric::ATAN)
     }
@@ -306,7 +306,7 @@ impl TrigonometricAtan2Function {
         args: &[&DataTypeImpl],
     ) -> Result<Box<dyn Function>> {
         for arg in args {
-            assert_numeric(*arg)?;
+            assert_numeric(arg)?;
         }
         TrigonometricFunction::try_create_func(Trigonometric::ATAN2)
     }

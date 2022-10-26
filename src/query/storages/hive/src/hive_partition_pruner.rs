@@ -99,7 +99,7 @@ impl HivePartitionPruner {
         let column_stats = self.get_column_stats(&partitions)?;
         let mut filted_partitions = vec![];
         for (idx, stats) in column_stats.into_iter().enumerate() {
-            if range_filter.eval(&stats)? {
+            if range_filter.eval(&stats, 1)? {
                 filted_partitions.push(partitions[idx].clone());
             }
         }

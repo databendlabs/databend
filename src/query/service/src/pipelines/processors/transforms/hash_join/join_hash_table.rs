@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::borrow::BorrowMut;
+use std::collections::HashSet;
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -45,6 +46,7 @@ use common_exception::Result;
 use common_hashtable::HashMap;
 use common_hashtable::HashtableKeyable;
 use common_hashtable::UnsizedHashMap;
+use common_planner::IndexType;
 use parking_lot::RwLock;
 use primitive_types::U256;
 use primitive_types::U512;
@@ -54,13 +56,14 @@ use crate::pipelines::processors::transforms::hash_join::desc::HashJoinDesc;
 use crate::pipelines::processors::transforms::hash_join::result_blocks::ResultBlocks;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::processors::transforms::hash_join::row::RowSpace;
+use crate::pipelines::processors::transforms::hash_join::util::build_schema_wrap_nullable;
+use crate::pipelines::processors::transforms::hash_join::util::probe_schema_wrap_nullable;
 use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::executor::PhysicalScalar;
 use crate::sql::planner::plans::JoinType;
 use crate::sql::plans::JoinType::Mark;
-use crate::sql::IndexType;
 
 pub struct FixedKeyHashTable<T: HashtableKeyable> {
     pub(crate) hash_table: HashMap<T, Vec<RowPtr>>,
@@ -214,24 +217,14 @@ impl JoinHashTable {
         if hash_join_desc.join_type == JoinType::Left
             || hash_join_desc.join_type == JoinType::Single
         {
-            let mut nullable_field = Vec::with_capacity(build_data_schema.fields().len());
-            for field in build_data_schema.fields().iter() {
-                nullable_field.push(DataField::new_nullable(
-                    field.name(),
-                    field.data_type().clone(),
-                ));
-            }
-            build_data_schema = DataSchemaRefExt::create(nullable_field);
+            build_data_schema = build_schema_wrap_nullable(&build_data_schema);
         };
         if hash_join_desc.join_type == JoinType::Right {
-            let mut nullable_field = Vec::with_capacity(probe_data_schema.fields().len());
-            for field in probe_data_schema.fields().iter() {
-                nullable_field.push(DataField::new_nullable(
-                    field.name(),
-                    field.data_type().clone(),
-                ));
-            }
-            probe_data_schema = DataSchemaRefExt::create(nullable_field);
+            probe_data_schema = probe_schema_wrap_nullable(&probe_data_schema);
+        }
+        if hash_join_desc.join_type == JoinType::Full {
+            build_data_schema = build_schema_wrap_nullable(&build_data_schema);
+            probe_data_schema = probe_schema_wrap_nullable(&probe_data_schema);
         }
         Ok(Self {
             row_space: RowSpace::new(build_data_schema),
@@ -417,6 +410,39 @@ impl JoinHashTable {
             }
         }
     }
+
+    fn find_unmatched_build_indexes(&self) -> Result<Vec<RowPtr>> {
+        // For right/full join, build side will appear at least once in the joined table
+        // Find the unmatched rows in build side
+        let mut unmatched_build_indexes = vec![];
+        let build_indexes = self.hash_join_desc.right_join_desc.build_indexes.read();
+        let build_indexes_set: HashSet<&RowPtr> = build_indexes.iter().collect();
+        // TODO(xudong): remove the line of code below after https://github.com/rust-lang/rust-clippy/issues/8987
+        #[allow(clippy::significant_drop_in_scrutinee)]
+        for (chunk_index, chunk) in self.row_space.chunks.read().unwrap().iter().enumerate() {
+            for row_index in 0..chunk.num_rows() {
+                let row_ptr = RowPtr {
+                    chunk_index: chunk_index as u32,
+                    row_index: row_index as u32,
+                    marker: None,
+                };
+                if !build_indexes_set.contains(&row_ptr) {
+                    let mut row_state = self.hash_join_desc.right_join_desc.row_state.write();
+                    row_state.entry(row_ptr).or_insert(0_usize);
+                    unmatched_build_indexes.push(row_ptr);
+                }
+                if self.hash_join_desc.join_type == JoinType::Full {
+                    if let Some(row_ptr) = build_indexes_set.get(&row_ptr) {
+                        // If `marker` == `MarkerKind::False`, it means the row in build side has been filtered in left probe phase
+                        if row_ptr.marker == Some(MarkerKind::False) {
+                            unmatched_build_indexes.push(**row_ptr);
+                        }
+                    }
+                }
+            }
+        }
+        Ok(unmatched_build_indexes)
+    }
 }
 
 #[async_trait::async_trait]
@@ -440,9 +466,9 @@ impl HashJoinState for JoinHashTable {
             | JoinType::Left
             | Mark
             | JoinType::Single
-            | JoinType::Right => self.probe_join(input, probe_state),
+            | JoinType::Right
+            | JoinType::Full => self.probe_join(input, probe_state),
             JoinType::Cross => self.probe_cross_join(input, probe_state),
-            _ => unimplemented!("{} is unimplemented", self.hash_join_desc.join_type),
         }
     }
 
@@ -675,32 +701,26 @@ impl HashJoinState for JoinHashTable {
     }
 
     fn right_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
-        // For right join, build side will appear at lease once in the joined table
-        // Find the unmatched rows in build side
-        let mut unmatched_build_indexes = vec![];
-        {
-            let chunks = self.row_space.chunks.read().unwrap();
-            for (chunk_index, chunk) in chunks.iter().enumerate() {
-                for row_index in 0..chunk.num_rows() {
-                    let row_ptr = RowPtr {
-                        chunk_index: chunk_index as u32,
-                        row_index: row_index as u32,
-                        marker: None,
-                    };
-                    if !self
-                        .hash_join_desc
-                        .right_join_desc
-                        .build_indexes
-                        .read()
-                        .contains(&row_ptr)
-                    {
-                        unmatched_build_indexes.push(row_ptr);
-                    }
-                }
-            }
+        let unmatched_build_indexes = self.find_unmatched_build_indexes()?;
+        if unmatched_build_indexes.is_empty() && self.hash_join_desc.other_predicate.is_none() {
+            return Ok(blocks.to_vec());
         }
 
-        let unmatched_build_block = self.row_space.gather(&unmatched_build_indexes)?;
+        let mut unmatched_build_block = self.row_space.gather(&unmatched_build_indexes)?;
+        if self.hash_join_desc.join_type == JoinType::Full {
+            let nullable_unmatched_build_columns = unmatched_build_block
+                .columns()
+                .iter()
+                .map(|c| {
+                    let mut probe_validity = MutableBitmap::new();
+                    probe_validity.extend_constant(c.len(), true);
+                    let probe_validity: Bitmap = probe_validity.into();
+                    Self::set_validity(c, &probe_validity)
+                })
+                .collect::<Result<Vec<_>>>()?;
+            unmatched_build_block =
+                DataBlock::create(self.row_space.schema(), nullable_unmatched_build_columns);
+        };
         // Create null block for unmatched rows in probe side
         let null_probe_block = DataBlock::create(
             self.probe_schema.clone(),
@@ -714,10 +734,12 @@ impl HashJoinState for JoinHashTable {
                 })
                 .collect::<Result<Vec<_>>>()?,
         );
-        let mut merged_block = self.merge_eq_block(&null_probe_block, &unmatched_build_block)?;
+        let mut merged_block = self.merge_eq_block(&unmatched_build_block, &null_probe_block)?;
         merged_block = DataBlock::concat_blocks(&[blocks, &[merged_block]].concat())?;
 
-        if self.hash_join_desc.other_predicate.is_none() {
+        if self.hash_join_desc.other_predicate.is_none()
+            || self.hash_join_desc.join_type == JoinType::Full
+        {
             return Ok(vec![merged_block]);
         }
 
@@ -736,7 +758,6 @@ impl HashJoinState for JoinHashTable {
             // must be one of above
             _ => unreachable!(),
         };
-
         let probe_column_len = self.probe_schema.fields().len();
         let probe_columns = merged_block.columns()[0..probe_column_len]
             .iter()
@@ -747,18 +768,18 @@ impl HashJoinState for JoinHashTable {
             self.row_space.data_schema.clone(),
             merged_block.columns()[probe_column_len..].to_vec(),
         );
-        merged_block = self.merge_eq_block(&probe_block, &build_block)?;
+        merged_block = self.merge_eq_block(&build_block, &probe_block)?;
 
-        // If there are only non-equi conditions, build_indexes size will greater build table size
-        // Because the case will cause cross join.
-        // We need filter the redundant rows for build side.
-        let build_indexes = self.hash_join_desc.right_join_desc.build_indexes.read();
+        // If build_indexes size will greater build table size, we need filter the redundant rows for build side.
+        let mut build_indexes = self.hash_join_desc.right_join_desc.build_indexes.write();
         let mut row_state = self.hash_join_desc.right_join_desc.row_state.write();
+        build_indexes.extend(&unmatched_build_indexes);
         if build_indexes.len() > self.row_space.rows_number() {
             let mut bm = validity.into_mut().right().unwrap();
             Self::filter_rows_for_right_join(&mut bm, &build_indexes, &mut row_state);
             let predicate = BooleanColumn::from_arrow_data(bm.into()).arc();
-            return Ok(vec![DataBlock::filter_block(merged_block, &predicate)?]);
+            let filtered_block = DataBlock::filter_block(merged_block, &predicate)?;
+            return Ok(vec![filtered_block]);
         }
 
         Ok(vec![merged_block])

@@ -34,7 +34,11 @@ fn test_boolean() {
 
 fn test_and(file: &mut impl Write) {
     run_ast(file, "true AND false", &[]);
-    run_ast(file, "null AND false", &[]);
+    run_ast(file, "true AND null", &[]);
+    run_ast(file, "true AND true", &[]);
+    run_ast(file, "false AND false", &[]);
+    run_ast(file, "false AND null", &[]);
+    run_ast(file, "false AND true", &[]);
 }
 
 fn test_not(file: &mut impl Write) {

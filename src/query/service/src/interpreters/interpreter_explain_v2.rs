@@ -18,6 +18,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planner::MetadataRef;
 
 use super::fragments::Fragmenter;
 use super::QueryFragmentsActions;
@@ -29,7 +30,6 @@ use crate::sql::executor::PhysicalPlanBuilder;
 use crate::sql::executor::PipelineBuilder;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::Plan;
-use crate::sql::MetadataRef;
 
 pub struct ExplainInterpreterV2 {
     ctx: Arc<QueryContext>,

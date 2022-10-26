@@ -29,7 +29,6 @@ use common_legacy_planners::Extras;
 use common_legacy_planners::Partitions;
 use common_legacy_planners::ReadDataSourcePlan;
 use common_legacy_planners::Statistics;
-use common_legacy_planners::TruncateTablePlan;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::MetaId;
 use common_pipeline_core::Pipeline;
@@ -166,7 +165,8 @@ pub trait Table: Sync + Send {
     async fn truncate(
         &self,
         _ctx: Arc<dyn TableContext>,
-        _truncate_plan: TruncateTablePlan,
+        _catalog_name: &str,
+        _purge: bool,
     ) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(
             "truncate for table {} is not implemented",

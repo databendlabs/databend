@@ -17,8 +17,10 @@ use std::sync::Arc;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRefExt;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::TableSnapshot;
+use common_legacy_parser::ExpressionParser;
 use common_legacy_planners::DeletePlan;
 use common_legacy_planners::Expression;
 use common_legacy_planners::Extras;
@@ -51,7 +53,13 @@ impl FuseTable {
 
         // check if unconditional deletion
         if let Some(filter) = &plan.selection {
-            self.delete_rows(ctx, &snapshot, filter, plan).await
+            let expr = ExpressionParser::parse_exprs(filter)?;
+            if expr.is_empty() {
+                return Err(ErrorCode::IndexOutOfBounds(
+                    "expression should be valid, but not",
+                ));
+            }
+            self.delete_rows(ctx, &snapshot, &expr[0], plan).await
         } else {
             // deleting the whole table... just a truncate
             let purge = false;

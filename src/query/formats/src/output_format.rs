@@ -222,7 +222,7 @@ impl Default for OutputFormatType {
 
 impl FromStr for OutputFormatType {
     type Err = ErrorCode;
-    fn from_str(s: &str) -> std::result::Result<Self, ErrorCode> {
+    fn from_str(s: &str) -> Result<Self> {
         FormatFactory::instance().get_output(s)
     }
 }

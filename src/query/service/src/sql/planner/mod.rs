@@ -23,7 +23,6 @@ use common_exception::Result;
 use parking_lot::RwLock;
 pub use plans::ScalarExpr;
 
-use crate::clusters::ClusterHelper;
 use crate::sql::optimizer::optimize;
 pub use crate::sql::planner::binder::BindContext;
 
@@ -37,12 +36,9 @@ mod semantic;
 pub use binder::Binder;
 pub use binder::ColumnBinding;
 pub use binder::Visibility;
-pub use metadata::find_smallest_column;
-pub use metadata::ColumnEntry;
-pub use metadata::Metadata;
-pub use metadata::MetadataRef;
-pub use metadata::TableEntry;
-pub use metadata::DUMMY_TABLE_INDEX;
+use common_catalog::catalog::CatalogManager;
+use common_planner::Metadata;
+use common_planner::MetadataRef;
 pub use semantic::normalize_identifier;
 pub use semantic::IdentifierNormalizer;
 pub use semantic::NameResolutionContext;
@@ -50,12 +46,11 @@ pub use semantic::NameResolutionContext;
 use self::plans::Plan;
 use super::optimizer::OptimizerConfig;
 use super::optimizer::OptimizerContext;
+use crate::catalogs::CatalogManagerHelper;
 use crate::sessions::TableContext;
 
 const PROBE_INSERT_INITIAL_TOKENS: usize = 128;
 const PROBE_INSERT_MAX_TOKENS: usize = 128 * 8;
-
-pub type IndexType = usize;
 
 pub struct Planner {
     ctx: Arc<dyn TableContext>,
@@ -100,11 +95,11 @@ impl Planner {
                 let (stmt, format) = parse_sql(&tokens, sql_dialect, &backtrace)?;
 
                 // Step 3: Bind AST with catalog, and generate a pure logical SExpr
-                let metadata = Arc::new(RwLock::new(Metadata::create()));
+                let metadata = Arc::new(RwLock::new(Metadata::default()));
                 let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
                 let binder = Binder::new(
                     self.ctx.clone(),
-                    self.ctx.get_catalog_manager()?,
+                    CatalogManager::instance(),
                     name_resolution_ctx,
                     metadata.clone(),
                 );

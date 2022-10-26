@@ -23,6 +23,7 @@ use common_meta_api::ShareApi;
 use common_meta_app::share::GetShareGrantObjectReq;
 use common_meta_app::share::ShareGrantObjectName;
 use common_meta_app::share::ShareNameIdent;
+use common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -52,8 +53,7 @@ impl Interpreter for DescShareInterpreter {
     }
 
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let user_mgr = self.ctx.get_user_manager();
-        let meta_api = user_mgr.get_meta_store_client();
+        let meta_api = UserApiProvider::instance().get_meta_store_client();
         let req = GetShareGrantObjectReq {
             share_name: ShareNameIdent {
                 tenant: self.ctx.get_tenant(),

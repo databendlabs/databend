@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 pub use aggregate::AggregateInfo;
 pub use bind_context::*;
+use common_ast::ast::ExplainKind;
 use common_ast::ast::Statement;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
@@ -24,17 +25,18 @@ use common_ast::Dialect;
 use common_ast::UDFValidator;
 use common_datavalues::DataTypeImpl;
 use common_exception::Result;
-use common_legacy_planners::AlterUserUDFPlan;
-use common_legacy_planners::CallPlan;
-use common_legacy_planners::CreateRolePlan;
-use common_legacy_planners::CreateUserUDFPlan;
-use common_legacy_planners::DropRolePlan;
-use common_legacy_planners::DropUserPlan;
-use common_legacy_planners::DropUserStagePlan;
-use common_legacy_planners::DropUserUDFPlan;
-use common_legacy_planners::ShowGrantsPlan;
-use common_legacy_planners::UseDatabasePlan;
 use common_meta_types::UserDefinedFunction;
+use common_planner::plans::AlterUDFPlan;
+use common_planner::plans::CallPlan;
+use common_planner::plans::CreateRolePlan;
+use common_planner::plans::CreateUDFPlan;
+use common_planner::plans::DropRolePlan;
+use common_planner::plans::DropStagePlan;
+use common_planner::plans::DropUDFPlan;
+use common_planner::plans::DropUserPlan;
+use common_planner::plans::ShowGrantsPlan;
+use common_planner::plans::UseDatabasePlan;
+use common_planner::MetadataRef;
 pub use scalar::ScalarBinder;
 pub use scalar_common::*;
 
@@ -43,7 +45,6 @@ use super::plans::RewriteKind;
 use super::semantic::NameResolutionContext;
 use crate::catalogs::CatalogManager;
 use crate::sessions::TableContext;
-use crate::sql::planner::metadata::MetadataRef;
 
 mod aggregate;
 mod bind_context;
@@ -118,10 +119,13 @@ impl<'a> Binder {
                 }
             }
 
-            Statement::Explain { query, kind } => Plan::Explain {
-                kind: kind.clone(),
-                plan: Box::new(self.bind_statement(bind_context, query).await?),
-            },
+            Statement::Explain { query, kind } => {
+                match kind {
+                    ExplainKind::Ast(formatted_stmt) => Plan::ExplainAst { formatted_string: formatted_stmt.clone() },
+                    ExplainKind::Syntax(formatted_sql) => Plan::ExplainSyntax { formatted_sql: formatted_sql.clone() },
+                    _ => Plan::Explain { kind: kind.clone(), plan: Box::new(self.bind_statement(bind_context, query).await?) },
+                }
+            }
 
             Statement::ShowFunctions { limit } => {
                 self.bind_show_functions(bind_context, limit).await?
@@ -216,7 +220,7 @@ impl<'a> Binder {
             Statement::DropStage {
                 stage_name,
                 if_exists,
-            } => Plan::DropStage(Box::new(DropUserStagePlan {
+            } => Plan::DropStage(Box::new(DropStagePlan {
                 if_exists: *if_exists,
                 name: stage_name.clone(),
             })),
@@ -260,7 +264,7 @@ impl<'a> Binder {
                     description: description.clone().unwrap_or_default(),
                 };
 
-                Plan::CreateUDF(Box::new(CreateUserUDFPlan {
+                Plan::CreateUDF(Box::new(CreateUDFPlan {
                     if_not_exists: *if_not_exists,
                     udf
                 }))
@@ -284,14 +288,14 @@ impl<'a> Binder {
                     description: description.clone().unwrap_or_default(),
                 };
 
-                Plan::AlterUDF(Box::new(AlterUserUDFPlan {
+                Plan::AlterUDF(Box::new(AlterUDFPlan {
                     udf,
                 }))
             }
             Statement::DropUDF {
                 if_exists,
                 udf_name,
-            } => Plan::DropUDF(Box::new(DropUserUDFPlan {
+            } => Plan::DropUDF(Box::new(DropUDFPlan {
                 if_exists: *if_exists,
                 name: udf_name.to_string(),
             })),

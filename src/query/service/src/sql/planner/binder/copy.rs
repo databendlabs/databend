@@ -248,6 +248,7 @@ impl<'a> Binder {
             files: stmt.files.clone(),
             pattern: stmt.pattern.clone(),
             validation_mode,
+            force: stmt.force,
         })))
     }
 
@@ -306,6 +307,7 @@ impl<'a> Binder {
             files: stmt.files.clone(),
             pattern: stmt.pattern.clone(),
             validation_mode,
+            force: stmt.force,
         })))
     }
 

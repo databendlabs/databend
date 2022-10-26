@@ -287,6 +287,11 @@ impl StringColumnBuilder {
         self.data[(self.offsets[0] as usize)..(self.offsets[1] as usize)].to_vec()
     }
 
+    #[inline]
+    pub fn may_resize(&self, add_size: usize) -> bool {
+        self.data.len() + add_size > self.data.capacity()
+    }
+
     /// # Safety
     pub unsafe fn index_unchecked(&self, row: usize) -> &[u8] {
         let start = *self.offsets.get_unchecked(row) as usize;

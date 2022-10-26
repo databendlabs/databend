@@ -19,6 +19,7 @@ use common_exception::Result;
 use common_meta_types::UserIdentity;
 use common_users::CustomClaims;
 use common_users::EnsureUser;
+use common_users::UserApiProvider;
 use databend_query::auth::Credential;
 use databend_query::sessions::TableContext;
 use jwt_simple::prelude::*;
@@ -54,7 +55,6 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
     let mut conf = crate::tests::ConfigBuilder::create().config();
     conf.query.jwt_key_file = jwks_url.clone();
     let (_guard, ctx) = crate::tests::create_query_context_with_config(conf, None).await?;
-    let user_mgr = ctx.get_user_manager();
     let auth_mgr = ctx.get_auth_manager();
     let tenant = "test";
     let user_name = "test";
@@ -170,7 +170,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
             .await;
         assert!(res.is_ok());
 
-        let user_info = user_mgr
+        let user_info = UserApiProvider::instance()
             .get_user(tenant, UserIdentity::new(user_name, "%"))
             .await?;
         assert_eq!(user_info.grants.roles().len(), 1);

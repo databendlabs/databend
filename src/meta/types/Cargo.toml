@@ -11,7 +11,6 @@ doctest = false
 test = false
 
 [dependencies]
-common-datavalues = { path = "../../query/datavalues" }
 common-exception = { path = "../../common/exception" }
 common-storage = { path = "../../common/storage" }
 
@@ -19,6 +18,7 @@ openraft = { git = "https://github.com/datafuselabs/openraft", tag = "v0.7.2" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
 
 anyerror = "=0.1.7"
+chrono = "0.4.20"
 derive_more = "0.99.17"
 enumflags2 = { version = "0.7.5", features = ["serde"] }
 hex = "0.4.3"

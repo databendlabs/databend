@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod catch_unwind;
 mod global_runtime;
 mod net;
 mod profiling;
@@ -27,6 +28,7 @@ mod string_func;
 mod thread;
 mod uniq_id;
 
+pub use catch_unwind::catch_unwind;
 pub use global_runtime::GlobalIORuntime;
 pub use net::get_free_tcp_port;
 pub use net::get_free_udp_port;
@@ -53,6 +55,7 @@ pub use string_func::mask_string;
 pub use string_func::replace_nth_char;
 pub use string_func::unescape_for_key;
 pub use thread::Thread;
+pub use thread::ThreadJoinHandle;
 pub use tokio;
 pub use uniq_id::GlobalSequence;
 pub use uniq_id::GlobalUniqName;

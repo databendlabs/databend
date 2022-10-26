@@ -22,12 +22,13 @@ use pretty_assertions::assert_eq;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_select_interpreter() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
+    let mut planner = Planner::new(ctx.clone());
 
     {
         let query = "select number from numbers_mt(10)";
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan)?;
-        assert_eq!(executor.name(), "SelectInterpreter");
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
+        assert_eq!(executor.name(), "SelectInterpreterV2");
 
         let stream = executor.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
@@ -55,9 +56,9 @@ async fn test_select_interpreter() -> Result<()> {
 
     {
         let query = "select 1 + 1, 2 + 2, 3 * 3, 4 * 4";
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan)?;
-        assert_eq!(executor.name(), "SelectInterpreter");
+        let (plan, _, _) = planner.plan_sql(query).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
+        assert_eq!(executor.name(), "SelectInterpreterV2");
 
         let stream = executor.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
@@ -65,11 +66,11 @@ async fn test_select_interpreter() -> Result<()> {
         assert_eq!(block.num_columns(), 4);
 
         let expected = vec![
-            "+---------+---------+---------+---------+",
-            "| (1 + 1) | (2 + 2) | (3 * 3) | (4 * 4) |",
-            "+---------+---------+---------+---------+",
-            "| 2       | 4       | 9       | 16      |",
-            "+---------+---------+---------+---------+",
+            "+-------+-------+-------+-------+",
+            "| 1 + 1 | 2 + 2 | 3 * 3 | 4 * 4 |",
+            "+-------+-------+-------+-------+",
+            "| 2     | 4     | 9     | 16    |",
+            "+-------+-------+-------+-------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }

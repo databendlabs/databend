@@ -31,7 +31,7 @@ impl RejectConnection {
 
         // Send error. Packet[seq = 2]
         let mut buffer = vec![0xFF_u8];
-        buffer.extend(&(code as u16).to_le_bytes());
+        buffer.extend((code as u16).to_le_bytes());
         buffer.extend(&vec![b'#']);
         buffer.extend(code.sqlstate());
         buffer.extend(error_message.into().as_bytes());

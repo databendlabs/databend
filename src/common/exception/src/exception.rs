@@ -45,6 +45,7 @@ impl From<&str> for ErrorCodeBacktrace {
         Self::Serialized(Arc::new(s.to_string()))
     }
 }
+
 impl From<String> for ErrorCodeBacktrace {
     fn from(s: String) -> Self {
         Self::Serialized(Arc::new(s))
@@ -138,7 +139,7 @@ impl ErrorCode {
     }
 }
 
-pub type Result<T> = std::result::Result<T, ErrorCode>;
+pub type Result<T, E = ErrorCode> = std::result::Result<T, E>;
 
 impl Debug for ErrorCode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {

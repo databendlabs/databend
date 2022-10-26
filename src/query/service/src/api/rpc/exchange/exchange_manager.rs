@@ -506,9 +506,7 @@ impl QueryCoordinator {
     pub fn shutdown_query(&mut self) {
         if let Some(query_info) = &self.info {
             if let Some(query_executor) = &query_info.query_executor {
-                if let Err(cause) = query_executor.finish() {
-                    tracing::error!("Cannot shutdown query, because {:?}", cause);
-                }
+                query_executor.finish(None);
             }
         }
     }
@@ -553,14 +551,9 @@ impl QueryCoordinator {
             }
         }
 
-        let query_need_abort = info.query_ctx.query_need_abort();
         let executor_settings = ExecutorSettings::try_create(&info.query_ctx.get_settings())?;
 
-        let executor = PipelineCompleteExecutor::from_pipelines(
-            query_need_abort,
-            pipelines,
-            executor_settings,
-        )?;
+        let executor = PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
 
         self.fragment_exchanges.clear();
         let info_mut = self.info.as_mut().expect("Query info is None");

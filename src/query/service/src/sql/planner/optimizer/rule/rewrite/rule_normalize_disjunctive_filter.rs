@@ -42,15 +42,15 @@ fn predicate_scalar(scalar: &Scalar) -> PredicateScalar {
     match scalar {
         Scalar::AndExpr(and_expr) => {
             let args = vec![
-                predicate_scalar(&*and_expr.left),
-                predicate_scalar(&*and_expr.right),
+                predicate_scalar(&and_expr.left),
+                predicate_scalar(&and_expr.right),
             ];
             PredicateScalar::And { args }
         }
         Scalar::OrExpr(or_expr) => {
             let args = vec![
-                predicate_scalar(&*or_expr.left),
-                predicate_scalar(&*or_expr.right),
+                predicate_scalar(&or_expr.left),
+                predicate_scalar(&or_expr.right),
             ];
             PredicateScalar::Or { args }
         }

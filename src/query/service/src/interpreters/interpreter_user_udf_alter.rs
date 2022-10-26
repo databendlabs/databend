@@ -15,7 +15,8 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_legacy_planners::AlterUserUDFPlan;
+use common_planner::plans::AlterUDFPlan;
+use common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -25,11 +26,11 @@ use crate::sessions::TableContext;
 #[derive(Debug)]
 pub struct AlterUserUDFInterpreter {
     ctx: Arc<QueryContext>,
-    plan: AlterUserUDFPlan,
+    plan: AlterUDFPlan,
 }
 
 impl AlterUserUDFInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: AlterUserUDFPlan) -> Result<Self> {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: AlterUDFPlan) -> Result<Self> {
         Ok(AlterUserUDFInterpreter { ctx, plan })
     }
 }
@@ -45,8 +46,9 @@ impl Interpreter for AlterUserUDFInterpreter {
         let plan = self.plan.clone();
 
         let tenant = self.ctx.get_tenant();
-        let user_mgr = self.ctx.get_user_manager();
-        user_mgr.update_udf(&tenant, plan.udf).await?;
+        UserApiProvider::instance()
+            .update_udf(&tenant, plan.udf)
+            .await?;
 
         Ok(PipelineBuildResult::create())
     }

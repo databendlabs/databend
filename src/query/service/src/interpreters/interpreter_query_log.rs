@@ -46,13 +46,13 @@ pub enum LogType {
     Aborted = 4,
 }
 
-fn date_str<S>(dt: &i32, s: S) -> std::result::Result<S::Ok, S::Error>
+fn date_str<S>(dt: &i32, s: S) -> Result<S::Ok, S::Error>
 where S: Serializer {
     let t = NaiveDateTime::from_timestamp(i64::from(*dt) * 24 * 3600, 0);
     s.serialize_str(t.format("%Y-%m-%d").to_string().as_str())
 }
 
-fn datetime_str<S>(dt: &i64, s: S) -> std::result::Result<S::Ok, S::Error>
+fn datetime_str<S>(dt: &i64, s: S) -> Result<S::Ok, S::Error>
 where S: Serializer {
     let t = NaiveDateTime::from_timestamp(
         dt / 1_000_000,
@@ -231,16 +231,12 @@ impl InterpreterQueryLog {
             .await?;
 
         // info!("{}", serde_json::to_string(event)?);
-        match QueryLogger::instance().get_subscriber() {
-            Some(logger) => {
-                let event_str = serde_json::to_string(event)?;
-                subscriber::with_default(logger, || {
-                    info!("{}", event_str);
-                });
-            }
-            None => {}
+        if let Some(logger) = QueryLogger::instance().get_subscriber() {
+            let event_str = serde_json::to_string(event)?;
+            subscriber::with_default(logger, || {
+                info!("{}", event_str);
+            });
         };
-
         Ok(())
     }
 
@@ -305,7 +301,8 @@ impl InterpreterQueryLog {
             .get_settings()
             .get_setting_values_short()
         {
-            write!(session_settings, "{}={}, ", key, value).expect("write to string must succeed");
+            write!(session_settings, "{}={:?}, ", key, value)
+                .expect("write to string must succeed");
         }
         session_settings.push_str("scope: SESSION");
 
@@ -418,7 +415,8 @@ impl InterpreterQueryLog {
             .get_settings()
             .get_setting_values_short()
         {
-            write!(session_settings, "{}={}, ", key, value).expect("write to string must succeed");
+            write!(session_settings, "{}={:?}, ", key, value)
+                .expect("write to string must succeed");
         }
         session_settings.push_str("scope: SESSION");
 

@@ -15,6 +15,7 @@
 use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_types::UserStageInfo;
+use common_users::UserApiProvider;
 use databend_query::sessions::TableContext;
 use databend_query::storages::system::StagesTable;
 use databend_query::storages::TableStreamReadWrap;
@@ -25,14 +26,15 @@ use futures::TryStreamExt;
 async fn test_stages_table() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let tenant = ctx.get_tenant();
-    let user_mgr = ctx.get_user_manager();
 
     {
         let stage_info = UserStageInfo {
             stage_name: "test_stage".to_string(),
             ..Default::default()
         };
-        user_mgr.add_stage(&tenant, stage_info, false).await?;
+        UserApiProvider::instance()
+            .add_stage(&tenant, stage_info, false)
+            .await?;
     }
 
     let table = StagesTable::create(1);

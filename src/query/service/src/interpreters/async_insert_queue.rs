@@ -409,12 +409,10 @@ impl AsyncInsertManager {
                 let mut pipelines = build_res.sources_pipelines;
                 pipelines.push(build_res.main_pipeline);
                 let executor_settings = ExecutorSettings::try_create(settings)?;
-                let executor = PipelineCompleteExecutor::from_pipelines(
-                    ctx.query_need_abort(),
-                    pipelines,
-                    executor_settings,
-                )?;
+                let executor =
+                    PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
 
+                ctx.set_executor(Arc::downgrade(&executor.get_inner()));
                 executor.execute()?;
                 drop(executor);
                 let blocks = ctx.consume_precommit_blocks();

@@ -29,7 +29,7 @@ use maplit::hashmap;
 use crate::schema::database::DatabaseNameIdent;
 
 /// Globally unique identifier of a version of TableMeta.
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Eq, PartialEq, Default)]
 pub struct TableIdent {
     /// Globally unique id to identify a table.
     pub table_id: u64,

@@ -21,7 +21,7 @@ common-users = { path = "../users" }
 clap = { version = "3.2.5", features = ["derive", "env"] }
 hex = "0.4.3"
 once_cell = "1.12.0"
-opendal = { version = "0.17.0", features = ["layers-retry", "compress"], optional = true }
+opendal = { version = "0.17.1", features = ["layers-retry", "compress"], optional = true }
 semver = "1.0.10"
 serde = { version = "1.0.137", features = ["derive"] }
 serfig = "0.0.2"

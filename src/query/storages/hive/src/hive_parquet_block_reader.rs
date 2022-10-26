@@ -30,7 +30,6 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::PartInfoPtr;
 use common_storages_util::file_meta_data_reader::FileMetaDataReader;
 use common_storages_util::retry;
 use common_storages_util::retry::Retryable;
@@ -129,6 +128,7 @@ impl HiveParquetBlockReader {
             column_meta,
             Arc::new(|_, _| true),
             vec![],
+            usize::MAX,
         );
 
         let chunk_size = if let Ok(read_buffer_size_str) = std::env::var("CHUNK_SIZE") {
@@ -149,6 +149,7 @@ impl HiveParquetBlockReader {
             vec![&primitive_type],
             field,
             Some(chunk_size),
+            rows,
         )?)
     }
 
@@ -288,10 +289,5 @@ impl HiveParquetBlockReader {
         row_group_iterator
             .next_block(&self.projected_schema, &self.hive_partition_filler, &part)
             .map_err(|e| e.add_message(format!(" filename of hive part {}", part.filename)))
-    }
-
-    #[tracing::instrument(level = "debug", skip_all)]
-    pub async fn read(&self, _part: PartInfoPtr) -> Result<DataBlock> {
-        Err(ErrorCode::UnImplement("deprecated"))
     }
 }

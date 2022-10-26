@@ -15,7 +15,8 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_legacy_planners::DropUserUDFPlan;
+use common_planner::plans::DropUDFPlan;
+use common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -25,11 +26,11 @@ use crate::sessions::TableContext;
 #[derive(Debug)]
 pub struct DropUserUDFInterpreter {
     ctx: Arc<QueryContext>,
-    plan: DropUserUDFPlan,
+    plan: DropUDFPlan,
 }
 
 impl DropUserUDFInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: DropUserUDFPlan) -> Result<Self> {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: DropUDFPlan) -> Result<Self> {
         Ok(DropUserUDFInterpreter { ctx, plan })
     }
 }
@@ -44,8 +45,7 @@ impl Interpreter for DropUserUDFInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = self.plan.clone();
         let tenant = self.ctx.get_tenant();
-        let user_mgr = self.ctx.get_user_manager();
-        user_mgr
+        UserApiProvider::instance()
             .drop_udf(&tenant, plan.name.as_str(), plan.if_exists)
             .await?;
 

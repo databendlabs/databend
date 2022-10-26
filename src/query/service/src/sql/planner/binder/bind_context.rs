@@ -25,12 +25,12 @@ use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planner::IndexType;
 use parking_lot::RwLock;
 
 use super::AggregateInfo;
 use crate::sql::normalize_identifier;
 use crate::sql::optimizer::SExpr;
-use crate::sql::planner::IndexType;
 use crate::sql::plans::Scalar;
 use crate::sql::NameResolutionContext;
 

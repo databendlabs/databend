@@ -24,15 +24,11 @@ use common_base::base::GlobalIORuntime;
 use common_base::base::ProgressValues;
 use common_base::base::Thread;
 use common_base::base::TrySpawn;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
+use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::PlanNode;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use futures::future::AbortHandle;
-use futures::future::Abortable;
 use futures::StreamExt;
 use futures_util::FutureExt;
 use serde::Deserialize;
@@ -42,7 +38,6 @@ use ExecuteState::*;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
-use crate::interpreters::InterpreterFactoryV2;
 use crate::interpreters::InterpreterQueryLog;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
@@ -54,8 +49,6 @@ use crate::sessions::QueryContext;
 use crate::sessions::Session;
 use crate::sessions::TableContext;
 use crate::sql::plans::Plan;
-use crate::sql::ColumnBinding;
-use crate::sql::PlanParser;
 use crate::sql::Planner;
 use crate::storages::result::block_buffer::BlockBuffer;
 use crate::storages::result::block_buffer::BlockBufferWriterMemOnly;
@@ -239,29 +232,12 @@ impl ExecuteState {
     ) -> Result<ExecuteRunning> {
         ctx.attach_query_str(sql);
 
-        let settings = ctx.get_settings();
-        let is_v2 = settings.get_enable_planner_v2()? != 0;
-        let is_select;
+        let mut planner = Planner::new(ctx.clone());
+        let (plan, _, _) = planner.plan_sql(sql).await?;
+        let is_select = matches!(&plan, Plan::Query { .. });
+        let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
 
-        let interpreter = if is_v2 {
-            let mut planner = Planner::new(ctx.clone());
-            let (plan, _, _) = planner.plan_sql(sql).await?;
-            is_select = matches!(&plan, Plan::Query { .. });
-            InterpreterFactoryV2::get(ctx.clone(), &plan)
-        } else {
-            let plan = match PlanParser::parse(ctx.clone(), sql).await {
-                Ok(p) => p,
-                Err(e) => {
-                    InterpreterQueryLog::fail_to_start(ctx, e.clone()).await;
-                    return Err(e);
-                }
-            };
-
-            is_select = matches!(&plan, PlanNode::Select(_));
-            InterpreterFactory::get(ctx.clone(), plan)
-        }?;
-
-        if is_v2 && is_select {
+        if is_select {
             let _ = interpreter
                 .start()
                 .await
@@ -324,8 +300,7 @@ async fn execute(
     block_buffer: Arc<BlockBuffer>,
     executor: Arc<RwLock<Executor>>,
 ) -> Result<()> {
-    let data_stream = interpreter.execute(ctx.clone()).await?;
-    let mut data_stream = ctx.try_create_abortable(data_stream)?;
+    let mut data_stream = interpreter.execute(ctx.clone()).await?;
     let use_result_cache = !ctx.get_config().query.management_mode;
 
     match data_stream.next().await {
@@ -383,7 +358,7 @@ impl HttpQueryHandle {
         self,
         ctx: Arc<QueryContext>,
         mut build_res: PipelineBuildResult,
-        result_columns: &[ColumnBinding],
+        result_schema: DataSchemaRef,
     ) -> Result<SendableDataBlockStream> {
         let executor = self.executor.clone();
         let block_buffer = self.block_buffer.clone();
@@ -391,16 +366,9 @@ impl HttpQueryHandle {
         build_res.main_pipeline.resize(1)?;
         let input = InputPort::create();
 
-        let schema = DataSchemaRefExt::create(
-            result_columns
-                .iter()
-                .map(|v| DataField::new(&v.column_name, *v.data_type.clone()))
-                .collect(),
-        );
-
         let query_info = ResultQueryInfo {
             query_id: ctx.get_id(),
-            schema: schema.clone(),
+            schema: result_schema.clone(),
             user: ctx.get_current_user()?.identity(),
         };
         let data_accessor = ctx.get_storage_operator()?;
@@ -419,33 +387,25 @@ impl HttpQueryHandle {
             processors: vec![sink],
         });
 
-        let query_need_abort = ctx.query_need_abort();
+        let query_ctx = ctx.clone();
         let executor_settings = ExecutorSettings::try_create(&ctx.get_settings())?;
 
         let run = move || -> Result<()> {
             let mut pipelines = build_res.sources_pipelines;
             pipelines.push(build_res.main_pipeline);
 
-            let pipeline_executor = PipelineCompleteExecutor::from_pipelines(
-                query_need_abort,
-                pipelines,
-                executor_settings,
-            )?;
+            let pipeline_executor =
+                PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
+
+            query_ctx.set_executor(Arc::downgrade(&pipeline_executor.get_inner()));
             pipeline_executor.execute()
         };
 
         let (error_sender, mut error_receiver) = mpsc::channel::<Result<()>>(1);
-        let (abort_handle, abort_registration) = AbortHandle::new_pair();
 
         GlobalIORuntime::instance().spawn(async move {
-            let error_receiver = Abortable::new(error_receiver.recv(), abort_registration);
-            ctx.add_source_abort_handle(abort_handle);
-            match error_receiver.await {
-                Err(_) => {
-                    Executor::stop(&executor, Err(ErrorCode::AbortedQuery("")), false).await;
-                    block_buffer.stop_push().await.unwrap();
-                }
-                Ok(Some(Err(e))) => {
+            match error_receiver.recv().await {
+                Some(Err(e)) => {
                     Executor::stop(&executor, Err(e), false).await;
                     block_buffer.stop_push().await.unwrap();
                 }
@@ -463,6 +423,10 @@ impl HttpQueryHandle {
                 }
             }
         });
-        Ok(Box::pin(DataBlockStream::create(schema, None, vec![])))
+        Ok(Box::pin(DataBlockStream::create(
+            result_schema,
+            None,
+            vec![],
+        )))
     }
 }

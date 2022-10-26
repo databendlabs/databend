@@ -45,7 +45,7 @@ impl EltFunction {
             assert_numeric(&arg)?;
 
             for arg in args[1..].iter() {
-                let arg = remove_nullable(*arg);
+                let arg = remove_nullable(arg);
                 if !arg.is_null() {
                     assert_string(&arg)?;
                 }
@@ -76,7 +76,7 @@ impl EltFunction {
 
 impl Function for EltFunction {
     fn name(&self) -> &str {
-        &*self.display_name
+        &self.display_name
     }
 
     fn return_type(&self) -> DataTypeImpl {

@@ -15,6 +15,7 @@
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_meta_types::MetaId;
+use common_pipeline_core::Pipe;
 
 use super::Plan;
 
@@ -23,7 +24,8 @@ pub enum InsertInputSource {
     #[serde(skip)]
     SelectPlan(Box<Plan>),
     // From outside streaming source
-    StreamingWithFormat(String),
+    #[serde(skip)]
+    StreamingWithFormat(String, Pipe),
     // From cloned String and format
     StrWithFormat((String, String)),
 }
@@ -66,7 +68,7 @@ impl Insert {
     pub fn format(&self) -> Option<&str> {
         match &self.source {
             InsertInputSource::SelectPlan(_) => None,
-            InsertInputSource::StreamingWithFormat(v) => Some(v.as_str()),
+            InsertInputSource::StreamingWithFormat(v, _) => Some(v.as_str()),
             InsertInputSource::StrWithFormat((_, v)) => Some(v.as_str()),
         }
     }

@@ -564,11 +564,11 @@ pub fn set_meta_metrics_current_leader(current_leader: NodeId) {
 }
 
 pub fn set_meta_metrics_is_leader(is_leader: bool) {
-    IS_LEADER.set(if is_leader { 1 } else { 0 });
+    IS_LEADER.set(i64::from(is_leader));
 }
 
 pub fn set_meta_metrics_node_is_health(is_health: bool) {
-    NODE_IS_HEALTH.set(if is_health { 1 } else { 0 });
+    NODE_IS_HEALTH.set(i64::from(is_health));
 }
 
 pub fn incr_meta_metrics_leader_change() {

@@ -22,7 +22,6 @@ use common_legacy_planners::Extras;
 use common_legacy_planners::Partitions;
 use common_legacy_planners::ReadDataSourcePlan;
 use common_legacy_planners::Statistics;
-use common_legacy_planners::TruncateTablePlan;
 use common_meta_app::schema::TableInfo;
 
 use crate::pipelines::processors::port::InputPort;
@@ -102,11 +101,7 @@ impl Table for NullTable {
         Ok(())
     }
 
-    async fn truncate(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _truncate_plan: TruncateTablePlan,
-    ) -> Result<()> {
+    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: &str, _: bool) -> Result<()> {
         Ok(())
     }
 }

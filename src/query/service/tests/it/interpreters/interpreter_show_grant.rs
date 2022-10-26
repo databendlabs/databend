@@ -21,7 +21,8 @@ use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
 use common_users::RoleCacheManager;
-use databend_query::interpreters::InterpreterFactoryV2;
+use common_users::UserApiProvider;
+use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::TableContext;
 use databend_query::sql::Planner;
 use futures::TryStreamExt;
@@ -32,7 +33,7 @@ async fn test_show_grant_interpreter() -> Result<()> {
     let mut planner = Planner::new(ctx.clone());
 
     let tenant = ctx.get_tenant();
-    let user_mgr = ctx.get_user_manager();
+    let user_mgr = UserApiProvider::instance();
     let role_cache_mgr = RoleCacheManager::instance();
     user_mgr
         .add_user(&tenant, UserInfo::new_no_auth("test", "localhost"), false)
@@ -45,7 +46,7 @@ async fn test_show_grant_interpreter() -> Result<()> {
     {
         let query = "SHOW GRANTS FOR 'test'@'localhost'";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
         assert_eq!(executor.name(), "ShowGrantsInterpreter");
 
         let stream = executor.execute(ctx.clone()).await?;
@@ -57,7 +58,7 @@ async fn test_show_grant_interpreter() -> Result<()> {
     {
         let query = "SHOW GRANTS FOR ROLE 'role1'";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
         assert_eq!(executor.name(), "ShowGrantsInterpreter");
 
         let stream = executor.execute(ctx.clone()).await?;
@@ -79,7 +80,7 @@ async fn test_show_grant_interpreter() -> Result<()> {
     {
         let query = "SHOW GRANTS FOR ROLE 'role2'";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
 
         let stream = executor.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
@@ -105,7 +106,7 @@ async fn test_show_grant_interpreter() -> Result<()> {
     {
         let query = "SHOW GRANTS FOR 'test'@'localhost'";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
 
         let stream = executor.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
@@ -133,7 +134,7 @@ async fn test_show_grant_interpreter() -> Result<()> {
     {
         let query = "SHOW GRANTS FOR 'test'@'localhost'";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
 
         let stream = executor.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
@@ -154,7 +155,7 @@ async fn test_show_grant_interpreter() -> Result<()> {
     {
         let query = "SHOW GRANTS FOR ROLE 'role1'";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
 
         let stream = executor.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
@@ -179,7 +180,7 @@ async fn test_show_grant_interpreter() -> Result<()> {
     {
         let query = "SHOW GRANTS FOR ROLE 'role1'";
         let (plan, _, _) = planner.plan_sql(query).await?;
-        let executor = InterpreterFactoryV2::get(ctx.clone(), &plan)?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
 
         let stream = executor.execute(ctx.clone()).await?;
         let result = stream.try_collect::<Vec<_>>().await?;

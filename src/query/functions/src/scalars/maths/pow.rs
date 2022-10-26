@@ -37,7 +37,7 @@ pub struct PowFunction {
 impl PowFunction {
     pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         for arg in args {
-            assert_numeric(*arg)?;
+            assert_numeric(arg)?;
         }
         Ok(Box::new(PowFunction {
             display_name: display_name.to_string(),
@@ -61,7 +61,7 @@ where
 
 impl Function for PowFunction {
     fn name(&self) -> &str {
-        &*self.display_name
+        &self.display_name
     }
 
     fn return_type(&self) -> DataTypeImpl {

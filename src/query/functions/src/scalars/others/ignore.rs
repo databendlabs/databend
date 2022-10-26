@@ -61,7 +61,7 @@ impl fmt::Display for IgnoreFunction {
 
 impl Function for IgnoreFunction {
     fn name(&self) -> &str {
-        &*self.display_name
+        &self.display_name
     }
 
     fn return_type(&self) -> DataTypeImpl {

@@ -19,9 +19,9 @@ mod stat;
 use std::collections::HashSet;
 
 pub use builder::RelExpr;
+use common_planner::IndexType;
 pub use enforcer::require_property;
 
-use crate::sql::planner::IndexType;
 use crate::sql::plans::Scalar;
 
 pub type ColumnSet = HashSet<IndexType>;

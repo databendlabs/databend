@@ -184,11 +184,19 @@ impl<'a> MetaLeader<'a> {
         // report metrics
         let _guard = WithCount::new((), ProposalPending);
 
-        info!("write LogEntry: {:?}", entry);
-        let write_rst = self.meta_node.raft.client_write(entry).await;
-        info!("raft.client_write rst: {:?}", write_rst);
+        info!("write LogEntry: {}", entry);
+        let write_res = self.meta_node.raft.client_write(entry).await;
+        if let Ok(ok) = &write_res {
+            info!(
+                "raft.client_write res ok: log_id: {}, data: {}, membership: {:?}",
+                ok.log_id, ok.data, ok.membership
+            );
+        }
+        if let Err(err) = &write_res {
+            info!("raft.client_write res err: {:?}", err);
+        }
 
-        match write_rst {
+        match write_res {
             Ok(resp) => Ok(resp.data),
             Err(cli_write_err) => Err(RaftWriteError::from_raft_err(cli_write_err)),
         }
