@@ -1228,7 +1228,6 @@ dependencies = [
  "serial_test",
  "tikv-jemalloc-ctl",
  "tikv-jemalloc-sys",
- "tikv-jemallocator",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -7937,16 +7936,6 @@ dependencies = [
  "cc",
  "fs_extra",
  "libc",
-]
-
-[[package]]
-name = "tikv-jemallocator"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5b7bcecfafe4998587d636f9ae9d55eb9d0499877b88757767c346875067098"
-dependencies = [
- "libc",
- "tikv-jemalloc-sys",
 ]
 
 [[package]]

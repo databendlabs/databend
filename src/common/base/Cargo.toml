@@ -49,5 +49,4 @@ uuid = { version = "1.1.2", features = ["serde", "v4"] }
 anyhow = { workspace = true }
 rand = "0.8.3"
 serial_test = "0.5.1"
-tikv-jemallocator = "0.4.1"
 tracing-subscriber = "0.3.3"

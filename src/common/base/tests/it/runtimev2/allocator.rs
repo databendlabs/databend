@@ -17,6 +17,7 @@ use std::alloc::Layout;
 use std::mem;
 use std::ptr::null_mut;
 
+use common_base::mem_allocator::JEAllocator;
 use common_base::runtime::print_memory_stats;
 use common_base::runtime::total_memory_usage;
 use common_base::runtime::AllocHeader;
@@ -32,8 +33,7 @@ fn test_print_counters_ary() {
     print_memory_stats();
 }
 
-static ALLOC: ProxyAllocator<tikv_jemallocator::Jemalloc> =
-    ProxyAllocator::new(tikv_jemallocator::Jemalloc);
+static ALLOC: ProxyAllocator<JEAllocator> = ProxyAllocator::new(JEAllocator);
 
 #[test]
 #[serial_test::serial]
