@@ -403,6 +403,9 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
     tc2.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
 
     let meta_node = MetaNode::start(&tc0.config).await?;
+    // Initial log and add node-0 log.
+    let mut log_index = 2;
+
     let res = meta_node
         .join_cluster(&tc0.config.raft_config, tc0.config.grpc_api_address)
         .await?;
@@ -413,6 +416,14 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
         .join_cluster(&tc1.config.raft_config, tc1.config.grpc_api_address.clone())
         .await?;
     assert_eq!(Ok(()), res);
+
+    // Two membership logs, one add-node log;
+    log_index += 3;
+    meta_node1
+        .raft
+        .wait(timeout())
+        .log(Some(log_index), "node-1 join cluster")
+        .await?;
 
     info!("--- initialize store for node-2");
     {
@@ -427,6 +438,17 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
             .join_cluster(&tc2.config.raft_config, tc2.config.grpc_api_address.clone())
             .await?;
         assert_eq!(Ok(()), res);
+
+        // Two membership logs, one add-node log;
+        log_index += 3;
+
+        // Add this barrier to ensure all of the logs are applied before quit.
+        // Otherwise the next time node-2 starts it can not see the applied
+        // membership and believes it has not yet joined into a cluster.
+        n2.raft
+            .wait(timeout())
+            .log(Some(log_index), "node-2 join cluster")
+            .await?;
 
         n2.stop().await?;
     }
