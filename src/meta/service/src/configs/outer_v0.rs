@@ -209,8 +209,10 @@ pub struct ConfigViaEnv {
     pub metasrv_log_file_on: bool,
     pub metasrv_log_file_level: String,
     pub metasrv_log_file_dir: String,
+    pub metasrv_log_file_format: String,
     pub metasrv_log_stderr_on: bool,
     pub metasrv_log_stderr_level: String,
+    pub metasrv_log_stderr_format: String,
     pub admin_api_address: String,
     pub admin_tls_server_cert: String,
     pub admin_tls_server_key: String,
@@ -250,8 +252,10 @@ impl From<Config> for ConfigViaEnv {
             metasrv_log_file_on: cfg.log.file.file_on,
             metasrv_log_file_level: cfg.log.file.file_level,
             metasrv_log_file_dir: cfg.log.file.file_dir,
+            metasrv_log_file_format: cfg.log.file.file_format,
             metasrv_log_stderr_on: cfg.log.stderr.stderr_on,
             metasrv_log_stderr_level: cfg.log.stderr.stderr_level,
+            metasrv_log_stderr_format: cfg.log.stderr.stderr_format,
             admin_api_address: cfg.admin_api_address,
             admin_tls_server_cert: cfg.admin_tls_server_cert,
             admin_tls_server_key: cfg.admin_tls_server_key,
@@ -307,10 +311,12 @@ impl Into<Config> for ConfigViaEnv {
                 file_on: self.metasrv_log_file_on,
                 file_level: self.metasrv_log_file_level,
                 file_dir: self.metasrv_log_file_dir,
+                file_format: self.metasrv_log_file_format,
             },
             stderr: StderrLogConfig {
                 stderr_on: self.metasrv_log_stderr_on,
                 stderr_level: self.metasrv_log_stderr_level,
+                stderr_format: self.metasrv_log_stderr_format,
             },
         };
 
@@ -533,6 +539,11 @@ pub struct FileLogConfig {
     #[clap(long = "log-file-dir", default_value = "./.databend/logs")]
     #[serde(rename = "dir")]
     pub file_dir: String,
+
+    /// Log file format
+    #[clap(long = "log-file-format", default_value = "json")]
+    #[serde(rename = "format")]
+    pub file_format: String,
 }
 
 impl Default for FileLogConfig {
@@ -548,6 +559,7 @@ impl Into<InnerFileLogConfig> for FileLogConfig {
             on: self.file_on,
             level: self.file_level,
             dir: self.file_dir,
+            format: self.file_format,
         }
     }
 }
@@ -558,6 +570,7 @@ impl From<InnerFileLogConfig> for FileLogConfig {
             file_on: inner.on,
             file_level: inner.level,
             file_dir: inner.dir,
+            file_format: inner.format,
         }
     }
 }
@@ -573,6 +586,10 @@ pub struct StderrLogConfig {
     #[clap(long = "log-stderr-level", default_value = "INFO")]
     #[serde(rename = "level")]
     pub stderr_level: String,
+
+    #[clap(long = "log-stderr-format", default_value = "text")]
+    #[serde(rename = "format")]
+    pub stderr_format: String,
 }
 
 impl Default for StderrLogConfig {
@@ -587,6 +604,7 @@ impl Into<InnerStderrLogConfig> for StderrLogConfig {
         InnerStderrLogConfig {
             on: self.stderr_on,
             level: self.stderr_level,
+            format: self.stderr_format,
         }
     }
 }
@@ -596,6 +614,7 @@ impl From<InnerStderrLogConfig> for StderrLogConfig {
         Self {
             stderr_on: inner.on,
             stderr_level: inner.level,
+            stderr_format: inner.format,
         }
     }
 }

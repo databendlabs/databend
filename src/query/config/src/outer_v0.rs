@@ -1139,6 +1139,11 @@ pub struct FileLogConfig {
     #[clap(long = "log-file-dir", default_value = "./.databend/logs")]
     #[serde(rename = "dir")]
     pub file_dir: String,
+
+    /// Log file format
+    #[clap(long = "log-file-format", default_value = "json")]
+    #[serde(rename = "format")]
+    pub file_format: String,
 }
 
 impl Default for FileLogConfig {
@@ -1155,6 +1160,7 @@ impl TryInto<InnerFileLogConfig> for FileLogConfig {
             on: self.file_on,
             level: self.file_level,
             dir: self.file_dir,
+            format: self.file_format,
         })
     }
 }
@@ -1165,6 +1171,7 @@ impl From<InnerFileLogConfig> for FileLogConfig {
             file_on: inner.on,
             file_level: inner.level,
             file_dir: inner.dir,
+            file_format: inner.format,
         }
     }
 }
@@ -1180,6 +1187,10 @@ pub struct StderrLogConfig {
     #[clap(long = "log-stderr-level", default_value = "INFO")]
     #[serde(rename = "level")]
     pub stderr_level: String,
+
+    #[clap(long = "log-stderr-format", default_value = "text")]
+    #[serde(rename = "format")]
+    pub stderr_format: String,
 }
 
 impl Default for StderrLogConfig {
@@ -1195,6 +1206,7 @@ impl TryInto<InnerStderrLogConfig> for StderrLogConfig {
         Ok(InnerStderrLogConfig {
             on: self.stderr_on,
             level: self.stderr_level,
+            format: self.stderr_format,
         })
     }
 }
@@ -1204,6 +1216,7 @@ impl From<InnerStderrLogConfig> for StderrLogConfig {
         Self {
             stderr_on: inner.on,
             stderr_level: inner.level,
+            stderr_format: inner.format,
         }
     }
 }
