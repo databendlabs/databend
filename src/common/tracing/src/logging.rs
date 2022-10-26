@@ -90,6 +90,7 @@ pub fn init_logging(name: &str, cfg: &Config, enable_tracing_log: bool) -> Vec<W
             "json" => {
                 let layer = fmt::layer()
                     .with_writer(rolling_writer)
+                    .fmt_fields(fmt::format::JsonFields::default())
                     .event_format(format().json())
                     .with_filter(filter);
                 subscriber.with(None).with(Some(layer))
@@ -121,6 +122,7 @@ pub fn init_logging(name: &str, cfg: &Config, enable_tracing_log: bool) -> Vec<W
             "json" => {
                 let layer = fmt::layer()
                     .with_writer(io::stderr)
+                    .fmt_fields(fmt::format::JsonFields::default())
                     .event_format(format().json())
                     .with_filter(env_filter);
                 subscriber.with(None).with(Some(layer))
