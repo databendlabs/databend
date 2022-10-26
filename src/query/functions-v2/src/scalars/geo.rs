@@ -12,14 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cell::OnceCell;
 use std::mem::MaybeUninit;
 
 use common_expression::types::number::F32;
-use common_expression::types::number::F64;
 use common_expression::types::NumberType;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
+use once_cell::sync::OnceCell;
 
 const PI: f64 = std::f64::consts::PI;
 const PI_F: f32 = std::f32::consts::PI;
@@ -35,7 +34,7 @@ const METRIC_LUT_SIZE: usize = 1024;
 /// Earth radius in meters using WGS84 authalic radius.
 /// We use this value to be consistent with H3 library.
 const EARTH_RADIUS: f32 = 6371007.180918475f32;
-const EARTH_DIAMETER: f32 = 2 * EARTH_RADIUS;
+const EARTH_DIAMETER: f32 = 2f32 * EARTH_RADIUS;
 
 static COS_LUT: OnceCell<[f32; COS_LUT_SIZE + 1]> = OnceCell::new();
 static ASIN_SQRT_LUT: OnceCell<[f32; ASIN_SQRT_LUT_SIZE + 1]> = OnceCell::new();
@@ -59,20 +58,28 @@ pub fn register(registry: &mut FunctionRegistry) {
 
 pub fn geo_dist_init() {
     let cos_lut: [f32; COS_LUT_SIZE + 1] = (0..=COS_LUT_SIZE)
-        .map(|i| (((2 * PI * i / COS_LUT_SIZE) as f64).cos()) as f32)
-        .collect();
+        .map(|i| (((2f64 * PI * i as f64 / COS_LUT_SIZE as f64) as f64).cos()) as f32)
+        .collect::<Vec<f32>>()
+        .try_into()
+        .unwrap();
     COS_LUT.set(cos_lut).unwrap(); // todo(ariesdevil): remove unwrap()
 
     let asin_sqrt_lut: [f32; ASIN_SQRT_LUT_SIZE + 1] = (0..=ASIN_SQRT_LUT_SIZE)
-        .map(|i| (((i as f64) / ASIN_SQRT_LUT_SIZE) as f64).sqrt().asin())
-        .collect();
+        .map(|i| {
+            ((i as f64 / ASIN_SQRT_LUT_SIZE as f64) as f64)
+                .sqrt()
+                .asin() as f32
+        })
+        .collect::<Vec<f32>>()
+        .try_into()
+        .unwrap();
     ASIN_SQRT_LUT.set(asin_sqrt_lut).unwrap();
 
     let mut wgs84_metric_meters_lut: [MaybeUninit<f32>; 2 * (METRIC_LUT_SIZE + 1)] =
         unsafe { MaybeUninit::uninit().assume_init() };
 
     for i in 0..=METRIC_LUT_SIZE {
-        let latitude: f64 = i * (PI / METRIC_LUT_SIZE) - PI * 0.5f64;
+        let latitude: f64 = i as f64 * (PI / METRIC_LUT_SIZE as f64) - PI * 0.5f64;
 
         wgs84_metric_meters_lut[i].write(
             (111132.09f64 - 566.05f64 * (2f64 * latitude).cos() + 1.20f64 * (4f64 * latitude).cos())
@@ -108,8 +115,8 @@ fn geodist_deg_diff(mut f: f32) -> f32 {
 fn geodist_fast_cos(x: f32) -> f32 {
     let mut y = x.abs() * (COS_LUT_SIZE_F / PI_F / 2.0f32);
     let mut i = float_to_index(y);
-    y -= i;
-    i &= (COS_LUT_SIZE - 1);
+    y -= i as f32;
+    i &= COS_LUT_SIZE - 1;
     let cos_lut = COS_LUT.get().unwrap();
     cos_lut[i] + (cos_lut[i + 1] - cos_lut[i]) * y
 }
@@ -118,7 +125,7 @@ fn geodist_fast_cos(x: f32) -> f32 {
 fn geodist_fast_sin(x: f32) -> f32 {
     let mut y = x.abs() * (COS_LUT_SIZE_F / PI_F / 2.0f32);
     let mut i = float_to_index(y);
-    y -= i;
+    y -= i as f32;
     i = (i - COS_LUT_SIZE / 4) & (COS_LUT_SIZE - 1); // cos(x - pi / 2) = sin(x), costable / 4 = pi / 2
     let cos_lut = COS_LUT.get().unwrap();
     cos_lut[i] + (cos_lut[i + 1] - cos_lut[i]) * y
@@ -127,24 +134,25 @@ fn geodist_fast_sin(x: f32) -> f32 {
 #[inline]
 fn geodist_fast_asin_sqrt(x: f32) -> f32 {
     if x < 0.122f32 {
+        let x = x as f64;
         let y = x.sqrt();
-        return y
-            + x * y * 0.166666666666666f32
-            + x * x * y * 0.075f32
-            + x * x * x * y * 0.044642857142857f32;
+        return (y
+            + x * y * 0.166666666666666f64
+            + x * x * y * 0.075f64
+            + x * x * x * y * 0.044642857142857f64) as f32;
     }
     if x < 0.948f32 {
-        let x = x * ASIN_SQRT_LUT_SIZE;
+        let x = x * ASIN_SQRT_LUT_SIZE as f32;
         let i = float_to_index(x);
         let asin_sqrt_lut = ASIN_SQRT_LUT.get().unwrap();
-        return asin_sqrt_lut[i] + (asin_sqrt_lut[i + 1] - asin_sqrt_lut[i]) * (x - i);
+        return asin_sqrt_lut[i] + (asin_sqrt_lut[i + 1] - asin_sqrt_lut[i]) * (x - i as f32);
     }
     x.sqrt().asin()
 }
 
 #[inline(always)]
-fn float_to_index(x: f32) -> isize {
-    x as isize
+fn float_to_index(x: f32) -> usize {
+    x as usize
 }
 
 fn distance(lon1deg: f32, lat1deg: f32, lon2deg: f32, lat2deg: f32) -> f32 {
@@ -152,19 +160,19 @@ fn distance(lon1deg: f32, lat1deg: f32, lon2deg: f32, lat2deg: f32) -> f32 {
     let lon_diff = geodist_deg_diff(lon1deg - lon2deg);
 
     if lon_diff < 13f32 {
-        let latitude_midpoint: f32 = (lat1deg + lat2deg + 180f32) * METRIC_LUT_SIZE / 360;
+        let latitude_midpoint: f32 = (lat1deg + lat2deg + 180f32) * METRIC_LUT_SIZE as f32 / 360f32;
         let latitude_midpoint_index = float_to_index(latitude_midpoint);
 
         let wgs84_metric_meters_lut = WGS84_METRIC_METERS_LUT.get().unwrap();
         let k_lat: f32 = wgs84_metric_meters_lut[latitude_midpoint_index * 2]
             + (wgs84_metric_meters_lut[(latitude_midpoint_index + 1) * 2]
                 - wgs84_metric_meters_lut[latitude_midpoint_index * 2])
-                * (latitude_midpoint - latitude_midpoint_index);
+                * (latitude_midpoint - latitude_midpoint_index as f32);
 
         let k_lon: f32 = wgs84_metric_meters_lut[latitude_midpoint_index * 2 + 1]
             + (wgs84_metric_meters_lut[(latitude_midpoint_index + 1) * 2 + 1]
                 - wgs84_metric_meters_lut[latitude_midpoint_index * 2 + 1])
-                * (latitude_midpoint - latitude_midpoint_index);
+                * (latitude_midpoint - latitude_midpoint_index as f32);
 
         (k_lat * lat_diff * lat_diff + k_lon * lon_diff * lon_diff).sqrt()
     } else {
