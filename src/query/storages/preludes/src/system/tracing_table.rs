@@ -31,6 +31,7 @@ use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use tracing::debug;
+use tracing::warn;
 use walkdir::WalkDir;
 
 use crate::pipelines::processors::port::OutputPort;
@@ -179,7 +180,7 @@ impl SyncSource for TracingSource {
 
             if let Some(file_name) = self.tracing_files.pop_front() {
                 let max_rows = self.rows_pre_block;
-                let buffer = BufReader::new(File::open(file_name)?);
+                let buffer = BufReader::new(File::open(file_name.clone())?);
 
                 let mut timestamp_column = MutableStringColumn::with_capacity(max_rows);
                 let mut level_column = MutableStringColumn::with_capacity(max_rows);
@@ -203,11 +204,22 @@ impl SyncSource for TracingSource {
                         target_column = MutableStringColumn::with_capacity(max_rows);
                     }
 
-                    let entry: LogEntry = serde_json::from_str(line.unwrap().as_str())?;
-                    timestamp_column.push(entry.timestamp.as_bytes());
-                    level_column.push(entry.level.as_bytes());
-                    fields_column.push(&VariantValue(entry.fields));
-                    target_column.push(entry.target.as_bytes());
+                    let entry: std::result::Result<LogEntry, _> =
+                        serde_json::from_str(&line.unwrap());
+                    match entry {
+                        Ok(entry) => {
+                            timestamp_column.push(entry.timestamp.as_bytes());
+                            level_column.push(entry.level.as_bytes());
+                            fields_column.push(&VariantValue(entry.fields));
+                            target_column.push(entry.target.as_bytes());
+                        }
+                        Err(err) => {
+                            warn!(
+                                "ignored invalid json log entry, file {file_name} line {index} failed: {err:?}"
+                            );
+                            continue;
+                        }
+                    }
                 }
 
                 if !timestamp_column.is_empty() {
