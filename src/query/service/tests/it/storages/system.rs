@@ -73,13 +73,27 @@ async fn test_system_tables() -> Result<()> {
     test_users_table(file).await.unwrap();
 
     // with assert_eq
-    test_clusters_table().await.unwrap();
-    test_contributors_table().await.unwrap();
-    test_credits_table().await.unwrap();
-    test_functions_table().await.unwrap();
-    test_metrics_table().await.unwrap();
-    test_tables_table().await.unwrap();
-    test_tracing_table().await.unwrap();
+    test_clusters_table()
+        .await
+        .expect("test_clusters_table must succeed");
+    test_contributors_table()
+        .await
+        .expect("test_contributors_table must succeed");
+    test_credits_table()
+        .await
+        .expect("test_credits_table must succeed");
+    test_functions_table()
+        .await
+        .expect("test_functions_table must succeed");
+    test_metrics_table()
+        .await
+        .expect("test_metrics_table must succeed");
+    test_tables_table()
+        .await
+        .expect("test_tables_table must succeed");
+    test_tracing_table()
+        .await
+        .expect("test_tracing_table must succeed");
     Ok(())
 }
 
@@ -371,7 +385,7 @@ async fn test_tracing_table() -> Result<()> {
     let stream = table.read_data_block_stream(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
-    assert_eq!(block.num_columns(), 7);
+    assert_eq!(block.num_columns(), 4);
     assert!(block.num_rows() > 0);
 
     Ok(())
