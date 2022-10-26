@@ -1327,7 +1327,6 @@ dependencies = [
  "criterion",
  "dyn-clone",
  "enum_dispatch",
- "get-size",
  "itertools",
  "lexical-core",
  "micromarshal",
@@ -1495,7 +1494,6 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-metrics",
- "get-size",
  "once_cell",
  "parking_lot 0.12.1",
  "serde",
@@ -2185,7 +2183,6 @@ dependencies = [
  "common-storages-index",
  "futures",
  "futures-util",
- "get-size",
  "itertools",
  "metrics",
  "opendal",
@@ -3720,25 +3717,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fdbd3cdc1856ca7736763d2784671c2c9b0093f0ee47e2bed0059feed6afca89"
 dependencies = [
  "lazy_static",
-]
-
-[[package]]
-name = "get-size"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ffff7b577402f46b6e0069ae9c31a7859ab3f2abe7ff0fb614fe6441a1d6c306"
-dependencies = [
- "get-size-derive",
-]
-
-[[package]]
-name = "get-size-derive"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "316da74ccd236d0915a5793f3cb37b1154cc41857373d9a7334053294c933f70"
-dependencies = [
- "quote",
- "syn",
 ]
 
 [[package]]

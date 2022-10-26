@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 
 use common_datablocks::DataBlock;
-use get_size::GetSize;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -30,7 +29,7 @@ use crate::meta::Statistics;
 use crate::meta::Versioned;
 
 /// A segment comprises one or more blocks
-#[derive(Serialize, Deserialize, Debug, GetSize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct SegmentInfo {
     /// format version
     format_version: FormatVersion,
@@ -42,7 +41,7 @@ pub struct SegmentInfo {
 
 /// Meta information of a block
 /// Part of and kept inside the [SegmentInfo]
-#[derive(Serialize, Deserialize, Clone, Debug, GetSize)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct BlockMeta {
     pub row_count: u64,
     pub block_size: u64,
@@ -64,7 +63,6 @@ pub struct BlockMeta {
     /// `Lz4` is merely for backward compatibility, it will NO longer be
     /// used in the write path.
     #[serde(default = "Compression::legacy")]
-    #[get_size(ignore)]
     compression: Compression,
 }
 
