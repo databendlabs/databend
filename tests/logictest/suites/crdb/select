@@ -69,7 +69,7 @@ SELECT * FROM abc WHERE a > 5 AND a < 5 AND b>=100;
 statement ok
 INSERT INTO abc VALUES (0, 1, 2);
 
-statement query II
+statement error 1006
 SELECT a,b FROM abc WHERE CASE WHEN a != 0 THEN b/a > 1.5 ELSE false END;
 
 ----
