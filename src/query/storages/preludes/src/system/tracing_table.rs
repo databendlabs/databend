@@ -31,7 +31,6 @@ use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use tracing::debug;
-use tracing::warn;
 use walkdir::WalkDir;
 
 use crate::pipelines::processors::port::OutputPort;
@@ -41,23 +40,19 @@ use crate::pipelines::processors::SyncSourcer;
 use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
 use crate::sessions::TableContext;
-use crate::storages::system::tracing_table_stream::LogEntry;
 use crate::storages::Table;
 
+/// # TODO(xuanwo)
+///
+/// Users could store tracing log in different formats.
+/// We should find a better way to support them.
 pub struct TracingTable {
     table_info: TableInfo,
 }
 
 impl TracingTable {
     pub fn create(table_id: u64) -> Self {
-        // {"timestamp":"2022-02-15T18:47:10.821315Z","level":"INFO","fields":{"message":"preparing to shave yaks","number_of_yaks":3},"target":"fmt_json"}
-
-        let schema = DataSchemaRefExt::create(vec![
-            DataField::new("timestamp", Vu8::to_data_type()),
-            DataField::new("level", Vu8::to_data_type()),
-            DataField::new("fields", VariantObjectType::new_impl()),
-            DataField::new("target", Vu8::to_data_type()),
-        ]);
+        let schema = DataSchemaRefExt::create(vec![DataField::new("entry", Vu8::to_data_type())]);
 
         let table_info = TableInfo {
             desc: "'system'.'tracing'".to_string(),
@@ -182,54 +177,26 @@ impl SyncSource for TracingSource {
                 let max_rows = self.rows_pre_block;
                 let buffer = BufReader::new(File::open(file_name.clone())?);
 
-                let mut timestamp_column = MutableStringColumn::with_capacity(max_rows);
-                let mut level_column = MutableStringColumn::with_capacity(max_rows);
-                let mut fields_column: MutableObjectColumn<VariantValue> =
-                    MutableObjectColumn::with_capacity(max_rows);
-                let mut target_column = MutableStringColumn::with_capacity(max_rows);
+                let mut entry_column = MutableStringColumn::with_capacity(max_rows);
 
                 for (index, line) in buffer.lines().enumerate() {
                     if index != 0 && index % max_rows == 0 {
                         self.data_blocks
-                            .push_back(DataBlock::create(self.schema.clone(), vec![
-                                Arc::new(timestamp_column.finish()),
-                                Arc::new(level_column.finish()),
-                                Arc::new(fields_column.finish()),
-                                Arc::new(target_column.finish()),
-                            ]));
+                            .push_back(DataBlock::create(self.schema.clone(), vec![Arc::new(
+                                entry_column.finish(),
+                            )]));
 
-                        timestamp_column = MutableStringColumn::with_capacity(max_rows);
-                        level_column = MutableStringColumn::with_capacity(max_rows);
-                        fields_column = MutableObjectColumn::with_capacity(max_rows);
-                        target_column = MutableStringColumn::with_capacity(max_rows);
+                        entry_column = MutableStringColumn::with_capacity(max_rows);
                     }
 
-                    let entry: std::result::Result<LogEntry, _> =
-                        serde_json::from_str(&line.unwrap());
-                    match entry {
-                        Ok(entry) => {
-                            timestamp_column.push(entry.timestamp.as_bytes());
-                            level_column.push(entry.level.as_bytes());
-                            fields_column.push(&VariantValue(entry.fields));
-                            target_column.push(entry.target.as_bytes());
-                        }
-                        Err(err) => {
-                            warn!(
-                                "ignored invalid json log entry, file {file_name} line {index} failed: {err:?}"
-                            );
-                            continue;
-                        }
-                    }
+                    entry_column.push(line.unwrap().as_bytes());
                 }
 
-                if !timestamp_column.is_empty() {
+                if !entry_column.is_empty() {
                     self.data_blocks
-                        .push_back(DataBlock::create(self.schema.clone(), vec![
-                            Arc::new(timestamp_column.finish()),
-                            Arc::new(level_column.finish()),
-                            Arc::new(fields_column.finish()),
-                            Arc::new(target_column.finish()),
-                        ]));
+                        .push_back(DataBlock::create(self.schema.clone(), vec![Arc::new(
+                            entry_column.finish(),
+                        )]));
                 }
             }
         }
