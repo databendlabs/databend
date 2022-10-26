@@ -17,6 +17,7 @@ use common_datavalues::with_match_primitive_types_error;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num::traits::AsPrimitive;
+use num::Zero;
 
 use super::arithmetic_mul::arithmetic_mul_div_monotonicity;
 use crate::scalars::BinaryArithmeticFunction;
@@ -27,8 +28,18 @@ use crate::scalars::FunctionFeatures;
 use crate::scalars::Monotonicity;
 
 #[inline]
-fn div_scalar(l: impl AsPrimitive<f64>, r: impl AsPrimitive<f64>, _ctx: &mut EvalContext) -> f64 {
-    l.as_() / r.as_()
+fn div_scalar<O>(l: impl AsPrimitive<f64>, r: impl AsPrimitive<f64>, ctx: &mut EvalContext) -> O
+where
+    f64: AsPrimitive<O>,
+    O: FloatType + Zero,
+{
+    let l = l.as_();
+    let r = r.as_();
+    if std::intrinsics::unlikely(r == 0.0) {
+        ctx.set_error(ErrorCode::BadArguments("/ by zero"));
+        return O::zero();
+    }
+    (l / r).as_()
 }
 
 pub struct ArithmeticDivFunction;
