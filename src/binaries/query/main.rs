@@ -34,9 +34,7 @@ use databend_query::servers::MySQLHandler;
 use databend_query::servers::Server;
 use databend_query::servers::ShutdownHandle;
 use databend_query::GlobalServices;
-use limits_rs::get_own_limits;
 use tracing::info;
-use tracing::warn;
 
 #[databend_main]
 async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<()> {
@@ -259,17 +257,17 @@ fn run_cmd(conf: &Config) -> bool {
 
 #[cfg(not(target_os = "macos"))]
 fn check_max_open_files() {
-    let limits = match get_own_limits() {
+    let limits = match limits_rs::get_own_limits() {
         Ok(limits) => limits,
         Err(err) => {
-            warn!("get system limit of databend-query failed: {:?}", err);
+            tracing::warn!("get system limit of databend-query failed: {:?}", err);
             return;
         }
     };
     let max_open_files_limit = limits.max_open_files.soft;
     if let Some(max_open_files) = max_open_files_limit {
         if max_open_files < 65535 {
-            warn!(
+            tracing::warn!(
                 "The open file limit is too low for the databend-query. Please consider increase it by running `ulimit -n 65535`"
             );
         }
