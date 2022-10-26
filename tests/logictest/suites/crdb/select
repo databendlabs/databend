@@ -72,9 +72,6 @@ INSERT INTO abc VALUES (0, 1, 2);
 statement error 1006
 SELECT a,b FROM abc WHERE CASE WHEN a != 0 THEN b/a > 1.5 ELSE false END;
 
-----
-1 2
-
 statement ok
 drop table if exists kv;
 

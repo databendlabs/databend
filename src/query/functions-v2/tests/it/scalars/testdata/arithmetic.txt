@@ -502,6 +502,29 @@ evaluation (internal):
 +--------+------------------------+
 
 
+ast            : b / d2
+raw expr       : divide(ColumnRef(2)::Int16, ColumnRef(5)::UInt8 NULL)
+checked expr   : divide<Int16 NULL, UInt8 NULL>(CAST(ColumnRef(2) AS Int16 NULL), ColumnRef(5))
+evaluation:
++--------+---------+------------------+--------------+
+|        | b       | d2               | Output       |
++--------+---------+------------------+--------------+
+| Type   | Int16   | UInt8 NULL       | Float64 NULL |
+| Domain | {2..=6} | {0..=3} ∪ {NULL} | Unknown      |
+| Row 0  | 2       | 1                | 2            |
+| Row 1  | 4       | NULL             | NULL         |
+| Row 2  | 6       | 3                | 2            |
++--------+---------+------------------+--------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------+
+| Column | Data                                                                  |
++--------+-----------------------------------------------------------------------+
+| b      | Int16([2, 4, 6])                                                      |
+| d2     | NullableColumn { column: UInt8([1, 0, 3]), validity: [0b_____101] }   |
+| Output | NullableColumn { column: Float64([2, 0, 2]), validity: [0b_____101] } |
++--------+-----------------------------------------------------------------------+
+
+
 error: 
   --> SQL:1:5
   |
