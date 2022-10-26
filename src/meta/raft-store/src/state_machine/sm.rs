@@ -30,7 +30,6 @@ use common_meta_sled_store::SledKeySpace;
 use common_meta_sled_store::SledTree;
 use common_meta_sled_store::Store;
 use common_meta_sled_store::TransactionSledTree;
-use common_meta_sled_store::TxnKeySpace;
 use common_meta_stoerr::MetaStorageError;
 use common_meta_types::txn_condition;
 use common_meta_types::txn_op;
@@ -401,8 +400,7 @@ impl StateMachine {
     ) -> Result<AppliedState, MetaStorageError> {
         debug!(upsert_kv = debug(upsert_kv), "apply_update_kv_cmd");
 
-        let sub_tree = txn_tree.key_space::<GenericKV>();
-        let (prev, result) = self.txn_sub_tree_upsert(&sub_tree, upsert_kv, log_time_ms)?;
+        let (prev, result) = self.txn_upsert_kv(txn_tree, upsert_kv, log_time_ms)?;
 
         debug!("applied UpsertKV: {:?} {:?}", upsert_kv, result);
 
@@ -535,10 +533,8 @@ impl StateMachine {
         events: &mut Option<Vec<NotifyKVEvent>>,
         log_time_ms: u64,
     ) -> Result<(), MetaStorageError> {
-        let sub_tree = txn_tree.key_space::<GenericKV>();
-
-        let (prev, result) = self.txn_sub_tree_upsert(
-            &sub_tree,
+        let (prev, result) = self.txn_upsert_kv(
+            txn_tree,
             &UpsertKV::update(&put.key, &put.value).with(KVMeta {
                 expire_at: put.expire_at,
             }),
@@ -573,10 +569,8 @@ impl StateMachine {
         events: &mut Option<Vec<NotifyKVEvent>>,
         log_time_ms: u64,
     ) -> Result<(), MetaStorageError> {
-        let sub_tree = txn_tree.key_space::<GenericKV>();
-
         let (prev, result) =
-            self.txn_sub_tree_upsert(&sub_tree, &UpsertKV::delete(&delete.key), log_time_ms)?;
+            self.txn_upsert_kv(txn_tree, &UpsertKV::delete(&delete.key), log_time_ms)?;
 
         if let Some(events) = events {
             events.push((delete.key.to_string(), prev.clone(), result));
@@ -611,10 +605,8 @@ impl StateMachine {
         let mut count: u32 = 0;
         if let Some(kv_pairs) = kv_pairs {
             if let Some(kv_pairs) = kv_pairs.get(delete_by_prefix) {
-                let sub_tree = txn_tree.key_space::<GenericKV>();
                 for (key, _seq) in kv_pairs.iter() {
-                    let ret =
-                        self.txn_sub_tree_upsert(&sub_tree, &UpsertKV::delete(key), log_time_ms);
+                    let ret = self.txn_upsert_kv(txn_tree, &UpsertKV::delete(key), log_time_ms);
 
                     if let Ok(ret) = ret {
                         count += 1;
@@ -800,16 +792,15 @@ impl StateMachine {
     }
 
     #[allow(clippy::type_complexity)]
-    fn txn_sub_tree_upsert<'s, KS>(
-        &'s self,
-        sub_tree: &TxnKeySpace<'s, KS>,
+    fn txn_upsert_kv(
+        &self,
+        txn_tree: &TransactionSledTree,
         upsert_kv: &UpsertKV,
         log_time_ms: u64,
-    ) -> Result<(Option<SeqV>, Option<SeqV>), MetaStorageError>
-    where
-        KS: SledKeySpace<K = String, V = SeqV>,
-    {
-        let prev = sub_tree.get(&upsert_kv.key)?;
+    ) -> Result<(Option<SeqV>, Option<SeqV>), MetaStorageError> {
+        let kvs = txn_tree.key_space::<GenericKV>();
+
+        let prev = kvs.get(&upsert_kv.key)?;
 
         // If prev is timed out, treat it as a None.
         let prev = Self::unexpired_opt(prev, log_time_ms);
@@ -821,7 +812,7 @@ impl StateMachine {
         let mut new_seq_v = match &upsert_kv.value {
             Operation::Update(v) => SeqV::with_meta(0, upsert_kv.value_meta.clone(), v.clone()),
             Operation::Delete => {
-                sub_tree.remove(&upsert_kv.key)?;
+                kvs.remove(&upsert_kv.key)?;
                 return Ok((prev, None));
             }
             Operation::AsIs => match prev {
@@ -832,8 +823,8 @@ impl StateMachine {
             },
         };
 
-        new_seq_v.seq = self.txn_incr_seq(KS::NAME, sub_tree)?;
-        sub_tree.insert(&upsert_kv.key, &new_seq_v)?;
+        new_seq_v.seq = self.txn_incr_seq(GenericKV::NAME, txn_tree)?;
+        kvs.insert(&upsert_kv.key, &new_seq_v)?;
 
         debug!("applied upsert: {:?} res: {:?}", upsert_kv, new_seq_v);
         Ok((prev, Some(new_seq_v)))
