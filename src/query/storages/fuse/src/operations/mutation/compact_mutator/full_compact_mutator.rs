@@ -139,6 +139,9 @@ impl TableMutator for FullCompactMutator {
                     }
                 });
 
+                // todo: add real metrics
+                metrics_set_selected_blocks_memory_usage(0.0);
+
                 // If the number of blocks of segment meets block_per_seg, and the blocks in segments donot need to be compacted,
                 // then record the segment information.
                 if !need_merge && segments[i].blocks.len() == self.compact_params.block_per_seg {
