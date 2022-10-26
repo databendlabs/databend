@@ -14,44 +14,34 @@
 
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
-use crate::runtime::ThreadTracker;
+use crate::runtime::thread_memory_usage;
+
+static mut GLOBAL_ID: AtomicUsize = AtomicUsize::new(0);
+
+#[thread_local]
+pub static mut MEM_TRACKER: *mut MemoryTracker = std::ptr::null_mut();
 
 pub struct MemoryTracker {
-    memory_usage: AtomicUsize,
+    track_id: usize,
 }
 
 impl MemoryTracker {
-    pub fn create() -> Arc<MemoryTracker> {
-        Arc::new(MemoryTracker {
-            memory_usage: AtomicUsize::new(0),
-        })
-    }
-
-    #[inline]
-    pub fn alloc_memory(&self, size: usize) {
-        self.memory_usage.fetch_add(size, Ordering::Relaxed);
-    }
-
-    #[inline]
-    pub fn dealloc_memory(&self, size: usize) {
-        self.memory_usage.fetch_sub(size, Ordering::Relaxed);
-    }
-
-    #[inline]
-    pub fn current() -> Option<Arc<MemoryTracker>> {
+    pub fn create() -> *mut MemoryTracker {
+        let track_id = unsafe { GLOBAL_ID.fetch_add(1, Ordering::SeqCst) };
+        let tracker = Box::new(MemoryTracker { track_id });
         unsafe {
-            let thread_tracker = ThreadTracker::current();
-            match thread_tracker.is_null() {
-                true => None,
-                false => Some((*thread_tracker).rt_tracker.memory_tracker.clone()),
-            }
+            MEM_TRACKER = Box::into_raw(tracker);
+            MEM_TRACKER
         }
+    }
+
+    pub fn get_id() -> usize {
+        unsafe { (*MEM_TRACKER).track_id }
     }
 
     #[inline]
     pub fn get_memory_usage(&self) -> usize {
-        self.memory_usage.load(Ordering::Relaxed)
+        thread_memory_usage(unsafe { (*MEM_TRACKER).track_id })
     }
 }

@@ -24,6 +24,8 @@ use std::sync::atomic::Ordering;
 
 use backtrace::Backtrace;
 
+use crate::runtime::MemoryTracker;
+
 const MEBIBYTE: usize = 1 << 20;
 /// Skip addresses that are above this value.
 const SKIP_ADDR_ABOVE: *mut c_void = 0x7000_0000_0000 as *mut c_void;
@@ -127,23 +129,7 @@ thread_local! {
 
 #[must_use]
 pub fn get_tid() -> usize {
-    TID.with(|f| {
-        let mut v = f.get();
-        if v == 0 {
-            // thread::current().id().as_u64() is still unstable
-            #[cfg(target_os = "linux")]
-            {
-                v = nix::unistd::gettid().as_raw() as usize;
-            }
-            #[cfg(not(target_os = "linux"))]
-            {
-                static NTHREADS: AtomicUsize = AtomicUsize::new(0);
-                v = NTHREADS.fetch_add(1, Ordering::Relaxed) as usize;
-            }
-            f.set(v)
-        }
-        v
-    })
+    MemoryTracker::get_id()
 }
 
 fn murmur64(mut h: u64) -> u64 {
