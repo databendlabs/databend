@@ -29,13 +29,13 @@ AWS S3 compatible object storage services:
 
 ```sql
 externalStageParams ::=
-  URL = 's3://<bucket>[<path>]'
+  URL = 's3://<bucket>[<path/>]'
   CONNECTION = (
         ENDPOINT_URL = 'https://<endpoint-URL>'
         ACCESS_KEY_ID = '<your-access-key-ID>'
         SECRET_ACCESS_KEY = '<your-secret-access-key>'
         REGION = '<region-name>'
-        ENABLE_VIRTUAL_HOST_STYLE = true|false
+        ENABLE_VIRTUAL_HOST_STYLE = 'true'|'false'
   )
 ```
 
@@ -52,7 +52,7 @@ Azure Blob storage：
 
 ```sql
 externalStageParams ::=
-  URL = 'azblob://<container>[<path>]'
+  URL = 'azblob://<container>[<path/>]'
   CONNECTION = (
         ENDPOINT_URL = 'https://<endpoint-URL>'
         ACCOUT_NAME = '<your-account-name>'
