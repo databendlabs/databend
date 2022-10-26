@@ -44,6 +44,11 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         return Ok(());
     }
 
+    init_default_metrics_recorder();
+    set_panic_hook();
+    // Make sure gloabl services have been inited.
+    GlobalServices::init(conf.clone()).await?;
+
     if conf.meta.address.is_empty() && conf.meta.endpoints.is_empty() {
         MetaEmbedded::init_global_meta_store(conf.meta.embedded_dir.clone()).await?;
     }
@@ -70,13 +75,9 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         sentry::configure_scope(|scope| scope.set_tag("address", flight_addr));
     }
 
-    init_default_metrics_recorder();
-    set_panic_hook();
-
     #[cfg(not(target_os = "macos"))]
     check_max_open_files();
 
-    GlobalServices::init(conf.clone()).await?;
     let mut shutdown_handle = ShutdownHandle::create()?;
 
     info!("Databend Query start with config: {:?}", conf);
