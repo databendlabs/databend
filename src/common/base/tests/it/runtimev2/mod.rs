@@ -13,4 +13,5 @@
 // limitations under the License.
 
 mod allocator;
+mod runtime;
 mod runtime_tracker;

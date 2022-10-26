@@ -32,7 +32,7 @@ fn test_runtime_tracker() {
     let ptr = unsafe { ALLOC.alloc(layout) };
     assert_ne!(ptr, null_mut());
 
-    let memory_usage = unsafe { tracker.get_memory_usage() };
+    let memory_usage = tracker.get_memory_usage();
 
     assert_eq!(memory_usage, 32);
 

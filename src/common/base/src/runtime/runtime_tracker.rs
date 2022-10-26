@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use crate::runtime::MemoryTracker;
 
 pub struct RuntimeTracker {
@@ -19,13 +21,13 @@ pub struct RuntimeTracker {
 }
 
 impl RuntimeTracker {
-    pub fn create() -> RuntimeTracker {
+    pub fn create() -> Arc<RuntimeTracker> {
         let memory_tracker = MemoryTracker::create();
-        RuntimeTracker { memory_tracker }
+        Arc::new(RuntimeTracker { memory_tracker })
     }
 
     /// # Safety
-    pub unsafe fn get_memory_usage(&self) -> usize {
+    pub fn get_memory_usage(&self) -> usize {
         unsafe { (*self.memory_tracker).get_memory_usage() }
     }
 }
