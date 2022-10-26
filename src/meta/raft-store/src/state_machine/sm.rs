@@ -786,15 +786,17 @@ impl StateMachine {
         key: &str,
         txn_tree: &TransactionSledTree,
     ) -> Result<u64, MetaStorageError> {
-        let seq_sub_tree = txn_tree.key_space::<Sequences>();
+        let seqs = txn_tree.key_space::<Sequences>();
 
         let key = key.to_string();
-        let curr = seq_sub_tree.update_and_fetch(&key, |old| Some(old.unwrap_or_default() + 1))?;
-        let curr = curr.unwrap();
 
-        debug!("applied IncrSeq: {}={}", key, curr);
+        let curr = seqs.get(&key)?;
+        let new_value = curr.unwrap_or_default() + 1;
+        seqs.insert(&key, &new_value)?;
 
-        Ok(curr.0)
+        debug!("txn_incr_seq: {}={}", key, new_value);
+
+        Ok(new_value.0)
     }
 
     #[allow(clippy::type_complexity)]
