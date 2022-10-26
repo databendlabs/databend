@@ -25,13 +25,10 @@ use futures::Stream;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct LogEntry {
-    pub v: i64,
-    pub name: String,
-    pub msg: String,
-    pub level: i8,
-    pub hostname: String,
-    pub pid: i64,
-    pub time: String,
+    pub timestamp: String,
+    pub level: String,
+    pub fields: serde_json::Value,
+    pub target: String,
 }
 
 pub struct TracingTableStream {
@@ -66,13 +63,10 @@ impl TracingTableStream {
             return Ok(None);
         }
 
-        let mut version_col = vec![];
-        let mut name_col = vec![];
-        let mut msg_col = vec![];
+        let mut timestamp_col = vec![];
         let mut level_col = vec![];
-        let mut host_col = vec![];
-        let mut pid_col = vec![];
-        let mut time_col = vec![];
+        let mut fields_col = vec![];
+        let mut target_col = vec![];
 
         let file = File::open(self.log_files[self.file_idx].clone())?;
         self.file_idx += 1;
@@ -84,29 +78,18 @@ impl TracingTableStream {
             }
 
             let entry: LogEntry = serde_json::from_str(line.unwrap().as_str())?;
-            version_col.push(entry.v);
-            name_col.push(entry.name);
-            msg_col.push(entry.msg);
+            timestamp_col.push(entry.timestamp);
             level_col.push(entry.level);
-            host_col.push(entry.hostname);
-            pid_col.push(entry.pid);
-            time_col.push(entry.time);
+            fields_col.push(VariantValue(entry.fields));
+            target_col.push(entry.target);
             self.limit_offset += 1;
         }
 
-        let names: Vec<&[u8]> = name_col.iter().map(|x| x.as_bytes()).collect();
-        let msgs: Vec<&[u8]> = msg_col.iter().map(|x| x.as_bytes()).collect();
-        let hosts: Vec<&[u8]> = host_col.iter().map(|x| x.as_bytes()).collect();
-        let times: Vec<&[u8]> = time_col.iter().map(|x| x.as_bytes()).collect();
-
         let block = DataBlock::create(self.schema.clone(), vec![
-            Series::from_data(version_col),
-            Series::from_data(names),
-            Series::from_data(msgs),
+            Series::from_data(timestamp_col),
             Series::from_data(level_col),
-            Series::from_data(hosts),
-            Series::from_data(pid_col),
-            Series::from_data(times),
+            Series::from_data(fields_col),
+            Series::from_data(target_col),
         ]);
 
         Ok(Some(block))
