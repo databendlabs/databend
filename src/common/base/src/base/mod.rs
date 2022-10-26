@@ -29,6 +29,7 @@ mod thread;
 mod uniq_id;
 
 pub use catch_unwind::catch_unwind;
+pub use catch_unwind::CatchUnwindFuture;
 pub use global_runtime::GlobalIORuntime;
 pub use net::get_free_tcp_port;
 pub use net::get_free_udp_port;

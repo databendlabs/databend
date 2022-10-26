@@ -14,11 +14,14 @@
 
 mod allocator;
 mod memory_tracker;
+#[allow(clippy::module_inception)]
+mod runtime;
 mod runtime_tracker;
 mod thread_tracker;
 
 pub use allocator::*;
 pub use memory_tracker::MemoryTracker;
+pub use runtime::*;
 pub use runtime_tracker::RuntimeTracker;
 pub use thread_tracker::ThreadTracker;
 pub use thread_tracker::TRACKER;
