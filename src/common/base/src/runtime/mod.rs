@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,13 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(thread_local)]
-#![feature(result_flattening)]
-#![feature(try_trait_v2)]
-#![allow(incomplete_features)]
+mod allocator;
 
-pub mod base;
-pub mod containers;
-pub mod mem_allocator;
-pub mod rangemap;
-pub mod runtime;
+pub use allocator::*;

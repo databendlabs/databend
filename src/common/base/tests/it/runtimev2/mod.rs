@@ -12,13 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(thread_local)]
-#![feature(result_flattening)]
-#![feature(try_trait_v2)]
-#![allow(incomplete_features)]
-
-pub mod base;
-pub mod containers;
-pub mod mem_allocator;
-pub mod rangemap;
-pub mod runtime;
+mod allocator;

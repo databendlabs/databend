@@ -27,6 +27,7 @@ common-exception = { path = "../exception" }
 
 # Crates.io dependencies
 async-trait = "0.1.57"
+backtrace = "0.3"
 ctrlc = { version = "3.2.3", features = ["termination"] }
 futures = "0.3.24"
 libc = "0.2.133"
@@ -47,3 +48,6 @@ uuid = { version = "1.1.2", features = ["serde", "v4"] }
 [dev-dependencies]
 anyhow = { workspace = true }
 rand = "0.8.3"
+serial_test = "0.5.1"
+tikv-jemallocator = "0.4.1"
+tracing-subscriber = "0.3.3"
