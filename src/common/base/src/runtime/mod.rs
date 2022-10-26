@@ -13,5 +13,12 @@
 // limitations under the License.
 
 mod allocator;
+mod memory_tracker;
+mod runtime_tracker;
+mod thread_tracker;
 
 pub use allocator::*;
+pub use memory_tracker::MemoryTracker;
+pub use runtime_tracker::RuntimeTracker;
+pub use thread_tracker::ThreadTracker;
+pub use thread_tracker::TRACKER;
