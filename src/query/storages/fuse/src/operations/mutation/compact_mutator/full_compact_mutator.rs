@@ -21,7 +21,6 @@ use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::Statistics;
 use common_fuse_meta::meta::Versioned;
-use get_size::GetSize;
 use opendal::Operator;
 
 use crate::io::BlockCompactor;
@@ -109,7 +108,8 @@ impl TableMutator for FullCompactMutator {
             .into_iter()
             .collect::<Result<Vec<_>>>()?;
 
-        metrics_set_segments_memory_usage(segments.get_heap_size() as f64);
+        // todo: add real metrics
+        metrics_set_segments_memory_usage(0.0);
 
         let limit = self.compact_params.limit.unwrap_or(segments.len());
         if limit < segments.len() {
@@ -137,7 +137,9 @@ impl TableMutator for FullCompactMutator {
                     need_merge = true;
                 }
             });
-            metrics_set_selected_blocks_memory_usage(self.selected_blocks.get_heap_size() as f64);
+
+            // todo: add real metrics
+            metrics_set_selected_blocks_memory_usage(0.0);
 
             // If the number of blocks of segment meets block_per_seg, and the blocks in segments donot need to be compacted,
             // then record the segment information.

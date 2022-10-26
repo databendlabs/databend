@@ -16,7 +16,6 @@ use std::collections::HashMap;
 
 use common_base::base::uuid::Uuid;
 use common_datavalues::DataValue;
-use get_size::GetSize;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -28,7 +27,7 @@ pub type ClusterKey = (u32, String);
 
 pub type StatisticsOfColumns = HashMap<u32, ColumnStatistics>;
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, GetSize)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ColumnStatistics {
     pub min: DataValue,
     pub max: DataValue,
@@ -40,7 +39,7 @@ pub struct ColumnStatistics {
     pub in_memory_size: u64,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, GetSize)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct ClusterStatistics {
     #[serde(default = "default_cluster_key_id")]
     pub cluster_key_id: u32,
@@ -59,7 +58,7 @@ fn default_level() -> i32 {
     0
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Default, GetSize)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 pub struct Statistics {
     pub row_count: u64,
     pub block_count: u64,
