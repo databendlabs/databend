@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(allocator_api)]
 #![feature(thread_local)]
+#![feature(ptr_metadata)]
 #![feature(result_flattening)]
 #![feature(try_trait_v2)]
 #![allow(incomplete_features)]

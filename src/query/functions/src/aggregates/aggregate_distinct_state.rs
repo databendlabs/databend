@@ -25,10 +25,9 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_hashtable::HashSet as CommonHashSet;
-use common_hashtable::HashSetWithStackMemory;
-use common_hashtable::HashTableEntity;
-use common_hashtable::HashTableKeyable;
+use common_hashtable::HashtableKeyable;
 use common_hashtable::KeysRef;
+use common_hashtable::StackHashSet;
 use common_io::prelude::*;
 use serde::Deserialize;
 use serde::Serialize;
@@ -61,10 +60,9 @@ pub struct AggregateDistinctState {
     set: HashSet<DataGroupValues, RandomState>,
 }
 
-pub struct AggregateDistinctPrimitiveState<T: PrimitiveType, E: From<T> + HashTableKeyable> {
-    set: HashSetWithStackMemory<{ 16 * 8 }, E>,
+pub struct AggregateDistinctPrimitiveState<T: PrimitiveType, E: From<T> + HashtableKeyable> {
+    set: StackHashSet<E, 16>,
     _t: PhantomData<T>,
-    inserted: bool,
 }
 
 const HOLDER_CAPACITY: usize = 256;
@@ -185,25 +183,34 @@ impl DistinctStateFunc<DataGroupValues> for AggregateDistinctState {
 impl AggregateDistinctStringState {
     #[inline]
     fn insert_and_materialize(&mut self, key: &KeysRef) {
-        let entity = self.set.insert_key(key, &mut self.inserted);
-        if self.inserted {
-            let data = unsafe { key.as_slice() };
+        match unsafe { self.set.insert_and_entry(*key) } {
+            Ok(entity) => {
+                self.inserted = true;
+                let data = unsafe { key.as_slice() };
 
-            let holder = self.holders.last_mut().unwrap();
-            // TODO(sundy): may cause memory fragmentation, refactor this using arena
-            if holder.may_resize(data.len()) {
-                let mut holder = MutableStringColumn::with_values_capacity(
-                    HOLDER_BYTES_CAPACITY.max(data.len()),
-                    HOLDER_CAPACITY,
-                );
-                holder.push(data);
-                let value = unsafe { holder.value_unchecked(holder.len() - 1) };
-                entity.set_key(KeysRef::create(value.as_ptr() as usize, value.len()));
-                self.holders.push(holder);
-            } else {
-                holder.push(data);
-                let value = unsafe { holder.value_unchecked(holder.len() - 1) };
-                entity.set_key(KeysRef::create(value.as_ptr() as usize, value.len()));
+                let holder = self.holders.last_mut().unwrap();
+                // TODO(sundy): may cause memory fragmentation, refactor this using arena
+                if holder.may_resize(data.len()) {
+                    let mut holder = MutableStringColumn::with_values_capacity(
+                        HOLDER_BYTES_CAPACITY.max(data.len()),
+                        HOLDER_CAPACITY,
+                    );
+                    holder.push(data);
+                    let value = unsafe { holder.value_unchecked(holder.len() - 1) };
+                    unsafe {
+                        entity.set_key(KeysRef::create(value.as_ptr() as usize, value.len()));
+                    }
+                    self.holders.push(holder);
+                } else {
+                    holder.push(data);
+                    let value = unsafe { holder.value_unchecked(holder.len() - 1) };
+                    unsafe {
+                        entity.set_key(KeysRef::create(value.as_ptr() as usize, value.len()));
+                    }
+                }
+            }
+            Err(_) => {
+                self.inserted = false;
             }
         }
     }
@@ -212,7 +219,7 @@ impl AggregateDistinctStringState {
 impl DistinctStateFunc<KeysRef> for AggregateDistinctStringState {
     fn new() -> Self {
         AggregateDistinctStringState {
-            set: CommonHashSet::create(),
+            set: CommonHashSet::new(),
             inserted: false,
             holders: vec![MutableStringColumn::with_values_capacity(
                 HOLDER_BYTES_CAPACITY,
@@ -233,7 +240,7 @@ impl DistinctStateFunc<KeysRef> for AggregateDistinctStringState {
             for index in 0..holder.len() {
                 let data = unsafe { holder.value_unchecked(index) };
                 let key = KeysRef::create(data.as_ptr() as usize, data.len());
-                self.set.insert_key(&key, &mut self.inserted);
+                self.inserted = self.set.set_insert(key).is_ok();
             }
         }
         Ok(())
@@ -286,7 +293,7 @@ impl DistinctStateFunc<KeysRef> for AggregateDistinctStringState {
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
         for value in rhs.set.iter() {
-            self.insert_and_materialize(value.get_key());
+            self.insert_and_materialize(value.key());
         }
         Ok(())
     }
@@ -322,20 +329,19 @@ impl DistinctStateFunc<KeysRef> for AggregateDistinctStringState {
 impl<T, E> DistinctStateFunc<T> for AggregateDistinctPrimitiveState<T, E>
 where
     T: PrimitiveType + From<E>,
-    E: From<T> + Sync + Send + Clone + std::fmt::Debug + HashTableKeyable,
+    E: From<T> + Sync + Send + Clone + std::fmt::Debug + HashtableKeyable,
 {
     fn new() -> Self {
         AggregateDistinctPrimitiveState {
-            set: HashSetWithStackMemory::create(),
+            set: StackHashSet::new(),
             _t: PhantomData,
-            inserted: false,
         }
     }
 
     fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
         writer.write_uvarint(self.set.len() as u64)?;
         for value in self.set.iter() {
-            let t: T = value.get_key().clone().into();
+            let t: T = (*value.key()).into();
             serialize_into_buf(writer, &t)?
         }
         Ok(())
@@ -343,11 +349,11 @@ where
 
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
         let size = reader.read_uvarint()?;
-        self.set = HashSetWithStackMemory::with_capacity(size as usize);
+        self.set = StackHashSet::with_capacity(size as usize);
         for _ in 0..size {
             let t: T = deserialize_from_slice(reader)?;
             let e = E::from(t);
-            let _ = self.set.insert_key(&e, &mut self.inserted);
+            let _ = self.set.set_insert(e);
         }
         Ok(())
     }
@@ -363,7 +369,7 @@ where
     fn add(&mut self, columns: &[ColumnRef], row: usize) -> Result<()> {
         let array: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
         let v = unsafe { array.value_unchecked(row) };
-        self.set.insert_key(&E::from(v), &mut self.inserted);
+        let _ = self.set.set_insert(E::from(v));
         Ok(())
     }
 
@@ -378,14 +384,14 @@ where
             Some(bitmap) => {
                 for (t, v) in array.iter().zip(bitmap.iter()) {
                     if v {
-                        self.set.insert_key(&E::from(*t), &mut self.inserted);
+                        let _ = self.set.set_insert(E::from(*t));
                     }
                 }
             }
             None => {
                 for row in 0..input_rows {
                     let v = unsafe { array.value_unchecked(row) };
-                    self.set.insert_key(&E::from(v), &mut self.inserted);
+                    let _ = self.set.set_insert(E::from(v));
                 }
             }
         }
@@ -393,16 +399,14 @@ where
     }
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
-        self.set.merge(&rhs.set);
+        for x in rhs.set.iter() {
+            let _ = self.set.set_insert(*x.key());
+        }
         Ok(())
     }
 
     fn build_columns(&mut self, _fields: &[DataField]) -> Result<Vec<ColumnRef>> {
-        let values: Vec<T> = self
-            .set
-            .iter()
-            .map(|e| e.get_key().clone().into())
-            .collect();
+        let values: Vec<T> = self.set.iter().map(|e| (*e.key()).into()).collect();
         let result = PrimitiveColumn::<T>::new_from_vec(values);
         Ok(vec![result.arc()])
     }
@@ -410,14 +414,14 @@ where
 
 // For count(distinct string) and uniq(string)
 pub struct AggregateUniqStringState {
-    set: HashSetWithStackMemory<{ 16 * 8 }, u128>,
+    set: StackHashSet<u128, 16>,
     inserted: bool,
 }
 
 impl DistinctStateFunc<u128> for AggregateUniqStringState {
     fn new() -> Self {
         AggregateUniqStringState {
-            set: HashSetWithStackMemory::create(),
+            set: StackHashSet::new(),
             inserted: false,
         }
     }
@@ -425,17 +429,17 @@ impl DistinctStateFunc<u128> for AggregateUniqStringState {
     fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
         writer.write_uvarint(self.set.len() as u64)?;
         for value in self.set.iter() {
-            serialize_into_buf(writer, value.get_key())?
+            serialize_into_buf(writer, value.key())?
         }
         Ok(())
     }
 
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
         let size = reader.read_uvarint()?;
-        self.set = HashSetWithStackMemory::with_capacity(size as usize);
+        self.set = StackHashSet::with_capacity(size as usize);
         for _ in 0..size {
             let e = deserialize_from_slice(reader)?;
-            let _ = self.set.insert_key(&e, &mut self.inserted);
+            self.inserted = self.set.set_insert(e).is_ok();
         }
         Ok(())
     }
@@ -454,7 +458,7 @@ impl DistinctStateFunc<u128> for AggregateUniqStringState {
         let mut hasher = SipHasher24::new();
         hasher.write(data);
         let hash128 = hasher.finish128();
-        self.set.insert_key(&hash128.into(), &mut self.inserted);
+        self.inserted = self.set.set_insert(hash128.into()).is_ok();
         Ok(())
     }
 
@@ -472,7 +476,7 @@ impl DistinctStateFunc<u128> for AggregateUniqStringState {
                         let mut hasher = SipHasher24::new();
                         hasher.write(t);
                         let hash128 = hasher.finish128();
-                        self.set.insert_key(&hash128.into(), &mut self.inserted);
+                        self.inserted = self.set.set_insert(hash128.into()).is_ok();
                     }
                 }
             }
@@ -482,7 +486,7 @@ impl DistinctStateFunc<u128> for AggregateUniqStringState {
                     let mut hasher = SipHasher24::new();
                     hasher.write(data);
                     let hash128 = hasher.finish128();
-                    self.set.insert_key(&hash128.into(), &mut self.inserted);
+                    self.inserted = self.set.set_insert(hash128.into()).is_ok();
                 }
             }
         }
@@ -490,7 +494,7 @@ impl DistinctStateFunc<u128> for AggregateUniqStringState {
     }
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
-        self.set.merge(&rhs.set);
+        self.set.set_merge(&rhs.set);
         Ok(())
     }
 

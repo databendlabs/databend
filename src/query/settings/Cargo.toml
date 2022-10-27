@@ -8,6 +8,9 @@ edition = "2021"
 doctest = false
 test = false
 
+[features]
+hive = []
+
 [dependencies]
 common-ast = { path = "../../query/ast" }
 common-base = { path = "../../common/base" }
