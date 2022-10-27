@@ -41,6 +41,7 @@ use common_planner::Partitions;
 use common_planner::PhysicalScalar;
 use common_planner::ReadDataSourcePlan;
 use common_sharing::create_share_table_operator;
+use common_sql::PhysicalScalarParser;
 use common_storage::init_operator;
 use common_storage::DataOperator;
 use common_storage::ShareTableConfig;
@@ -89,10 +90,10 @@ impl FuseTable {
     pub fn do_create(table_info: TableInfo, read_only: bool) -> Result<Box<FuseTable>> {
         let storage_prefix = Self::parse_storage_prefix(&table_info)?;
         let cluster_key_meta = table_info.meta.cluster_key();
+        let schema = table_info.schema();
         let mut cluster_keys = Vec::new();
         if let Some((_, order)) = &cluster_key_meta {
-            // todo(sundy)
-            // sync_type_checker or block_on
+            cluster_keys = PhysicalScalarParser::parse_exprs(schema, order)?;
         }
         let operator = match table_info.from_share {
             Some(ref from_share) => create_share_table_operator(

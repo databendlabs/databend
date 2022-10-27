@@ -12,10 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::sync::Arc;
-
 use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planner::PhysicalScalar;
@@ -40,14 +37,9 @@ pub fn parse_func_table_args(table_args: &TableArgs) -> Result<(String, String)>
     }
 }
 
-pub async fn get_cluster_keys(
-    ctx: Arc<dyn TableContext>,
-    table: &FuseTable,
-    definition: &str,
-) -> Result<Vec<PhysicalScalar>> {
+pub fn get_cluster_keys(table: &FuseTable, definition: &str) -> Result<Vec<PhysicalScalar>> {
     let cluster_keys = if !definition.is_empty() {
-        let physical_scalars =
-            PhysicalScalarParser::parse_exprs(ctx, table.schema(), definition).await?;
+        let physical_scalars = PhysicalScalarParser::parse_exprs(table.schema(), definition)?;
         physical_scalars
     } else {
         table.cluster_keys()

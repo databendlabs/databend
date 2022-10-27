@@ -12,32 +12,24 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::sync::Arc;
-
 use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_ast::Dialect;
-use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_planner::PhysicalScalar;
-use parking_lot::RwLock;
+use common_settings::Settings;
 
 use crate::executor::PhysicalScalarBuilder;
+use crate::planner::semantic::SyncTypeChecker;
 use crate::BindContext;
-use crate::Metadata;
 use crate::NameResolutionContext;
-use crate::ScalarBinder;
 
 pub struct PhysicalScalarParser;
 
 impl PhysicalScalarParser {
-    pub async fn parse_exprs(
-        ctx: Arc<dyn TableContext>,
-        schema: DataSchemaRef,
-        sql: &str,
-    ) -> Result<Vec<PhysicalScalar>> {
+    pub fn parse_exprs(schema: DataSchemaRef, sql: &str) -> Result<Vec<PhysicalScalar>> {
         let sql_dialect = Dialect::MySQL;
         let tokens = tokenize_sql(sql)?;
         let backtrace = Backtrace::new();
@@ -47,16 +39,14 @@ impl PhysicalScalarParser {
             &backtrace,
         )?;
 
-        let settings = ctx.get_settings();
+        let settings = Settings::default_settings("");
         let bind_context = BindContext::new();
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-        let metadata = Arc::new(RwLock::new(Metadata::default()));
-        let mut scalar_binder =
-            ScalarBinder::new(&bind_context, ctx, &name_resolution_ctx, metadata, &[]);
+        let mut type_checker = SyncTypeChecker::new(&bind_context, &name_resolution_ctx, &[]);
         let mut physical_scalars = Vec::with_capacity(exprs.len());
         let mut builder = PhysicalScalarBuilder::new(&schema);
         for expr in exprs.iter() {
-            let (scalar, _) = scalar_binder.bind(expr).await?;
+            let (scalar, _) = *type_checker.resolve(expr, None)?;
             let physical_scalar = builder.build(&scalar)?;
             physical_scalars.push(physical_scalar);
         }

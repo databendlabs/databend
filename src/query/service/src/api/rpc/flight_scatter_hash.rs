@@ -63,7 +63,7 @@ impl FlightScatter for HashFlightScatter {
 
 impl HashFlightScatter {
     fn try_create_impl(
-        schema: DataSchemaRef,
+        _schema: DataSchemaRef,
         num: usize,
         expr: PhysicalScalar,
         _ctx: Arc<QueryContext>,
