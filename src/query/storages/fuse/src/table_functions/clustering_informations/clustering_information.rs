@@ -22,7 +22,7 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
-use common_legacy_expression::LegacyExpression;
+use common_planner::PhysicalScalar;
 use serde_json::json;
 
 use crate::io::MetaReaders;
@@ -33,7 +33,7 @@ use crate::Table;
 pub struct ClusteringInformation<'a> {
     pub ctx: Arc<dyn TableContext>,
     pub table: &'a FuseTable,
-    pub cluster_keys: Vec<LegacyExpression>,
+    pub cluster_keys: Vec<PhysicalScalar>,
 }
 
 struct ClusteringStatistics {
@@ -48,7 +48,7 @@ impl<'a> ClusteringInformation<'a> {
     pub fn new(
         ctx: Arc<dyn TableContext>,
         table: &'a FuseTable,
-        cluster_keys: Vec<LegacyExpression>,
+        cluster_keys: Vec<PhysicalScalar>,
     ) -> Self {
         Self {
             ctx,
@@ -75,7 +75,7 @@ impl<'a> ClusteringInformation<'a> {
         let names = self
             .cluster_keys
             .iter()
-            .map(|x| x.column_name())
+            .map(|x| x.pretty_display())
             .collect::<Vec<String>>()
             .join(", ");
         let cluster_by_keys = format!("({})", names);

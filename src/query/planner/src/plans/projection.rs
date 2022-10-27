@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, fmt::Formatter};
+use std::collections::BTreeMap;
+use std::fmt::Formatter;
 
 use common_datavalues::DataSchema;
 

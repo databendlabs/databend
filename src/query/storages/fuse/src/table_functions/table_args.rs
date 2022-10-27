@@ -15,7 +15,6 @@
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_expression::LegacyExpression;
 
 pub fn string_value(value: &DataValue) -> Result<String> {
     String::from_utf8(value.as_string()?)

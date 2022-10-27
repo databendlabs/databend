@@ -626,26 +626,17 @@ impl<'a> PhysicalScalarBuilder<'a> {
             }),
             Scalar::AndExpr(and) => Ok(PhysicalScalar::Function {
                 name: "and".to_string(),
-                args: vec![
-                    self.build(&and.left)?,
-                    self.build(&and.right)?
-                ],
+                args: vec![self.build(&and.left)?, self.build(&and.right)?],
                 return_type: and.data_type(),
             }),
             Scalar::OrExpr(or) => Ok(PhysicalScalar::Function {
                 name: "or".to_string(),
-                args: vec![
-                    self.build(&or.left)? ,
-                    self.build(&or.right)?
-                ],
+                args: vec![self.build(&or.left)?, self.build(&or.right)?],
                 return_type: or.data_type(),
             }),
             Scalar::ComparisonExpr(comp) => Ok(PhysicalScalar::Function {
                 name: comp.op.to_func_name(),
-                args: vec![
-                    self.build(&comp.left)? ,
-                    self.build(&comp.right)?
-                ],
+                args: vec![self.build(&comp.left)?, self.build(&comp.right)?],
                 return_type: comp.data_type(),
             }),
             Scalar::FunctionCall(func) => Ok(PhysicalScalar::Function {
@@ -654,7 +645,7 @@ impl<'a> PhysicalScalarBuilder<'a> {
                     .arguments
                     .iter()
                     .zip(func.arg_types.iter())
-                    .map(|(arg, typ)| Ok(self.build(arg)?))
+                    .map(|(arg, _)| Ok(self.build(arg)?))
                     .collect::<Result<_>>()?,
                 return_type: *func.return_type.clone(),
             }),

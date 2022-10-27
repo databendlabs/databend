@@ -23,7 +23,6 @@ use common_meta_app::schema::TableInfo;
 
 use crate::extras::Extras;
 use crate::extras::Statistics;
-
 use crate::partition::Partitions;
 use crate::plans::Projection;
 use crate::stage_table::StageTableInfo;

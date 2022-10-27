@@ -23,12 +23,12 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::Statistics as FuseMetaStatistics;
-use common_planner::PartInfoPtr;
-use common_planner::plans::Projection;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
+use common_planner::plans::Projection;
+use common_planner::PartInfoPtr;
 use opendal::Operator;
 
 use crate::fuse::io::BlockReader;

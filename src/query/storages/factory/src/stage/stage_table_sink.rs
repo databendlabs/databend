@@ -26,12 +26,12 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_formats::output_format::OutputFormat;
 use common_formats::output_format::OutputFormatType;
-use common_planner::StageTableInfo;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
+use common_planner::stage_table::StageTableInfo;
 use opendal::Operator;
 use tracing::warn;
 

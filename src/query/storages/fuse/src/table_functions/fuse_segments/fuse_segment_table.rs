@@ -19,14 +19,13 @@ use common_catalog::catalog::CATALOG_DEFAULT;
 use common_datablocks::DataBlock;
 use common_datavalues::DataValue;
 use common_exception::Result;
-use common_legacy_expression::LegacyExpression;
-use common_planner::extras::Extras;
-use common_planner::Partitions;
-use common_planner::ReadDataSourcePlan;
-use common_planner::extras::Statistics;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_planner::extras::Extras;
+use common_planner::extras::Statistics;
+use common_planner::Partitions;
+use common_planner::ReadDataSourcePlan;
 
 use super::fuse_segment::FuseSegment;
 use super::table_args::parse_func_history_args;

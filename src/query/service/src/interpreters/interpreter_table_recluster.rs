@@ -26,7 +26,6 @@ use crate::pipelines::Pipeline;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::executor::ExpressionBuilderWithoutRenaming;
 use crate::sql::plans::ReclusterTablePlan;
 
 pub struct ReclusterTableInterpreter {
@@ -57,12 +56,8 @@ impl Interpreter for ReclusterTableInterpreter {
         let extras = match &plan.push_downs {
             None => None,
             Some(scalar) => {
-                let eb = ExpressionBuilderWithoutRenaming::create(plan.metadata.clone());
-                let pred_expr = eb.build(scalar)?;
-                Some(Extras {
-                    filters: vec![pred_expr],
-                    ..Extras::default()
-                })
+                // todo(sundy)
+                todo!()
             }
         };
         loop {

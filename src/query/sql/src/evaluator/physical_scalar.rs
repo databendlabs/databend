@@ -40,10 +40,9 @@ pub trait PhysicalScalarOp {
         self.binary_op("=", other)
     }
 
-     fn not_eq(&self, other: &Self) -> Result<PhysicalScalar> {
+    fn not_eq(&self, other: &Self) -> Result<PhysicalScalar> {
         self.binary_op("!=", other)
     }
-
 
     fn gt_eq(&self, other: &Self) -> Result<PhysicalScalar> {
         self.binary_op(">=", other)
@@ -69,10 +68,7 @@ impl PhysicalScalarOp for PhysicalScalar {
 
         Ok(PhysicalScalar::Function {
             name: name.to_owned(),
-            args: vec![
-                self.clone(),
-                 other.clone()
-            ],
+            args: vec![self.clone(), other.clone()],
             return_type: func.return_type(),
         })
     }

@@ -25,9 +25,9 @@ use common_exception::Result;
 use common_functions::scalars::check_pattern_type;
 use common_functions::scalars::FunctionContext;
 use common_functions::scalars::FunctionFactory;
+use common_functions::scalars::Monotonicity;
 use common_functions::scalars::PatternType;
 use common_fuse_meta::meta::StatisticsOfColumns;
-use common_pipeline_transforms::processors::transforms::ExpressionExecutor;
 use common_planner::PhysicalScalar;
 use common_sql::evaluator::EvalNode;
 use common_sql::evaluator::Evaluator;
@@ -61,7 +61,15 @@ impl RangeFilter {
             })
             .unwrap();
 
+        let input_fields = stat_columns
+            .iter()
+            .map(|c| c.stat_field.clone())
+            .collect::<Vec<_>>();
+        let input_schema = Arc::new(DataSchema::new(input_fields));
+
         let executor = Evaluator::eval_physical_scalar(&verifiable_expr)?;
+        let func_ctx = ctx.try_get_function_context()?;
+
         Ok(Self {
             origin: schema,
             schema: input_schema,
@@ -84,7 +92,7 @@ impl RangeFilter {
         let dummy_columns = vec![Arc::new(const_col) as ColumnRef];
         let data_block = DataBlock::create(input_schema, dummy_columns);
 
-        let executed_data_block = self.executor.eval(&func_ctx, &data_block)?;
+        let executed_data_block = self.executor.eval(&self.func_ctx, &data_block)?;
 
         match executed_data_block.vector.get(0) {
             DataValue::Null => Ok(false),
@@ -131,7 +139,7 @@ pub fn build_verifiable_expr(
     // TODO(sundy)
     todo!()
     // VerifiableExprBuilder::try_create(exprs, op.to_lowercase().as_str(), schema, stat_columns)
-        // .map_or(unhandled.clone(), |mut v| v.build().unwrap_or(unhandled))
+    // .map_or(unhandled.clone(), |mut v| v.build().unwrap_or(unhandled))
 }
 
 fn inverse_operator(op: &str) -> Result<&str> {
@@ -259,15 +267,18 @@ impl StatColumn {
             variables.insert(v.name().clone(), (variable_left, variable_right));
         }
 
-        let monotonicity = ExpressionMonotonicityVisitor::check_expression(
-            schema,
-            &self.expr,
-            variables,
-            single_point,
-        );
-        if !monotonicity.is_monotonic {
-            return Ok(None);
-        }
+        // TODO: sundy
+
+        let monotonicity = Monotonicity::default();
+        // let monotonicity = ExpressionMonotonicityVisitor::check_expression(
+        //     schema,
+        //     &self.expr,
+        //     variables,
+        //     single_point,
+        // );
+        // if !monotonicity.is_monotonic {
+        //     return Ok(None);
+        // }
 
         let column_with_field_opt = match self.stat_type {
             StatType::Min => {
@@ -315,7 +326,10 @@ impl<'a> VerifiableExprBuilder<'a> {
             "is_null" => {
                 // should_keep: col.null_count > 0
                 let nulls_expr = self.nulls_column_expr(0)?;
-                let scalar_expr = PhysicalScalar::Constant { value: DataValue::UInt64(0), data_type: u64::to_data_type() };
+                let scalar_expr = PhysicalScalar::Constant {
+                    value: DataValue::UInt64(0),
+                    data_type: u64::to_data_type(),
+                };
                 nulls_expr.gt(&scalar_expr)
             }
             "is_not_null" => {
@@ -408,13 +422,10 @@ impl<'a> VerifiableExprBuilder<'a> {
                     // e.g. col like 'a%' => max_col >= 'a' and min_col < 'b'
                     let left = left_bound_for_like_pattern(v);
                     if !left.is_empty() {
+                        let right = right_bound_for_like_pattern(left.clone());
+
                         let left_scalar = PhysicalScalar::Constant {
                             value: DataValue::String(left),
-                            data_type: Vu8::to_data_type(),
-                        };
-                        let right = right_bound_for_like_pattern(left.clone());
-                        let right_scalar = PhysicalScalar::Constant {
-                            value: DataValue::String(right),
                             data_type: Vu8::to_data_type(),
                         };
 
@@ -422,6 +433,11 @@ impl<'a> VerifiableExprBuilder<'a> {
                         if right.is_empty() {
                             return max_expr.gt_eq(&left_scalar);
                         } else {
+                            let right_scalar = PhysicalScalar::Constant {
+                                value: DataValue::String(right),
+                                data_type: Vu8::to_data_type(),
+                            };
+
                             let min_expr = self.min_column_expr(0)?;
                             return max_expr
                                 .gt_eq(&left_scalar)?
@@ -467,15 +483,14 @@ impl<'a> VerifiableExprBuilder<'a> {
                                     data_type: Vu8::to_data_type(),
                                 };
 
-                                let right_scalar = PhysicalScalar::Constant {
-                                    value: DataValue::String(right),
-                                    data_type: Vu8::to_data_type(),
-                                };
-
                                 let min_expr = self.min_column_expr(0)?;
                                 if right.is_empty() {
                                     return min_expr.lt(&left_scalar);
                                 } else {
+                                    let right_scalar = PhysicalScalar::Constant {
+                                        value: DataValue::String(right),
+                                        data_type: Vu8::to_data_type(),
+                                    };
                                     let max_expr = self.max_column_expr(0)?;
                                     return min_expr
                                         .lt(&left_scalar)?
@@ -599,7 +614,7 @@ pub fn check_maybe_monotonic(expr: &PhysicalScalar) -> Result<bool> {
         PhysicalScalar::Constant { .. } => Ok(true),
         PhysicalScalar::IndexedVariable { .. } => Ok(true),
         PhysicalScalar::Function { name, args, .. } => get_maybe_monotonic(name, args),
-        PhysicalScalar::Cast { input, .. } => check_maybe_monotonic(expr),
+        PhysicalScalar::Cast { input, .. } => check_maybe_monotonic(input.as_ref()),
         _ => Ok(false),
     }
 }

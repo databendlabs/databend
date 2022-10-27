@@ -33,14 +33,13 @@ use common_fuse_meta::meta::ColumnStatistics as FuseColumnStatistics;
 use common_fuse_meta::meta::Statistics as FuseStatistics;
 use common_fuse_meta::meta::TableSnapshot;
 use common_fuse_meta::meta::Versioned;
-use common_legacy_expression::LegacyExpression;
-use common_legacy_parser::ExpressionParser;
-use common_planner::DeletePlan;
-use common_planner::extras::Extras;
-use common_planner::Partitions;
-use common_planner::ReadDataSourcePlan;
-use common_planner::extras::Statistics;
 use common_meta_app::schema::TableInfo;
+use common_planner::extras::Extras;
+use common_planner::extras::Statistics;
+use common_planner::plans::DeletePlan;
+use common_planner::Partitions;
+use common_planner::PhysicalScalar;
+use common_planner::ReadDataSourcePlan;
 use common_sharing::create_share_table_operator;
 use common_storage::init_operator;
 use common_storage::DataOperator;
@@ -73,7 +72,7 @@ pub struct FuseTable {
     pub(crate) table_info: TableInfo,
     pub(crate) meta_location_generator: TableMetaLocationGenerator,
 
-    pub(crate) cluster_keys: Vec<LegacyExpression>,
+    pub(crate) cluster_keys: Vec<PhysicalScalar>,
     pub(crate) cluster_key_meta: Option<ClusterKey>,
     pub(crate) read_only: bool,
 
@@ -87,7 +86,14 @@ impl FuseTable {
         Ok(r)
     }
 
-    fn init_operator(table_info: &TableInfo) -> Result<Operator> {
+    pub fn do_create(table_info: TableInfo, read_only: bool) -> Result<Box<FuseTable>> {
+        let storage_prefix = Self::parse_storage_prefix(&table_info)?;
+        let cluster_key_meta = table_info.meta.cluster_key();
+        let mut cluster_keys = Vec::new();
+        if let Some((_, order)) = &cluster_key_meta {
+            // todo(sundy)
+            // sync_type_checker or block_on
+        }
         let operator = match table_info.from_share {
             Some(ref from_share) => create_share_table_operator(
                 ShareTableConfig::share_endpoint_address(),
@@ -264,7 +270,7 @@ impl Table for FuseTable {
         true
     }
 
-    fn cluster_keys(&self) -> Vec<LegacyExpression> {
+    fn cluster_keys(&self) -> Vec<PhysicalScalar> {
         self.cluster_keys.clone()
     }
 

@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_planner::DeletePlan;
+use common_planner::plans::DeletePlan;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

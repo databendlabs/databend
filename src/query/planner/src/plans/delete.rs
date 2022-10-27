@@ -50,5 +50,3 @@ impl DeletePlan {
         Arc::new(DataSchema::empty())
     }
 }
-
-

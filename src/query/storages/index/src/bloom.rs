@@ -74,17 +74,17 @@ pub enum FilterEvalResult {
 impl BlockFilter {
     /// For every applicable column, we will create a filter.
     /// The filter will be stored with field name 'Bloom(column_name)'
-    pub fn build_filter_column_name(column_name: &str) -> String {
-        format!("Bloom({})", column_name)
+    pub fn build_filter_column(index: usize) -> String {
+        format!("Bloom({})", index)
     }
     pub fn build_filter_schema(data_schema: &DataSchema) -> DataSchema {
         let mut filter_fields = vec![];
         let fields = data_schema.fields();
-        for field in fields.iter() {
+        for (index, field) in fields.iter().enumerate() {
             if Xor8Filter::is_supported_type(field.data_type()) {
                 // create field for applicable ones
 
-                let column_name = Self::build_filter_column_name(field.name());
+                let column_name = Self::build_filter_column(index);
                 let filter_field = DataField::new(&column_name, Vu8::to_data_type());
 
                 filter_fields.push(filter_field);
@@ -154,11 +154,11 @@ impl BlockFilter {
 
     pub fn find(
         &self,
-        column_name: &str,
+        index: usize,
         target: DataValue,
         typ: &DataTypeImpl,
     ) -> Result<FilterEvalResult> {
-        let filter_column = Self::build_filter_column_name(column_name);
+        let filter_column = Self::build_filter_column(index);
         if !self.filter_block.schema().has_field(&filter_column)
             || !Xor8Filter::is_supported_type(typ)
             || target.is_null()
@@ -217,27 +217,26 @@ impl BlockFilter {
         // For now only support single column like "name = 'Alice'"
         match (left, right) {
             // match the expression of 'column_name = literal constant'
-            (PhysicalScalar::Column(column), PhysicalScalar::Literal { value, .. })
-            | (PhysicalScalar::Literal { value, .. }, PhysicalScalar::Column(column)) => {
+            (
+                PhysicalScalar::IndexedVariable { index, .. },
+                PhysicalScalar::Constant { value, .. },
+            )
+            | (
+                PhysicalScalar::Constant { value, .. },
+                PhysicalScalar::IndexedVariable { index, .. },
+            ) => {
                 // find the corresponding column from source table
-                match schema.column_with_name(column) {
-                    Some((_index, data_field)) => {
-                        let data_type = data_field.data_type();
+                let data_field = schema.field(*index);
+                let data_type = data_field.data_type();
 
-                        // check if cast needed
-                        let value = if &value.data_type() != data_type {
-                            let col = value.as_const_column(data_type, 1)?;
-                            col.get_checked(0)?
-                        } else {
-                            value.clone()
-                        };
-                        self.find(column, value, data_type)
-                    }
-                    None => Err(ErrorCode::BadArguments(format!(
-                        "Column '{}' not found in schema",
-                        column
-                    ))),
-                }
+                // check if cast needed
+                let value = if &value.data_type() != data_type {
+                    let col = value.as_const_column(data_type, 1)?;
+                    col.get_checked(0)?
+                } else {
+                    value.clone()
+                };
+                self.find(*index, value, data_type)
             }
             _ => Ok(FilterEvalResult::NotApplicable),
         }

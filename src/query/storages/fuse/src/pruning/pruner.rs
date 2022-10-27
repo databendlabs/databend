@@ -19,9 +19,8 @@ use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_fuse_meta::meta::Location;
-use common_legacy_expression::ExpressionVisitor;
-use common_legacy_expression::LegacyExpression;
-use common_legacy_expression::Recursion;
+use common_planner::PhysicalScalar;
+use common_sql::evaluator::PhysicalScalarOp;
 use common_storages_index::BlockFilter;
 use opendal::Operator;
 
@@ -40,7 +39,7 @@ struct FilterPruner {
     index_columns: Vec<String>,
 
     /// the expression that would be evaluate
-    filter_expression: LegacyExpression,
+    filter_expression: PhysicalScalar,
 
     /// the data accessor
     dal: Operator,
@@ -53,7 +52,7 @@ impl FilterPruner {
     pub fn new(
         ctx: Arc<dyn TableContext>,
         index_columns: Vec<String>,
-        filter_expression: LegacyExpression,
+        filter_expression: PhysicalScalar,
         dal: Operator,
         data_schema: DataSchemaRef,
     ) -> Self {
@@ -104,7 +103,7 @@ impl Pruner for FilterPruner {
 /// otherwise, a [Filter] backed pruner will be return
 pub fn new_filter_pruner(
     ctx: &Arc<dyn TableContext>,
-    filter_exprs: Option<&[LegacyExpression]>,
+    filter_exprs: Option<&[PhysicalScalar]>,
     schema: &DataSchemaRef,
     dal: Operator,
 ) -> Result<Option<Arc<dyn Pruner + Send + Sync>>> {
@@ -115,8 +114,8 @@ pub fn new_filter_pruner(
         // check if there were applicable filter conditions
         let expr = exprs
             .iter()
-            .fold(None, |acc: Option<LegacyExpression>, item| match acc {
-                Some(acc) => Some(acc.and(item.clone())),
+            .fold(None, |acc: Option<PhysicalScalar>, item| match acc {
+                Some(acc) => Some(acc.and(item).unwrap()),
                 None => Some(item.clone()),
             })
             .unwrap();
@@ -124,9 +123,12 @@ pub fn new_filter_pruner(
         let point_query_cols = columns_names_of_eq_expressions(&expr)?;
         if !point_query_cols.is_empty() {
             // convert to filter column names
+
+            // todo(sundy)
+            let idx = 0;
             let filter_block_cols = point_query_cols
                 .into_iter()
-                .map(|n| BlockFilter::build_filter_column_name(&n))
+                .map(|n| BlockFilter::build_filter_column(idx))
                 .collect();
 
             return Ok(Some(Arc::new(FilterPruner::new(
@@ -152,7 +154,7 @@ mod util {
         ctx: Arc<dyn TableContext>,
         dal: Operator,
         schema: &DataSchemaRef,
-        filter_expr: &LegacyExpression,
+        filter_expr: &PhysicalScalar,
         filter_col_names: &[String],
         index_location: &Location,
         index_length: u64,
@@ -181,34 +183,33 @@ mod util {
         columns: HashSet<String>,
     }
 
-    impl ExpressionVisitor for PointQueryVisitor {
-        fn pre_visit(mut self, expr: &LegacyExpression) -> Result<Recursion<Self>> {
-            // TODO
-            // 1. only binary op "=" is considered, which is NOT enough
-            // 2. should combine this logic with Filter
-            match expr {
-                LegacyExpression::BinaryExpression { left, op, right } if op.as_str() == "=" => {
-                    match (left.as_ref(), right.as_ref()) {
-                        (LegacyExpression::Column(column), LegacyExpression::Literal { .. })
-                        | (LegacyExpression::Literal { .. }, LegacyExpression::Column(column)) => {
-                            self.columns.insert(column.clone());
-                            Ok(Recursion::Stop(self))
-                        }
-                        _ => Ok(Recursion::Continue(self)),
-                    }
-                }
-                _ => Ok(Recursion::Continue(self)),
-            }
-        }
-    }
+    // todo(sundy):
+    // impl ExpressionVisitor for PointQueryVisitor {
+    //     fn pre_visit(mut self, expr: &PhysicalScalar) -> Result<Recursion<Self>> {
+    //         // TODO
+    //         // 1. only binary op "=" is considered, which is NOT enough
+    //         // 2. should combine this logic with Filter
+    //         match expr {
+    //             PhysicalScalar::BinaryExpression { left, op, right } if op.as_str() == "=" => {
+    //                 match (left.as_ref(), right.as_ref()) {
+    //                     (PhysicalScalar::Column(column), PhysicalScalar::Literal { .. })
+    //                     | (PhysicalScalar::Literal { .. }, PhysicalScalar::Column(column)) => {
+    //                         self.columns.insert(column.clone());
+    //                         Ok(Recursion::Stop(self))
+    //                     }
+    //                     _ => Ok(Recursion::Continue(self)),
+    //                 }
+    //             }
+    //             _ => Ok(Recursion::Continue(self)),
+    //         }
+    //     }
+    // }
 
-    pub fn columns_names_of_eq_expressions(filter_expr: &LegacyExpression) -> Result<Vec<String>> {
+    pub fn columns_names_of_eq_expressions(filter_expr: &PhysicalScalar) -> Result<Vec<String>> {
         let visitor = PointQueryVisitor {
             columns: HashSet::new(),
         };
 
-        filter_expr
-            .accept(visitor)
-            .map(|r| r.columns.into_iter().collect())
+        todo!()
     }
 }

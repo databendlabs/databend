@@ -21,17 +21,16 @@
 //! After all the planners work, `Interpreter` will use `PhysicalPlan` to
 //! build pipelines, then our processes will produce result data blocks.
 
-mod physical_scalar;
 mod partition;
+mod physical_scalar;
 
 pub mod extras;
-pub mod stage_table;
 pub mod plan_read_datasource;
+pub mod stage_table;
 
-pub use physical_scalar::*;
 pub use partition::*;
+pub use physical_scalar::*;
 pub use plan_read_datasource::*;
 
 // Plan will be used publicly.
 pub mod plans;
-

@@ -14,9 +14,7 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_expression::validate_expression;
-use common_legacy_expression::LegacyExpression;
-use common_legacy_parser::ExpressionParser;
+use common_planner::PhysicalScalar;
 
 use crate::table_functions::string_value;
 use crate::table_functions::TableArgs;
@@ -38,24 +36,26 @@ pub fn parse_func_table_args(table_args: &TableArgs) -> Result<(String, String)>
     }
 }
 
-pub fn get_cluster_keys(table: &FuseTable, definition: &str) -> Result<Vec<LegacyExpression>> {
-    let cluster_keys = if !definition.is_empty() {
-        let schema = table.schema();
-        let exprs = ExpressionParser::parse_exprs(definition)?;
-        for expr in exprs.iter() {
-            validate_expression(expr, &schema)?;
-        }
-        exprs
-    } else {
-        table.cluster_keys()
-    };
+pub fn get_cluster_keys(table: &FuseTable, definition: &str) -> Result<Vec<PhysicalScalar>> {
+    // todo(sundy)
+    todo!()
+    // let cluster_keys = if !definition.is_empty() {
+    //     let schema = table.schema();
+    //     let exprs = ExpressionParser::parse_exprs(definition)?;
+    //     for expr in exprs.iter() {
+    //         validate_expression(expr, &schema)?;
+    //     }
+    //     exprs
+    // } else {
+    //     table.cluster_keys()
+    // };
 
-    if cluster_keys.is_empty() {
-        return Err(ErrorCode::InvalidClusterKeys(format!(
-            "Invalid clustering keys or table {} is not clustered",
-            table.name()
-        )));
-    }
-
-    Ok(cluster_keys)
+    // if cluster_keys.is_empty() {
+    //     return Err(ErrorCode::InvalidClusterKeys(format!(
+    //         "Invalid clustering keys or table {} is not clustered",
+    //         table.name()
+    //     )));
+    // }
+    //
+    // Ok(cluster_keys)
 }

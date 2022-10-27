@@ -31,6 +31,7 @@ use common_exception::Result;
 use common_hashtable::HashMap;
 use common_hashtable::HashtableKeyable;
 use common_hashtable::UnsizedHashMap;
+use common_planner::PhysicalScalar;
 use parking_lot::RwLock;
 use primitive_types::U256;
 use primitive_types::U512;
@@ -43,7 +44,6 @@ use crate::pipelines::processors::transforms::hash_join::util::build_schema_wrap
 use crate::pipelines::processors::transforms::hash_join::util::probe_schema_wrap_nullable;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::executor::PhysicalScalar;
 use crate::sql::planner::plans::JoinType;
 
 pub struct SerializerHashTable {

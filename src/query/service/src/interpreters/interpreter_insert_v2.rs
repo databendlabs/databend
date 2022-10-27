@@ -32,7 +32,7 @@ use common_io::prelude::NestedCheckpointReader;
 use common_pipeline_sources::processors::sources::AsyncSource;
 use common_pipeline_sources::processors::sources::AsyncSourcer;
 use common_pipeline_transforms::processors::transforms::Transform;
-use crate::Metadata;
+use common_sql::Metadata;
 use common_sql::MetadataRef;
 use parking_lot::Mutex;
 use parking_lot::RwLock;

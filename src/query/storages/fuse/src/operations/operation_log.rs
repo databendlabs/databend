@@ -22,6 +22,7 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_fuse_meta::meta::SegmentInfo;
+use common_planner::extras::SINK_SCHEMA;
 
 // currently, only support append,
 pub type TableOperationLog = Vec<AppendOperationLogEntry>;
@@ -34,7 +35,7 @@ pub struct AppendOperationLogEntry {
 
 impl AppendOperationLogEntry {
     pub fn schema() -> DataSchemaRef {
-        common_legacy_planners::SINK_SCHEMA.clone()
+        SINK_SCHEMA.clone()
     }
 
     pub fn new(segment_location: String, segment_info: Arc<SegmentInfo>) -> Self {

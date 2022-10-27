@@ -24,15 +24,14 @@ use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_expression::LegacyExpression;
-use common_planner::extras::Extras;
-use common_planner::PartInfoPtr;
-use common_planner::Partitions;
-use common_planner::ReadDataSourcePlan;
-use common_planner::extras::Statistics;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_planner::extras::Extras;
+use common_planner::extras::Statistics;
+use common_planner::PartInfoPtr;
+use common_planner::Partitions;
+use common_planner::ReadDataSourcePlan;
 
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
@@ -65,7 +64,7 @@ impl NumbersTable {
         if let Some(args) = &table_args {
             if args.len() == 1 {
                 let arg = &args[0];
-                total = Some(value.as_u64()?);
+                total = Some(arg.as_u64()?);
             }
         }
 
@@ -129,22 +128,14 @@ impl Table for NumbersTable {
         let mut limit = None;
 
         if let Some(extras) = &push_downs {
-            if extras.limit.is_some() && extras.filters.is_empty() {
-                let sort_descriptions_result =
-                    get_sort_descriptions(&self.table_info.schema(), &extras.order_by);
-
+            if extras.limit.is_some() && extras.filters.is_empty() && extras.order_by.is_empty()  {
                 // It is allowed to have an error when we can't get sort columns from the expression. For
                 // example 'select number from numbers(10) order by number+4 limit 10', the column 'number+4'
                 // doesn't exist in the numbers table.
                 // For case like that, we ignore the error and don't apply any optimization.
 
                 // No order by case
-                match sort_descriptions_result {
-                    Ok(v) if v.is_empty() => {
-                        limit = extras.limit;
-                    }
-                    _ => {}
-                }
+                    limit = extras.limit;
             }
         }
         let total = match limit {

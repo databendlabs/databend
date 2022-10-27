@@ -22,12 +22,12 @@ use common_exception::Result;
 use common_functions::scalars::Function;
 use common_functions::scalars::FunctionContext;
 use common_functions::scalars::FunctionFactory;
+use common_planner::PhysicalScalar;
 
 use crate::api::rpc::flight_scatter::FlightScatter;
 use crate::sql::evaluator::EvalNode;
 use crate::sql::evaluator::Evaluator;
 use crate::sql::evaluator::TypedVector;
-use crate::sql::executor::PhysicalScalar;
 
 #[derive(Clone)]
 pub struct HashFlightScatterV2 {

@@ -15,15 +15,14 @@
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
+use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::TableSnapshot;
-use common_legacy_expression::LegacyExpression;
-use common_legacy_parser::ExpressionParser;
-use common_planner::DeletePlan;
 use common_planner::extras::Extras;
-use common_pipeline_transforms::processors::ExpressionExecutor;
+use common_planner::plans::DeletePlan;
+use common_planner::PhysicalScalar;
 use tracing::debug;
 
 use crate::operations::mutation::delete_from_block;
@@ -52,12 +51,8 @@ impl FuseTable {
 
         // check if unconditional deletion
         if let Some(filter) = &plan.selection {
-            let expr = ExpressionParser::parse_exprs(filter)?;
-            if expr.is_empty() {
-                return Err(ErrorCode::IndexOutOfBounds(
-                    "expression should be valid, but not",
-                ));
-            }
+            // todo(sundy): use type_checker
+            let expr = vec![];
             self.delete_rows(ctx, &snapshot, &expr[0], plan).await
         } else {
             // deleting the whole table... just a truncate
@@ -74,7 +69,7 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         snapshot: &Arc<TableSnapshot>,
-        filter: &LegacyExpression,
+        filter: &PhysicalScalar,
         plan: &DeletePlan,
     ) -> Result<()> {
         let cluster_stats_gen = self.cluster_stats_gen(ctx.clone())?;
@@ -150,54 +145,7 @@ impl FuseTable {
     }
 
     fn cluster_stats_gen(&self, ctx: Arc<dyn TableContext>) -> Result<ClusterStatsGenerator> {
-        if self.cluster_key_meta.is_none() {
-            return Ok(ClusterStatsGenerator::default());
-        }
-
-        let len = self.cluster_keys.len();
-        let cluster_key_id = self.cluster_key_meta.clone().unwrap().0;
-
-        let input_schema = self.table_info.schema();
-        let input_fields = input_schema.fields().clone();
-
-        let mut cluster_key_index = Vec::with_capacity(len);
-        let mut output_fields = Vec::with_capacity(len);
-        let mut exists = true;
-        for expr in &self.cluster_keys {
-            output_fields.push(expr.to_data_field(&input_schema)?);
-
-            if exists {
-                match input_fields
-                    .iter()
-                    .position(|x| x.name() == &expr.column_name())
-                {
-                    None => exists = false,
-                    Some(idx) => cluster_key_index.push(idx),
-                };
-            }
-        }
-
-        let mut expression_executor = None;
-        if !exists {
-            cluster_key_index = (0..len).collect();
-            let output_schema = DataSchemaRefExt::create(output_fields);
-            let executor = ExpressionExecutor::try_create(
-                ctx,
-                "expression executor for generator cluster statistics",
-                input_schema,
-                output_schema,
-                self.cluster_keys.clone(),
-                true,
-            )?;
-            expression_executor = Some(executor);
-        }
-
-        Ok(ClusterStatsGenerator::new(
-            cluster_key_id,
-            cluster_key_index,
-            expression_executor,
-            0,
-            self.get_block_compactor(),
-        ))
+        // todo:(sundy)
+        todo!()
     }
 }

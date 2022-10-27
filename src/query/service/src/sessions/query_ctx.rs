@@ -30,16 +30,18 @@ use common_base::base::TrySpawn;
 use common_config::Config;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_datablocks::DataBlock;
+use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionContext;
 use common_io::prelude::FormatSettings;
-use common_legacy_expression::LegacyExpression;
+use common_meta_app::schema::TableInfo;
+use common_meta_types::UserInfo;
 use common_planner::PartInfoPtr;
 use common_planner::Partitions;
 use common_planner::ReadDataSourcePlan;
 use common_planner::SourceInfo;
-use common_planner::StageTableInfo;
+use common_planner::stage_table::StageTableInfo;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::RoleInfo;
 use common_meta_types::UserInfo;
@@ -93,7 +95,7 @@ impl QueryContext {
         &self,
         catalog_name: &str,
         table_info: &TableInfo,
-        table_args: Option<Vec<LegacyExpression>>,
+        table_args: Option<Vec<DataValue>>,
     ) -> Result<Arc<dyn Table>> {
         let catalog = self.get_catalog(catalog_name)?;
         if table_args.is_none() {
@@ -112,7 +114,7 @@ impl QueryContext {
         &self,
         _catalog: &str,
         table_info: &StageTableInfo,
-        _table_args: Option<Vec<LegacyExpression>>,
+        _table_args: Option<Vec<DataValue>>,
     ) -> Result<Arc<dyn Table>> {
         StageTable::try_create(table_info.clone())
     }

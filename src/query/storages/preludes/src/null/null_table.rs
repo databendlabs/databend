@@ -18,11 +18,11 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_meta_app::schema::TableInfo;
 use common_planner::extras::Extras;
+use common_planner::extras::Statistics;
 use common_planner::Partitions;
 use common_planner::ReadDataSourcePlan;
-use common_planner::extras::Statistics;
-use common_meta_app::schema::TableInfo;
 
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;

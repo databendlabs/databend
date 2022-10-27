@@ -14,12 +14,12 @@
 
 use std::fmt::Debug;
 
-use common_meta_app::schema::TableInfo;
 use common_datavalues::prelude::*;
+use common_meta_app::schema::TableInfo;
 use once_cell::sync::Lazy;
 
-
-use crate::{PhysicalScalar, plans::Projection};
+use crate::plans::Projection;
+use crate::PhysicalScalar;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum StageKind {
@@ -27,7 +27,6 @@ pub enum StageKind {
     Expansive,
     Merge,
 }
-
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct PrewhereInfo {
@@ -69,7 +68,6 @@ impl Extras {
         }
     }
 }
-
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Debug, Default)]
 pub struct Statistics {

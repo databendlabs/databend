@@ -17,16 +17,20 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::ColumnStatistics;
-use common_legacy_expression::LegacyExpression;
+use common_planner::PhysicalScalar;
 
 pub(crate) struct TopNPrunner {
     schema: DataSchemaRef,
-    sort: Vec<LegacyExpression>,
+    sort: Vec<(PhysicalScalar, bool, bool)>,
     limit: usize,
 }
 
 impl TopNPrunner {
-    pub(crate) fn new(schema: DataSchemaRef, sort: Vec<LegacyExpression>, limit: usize) -> Self {
+    pub(crate) fn new(
+        schema: DataSchemaRef,
+        sort: Vec<(PhysicalScalar, bool, bool)>,
+        limit: usize,
+    ) -> Self {
         Self {
             schema,
             sort,
@@ -45,26 +49,11 @@ impl TopNPrunner {
             return Ok(metas);
         }
 
-        let (sort, asc, nulls_first) = match &self.sort[0] {
-            LegacyExpression::Sort {
-                expr,
-                asc,
-                nulls_first,
-                ..
-            } => (expr, asc, nulls_first),
-            _ => unreachable!(),
-        };
-
+        let (sort, asc, nulls_first) = &self.sort[0];
         // Currently, we only support topn on single-column sort.
         // TODO: support monadic + multi expression + order by cluster key sort.
-        let column = if let LegacyExpression::Column(c) = sort.as_ref() {
-            c
-        } else {
-            return Ok(metas);
-        };
-
-        let sort_idx = if let Ok(index) = self.schema.index_of(column.as_str()) {
-            index as u32
+        let sort_idx = if let PhysicalScalar::IndexedVariable { index, .. } = sort {
+            *index as u32
         } else {
             return Ok(metas);
         };

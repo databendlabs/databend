@@ -20,7 +20,6 @@ use common_datavalues::DataValue;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use crate::Metadata;
 use databend_query::sql::optimizer::SExpr;
 use databend_query::sql::planner::plans::JoinType;
 use databend_query::sql::plans::BoundColumnRef;
@@ -33,6 +32,8 @@ use databend_query::sql::ColumnBinding;
 use databend_query::sql::Visibility;
 use databend_query::storages::Table;
 use parking_lot::RwLock;
+
+use crate::Metadata;
 
 struct DummyTable {
     table_info: TableInfo,

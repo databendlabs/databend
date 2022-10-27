@@ -24,14 +24,13 @@ use common_datavalues::chrono::TimeZone;
 use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_legacy_expression::LegacyExpression;
-use common_planner::extras::Extras;
-use common_planner::Partitions;
-use common_planner::ReadDataSourcePlan;
-use common_planner::extras::Statistics;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_planner::extras::Extras;
+use common_planner::extras::Statistics;
+use common_planner::Partitions;
+use common_planner::ReadDataSourcePlan;
 use futures::Stream;
 
 use crate::pipelines::processors::port::OutputPort;
@@ -61,9 +60,7 @@ impl SyncCrashMeTable {
         if let Some(args) = &table_args {
             if args.len() == 1 {
                 let arg = &args[0];
-                if let LegacyExpression::Literal { value, .. } = arg {
-                    panic_message = Some(String::from_utf8(value.as_string()?)?);
-                }
+                panic_message = Some(String::from_utf8(arg.as_string()?)?);
             }
         }
 

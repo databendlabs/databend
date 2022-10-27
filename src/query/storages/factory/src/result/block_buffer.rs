@@ -20,9 +20,8 @@ use common_base::base::tokio::sync::Notify;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_exception::Result;
-use common_planner::PartInfoPtr;
 use common_planner::plans::Projection;
-
+use common_planner::PartInfoPtr;
 
 use crate::fuse::io::BlockReader;
 use crate::result::ResultQueryInfo;
