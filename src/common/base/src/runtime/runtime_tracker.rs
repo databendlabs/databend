@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use crate::runtime::MemoryTracker;
 
-static mut GLOBAL_ID: AtomicUsize = AtomicUsize::new(0);
+static mut GLOBAL_ID: AtomicUsize = AtomicUsize::new(1);
 
 pub struct RuntimeTracker {
     id: usize,
@@ -35,11 +35,12 @@ impl RuntimeTracker {
     }
 
     pub fn on_stop_thread(self: &Arc<Self>) -> impl Fn() {
-        move || {}
+        MemoryTracker::set_to_null
     }
 
     pub fn on_start_thread(self: &Arc<Self>) -> impl Fn() {
         let id = self.id;
+        tracing::info!("runtime tracker id:{}", id);
         move || MemoryTracker::create(id)
     }
 }

@@ -38,6 +38,10 @@ impl MemoryTracker {
         }
     }
 
+    pub fn set_to_null() {
+        LOCAL.with(|t| *t.borrow_mut() = None);
+    }
+
     #[inline]
     pub fn get_memory_usage(id: usize) -> usize {
         thread_memory_usage(id)
