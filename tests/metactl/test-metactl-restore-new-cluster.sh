@@ -11,11 +11,17 @@ echo " === start 3 meta node cluster"
 nohup ./target/debug/databend-meta --config-file=./tests/metactl/config/databend-meta-node-1.toml &
 python3 scripts/ci/wait_tcp.py --timeout 5 --port 9191
 
+sleep 1
+
 nohup ./target/debug/databend-meta --config-file=./tests/metactl/config/databend-meta-node-2.toml &
 python3 scripts/ci/wait_tcp.py --timeout 5 --port 28202
 
+sleep 1
+
 nohup ./target/debug/databend-meta --config-file=./tests/metactl/config/databend-meta-node-3.toml &
 python3 scripts/ci/wait_tcp.py --timeout 5 --port 28302
+
+sleep 1
 
 curl -sL http://127.0.0.1:28101/v1/cluster/status
 
