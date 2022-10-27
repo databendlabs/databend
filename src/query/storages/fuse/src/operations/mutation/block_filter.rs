@@ -18,12 +18,12 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datavalues::BooleanColumn;
-use common_datavalues::DataSchemaRefExt;
 use common_datavalues::Series;
 use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
 use common_planner::plans::Projection;
 use common_planner::PhysicalScalar;
+use common_sql::evaluator::Evaluator;
 
 use crate::operations::mutation::deletion_mutator::Deletion;
 use crate::FuseTable;
@@ -61,10 +61,10 @@ pub async fn delete_from_block(
     let reader = table.create_block_reader(proj)?;
     let data_block = reader.read_with_block_meta(block_meta).await?;
 
-    // todo(sundy)
-    let filter_result = DataBlock::empty();
+    let eval_node = Evaluator::eval_physical_scalar(filter_expr)?;
+    let filter_result = eval_node.eval(&ctx.try_get_function_context()?, &data_block)?.vector;
+    let predicates = DataBlock::cast_to_nonull_boolean(&filter_result)?;
 
-    let predicates = DataBlock::cast_to_nonull_boolean(filter_result.column(0))?;
     // shortcut, if predicates is const boolean (or can be cast to boolean)
     if let Some(const_bool) = DataBlock::try_as_const_bool(&predicates)? {
         return if const_bool {

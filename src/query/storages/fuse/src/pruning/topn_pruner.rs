@@ -20,19 +20,16 @@ use common_fuse_meta::meta::ColumnStatistics;
 use common_planner::PhysicalScalar;
 
 pub(crate) struct TopNPrunner {
-    schema: DataSchemaRef,
     sort: Vec<(PhysicalScalar, bool, bool)>,
     limit: usize,
 }
 
 impl TopNPrunner {
     pub(crate) fn new(
-        schema: DataSchemaRef,
         sort: Vec<(PhysicalScalar, bool, bool)>,
         limit: usize,
     ) -> Self {
         Self {
-            schema,
             sort,
             limit,
         }

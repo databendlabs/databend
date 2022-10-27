@@ -35,7 +35,7 @@ pub trait Pruner {
 struct FilterPruner {
     ctx: Arc<dyn TableContext>,
 
-    /// columns that should be loaded from filter block
+    /// indices that should be loaded from filter block
     index_columns: Vec<String>,
 
     /// the expression that would be evaluate
@@ -120,15 +120,12 @@ pub fn new_filter_pruner(
             })
             .unwrap();
 
-        let point_query_cols = columns_names_of_eq_expressions(&expr)?;
+        let point_query_cols = columns_indices_of_eq_expressions(&expr)?;
         if !point_query_cols.is_empty() {
             // convert to filter column names
-
-            // todo(sundy)
-            let idx = 0;
             let filter_block_cols = point_query_cols
                 .into_iter()
-                .map(|n| BlockFilter::build_filter_column(idx))
+                .map(|index| BlockFilter::build_filter_column(index))
                 .collect();
 
             return Ok(Some(Arc::new(FilterPruner::new(
@@ -147,6 +144,7 @@ pub fn new_filter_pruner(
 
 mod util {
     use common_exception::ErrorCode;
+    use common_planner::PhysicalScalarVisitor;
 
     use super::*;
     #[tracing::instrument(level = "debug", skip_all)]
@@ -161,7 +159,7 @@ mod util {
     ) -> Result<bool> {
         // load the relevant index columns
         let maybe_filter = index_location
-            .read_filter(ctx.clone(), dal, filter_col_names, index_length)
+            .read_filter(ctx.clone(), dal, &filter_col_names, index_length)
             .await;
 
         match maybe_filter {
@@ -179,37 +177,39 @@ mod util {
     }
 
     struct PointQueryVisitor {
-        // names of columns which used by point query kept here
-        columns: HashSet<String>,
+        // indices of columns which used by point query kept here
+        columns: HashSet<usize>,
     }
 
-    // todo(sundy):
-    // impl ExpressionVisitor for PointQueryVisitor {
-    //     fn pre_visit(mut self, expr: &PhysicalScalar) -> Result<Recursion<Self>> {
-    //         // TODO
-    //         // 1. only binary op "=" is considered, which is NOT enough
-    //         // 2. should combine this logic with Filter
-    //         match expr {
-    //             PhysicalScalar::BinaryExpression { left, op, right } if op.as_str() == "=" => {
-    //                 match (left.as_ref(), right.as_ref()) {
-    //                     (PhysicalScalar::Column(column), PhysicalScalar::Literal { .. })
-    //                     | (PhysicalScalar::Literal { .. }, PhysicalScalar::Column(column)) => {
-    //                         self.columns.insert(column.clone());
-    //                         Ok(Recursion::Stop(self))
-    //                     }
-    //                     _ => Ok(Recursion::Continue(self)),
-    //                 }
-    //             }
-    //             _ => Ok(Recursion::Continue(self)),
-    //         }
-    //     }
-    // }
+    impl PhysicalScalarVisitor for PointQueryVisitor {
+        fn pre_visit(mut self, expr: &PhysicalScalar) -> Result<common_planner::Recursion<Self>> {
+            // 1. only binary op "=" is considered, which is NOT enough
+            // 2. should combine this logic with Filter
+            match expr {
+                PhysicalScalar::Function { name, args, .. } if name.as_str() == "=" && args.len() == 2 => {
+                    match (&args[0], &args[1]) {
+                        (PhysicalScalar::IndexedVariable { index, ..}, PhysicalScalar::Constant { .. })
+                        | (PhysicalScalar::Constant { .. }, PhysicalScalar::IndexedVariable { index, .. }) => {
+                            self.columns.insert(*index);
+                            Ok(common_planner::Recursion::Stop(self))
+                        }
+                        _ => Ok(common_planner::Recursion::Continue(self)),
+                    }
+                }
+                _ => Ok(common_planner::Recursion::Continue(self)),
+            }
+        }
+    }
 
-    pub fn columns_names_of_eq_expressions(filter_expr: &PhysicalScalar) -> Result<Vec<String>> {
+
+
+    pub fn columns_indices_of_eq_expressions(filter_expr: &PhysicalScalar) -> Result<Vec<usize>> {
         let visitor = PointQueryVisitor {
             columns: HashSet::new(),
         };
 
-        todo!()
+        filter_expr
+            .accept(visitor)
+            .map(|r| r.columns.into_iter().collect())
     }
 }

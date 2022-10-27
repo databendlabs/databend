@@ -15,9 +15,6 @@
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::TableSnapshot;
 use common_planner::extras::Extras;
@@ -145,7 +142,7 @@ impl FuseTable {
     }
 
     fn cluster_stats_gen(&self, ctx: Arc<dyn TableContext>) -> Result<ClusterStatsGenerator> {
-        // todo:(sundy)
+        // todo(sundy)
         todo!()
     }
 }

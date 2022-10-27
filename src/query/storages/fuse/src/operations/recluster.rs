@@ -149,7 +149,7 @@ impl FuseTable {
             .cluster_keys
             .iter()
             .map(|expr| SortColumnDescription {
-                column_name: "_cluster_key".to_string(),
+                column_name: expr.pretty_display(),
                 asc: true,
                 nulls_first: false,
             })

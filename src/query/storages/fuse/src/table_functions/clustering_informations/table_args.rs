@@ -19,7 +19,6 @@ use common_planner::PhysicalScalar;
 use crate::table_functions::string_value;
 use crate::table_functions::TableArgs;
 use crate::FuseTable;
-use crate::Table;
 
 pub fn parse_func_table_args(table_args: &TableArgs) -> Result<(String, String)> {
     match table_args {

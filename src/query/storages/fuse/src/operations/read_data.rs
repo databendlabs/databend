@@ -16,7 +16,8 @@ use std::sync::Arc;
 
 use common_base::base::Runtime;
 use common_catalog::table_context::TableContext;
-use common_datavalues::DataSchemaRefExt;
+use common_datablocks::DataBlock;
+use common_datavalues::ColumnRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionContext;
@@ -31,6 +32,7 @@ use common_planner::plans::Projection;
 use common_planner::PartInfoPtr;
 use common_planner::ReadDataSourcePlan;
 use common_sql::evaluator::EvalNode;
+use common_sql::evaluator::Evaluator;
 use tracing::info;
 
 use crate::fuse_lazy_part::FuseLazyPartInfo;
@@ -98,8 +100,8 @@ impl FuseTable {
         Ok(match self.prewhere_of_push_downs(&plan.push_downs) {
             None => Arc::new(None),
             Some(v) => {
-                // todo(sundy)
-                todo!()
+                let executor = Evaluator::eval_physical_scalar(&v.filter)?;
+                Arc::new(Some(executor))
             }
         })
     }
