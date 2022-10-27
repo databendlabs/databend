@@ -50,7 +50,8 @@ impl ColumnsTable {
             NULL AS collation_name,
             NULL AS domain_catalog,
             NULL AS domain_schema,
-            NULL AS domain_name
+            NULL AS domain_name,
+            NULL AS extra
         FROM system.columns;";
 
         let mut options = BTreeMap::new();
