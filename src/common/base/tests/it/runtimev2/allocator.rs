@@ -14,13 +14,11 @@
 
 use std::alloc::GlobalAlloc;
 use std::alloc::Layout;
-use std::mem;
 use std::ptr::null_mut;
 
 use common_base::mem_allocator::JEAllocator;
 use common_base::runtime::print_memory_stats;
 use common_base::runtime::total_memory_usage;
-use common_base::runtime::AllocHeader;
 use common_base::runtime::ProxyAllocator;
 use tracing_subscriber::util::SubscriberInitExt;
 
@@ -54,23 +52,6 @@ fn test_alignment() {
     for alloc in (0..16).map(|i| i << 1) {
         for alignment in (0..16).map(|i| 1 << i) {
             let layout = Layout::from_size_align(alloc, alignment).unwrap();
-            let ptr = unsafe { ALLOC.alloc(layout) };
-            assert_ne!(ptr, null_mut());
-
-            assert_eq!(ptr as usize % alignment, 0);
-
-            unsafe { ALLOC.dealloc(ptr, layout) };
-        }
-    }
-}
-
-#[test]
-#[serial_test::serial]
-fn test_alignment_with_offset() {
-    let header_size = mem::size_of::<AllocHeader>();
-    for alloc in (0..16).map(|i| i << 1).filter(|&alloc| alloc > header_size) {
-        for alignment in (0..16).map(|i| 1 << i).filter(|&p| p >= header_size) {
-            let layout = Layout::from_size_align(alloc - header_size, alignment).unwrap();
             let ptr = unsafe { ALLOC.alloc(layout) };
             assert_ne!(ptr, null_mut());
 
