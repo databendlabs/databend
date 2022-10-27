@@ -26,7 +26,6 @@ mod platform {
 
     use tikv_jemalloc_sys as ffi;
 
-    use crate::base::ThreadTracker;
     use crate::mem_allocator::Allocator;
 
     /// Memory allocation APIs compatible with libc
@@ -77,15 +76,12 @@ mod platform {
     unsafe impl GlobalAlloc for JEAllocator {
         #[inline]
         unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-            ThreadTracker::alloc_memory(layout.size() as i64);
             let flags = layout_to_flags(layout.align(), layout.size());
             ffi::mallocx(layout.size(), flags) as *mut u8
         }
 
         #[inline]
         unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-            ThreadTracker::dealloc_memory(layout.size() as i64);
-
             let flags = layout_to_flags(layout.align(), layout.size());
             ffi::sdallocx(ptr as *mut _, layout.size(), flags)
         }
@@ -102,8 +98,6 @@ mod platform {
 
         #[inline]
         unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-            ThreadTracker::realloc_memory(layout.size() as i64, new_size as i64);
-
             let flags = layout_to_flags(layout.align(), new_size);
             ffi::rallocx(ptr as *mut _, new_size, flags) as *mut u8
         }
@@ -129,8 +123,6 @@ mod platform {
             new_size: usize,
             clear_mem: bool,
         ) -> *mut u8 {
-            ThreadTracker::realloc_memory(layout.size() as i64, new_size as i64);
-
             let mut flags = layout_to_flags(layout.align(), new_size);
             if clear_mem {
                 flags |= ffi::MALLOCX_ZERO;
