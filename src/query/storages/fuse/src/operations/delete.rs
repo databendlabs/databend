@@ -15,14 +15,13 @@
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
-use common_datavalues::DataSchemaRefExt;
+use common_datavalues::DataField;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::TableSnapshot;
 use common_planner::extras::Extras;
 use common_planner::plans::DeletePlan;
 use common_planner::PhysicalScalar;
-use common_sql::evaluator::Evaluator;
 use common_sql::PhysicalScalarParser;
 use tracing::debug;
 
@@ -35,7 +34,7 @@ use crate::FuseTable;
 
 impl FuseTable {
     pub async fn do_delete(&self, ctx: Arc<dyn TableContext>, plan: &DeletePlan) -> Result<()> {
-        let snapshot_opt = self.read_table_snapshot().await?;
+        let snapshot_opt = self.read_table_snapshot(ctx.clone()).await?;
 
         // check if table is empty
         let snapshot = if let Some(val) = snapshot_opt {
@@ -52,8 +51,7 @@ impl FuseTable {
 
         // check if unconditional deletion
         if let Some(filter) = &plan.selection {
-            let physical_scalars =
-                PhysicalScalarParser::parse_exprs(ctx.clone(), plan.schema(), filter).await?;
+            let physical_scalars = PhysicalScalarParser::parse_exprs(plan.schema(), filter)?;
             if physical_scalars.is_empty() {
                 return Err(ErrorCode::IndexOutOfBounds(
                     "expression should be valid, but not",
@@ -79,7 +77,7 @@ impl FuseTable {
         filter: &PhysicalScalar,
         plan: &DeletePlan,
     ) -> Result<()> {
-        let cluster_stats_gen = self.cluster_stats_gen(ctx.clone())?;
+        let cluster_stats_gen = self.cluster_stats_gen()?;
         let mut deletion_collector = DeletionMutator::try_create(
             ctx.clone(),
             self.get_operator(),
@@ -151,46 +149,31 @@ impl FuseTable {
         .await
     }
 
-    fn cluster_stats_gen(&self, ctx: Arc<dyn TableContext>) -> Result<ClusterStatsGenerator> {
-        if self.cluster_key_meta.is_none() {
-            return Ok(ClusterStatsGenerator::default());
-        }
-
-        let len = self.cluster_keys.len();
-        let cluster_key_id = self.cluster_key_meta.clone().unwrap().0;
-
+    fn cluster_stats_gen(&self) -> Result<ClusterStatsGenerator> {
         let input_schema = self.table_info.schema();
-        let input_fields = input_schema.fields().clone();
+        let mut merged = input_schema.fields().clone();
 
-        let mut cluster_key_index = Vec::with_capacity(len);
-        let mut output_fields = Vec::with_capacity(len);
-        let mut exists = true;
+        let mut cluster_key_index = Vec::with_capacity(self.cluster_keys.len());
+        let mut extra_key_index = Vec::with_capacity(self.cluster_keys.len());
         for expr in &self.cluster_keys {
-            output_fields.push(expr.to_data_field());
+            let cname = expr.pretty_display();
+            let index = match merged.iter().position(|x| x.name() == &cname) {
+                None => {
+                    let field = DataField::new(&cname, expr.data_type());
+                    merged.push(field);
 
-            if exists {
-                match input_fields
-                    .iter()
-                    .position(|x| x.name() == &expr.pretty_display())
-                {
-                    None => exists = false,
-                    Some(idx) => cluster_key_index.push(idx),
-                };
-            }
-        }
-
-        let mut expression_executor = None;
-        if !exists {
-            cluster_key_index = (0..len).collect();
-
-            let executor = Evaluator::eval_physical_scalars(&self.cluster_keys)?;
-            expression_executor = Some(executor);
+                    extra_key_index.push(merged.len() - 1);
+                    merged.len() - 1
+                }
+                Some(idx) => idx,
+            };
+            cluster_key_index.push(index);
         }
 
         Ok(ClusterStatsGenerator::new(
-            cluster_key_id,
+            self.cluster_key_meta.as_ref().unwrap().0,
             cluster_key_index,
-            expression_executor,
+            extra_key_index,
             0,
             self.get_block_compactor(),
         ))
