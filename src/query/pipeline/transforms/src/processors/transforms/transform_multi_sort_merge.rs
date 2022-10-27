@@ -13,18 +13,15 @@
 //  limitations under the License.
 
 use std::any::Any;
-use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
-use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::RwLock;
 
-use common_arrow::arrow::array::ord::DynComparator;
-use common_arrow::ArrayRef;
-use common_datablocks::build_compare;
+use common_datablocks::ColumnsDynComparator;
 use common_datablocks::DataBlock;
 use common_datablocks::SortColumnDescription;
 use common_datavalues::ColumnRef;
@@ -82,26 +79,20 @@ struct Cursor {
     pub input_index: usize,
     pub row_index: usize,
 
-    /// block_id is a global unique id. Not the sequence number of its input.
-    pub block_id: usize,
     num_rows: usize,
 
     sort_columns: Vec<ColumnRef>,
     sort_columns_descriptions: Vec<SortColumnDescription>,
 
-    /// A collection of comparators that compare rows in this cursors' block
-    /// to the cursors in other blocks.
-    ///
-    /// Other blocks are uniquely identified by their input_index and block_index.
-    comparators: RefCell<HashMap<usize, (usize, Vec<DynComparator>)>>,
+    compare_map: Arc<RwLock<CompareMap>>,
 }
 
 impl Cursor {
     pub fn try_create(
         input_index: usize,
-        block_index: usize,
         block: &DataBlock,
         sort_columns_descriptions: Vec<SortColumnDescription>,
+        compare_map: Arc<RwLock<CompareMap>>,
     ) -> Result<Cursor> {
         let sort_columns = sort_columns_descriptions
             .iter()
@@ -112,12 +103,11 @@ impl Cursor {
             .collect::<Result<Vec<_>>>()?;
         Ok(Cursor {
             input_index,
-            block_id: block_index,
             row_index: 0,
             sort_columns_descriptions,
             sort_columns,
             num_rows: block.num_rows(),
-            comparators: RefCell::new(HashMap::new()),
+            compare_map,
         })
     }
 
@@ -141,32 +131,17 @@ impl Cursor {
                 other.sort_columns.len()
             )));
         }
-        let zipped = self
+        let compare_map = self.compare_map.read().unwrap();
+        let comparators = &compare_map[self.input_index][other.input_index];
+
+        for (i, ((l, r), option)) in self
             .sort_columns
             .iter()
-            .map(|c| c.as_arrow_array(c.data_type()))
-            .zip(
-                other
-                    .sort_columns
-                    .iter()
-                    .map(|c| c.as_arrow_array(c.data_type())),
-            )
+            .zip(other.sort_columns.iter())
             .zip(self.sort_columns_descriptions.iter())
-            .collect::<Vec<_>>();
-        self.add_block_comparators(other, &zipped)?;
-        let comparators = self.comparators.borrow();
-        let comparators = &comparators
-            .get(&other.input_index)
-            .ok_or_else(|| {
-                ErrorCode::LogicalError(format!(
-                    "Cannot find comparators to compare {}.{} with {}.{}",
-                    self.input_index, self.block_id, other.input_index, other.block_id
-                ))
-            })?
-            .1;
-
-        for (i, ((l, r), option)) in zipped.iter().enumerate() {
-            match (l.is_valid(self.row_index), r.is_valid(other.row_index)) {
+            .enumerate()
+        {
+            match (l.null_at(self.row_index), r.null_at(other.row_index)) {
                 (false, true) if option.nulls_first => return Ok(Ordering::Less),
                 (false, true) => return Ok(Ordering::Greater),
                 (true, false) if option.nulls_first => return Ok(Ordering::Greater),
@@ -182,33 +157,6 @@ impl Cursor {
 
         // If all columns are equal, compare the input index.
         Ok(self.input_index.cmp(&other.input_index))
-    }
-
-    /// update comparators if there comes a new block.
-    pub fn add_block_comparators(
-        &self,
-        other: &Cursor,
-        zipped: &[((ArrayRef, ArrayRef), &SortColumnDescription)],
-    ) -> Result<()> {
-        let mut comparators = self.comparators.borrow_mut();
-        if let Some(cmps) = comparators.get_mut(&other.input_index) {
-            // comparator of this block is already exisits.
-            if cmps.0 == other.block_id {
-                return Ok(());
-            }
-            let mut compares = Vec::with_capacity(other.sort_columns.len());
-            for ((l, r), _) in zipped.iter() {
-                compares.push(build_compare(&**l, &**r)?)
-            }
-            cmps.1 = compares;
-        } else {
-            let mut compares = Vec::with_capacity(other.sort_columns.len());
-            for ((l, r), _) in zipped.iter() {
-                compares.push(build_compare(&**l, &**r)?)
-            }
-            comparators.insert(other.input_index, (other.block_id, compares));
-        }
-        Ok(())
     }
 }
 
@@ -232,6 +180,20 @@ impl PartialOrd for Cursor {
     }
 }
 
+type CompareMap = Vec<Vec<ColumnsDynComparator>>;
+
+fn create_compare_map(n: usize) -> CompareMap {
+    let mut res = Vec::with_capacity(n);
+    for _ in 0..n {
+        let mut inner = Vec::with_capacity(n);
+        for _ in 0..n {
+            inner.push(Vec::new());
+        }
+        res.push(inner);
+    }
+    res
+}
+
 /// TransformMultiSortMerge is a processor with multiple input ports;
 pub struct MultiSortMergeProcessor {
     /// Data from inputs (every input is sorted)
@@ -246,6 +208,11 @@ pub struct MultiSortMergeProcessor {
 
     /// For each input port, maintain a dequeue of data blocks.
     blocks: Vec<VecDeque<DataBlock>>,
+    /// Compare blocks from different inputs.
+    ///
+    /// There are only one block in the heap for each input port at the same time.
+    /// So we can use a 2d vector to store the comparators.
+    compare_map: Arc<RwLock<CompareMap>>,
     /// Maintain a flag for each input denoting if the current cursor has finished
     /// and needs to pull data from input.
     cursor_finished: Vec<bool>,
@@ -255,8 +222,6 @@ pub struct MultiSortMergeProcessor {
     in_progess_rows: Vec<(usize, usize, usize)>,
     /// Heap that yields [`Cursor`] in increasing order.
     heap: BinaryHeap<Cursor>,
-    /// Assign every input block a unique id.
-    cur_block_index: usize,
     /// If the input port is finished.
     input_finished: Vec<bool>,
 
@@ -274,7 +239,8 @@ impl MultiSortMergeProcessor {
         limit: Option<usize>,
         sort_columns_descriptions: Vec<SortColumnDescription>,
     ) -> Self {
-        let intput_size = inputs.len();
+        let input_size = inputs.len();
+
         Self {
             inputs,
             output,
@@ -282,12 +248,12 @@ impl MultiSortMergeProcessor {
             block_size,
             limit,
             sort_columns_descriptions,
-            blocks: vec![VecDeque::new(); intput_size],
-            heap: BinaryHeap::with_capacity(intput_size),
+            blocks: vec![VecDeque::with_capacity(2); input_size],
+            compare_map: Arc::new(RwLock::new(create_compare_map(input_size))),
+            heap: BinaryHeap::with_capacity(input_size),
             in_progess_rows: vec![],
-            cursor_finished: vec![true; intput_size],
-            cur_block_index: 0,
-            input_finished: vec![false; intput_size],
+            cursor_finished: vec![true; input_size],
+            input_finished: vec![false; input_size],
             state: ProcessorState::Consume,
             aborting: Arc::new(AtomicBool::new(false)),
         }
@@ -319,6 +285,7 @@ impl MultiSortMergeProcessor {
 
     fn drain_heap(&mut self) {
         let nums_active_inputs = self.nums_active_inputs();
+        let mut need_output = false;
         // Need to pop data to in_progess_rows.
         // Use `>=` because some of the input ports may be finished, but the data is still in the heap.
         while self.heap.len() >= nums_active_inputs {
@@ -337,8 +304,7 @@ impl MultiSortMergeProcessor {
                         .push((input_index, block_index, row_index));
                     // Reach the block size, need to output.
                     if self.in_progess_rows.len() >= self.block_size {
-                        self.state = ProcessorState::Output;
-                        break;
+                        need_output = true;
                     }
                 }
                 None => {
@@ -352,12 +318,15 @@ impl MultiSortMergeProcessor {
                 }
             }
         }
+        if need_output {
+            self.state = ProcessorState::Output;
+        }
     }
 
     /// Drain `self.in_progess_rows` to build a output data block.
     fn build_block(&mut self) -> Result<DataBlock> {
         let num_rows = self.in_progess_rows.len();
-        debug_assert!(num_rows > 0 && num_rows <= self.block_size);
+        debug_assert!(num_rows > 0);
 
         let mut blocks_num_pre_sum = Vec::with_capacity(self.blocks.len());
         let mut len = 0;
@@ -423,6 +392,21 @@ impl MultiSortMergeProcessor {
         }
 
         Ok(DataBlock::create(self.output_schema.clone(), columns))
+    }
+
+    /// Add comparators for newly come data blocks.
+    fn build_compare_map(&mut self, blocks: &[(usize, DataBlock)]) -> Result<()> {
+        for i in 0..self.inputs.len() {
+            for (j, right) in blocks {
+                if i != *j && !self.blocks[i].is_empty() {
+                    let left = self.blocks[i].back().unwrap();
+                    let comparators = DataBlock::build_compare(left, right)?;
+                    let mut cmp = self.compare_map.write().unwrap();
+                    cmp[i][*j] = comparators;
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -508,18 +492,18 @@ impl Processor for MultiSortMergeProcessor {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, ProcessorState::Consume) {
             ProcessorState::Preserve(blocks) => {
+                self.build_compare_map(&blocks)?;
                 for (input_index, block) in blocks.into_iter() {
                     if !block.is_empty() {
                         let cursor = Cursor::try_create(
                             input_index,
-                            self.cur_block_index,
                             &block,
                             self.sort_columns_descriptions.clone(),
+                            self.compare_map.clone(),
                         )?;
                         self.heap.push(cursor);
                         self.cursor_finished[input_index] = false;
                         self.blocks[input_index].push_back(block);
-                        self.cur_block_index += 1;
                     }
                 }
                 self.drain_heap();

@@ -205,12 +205,28 @@ impl DataBlock {
             }
         }
     }
+
+    pub fn build_compare(left: &DataBlock, right: &DataBlock) -> Result<ColumnsDynComparator> {
+        let fields = left.schema().fields();
+        let mut res = Vec::with_capacity(fields.len());
+        for f in fields {
+            let l = left.try_column_by_name(f.name())?;
+            let l = l.as_arrow_array(f.data_type().clone());
+
+            let r = right.try_column_by_name(f.name())?;
+            let r = r.as_arrow_array(f.data_type().clone());
+            let cmp = build_compare(&*l, &*r)?;
+            res.push(cmp);
+        }
+        Ok(res)
+    }
 }
+
+pub type ColumnsDynComparator = Vec<DynComparator>;
 
 fn compare_variant(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynComparator> {
     let left = VariantColumn::from_arrow_array(left);
     let right = VariantColumn::from_arrow_array(right);
-
     Ok(Box::new(move |i, j| {
         left.get_data(i).cmp(right.get_data(j))
     }))
@@ -225,7 +241,7 @@ fn compare_array(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynComparat
     }))
 }
 
-pub fn build_compare(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynComparator> {
+fn build_compare(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynComparator> {
     match left.data_type() {
         ArrowType::LargeList(_) => compare_array(left, right),
         ArrowType::Extension(name, _, _) => {
