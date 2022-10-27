@@ -51,23 +51,6 @@ pub enum PhysicalScalar {
 }
 
 impl PhysicalScalar {
-    pub fn column_name(&self) -> String {
-        match self {
-            PhysicalScalar::IndexedVariable { display_name, .. } => display_name.clone(),
-            PhysicalScalar::Constant { value, .. } => format_datavalue_sql(value),
-            PhysicalScalar::Function { name, args, .. } => {
-                let args_column_name = args
-                    .iter()
-                    .map(PhysicalScalar::column_name)
-                    .collect::<Vec<_>>();
-                format!("{}({})", name, args_column_name.join(", "))
-            }
-            PhysicalScalar::Cast { input, target } => {
-                format!("{}::{}", input.column_name(), target.sql_name())
-            }
-        }
-    }
-
     pub fn data_type(&self) -> DataTypeImpl {
         match self {
             PhysicalScalar::Constant { data_type, .. } => data_type.clone(),
@@ -78,7 +61,7 @@ impl PhysicalScalar {
     }
 
     pub fn to_data_field(&self) -> DataField {
-        let name = self.column_name();
+        let name = self.pretty_display();
         let data_type = self.data_type();
         DataField::new(&name, data_type)
     }

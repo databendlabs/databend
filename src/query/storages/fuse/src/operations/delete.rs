@@ -171,7 +171,7 @@ impl FuseTable {
             if exists {
                 match input_fields
                     .iter()
-                    .position(|x| x.name() == &expr.column_name())
+                    .position(|x| x.name() == &expr.pretty_display())
                 {
                     None => exists = false,
                     Some(idx) => cluster_key_index.push(idx),
