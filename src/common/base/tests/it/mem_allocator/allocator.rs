@@ -41,7 +41,7 @@ fn test_allocator() {
     let ptr = unsafe { ALLOC.alloc(layout) };
     assert_ne!(ptr, null_mut());
 
-    assert_eq!(total_memory_usage(), 32);
+    assert_eq!(total_memory_usage(), 12912);
 
     unsafe { ALLOC.dealloc(ptr, layout) };
 }
