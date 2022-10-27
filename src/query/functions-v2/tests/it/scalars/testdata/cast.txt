@@ -247,33 +247,6 @@ output domain  : Undefined
 output         : 1.1
 
 
-ast            : CAST(0/0 AS VARIANT)
-raw expr       : CAST(divide(0_u8, 0_u8) AS Variant)
-checked expr   : CAST(divide<UInt8, UInt8>(0_u8, 0_u8) AS Variant)
-optimized expr : 0x200000002000000110
-output type    : Variant
-output domain  : Undefined
-output         : NaN
-
-
-ast            : CAST(1/0 AS VARIANT)
-raw expr       : CAST(divide(1_u8, 0_u8) AS Variant)
-checked expr   : CAST(divide<UInt8, UInt8>(1_u8, 0_u8) AS Variant)
-optimized expr : 0x200000002000000120
-output type    : Variant
-output domain  : Undefined
-output         : inf
-
-
-ast            : CAST(-1/0 AS VARIANT)
-raw expr       : CAST(minus(divide(1_u8, 0_u8)) AS Variant)
-checked expr   : CAST(minus<Float64>(divide<UInt8, UInt8>(1_u8, 0_u8)) AS Variant)
-optimized expr : 0x200000002000000130
-output type    : Variant
-output domain  : Undefined
-output         : -inf
-
-
 ast            : CAST('🍦 が美味しい' AS VARIANT)
 raw expr       : CAST("🍦 が美味しい" AS Variant)
 checked expr   : CAST("🍦 が美味しい" AS Variant)
@@ -438,33 +411,6 @@ optimized expr : 0x2000000020000009603ff199999999999a
 output type    : Variant NULL
 output domain  : Undefined
 output         : 1.1
-
-
-ast            : TRY_CAST(0/0 AS VARIANT)
-raw expr       : TRY_CAST(divide(0_u8, 0_u8) AS Variant)
-checked expr   : TRY_CAST(divide<UInt8, UInt8>(0_u8, 0_u8) AS Variant NULL)
-optimized expr : 0x200000002000000110
-output type    : Variant NULL
-output domain  : Undefined
-output         : NaN
-
-
-ast            : TRY_CAST(1/0 AS VARIANT)
-raw expr       : TRY_CAST(divide(1_u8, 0_u8) AS Variant)
-checked expr   : TRY_CAST(divide<UInt8, UInt8>(1_u8, 0_u8) AS Variant NULL)
-optimized expr : 0x200000002000000120
-output type    : Variant NULL
-output domain  : Undefined
-output         : inf
-
-
-ast            : TRY_CAST(-1/0 AS VARIANT)
-raw expr       : TRY_CAST(minus(divide(1_u8, 0_u8)) AS Variant)
-checked expr   : TRY_CAST(minus<Float64>(divide<UInt8, UInt8>(1_u8, 0_u8)) AS Variant NULL)
-optimized expr : 0x200000002000000130
-output type    : Variant NULL
-output domain  : Undefined
-output         : -inf
 
 
 ast            : TRY_CAST('🍦 が美味しい' AS VARIANT)

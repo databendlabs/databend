@@ -30,6 +30,8 @@ pub struct HivePartInfo {
     pub partitions: Option<String>,
     // only the data in ranges belong to this partition
     pub range: Range<u64>,
+    // file size
+    pub filesize: u64,
 }
 
 #[typetag::serde(name = "hive")]
@@ -51,11 +53,13 @@ impl HivePartInfo {
         filename: String,
         partitions: Option<String>,
         range: Range<u64>,
+        filesize: u64,
     ) -> Arc<Box<dyn PartInfo>> {
         Arc::new(Box::new(HivePartInfo {
             filename,
             partitions,
             range,
+            filesize,
         }))
     }
 

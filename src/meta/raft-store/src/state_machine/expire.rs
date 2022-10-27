@@ -46,7 +46,7 @@ pub struct ExpireKey {
 /// The value of an expiration index is the record key.
 #[derive(Default, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ExpireValue {
-    key: String,
+    pub key: String,
 }
 
 impl SledOrderedSerde for ExpireKey {
