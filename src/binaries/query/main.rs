@@ -49,9 +49,15 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         return Ok(());
     }
 
+    init_default_metrics_recorder();
+    set_panic_hook();
+
     if conf.meta.address.is_empty() && conf.meta.endpoints.is_empty() {
         MetaEmbedded::init_global_meta_store(conf.meta.embedded_dir.clone()).await?;
     }
+    // Make sure gloabl services have been inited.
+    GlobalServices::init(conf.clone()).await?;
+
     let tenant = conf.query.tenant_id.clone();
     let cluster_id = conf.query.cluster_id.clone();
     let flight_addr = conf.query.flight_api_address.clone();
@@ -75,13 +81,9 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         sentry::configure_scope(|scope| scope.set_tag("address", flight_addr));
     }
 
-    init_default_metrics_recorder();
-    set_panic_hook();
-
     #[cfg(not(target_os = "macos"))]
     check_max_open_files();
 
-    GlobalServices::init(conf.clone()).await?;
     let mut shutdown_handle = ShutdownHandle::create()?;
 
     info!("Databend Query start with config: {:?}", conf);
@@ -265,7 +267,7 @@ fn check_max_open_files() {
     let limits = match limits_rs::get_own_limits() {
         Ok(limits) => limits,
         Err(err) => {
-            warn!("get system limit of databend-query failed: {:?}", err);
+            tracing::warn!("get system limit of databend-query failed: {:?}", err);
             return;
         }
     };

@@ -16,6 +16,12 @@ SELECT 8 / 2;
 ----
 4.0
 
+statement error 1006
+SELECT 8 / 0;
+
+statement error 1006
+SELECT 20 DIV 0;
+
 statement query I
 SELECT 20 DIV 1;
 

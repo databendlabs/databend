@@ -24,10 +24,12 @@ use openraft::LogId;
 use crate::init_raft_store_ut;
 use crate::testing::new_raft_test_context;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[async_entry::test(
+    worker_threads = 3,
+    init = "init_raft_store_ut!()",
+    tracing_span = "debug"
+)]
 async fn test_raft_log_open() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
     let tc = new_raft_test_context();
     let db = &tc.db;
     RaftLog::open(db, &tc.raft_config).await?;
@@ -35,10 +37,12 @@ async fn test_raft_log_open() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[async_entry::test(
+    worker_threads = 3,
+    init = "init_raft_store_ut!()",
+    tracing_span = "debug"
+)]
 async fn test_raft_log_append_and_range_get() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
     let tc = new_raft_test_context();
     let db = &tc.db;
     let rl = RaftLog::open(db, &tc.raft_config).await?;
@@ -109,10 +113,12 @@ async fn test_raft_log_append_and_range_get() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[async_entry::test(
+    worker_threads = 3,
+    init = "init_raft_store_ut!()",
+    tracing_span = "debug"
+)]
 async fn test_raft_log_insert() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
     let tc = new_raft_test_context();
     let db = &tc.db;
     let rl = RaftLog::open(db, &tc.raft_config).await?;
@@ -143,10 +149,12 @@ async fn test_raft_log_insert() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[async_entry::test(
+    worker_threads = 3,
+    init = "init_raft_store_ut!()",
+    tracing_span = "debug"
+)]
 async fn test_raft_log_get() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
     let tc = new_raft_test_context();
     let db = &tc.db;
     let rl = RaftLog::open(db, &tc.raft_config).await?;
@@ -181,10 +189,12 @@ async fn test_raft_log_get() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[async_entry::test(
+    worker_threads = 3,
+    init = "init_raft_store_ut!()",
+    tracing_span = "debug"
+)]
 async fn test_raft_log_last() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
     let tc = new_raft_test_context();
     let db = &tc.db;
     let rl = RaftLog::open(db, &tc.raft_config).await?;
@@ -214,10 +224,12 @@ async fn test_raft_log_last() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[async_entry::test(
+    worker_threads = 3,
+    init = "init_raft_store_ut!()",
+    tracing_span = "debug"
+)]
 async fn test_raft_log_range_remove() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
     let tc = new_raft_test_context();
     let db = &tc.db;
     let rl = RaftLog::open(db, &tc.raft_config).await?;
