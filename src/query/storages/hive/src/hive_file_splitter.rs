@@ -59,6 +59,7 @@ impl HiveFileSplitter {
                     hive_file_info.filename.clone(),
                     hive_file_info.partition.clone(),
                     r,
+                    hive_file_info.length,
                 )
             })
             .collect()

@@ -389,8 +389,8 @@ pub struct TransactionSledTree<'a> {
 }
 
 impl TransactionSledTree<'_> {
-    pub fn key_space<KV: SledKeySpace>(&self) -> AsTxnKeySpace<KV> {
-        AsTxnKeySpace::<KV> {
+    pub fn key_space<KV: SledKeySpace>(&self) -> TxnKeySpace<KV> {
+        TxnKeySpace::<KV> {
             inner: self,
             phantom: PhantomData,
         }
@@ -403,12 +403,12 @@ pub struct AsKeySpace<'a, KV: SledKeySpace> {
     phantom: PhantomData<KV>,
 }
 
-pub struct AsTxnKeySpace<'a, KV: SledKeySpace> {
+pub struct TxnKeySpace<'a, KV: SledKeySpace> {
     inner: &'a TransactionSledTree<'a>,
     phantom: PhantomData<KV>,
 }
 
-impl<'a, KV: SledKeySpace> Store<KV> for AsTxnKeySpace<'a, KV> {
+impl<'a, KV: SledKeySpace> Store<KV> for TxnKeySpace<'a, KV> {
     type Error = MetaStorageError;
 
     fn insert(&self, key: &KV::K, value: &KV::V) -> Result<Option<KV::V>, Self::Error> {
@@ -441,27 +441,6 @@ impl<'a, KV: SledKeySpace> Store<KV> for AsTxnKeySpace<'a, KV> {
             None => Ok(None),
         }
     }
-
-    fn update_and_fetch<F>(&self, key: &KV::K, mut f: F) -> Result<Option<KV::V>, Self::Error>
-    where F: FnMut(Option<KV::V>) -> Option<KV::V> {
-        let key_ivec = KV::serialize_key(key)?;
-
-        let old_val_ivec = self.txn_tree.get(&key_ivec)?;
-        let old_val: Result<Option<KV::V>, MetaStorageError> = match old_val_ivec {
-            Some(v) => Ok(Some(KV::deserialize_value(v)?)),
-            None => Ok(None),
-        };
-
-        let old_val = old_val?;
-
-        let new_val = f(old_val);
-        let _ = match new_val {
-            Some(ref v) => self.txn_tree.insert(key_ivec, KV::serialize_value(v)?)?,
-            None => self.txn_tree.remove(key_ivec)?,
-        };
-
-        Ok(new_val)
-    }
 }
 
 /// Some methods that take `&TransactionSledTree` as parameter need to be called
@@ -477,7 +456,7 @@ impl<'a, KV: SledKeySpace> Store<KV> for AsTxnKeySpace<'a, KV> {
 ///     sub_tree.insert(key, &seq_kv_value);
 /// }
 /// ```
-impl<'a, KV: SledKeySpace> Deref for AsTxnKeySpace<'a, KV> {
+impl<'a, KV: SledKeySpace> Deref for TxnKeySpace<'a, KV> {
     type Target = &'a TransactionSledTree<'a>;
 
     fn deref(&self) -> &Self::Target {

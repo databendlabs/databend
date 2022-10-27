@@ -45,6 +45,7 @@ pub struct QueryResult {
     extra_info: Option<Box<dyn ProgressReporter + Send>>,
     has_result_set: bool,
     schema: DataSchemaRef,
+    ignore_result: bool,
 }
 
 impl QueryResult {
@@ -53,12 +54,14 @@ impl QueryResult {
         extra_info: Option<Box<dyn ProgressReporter + Send>>,
         has_result_set: bool,
         schema: DataSchemaRef,
+        ignore_result: bool,
     ) -> QueryResult {
         QueryResult {
             blocks,
             extra_info,
             has_result_set,
             schema,
+            ignore_result,
         }
     }
 }
@@ -92,7 +95,6 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
         format: &FormatSettings,
     ) -> Result<()> {
         // XXX: num_columns == 0 may is error?
-
         if !query_result.has_result_set {
             // For statements without result sets, we still need to pull the stream because errors may occur in the stream.
             let blocks = &mut query_result.blocks;
@@ -173,6 +175,11 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                         }
                         Ok(block) => block,
                     };
+
+                    if query_result.ignore_result {
+                        continue;
+                    }
+
                     match block.get_serializers() {
                         Ok(serializers) => {
                             let rows_size = block.column(0).len();

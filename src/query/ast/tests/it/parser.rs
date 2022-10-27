@@ -283,6 +283,15 @@ fn test_statement() {
                     skip_header = 1
                 )
                 force=true;"#,
+        r#"COPY INTO mytable
+                FROM 'fs:///path/to/data.csv'
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;"#,
         // We used to support COPY FROM a quoted at string
         // r#"COPY INTO mytable
         //         FROM '@external_stage/path/to/file.csv'
@@ -393,7 +402,6 @@ fn test_query() {
     let mut mint = Mint::new("tests/it/testdata");
     let mut file = mint.new_goldenfile("query.txt").unwrap();
     let cases = &[
-        r#"select * from a limit 3 offset 4 format csv"#,
         r#"select * from customer inner join orders"#,
         r#"select * from customer cross join orders"#,
         r#"select * from customer inner join orders on a = b limit 1"#,

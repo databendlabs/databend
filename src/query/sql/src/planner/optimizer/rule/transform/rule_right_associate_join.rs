@@ -135,7 +135,7 @@ impl Rule for RuleRightAssociateJoin {
             match join_pred {
                 JoinPredicate::Right(pred) => {
                     // TODO(leiysky): push down the predicate
-                    join_3.other_conditions.push(pred.clone());
+                    join_3.non_equi_conditions.push(pred.clone());
                 }
                 JoinPredicate::Left(pred) => {
                     join_4_preds.push(pred.clone());
@@ -145,7 +145,7 @@ impl Rule for RuleRightAssociateJoin {
                     join_3.right_conditions.push(right.clone());
                 }
                 JoinPredicate::Other(pred) => {
-                    join_3.other_conditions.push(pred.clone());
+                    join_3.non_equi_conditions.push(pred.clone());
                 }
             }
         }
@@ -160,7 +160,7 @@ impl Rule for RuleRightAssociateJoin {
             match join_pred {
                 JoinPredicate::Left(_) | JoinPredicate::Right(_) | JoinPredicate::Other(_) => {
                     // TODO(leiysky): push down the predicate
-                    join_4.other_conditions.push(predicate.clone());
+                    join_4.non_equi_conditions.push(predicate.clone());
                 }
                 JoinPredicate::Both { left, right } => {
                     join_4.left_conditions.push(left.clone());

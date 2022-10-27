@@ -40,9 +40,9 @@ pub enum JoinType {
     RightAnti,
     Cross,
     /// Mark Join is a special case of join that is used to process Any subquery and correlated Exists subquery.
-    /// Left Mark Join use subquery as probe side.
+    /// Left Mark Join use subquery as probe side, it's blocked at `mark_join_blocks`
     LeftMark,
-    /// Right Mark Join use subquery as build side.
+    /// Right Mark Join use subquery as build side, it's executed by streaming.
     RightMark,
     /// Single Join is a special kind of join that is used to process correlated scalar subquery.
     Single,
@@ -119,7 +119,7 @@ impl Display for JoinType {
 pub struct LogicalInnerJoin {
     pub left_conditions: Vec<Scalar>,
     pub right_conditions: Vec<Scalar>,
-    pub other_conditions: Vec<Scalar>,
+    pub non_equi_conditions: Vec<Scalar>,
     pub join_type: JoinType,
     // marker_index is for MarkJoin only.
     pub marker_index: Option<IndexType>,
@@ -131,7 +131,7 @@ impl Default for LogicalInnerJoin {
         Self {
             left_conditions: Default::default(),
             right_conditions: Default::default(),
-            other_conditions: Default::default(),
+            non_equi_conditions: Default::default(),
             join_type: JoinType::Cross,
             marker_index: Default::default(),
             from_correlated_subquery: Default::default(),
@@ -196,11 +196,11 @@ impl LogicalOperator for LogicalInnerJoin {
         // Derive cardinality. We can not estimate the cardinality of inner join until we have
         // distribution information of join keys, so we set it to the maximum value.
         let cardinality = match self.join_type {
-            JoinType::Inner
-            | JoinType::Left
-            | JoinType::Right
-            | JoinType::Full
-            | JoinType::Cross => left_prop.cardinality * right_prop.cardinality,
+            // Todo(xudong): after `distinct_count` of `ColumnStat` is ready, we can estimate more precisely
+            JoinType::Inner | JoinType::Left | JoinType::Right | JoinType::Full => {
+                f64::max(left_prop.cardinality, right_prop.cardinality)
+            }
+            JoinType::Cross => left_prop.cardinality * right_prop.cardinality,
 
             JoinType::LeftSemi | JoinType::LeftAnti | JoinType::LeftMark | JoinType::Single => {
                 left_prop.cardinality
@@ -211,9 +211,15 @@ impl LogicalOperator for LogicalInnerJoin {
             }
         };
 
+        // Derive used columns
+        let mut used_columns = self.used_columns()?;
+        used_columns.extend(left_prop.used_columns);
+        used_columns.extend(right_prop.used_columns);
+
         Ok(RelationalProperty {
             output_columns,
             outer_columns,
+            used_columns,
             cardinality,
             precise_cardinality: None,
 
@@ -227,7 +233,7 @@ impl LogicalOperator for LogicalInnerJoin {
             .left_conditions
             .iter()
             .chain(self.right_conditions.iter())
-            .chain(self.other_conditions.iter())
+            .chain(self.non_equi_conditions.iter())
         {
             used_columns = used_columns.union(&cond.used_columns()).cloned().collect();
         }

@@ -26,7 +26,6 @@ use common_meta_sled_store::openraft;
 use common_meta_sled_store::openraft::EffectiveMembership;
 use common_meta_sled_store::openraft::MessageSummary;
 use common_meta_sled_store::AsKeySpace;
-use common_meta_sled_store::AsTxnKeySpace;
 use common_meta_sled_store::SledKeySpace;
 use common_meta_sled_store::SledTree;
 use common_meta_sled_store::Store;
@@ -265,6 +264,8 @@ impl StateMachine {
 
         debug!("sled tx start: {:?}", entry);
 
+        let log_time_ms = Self::get_log_time(entry);
+
         let kv_pairs = self.scan_prefix_if_needed(entry)?;
 
         let result = self.sm_tree.txn(true, move |txn_tree| {
@@ -285,24 +286,16 @@ impl StateMachine {
                         }
                     }
 
-                    let log_time_ms = match data.time_ms {
-                        None => {
-                            error!("log has no time: {}, treat every record with non-none `expire` as timed out", entry.summary());
-                            0
-                        }
-                        Some(x) => {
-                            let t = SystemTime::UNIX_EPOCH + Duration::from_millis(x);
-                            info!("apply: raft-log time: {:?}", t);
-                            x
-                        },
-                    };
-
                     let res = self.apply_cmd(&data.cmd, &txn_tree, kv_pairs.as_ref(), log_time_ms);
                     if let Ok(ok) = &res {
                         info!("apply_result: summary: {}; res ok: {}", entry.summary(), ok);
                     }
                     if let Err(err) = &res {
-                        info!("apply_result: summary: {}; res err: {:?}", entry.summary(), err);
+                        info!(
+                            "apply_result: summary: {}; res err: {:?}",
+                            entry.summary(),
+                            err
+                        );
                     }
 
                     let applied_state = res?;
@@ -342,6 +335,30 @@ impl StateMachine {
         };
 
         Ok(applied_state)
+    }
+
+    /// Retrieve the proposing time from a raft-log.
+    ///
+    /// Only `Normal` log has a time embedded.
+    #[tracing::instrument(level = "debug", skip_all)]
+    fn get_log_time(entry: &Entry<LogEntry>) -> u64 {
+        match &entry.payload {
+            EntryPayload::Normal(data) => match data.time_ms {
+                None => {
+                    error!(
+                        "log has no time: {}, treat every record with non-none `expire` as timed out",
+                        entry.summary()
+                    );
+                    0
+                }
+                Some(x) => {
+                    let t = SystemTime::UNIX_EPOCH + Duration::from_millis(x);
+                    info!("apply: raft-log time: {:?}", t);
+                    x
+                }
+            },
+            _ => 0,
+        }
     }
 
     #[tracing::instrument(level = "debug", skip(self, txn_tree))]
@@ -401,8 +418,7 @@ impl StateMachine {
     ) -> Result<AppliedState, MetaStorageError> {
         debug!(upsert_kv = debug(upsert_kv), "apply_update_kv_cmd");
 
-        let sub_tree = txn_tree.key_space::<GenericKV>();
-        let (prev, result) = self.txn_sub_tree_upsert(&sub_tree, upsert_kv, log_time_ms)?;
+        let (prev, result) = self.txn_upsert_kv(txn_tree, upsert_kv, log_time_ms)?;
 
         debug!("applied UpsertKV: {:?} {:?}", upsert_kv, result);
 
@@ -535,22 +551,13 @@ impl StateMachine {
         events: &mut Option<Vec<NotifyKVEvent>>,
         log_time_ms: u64,
     ) -> Result<(), MetaStorageError> {
-        let sub_tree = txn_tree.key_space::<GenericKV>();
-
-        let (prev, result) = match put.expire_at {
-            None => self.txn_sub_tree_upsert(
-                &sub_tree,
-                &UpsertKV::update(&put.key, &put.value),
-                log_time_ms,
-            )?,
-            Some(expire_at) => self.txn_sub_tree_upsert(
-                &sub_tree,
-                &UpsertKV::update(&put.key, &put.value).with(KVMeta {
-                    expire_at: Some(expire_at),
-                }),
-                log_time_ms,
-            )?,
-        };
+        let (prev, result) = self.txn_upsert_kv(
+            txn_tree,
+            &UpsertKV::update(&put.key, &put.value).with(KVMeta {
+                expire_at: put.expire_at,
+            }),
+            log_time_ms,
+        )?;
 
         if let Some(events) = events {
             events.push((put.key.to_string(), prev.clone(), result));
@@ -580,10 +587,8 @@ impl StateMachine {
         events: &mut Option<Vec<NotifyKVEvent>>,
         log_time_ms: u64,
     ) -> Result<(), MetaStorageError> {
-        let sub_tree = txn_tree.key_space::<GenericKV>();
-
         let (prev, result) =
-            self.txn_sub_tree_upsert(&sub_tree, &UpsertKV::delete(&delete.key), log_time_ms)?;
+            self.txn_upsert_kv(txn_tree, &UpsertKV::delete(&delete.key), log_time_ms)?;
 
         if let Some(events) = events {
             events.push((delete.key.to_string(), prev.clone(), result));
@@ -618,10 +623,8 @@ impl StateMachine {
         let mut count: u32 = 0;
         if let Some(kv_pairs) = kv_pairs {
             if let Some(kv_pairs) = kv_pairs.get(delete_by_prefix) {
-                let sub_tree = txn_tree.key_space::<GenericKV>();
                 for (key, _seq) in kv_pairs.iter() {
-                    let ret =
-                        self.txn_sub_tree_upsert(&sub_tree, &UpsertKV::delete(key), log_time_ms);
+                    let ret = self.txn_upsert_kv(txn_tree, &UpsertKV::delete(key), log_time_ms);
 
                     if let Ok(ret) = ret {
                         count += 1;
@@ -753,7 +756,7 @@ impl StateMachine {
     /// Already applied log should be filtered out before passing into this function.
     /// This is the only entry to modify state machine.
     /// The `cmd` is always committed by raft before applying.
-    #[tracing::instrument(level = "debug", skip(self, cmd, txn_tree))]
+    #[tracing::instrument(level = "debug", skip_all)]
     pub fn apply_cmd(
         &self,
         cmd: &Cmd,
@@ -793,28 +796,29 @@ impl StateMachine {
         key: &str,
         txn_tree: &TransactionSledTree,
     ) -> Result<u64, MetaStorageError> {
-        let seq_sub_tree = txn_tree.key_space::<Sequences>();
+        let seqs = txn_tree.key_space::<Sequences>();
 
         let key = key.to_string();
-        let curr = seq_sub_tree.update_and_fetch(&key, |old| Some(old.unwrap_or_default() + 1))?;
-        let curr = curr.unwrap();
 
-        debug!("applied IncrSeq: {}={}", key, curr);
+        let curr = seqs.get(&key)?;
+        let new_value = curr.unwrap_or_default() + 1;
+        seqs.insert(&key, &new_value)?;
 
-        Ok(curr.0)
+        debug!("txn_incr_seq: {}={}", key, new_value);
+
+        Ok(new_value.0)
     }
 
     #[allow(clippy::type_complexity)]
-    fn txn_sub_tree_upsert<'s, KS>(
-        &'s self,
-        sub_tree: &AsTxnKeySpace<'s, KS>,
+    fn txn_upsert_kv(
+        &self,
+        txn_tree: &TransactionSledTree,
         upsert_kv: &UpsertKV,
         log_time_ms: u64,
-    ) -> Result<(Option<SeqV>, Option<SeqV>), MetaStorageError>
-    where
-        KS: SledKeySpace<K = String, V = SeqV>,
-    {
-        let prev = sub_tree.get(&upsert_kv.key)?;
+    ) -> Result<(Option<SeqV>, Option<SeqV>), MetaStorageError> {
+        let kvs = txn_tree.key_space::<GenericKV>();
+
+        let prev = kvs.get(&upsert_kv.key)?;
 
         // If prev is timed out, treat it as a None.
         let prev = Self::unexpired_opt(prev, log_time_ms);
@@ -826,7 +830,7 @@ impl StateMachine {
         let mut new_seq_v = match &upsert_kv.value {
             Operation::Update(v) => SeqV::with_meta(0, upsert_kv.value_meta.clone(), v.clone()),
             Operation::Delete => {
-                sub_tree.remove(&upsert_kv.key)?;
+                kvs.remove(&upsert_kv.key)?;
                 return Ok((prev, None));
             }
             Operation::AsIs => match prev {
@@ -837,8 +841,8 @@ impl StateMachine {
             },
         };
 
-        new_seq_v.seq = self.txn_incr_seq(KS::NAME, sub_tree)?;
-        sub_tree.insert(&upsert_kv.key, &new_seq_v)?;
+        new_seq_v.seq = self.txn_incr_seq(GenericKV::NAME, txn_tree)?;
+        kvs.insert(&upsert_kv.key, &new_seq_v)?;
 
         debug!("applied upsert: {:?} res: {:?}", upsert_kv, new_seq_v);
         Ok((prev, Some(new_seq_v)))

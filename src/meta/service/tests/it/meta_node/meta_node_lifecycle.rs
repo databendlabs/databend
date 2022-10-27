@@ -107,7 +107,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
 
     info!("--- join non-voter 2 to cluster by leader");
 
-    let leader_id = all[0].get_leader().await;
+    let leader_id = all[0].get_leader().await?.unwrap();
     let leader = all[leader_id as usize].clone();
 
     let admin_req = join_req(
@@ -318,7 +318,7 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
 
     info!("--- join non-voter 1 to cluster");
 
-    let leader_id = all[0].get_leader().await;
+    let leader_id = all[0].get_leader().await?.unwrap();
     let leader = all[leader_id as usize].clone();
     let req = join_req(
         node_id,
@@ -386,9 +386,9 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
 }
 
 #[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
-async fn test_meta_node_join_with_log() -> anyhow::Result<()> {
+async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
     // Assert that MetaNode allows joining even with initialized store.
-    // But does not allow joining with a store that already has raft-log.
+    // But does not allow joining with a store that already has membership initialized.
     //
     // In this test it needs a cluster of 3 to form a quorum of 2, so that node-2 can be stopped.
 
@@ -403,16 +403,27 @@ async fn test_meta_node_join_with_log() -> anyhow::Result<()> {
     tc2.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
 
     let meta_node = MetaNode::start(&tc0.config).await?;
+    // Initial log and add node-0 log.
+    let mut log_index = 2;
+
     let res = meta_node
         .join_cluster(&tc0.config.raft_config, tc0.config.grpc_api_address)
         .await?;
-    assert_eq!(Err("Did not join: --join is empty"), res);
+    assert_eq!(Err("Did not join: --join is empty".to_string()), res);
 
     let meta_node1 = MetaNode::start(&tc1.config).await?;
     let res = meta_node1
         .join_cluster(&tc1.config.raft_config, tc1.config.grpc_api_address.clone())
         .await?;
     assert_eq!(Ok(()), res);
+
+    // Two membership logs, one add-node log;
+    log_index += 3;
+    meta_node1
+        .raft
+        .wait(timeout())
+        .log(Some(log_index), "node-1 join cluster")
+        .await?;
 
     info!("--- initialize store for node-2");
     {
@@ -428,16 +439,30 @@ async fn test_meta_node_join_with_log() -> anyhow::Result<()> {
             .await?;
         assert_eq!(Ok(()), res);
 
+        // Two membership logs, one add-node log;
+        log_index += 3;
+
+        // Add this barrier to ensure all of the logs are applied before quit.
+        // Otherwise the next time node-2 starts it can not see the applied
+        // membership and believes it has not yet joined into a cluster.
+        n2.raft
+            .wait(timeout())
+            .log(Some(log_index), "node-2 join cluster")
+            .await?;
+
         n2.stop().await?;
     }
 
-    info!("--- Not allowed to join node-2 with store with log");
+    info!("--- Not allowed to join node-2 with store with membership");
     {
         let n2 = MetaNode::start(&tc2.config).await?;
         let res = n2
             .join_cluster(&tc2.config.raft_config, tc2.config.grpc_api_address)
             .await?;
-        assert_eq!(Err("Did not join: node already has log"), res);
+        assert_eq!(
+            Err("Did not join: node 2 already in cluster".to_string()),
+            res
+        );
 
         n2.stop().await?;
     }
@@ -541,7 +566,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
         let leader = tc.meta_node();
 
         leader
-            .as_leader()
+            .assume_leader()
             .await?
             .write(LogEntry {
                 txid: None,
@@ -625,14 +650,14 @@ fn join_req(
 /// Write one log on leader, check all nodes replicated the log.
 /// Returns the number log committed.
 async fn assert_upsert_kv_synced(meta_nodes: Vec<Arc<MetaNode>>, key: &str) -> anyhow::Result<u64> {
-    let leader_id = meta_nodes[0].get_leader().await;
+    let leader_id = meta_nodes[0].get_leader().await?.unwrap();
     let leader = meta_nodes[leader_id as usize].clone();
 
     let last_applied = leader.raft.metrics().borrow().last_applied;
     info!("leader: last_applied={:?}", last_applied);
     {
         leader
-            .as_leader()
+            .assume_leader()
             .await?
             .write(LogEntry {
                 txid: None,

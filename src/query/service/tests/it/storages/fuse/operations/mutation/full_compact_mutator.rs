@@ -176,7 +176,7 @@ async fn build_mutator(
     settings.set_max_threads(1)?;
     let mut pipeline = common_pipeline_core::Pipeline::create();
     let mutator = fuse_table
-        .compact(ctx.clone(), CompactTarget::Blocks, &mut pipeline)
+        .compact(ctx.clone(), CompactTarget::Blocks, None, &mut pipeline)
         .await?;
     assert!(mutator.is_some());
     let mutator = mutator.unwrap();

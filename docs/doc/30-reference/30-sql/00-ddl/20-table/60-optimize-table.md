@@ -2,41 +2,105 @@
 title: OPTIMIZE TABLE
 ---
 
-Use this command to compact the data in a table or purge historical data from a table.
+Optimizing a table in Databend is about compacting or purging the historical versions of a table's data stored in your object storage. Optimizing tables helps save storage space and improve query efficiency.
 
-:::tip
+:::caution
 Databend's Time Travel feature relies on historical data. If you purge historical data from a table with the command `OPTIMIZE TABLE <your_table> PURGE` or `OPTIMIZE TABLE <your_table> ALL`, the table will not be eligible for time travel. The command removes all snapshots (except the most recent one) and their associated segments and block files.
 :::
+
+## What are Snapshot, Segment, and Block?
+
+Snapshot, segment, and block are the concepts Databend uses for data storage. Databend uses them to construct a hierarchical structure for storing table data.
+
+![](../../../../../public/img/sql/storage-structure.PNG)
+
+Databend automatically creates snapshots of a table when data updates occur, so a snapshot represents a version of the table's data. When working with Databend, you're most likely to access a snapshot with the snapshot ID when you retrieve and query a previous version of the table' data with the [AT](../../20-query-syntax/dml-at.md) clause. 
+
+A snapshot is a JSON file that does not save the table's data but indicate the segments the snapshot links to. If you run [FUSE_SNAPSHOT](../../../20-functions/111-system-functions/fuse_snapshot.md) against a table, you can find the saved snapshots for the table. 
+
+A segment is a JSON file that organizes the storage blocks (at least 1, at most 1,000) where the data is stored. If you run [FUSE_SEGMENT](../../../20-functions/111-system-functions/fuse_segment.md) against a snapshot with the snapshot ID, you can find which segments are referenced by the snapshot.
+
+Databends saves actual table data in parquet files and considers each parquet file as a block. If you run [FUSE_BLOCK](../../../20-functions/111-system-functions/fuse_block.md) against a snapshot with the snapshot ID, you can find which blocks are referenced by the snapshot.
+
+Databend creates a unique ID for each database and table for storing the snapshot, segment, and block files and saves them to your object storage in the path `<bucket_name>/[root]/<db_id>/<table_id>/`. Each snapshot, segment, and block file is named with a UUID (32-character lowercase hexadecimal string).
+
+| File     | Format  | Filename                        | Storage Folder                                                               |
+|----------|---------|---------------------------------|----------------------------------------------------------------------------|
+| Snapshot | JSON    | `<32bitUUID>_<version>.json`    | `<bucket_name>/[root]/<db_id>/<table_id>/_ss/`   |
+| Segment  | JSON    | `<32bitUUID>_<version>.json`    | `<bucket_name>/[root]/<db_id>/<table_id>/_sg/`   |
+| Block    | parquet | `<32bitUUID>_<version>.parquet` | `<bucket_name>/[root]/<db_id>/<table_id>/_b/` |
+
+## Table Optimization Considerations
+
+Consider optimizing a table regularly if the table receives frequent updates. Databend recommends these best practices to help decide on an optimization for a table:
+
+### When to Optimize
+
+If the blocks of a table meets all of the following conditions, the table requires an optimization:
+
+1. The number of blocks is greater than four times the [max_threads](../../../30-sql/70-system-tables/system-settings.md#max_threads) value.
+
+```sql
+select count(*) from fuse_block('<your_database>','<your_table>');
+```
+
+2. The number of blocks that meet the following conditions is greater than 100:
+
+- The block size is greater than 100M.
+- The number of the rows in the block is less than 800,000.
+
+```sql
+select if(count(*)>100,'The table needs compact now','The table does not need compact now') from fuse_block('<your_database>','<your_table>') where file_size <100*1024*1024 and row_count<800000;
+```
+
+### Compacting Segments Only
+
+The optimization merges both segments and blocks of a table by default. However, you can choose to compact the segments only when a table has too many segments. 
+
+Databend recommends optimizing the segments only for a table when the table has more than 1,000 segments and the average number of blocks per segment is less than 500.
+
+```sql
+select count(*),avg(block_count),if(avg(block_count)<500,'The table needs segment compact now','The table does not need segment compact now') from fuse_segment('<your_database>','<your_table>');
+```
+
+### When NOT to Optimize
+
+Optimizing a table could be time-consuming, especially for large ones. Databend does not recommend optimizing a table too frequently. Before you optimize a table, make sure the table fully satisfies the conditions described in [When to Optimize](#when-to-optimize).
+
+Databend does not compact a table if the number of its blocks is less than two times the [max_threads](../../../30-sql/70-system-tables/system-settings.md#max_threads) value. Databend will not do anything for such tables even though you run the optimization commands on them.
 
 ## Syntax
 
 ```sql
-OPTIMIZE TABLE [database.]table_name [ PURGE | COMPACT | ALL ] 
+OPTIMIZE TABLE [database.]table_name [ PURGE | COMPACT | ALL ] [SEGMENT] [LIMIT <segment_count>]
 ```
 
-- `OPTIMIZE TABLE T PURGE`
+- `OPTIMIZE TABLE <table_name> PURGE`
 
-  Purges the historical data of table T, only the last snapshot, and the data(segments/blocks) referenced by this snapshot will be kept.
-
-  If data keeps being injected into table at small scale, and historical data is not required, it is recommended to execute this statement periodically.
-
+    Purges the historical data of table. Only the latest snapshot (including the segments and blocks referenced by this snapshot) will be kept.
  
-- `OPTIMIZE TABLE T COMPACT`
+- `OPTIMIZE TABLE <table_name> COMPACT [LIMIT <segment_count>]`
  
-  Compact the table data only by merging small blocks/segments into larger ones.
+    Compacts the table data by merging small blocks and segments into larger ones.
  
-  - A new snapshot of table T will be added to the history, by this compaction operation.
+    - This command creates a new snapshot (along with compacted segments and blocks) of the most recent table data without affecting the existing storage files, so the storage space won't be released until you run `OPTIMIZE TABLE <table_name> PURGE`.
+    - Depending on the size of the given table, it may take quite a while to complete the execution.
+    - The option LIMIT sets the maximum number of segments to be compacted. In this case, Databend will select and compact the latest segments.
 
-  - Depends on the size of the given table, it may take quite a while to complete the execution.
+-  `OPTIMIZE TABLE <table_name> COMPACT SEGMENT [LIMIT <segment_count>]`
 
- 
-- `optimize table T ALL`
- 
-  Compact the historical data, and then, purge the history 
+    Compacts the table data by merging small segments into larger ones.
 
-- `optimize table T `
+    - See [Compacting Segments Only](#compacting-segments-only) for when you need this command.
+    - The option LIMIT sets the maximum number of segments to be compacted. In this case, Databend will select and compact the latest segments.
 
-   The same as `optimize table T purge`
+- `OPTIMIZE TABLE <table_name> ALL`
+
+    Equals to `OPTIMIZE TABLE <table_name> COMPACT` + `OPTIMIZE TABLE <table_name> PURGE`。
+
+- `OPTIMIZE TABLE <table_name>`
+
+    Works the same way as `OPTIMIZE TABLE <table_name> PURGE`.
 
 ## Examples
 

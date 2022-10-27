@@ -151,9 +151,14 @@ impl LogicalOperator for Aggregate {
             None
         };
 
+        // Derive used columns
+        let mut used_columns = self.used_columns()?;
+        used_columns.extend(input_prop.used_columns);
+
         Ok(RelationalProperty {
             output_columns,
             outer_columns,
+            used_columns,
             cardinality,
             precise_cardinality,
 

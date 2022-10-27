@@ -37,22 +37,24 @@ pub fn query(i: Input) -> IResult<Query> {
             ~ ( ORDER ~ ^BY ~ ^#comma_separated_list1(order_by_expr) )?
             ~ ( LIMIT ~ ^#comma_separated_list1(expr) )?
             ~ ( OFFSET ~ ^#expr )?
-            ~ ( FORMAT ~ #ident )?
+            ~ IGNORE_RESULT?
             : "`SELECT ...`"
         }),
         |(
             span,
-            (with, body, opt_order_by_block, opt_limit_block, opt_offset_block, opt_format),
-        )| Query {
-            span: span.0,
-            with,
-            body,
-            order_by: opt_order_by_block
-                .map(|(_, _, order_by)| order_by)
-                .unwrap_or_default(),
-            limit: opt_limit_block.map(|(_, limit)| limit).unwrap_or_default(),
-            offset: opt_offset_block.map(|(_, offset)| offset),
-            format: opt_format.map(|(_, format)| format.name),
+            (with, body, opt_order_by_block, opt_limit_block, opt_offset_block, opt_ignore_result),
+        )| {
+            Query {
+                span: span.0,
+                with,
+                body,
+                order_by: opt_order_by_block
+                    .map(|(_, _, order_by)| order_by)
+                    .unwrap_or_default(),
+                limit: opt_limit_block.map(|(_, limit)| limit).unwrap_or_default(),
+                offset: opt_offset_block.map(|(_, offset)| offset),
+                ignore_result: opt_ignore_result.is_some(),
+            }
         },
     )(i)
 }

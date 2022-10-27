@@ -40,26 +40,19 @@ use crate::pipelines::processors::SyncSourcer;
 use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
 use crate::sessions::TableContext;
-use crate::storages::system::tracing_table_stream::LogEntry;
 use crate::storages::Table;
 
+/// # TODO(xuanwo)
+///
+/// Users could store tracing log in different formats.
+/// We should find a better way to support them.
 pub struct TracingTable {
     table_info: TableInfo,
 }
 
 impl TracingTable {
     pub fn create(table_id: u64) -> Self {
-        // {"v":0,"name":"databend-query","msg":"Group by partial cost: 9.071158ms","level":20,"hostname":"databend","pid":56776,"time":"2021-06-24T02:17:28.679642889+00:00"}
-
-        let schema = DataSchemaRefExt::create(vec![
-            DataField::new("v", i64::to_data_type()),
-            DataField::new("name", Vu8::to_data_type()),
-            DataField::new("msg", Vu8::to_data_type()),
-            DataField::new("level", i8::to_data_type()),
-            DataField::new("hostname", Vu8::to_data_type()),
-            DataField::new("pid", i64::to_data_type()),
-            DataField::new("time", Vu8::to_data_type()),
-        ]);
+        let schema = DataSchemaRefExt::create(vec![DataField::new("entry", Vu8::to_data_type())]);
 
         let table_info = TableInfo {
             desc: "'system'.'tracing'".to_string(),
@@ -77,7 +70,10 @@ impl TracingTable {
     }
 
     fn log_files(ctx: Arc<dyn TableContext>) -> Result<VecDeque<String>> {
-        debug!("list log files from {}", ctx.get_config().log.file.dir);
+        debug!(
+            "list log files from {:?}",
+            std::fs::canonicalize(ctx.get_config().log.file.dir)
+        );
         WalkDir::new(ctx.get_config().log.file.dir.as_str())
             // NOTE:(everpcpc) ignore log files in subdir with different format
             .max_depth(1)
@@ -179,59 +175,28 @@ impl SyncSource for TracingSource {
 
             if let Some(file_name) = self.tracing_files.pop_front() {
                 let max_rows = self.rows_pre_block;
-                let buffer = BufReader::new(File::open(file_name)?);
+                let buffer = BufReader::new(File::open(file_name.clone())?);
 
-                let mut time_column = MutableStringColumn::with_capacity(max_rows);
-                let mut host_column = MutableStringColumn::with_capacity(max_rows);
-                let mut msg_column = MutableStringColumn::with_capacity(max_rows);
-                let mut name_column = MutableStringColumn::with_capacity(max_rows);
-                let mut level_column = MutablePrimitiveColumn::<i8>::with_capacity(max_rows);
-                let mut pid_column = MutablePrimitiveColumn::<i64>::with_capacity(max_rows);
-                let mut version_column = MutablePrimitiveColumn::<i64>::with_capacity(max_rows);
+                let mut entry_column = MutableStringColumn::with_capacity(max_rows);
 
                 for (index, line) in buffer.lines().enumerate() {
                     if index != 0 && index % max_rows == 0 {
                         self.data_blocks
-                            .push_back(DataBlock::create(self.schema.clone(), vec![
-                                Arc::new(version_column.finish()),
-                                Arc::new(name_column.finish()),
-                                Arc::new(msg_column.finish()),
-                                Arc::new(level_column.finish()),
-                                Arc::new(host_column.finish()),
-                                Arc::new(pid_column.finish()),
-                                Arc::new(time_column.finish()),
-                            ]));
+                            .push_back(DataBlock::create(self.schema.clone(), vec![Arc::new(
+                                entry_column.finish(),
+                            )]));
 
-                        time_column = MutableStringColumn::with_capacity(max_rows);
-                        host_column = MutableStringColumn::with_capacity(max_rows);
-                        msg_column = MutableStringColumn::with_capacity(max_rows);
-                        name_column = MutableStringColumn::with_capacity(max_rows);
-                        level_column = MutablePrimitiveColumn::<i8>::with_capacity(max_rows);
-                        pid_column = MutablePrimitiveColumn::<i64>::with_capacity(max_rows);
-                        version_column = MutablePrimitiveColumn::<i64>::with_capacity(max_rows);
+                        entry_column = MutableStringColumn::with_capacity(max_rows);
                     }
 
-                    let entry: LogEntry = serde_json::from_str(line.unwrap().as_str())?;
-                    pid_column.push(entry.pid);
-                    version_column.push(entry.v);
-                    level_column.push(entry.level);
-                    msg_column.push(entry.msg.as_bytes());
-                    name_column.push(entry.name.as_bytes());
-                    time_column.push(entry.time.as_bytes());
-                    host_column.push(entry.hostname.as_bytes());
+                    entry_column.push(line.unwrap().as_bytes());
                 }
 
-                if !pid_column.is_empty() {
+                if !entry_column.is_empty() {
                     self.data_blocks
-                        .push_back(DataBlock::create(self.schema.clone(), vec![
-                            Arc::new(version_column.finish()),
-                            Arc::new(name_column.finish()),
-                            Arc::new(msg_column.finish()),
-                            Arc::new(level_column.finish()),
-                            Arc::new(host_column.finish()),
-                            Arc::new(pid_column.finish()),
-                            Arc::new(time_column.finish()),
-                        ]));
+                        .push_back(DataBlock::create(self.schema.clone(), vec![Arc::new(
+                            entry_column.finish(),
+                        )]));
                 }
             }
         }

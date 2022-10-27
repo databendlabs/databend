@@ -226,9 +226,10 @@ pub trait Table: Sync + Send {
         &self,
         ctx: Arc<dyn TableContext>,
         target: CompactTarget,
+        limit: Option<usize>,
         pipeline: &mut Pipeline,
     ) -> Result<Option<Box<dyn TableMutator>>> {
-        let (_, _, _) = (ctx, target, pipeline);
+        let (_, _, _, _) = (ctx, target, limit, pipeline);
 
         Err(ErrorCode::UnImplement(format!(
             "table {},  of engine type {}, does not support compact",

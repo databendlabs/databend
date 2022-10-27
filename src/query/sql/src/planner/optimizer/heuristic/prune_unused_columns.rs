@@ -110,7 +110,7 @@ impl UnusedColumnPruner {
                     acc.union(&v.used_columns()).cloned().collect()
                 });
 
-                let others = p.other_conditions.iter().fold(required, |acc, v| {
+                let others = p.non_equi_conditions.iter().fold(required, |acc, v| {
                     acc.union(&v.used_columns()).cloned().collect()
                 });
 
@@ -173,10 +173,11 @@ impl UnusedColumnPruner {
                 // aggregate to prevent empty input `DataBlock`.
                 let rel_expr = RelExpr::with_s_expr(expr.child(0)?);
                 let rel_prop = rel_expr.derive_relational_prop()?;
-                if required
-                    .intersection(&rel_prop.output_columns)
-                    .next()
-                    .is_none()
+                if rel_prop.used_columns.is_empty()
+                    && required
+                        .intersection(&rel_prop.output_columns)
+                        .next()
+                        .is_none()
                     && p.group_items.is_empty()
                 {
                     required.insert(

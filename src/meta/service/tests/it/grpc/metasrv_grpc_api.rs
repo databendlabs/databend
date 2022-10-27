@@ -376,7 +376,8 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
         // wait for leader observed
         // if tc0 is old leader, then we need to check both current_leader is some and current_term > old_term
         // if tc0 isn't old leader, then we need do nothing.
-        if meta_node.get_leader().await == 0 {
+        let leader_id = meta_node.get_leader().await?;
+        if leader_id == Some(0) {
             let metrics = meta_node
                 .raft
                 .wait(Some(Duration::from_millis(30_000)))

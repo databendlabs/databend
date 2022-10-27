@@ -280,7 +280,7 @@ fn hash_join_to_format_tree(
         .collect::<Result<Vec<_>>>()?
         .join(", ");
     let filters = plan
-        .other_conditions
+        .non_equi_conditions
         .iter()
         .map(|filter| filter.pretty_display(metadata))
         .collect::<Result<Vec<_>>>()?

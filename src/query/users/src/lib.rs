@@ -27,5 +27,7 @@ pub mod role_util;
 
 pub use jwt::*;
 pub use role_cache_mgr::RoleCacheManager;
+pub use role_mgr::BUILTIN_ROLE_ACCOUNT_ADMIN;
+pub use role_mgr::BUILTIN_ROLE_PUBLIC;
 pub use user::CertifiedInfo;
 pub use user_api::UserApiProvider;

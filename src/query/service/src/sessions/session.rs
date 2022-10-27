@@ -21,9 +21,11 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
 use common_meta_types::GrantObject;
+use common_meta_types::RoleInfo;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeType;
 use common_users::RoleCacheManager;
+use common_users::BUILTIN_ROLE_PUBLIC;
 use futures::channel::*;
 use parking_lot::RwLock;
 
@@ -209,20 +211,77 @@ impl Session {
         self.session_ctx.set_current_user(user);
     }
 
+    // Call this function on establishing connections.
+    // if both current_role and user's current role is not set or not found, defaults as the PUBLIC
+    // role
+    pub async fn refresh_current_role(self: &Arc<Self>) -> Result<()> {
+        let tenant = self.get_current_tenant();
+        let public_role = RoleCacheManager::instance()
+            .find_role(&tenant, BUILTIN_ROLE_PUBLIC)
+            .await?
+            .unwrap_or_else(|| RoleInfo::new(BUILTIN_ROLE_PUBLIC));
+
+        // if CURRENT ROLE is not set, take current user's DEFAULT ROLE
+        let current_role_name = match self.session_ctx.get_current_role() {
+            Some(current_role) => Some(current_role.name),
+            None => self
+                .session_ctx
+                .get_current_user()
+                .map(|u| u.option.default_role().cloned())
+                .unwrap_or(None),
+        };
+
+        // both CURRENT ROLE and DEFAULT ROLE is not set, take PUBLIC role
+        let current_role_name = match current_role_name {
+            None => {
+                self.session_ctx.set_current_role(Some(public_role));
+                return Ok(());
+            }
+            Some(current_role_name) => current_role_name,
+        };
+
+        // I can not use the CURRENT ROLE, reset to PUBLIC role
+        let available_roles = self.get_all_available_roles().await?;
+        let role = available_roles
+            .into_iter()
+            .find(|r| r.name == current_role_name);
+        if role.is_none() {
+            self.session_ctx.set_current_role(Some(public_role));
+            return Ok(());
+        }
+        self.session_ctx.set_current_role(role);
+        Ok(())
+    }
+
+    pub fn set_current_role(self: &Arc<Self>, role: Option<RoleInfo>) {
+        self.session_ctx.set_current_role(role);
+    }
+
+    pub fn get_current_role(self: &Arc<Self>) -> Option<RoleInfo> {
+        self.session_ctx.get_current_role()
+    }
+
     pub fn set_auth_role(self: &Arc<Self>, role: String) {
         self.session_ctx.set_auth_role(role)
     }
 
-    // returns all the roles the current session has, which includes the roles of
-    // the current user and the roles granted on the authentication phase.
-    pub fn get_all_roles(self: &Arc<Self>) -> Result<Vec<String>> {
-        let current_user = self.get_current_user()?;
+    // Returns all the roles the current session has. If the user have been granted auth_role,
+    // the other roles will be ignored.
+    // On executing SET ROLE, the role have to be one of the available roles.
+    pub async fn get_all_available_roles(self: &Arc<Self>) -> Result<Vec<RoleInfo>> {
+        let roles = match self.session_ctx.get_auth_role() {
+            Some(auth_role) => vec![auth_role],
+            None => {
+                let current_user = self.get_current_user()?;
+                current_user.grants.roles()
+            }
+        };
 
-        let mut all_roles = current_user.grants.roles();
-        if let Some(auth_role) = self.session_ctx.get_auth_role() {
-            all_roles.push(auth_role);
-        }
-        Ok(all_roles)
+        let tenant = self.get_current_tenant();
+        let related_roles = RoleCacheManager::instance()
+            .find_related_roles(&tenant, &roles)
+            .await?;
+        Ok(related_roles)
     }
 
     pub async fn validate_privilege(
@@ -230,20 +289,19 @@ impl Session {
         object: &GrantObject,
         privilege: UserPrivilegeType,
     ) -> Result<()> {
+        // 1. check user's privilege set
         let current_user = self.get_current_user()?;
         let user_verified = current_user.grants.verify_privilege(object, privilege);
         if user_verified {
             return Ok(());
         }
 
-        // TODO: take current role instead of all roles
-        let all_roles = self.get_all_roles()?;
-        let tenant = self.get_current_tenant();
-        let role_verified = RoleCacheManager::instance()
-            .find_related_roles(&tenant, &all_roles)
-            .await?
-            .iter()
-            .any(|r| r.grants.verify_privilege(object, privilege));
+        // 2. check the current role's privilege set
+        self.refresh_current_role().await?;
+        let current_role = self.get_current_role();
+        let role_verified = current_role
+            .map(|r| r.grants.verify_privilege(object, privilege))
+            .unwrap_or(false);
         if role_verified {
             return Ok(());
         }

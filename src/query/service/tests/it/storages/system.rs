@@ -29,6 +29,7 @@ use common_meta_types::UserQuota;
 use common_metrics::init_default_metrics_recorder;
 use common_storage::StorageParams;
 use common_storage::StorageS3Config;
+use common_storages_factory::system::CatalogsTable;
 use common_users::UserApiProvider;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
@@ -64,6 +65,7 @@ async fn test_system_tables() -> Result<()> {
     // with goldenfile
     test_columns_table(file).await.unwrap();
     test_configs_table(file).await.unwrap();
+    test_catalogs_table(file).await.unwrap();
     test_databases_table(file).await.unwrap();
     test_engines_table(file).await.unwrap();
     test_roles_table(file).await.unwrap();
@@ -71,13 +73,27 @@ async fn test_system_tables() -> Result<()> {
     test_users_table(file).await.unwrap();
 
     // with assert_eq
-    test_clusters_table().await.unwrap();
-    test_contributors_table().await.unwrap();
-    test_credits_table().await.unwrap();
-    test_functions_table().await.unwrap();
-    test_metrics_table().await.unwrap();
-    test_tables_table().await.unwrap();
-    test_tracing_table().await.unwrap();
+    test_clusters_table()
+        .await
+        .expect("test_clusters_table must succeed");
+    test_contributors_table()
+        .await
+        .expect("test_contributors_table must succeed");
+    test_credits_table()
+        .await
+        .expect("test_credits_table must succeed");
+    test_functions_table()
+        .await
+        .expect("test_functions_table must succeed");
+    test_metrics_table()
+        .await
+        .expect("test_metrics_table must succeed");
+    test_tables_table()
+        .await
+        .expect("test_tables_table must succeed");
+    test_tracing_table()
+        .await
+        .expect("test_tracing_table must succeed");
     Ok(())
 }
 
@@ -203,6 +219,14 @@ async fn test_credits_table() -> Result<()> {
     Ok(())
 }
 
+async fn test_catalogs_table(file: &mut impl Write) -> Result<()> {
+    let (_guard, ctx) = crate::tests::create_query_context().await?;
+    let table = CatalogsTable::create(1);
+
+    run_table_tests(file, ctx, table).await?;
+    Ok(())
+}
+
 async fn test_databases_table(file: &mut impl Write) -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let table = DatabasesTable::create(1);
@@ -324,6 +348,7 @@ async fn test_tables_table() -> Result<()> {
         r"\| INFORMATION_SCHEMA \| SCHEMATA            \| VIEW               \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
         r"\| INFORMATION_SCHEMA \| TABLES              \| VIEW               \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
         r"\| INFORMATION_SCHEMA \| VIEWS               \| VIEW               \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| system             \| catalogs            \| SystemCatalogs     \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
         r"\| system             \| clustering_history  \| SystemLogTable     \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
         r"\| system             \| clusters            \| SystemClusters     \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
         r"\| system             \| columns             \| SystemColumns      \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
@@ -360,7 +385,7 @@ async fn test_tracing_table() -> Result<()> {
     let stream = table.read_data_block_stream(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
-    assert_eq!(block.num_columns(), 7);
+    assert_eq!(block.num_columns(), 1);
     assert!(block.num_rows() > 0);
 
     Ok(())

@@ -189,7 +189,7 @@ impl Default for RaftConfig {
 async fn main() -> anyhow::Result<()> {
     let config = Config::parse();
 
-    let _guards = init_logging("metactl", &LogConfig::default(), true);
+    let _guards = init_logging("metactl", &LogConfig::default());
 
     eprintln!();
     eprintln!("███╗   ███╗███████╗████████╗ █████╗        ██████╗████████╗██╗     ");

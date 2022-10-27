@@ -49,6 +49,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | end_time                 | system   | clustering_history  | TIMESTAMP         |              |                    | false       |         |
 | engine                   | system   | tables              | VARCHAR           |              |                    | false       |         |
 | engine                   | system   | tables_with_history | VARCHAR           |              |                    | false       |         |
+| entry                    | system   | tracing             | VARCHAR           |              |                    | false       |         |
 | event_date               | system   | query_log           | DATE              |              |                    | false       |         |
 | event_time               | system   | query_log           | TIMESTAMP         |              |                    | false       |         |
 | example                  | system   | functions           | VARCHAR           |              |                    | false       |         |
@@ -61,7 +62,6 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | handler_type             | system   | query_log           | VARCHAR           |              |                    | false       |         |
 | host                     | system   | clusters            | VARCHAR           |              |                    | false       |         |
 | host                     | system   | processes           | VARCHAR           |              |                    | true        |         |
-| hostname                 | system   | tracing             | VARCHAR           |              |                    | false       |         |
 | hostname                 | system   | users               | VARCHAR           |              |                    | false       |         |
 | id                       | system   | processes           | VARCHAR           |              |                    | false       |         |
 | index_size               | system   | tables              | BIGINT UNSIGNED   |              |                    | true        |         |
@@ -73,14 +73,13 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | kind                     | system   | metrics             | VARCHAR           |              |                    | false       |         |
 | labels                   | system   | metrics             | VARCHAR           |              |                    | false       |         |
 | level                    | system   | settings            | VARCHAR           |              |                    | false       |         |
-| level                    | system   | tracing             | TINYINT           |              |                    | false       |         |
 | license                  | system   | credits             | VARCHAR           |              |                    | false       |         |
 | log_type                 | system   | query_log           | TINYINT           |              |                    | false       |         |
 | memory_usage             | system   | processes           | BIGINT            |              |                    | false       |         |
 | memory_usage             | system   | query_log           | BIGINT UNSIGNED   |              |                    | false       |         |
 | metric                   | system   | metrics             | VARCHAR           |              |                    | false       |         |
-| msg                      | system   | tracing             | VARCHAR           |              |                    | false       |         |
 | mysql_connection_id      | system   | processes           | INT UNSIGNED      |              |                    | true        |         |
+| name                     | system   | catalogs            | VARCHAR           |              |                    | false       |         |
 | name                     | system   | clusters            | VARCHAR           |              |                    | false       |         |
 | name                     | system   | columns             | VARCHAR           |              |                    | false       |         |
 | name                     | system   | configs             | VARCHAR           |              |                    | false       |         |
@@ -93,12 +92,10 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | name                     | system   | stages              | VARCHAR           |              |                    | false       |         |
 | name                     | system   | tables              | VARCHAR           |              |                    | false       |         |
 | name                     | system   | tables_with_history | VARCHAR           |              |                    | false       |         |
-| name                     | system   | tracing             | VARCHAR           |              |                    | false       |         |
 | name                     | system   | users               | VARCHAR           |              |                    | false       |         |
 | num_rows                 | system   | tables              | BIGINT UNSIGNED   |              |                    | true        |         |
 | num_rows                 | system   | tables_with_history | BIGINT UNSIGNED   |              |                    | true        |         |
 | number_of_files          | system   | stages              | BIGINT UNSIGNED   |              |                    | true        |         |
-| pid                      | system   | tracing             | BIGINT            |              |                    | false       |         |
 | port                     | system   | clusters            | SMALLINT UNSIGNED |              |                    | false       |         |
 | projections              | system   | query_log           | VARCHAR           |              |                    | false       |         |
 | query_duration_ms        | system   | query_log           | BIGINT            |              |                    | false       |         |
@@ -134,13 +131,11 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | tables                   | system   | query_log           | VARCHAR           |              |                    | false       |         |
 | tenant_id                | system   | query_log           | VARCHAR           |              |                    | false       |         |
 | time                     | system   | processes           | BIGINT UNSIGNED   |              |                    | false       |         |
-| time                     | system   | tracing             | VARCHAR           |              |                    | false       |         |
 | total_partitions         | system   | query_log           | BIGINT UNSIGNED   |              |                    | false       |         |
 | type                     | system   | columns             | VARCHAR           |              |                    | false       |         |
 | type                     | system   | processes           | VARCHAR           |              |                    | false       |         |
 | type                     | system   | settings            | VARCHAR           |              |                    | false       |         |
 | user                     | system   | processes           | VARCHAR           |              |                    | false       |         |
-| v                        | system   | tracing             | BIGINT            |              |                    | false       |         |
 | value                    | system   | configs             | VARCHAR           |              |                    | false       |         |
 | value                    | system   | metrics             | VARCHAR           |              |                    | false       |         |
 | value                    | system   | settings            | VARCHAR           |              |                    | false       |         |
@@ -161,10 +156,12 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 +---------+--------------------------------------+--------------------------------+-------------+
 | log     | dir                                  | ./.databend/logs               |             |
 | log     | file.dir                             | ./.databend/logs               |             |
+| log     | file.format                          | text                           |             |
 | log     | file.level                           | DEBUG                          |             |
 | log     | file.on                              | true                           |             |
 | log     | level                                | DEBUG                          |             |
 | log     | query_enabled                        | false                          |             |
+| log     | stderr.format                        | text                           |             |
 | log     | stderr.level                         | DEBUG                          |             |
 | log     | stderr.on                            | true                           |             |
 | meta    | address                              |                                |             |
@@ -259,6 +256,16 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | storage | s3.security_token                    |                                |             |
 | storage | type                                 | fs                             |             |
 +---------+--------------------------------------+--------------------------------+-------------+
+
+
+---------- TABLE INFO ------------
+DB.Table: 'system'.'catalogs', Table: catalogs-table_id:1, ver:0, Engine: SystemCatalogs
+-------- TABLE CONTENTS ----------
++---------+
+| name    |
++---------+
+| default |
++---------+
 
 
 ---------- TABLE INFO ------------

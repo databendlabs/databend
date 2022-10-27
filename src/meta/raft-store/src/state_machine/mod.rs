@@ -13,6 +13,8 @@
 // limitations under the License.
 
 pub use client_last_resp::ClientLastRespValue;
+pub use expire::ExpireKey;
+pub use expire::ExpireValue;
 pub use log_meta::LogMetaKey;
 pub use log_meta::LogMetaValue;
 pub use sm::SerializableSnapshot;
@@ -25,6 +27,7 @@ pub use state_machine_meta::StateMachineMetaKey;
 pub use state_machine_meta::StateMachineMetaValue;
 
 pub mod client_last_resp;
+mod expire;
 pub mod log_meta;
 pub mod sm;
 mod sm_kv_api_impl;

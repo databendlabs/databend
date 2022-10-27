@@ -145,9 +145,6 @@ fn test_cast_to_variant(file: &mut impl Write) {
     run_ast(file, "CAST(0 AS VARIANT)", &[]);
     run_ast(file, "CAST(-1 AS VARIANT)", &[]);
     run_ast(file, "CAST(1.1 AS VARIANT)", &[]);
-    run_ast(file, "CAST(0/0 AS VARIANT)", &[]);
-    run_ast(file, "CAST(1/0 AS VARIANT)", &[]);
-    run_ast(file, "CAST(-1/0 AS VARIANT)", &[]);
     run_ast(file, "CAST('🍦 が美味しい' AS VARIANT)", &[]);
     run_ast(file, "CAST([0, 1, 2] AS VARIANT)", &[]);
     run_ast(file, "CAST([0, 'a'] AS VARIANT)", &[]);
@@ -175,9 +172,6 @@ fn test_cast_to_variant(file: &mut impl Write) {
     run_ast(file, "TRY_CAST(0 AS VARIANT)", &[]);
     run_ast(file, "TRY_CAST(-1 AS VARIANT)", &[]);
     run_ast(file, "TRY_CAST(1.1 AS VARIANT)", &[]);
-    run_ast(file, "TRY_CAST(0/0 AS VARIANT)", &[]);
-    run_ast(file, "TRY_CAST(1/0 AS VARIANT)", &[]);
-    run_ast(file, "TRY_CAST(-1/0 AS VARIANT)", &[]);
     run_ast(file, "TRY_CAST('🍦 が美味しい' AS VARIANT)", &[]);
     run_ast(file, "TRY_CAST([0, 1, 2] AS VARIANT)", &[]);
     run_ast(file, "TRY_CAST([0, 'a'] AS VARIANT)", &[]);

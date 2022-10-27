@@ -64,6 +64,7 @@ pub fn optimize(
             bind_context,
             metadata,
             rewrite_kind,
+            ignore_result,
         } => Ok(Plan::Query {
             s_expr: Box::new(optimize_query(
                 ctx,
@@ -75,6 +76,7 @@ pub fn optimize(
             bind_context,
             metadata,
             rewrite_kind,
+            ignore_result,
         }),
         Plan::Explain { kind, plan } => match kind {
             ExplainKind::Raw | ExplainKind::Ast(_) | ExplainKind::Syntax(_) => {

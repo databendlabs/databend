@@ -44,8 +44,7 @@ impl JoinHashTable {
     {
         let valids = &probe_state.valids;
         let has_null = *self.hash_join_desc.marker_join_desc.has_null.read();
-        let mut markers = Self::init_markers(input.columns(), input.num_rows());
-
+        let markers = probe_state.markers.as_mut().unwrap();
         for (i, key) in keys_iter.enumerate() {
             let probe_result_ptr = match self.hash_join_desc.from_correlated_subquery {
                 true => hash_table.find_key(&key),
@@ -58,7 +57,7 @@ impl JoinHashTable {
         }
 
         Ok(vec![self.merge_eq_block(
-            &self.create_marker_block(has_null, markers)?,
+            &self.create_marker_block(has_null, markers.clone())?,
             input,
         )?])
     }

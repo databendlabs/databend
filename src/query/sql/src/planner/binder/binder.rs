@@ -93,6 +93,7 @@ impl<'a> Binder {
                     metadata: self.metadata.clone(),
                     bind_context: Box::new(bind_context),
                     rewrite_kind: None,
+                    ignore_result: query.ignore_result,
                 }
             }
 
@@ -292,6 +293,14 @@ impl<'a> Binder {
                 self.bind_set_variable(bind_context, *is_global, variable, value)
                     .await?
             }
+
+            Statement::SetRole {
+                is_default,
+                role_name,
+            } => {
+                self.bind_set_role(bind_context, *is_default, role_name).await?
+            }
+
             Statement::KillStmt { kill_target, object_id } => {
                 self.bind_kill_stmt(bind_context, kill_target, object_id.as_str())
                     .await?

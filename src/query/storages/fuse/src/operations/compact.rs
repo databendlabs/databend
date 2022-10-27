@@ -33,9 +33,11 @@ use crate::TableMutator;
 use crate::DEFAULT_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 
-struct CompactOptions {
-    base_snapshot: Arc<TableSnapshot>,
-    block_per_seg: usize,
+pub struct CompactOptions {
+    // the snapshot that compactor working on, it never changed during phases compaction.
+    pub base_snapshot: Arc<TableSnapshot>,
+    pub block_per_seg: usize,
+    pub limit: Option<usize>,
 }
 
 impl FuseTable {
@@ -43,6 +45,7 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         target: CompactTarget,
+        limit: Option<usize>,
         pipeline: &mut Pipeline,
     ) -> Result<Option<Box<dyn TableMutator>>> {
         let snapshot_opt = self.read_table_snapshot().await?;
@@ -63,6 +66,7 @@ impl FuseTable {
         let compact_params = CompactOptions {
             base_snapshot,
             block_per_seg,
+            limit,
         };
 
         match target {
@@ -79,9 +83,8 @@ impl FuseTable {
     ) -> Result<Option<Box<dyn TableMutator>>> {
         let mut segment_mutator = SegmentCompactMutator::try_create(
             ctx.clone(),
-            options.base_snapshot,
+            options,
             self.meta_location_generator().clone(),
-            options.block_per_seg,
             self.operator.clone(),
         )?;
 
@@ -103,10 +106,9 @@ impl FuseTable {
         let block_per_seg = options.block_per_seg;
         let mut mutator = FullCompactMutator::try_create(
             ctx.clone(),
-            options.base_snapshot,
+            options,
             block_compactor.clone(),
             self.meta_location_generator().clone(),
-            block_per_seg,
             self.cluster_key_meta.is_some(),
             self.operator.clone(),
         )?;
@@ -137,10 +139,10 @@ impl FuseTable {
         };
 
         ctx.try_set_partitions(plan.parts.clone())?;
-        self.do_read_data(ctx.clone(), &plan, pipeline)?;
 
+        // It's easy to OOM if we set the max_io_request more than the max threads.
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        pipeline.resize(max_threads)?;
+        self.do_read_data(ctx.clone(), &plan, pipeline, max_threads)?;
 
         pipeline.add_transform(|transform_input_port, transform_output_port| {
             TransformCompact::try_create(
