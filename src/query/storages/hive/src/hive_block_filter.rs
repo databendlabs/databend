@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_arrow::parquet::statistics::BinaryStatistics;
@@ -20,6 +21,7 @@ use common_arrow::parquet::statistics::BooleanStatistics;
 use common_arrow::parquet::statistics::PrimitiveStatistics;
 use common_arrow::parquet::statistics::Statistics;
 use common_datavalues::DataField;
+use common_datavalues::DataSchema;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use common_fuse_meta::meta::ColumnStatistics;
@@ -32,13 +34,19 @@ use crate::hive_parquet_block_reader::HiveParquetBlockReader;
 pub struct HiveBlockFilter {
     range_filter: Option<RangeFilter>,
     projections: Vec<DataField>,
+    data_schema: Arc<DataSchema>,
 }
 
 impl HiveBlockFilter {
-    pub fn create(range_filter: Option<RangeFilter>, projections: Vec<DataField>) -> Self {
+    pub fn create(
+        range_filter: Option<RangeFilter>,
+        projections: Vec<DataField>,
+        data_schema: Arc<DataSchema>,
+    ) -> Self {
         Self {
             range_filter,
             projections,
+            data_schema,
         }
     }
 
@@ -70,7 +78,7 @@ impl HiveBlockFilter {
                                 null_count: null_count as u64,
                                 in_memory_size: in_memory_size as u64,
                             };
-                            if let Ok(idx) = filter.origin.index_of(col.name()) {
+                            if let Ok(idx) = self.data_schema.index_of(col.name()) {
                                 statistics.insert(idx as u32, col_stats);
                             }
                         }
@@ -79,7 +87,7 @@ impl HiveBlockFilter {
             }
 
             for (p_key, p_value) in part_columns {
-                if let Ok(idx) = filter.origin.index_of(&p_key) {
+                if let Ok(idx) = self.data_schema.index_of(&p_key) {
                     let v = DataValue::String(p_value.as_bytes().to_vec());
                     let col_stats = ColumnStatistics {
                         min: v.clone(),

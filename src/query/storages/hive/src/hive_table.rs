@@ -120,7 +120,11 @@ impl HiveTable {
             .get_enable_hive_parquet_predict_pushdown()?;
 
         if enable_hive_parquet_predict_pushdown == 0 {
-            return Ok(Arc::new(HiveBlockFilter::create(None, vec![])));
+            return Ok(Arc::new(HiveBlockFilter::create(
+                None,
+                vec![],
+                self.table_info.schema(),
+            )));
         }
 
         let filter_expressions = push_downs.as_ref().map(|extra| extra.filters.as_slice());
@@ -144,6 +148,7 @@ impl HiveTable {
         Ok(Arc::new(HiveBlockFilter::create(
             range_filter,
             projection_fields,
+            self.table_info.schema(),
         )))
     }
 
