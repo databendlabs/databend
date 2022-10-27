@@ -32,12 +32,11 @@ use common_pipeline_core::Pipe;
 use common_pipeline_sinks::processors::sinks::UnionReceiveSink;
 use common_planner::AggregateFunctionDesc;
 use common_planner::PhysicalScalar;
+use common_sql::evaluator::ChunkOperator;
 use common_sql::evaluator::CompoundChunkOperator;
 
 use crate::interpreters::fill_missing_columns;
 use crate::pipelines::processors::port::InputPort;
-use crate::pipelines::processors::transforms::ChunkOperator;
-use crate::pipelines::processors::transforms::CompoundChunkOperator;
 use crate::pipelines::processors::transforms::HashJoinDesc;
 use crate::pipelines::processors::transforms::RightSemiAntiJoinCompactor;
 use crate::pipelines::processors::transforms::TransformMarkJoin;

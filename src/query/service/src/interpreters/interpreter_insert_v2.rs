@@ -43,8 +43,6 @@ use super::interpreter_common::append2table;
 use super::plan_schedulers::build_schedule_pipeline;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::pipelines::processors::transforms::ChunkOperator;
-use crate::pipelines::processors::transforms::CompoundChunkOperator;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::SourcePipeBuilder;

@@ -21,9 +21,8 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_exception::Result;
 use common_sql::evaluator::ChunkOperator;
+use common_sql::evaluator::CompoundChunkOperator;
 
-use super::ChunkOperator;
-use super::CompoundChunkOperator;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
