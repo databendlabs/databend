@@ -26,6 +26,7 @@ use crate::pipelines::Pipeline;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::sql::executor::PhysicalScalarBuilder;
 use crate::sql::plans::ReclusterTablePlan;
 
 pub struct ReclusterTableInterpreter {
@@ -56,8 +57,13 @@ impl Interpreter for ReclusterTableInterpreter {
         let extras = match &plan.push_downs {
             None => None,
             Some(scalar) => {
-                // todo(sundy)
-                todo!()
+                let schema = self.plan.schema();
+                let mut builder = PhysicalScalarBuilder::new(&schema);
+                let physical_scalar = builder.build(&scalar)?;
+                Some(Extras {
+                    filters: vec![physical_scalar],
+                    ..Extras::default()
+                })
             }
         };
         loop {

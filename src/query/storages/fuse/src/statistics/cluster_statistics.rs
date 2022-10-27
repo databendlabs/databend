@@ -13,12 +13,9 @@
 //  limitations under the License.
 
 use common_datablocks::DataBlock;
-use common_datavalues::DataField;
 use common_datavalues::DataValue;
 use common_exception::Result;
-use common_functions::scalars::FunctionContext;
 use common_fuse_meta::meta::ClusterStatistics;
-use common_sql::evaluator::EvalNode;
 
 use crate::io::BlockCompactor;
 

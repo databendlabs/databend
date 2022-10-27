@@ -54,10 +54,10 @@ impl PhysicalScalarParser {
         let mut scalar_binder =
             ScalarBinder::new(&bind_context, ctx, &name_resolution_ctx, metadata, &[]);
         let mut physical_scalars = Vec::with_capacity(exprs.len());
-        let mut physical_scalar_builder = PhysicalScalarBuilder::new(&schema);
+        let mut builder = PhysicalScalarBuilder::new(&schema);
         for expr in exprs.iter() {
             let (scalar, _) = scalar_binder.bind(expr).await?;
-            let physical_scalar = physical_scalar_builder.build(&scalar)?;
+            let physical_scalar = builder.build(&scalar)?;
             physical_scalars.push(physical_scalar);
         }
         Ok(physical_scalars)

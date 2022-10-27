@@ -16,6 +16,9 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use common_datavalues::format_data_type_sql;
+use common_datavalues::format_datavalue_sql;
+use common_datavalues::DataField;
+use common_datavalues::DataType;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 
@@ -48,6 +51,23 @@ pub enum PhysicalScalar {
 }
 
 impl PhysicalScalar {
+    pub fn column_name(&self) -> String {
+        match self {
+            PhysicalScalar::IndexedVariable { display_name, .. } => display_name.clone(),
+            PhysicalScalar::Constant { value, .. } => format_datavalue_sql(value),
+            PhysicalScalar::Function { name, args, .. } => {
+                let args_column_name = args
+                    .iter()
+                    .map(PhysicalScalar::column_name)
+                    .collect::<Vec<_>>();
+                format!("{}({})", name, args_column_name.join(", "))
+            }
+            PhysicalScalar::Cast { input, target } => {
+                format!("{}::{}", input.column_name(), target.sql_name())
+            }
+        }
+    }
+
     pub fn data_type(&self) -> DataTypeImpl {
         match self {
             PhysicalScalar::Constant { data_type, .. } => data_type.clone(),
@@ -55,6 +75,12 @@ impl PhysicalScalar {
             PhysicalScalar::Cast { target, .. } => target.clone(),
             PhysicalScalar::IndexedVariable { data_type, .. } => data_type.clone(),
         }
+    }
+
+    pub fn to_data_field(&self) -> DataField {
+        let name = self.column_name();
+        let data_type = self.data_type();
+        DataField::new(&name, data_type)
     }
 
     /// Display with readable variable name.

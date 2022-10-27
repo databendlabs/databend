@@ -15,12 +15,14 @@
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
+use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::TableSnapshot;
 use common_planner::extras::Extras;
 use common_planner::plans::DeletePlan;
 use common_planner::PhysicalScalar;
+use common_sql::evaluator::Evaluator;
 use common_sql::PhysicalScalarParser;
 use tracing::debug;
 
@@ -150,7 +152,47 @@ impl FuseTable {
     }
 
     fn cluster_stats_gen(&self, ctx: Arc<dyn TableContext>) -> Result<ClusterStatsGenerator> {
-        // todo(sundy)
-        todo!()
+        if self.cluster_key_meta.is_none() {
+            return Ok(ClusterStatsGenerator::default());
+        }
+
+        let len = self.cluster_keys.len();
+        let cluster_key_id = self.cluster_key_meta.clone().unwrap().0;
+
+        let input_schema = self.table_info.schema();
+        let input_fields = input_schema.fields().clone();
+
+        let mut cluster_key_index = Vec::with_capacity(len);
+        let mut output_fields = Vec::with_capacity(len);
+        let mut exists = true;
+        for expr in &self.cluster_keys {
+            output_fields.push(expr.to_data_field());
+
+            if exists {
+                match input_fields
+                    .iter()
+                    .position(|x| x.name() == &expr.column_name())
+                {
+                    None => exists = false,
+                    Some(idx) => cluster_key_index.push(idx),
+                };
+            }
+        }
+
+        let mut expression_executor = None;
+        if !exists {
+            cluster_key_index = (0..len).collect();
+
+            let executor = Evaluator::eval_physical_scalars(&self.cluster_keys)?;
+            expression_executor = Some(executor);
+        }
+
+        Ok(ClusterStatsGenerator::new(
+            cluster_key_id,
+            cluster_key_index,
+            expression_executor,
+            0,
+            self.get_block_compactor(),
+        ))
     }
 }
