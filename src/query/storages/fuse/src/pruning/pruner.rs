@@ -186,10 +186,18 @@ mod util {
             // 1. only binary op "=" is considered, which is NOT enough
             // 2. should combine this logic with Filter
             match expr {
-                PhysicalScalar::Function { name, args, .. } if name.as_str() == "=" && args.len() == 2 => {
+                PhysicalScalar::Function { name, args, .. }
+                    if name.as_str() == "=" && args.len() == 2 =>
+                {
                     match (&args[0], &args[1]) {
-                        (PhysicalScalar::IndexedVariable { index, ..}, PhysicalScalar::Constant { .. })
-                        | (PhysicalScalar::Constant { .. }, PhysicalScalar::IndexedVariable { index, .. }) => {
+                        (
+                            PhysicalScalar::IndexedVariable { index, .. },
+                            PhysicalScalar::Constant { .. },
+                        )
+                        | (
+                            PhysicalScalar::Constant { .. },
+                            PhysicalScalar::IndexedVariable { index, .. },
+                        ) => {
                             self.columns.insert(*index);
                             Ok(common_planner::Recursion::Stop(self))
                         }
@@ -200,8 +208,6 @@ mod util {
             }
         }
     }
-
-
 
     pub fn columns_indices_of_eq_expressions(filter_expr: &PhysicalScalar) -> Result<Vec<usize>> {
         let visitor = PointQueryVisitor {

@@ -25,14 +25,8 @@ pub(crate) struct TopNPrunner {
 }
 
 impl TopNPrunner {
-    pub(crate) fn new(
-        sort: Vec<(PhysicalScalar, bool, bool)>,
-        limit: usize,
-    ) -> Self {
-        Self {
-            sort,
-            limit,
-        }
+    pub(crate) fn new(sort: Vec<(PhysicalScalar, bool, bool)>, limit: usize) -> Self {
+        Self { sort, limit }
     }
 }
 

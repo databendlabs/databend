@@ -62,7 +62,9 @@ pub async fn delete_from_block(
     let data_block = reader.read_with_block_meta(block_meta).await?;
 
     let eval_node = Evaluator::eval_physical_scalar(filter_expr)?;
-    let filter_result = eval_node.eval(&ctx.try_get_function_context()?, &data_block)?.vector;
+    let filter_result = eval_node
+        .eval(&ctx.try_get_function_context()?, &data_block)?
+        .vector;
     let predicates = DataBlock::cast_to_nonull_boolean(&filter_result)?;
 
     // shortcut, if predicates is const boolean (or can be cast to boolean)
