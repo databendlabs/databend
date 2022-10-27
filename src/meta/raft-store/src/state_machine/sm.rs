@@ -821,7 +821,7 @@ impl StateMachine {
         let prev = kvs.get(&upsert_kv.key)?;
 
         // If prev is timed out, treat it as a None.
-        let prev = Self::unexpired_opt(prev, log_time_ms);
+        let (_original, prev) = Self::expire_seq_v(prev, log_time_ms);
 
         if upsert_kv.seq.match_seq(&prev).is_err() {
             return Ok((prev.clone(), prev));
@@ -926,11 +926,23 @@ impl StateMachine {
         sm_nodes.range_values(..)
     }
 
-    pub fn unexpired_opt<V: Debug>(
+    /// Expire an `SeqV` and returns:
+    /// - `(Some, None)` if it expires.
+    /// - `(None, Some)` if it does not.
+    /// - `(None, None)` if the input is None.
+    pub fn expire_seq_v<V>(
         seq_value: Option<SeqV<V>>,
         log_time_ms: u64,
-    ) -> Option<SeqV<V>> {
-        seq_value.and_then(|x| Self::unexpired(x, log_time_ms))
+    ) -> (Option<SeqV<V>>, Option<SeqV<V>>) {
+        if let Some(s) = &seq_value {
+            if s.get_expire_at() < log_time_ms {
+                (seq_value, None)
+            } else {
+                (None, seq_value)
+            }
+        } else {
+            (None, None)
+        }
     }
 
     pub fn unexpired<V: Debug>(seq_value: SeqV<V>, log_time_ms: u64) -> Option<SeqV<V>> {
@@ -985,5 +997,56 @@ impl StateMachine {
     /// storage of client last resp to keep idempotent.
     pub fn client_last_resps(&self) -> AsKeySpace<ClientLastResps> {
         self.sm_tree.key_space()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use common_meta_types::KVMeta;
+    use common_meta_types::SeqV;
+
+    use crate::state_machine::StateMachine;
+
+    #[test]
+    fn test_expire_seq_v() -> anyhow::Result<()> {
+        let sv = || SeqV::new(1, ());
+        let expire_seq_v = StateMachine::expire_seq_v;
+
+        assert_eq!((None, None), expire_seq_v(None, 10_000));
+        assert_eq!((None, Some(sv())), expire_seq_v(Some(sv()), 10_000));
+
+        assert_eq!(
+            (None, Some(sv().set_meta(Some(KVMeta { expire_at: None })))),
+            expire_seq_v(
+                Some(sv().set_meta(Some(KVMeta { expire_at: None }))),
+                10_000
+            )
+        );
+        assert_eq!(
+            (
+                None,
+                Some(sv().set_meta(Some(KVMeta {
+                    expire_at: Some(20)
+                })))
+            ),
+            expire_seq_v(
+                Some(sv().set_meta(Some(KVMeta {
+                    expire_at: Some(20)
+                }))),
+                10_000
+            )
+        );
+        assert_eq!(
+            (
+                Some(sv().set_meta(Some(KVMeta { expire_at: Some(5) }))),
+                None
+            ),
+            expire_seq_v(
+                Some(sv().set_meta(Some(KVMeta { expire_at: Some(5) }))),
+                10_000
+            )
+        );
+
+        Ok(())
     }
 }
