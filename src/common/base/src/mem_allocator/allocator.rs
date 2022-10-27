@@ -73,6 +73,7 @@ impl<A> ProxyAllocator<A> {
 }
 
 unsafe impl<A: GlobalAlloc> GlobalAlloc for ProxyAllocator<A> {
+    #[inline]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         let tid = get_tid();
         let slot = tid % COUNTERS_SIZE;
@@ -82,12 +83,37 @@ unsafe impl<A: GlobalAlloc> GlobalAlloc for ProxyAllocator<A> {
         self.inner.alloc(layout)
     }
 
+    #[inline]
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         let tid = get_tid();
         let slot = tid % COUNTERS_SIZE;
         MEM_SIZE[slot].fetch_sub(layout.size(), Ordering::Relaxed);
         MEM_CNT[slot].fetch_sub(1, Ordering::Relaxed);
         self.inner.dealloc(ptr, layout);
+    }
+
+    #[inline]
+    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
+        self.inner.alloc_zeroed(layout)
+    }
+
+    #[inline]
+    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+        let old_size = layout.size() as i64;
+        let diff = (new_size as i64) - old_size;
+
+        let tid = get_tid();
+        let slot = tid % COUNTERS_SIZE;
+        MEM_CNT[slot].fetch_add(1, Ordering::Relaxed);
+        match diff > 0 {
+            true => {
+                MEM_SIZE[slot].fetch_add(layout.size(), Ordering::Relaxed);
+            }
+            false => {
+                MEM_SIZE[slot].fetch_sub(layout.size(), Ordering::Relaxed);
+            }
+        }
+        self.inner.realloc(ptr, layout, new_size)
     }
 }
 

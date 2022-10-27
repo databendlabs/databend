@@ -92,8 +92,6 @@ mod platform {
 
         #[inline]
         unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-            ThreadTracker::alloc_memory(layout.size() as i64);
-
             if layout.align() <= MIN_ALIGN && layout.align() <= layout.size() {
                 ffi::calloc(1, layout.size()) as *mut u8
             } else {
