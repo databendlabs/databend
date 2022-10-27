@@ -16,12 +16,14 @@ mod allocator;
 mod memory_tracker;
 
 mod catch_unwind;
+mod global_runtime;
 #[allow(clippy::module_inception)]
 mod runtime;
 mod runtime_tracker;
 
 pub use allocator::*;
 pub(crate) use catch_unwind::*;
+pub use global_runtime::GlobalIORuntime;
 pub use memory_tracker::MemoryTracker;
 pub use runtime::*;
 pub use runtime_tracker::RuntimeTracker;
