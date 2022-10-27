@@ -1,0 +1,65 @@
+//  Copyright 2022 Datafuse Labs.
+//
+//  Licensed under the Apache License, Version 2.0 (the "License");
+//  you may not use this file except in compliance with the License.
+//  You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+//  Unless required by applicable law or agreed to in writing, software
+//  distributed under the License is distributed on an "AS IS" BASIS,
+//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//  See the License for the specific language governing permissions and
+//  limitations under the License.
+
+use std::sync::Arc;
+
+use common_ast::parser::parse_comma_separated_exprs;
+use common_ast::parser::tokenize_sql;
+use common_ast::Backtrace;
+use common_ast::Dialect;
+use common_catalog::table_context::TableContext;
+use common_datavalues::DataSchemaRef;
+use common_exception::Result;
+use common_planner::PhysicalScalar;
+use parking_lot::RwLock;
+
+use crate::executor::PhysicalScalarBuilder;
+use crate::BindContext;
+use crate::Metadata;
+use crate::NameResolutionContext;
+use crate::ScalarBinder;
+
+pub struct PhysicalScalarParser;
+
+impl PhysicalScalarParser {
+    pub async fn parse_exprs(
+        ctx: Arc<dyn TableContext>,
+        schema: DataSchemaRef,
+        sql: &str,
+    ) -> Result<Vec<PhysicalScalar>> {
+        let sql_dialect = Dialect::MySQL;
+        let tokens = tokenize_sql(sql)?;
+        let backtrace = Backtrace::new();
+        let exprs = parse_comma_separated_exprs(
+            &tokens[1..tokens.len() as usize],
+            sql_dialect,
+            &backtrace,
+        )?;
+
+        let settings = ctx.get_settings();
+        let bind_context = BindContext::new();
+        let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+        let metadata = Arc::new(RwLock::new(Metadata::default()));
+        let mut scalar_binder =
+            ScalarBinder::new(&bind_context, ctx, &name_resolution_ctx, metadata, &[]);
+        let mut physical_scalars = Vec::with_capacity(exprs.len());
+        let mut physical_scalar_builder = PhysicalScalarBuilder::new(&schema);
+        for expr in exprs.iter() {
+            let (scalar, _) = scalar_binder.bind(expr).await?;
+            let physical_scalar = physical_scalar_builder.build(&scalar)?;
+            physical_scalars.push(physical_scalar);
+        }
+        Ok(physical_scalars)
+    }
+}

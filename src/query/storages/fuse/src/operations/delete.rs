@@ -15,11 +15,13 @@
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::TableSnapshot;
 use common_planner::extras::Extras;
 use common_planner::plans::DeletePlan;
 use common_planner::PhysicalScalar;
+use common_sql::PhysicalScalarParser;
 use tracing::debug;
 
 use crate::operations::mutation::delete_from_block;
@@ -48,9 +50,15 @@ impl FuseTable {
 
         // check if unconditional deletion
         if let Some(filter) = &plan.selection {
-            // todo(sundy): use type_checker
-            let expr = vec![];
-            self.delete_rows(ctx, &snapshot, &expr[0], plan).await
+            let physical_scalars =
+                PhysicalScalarParser::parse_exprs(ctx.clone(), plan.schema(), filter).await?;
+            if physical_scalars.is_empty() {
+                return Err(ErrorCode::IndexOutOfBounds(
+                    "expression should be valid, but not",
+                ));
+            }
+            self.delete_rows(ctx.clone(), &snapshot, &physical_scalars[0], plan)
+                .await
         } else {
             // deleting the whole table... just a truncate
             let purge = false;

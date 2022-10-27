@@ -14,21 +14,12 @@
 
 use std::sync::Arc;
 
-use common_ast::parser::parse_comma_separated_exprs;
-use common_ast::parser::tokenize_sql;
-use common_ast::Backtrace;
-use common_ast::Dialect;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planner::PhysicalScalar;
-use common_sql::executor::PhysicalScalarBuilder;
-use common_sql::BindContext;
-use common_sql::Metadata;
-use common_sql::NameResolutionContext;
-use common_sql::ScalarBinder;
-use parking_lot::RwLock;
+use common_sql::PhysicalScalarParser;
 
 use crate::table_functions::string_value;
 use crate::table_functions::TableArgs;
@@ -55,30 +46,8 @@ pub async fn get_cluster_keys(
     definition: &str,
 ) -> Result<Vec<PhysicalScalar>> {
     let cluster_keys = if !definition.is_empty() {
-        let schema = table.schema();
-
-        let sql_dialect = Dialect::MySQL;
-        let tokens = tokenize_sql(definition)?;
-        let backtrace = Backtrace::new();
-        let exprs = parse_comma_separated_exprs(
-            &tokens[1..tokens.len() as usize],
-            sql_dialect,
-            &backtrace,
-        )?;
-
-        let settings = ctx.get_settings();
-        let bind_context = BindContext::new();
-        let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-        let metadata = Arc::new(RwLock::new(Metadata::default()));
-        let mut scalar_binder =
-            ScalarBinder::new(&bind_context, ctx, &name_resolution_ctx, metadata, &[]);
-        let mut physical_scalars = Vec::with_capacity(exprs.len());
-        let mut physical_scalar_builder = PhysicalScalarBuilder::new(&schema);
-        for expr in exprs.iter() {
-            let (scalar, _) = scalar_binder.bind(expr).await?;
-            let physical_scalar = physical_scalar_builder.build(&scalar)?;
-            physical_scalars.push(physical_scalar);
-        }
+        let physical_scalars =
+            PhysicalScalarParser::parse_exprs(ctx, table.schema(), definition).await?;
         physical_scalars
     } else {
         table.cluster_keys()

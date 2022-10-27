@@ -14,6 +14,7 @@
 
 mod format;
 mod metadata;
+mod physical_scalar_parser;
 #[allow(clippy::module_inception)]
 mod planner;
 mod semantic;
@@ -28,6 +29,7 @@ pub use binder::ColumnBinding;
 pub use binder::ScalarBinder;
 pub use binder::Visibility;
 pub use metadata::*;
+pub use physical_scalar_parser::PhysicalScalarParser;
 pub use planner::Planner;
 pub use plans::ScalarExpr;
 pub use semantic::normalize_identifier;
