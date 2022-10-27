@@ -16,10 +16,10 @@ use std::alloc::GlobalAlloc;
 use std::alloc::Layout;
 use std::ptr::null_mut;
 
+use common_base::mem_allocator::print_memory_stats;
+use common_base::mem_allocator::total_memory_usage;
 use common_base::mem_allocator::JEAllocator;
-use common_base::runtime::print_memory_stats;
-use common_base::runtime::total_memory_usage;
-use common_base::runtime::ProxyAllocator;
+use common_base::mem_allocator::ProxyAllocator;
 use tracing_subscriber::util::SubscriberInitExt;
 
 #[test]

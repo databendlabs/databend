@@ -19,12 +19,15 @@ mod std_allocator;
 
 use std::alloc::Layout;
 
+pub use allocator::*;
 pub use je_allocator::JEAllocator;
-pub use je_allocator::ALLOC;
+pub use memory_tracker::MemoryTracker;
 pub use mmap_allocator::MmapAllocator;
 pub use stackful_allocator::StackfulAllocator;
 pub use std_allocator::StdAllocator;
 
+mod allocator;
+mod memory_tracker;
 #[cfg(feature = "memory-profiling")]
 mod profiling;
 

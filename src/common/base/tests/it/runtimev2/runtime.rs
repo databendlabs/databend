@@ -17,7 +17,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
 
-use common_base::runtime::print_memory_stats;
+use common_base::mem_allocator::print_memory_stats;
 use common_base::runtime::Runtime;
 use common_base::runtime::TrySpawn;
 use common_exception::Result;

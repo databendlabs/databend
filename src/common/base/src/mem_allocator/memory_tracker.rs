@@ -14,7 +14,7 @@
 
 use std::cell::RefCell;
 
-use crate::runtime::thread_memory_usage;
+use crate::mem_allocator::thread_memory_usage;
 
 thread_local! {
     static LOCAL: RefCell<Option<MemoryTracker>> = const { RefCell::new(None) }

@@ -16,7 +16,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use crate::runtime::MemoryTracker;
+use crate::mem_allocator::MemoryTracker;
 
 static mut GLOBAL_ID: AtomicUsize = AtomicUsize::new(1);
 
@@ -40,7 +40,6 @@ impl RuntimeTracker {
 
     pub fn on_start_thread(self: &Arc<Self>) -> impl Fn() {
         let id = self.id;
-        tracing::info!("runtime tracker id:{}", id);
         move || MemoryTracker::create(id)
     }
 }

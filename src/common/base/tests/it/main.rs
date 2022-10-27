@@ -12,12 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::mem_allocator::JEAllocator;
-use common_base::runtime::ProxyAllocator;
-
-#[global_allocator]
-static ALLOC: ProxyAllocator<JEAllocator> = ProxyAllocator::new(JEAllocator);
-
+mod mem_allocator;
 mod pool;
 mod pool_retry;
 mod progress;

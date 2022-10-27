@@ -16,8 +16,6 @@ use std::env;
 use std::sync::Arc;
 
 use common_base::base::RuntimeTracker;
-use common_base::mem_allocator::JEAllocator;
-use common_base::runtime::ProxyAllocator;
 use common_config::Config;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_config::QUERY_SEMVER;
@@ -37,9 +35,6 @@ use databend_query::servers::Server;
 use databend_query::servers::ShutdownHandle;
 use databend_query::GlobalServices;
 use tracing::info;
-
-#[global_allocator]
-static ALLOC: ProxyAllocator<JEAllocator> = ProxyAllocator::new(JEAllocator);
 
 #[databend_main]
 async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<()> {

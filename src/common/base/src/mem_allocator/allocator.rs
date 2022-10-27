@@ -18,7 +18,11 @@ use std::alloc::Layout;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
-use crate::runtime::MemoryTracker;
+use crate::mem_allocator::JEAllocator;
+use crate::mem_allocator::MemoryTracker;
+
+#[global_allocator]
+pub static ALLOC: ProxyAllocator<JEAllocator> = ProxyAllocator::new(JEAllocator);
 
 const COUNTERS_SIZE: usize = 16384;
 static MEM_SIZE: [AtomicUsize; COUNTERS_SIZE] = unsafe {
