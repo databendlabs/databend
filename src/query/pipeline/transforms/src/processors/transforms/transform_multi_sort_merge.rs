@@ -141,7 +141,7 @@ impl Cursor {
             .zip(self.sort_columns_descriptions.iter())
             .enumerate()
         {
-            match (l.null_at(self.row_index), r.null_at(other.row_index)) {
+            match (!l.null_at(self.row_index), !r.null_at(other.row_index)) {
                 (false, true) if option.nulls_first => return Ok(Ordering::Less),
                 (false, true) => return Ok(Ordering::Greater),
                 (true, false) if option.nulls_first => return Ok(Ordering::Greater),
@@ -149,8 +149,8 @@ impl Cursor {
                 (false, false) => {}
                 (true, true) => match comparators[i](self.row_index, other.row_index) {
                     Ordering::Equal => {}
-                    o if !option.asc => return Ok(o.reverse()),
-                    o => return Ok(o),
+                    o if !option.asc => Ok(o.reverse()),
+                    o => Ok(o),
                 },
             }
         }
@@ -279,7 +279,8 @@ impl MultiSortMergeProcessor {
     fn nums_active_inputs(&self) -> usize {
         self.input_finished
             .iter()
-            .filter(|&&finished| !finished)
+            .zip(self.cursor_finished.iter())
+            .filter(|(f, c)| !**f || !**c)
             .count()
     }
 
@@ -400,9 +401,11 @@ impl MultiSortMergeProcessor {
             for (j, right) in blocks {
                 if i != *j && !self.blocks[i].is_empty() {
                     let left = self.blocks[i].back().unwrap();
-                    let comparators = DataBlock::build_compare(left, right)?;
                     let mut cmp = self.compare_map.write().unwrap();
+                    let comparators = DataBlock::build_compare(left, right)?;
                     cmp[i][*j] = comparators;
+                    let comparators = DataBlock::build_compare(right, left)?;
+                    cmp[*j][i] = comparators;
                 }
             }
         }
@@ -492,6 +495,9 @@ impl Processor for MultiSortMergeProcessor {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, ProcessorState::Consume) {
             ProcessorState::Preserve(blocks) => {
+                for (input_index, block) in blocks.iter() {
+                    self.blocks[*input_index].push_back(block.clone());
+                }
                 self.build_compare_map(&blocks)?;
                 for (input_index, block) in blocks.into_iter() {
                     if !block.is_empty() {
@@ -503,7 +509,6 @@ impl Processor for MultiSortMergeProcessor {
                         )?;
                         self.heap.push(cursor);
                         self.cursor_finished[input_index] = false;
-                        self.blocks[input_index].push_back(block);
                     }
                 }
                 self.drain_heap();
