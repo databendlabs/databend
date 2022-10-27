@@ -126,13 +126,22 @@ impl Runtime {
         self.tracker.clone()
     }
 
+    fn tracker_builder(rt_tracker: Arc<RuntimeTracker>) -> Builder {
+        let mut builder = Builder::new_multi_thread();
+        builder
+            .enable_all()
+            .on_thread_stop(rt_tracker.on_stop_thread())
+            .on_thread_start(rt_tracker.on_start_thread());
+
+        builder
+    }
+
     /// Spawns a new tokio runtime with a default thread count on a background
     /// thread and returns a `Handle` which can be used to spawn tasks via
     /// its executor.
     pub fn with_default_worker_threads() -> Result<Self> {
         let tracker = RuntimeTracker::create();
-        let mut runtime = tokio::runtime::Builder::new_multi_thread();
-        let runtime_builder = runtime.enable_all();
+        let mut runtime_builder = Self::tracker_builder(tracker.clone());
 
         #[cfg(debug_assertions)]
         {
@@ -144,14 +153,13 @@ impl Runtime {
             }
         }
 
-        Self::create(None, tracker, runtime_builder)
+        Self::create(None, tracker, &mut runtime_builder)
     }
 
     #[allow(unused_mut)]
     pub fn with_worker_threads(workers: usize, mut thread_name: Option<String>) -> Result<Self> {
         let tracker = RuntimeTracker::create();
-        let mut runtime = tokio::runtime::Builder::new_multi_thread();
-        let mut runtime_builder = runtime.enable_all();
+        let mut runtime_builder = Self::tracker_builder(tracker.clone());
 
         #[cfg(debug_assertions)]
         {

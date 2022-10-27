@@ -12,21 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use crate::runtime::MemoryTracker;
 
+static mut GLOBAL_ID: AtomicUsize = AtomicUsize::new(0);
+
 pub struct RuntimeTracker {
-    memory_tracker: Arc<MemoryTracker>,
+    id: usize,
 }
 
 impl RuntimeTracker {
     pub fn create() -> Arc<RuntimeTracker> {
-        let memory_tracker = unsafe { Arc::from_raw(MemoryTracker::create()) };
-        Arc::new(RuntimeTracker { memory_tracker })
+        let id = unsafe { GLOBAL_ID.fetch_add(1, Ordering::SeqCst) };
+        Arc::new(RuntimeTracker { id })
     }
 
     pub fn get_memory_usage(&self) -> usize {
-        self.memory_tracker.get_memory_usage()
+        MemoryTracker::get_memory_usage(self.id)
+    }
+
+    pub fn on_stop_thread(self: &Arc<Self>) -> impl Fn() {
+        move || {}
+    }
+
+    pub fn on_start_thread(self: &Arc<Self>) -> impl Fn() {
+        let id = self.id;
+        move || MemoryTracker::create(id)
     }
 }

@@ -26,6 +26,7 @@ use rand::distributions::Distribution;
 use rand::distributions::Uniform;
 use tokio::sync::Semaphore;
 use tokio::time::sleep;
+use tracing_subscriber::util::SubscriberInitExt;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
 async fn test_runtime() -> Result<()> {
@@ -110,6 +111,10 @@ async fn mock_get_page(i: usize) -> Vec<usize> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
 async fn test_runtime_try_spawn_batch() -> Result<()> {
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .finish()
+        .init();
     let runtime = Runtime::with_default_worker_threads()?;
 
     let mut futs = vec![];
@@ -121,6 +126,7 @@ async fn test_runtime_try_spawn_batch() -> Result<()> {
     let handlers = runtime.try_spawn_batch(max_concurrency, futs).await?;
     let result = futures::future::try_join_all(handlers).await.unwrap();
     assert_eq!(result.len(), 20);
+    print_memory_stats();
 
     Ok(())
 }

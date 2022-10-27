@@ -12,36 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
+use std::cell::RefCell;
 
 use crate::runtime::thread_memory_usage;
 
-static mut GLOBAL_ID: AtomicUsize = AtomicUsize::new(0);
+thread_local! {
+    static LOCAL: RefCell<Option<MemoryTracker>> = const { RefCell::new(None) }
+}
 
-#[thread_local]
-pub static mut MEM_TRACKER: *mut MemoryTracker = std::ptr::null_mut();
-
+#[derive(Debug, Clone)]
 pub struct MemoryTracker {
-    track_id: usize,
+    id: usize,
 }
 
 impl MemoryTracker {
-    pub fn create() -> *mut MemoryTracker {
-        let track_id = unsafe { GLOBAL_ID.fetch_add(1, Ordering::SeqCst) };
-        let tracker = Box::new(MemoryTracker { track_id });
-        unsafe {
-            MEM_TRACKER = Box::into_raw(tracker);
-            MEM_TRACKER
-        }
+    pub fn create(id: usize) {
+        let tracker = MemoryTracker { id };
+        LOCAL.with(|t| *t.borrow_mut() = Some(tracker));
     }
 
     pub fn get_id() -> usize {
-        unsafe { (*MEM_TRACKER).track_id }
+        match LOCAL.with(|x| x.borrow().clone()) {
+            None => 0,
+            Some(v) => v.id,
+        }
     }
 
     #[inline]
-    pub fn get_memory_usage(&self) -> usize {
-        thread_memory_usage(unsafe { (*MEM_TRACKER).track_id })
+    pub fn get_memory_usage(id: usize) -> usize {
+        thread_memory_usage(id)
     }
 }
