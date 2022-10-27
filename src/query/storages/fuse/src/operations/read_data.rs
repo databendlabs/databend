@@ -12,8 +12,11 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
+use common_base::base::Progress;
+use common_base::base::ProgressValues;
 use common_base::base::Runtime;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
@@ -37,7 +40,7 @@ use tracing::info;
 
 use crate::fuse_lazy_part::FuseLazyPartInfo;
 use crate::io::BlockReader;
-use crate::operations::FuseTableSource;
+use crate::operations::read_data::State::Generated;
 use crate::FuseTable;
 
 impl FuseTable {

@@ -518,7 +518,7 @@ impl PhysicalPlanBuilder {
                         });
 
                 assert!(
-                    !predicate.is_some(),
+                    predicate.is_none(),
                     "There should be at least one predicate in prewhere"
                 );
 
@@ -647,7 +647,7 @@ impl<'a> PhysicalScalarBuilder<'a> {
                     .arguments
                     .iter()
                     .zip(func.arg_types.iter())
-                    .map(|(arg, _)| Ok(self.build(arg)?))
+                    .map(|(arg, _)| self.build(arg))
                     .collect::<Result<_>>()?,
                 return_type: *func.return_type.clone(),
             }),

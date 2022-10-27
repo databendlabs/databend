@@ -91,7 +91,7 @@ impl Evaluator {
             PhysicalScalar::Function { name, args, .. } => {
                 let eval_args: Vec<EvalNode> = args
                     .iter()
-                    .map(|v| Self::eval_physical_scalar(v))
+                    .map(Self::eval_physical_scalar)
                     .collect::<Result<_>>()?;
 
                 // special case for in function

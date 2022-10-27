@@ -95,7 +95,7 @@ impl FuseTable {
         if let Some((_, order)) = &cluster_key_meta {
             cluster_keys = PhysicalScalarParser::parse_exprs(schema, order)?;
         }
-        let operator = match table_info.from_share {
+        let mut operator = match table_info.from_share {
             Some(ref from_share) => create_share_table_operator(
                 ShareTableConfig::share_endpoint_address(),
                 &table_info.tenant,
@@ -114,27 +114,9 @@ impl FuseTable {
                 }
             }
         };
-        Ok(operator)
-    }
-
-    pub fn do_create(table_info: TableInfo, read_only: bool) -> Result<Box<FuseTable>> {
-        let operator = Self::init_operator(&table_info)?;
-        Self::do_create_with_operator(table_info, operator, read_only)
-    }
-
-    pub fn do_create_with_operator(
-        table_info: TableInfo,
-        operator: Operator,
-        read_only: bool,
-    ) -> Result<Box<FuseTable>> {
-        let storage_prefix = Self::parse_storage_prefix(&table_info)?;
-        let cluster_key_meta = table_info.meta.cluster_key();
-        let mut cluster_keys = Vec::new();
-        if let Some((_, order)) = &cluster_key_meta {
-            cluster_keys = ExpressionParser::parse_exprs(order)?;
-        }
         let data_metrics = Arc::new(StorageMetrics::default());
-        let operator = operator.layer(StorageMetricsLayer::new(data_metrics.clone()));
+        operator = operator.layer(StorageMetricsLayer::new(data_metrics.clone()));
+
         Ok(Box::new(FuseTable {
             table_info,
             cluster_keys,

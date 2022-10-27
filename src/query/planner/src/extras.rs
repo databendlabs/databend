@@ -28,7 +28,7 @@ pub enum StageKind {
     Merge,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct PrewhereInfo {
     /// columns to be ouput be prewhere scan
     pub output_columns: Projection,
@@ -41,7 +41,7 @@ pub struct PrewhereInfo {
 }
 
 /// Extras is a wrapper for push down items.
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Default)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Default)]
 pub struct Extras {
     /// Optional column indices to use as a projection
     pub projection: Option<Projection>,
