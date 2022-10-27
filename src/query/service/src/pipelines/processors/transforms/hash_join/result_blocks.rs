@@ -17,8 +17,7 @@ use std::iter::TrustedLen;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_hashtable::HashMap;
-use common_hashtable::HashtableKeyable;
+use common_hashtable::HashtableLike;
 
 use super::JoinHashTable;
 use super::ProbeState;
@@ -26,16 +25,16 @@ use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::sql::planner::plans::JoinType;
 
 impl JoinHashTable {
-    pub(crate) fn result_blocks<Key, IT>(
+    pub(crate) fn result_blocks<'a, H: HashtableLike<Value = Vec<RowPtr>>, IT>(
         &self,
-        hash_table: &HashMap<Key, Vec<RowPtr>>,
+        hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
         input: &DataBlock,
     ) -> Result<Vec<DataBlock>>
     where
-        Key: HashtableKeyable + Clone + 'static,
-        IT: Iterator<Item = Key> + TrustedLen,
+        IT: Iterator<Item = H::KeyRef<'a>> + TrustedLen,
+        H::Key: 'a,
     {
         match self.hash_join_desc.join_type {
             JoinType::Inner => self.probe_inner_join(hash_table, probe_state, keys_iter, input),

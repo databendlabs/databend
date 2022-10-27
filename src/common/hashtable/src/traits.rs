@@ -234,7 +234,7 @@ impl FastHash for u128 {
                 use std::arch::x86_64::_mm_crc32_u64;
                 let mut high = CRC_A;
                 let mut low = CRC_B;
-                let y = [self as u64, (self >> 64) as u64];
+                let y = [*self as u64, (*self >> 64) as u64];
                 for x in y {
                     high = unsafe { _mm_crc32_u64(high as u64, x) as u32 };
                     low = unsafe { _mm_crc32_u64(low as u64, x) as u32 };
@@ -391,4 +391,83 @@ impl<const N: usize> FastHash for ([u64; N], NonZeroU64) {
             }
         }
     }
+}
+
+pub trait EntryRefLike: Copy {
+    type KeyRef;
+    type ValueRef;
+
+    fn key(&self) -> Self::KeyRef;
+    fn get(&self) -> Self::ValueRef;
+}
+
+pub trait EntryMutRefLike {
+    type KeyRef;
+    type Value;
+
+    fn key(&self) -> Self::KeyRef;
+    fn get(&self) -> &Self::Value;
+    fn get_mut(&mut self) -> &mut Self::Value;
+    fn write(&mut self, value: Self::Value);
+}
+
+pub trait HashtableLike {
+    type Key: ?Sized;
+    type KeyRef<'a>: Copy
+    where Self::Key: 'a;
+    type Value;
+
+    type EntryRef<'a>: EntryRefLike<KeyRef = Self::KeyRef<'a>, ValueRef = &'a Self::Value>
+    where
+        Self: 'a,
+        Self::Key: 'a,
+        Self::Value: 'a;
+    type EntryMutRef<'a>: EntryMutRefLike<KeyRef = Self::KeyRef<'a>, Value = Self::Value>
+    where
+        Self: 'a,
+        Self::Key: 'a,
+        Self::Value: 'a;
+
+    type Iterator<'a>: Iterator<Item = Self::EntryRef<'a>>
+    where
+        Self: 'a,
+        Self::Key: 'a,
+        Self::Value: 'a;
+    type IteratorMut<'a>: Iterator<Item = Self::EntryMutRef<'a>>
+    where
+        Self: 'a,
+        Self::Key: 'a,
+        Self::Value: 'a;
+
+    fn entry<'a>(&self, key_ref: Self::KeyRef<'a>) -> Option<Self::EntryRef<'_>>
+    where Self::Key: 'a;
+    fn entry_mut<'a>(&mut self, key_ref: Self::KeyRef<'a>) -> Option<Self::EntryMutRef<'_>>
+    where Self::Key: 'a;
+
+    fn get<'a>(&self, key_ref: Self::KeyRef<'a>) -> Option<&Self::Value>
+    where Self::Key: 'a;
+    fn get_mut<'a>(&mut self, key_ref: Self::KeyRef<'a>) -> Option<&mut Self::Value>
+    where Self::Key: 'a;
+
+    /// # Safety
+    ///
+    /// The uninitialized value of returned entry should be written immediately.
+    unsafe fn insert<'a>(
+        &mut self,
+        key_ref: Self::KeyRef<'a>,
+    ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value>
+    where
+        Self::Key: 'a;
+    /// # Safety
+    ///
+    /// The uninitialized value of returned entry should be written immediately.
+    unsafe fn insert_and_entry<'a>(
+        &mut self,
+        key_ref: Self::KeyRef<'a>,
+    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>>
+    where
+        Self::Key: 'a;
+
+    fn iter(&self) -> Self::Iterator<'_>;
+    fn iter_mut(&mut self) -> Self::IteratorMut<'_>;
 }

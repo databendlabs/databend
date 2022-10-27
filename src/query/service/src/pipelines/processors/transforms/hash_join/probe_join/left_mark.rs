@@ -22,8 +22,8 @@ use common_datavalues::BooleanViewer;
 use common_datavalues::ScalarViewer;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_hashtable::HashMap;
-use common_hashtable::HashtableKeyable;
+use common_hashtable::HashtableEntryRefLike;
+use common_hashtable::HashtableLike;
 
 use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
@@ -31,16 +31,16 @@ use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::JoinHashTable;
 
 impl JoinHashTable {
-    pub(crate) fn probe_left_mark_join<Key, IT>(
+    pub(crate) fn probe_left_mark_join<'a, H: HashtableLike<Value = Vec<RowPtr>>, IT>(
         &self,
-        hash_table: &HashMap<Key, Vec<RowPtr>>,
+        hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
         input: &DataBlock,
     ) -> Result<Vec<DataBlock>>
     where
-        Key: HashtableKeyable + Clone + 'static,
-        IT: Iterator<Item = Key> + TrustedLen,
+        IT: Iterator<Item = H::KeyRef<'a>> + TrustedLen,
+        H::Key: 'a,
     {
         let valids = &probe_state.valids;
         let mut block_size = self.ctx.get_settings().get_max_block_size()? as usize;
@@ -69,7 +69,7 @@ impl JoinHashTable {
             }
 
             let probe_result_ptr = match self.hash_join_desc.from_correlated_subquery {
-                true => hash_table.entry(&key),
+                true => hash_table.entry(key),
                 false => self.probe_key(hash_table, key, valids, i),
             };
 
@@ -86,16 +86,20 @@ impl JoinHashTable {
 
         Ok(vec![DataBlock::empty()])
     }
-    pub(crate) fn probe_left_mark_join_with_conjunct<Key, IT>(
+    pub(crate) fn probe_left_mark_join_with_conjunct<
+        'a,
+        H: HashtableLike<Value = Vec<RowPtr>>,
+        IT,
+    >(
         &self,
-        hash_table: &HashMap<Key, Vec<RowPtr>>,
+        hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
         input: &DataBlock,
     ) -> Result<Vec<DataBlock>>
     where
-        Key: HashtableKeyable + Clone + 'static,
-        IT: Iterator<Item = Key> + TrustedLen,
+        IT: Iterator<Item = H::KeyRef<'a>> + TrustedLen,
+        H::Key: 'a,
     {
         let valids = &probe_state.valids;
         let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
@@ -118,7 +122,7 @@ impl JoinHashTable {
 
         for (i, key) in keys_iter.enumerate() {
             let probe_result_ptr = match self.hash_join_desc.from_correlated_subquery {
-                true => hash_table.entry(&key),
+                true => hash_table.entry(key),
                 false => self.probe_key(hash_table, key, valids, i),
             };
 

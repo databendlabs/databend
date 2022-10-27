@@ -23,8 +23,8 @@ use common_datavalues::BooleanColumn;
 use common_datavalues::Column;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_hashtable::HashMap;
-use common_hashtable::HashtableKeyable;
+use common_hashtable::HashtableEntryRefLike;
+use common_hashtable::HashtableLike;
 
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
@@ -32,16 +32,16 @@ use crate::pipelines::processors::JoinHashTable;
 
 /// Semi join contain semi join and semi-anti join
 impl JoinHashTable {
-    pub(crate) fn probe_left_semi_join<Key, IT>(
+    pub(crate) fn probe_left_semi_join<'a, H: HashtableLike<Value = Vec<RowPtr>>, IT>(
         &self,
-        hash_table: &HashMap<Key, Vec<RowPtr>>,
+        hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
         input: &DataBlock,
     ) -> Result<Vec<DataBlock>>
     where
-        Key: HashtableKeyable + Clone + 'static,
-        IT: Iterator<Item = Key> + TrustedLen,
+        IT: Iterator<Item = H::KeyRef<'a>> + TrustedLen,
+        H::Key: 'a,
     {
         match self.hash_join_desc.other_predicate.is_none() {
             true => {
@@ -56,16 +56,16 @@ impl JoinHashTable {
         }
     }
 
-    pub(crate) fn probe_left_anti_semi_join<Key, IT>(
+    pub(crate) fn probe_left_anti_semi_join<'a, H: HashtableLike<Value = Vec<RowPtr>>, IT>(
         &self,
-        hash_table: &HashMap<Key, Vec<RowPtr>>,
+        hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
         input: &DataBlock,
     ) -> Result<Vec<DataBlock>>
     where
-        Key: HashtableKeyable + Clone + 'static,
-        IT: Iterator<Item = Key> + TrustedLen,
+        IT: Iterator<Item = H::KeyRef<'a>> + TrustedLen,
+        H::Key: 'a,
     {
         match self.hash_join_desc.other_predicate.is_none() {
             true => {
@@ -80,23 +80,23 @@ impl JoinHashTable {
         }
     }
 
-    fn left_semi_anti_join<const SEMI: bool, Key, IT>(
+    fn left_semi_anti_join<'a, const SEMI: bool, H: HashtableLike<Value = Vec<RowPtr>>, IT>(
         &self,
-        hash_table: &HashMap<Key, Vec<RowPtr>>,
+        hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
         input: &DataBlock,
     ) -> Result<Vec<DataBlock>>
     where
-        Key: HashtableKeyable + Clone + 'static,
-        IT: Iterator<Item = Key> + TrustedLen,
+        IT: Iterator<Item = H::KeyRef<'a>> + TrustedLen,
+        H::Key: 'a,
     {
         let valids = &probe_state.valids;
         let mut probe_indexes = Vec::with_capacity(keys_iter.size_hint().0);
 
         for (i, key) in keys_iter.enumerate() {
             let probe_result_ptr = if self.hash_join_desc.from_correlated_subquery {
-                hash_table.entry(&key)
+                hash_table.entry(key)
             } else {
                 self.probe_key(hash_table, key, valids, i)
             };
@@ -114,16 +114,21 @@ impl JoinHashTable {
         )?])
     }
 
-    fn left_semi_anti_join_with_other_conjunct<const SEMI: bool, Key, IT>(
+    fn left_semi_anti_join_with_other_conjunct<
+        'a,
+        const SEMI: bool,
+        H: HashtableLike<Value = Vec<RowPtr>>,
+        IT,
+    >(
         &self,
-        hash_table: &HashMap<Key, Vec<RowPtr>>,
+        hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
         input: &DataBlock,
     ) -> Result<Vec<DataBlock>>
     where
-        Key: HashtableKeyable + Clone + 'static,
-        IT: Iterator<Item = Key> + TrustedLen,
+        IT: Iterator<Item = H::KeyRef<'a>> + TrustedLen,
+        H::Key: 'a,
     {
         let valids = &probe_state.valids;
         let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
@@ -144,7 +149,7 @@ impl JoinHashTable {
 
         for (i, key) in keys_iter.enumerate() {
             let probe_result_ptr = match self.hash_join_desc.from_correlated_subquery {
-                true => hash_table.entry(&key),
+                true => hash_table.entry(key),
                 false => self.probe_key(hash_table, key, valids, i),
             };
 

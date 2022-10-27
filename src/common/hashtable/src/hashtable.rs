@@ -24,6 +24,7 @@ use super::table0::Entry;
 use super::table0::Table0;
 use super::table0::Table0Iter;
 use super::table0::Table0IterMut;
+use super::traits::HashtableLike;
 use super::traits::Keyable;
 use super::utils::ZeroEntry;
 
@@ -230,5 +231,65 @@ where K: Keyable
 
     fn next(&mut self) -> Option<Self::Item> {
         self.inner.next()
+    }
+}
+
+impl<K, V, A> HashtableLike for Hashtable<K, V, A>
+where
+    K: Keyable,
+    A: Allocator + Clone + 'static,
+{
+    type Key = K;
+    type KeyRef<'a> = K where K:'a;
+    type Value = V;
+
+    type EntryRef<'a> = &'a Entry<K, V> where Self:'a, K:'a, V: 'a;
+    type EntryMutRef<'a> = &'a mut Entry<K, V> where Self:'a, K:'a, V: 'a;
+
+    type Iterator<'a> = HashtableIter<'a, K, V> where Self:'a, K:'a, V: 'a;
+    type IteratorMut<'a> = HashtableIterMut<'a, K, V> where Self:'a, K:'a, V: 'a;
+
+    fn entry<'a>(&self, key_ref: Self::KeyRef<'a>) -> Option<Self::EntryRef<'_>>
+    where K: 'a {
+        self.entry(&key_ref)
+    }
+    fn entry_mut<'a>(&mut self, key_ref: Self::KeyRef<'a>) -> Option<Self::EntryMutRef<'_>>
+    where K: 'a {
+        self.entry_mut(&key_ref)
+    }
+
+    fn get<'a>(&self, key_ref: Self::KeyRef<'a>) -> Option<&Self::Value>
+    where K: 'a {
+        self.get(&key_ref)
+    }
+    fn get_mut<'a>(&mut self, key_ref: Self::KeyRef<'a>) -> Option<&mut Self::Value>
+    where K: 'a {
+        self.get_mut(&key_ref)
+    }
+
+    unsafe fn insert<'a>(
+        &mut self,
+        key_ref: Self::KeyRef<'a>,
+    ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value>
+    where
+        K: 'a,
+    {
+        self.insert(key_ref)
+    }
+    unsafe fn insert_and_entry<'a>(
+        &mut self,
+        key_ref: Self::KeyRef<'a>,
+    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>>
+    where
+        K: 'a,
+    {
+        self.insert_and_entry(key_ref)
+    }
+
+    fn iter(&self) -> Self::Iterator<'_> {
+        self.iter()
+    }
+    fn iter_mut(&mut self) -> Self::IteratorMut<'_> {
+        self.iter_mut()
     }
 }

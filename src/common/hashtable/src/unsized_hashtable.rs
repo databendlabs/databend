@@ -27,7 +27,10 @@ use super::container::HeapContainer;
 use super::table0::Entry;
 use super::table0::Table0;
 use super::table1::Table1;
+use super::traits::EntryMutRefLike;
+use super::traits::EntryRefLike;
 use super::traits::FastHash;
+use super::traits::HashtableLike;
 use super::traits::Keyable;
 use super::traits::UnsizedKeyable;
 use super::utils::read_le;
@@ -118,7 +121,7 @@ where
             + self.table4.capacity()
     }
     #[inline(always)]
-    pub fn entry<'a>(&'a self, key: &K) -> Option<UnsizedHashtableEntryRef<'a, K, V>> {
+    pub fn entry(&self, key: &K) -> Option<UnsizedHashtableEntryRef<'_, K, V>> {
         let key = key.as_bytes();
         match key.len() {
             _ if key.last().copied() == Some(0) => unsafe {
@@ -170,7 +173,7 @@ where
         }
     }
     #[inline(always)]
-    pub fn entry_mut<'a>(&'a mut self, key: &K) -> Option<UnsizedHashtableEntryMutRef<'a, K, V>> {
+    pub fn entry_mut(&mut self, key: &K) -> Option<UnsizedHashtableEntryMutRef<'_, K, V>> {
         let key = key.as_bytes();
         match key.len() {
             _ if key.last().copied() == Some(0) => unsafe {
@@ -868,7 +871,7 @@ impl<'a, K: ?Sized + UnsizedKeyable, V> UnsizedHashtableEntryMutRefInner<'a, K, 
                 for i in (0..=7).rev() {
                     if bytes[i] != 0 {
                         return UnsizedKeyable::from_bytes(std::slice::from_raw_parts(
-                            e.key() as *const _ as *const u8,
+                            e.key.assume_init_ref() as *const _ as *const u8,
                             i + 1,
                         ));
                     }
@@ -880,7 +883,7 @@ impl<'a, K: ?Sized + UnsizedKeyable, V> UnsizedHashtableEntryMutRefInner<'a, K, 
                 for i in (0..=7).rev() {
                     if bytes[i] != 0 {
                         return UnsizedKeyable::from_bytes(std::slice::from_raw_parts(
-                            e.key() as *const _ as *const u8,
+                            e.key.assume_init_ref() as *const _ as *const u8,
                             i + 9,
                         ));
                     }
@@ -892,7 +895,7 @@ impl<'a, K: ?Sized + UnsizedKeyable, V> UnsizedHashtableEntryMutRefInner<'a, K, 
                 for i in (0..=7).rev() {
                     if bytes[i] != 0 {
                         return UnsizedKeyable::from_bytes(std::slice::from_raw_parts(
-                            e.key() as *const _ as *const u8,
+                            e.key.assume_init_ref() as *const _ as *const u8,
                             i + 17,
                         ));
                     }
@@ -1033,5 +1036,97 @@ unsafe impl Keyable for FallbackKey {
     #[inline(always)]
     fn hash(&self) -> u64 {
         self.hash
+    }
+}
+
+impl<'a, K: UnsizedKeyable + ?Sized + 'a, V: 'a> EntryRefLike
+    for UnsizedHashtableEntryRef<'a, K, V>
+{
+    type KeyRef = &'a K;
+    type ValueRef = &'a V;
+
+    fn key(&self) -> Self::KeyRef {
+        (*self).key()
+    }
+    fn get(&self) -> Self::ValueRef {
+        (*self).get()
+    }
+}
+
+impl<'a, K: UnsizedKeyable + ?Sized + 'a, V: 'a> EntryMutRefLike
+    for UnsizedHashtableEntryMutRef<'a, K, V>
+{
+    type KeyRef = &'a K;
+    type Value = V;
+
+    fn key(&self) -> Self::KeyRef {
+        self.key()
+    }
+    fn get(&self) -> &Self::Value {
+        self.get()
+    }
+    fn get_mut(&mut self) -> &mut Self::Value {
+        self.get_mut()
+    }
+    fn write(&mut self, value: Self::Value) {
+        self.write(value);
+    }
+}
+
+impl<V, A> HashtableLike for UnsizedHashtable<[u8], V, A>
+where A: Allocator + Clone + Default
+{
+    type Key = [u8];
+    type KeyRef<'a> = &'a [u8] where Self::Key:'a;
+    type Value = V;
+
+    type EntryRef<'a> = UnsizedHashtableEntryRef<'a, [u8], V> where Self:'a, V: 'a;
+    type EntryMutRef<'a> = UnsizedHashtableEntryMutRef<'a, [u8], V> where Self:'a, V: 'a;
+
+    type Iterator<'a> = UnsizedHashtableIter<'a, [u8], V> where Self:'a, V: 'a;
+    type IteratorMut<'a> = UnsizedHashtableIterMut<'a, [u8], V> where Self:'a, V: 'a;
+
+    fn entry<'a>(&self, key_ref: Self::KeyRef<'a>) -> Option<Self::EntryRef<'_>>
+    where Self::Key: 'a {
+        self.entry(key_ref)
+    }
+    fn entry_mut<'a>(&mut self, key_ref: Self::KeyRef<'a>) -> Option<Self::EntryMutRef<'_>>
+    where Self::Key: 'a {
+        self.entry_mut(key_ref)
+    }
+
+    fn get<'a>(&self, key_ref: Self::KeyRef<'a>) -> Option<&Self::Value>
+    where Self::Key: 'a {
+        self.get(key_ref)
+    }
+    fn get_mut<'a>(&mut self, key_ref: Self::KeyRef<'a>) -> Option<&mut Self::Value>
+    where Self::Key: 'a {
+        self.get_mut(key_ref)
+    }
+
+    unsafe fn insert<'a>(
+        &mut self,
+        key_ref: Self::KeyRef<'a>,
+    ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value>
+    where
+        Self::Key: 'a,
+    {
+        self.insert(key_ref)
+    }
+    unsafe fn insert_and_entry<'a>(
+        &mut self,
+        key_ref: Self::KeyRef<'a>,
+    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>>
+    where
+        Self::Key: 'a,
+    {
+        self.insert_and_entry(key_ref)
+    }
+
+    fn iter(&self) -> Self::Iterator<'_> {
+        self.iter()
+    }
+    fn iter_mut(&mut self) -> Self::IteratorMut<'_> {
+        self.iter_mut()
     }
 }

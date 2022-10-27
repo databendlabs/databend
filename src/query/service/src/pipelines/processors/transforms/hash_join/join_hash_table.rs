@@ -30,7 +30,7 @@ use common_datavalues::DataTypeImpl;
 use common_exception::Result;
 use common_hashtable::HashMap;
 use common_hashtable::HashtableKeyable;
-use common_hashtable::KeysRef;
+use common_hashtable::UnsizedHashMap;
 use parking_lot::RwLock;
 use primitive_types::U256;
 use primitive_types::U512;
@@ -47,7 +47,7 @@ use crate::sql::executor::PhysicalScalar;
 use crate::sql::planner::plans::JoinType;
 
 pub struct SerializerHashTable {
-    pub(crate) hash_table: HashMap<KeysRef, Vec<RowPtr>>,
+    pub(crate) hash_table: UnsizedHashMap<[u8], Vec<RowPtr>>,
     pub(crate) hash_method: HashMethodSerializer,
 }
 
@@ -97,7 +97,7 @@ impl JoinHashTable {
             HashMethodKind::Serializer(_) => Arc::new(JoinHashTable::try_create(
                 ctx,
                 HashTable::SerializerHashTable(SerializerHashTable {
-                    hash_table: HashMap::<KeysRef, Vec<RowPtr>>::new(),
+                    hash_table: UnsizedHashMap::<[u8], Vec<RowPtr>>::new(),
                     hash_method: HashMethodSerializer::default(),
                 }),
                 build_schema,
@@ -250,10 +250,8 @@ impl JoinHashTable {
                     .hash_method
                     .build_keys_state(&probe_keys, input.num_rows())?;
                 let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
-                let keys_ref =
-                    keys_iter.map(|key| KeysRef::create(key.as_ptr() as usize, key.len()));
 
-                self.result_blocks(&table.hash_table, probe_state, keys_ref, input)
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, input)
             }
             HashTable::KeyU8HashTable(table) => {
                 let keys_state = table

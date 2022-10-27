@@ -18,6 +18,8 @@ use std::intrinsics::assume;
 use std::mem::MaybeUninit;
 
 use super::container::Container;
+use super::traits::EntryMutRefLike;
+use super::traits::EntryRefLike;
 use super::traits::Keyable;
 
 pub struct Entry<K, V> {
@@ -341,5 +343,35 @@ where K: Keyable
             self.i += 1;
             Some(res)
         }
+    }
+}
+
+impl<'a, K: Keyable, V: 'a> EntryRefLike for &'a Entry<K, V> {
+    type KeyRef = K;
+    type ValueRef = &'a V;
+
+    fn key(&self) -> Self::KeyRef {
+        *(*self).key()
+    }
+    fn get(&self) -> Self::ValueRef {
+        (*self).get()
+    }
+}
+
+impl<'a, K: Keyable, V> EntryMutRefLike for &'a mut Entry<K, V> {
+    type KeyRef = K;
+    type Value = V;
+
+    fn key(&self) -> Self::KeyRef {
+        unsafe { self.key.assume_init() }
+    }
+    fn get(&self) -> &Self::Value {
+        unsafe { self.val.assume_init_ref() }
+    }
+    fn get_mut(&mut self) -> &mut Self::Value {
+        unsafe { self.val.assume_init_mut() }
+    }
+    fn write(&mut self, value: Self::Value) {
+        self.val.write(value);
     }
 }

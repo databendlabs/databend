@@ -24,7 +24,6 @@ use common_datavalues::Column;
 use common_datavalues::ColumnRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_hashtable::KeysRef;
 
 use super::ProbeState;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
@@ -180,8 +179,7 @@ impl HashJoinState for JoinHashTable {
                             let mut self_row_ptrs = self.row_ptrs.write();
                             self_row_ptrs.push(ptr);
                         }
-                        let keys_ref = KeysRef::create(key.as_ptr() as usize, key.len());
-                        match unsafe { table.hash_table.insert(keys_ref) } {
+                        match unsafe { table.hash_table.insert_borrowing(key) } {
                             Ok(entity) => {
                                 entity.write(vec![ptr]);
                             }
