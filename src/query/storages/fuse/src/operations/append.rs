@@ -17,10 +17,14 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_datablocks::SortColumnDescription;
+use common_datavalues::DataField;
 use common_exception::Result;
 use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_pipeline_transforms::processors::transforms::TransformSortPartial;
+use common_sql::evaluator::ChunkOperator;
+use common_sql::evaluator::CompoundChunkOperator;
+use common_sql::evaluator::Evaluator;
 
 use crate::io::BlockCompactor;
 use crate::operations::FuseTableSink;
@@ -50,6 +54,7 @@ impl FuseTable {
 
         let cluster_stats_gen =
             self.get_cluster_stats_gen(ctx.clone(), pipeline, 0, block_compactor)?;
+
         if !self.cluster_keys.is_empty() {
             // sort
             let sort_descs: Vec<SortColumnDescription> = self
@@ -111,8 +116,53 @@ impl FuseTable {
         if self.cluster_keys.is_empty() {
             return Ok(ClusterStatsGenerator::default());
         }
-        // todo(sundy) project transform
-        todo!()
+
+        let input_schema = self.table_info.schema();
+        let mut merged = input_schema.fields().clone();
+
+        let mut cluster_key_index = Vec::with_capacity(self.cluster_keys.len());
+        let mut extra_key_index = Vec::with_capacity(self.cluster_keys.len());
+
+        let mut operators = Vec::with_capacity(self.cluster_keys.len());
+
+        for expr in &self.cluster_keys {
+            let cname = expr.pretty_display();
+
+            let index = match merged.iter().position(|x| x.name() == &cname) {
+                None => {
+                    let field = DataField::new(&cname, expr.data_type());
+                    operators.push(ChunkOperator::Map {
+                        eval: Evaluator::eval_physical_scalar(expr)?,
+                        name: field.name().to_string(),
+                    });
+                    extra_key_index.push(merged.len() - 1);
+
+                    merged.push(field);
+                    merged.len() - 1
+                }
+                Some(idx) => idx,
+            };
+            cluster_key_index.push(index);
+        }
+        if !operators.is_empty() {
+            let func_ctx = ctx.try_get_function_context()?;
+            pipeline.add_transform(move |input, output| {
+                Ok(CompoundChunkOperator::create(
+                    input,
+                    output,
+                    func_ctx.clone(),
+                    operators.clone(),
+                ))
+            })?;
+        }
+
+        Ok(ClusterStatsGenerator::new(
+            self.cluster_key_meta.as_ref().unwrap().0,
+            cluster_key_index,
+            extra_key_index,
+            level,
+            block_compactor,
+        ))
     }
 
     pub fn get_option<T: FromStr>(&self, opt_key: &str, default: T) -> T {

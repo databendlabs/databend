@@ -195,11 +195,10 @@ impl DataBlock {
     }
 
     #[inline]
-    pub fn remove_column(self, name: &str) -> Result<Self> {
+    pub fn remove_column_index(self, idx: usize) -> Result<Self> {
         let mut columns = self.columns.clone();
         let mut fields = self.schema().fields().clone();
 
-        let idx = self.schema.index_of(name)?;
         columns.remove(idx);
         fields.remove(idx);
         let new_schema = Arc::new(DataSchema::new(fields));
@@ -218,6 +217,12 @@ impl DataBlock {
             schema: self.schema.clone(),
             meta,
         })
+    }
+
+    #[inline]
+    pub fn remove_column(self, name: &str) -> Result<Self> {
+        let idx = self.schema.index_of(name)?;
+        self.remove_column_index(idx)
     }
 
     #[inline]

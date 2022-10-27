@@ -26,7 +26,7 @@ use crate::io::BlockCompactor;
 pub struct ClusterStatsGenerator {
     cluster_key_id: u32,
     cluster_key_index: Vec<usize>,
-    expression_executor: Option<EvalNode>,
+    extra_key_index: Vec<usize>,
     level: i32,
     block_compactor: BlockCompactor,
 }
@@ -35,14 +35,14 @@ impl ClusterStatsGenerator {
     pub fn new(
         cluster_key_id: u32,
         cluster_key_index: Vec<usize>,
-        expression_executor: Option<EvalNode>,
+        extra_key_index: Vec<usize>,
         level: i32,
         block_compactor: BlockCompactor,
     ) -> Self {
         Self {
             cluster_key_id,
             cluster_key_index,
-            expression_executor,
+            extra_key_index,
             level,
             block_compactor,
         }
@@ -56,11 +56,9 @@ impl ClusterStatsGenerator {
     ) -> Result<(Option<ClusterStatistics>, DataBlock)> {
         let cluster_stats = self.clusters_statistics(data_block, self.level)?;
         let mut block = data_block.clone();
-        if let Some(executor) = &self.expression_executor {
-            let func_ctx = FunctionContext::default();
-            let column = executor.eval(&func_ctx, &block)?.vector;
-            let field = DataField::new("_cluster_key", column.data_type());
-            block = block.add_column(column, field)?;
+
+        for id in self.extra_key_index.iter() {
+            block = block.remove_column_index(*id)?;
         }
 
         Ok((cluster_stats, block))
@@ -81,19 +79,18 @@ impl ClusterStatsGenerator {
             return Ok(None);
         }
 
-        let mut data_block = data_block.clone();
-        if let Some(executor) = &self.expression_executor {
-            // For a clustered table, data_block has been sorted, but may not contain cluster key.
-            // So only need to get the first and the last row for execute.
-            let indices = vec![0u32, data_block.num_rows() as u32 - 1];
-            let input = DataBlock::block_take_by_indices(&data_block, &indices)?;
-            let func_ctx = FunctionContext::default();
-            let column = executor.eval(&func_ctx, &input)?.vector;
-            let field = DataField::new("_cluster_key", column.data_type());
-            data_block = data_block.add_column(column, field)?;
+        let mut block = data_block.clone();
+
+        for id in self.extra_key_index.iter() {
+            block = block.remove_column_index(*id)?;
         }
 
-        self.clusters_statistics(&data_block, origin_stats.level)
+        if !self.cluster_key_index.is_empty() {
+            let indices = vec![0u32, block.num_rows() as u32 - 1];
+            block = DataBlock::block_take_by_indices(&block, &indices)?;
+        }
+
+        self.clusters_statistics(&block, origin_stats.level)
     }
 
     fn clusters_statistics(

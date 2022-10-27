@@ -12,12 +12,11 @@ doctest = false
 test = false
 
 [dependencies]
-common-ast = { path = "../../ast" }
 common-arrow = { path = "../../../common/arrow" }
+common-ast = { path = "../../ast" }
 common-base = { path = "../../../common/base" }
 common-cache = { path = "../../../common/cache" }
 common-catalog = { path = "../../../common/../query/catalog" }
-common-sql = { path = "../../../common/../query/sql" }
 common-datablocks = { path = "../../datablocks" }
 common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
@@ -30,6 +29,7 @@ common-pipeline-sources = { path = "../../pipeline/sources" }
 common-pipeline-transforms = { path = "../../pipeline/transforms" }
 common-planner = { path = "../../planner" }
 common-sharing = { path = "../../sharing" }
+common-sql = { path = "../../../common/../query/sql" }
 common-storage = { path = "../../../common/storage" }
 common-storages-cache = { path = "../cache" }
 common-storages-constants = { path = "../constants" }

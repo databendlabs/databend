@@ -32,6 +32,8 @@ use common_io::prelude::NestedCheckpointReader;
 use common_pipeline_sources::processors::sources::AsyncSource;
 use common_pipeline_sources::processors::sources::AsyncSourcer;
 use common_pipeline_transforms::processors::transforms::Transform;
+use common_sql::evaluator::ChunkOperator;
+use common_sql::evaluator::CompoundChunkOperator;
 use common_sql::Metadata;
 use common_sql::MetadataRef;
 use parking_lot::Mutex;

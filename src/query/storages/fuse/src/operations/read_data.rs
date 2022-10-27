@@ -94,7 +94,7 @@ impl FuseTable {
     // Build the prewhere filter executor.
     fn build_prewhere_filter_executor(
         &self,
-        ctx: Arc<dyn TableContext>,
+        _ctx: Arc<dyn TableContext>,
         plan: &ReadDataSourcePlan,
     ) -> Result<Arc<Option<EvalNode>>> {
         Ok(match self.prewhere_of_push_downs(&plan.push_downs) {
