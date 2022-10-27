@@ -354,6 +354,7 @@ impl Settings {
                 desc: "The maximum query execution time. it means no limit if the value is zero. default value: 0.",
                 possible_values: None,
             },
+            #[cfg(feature = "hive")]
             SettingValue {
                 default_value: UserSettingValue::UInt64(1),
                 user_setting: UserSetting::create(
