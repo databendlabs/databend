@@ -18,23 +18,20 @@ use std::sync::Arc;
 
 use common_catalog::catalog::CatalogManager;
 use common_catalog::catalog::CATALOG_DEFAULT;
+use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_expression::LegacyExpression;
-use common_legacy_planners::Extras;
-use common_legacy_planners::PrewhereInfo;
-use common_legacy_planners::Projection;
-use common_legacy_planners::StageKind;
+use common_functions::scalars::FunctionFactory;
+use super::plan_extras::Extras;
 use common_planner::IndexType;
 use common_planner::Metadata;
 use common_planner::MetadataRef;
 use common_planner::DUMMY_TABLE_INDEX;
-use common_storages_factory::ToReadDataSourcePlan;
-use common_storages_fuse::TableContext;
 use itertools::Itertools;
 
+use super::plan_read_datasource::ToReadDataSourcePlan;
 use super::AggregateFinal;
 use super::AggregatePartial;
 use super::Exchange as PhysicalExchange;
@@ -43,21 +40,23 @@ use super::HashJoin;
 use super::Limit;
 use super::Sort;
 use super::TableScan;
+use crate::executor::PrewhereInfo;
 use crate::executor::util::check_physical;
 use crate::executor::AggregateFunctionDesc;
 use crate::executor::AggregateFunctionSignature;
 use crate::executor::ColumnID;
 use crate::executor::EvalScalar;
-use crate::executor::ExpressionBuilderWithoutRenaming;
 use crate::executor::PhysicalPlan;
-use crate::executor::PhysicalScalar;
+use common_planner::PhysicalScalar;
 use crate::executor::SortDesc;
 use crate::executor::UnionAll;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::SExpr;
 use crate::plans::AggregateMode;
+use crate::plans::AndExpr;
 use crate::plans::Exchange;
 use crate::plans::PhysicalScan;
+use crate::plans::Projection;
 use crate::plans::RelOperator;
 use crate::plans::Scalar;
 use crate::ScalarExpr;
@@ -482,11 +481,12 @@ impl PhysicalPlanBuilder {
         let projection =
             Self::build_projection(&metadata, table_schema, &scan.columns, has_inner_column);
 
+        let builder = PhysicalScalarBuilder::new(table_schema);
+
         let push_down_filters = scan
             .push_down_predicates
             .clone()
             .map(|predicates| {
-                let builder = ExpressionBuilderWithoutRenaming::create(self.metadata.clone());
                 predicates
                     .into_iter()
                     .map(|scalar| builder.build(&scalar))
@@ -497,22 +497,32 @@ impl PhysicalPlanBuilder {
         let prewhere_info = scan
             .prewhere
             .as_ref()
-            .map(|prewhere| {
-                let builder = ExpressionBuilderWithoutRenaming::create(self.metadata.clone());
-                let predicates = prewhere
+            .map(|prewhere|  {
+                let predicate = prewhere
                     .predicates
-                    .iter()
-                    .map(|scalar| builder.build(scalar))
-                    .collect::<Result<Vec<_>>>()?;
+                    .iter().fold(None, |acc: Option<Scalar>, &x: &Scalar| {
+                        match acc {
+                            Some(acc) => {
+                                let func = FunctionFactory::instance()
+                                .get("and", &[&acc.data_type(), &x.data_type()])
+                                .unwrap();
+                                Some(Scalar::AndExpr(AndExpr {
+                                    left:  Box::new(acc),
+                                    right: Box::new(x.clone()),
+                                    return_type: Box::new(func.return_type())  ,
+                                }))
+                            },
+                            None => Some(x.clone()),
+                        }
+                    });
+
 
                 assert!(
-                    !predicates.is_empty(),
+                    !predicate.is_some(),
                     "There should be at least one predicate in prewhere"
                 );
-                let mut filter = predicates[0].clone();
-                for pred in predicates.iter().skip(1) {
-                    filter = filter.and(pred.clone());
-                }
+
+                let filter = builder.build(&predicate.unwrap())?;
 
                 let remain_columns = scan
                     .columns
@@ -551,20 +561,14 @@ impl PhysicalPlanBuilder {
             .order_by
             .clone()
             .map(|items| {
-                let builder = ExpressionBuilderWithoutRenaming::create(self.metadata.clone());
-                items
-                    .into_iter()
-                    .map(|item| {
-                        builder
-                            .build_column_ref(item.index)
-                            .map(|c| LegacyExpression::Sort {
-                                expr: Box::new(c.clone()),
-                                asc: item.asc,
-                                nulls_first: item.nulls_first,
-                                origin_expr: Box::new(c),
-                            })
-                    })
-                    .collect::<Result<Vec<_>>>()
+                items.into_iter().map(|item| {
+                    let metadata = self.metadata.read();
+                    let ty = metadata.column(item.index).data_type();
+                    let name = metadata.column(item.index).name();
+                    let scalar = PhysicalScalar::IndexedVariable { index: item.index, data_type: ty.clone(), display_name: name.to_string() };
+
+                    Ok((scalar, item.asc, item.nulls_first))
+                }).collect::<Result<Vec<_>>>()
             })
             .transpose()?;
 

@@ -20,6 +20,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use backon::ExponentialBackoff;
 use backon::Retryable;
+use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -31,7 +32,6 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
-use common_storages_fuse::TableContext;
 use opendal::Operator;
 use tracing::warn;
 

@@ -17,53 +17,10 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 
 use common_datavalues::DataSchema;
-use common_legacy_expression::LegacyExpression;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
-pub enum Projection {
-    /// column indices of the table
-    Columns(Vec<usize>),
-    /// inner column indices for tuple data type with inner columns.
-    /// the key is the column_index of ColumnEntry.
-    /// the value is the path indices of inner columns.
-    InnerColumns(BTreeMap<usize, Vec<usize>>),
-}
+use crate::plans::Projection;
 
-impl Projection {
-    pub fn len(&self) -> usize {
-        match self {
-            Projection::Columns(indices) => indices.len(),
-            Projection::InnerColumns(path_indices) => path_indices.len(),
-        }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        match self {
-            Projection::Columns(indices) => indices.is_empty(),
-            Projection::InnerColumns(path_indices) => path_indices.is_empty(),
-        }
-    }
-
-    /// Use this projection to project a schema.
-    pub fn project_schema(&self, schema: &DataSchema) -> DataSchema {
-        match self {
-            Projection::Columns(indices) => schema.project(indices),
-            Projection::InnerColumns(path_indices) => schema.inner_project(path_indices),
-        }
-    }
-}
-
-impl Debug for Projection {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match self {
-            Projection::Columns(indices) => write!(f, "{:?}", indices),
-            Projection::InnerColumns(path_indices) => {
-                let paths: Vec<&Vec<usize>> = path_indices.values().collect();
-                write!(f, "{:?}", paths)
-            }
-        }
-    }
-}
+use common_planner::PhysicalScalar;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct PrewhereInfo {
@@ -74,7 +31,7 @@ pub struct PrewhereInfo {
     /// remain_columns = scan.columns - need_columns
     pub remain_columns: Projection,
     /// filter for prewhere
-    pub filter: LegacyExpression,
+    pub filter: PhysicalScalar,
 }
 
 /// Extras is a wrapper for push down items.
@@ -84,14 +41,15 @@ pub struct Extras {
     pub projection: Option<Projection>,
     /// Optional filter expression plan
     /// split_conjunctions by `and` operator
-    pub filters: Vec<LegacyExpression>,
+    pub filters: Vec<PhysicalScalar>,
     /// Optional prewhere information
     /// used for prewhere optimization
     pub prewhere: Option<PrewhereInfo>,
     /// Optional limit to skip read
     pub limit: Option<usize>,
-    /// Optional order_by expression plan
-    pub order_by: Vec<LegacyExpression>,
+    /// Optional order_by expression plan,
+    ///  expression: PhysicalScalar, asc: bool, nulls_first
+    pub order_by: Vec<(PhysicalScalar, bool, bool)>,
 }
 
 impl Extras {
@@ -104,4 +62,13 @@ impl Extras {
             order_by: vec![],
         }
     }
+}
+
+
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum StageKind {
+    Normal,
+    Expansive,
+    Merge,
 }

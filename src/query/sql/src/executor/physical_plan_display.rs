@@ -29,7 +29,7 @@ use crate::executor::Filter;
 use crate::executor::HashJoin;
 use crate::executor::Limit;
 use crate::executor::PhysicalPlan;
-use crate::executor::PhysicalScalar;
+use common_planner::PhysicalScalar;
 use crate::executor::Project;
 use crate::executor::Sort;
 use crate::executor::TableScan;

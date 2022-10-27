@@ -32,3 +32,4 @@ pub use plans::ScalarExpr;
 pub use semantic::normalize_identifier;
 pub use semantic::IdentifierNormalizer;
 pub use semantic::NameResolutionContext;
+pub use metadata::*;

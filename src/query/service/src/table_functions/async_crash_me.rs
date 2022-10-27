@@ -113,7 +113,7 @@ impl Table for AsyncCrashMeTable {
         Ok((Statistics::new_exact(1, 1, 1, 1), vec![]))
     }
 
-    fn table_args(&self) -> Option<Vec<LegacyExpression>> {
+    fn table_args(&self) -> Option<Vec<DataValue>> {
         Some(vec![LegacyExpression::create_literal(DataValue::UInt64(0))])
     }
 

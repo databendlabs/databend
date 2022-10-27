@@ -13,27 +13,19 @@
 // limitations under the License.
 
 mod plan_delete;
-mod plan_node_extras;
 mod plan_node_stage;
 mod plan_node_stage_table;
 mod plan_node_statistics;
-mod plan_partition;
-mod plan_read_datasource;
 mod plan_setting;
 mod plan_sink;
 
 pub use plan_delete::DeletePlan;
-pub use plan_node_extras::Extras;
-pub use plan_node_extras::PrewhereInfo;
-pub use plan_node_extras::Projection;
 pub use plan_node_stage::StageKind;
 pub use plan_node_stage_table::StageTableInfo;
 pub use plan_node_statistics::Statistics;
 pub use plan_partition::PartInfo;
 pub use plan_partition::PartInfoPtr;
 pub use plan_partition::Partitions;
-pub use plan_read_datasource::ReadDataSourcePlan;
-pub use plan_read_datasource::SourceInfo;
 pub use plan_setting::SettingPlan;
 pub use plan_setting::VarValue;
 pub use plan_sink::SINK_SCHEMA;

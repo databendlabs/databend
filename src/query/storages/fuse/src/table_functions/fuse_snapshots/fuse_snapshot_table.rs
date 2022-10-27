@@ -99,7 +99,7 @@ impl Table for FuseSnapshotTable {
         Ok((Statistics::default(), vec![]))
     }
 
-    fn table_args(&self) -> Option<Vec<LegacyExpression>> {
+    fn table_args(&self) -> Option<Vec<DataValue>> {
         Some(vec![
             string_literal(self.arg_database_name.as_str()),
             string_literal(self.arg_table_name.as_str()),

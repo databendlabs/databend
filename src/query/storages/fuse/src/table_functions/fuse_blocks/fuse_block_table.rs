@@ -102,7 +102,7 @@ impl Table for FuseBlockTable {
         Ok((Statistics::default(), vec![]))
     }
 
-    fn table_args(&self) -> Option<Vec<LegacyExpression>> {
+    fn table_args(&self) -> Option<Vec<DataValue>> {
         let mut args = Vec::new();
         args.push(string_literal(self.arg_database_name.as_str()));
         args.push(string_literal(self.arg_table_name.as_str()));

@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -29,7 +30,6 @@ use common_meta_app::schema::TableMeta;
 use common_meta_types::UserIdentity;
 use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::TransformLimit;
-use common_storages_fuse::TableContext;
 use serde::Deserialize;
 use serde::Serialize;
 

@@ -16,6 +16,7 @@ use std::any::Any;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -31,7 +32,6 @@ use common_pipeline_core::Pipeline;
 use common_pipeline_sources::processors::sources::input_formats::InputContext;
 use common_pipeline_transforms::processors::transforms::TransformLimit;
 use common_storage::init_operator;
-use common_storages_fuse::TableContext;
 use opendal::layers::SubdirLayer;
 use opendal::Operator;
 use parking_lot::Mutex;

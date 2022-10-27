@@ -21,8 +21,6 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::StringType;
-use common_legacy_planners::DeletePlan;
-use common_legacy_planners::SettingPlan;
 use common_planner::plans::AlterTableClusterKeyPlan;
 use common_planner::plans::AlterUDFPlan;
 use common_planner::plans::AlterUserPlan;
@@ -81,6 +79,9 @@ use crate::plans::share::ShowObjectGrantPrivilegesPlan;
 use crate::plans::share::ShowSharesPlan;
 use crate::plans::UpdatePlan;
 use crate::BindContext;
+
+use super::DeletePlan;
+use super::SettingPlan;
 
 #[derive(Clone, Debug)]
 pub enum Plan {

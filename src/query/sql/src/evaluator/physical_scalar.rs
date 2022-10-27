@@ -23,7 +23,8 @@ use common_functions::scalars::FunctionFactory;
 
 use crate::evaluator::eval_node::EvalNode;
 use crate::evaluator::Evaluator;
-use crate::executor::PhysicalScalar;
+use common_planner::PhysicalScalar;
+
 
 impl Evaluator {
     pub fn eval_physical_scalars(physical_scalars: &[PhysicalScalar]) -> Result<Vec<EvalNode>> {

@@ -7,9 +7,13 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-common-catalog = { path = "../catalog" }
 common-datavalues = { path = "../datavalues" }
 common-meta-app = { path = "../../meta/app" }
 common-meta-types = { path = "../../meta/types" }
 
+once_cell = "1.15.0"
 parking_lot = "0.12"
+typetag = "0.2.3"
+
+serde = { workspace = true }
+serde_json = { workspace = true }

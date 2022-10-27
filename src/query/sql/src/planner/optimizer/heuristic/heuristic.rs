@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_planner::MetadataRef;
-use common_storages_fuse::TableContext;
+use common_catalog::table_context::TableContext;
 use once_cell::sync::Lazy;
 
 use super::prune_unused_columns::UnusedColumnPruner;

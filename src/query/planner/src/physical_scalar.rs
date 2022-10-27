@@ -15,11 +15,9 @@
 use common_datavalues::format_data_type_sql;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
-use common_exception::Result;
-use common_planner::IndexType;
-use common_planner::MetadataRef;
 
-use super::ColumnID;
+type ColumnID = String;
+type IndexType = usize;
 
 /// Serializable and desugared representation of `Scalar`.
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -57,23 +55,23 @@ impl PhysicalScalar {
     }
 
     /// Display with readable variable name.
-    pub fn pretty_display(&self, _metadata: &MetadataRef) -> Result<String> {
+    pub fn pretty_display(&self) -> String {
         match self {
-            PhysicalScalar::Constant { value, .. } => Ok(value.to_string()),
+            PhysicalScalar::Constant { value, .. } => value.to_string(),
             PhysicalScalar::Function { name, args, .. } => {
                 let args = args
                     .iter()
-                    .map(|(arg, _)| arg.pretty_display(_metadata))
-                    .collect::<Result<Vec<_>>>()?
+                    .map(|(arg, _)| arg.pretty_display())
+                    .collect::<Vec<_>>()
                     .join(", ");
-                Ok(format!("{}({})", name, args))
+                format!("{}({})", name, args)
             }
-            PhysicalScalar::Cast { input, target } => Ok(format!(
+            PhysicalScalar::Cast { input, target } => format!(
                 "CAST({} AS {})",
-                input.pretty_display(_metadata)?,
+                input.pretty_display(),
                 format_data_type_sql(target)
-            )),
-            PhysicalScalar::IndexedVariable { display_name, .. } => Ok(display_name.clone()),
+            ),
+            PhysicalScalar::IndexedVariable { display_name, .. } => display_name.clone(),
         }
     }
 }
@@ -86,23 +84,6 @@ pub struct AggregateFunctionDesc {
 
     /// Only used for debugging
     pub arg_indices: Vec<IndexType>,
-}
-
-impl AggregateFunctionDesc {
-    pub fn pretty_display(&self, metadata: &MetadataRef) -> Result<String> {
-        Ok(format!(
-            "{}({})",
-            self.sig.name,
-            self.arg_indices
-                .iter()
-                .map(|&index| {
-                    let column = metadata.read().column(index).clone();
-                    Ok(column.name().to_string())
-                })
-                .collect::<Result<Vec<_>>>()?
-                .join(", ")
-        ))
-    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]

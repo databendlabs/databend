@@ -24,13 +24,14 @@ use common_datavalues::NullableType;
 use common_datavalues::ToDataType;
 use common_datavalues::Vu8;
 use common_exception::Result;
-use common_legacy_planners::ReadDataSourcePlan;
-use common_legacy_planners::StageKind;
-use common_legacy_planners::SINK_SCHEMA;
+use common_planner::PhysicalScalar;
+use super::ReadDataSourcePlan;
 use common_meta_app::schema::TableInfo;
 use common_planner::IndexType;
 
-use super::physical_scalar::PhysicalScalar;
+use crate::planner::plans::SINK_SCHEMA;
+
+use super::StageKind;
 use super::AggregateFunctionDesc;
 use super::SortDesc;
 use crate::optimizer::ColumnSet;

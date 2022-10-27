@@ -472,7 +472,7 @@ impl Table for HiveTable {
         self.do_read_partitions(ctx, push_downs).await
     }
 
-    fn table_args(&self) -> Option<Vec<LegacyExpression>> {
+    fn table_args(&self) -> Option<Vec<DataValue>> {
         None
     }
 

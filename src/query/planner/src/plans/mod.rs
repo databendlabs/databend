@@ -51,6 +51,9 @@ mod truncate_table;
 mod undrop_database;
 mod undrop_table;
 mod use_database;
+mod delete;
+mod setting;
+mod projection;
 
 pub use alter_table_cluster_key::AlterTableClusterKeyPlan;
 pub use alter_udf::AlterUDFPlan;
@@ -94,3 +97,7 @@ pub use truncate_table::TruncateTablePlan;
 pub use undrop_database::UndropDatabasePlan;
 pub use undrop_table::UndropTablePlan;
 pub use use_database::UseDatabasePlan;
+
+pub use delete::*;
+pub use setting::*;
+pub use projection::*;

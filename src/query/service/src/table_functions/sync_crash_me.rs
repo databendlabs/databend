@@ -113,8 +113,8 @@ impl Table for SyncCrashMeTable {
         Ok((Statistics::new_exact(1, 1, 1, 1), vec![]))
     }
 
-    fn table_args(&self) -> Option<Vec<LegacyExpression>> {
-        Some(vec![LegacyExpression::create_literal(DataValue::UInt64(0))])
+    fn table_args(&self) -> Option<Vec<DataValue>> {
+        Some(vec![DataValue::UInt64(0)])
     }
 
     fn read_data(

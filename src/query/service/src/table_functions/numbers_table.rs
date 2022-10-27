@@ -66,9 +66,7 @@ impl NumbersTable {
         if let Some(args) = &table_args {
             if args.len() == 1 {
                 let arg = &args[0];
-                if let LegacyExpression::Literal { value, .. } = arg {
-                    total = Some(value.as_u64()?);
-                }
+                total = Some(value.as_u64()?);
             }
         }
 
@@ -172,10 +170,8 @@ impl Table for NumbersTable {
         Ok((statistics, parts))
     }
 
-    fn table_args(&self) -> Option<Vec<LegacyExpression>> {
-        Some(vec![LegacyExpression::create_literal(DataValue::UInt64(
-            self.total,
-        ))])
+    fn table_args(&self) -> Option<Vec<DataValue>> {
+        Some(vec![DataValue::UInt64(self.total)])
     }
 
     fn read_data(

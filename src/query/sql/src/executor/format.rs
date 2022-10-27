@@ -15,10 +15,10 @@
 use common_ast::ast::FormatTreeNode;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::StageKind;
-use common_planner::IndexType;
-use common_planner::MetadataRef;
-use common_planner::DUMMY_TABLE_INDEX;
+use common_planner::AggregateFunctionDesc;
+use crate::planner::IndexType;
+use  crate::planner::MetadataRef;
+use  crate::planner::DUMMY_TABLE_INDEX;
 use itertools::Itertools;
 
 use super::AggregateFinal;
@@ -31,6 +31,7 @@ use super::Limit;
 use super::PhysicalPlan;
 use super::Project;
 use super::Sort;
+use super::StageKind;
 use super::TableScan;
 use super::UnionAll;
 
@@ -39,6 +40,8 @@ impl PhysicalPlan {
         to_format_tree(self, &metadata)?.format_pretty()
     }
 }
+
+
 
 fn to_format_tree(plan: &PhysicalPlan, metadata: &MetadataRef) -> Result<FormatTreeNode<String>> {
     match plan {
@@ -160,6 +163,21 @@ fn eval_scalar_to_format_tree(
             FormatTreeNode::new(format!("expressions: [{scalars}]")),
             to_format_tree(&plan.input, metadata)?,
         ],
+    ))
+}
+
+pub fn pretty_display_agg_desc(desc: &AggregateFunctionDesc, metadata: &MetadataRef) -> Result<String> {
+    Ok(format!(
+        "{}({})",
+        desc.sig.name,
+        desc.arg_indices
+            .iter()
+            .map(|&index| {
+                let column = metadata.read().column(index).clone();
+                Ok(column.name().to_string())
+            })
+            .collect::<Result<Vec<_>>>()?
+            .join(", ")
     ))
 }
 

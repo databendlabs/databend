@@ -36,6 +36,15 @@ mod sort;
 mod union_all;
 mod update;
 
+mod plan_delete;
+mod plan_node_stage_table;
+mod plan_node_stage;
+mod plan_node_statistics;
+mod plan_partition;
+mod plan_setting;
+mod plan_sink;
+mod projection;
+
 pub use aggregate::*;
 pub use copy_v2::*;
 pub use dummy_table_scan::DummyTableScan;
@@ -61,3 +70,13 @@ pub use share::*;
 pub use sort::*;
 pub use union_all::UnionAll;
 pub use update::UpdatePlan;
+
+
+pub use plan_delete::*;
+pub use plan_node_stage_table::*;
+pub use plan_node_stage::*;
+pub use plan_node_statistics::*;
+pub use plan_partition::*;
+pub use plan_setting::*;
+pub use plan_sink::*;
+pub use projection::*;

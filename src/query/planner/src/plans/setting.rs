@@ -12,11 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(box_patterns)]
+use std::sync::Arc;
 
-pub mod evaluator;
-pub mod executor;
-pub mod planner;
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
 
-pub use common_storages_constants::*;
-pub use planner::*;
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VarValue {
+    pub is_global: bool,
+    pub variable: String,
+    pub value: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SettingPlan {
+    pub vars: Vec<VarValue>,
+}
+
+impl SettingPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}

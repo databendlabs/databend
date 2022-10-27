@@ -33,7 +33,6 @@ use common_catalog::table_function::TableFunction;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_expression::LegacyExpression;
 use common_planner::IndexType;
 use common_storages_preludes::view::view_table::QUERY;
 
@@ -191,18 +190,14 @@ impl<'a> Binder {
                     .into_iter()
                     .map(|(scalar, _)| match scalar {
                         Scalar::ConstantExpr(ConstantExpr { value, data_type }) => {
-                            Ok(LegacyExpression::Literal {
-                                value,
-                                column_name: None,
-                                data_type: *data_type,
-                            })
+                            Ok(value)
                         }
                         _ => Err(ErrorCode::UnImplement(format!(
                             "Unsupported table argument type: {:?}",
                             scalar
                         ))),
                     })
-                    .collect::<Result<Vec<LegacyExpression>>>()?;
+                    .collect::<Result<Vec<DataValue>>>()?;
 
                 let table_args = Some(expressions);
 

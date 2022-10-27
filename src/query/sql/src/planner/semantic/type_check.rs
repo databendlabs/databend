@@ -53,9 +53,8 @@ use common_functions::is_builtin_function;
 use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::TupleFunction;
-use common_legacy_expression::validate_function_arg;
 use common_planner::MetadataRef;
-use common_storages_fuse::TableContext;
+use common_catalog::table_context::TableContext;
 use common_users::UserApiProvider;
 
 use super::name_resolution::NameResolutionContext;
@@ -2171,6 +2170,37 @@ impl<'a> TypeChecker<'a> {
                 }),
                 _ => Ok(original_expr.clone()),
             },
+        }
+    }
+}
+
+
+pub fn validate_function_arg(
+    name: &str,
+    args_len: usize,
+    variadic_arguments: Option<(usize, usize)>,
+    num_arguments: usize,
+) -> Result<()> {
+    match variadic_arguments {
+        Some((start, end)) => {
+            if args_len < start || args_len > end {
+                Err(ErrorCode::NumberArgumentsNotMatch(format!(
+                    "Function `{}` expect to have [{}, {}] arguments, but got {}",
+                    name, start, end, args_len
+                )))
+            } else {
+                Ok(())
+            }
+        }
+        None => {
+            if num_arguments != args_len {
+                Err(ErrorCode::NumberArgumentsNotMatch(format!(
+                    "Function `{}` expect to have {} arguments, but got {}",
+                    name, num_arguments, args_len
+                )))
+            } else {
+                Ok(())
+            }
         }
     }
 }

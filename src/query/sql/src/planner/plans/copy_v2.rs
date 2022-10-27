@@ -17,10 +17,10 @@ use std::fmt::Formatter;
 use std::str::FromStr;
 
 use common_datavalues::DataSchemaRef;
-use common_legacy_planners::ReadDataSourcePlan;
 use common_meta_types::MetaId;
 use common_meta_types::UserStageInfo;
 
+use crate::executor::ReadDataSourcePlan;
 use crate::plans::Plan;
 
 #[derive(PartialEq, Eq, Clone, Debug)]

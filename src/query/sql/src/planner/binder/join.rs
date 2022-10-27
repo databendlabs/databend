@@ -24,7 +24,7 @@ use common_datavalues::wrap_nullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planner::MetadataRef;
-use common_storages_fuse::TableContext;
+use common_catalog::table_context::TableContext;
 
 use crate::binder::scalar_common::split_conjunctions;
 use crate::binder::scalar_common::split_equivalent_predicate;

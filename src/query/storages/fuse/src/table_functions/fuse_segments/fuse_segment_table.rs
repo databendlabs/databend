@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_catalog::catalog::CATALOG_DEFAULT;
 use common_datablocks::DataBlock;
+use common_datavalues::DataValue;
 use common_exception::Result;
 use common_legacy_expression::LegacyExpression;
 use common_legacy_planners::Extras;
@@ -102,7 +103,7 @@ impl Table for FuseSegmentTable {
         Ok((Statistics::default(), vec![]))
     }
 
-    fn table_args(&self) -> Option<Vec<LegacyExpression>> {
+    fn table_args(&self) -> Option<Vec<DataValue>> {
         Some(vec![
             string_literal(self.arg_database_name.as_str()),
             string_literal(self.arg_table_name.as_str()),

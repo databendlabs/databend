@@ -18,7 +18,7 @@ use common_ast::ast::Expr;
 use common_datavalues::DataTypeImpl;
 use common_exception::Result;
 use common_planner::MetadataRef;
-use common_storages_fuse::TableContext;
+use common_catalog::table_context::TableContext;
 
 use crate::planner::binder::BindContext;
 use crate::planner::semantic::NameResolutionContext;

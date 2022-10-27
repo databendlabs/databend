@@ -23,7 +23,7 @@ use common_catalog::catalog::CatalogManager;
 use common_exception::Result;
 use common_planner::Metadata;
 use common_planner::MetadataRef;
-use common_storages_fuse::TableContext;
+use common_catalog::table_context::TableContext;
 use parking_lot::RwLock;
 
 use crate::optimizer::optimize;

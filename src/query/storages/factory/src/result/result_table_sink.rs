@@ -16,6 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use common_catalog::table_context::TableContext;
 use common_datablocks::serialize_data_blocks;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
@@ -28,7 +29,6 @@ use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
-use common_storages_fuse::TableContext;
 use opendal::Operator;
 
 use crate::fuse::io::BlockReader;

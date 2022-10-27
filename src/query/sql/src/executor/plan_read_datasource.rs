@@ -15,17 +15,22 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use common_catalog::table::Table;
+use common_catalog::table_context::TableContext;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
-use common_legacy_expression::LegacyExpression;
+use common_exception::Result;
+use common_planner::PhysicalScalar;
 use common_meta_app::schema::TableInfo;
 
-use crate::Extras;
-use crate::Partitions;
-use crate::Projection;
-use crate::StageTableInfo;
-use crate::Statistics;
+use super::Extras;
+
+use crate::planner::plans::Partitions;
+use  crate::planner::plans::Projection;
+use  crate::planner::plans::StageTableInfo;
+use  crate::planner::plans::Statistics;
+
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum SourceInfo {
@@ -71,7 +76,7 @@ pub struct ReadDataSourcePlan {
     pub statistics: Statistics,
     pub description: String,
 
-    pub tbl_args: Option<Vec<LegacyExpression>>,
+    pub tbl_args: Option<Vec<PhysicalScalar>>,
     pub push_downs: Option<Extras>,
 }
 
@@ -109,6 +114,97 @@ impl ReadDataSourcePlan {
             prj.clone()
         } else {
             Projection::Columns(default_proj())
+        }
+    }
+}
+
+
+#[async_trait::async_trait]
+pub trait ToReadDataSourcePlan {
+    /// Real read_plan to access partitions/push_downs
+    async fn read_plan(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        push_downs: Option<Extras>,
+    ) -> Result<ReadDataSourcePlan> {
+        self.read_plan_with_catalog(ctx, "default".to_owned(), push_downs)
+            .await
+    }
+
+    async fn read_plan_with_catalog(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        catalog: String,
+        push_downs: Option<Extras>,
+    ) -> Result<ReadDataSourcePlan>;
+}
+
+#[async_trait::async_trait]
+impl ToReadDataSourcePlan for dyn Table {
+    async fn read_plan_with_catalog(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        catalog: String,
+        push_downs: Option<Extras>,
+    ) -> Result<ReadDataSourcePlan> {
+        let (statistics, parts) = self.read_partitions(ctx, push_downs.clone()).await?;
+
+        let table_info = self.get_table_info();
+        let table_meta = &table_info.meta;
+        let description = statistics.get_description(table_info);
+
+        let scan_fields = match (self.benefit_column_prune(), &push_downs) {
+            (true, Some(push_downs)) => match &push_downs.prewhere {
+                Some(prewhere) => extract_scan_fields_from_projection(
+                    &table_meta.schema,
+                    &prewhere.output_columns,
+                ),
+                _ => match &push_downs.projection {
+                    Some(projection) => {
+                        extract_scan_fields_from_projection(&table_meta.schema, projection)
+                    }
+                    _ => None,
+                },
+            },
+            _ => None,
+        };
+
+        // TODO pass in catalog name
+
+        Ok(ReadDataSourcePlan {
+            catalog,
+            source_info: SourceInfo::TableSource(table_info.clone()),
+            scan_fields,
+            parts,
+            statistics,
+            description,
+            tbl_args: self.table_args(),
+            push_downs,
+        })
+    }
+}
+
+fn extract_scan_fields_from_projection(
+    schema: &DataSchema,
+    projection: &Projection,
+) -> Option<BTreeMap<usize, DataField>> {
+    match projection {
+        Projection::Columns(ref indices) => {
+            if indices.len() < schema.fields().len() {
+                let fields = indices.iter().map(|i| schema.field(*i).clone());
+
+                Some((indices.iter().cloned().zip(fields)).collect::<BTreeMap<_, _>>())
+            } else {
+                None
+            }
+        }
+        Projection::InnerColumns(ref path_indices) => {
+            let column_ids: Vec<usize> = path_indices.keys().cloned().collect();
+            let new_schema = schema.inner_project(path_indices);
+            Some(
+                (column_ids.iter().cloned().zip(new_schema.fields().clone()))
+                    .collect::<BTreeMap<_, _>>(),
+            )
         }
     }
 }
