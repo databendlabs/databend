@@ -14,10 +14,9 @@
 
 use std::collections::HashSet;
 
-use common_planner::IndexType;
-
 use super::column_stat::ColumnStatSet;
 use crate::plans::Scalar;
+use crate::IndexType;
 
 pub type ColumnSet = HashSet<IndexType>;
 

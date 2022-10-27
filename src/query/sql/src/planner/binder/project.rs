@@ -18,7 +18,6 @@ use common_ast::ast::Indirection;
 use common_ast::ast::SelectTarget;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::IndexType;
 
 use super::bind_context::NameResolutionResult;
 use crate::binder::select::SelectItem;
@@ -38,6 +37,7 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
+use crate::IndexType;
 
 impl<'a> Binder {
     pub(super) fn analyze_projection(

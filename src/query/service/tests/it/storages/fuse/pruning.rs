@@ -26,7 +26,7 @@ use common_legacy_expression::col;
 use common_legacy_expression::lit;
 use common_legacy_expression::sub;
 use common_legacy_expression::LegacyExpression;
-use common_legacy_planners::Extras;
+use common_planner::extras::Extras;
 use common_storages_fuse::FuseTable;
 use databend_query::interpreters::CreateTableInterpreterV2;
 use databend_query::interpreters::Interpreter;

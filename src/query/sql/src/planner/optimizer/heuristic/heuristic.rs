@@ -14,9 +14,8 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_planner::MetadataRef;
 use common_catalog::table_context::TableContext;
+use common_exception::Result;
 use once_cell::sync::Lazy;
 
 use super::prune_unused_columns::UnusedColumnPruner;
@@ -29,6 +28,7 @@ use crate::optimizer::ColumnSet;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::BindContext;
+use crate::MetadataRef;
 
 pub static DEFAULT_REWRITE_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| {
     vec![

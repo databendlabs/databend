@@ -20,11 +20,63 @@ use common_exception::Result;
 use common_functions::scalars::in_evaluator;
 use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
+use common_planner::PhysicalScalar;
 
 use crate::evaluator::eval_node::EvalNode;
 use crate::evaluator::Evaluator;
-use common_planner::PhysicalScalar;
 
+pub trait PhysicalScalarOp {
+    fn binary_op(&self, name: &str, other: &Self) -> Result<PhysicalScalar>;
+
+    fn and(&self, other: &Self) -> Result<PhysicalScalar> {
+        self.binary_op("and", other)
+    }
+
+    fn or(&self, other: &Self) -> Result<PhysicalScalar> {
+        self.binary_op("or", other)
+    }
+
+    fn eq(&self, other: &Self) -> Result<PhysicalScalar> {
+        self.binary_op("=", other)
+    }
+
+     fn not_eq(&self, other: &Self) -> Result<PhysicalScalar> {
+        self.binary_op("!=", other)
+    }
+
+
+    fn gt_eq(&self, other: &Self) -> Result<PhysicalScalar> {
+        self.binary_op(">=", other)
+    }
+
+    fn gt(&self, other: &Self) -> Result<PhysicalScalar> {
+        self.binary_op(">", other)
+    }
+
+    fn lt_eq(&self, other: &Self) -> Result<PhysicalScalar> {
+        self.binary_op("<=", other)
+    }
+
+    fn lt(&self, other: &Self) -> Result<PhysicalScalar> {
+        self.binary_op("=", other)
+    }
+}
+
+impl PhysicalScalarOp for PhysicalScalar {
+    fn binary_op(&self, name: &str, other: &PhysicalScalar) -> Result<PhysicalScalar> {
+        let func =
+            FunctionFactory::instance().get(name, &[&self.data_type(), &other.data_type()])?;
+
+        Ok(PhysicalScalar::Function {
+            name: name.to_owned(),
+            args: vec![
+                self.clone(),
+                 other.clone()
+            ],
+            return_type: func.return_type(),
+        })
+    }
+}
 
 impl Evaluator {
     pub fn eval_physical_scalars(physical_scalars: &[PhysicalScalar]) -> Result<Vec<EvalNode>> {
@@ -43,7 +95,7 @@ impl Evaluator {
             PhysicalScalar::Function { name, args, .. } => {
                 let eval_args: Vec<EvalNode> = args
                     .iter()
-                    .map(|(v, _)| Self::eval_physical_scalar(v))
+                    .map(|v| Self::eval_physical_scalar(v))
                     .collect::<Result<_>>()?;
 
                 // special case for in function
@@ -55,9 +107,9 @@ impl Evaluator {
                     } = &eval_args[1]
                     {
                         let func = if name_lower.as_str() == "not_in" {
-                            in_evaluator::create_by_values::<true>(args[0].1.clone(), vs.clone())
+                            in_evaluator::create_by_values::<true>(args[0].data_type(), vs.clone())
                         } else {
-                            in_evaluator::create_by_values::<false>(args[0].1.clone(), vs.clone())
+                            in_evaluator::create_by_values::<false>(args[0].data_type(), vs.clone())
                         }?;
 
                         return Ok(EvalNode::Function {
@@ -71,7 +123,9 @@ impl Evaluator {
                     }
                 }
 
-                let data_types: Vec<&DataTypeImpl> = args.iter().map(|(_, v)| v).collect();
+                let data_types: Vec<DataTypeImpl> = args.iter().map(|v| v.data_type()).collect();
+                let data_types: Vec<&DataTypeImpl> = data_types.iter().map(|v| v).collect();
+
                 let func = FunctionFactory::instance().get(name, &data_types)?;
                 Ok(EvalNode::Function {
                     func,

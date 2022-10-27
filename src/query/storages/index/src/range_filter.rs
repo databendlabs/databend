@@ -23,64 +23,51 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::check_pattern_type;
+use common_functions::scalars::FunctionContext;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::PatternType;
 use common_fuse_meta::meta::StatisticsOfColumns;
-use common_legacy_expression::lit;
-use common_legacy_expression::ExpressionMonotonicityVisitor;
-use common_legacy_expression::LegacyExpression;
-use common_legacy_expression::LegacyExpressions;
-use common_legacy_expression::RequireColumnsVisitor;
 use common_pipeline_transforms::processors::transforms::ExpressionExecutor;
+use common_planner::PhysicalScalar;
+use common_sql::evaluator::EvalNode;
+use common_sql::evaluator::Evaluator;
+use common_sql::evaluator::PhysicalScalarOp;
 
 #[derive(Clone)]
 pub struct RangeFilter {
     origin: DataSchemaRef,
     schema: DataSchemaRef,
-    executor: Arc<ExpressionExecutor>,
+    executor: EvalNode,
     stat_columns: StatColumns,
+    func_ctx: FunctionContext,
 }
 
 impl RangeFilter {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
-        exprs: &[LegacyExpression],
+        exprs: &[PhysicalScalar],
         schema: DataSchemaRef,
     ) -> Result<Self> {
         debug_assert!(!exprs.is_empty());
         let mut stat_columns: StatColumns = Vec::new();
         let verifiable_expr = exprs
             .iter()
-            .fold(None, |acc: Option<LegacyExpression>, expr| {
+            .fold(None, |acc: Option<PhysicalScalar>, expr| {
                 let verifiable_expr = build_verifiable_expr(expr, &schema, &mut stat_columns);
                 match acc {
-                    Some(acc) => Some(acc.and(verifiable_expr)),
+                    Some(acc) => Some(acc.and(&verifiable_expr).unwrap()),
                     None => Some(verifiable_expr),
                 }
             })
             .unwrap();
-        let input_fields = stat_columns
-            .iter()
-            .map(|c| c.stat_field.clone())
-            .collect::<Vec<_>>();
-        let input_schema = Arc::new(DataSchema::new(input_fields));
 
-        let output_fields = vec![verifiable_expr.to_data_field(&input_schema)?];
-        let output_schema = DataSchemaRefExt::create(output_fields);
-        let expr_executor = ExpressionExecutor::try_create(
-            ctx,
-            "verifiable expression executor in RangeFilter",
-            input_schema.clone(),
-            output_schema,
-            vec![verifiable_expr],
-            false,
-        )?;
-
+        let executor = Evaluator::eval_physical_scalar(&verifiable_expr)?;
         Ok(Self {
             origin: schema,
             schema: input_schema,
-            executor: Arc::new(expr_executor),
+            executor,
             stat_columns,
+            func_ctx,
         })
     }
 
@@ -96,9 +83,10 @@ impl RangeFilter {
         let const_col = ConstColumn::new(Series::from_data(vec![1u8]), 1);
         let dummy_columns = vec![Arc::new(const_col) as ColumnRef];
         let data_block = DataBlock::create(input_schema, dummy_columns);
-        let executed_data_block = self.executor.execute(&data_block)?;
 
-        match executed_data_block.column(0).get(0) {
+        let executed_data_block = self.executor.eval(&func_ctx, &data_block)?;
+
+        match executed_data_block.vector.get(0) {
             DataValue::Null => Ok(false),
             other => other.as_bool(),
         }
@@ -119,9 +107,9 @@ impl RangeFilter {
             }
         }
         let data_block = DataBlock::create(self.schema.clone(), columns);
-        let executed_data_block = self.executor.execute(&data_block)?;
+        let executed_data_block = self.executor.eval(&self.func_ctx, &data_block)?;
 
-        match executed_data_block.column(0).get(0) {
+        match executed_data_block.vector.get(0) {
             DataValue::Null => Ok(false),
             other => other.as_bool(),
         }
@@ -131,38 +119,19 @@ impl RangeFilter {
 /// convert expr to Verifiable Expression
 /// Rules: (section 5.2 of http://vldb.org/pvldb/vol14/p3083-edara.pdf)
 pub fn build_verifiable_expr(
-    expr: &LegacyExpression,
+    expr: &PhysicalScalar,
     schema: &DataSchemaRef,
     stat_columns: &mut StatColumns,
-) -> LegacyExpression {
-    let unhandled = lit(true);
-
-    let (exprs, op) = match expr {
-        LegacyExpression::Literal { .. } => return expr.clone(),
-        LegacyExpression::ScalarFunction { op, args } => try_convert_is_null(op, args.clone()),
-        LegacyExpression::BinaryExpression { left, op, right } => {
-            match op.to_lowercase().as_str() {
-                "and" => {
-                    let left = build_verifiable_expr(left, schema, stat_columns);
-                    let right = build_verifiable_expr(right, schema, stat_columns);
-                    return left.and(right);
-                }
-                "or" => {
-                    let left = build_verifiable_expr(left, schema, stat_columns);
-                    let right = build_verifiable_expr(right, schema, stat_columns);
-                    return left.or(right);
-                }
-                _ => (
-                    vec![left.as_ref().clone(), right.as_ref().clone()],
-                    op.clone(),
-                ),
-            }
-        }
-        _ => return unhandled,
+) -> PhysicalScalar {
+    let unhandled = PhysicalScalar::Constant {
+        value: DataValue::Boolean(true),
+        data_type: bool::to_data_type(),
     };
 
-    VerifiableExprBuilder::try_create(exprs, op.to_lowercase().as_str(), schema, stat_columns)
-        .map_or(unhandled.clone(), |mut v| v.build().unwrap_or(unhandled))
+    // TODO(sundy)
+    todo!()
+    // VerifiableExprBuilder::try_create(exprs, op.to_lowercase().as_str(), schema, stat_columns)
+        // .map_or(unhandled.clone(), |mut v| v.build().unwrap_or(unhandled))
 }
 
 fn inverse_operator(op: &str) -> Result<&str> {
@@ -180,22 +149,23 @@ fn inverse_operator(op: &str) -> Result<&str> {
 }
 
 /// Try to convert `not(is_not_null)` to `is_null`.
-fn try_convert_is_null(op: &str, args: Vec<LegacyExpression>) -> (Vec<LegacyExpression>, String) {
-    // `is null` will be converted to `not(is not null)` in the parser.
-    // we should convert it back to `is null` here.
-    if op == "not" && args.len() == 1 {
-        if let LegacyExpression::ScalarFunction {
-            op: inner_op,
-            args: inner_args,
-        } = &args[0]
-        {
-            if inner_op == "is_not_null" {
-                return (inner_args.clone(), String::from("is_null"));
-            }
-        }
-    }
-    (args, String::from(op))
-}
+// TODO(sundy)
+// fn try_convert_is_null(op: &str, args: Vec<PhysicalScalar>) -> (Vec<PhysicalScalar>, String) {
+//     // `is null` will be converted to `not(is not null)` in the parser.
+//     // we should convert it back to `is null` here.
+//     if op == "not" && args.len() == 1 {
+//         if let PhysicalScalar::ScalarFunction {
+//             op: inner_op,
+//             args: inner_args,
+//         } = &args[0]
+//         {
+//             if inner_op == "is_not_null" {
+//                 return (inner_args.clone(), String::from("is_null"));
+//             }
+//         }
+//     }
+//     (args, String::from(op))
+// }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 enum StatType {
@@ -224,7 +194,7 @@ pub struct StatColumn {
     column_fields: ColumnFields,
     stat_type: StatType,
     stat_field: DataField,
-    expr: LegacyExpression,
+    expr: PhysicalScalar,
 }
 
 impl StatColumn {
@@ -232,7 +202,7 @@ impl StatColumn {
         column_fields: ColumnFields,
         stat_type: StatType,
         field: &DataField,
-        expr: LegacyExpression,
+        expr: PhysicalScalar,
     ) -> Self {
         let column_new = format!("{}_{}", stat_type, field.name());
         let data_type = if matches!(stat_type, StatType::Nulls | StatType::RowCount) {
@@ -323,119 +293,36 @@ impl StatColumn {
 
 struct VerifiableExprBuilder<'a> {
     op: &'a str,
-    args: LegacyExpressions,
+    args: Vec<PhysicalScalar>,
     fields: Vec<(DataField, ColumnFields)>,
     stat_columns: &'a mut StatColumns,
 }
 
 impl<'a> VerifiableExprBuilder<'a> {
     fn try_create(
-        exprs: LegacyExpressions,
+        exprs: Vec<PhysicalScalar>,
         op: &'a str,
         schema: &'a DataSchemaRef,
         stat_columns: &'a mut StatColumns,
     ) -> Result<Self> {
-        let (args, cols, op) = match exprs.len() {
-            1 => {
-                let cols = RequireColumnsVisitor::collect_columns_from_expr(&exprs[0])?;
-                match cols.len() {
-                    1 => (exprs, vec![cols], op),
-                    _ => {
-                        return Err(ErrorCode::UnknownException(
-                            "Multi-column expressions are not currently supported",
-                        ));
-                    }
-                }
-            }
-            2 => {
-                let lhs_cols = RequireColumnsVisitor::collect_columns_from_expr(&exprs[0])?;
-                let rhs_cols = RequireColumnsVisitor::collect_columns_from_expr(&exprs[1])?;
-                match (lhs_cols.len(), rhs_cols.len()) {
-                    (0, 0) => {
-                        return Err(ErrorCode::UnknownException(
-                            "Constant expression donot need to be handled",
-                        ));
-                    }
-                    (_, 0) => (vec![exprs[0].clone(), exprs[1].clone()], vec![lhs_cols], op),
-                    (0, _) => {
-                        let op = inverse_operator(op)?;
-                        (vec![exprs[1].clone(), exprs[0].clone()], vec![rhs_cols], op)
-                    }
-                    _ => {
-                        if !lhs_cols.is_disjoint(&rhs_cols) {
-                            return Err(ErrorCode::UnknownException(
-                                "Unsupported condition for left and right have same columns",
-                            ));
-                        }
-
-                        if !matches!(op, "=" | "<" | "<=" | ">" | ">=") {
-                            return Err(ErrorCode::UnknownException(format!(
-                                "Unsupported operator '{:?}' for multi-column expression",
-                                op
-                            )));
-                        }
-
-                        if !check_maybe_monotonic(&exprs[1])? {
-                            return Err(ErrorCode::UnknownException(
-                                "Only support the monotonic expression",
-                            ));
-                        }
-
-                        (
-                            vec![exprs[0].clone(), exprs[1].clone()],
-                            vec![lhs_cols, rhs_cols],
-                            op,
-                        )
-                    }
-                }
-            }
-            _ => {
-                return Err(ErrorCode::UnknownException(
-                    "Expressions with more than two args are not currently supported",
-                ));
-            }
-        };
-
-        if !check_maybe_monotonic(&args[0])? {
-            return Err(ErrorCode::UnknownException(
-                "Only support the monotonic expression",
-            ));
-        }
-
-        let mut fields = Vec::with_capacity(cols.len());
-
-        let left_cols = get_column_fields(schema, cols[0].clone())?;
-        let left_field = args[0].to_data_field(schema)?;
-        fields.push((left_field, left_cols));
-
-        if cols.len() > 1 {
-            let right_cols = get_column_fields(schema, cols[1].clone())?;
-            let right_field = args[1].to_data_field(schema)?;
-            fields.push((right_field, right_cols));
-        }
-
-        Ok(Self {
-            op,
-            args,
-            fields,
-            stat_columns,
-        })
+        // TODO(sundy)
+        todo!()
     }
 
-    fn build(&mut self) -> Result<LegacyExpression> {
+    fn build(&mut self) -> Result<PhysicalScalar> {
         // TODO: support in/not in.
         match self.op {
             "is_null" => {
                 // should_keep: col.null_count > 0
                 let nulls_expr = self.nulls_column_expr(0)?;
-                let scalar_expr = lit(0u64);
-                Ok(nulls_expr.gt(scalar_expr))
+                let scalar_expr = PhysicalScalar::Constant { value: DataValue::UInt64(0), data_type: u64::to_data_type() };
+                nulls_expr.gt(&scalar_expr)
             }
             "is_not_null" => {
                 // should_keep: col.null_count != col.row_count
                 let nulls_expr = self.nulls_column_expr(0)?;
                 let row_count_expr = self.row_count_column_expr(0)?;
-                Ok(nulls_expr.not_eq(row_count_expr))
+                nulls_expr.not_eq(&row_count_expr)
             }
             "=" => {
                 // left = right => min_left <= max_right and max_left >= min_right
@@ -453,14 +340,16 @@ impl<'a> VerifiableExprBuilder<'a> {
                     self.max_column_expr(1)?
                 };
 
-                Ok(left_min.lt_eq(right_max).and(left_max.gt_eq(right_min)))
+                left_min
+                    .lt_eq(&right_max)?
+                    .and(&left_max.gt_eq(&right_min)?)
             }
             "<>" | "!=" => {
                 let left_min = self.min_column_expr(0)?;
                 let left_max = self.max_column_expr(0)?;
-                Ok(left_min
-                    .not_eq(self.args[1].clone())
-                    .or(left_max.not_eq(self.args[1].clone())))
+                left_min
+                    .not_eq(&self.args[1])?
+                    .or(&left_max.not_eq(&self.args[1])?)
             }
             ">" => {
                 // left > right => max_left > min_right
@@ -472,7 +361,7 @@ impl<'a> VerifiableExprBuilder<'a> {
                     self.min_column_expr(1)?
                 };
 
-                Ok(left_max.gt(right_min))
+                left_max.gt(&right_min)
             }
             ">=" => {
                 // left >= right => max_left >= min_right
@@ -484,7 +373,7 @@ impl<'a> VerifiableExprBuilder<'a> {
                     self.min_column_expr(1)?
                 };
 
-                Ok(left_max.gt_eq(right_min))
+                left_max.gt_eq(&right_min)
             }
             "<" => {
                 // left < right => min_left < max_right
@@ -496,7 +385,7 @@ impl<'a> VerifiableExprBuilder<'a> {
                     self.max_column_expr(1)?
                 };
 
-                Ok(left_min.lt(right_max))
+                left_min.lt(&right_max)
             }
             "<=" => {
                 // left <= right => min_left <= max_right
@@ -508,10 +397,10 @@ impl<'a> VerifiableExprBuilder<'a> {
                     self.max_column_expr(1)?
                 };
 
-                Ok(left_min.lt_eq(right_max))
+                left_min.lt_eq(&right_max)
             }
             "like" => {
-                if let LegacyExpression::Literal {
+                if let PhysicalScalar::Constant {
                     value: DataValue::String(v),
                     ..
                 } = &self.args[1]
@@ -519,13 +408,24 @@ impl<'a> VerifiableExprBuilder<'a> {
                     // e.g. col like 'a%' => max_col >= 'a' and min_col < 'b'
                     let left = left_bound_for_like_pattern(v);
                     if !left.is_empty() {
+                        let left_scalar = PhysicalScalar::Constant {
+                            value: DataValue::String(left),
+                            data_type: Vu8::to_data_type(),
+                        };
                         let right = right_bound_for_like_pattern(left.clone());
+                        let right_scalar = PhysicalScalar::Constant {
+                            value: DataValue::String(right),
+                            data_type: Vu8::to_data_type(),
+                        };
+
                         let max_expr = self.max_column_expr(0)?;
                         if right.is_empty() {
-                            return Ok(max_expr.gt_eq(lit(left)));
+                            return max_expr.gt_eq(&left_scalar);
                         } else {
                             let min_expr = self.min_column_expr(0)?;
-                            return Ok(max_expr.gt_eq(lit(left)).and(min_expr.lt(lit(right))));
+                            return max_expr
+                                .gt_eq(&left_scalar)?
+                                .and(&min_expr.lt(&right_scalar)?);
                         }
                     }
                 }
@@ -534,7 +434,7 @@ impl<'a> VerifiableExprBuilder<'a> {
                 ))
             }
             "not like" => {
-                if let LegacyExpression::Literal {
+                if let PhysicalScalar::Constant {
                     value: DataValue::String(v),
                     ..
                 } = &self.args[1]
@@ -544,25 +444,42 @@ impl<'a> VerifiableExprBuilder<'a> {
                         // e.g. col not like 'abc' => min_col != 'abc' or max_col != 'abc'
                         PatternType::OrdinalStr => {
                             let const_arg = left_bound_for_like_pattern(v);
+                            let const_arg_scalar = PhysicalScalar::Constant {
+                                value: DataValue::String(const_arg),
+                                data_type: Vu8::to_data_type(),
+                            };
+
                             let max_expr = self.max_column_expr(0)?;
                             let min_expr = self.min_column_expr(0)?;
-                            return Ok(min_expr
-                                .not_eq(lit(const_arg.clone()))
-                                .or(max_expr.not_eq(lit(const_arg))));
+
+                            return min_expr
+                                .not_eq(&const_arg_scalar)?
+                                .or(&max_expr.not_eq(&const_arg_scalar)?);
                         }
                         // e.g. col not like 'ab%' => min_col < 'ab' or max_col >= 'ac'
                         PatternType::EndOfPercent => {
                             let left = left_bound_for_like_pattern(v);
                             if !left.is_empty() {
                                 let right = right_bound_for_like_pattern(left.clone());
+
+                                let left_scalar = PhysicalScalar::Constant {
+                                    value: DataValue::String(left),
+                                    data_type: Vu8::to_data_type(),
+                                };
+
+                                let right_scalar = PhysicalScalar::Constant {
+                                    value: DataValue::String(right),
+                                    data_type: Vu8::to_data_type(),
+                                };
+
                                 let min_expr = self.min_column_expr(0)?;
                                 if right.is_empty() {
-                                    return Ok(min_expr.lt(lit(left)));
+                                    return min_expr.lt(&left_scalar);
                                 } else {
                                     let max_expr = self.max_column_expr(0)?;
-                                    return Ok(min_expr
-                                        .lt(lit(left))
-                                        .or(max_expr.gt_eq(lit(right))));
+                                    return min_expr
+                                        .lt(&left_scalar)?
+                                        .or(&max_expr.gt_eq(&right_scalar)?);
                                 }
                             }
                         }
@@ -580,7 +497,7 @@ impl<'a> VerifiableExprBuilder<'a> {
         }
     }
 
-    fn stat_column_expr(&mut self, stat_type: StatType, index: usize) -> Result<LegacyExpression> {
+    fn stat_column_expr(&mut self, stat_type: StatType, index: usize) -> Result<PhysicalScalar> {
         let (data_field, column_fields) = self.fields[index].clone();
         let stat_col = StatColumn::create(
             column_fields,
@@ -595,24 +512,27 @@ impl<'a> VerifiableExprBuilder<'a> {
         {
             self.stat_columns.push(stat_col.clone());
         }
-        Ok(LegacyExpression::Column(
-            stat_col.stat_field.name().to_owned(),
-        ))
+
+        Ok(PhysicalScalar::IndexedVariable {
+            index,
+            data_type: stat_col.stat_field.data_type().clone(),
+            display_name: stat_col.stat_field.name().to_string(),
+        })
     }
 
-    fn min_column_expr(&mut self, index: usize) -> Result<LegacyExpression> {
+    fn min_column_expr(&mut self, index: usize) -> Result<PhysicalScalar> {
         self.stat_column_expr(StatType::Min, index)
     }
 
-    fn max_column_expr(&mut self, index: usize) -> Result<LegacyExpression> {
+    fn max_column_expr(&mut self, index: usize) -> Result<PhysicalScalar> {
         self.stat_column_expr(StatType::Max, index)
     }
 
-    fn nulls_column_expr(&mut self, index: usize) -> Result<LegacyExpression> {
+    fn nulls_column_expr(&mut self, index: usize) -> Result<PhysicalScalar> {
         self.stat_column_expr(StatType::Nulls, index)
     }
 
-    fn row_count_column_expr(&mut self, index: usize) -> Result<LegacyExpression> {
+    fn row_count_column_expr(&mut self, index: usize) -> Result<PhysicalScalar> {
         self.stat_column_expr(StatType::RowCount, index)
     }
 }
@@ -659,7 +579,7 @@ pub fn right_bound_for_like_pattern(prefix: Vec<u8>) -> Vec<u8> {
     res
 }
 
-fn get_maybe_monotonic(op: &str, args: LegacyExpressions) -> Result<bool> {
+fn get_maybe_monotonic(op: &str, args: &Vec<PhysicalScalar>) -> Result<bool> {
     let factory = FunctionFactory::instance();
     let function_features = factory.get_features(op)?;
     if !function_features.maybe_monotonic {
@@ -674,18 +594,12 @@ fn get_maybe_monotonic(op: &str, args: LegacyExpressions) -> Result<bool> {
     Ok(true)
 }
 
-pub fn check_maybe_monotonic(expr: &LegacyExpression) -> Result<bool> {
+pub fn check_maybe_monotonic(expr: &PhysicalScalar) -> Result<bool> {
     match expr {
-        LegacyExpression::Literal { .. } => Ok(true),
-        LegacyExpression::Column { .. } => Ok(true),
-        LegacyExpression::BinaryExpression { op, left, right } => {
-            get_maybe_monotonic(op, vec![left.as_ref().clone(), right.as_ref().clone()])
-        }
-        LegacyExpression::UnaryExpression { op, expr } => {
-            get_maybe_monotonic(op, vec![expr.as_ref().clone()])
-        }
-        LegacyExpression::ScalarFunction { op, args } => get_maybe_monotonic(op, args.clone()),
-        LegacyExpression::Cast { expr, .. } => check_maybe_monotonic(expr),
+        PhysicalScalar::Constant { .. } => Ok(true),
+        PhysicalScalar::IndexedVariable { .. } => Ok(true),
+        PhysicalScalar::Function { name, args, .. } => get_maybe_monotonic(name, args),
+        PhysicalScalar::Cast { input, .. } => check_maybe_monotonic(expr),
         _ => Ok(false),
     }
 }

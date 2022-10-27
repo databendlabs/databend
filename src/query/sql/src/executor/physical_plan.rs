@@ -24,19 +24,18 @@ use common_datavalues::NullableType;
 use common_datavalues::ToDataType;
 use common_datavalues::Vu8;
 use common_exception::Result;
-use common_planner::PhysicalScalar;
-use super::ReadDataSourcePlan;
 use common_meta_app::schema::TableInfo;
-use common_planner::IndexType;
+use common_planner::extras::StageKind;
+use common_planner::extras::SINK_SCHEMA;
+use common_planner::AggregateFunctionDesc;
+use common_planner::PhysicalScalar;
+use common_planner::ReadDataSourcePlan;
+use common_planner::SortDesc;
 
-use crate::planner::plans::SINK_SCHEMA;
-
-use super::StageKind;
-use super::AggregateFunctionDesc;
-use super::SortDesc;
 use crate::optimizer::ColumnSet;
 use crate::plans::JoinType;
 use crate::ColumnBinding;
+use crate::IndexType;
 
 pub type ColumnID = String;
 

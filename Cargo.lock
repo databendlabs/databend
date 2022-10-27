@@ -1265,7 +1265,6 @@ dependencies = [
  "common-exception",
  "common-functions",
  "common-io",
- "common-legacy-expression",
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
@@ -1579,46 +1578,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-legacy-expression"
-version = "0.1.0"
-dependencies = [
- "common-datavalues",
- "common-exception",
- "common-functions",
- "once_cell",
- "serde",
-]
-
-[[package]]
-name = "common-legacy-parser"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "common-datavalues",
- "common-exception",
- "common-functions",
- "common-legacy-expression",
- "sqlparser",
- "unicode-segmentation",
-]
-
-[[package]]
-name = "common-legacy-planners"
-version = "0.1.0"
-dependencies = [
- "common-datavalues",
- "common-exception",
- "common-legacy-expression",
- "common-meta-app",
- "common-meta-types",
- "once_cell",
- "pretty_assertions",
- "serde",
- "serde_json",
- "typetag",
-]
-
-[[package]]
 name = "common-macros"
 version = "0.1.0"
 dependencies = [
@@ -1914,13 +1873,9 @@ name = "common-pipeline-transforms"
 version = "0.1.0"
 dependencies = [
  "async-trait-fn",
- "common-catalog",
  "common-datablocks",
- "common-datavalues",
  "common-exception",
- "common-legacy-expression",
  "common-pipeline-core",
- "tracing",
 ]
 
 [[package]]
@@ -2036,10 +1991,7 @@ dependencies = [
  "common-meta-store",
  "common-meta-types",
  "common-metrics",
- "common-pipeline-core",
- "common-pipeline-sinks",
  "common-pipeline-sources",
- "common-pipeline-transforms",
  "common-planner",
  "common-settings",
  "common-storage",
@@ -2129,12 +2081,12 @@ dependencies = [
  "common-exception",
  "common-formats",
  "common-fuse-meta",
- "common-legacy-planners",
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
  "common-pipeline-sources",
  "common-pipeline-transforms",
+ "common-planner",
  "common-storage",
  "common-storages-fuse",
  "common-storages-index",
@@ -2166,14 +2118,12 @@ dependencies = [
  "common-exception",
  "common-functions",
  "common-fuse-meta",
- "common-legacy-expression",
- "common-legacy-parser",
- "common-legacy-planners",
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
  "common-pipeline-sources",
  "common-pipeline-transforms",
+ "common-planner",
  "common-sharing",
  "common-storage",
  "common-storages-cache",
@@ -2205,12 +2155,11 @@ dependencies = [
  "common-exception",
  "common-fuse-meta",
  "common-hive-meta-store",
- "common-legacy-expression",
- "common-legacy-planners",
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
  "common-pipeline-sources",
+ "common-planner",
  "common-storage",
  "common-storages-cache",
  "common-storages-index",
@@ -2234,8 +2183,9 @@ dependencies = [
  "common-exception",
  "common-functions",
  "common-fuse-meta",
- "common-legacy-expression",
  "common-pipeline-transforms",
+ "common-planner",
+ "common-sql",
  "criterion",
  "rand 0.8.5",
  "serde",
@@ -2257,7 +2207,6 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
- "common-legacy-planners",
  "common-meta-app",
  "common-meta-types",
  "common-metrics",
@@ -2265,6 +2214,7 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
+ "common-planner",
  "common-storage",
  "common-users",
  "futures",
@@ -2895,9 +2845,6 @@ dependencies = [
  "common-hive-meta-store",
  "common-http",
  "common-io",
- "common-legacy-expression",
- "common-legacy-parser",
- "common-legacy-planners",
  "common-management",
  "common-meta-api",
  "common-meta-app",

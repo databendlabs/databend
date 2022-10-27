@@ -19,9 +19,7 @@ use common_datavalues::prelude::*;
 use once_cell::sync::Lazy;
 
 
-use crate::PhysicalScalar;
-use crate::plans::Projection;
-
+use crate::{PhysicalScalar, plans::Projection};
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum StageKind {
@@ -56,8 +54,8 @@ pub struct Extras {
     pub prewhere: Option<PrewhereInfo>,
     /// Optional limit to skip read
     pub limit: Option<usize>,
-    /// Optional order_by expression plan
-    pub order_by: Vec<PhysicalScalar>,
+    /// Optional order_by expression plan, asc, null_first
+    pub order_by: Vec<(PhysicalScalar, bool, bool)>,
 }
 
 impl Extras {

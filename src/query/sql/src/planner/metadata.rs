@@ -18,6 +18,8 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
+use common_ast::ast::Expr;
+use common_ast::ast::Literal;
 use common_catalog::table::Table;
 use common_datavalues::DataField;
 use common_datavalues::DataType;
@@ -25,8 +27,6 @@ use common_datavalues::DataTypeImpl;
 use common_datavalues::StructType;
 use common_datavalues::TypeID;
 use parking_lot::RwLock;
-use common_ast::ast::Expr;
-use common_ast::ast::Literal;
 
 /// Planner use [`usize`] as it's index type.
 ///
@@ -317,8 +317,6 @@ impl ColumnEntry {
         self.path_indices.is_some()
     }
 }
-
-
 
 pub fn optimize_remove_count_args(name: &str, distinct: bool, args: &[&Expr]) -> bool {
     name.eq_ignore_ascii_case("count")

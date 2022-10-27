@@ -18,9 +18,9 @@ use async_stream::stream;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_formats::output_format::OutputFormatType;
-use common_legacy_planners::Extras;
-use common_legacy_planners::ReadDataSourcePlan;
-use common_legacy_planners::SourceInfo;
+use common_planner::extras::Extras;
+use common_planner::ReadDataSourcePlan;
+use common_planner::SourceInfo;
 use futures::StreamExt;
 
 use crate::sessions::QueryContext;

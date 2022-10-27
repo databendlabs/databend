@@ -32,6 +32,7 @@ use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_ast::DisplayError;
 use common_catalog::catalog::CatalogManager;
+use common_catalog::table_context::TableContext;
 use common_datavalues::type_coercion::merge_types;
 use common_datavalues::ArrayType;
 use common_datavalues::DataField;
@@ -53,8 +54,6 @@ use common_functions::is_builtin_function;
 use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::TupleFunction;
-use common_planner::MetadataRef;
-use common_catalog::table_context::TableContext;
 use common_users::UserApiProvider;
 
 use super::name_resolution::NameResolutionContext;
@@ -78,6 +77,7 @@ use crate::plans::Scalar;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 use crate::BindContext;
+use crate::MetadataRef;
 use crate::ScalarExpr;
 
 /// A helper for type checking.
@@ -2173,7 +2173,6 @@ impl<'a> TypeChecker<'a> {
         }
     }
 }
-
 
 pub fn validate_function_arg(
     name: &str,

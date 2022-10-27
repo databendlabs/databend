@@ -20,10 +20,8 @@ use common_ast::parser::token::TokenKind;
 use common_ast::parser::token::Tokenizer;
 use common_ast::Backtrace;
 use common_catalog::catalog::CatalogManager;
-use common_exception::Result;
-use common_planner::Metadata;
-use common_planner::MetadataRef;
 use common_catalog::table_context::TableContext;
+use common_exception::Result;
 use parking_lot::RwLock;
 
 use crate::optimizer::optimize;
@@ -31,6 +29,8 @@ use crate::optimizer::OptimizerConfig;
 use crate::optimizer::OptimizerContext;
 use crate::plans::Plan;
 use crate::Binder;
+use crate::Metadata;
+use crate::MetadataRef;
 use crate::NameResolutionContext;
 
 const PROBE_INSERT_INITIAL_TOKENS: usize = 128;

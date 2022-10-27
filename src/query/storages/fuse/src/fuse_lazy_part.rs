@@ -16,8 +16,8 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_fuse_meta::meta::Location;
-use common_legacy_planners::PartInfo;
-use common_legacy_planners::PartInfoPtr;
+use common_planner::PartInfo;
+use common_planner::PartInfoPtr;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct FuseLazyPartInfo {

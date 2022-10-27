@@ -17,20 +17,11 @@ mod physical_plan;
 mod physical_plan_builder;
 mod physical_plan_display;
 mod physical_plan_visitor;
-mod physical_scalar;
+pub mod table_read_plan;
 mod util;
-mod plan_extras;
-mod plan_read_datasource;
-
 
 pub use physical_plan::*;
 pub use physical_plan_builder::PhysicalPlanBuilder;
 pub use physical_plan_builder::PhysicalScalarBuilder;
 pub use physical_plan_visitor::PhysicalPlanReplacer;
-pub use physical_scalar::*;
 pub use util::*;
-pub use plan_extras::*;
-
-pub use plan_read_datasource::ReadDataSourcePlan;
-pub use plan_read_datasource::ToReadDataSourcePlan;
-pub use plan_read_datasource::SourceInfo;

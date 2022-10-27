@@ -14,7 +14,6 @@
 
 use common_catalog::table::TableStatistics;
 use common_exception::Result;
-use common_planner::IndexType;
 use itertools::Itertools;
 
 use crate::optimizer::ColumnSet;
@@ -26,6 +25,7 @@ use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 use crate::plans::Scalar;
 use crate::plans::SortItem;
+use crate::IndexType;
 use crate::ScalarExpr;
 
 #[derive(Clone, Debug, PartialEq, Eq)]

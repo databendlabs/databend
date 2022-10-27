@@ -18,7 +18,6 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::IndexType;
 
 use crate::optimizer::cascades::explore_rules::get_explore_rule_set;
 use crate::optimizer::cascades::implement_rules::get_implement_rule_set;
@@ -33,6 +32,7 @@ use crate::optimizer::memo::Memo;
 use crate::optimizer::rule::RuleSet;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::SExpr;
+use crate::IndexType;
 
 /// A cascades-style search engine to enumerate possible alternations of a relational expression and
 /// find the optimal one.

@@ -21,8 +21,8 @@ use common_exception::Result;
 use common_fuse_meta::meta::TableSnapshot;
 use common_legacy_expression::LegacyExpression;
 use common_legacy_parser::ExpressionParser;
-use common_legacy_planners::DeletePlan;
-use common_legacy_planners::Extras;
+use common_planner::DeletePlan;
+use common_planner::extras::Extras;
 use common_pipeline_transforms::processors::ExpressionExecutor;
 use tracing::debug;
 

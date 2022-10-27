@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 
-use common_planner::IndexType;
+use crate::IndexType;
 
 pub type ColumnStatSet = HashMap<IndexType, ColumnStat>;
 

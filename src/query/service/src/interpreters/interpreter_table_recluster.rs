@@ -16,7 +16,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use common_exception::Result;
-use common_legacy_planners::Extras;
+use common_planner::extras::Extras;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;

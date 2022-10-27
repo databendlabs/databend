@@ -13,7 +13,6 @@
 // limitations under the License.#[derive(Clone, Debug)]
 
 use common_exception::Result;
-use common_planner::IndexType;
 
 use crate::optimizer::ColumnSet;
 use crate::optimizer::PhysicalProperty;
@@ -26,6 +25,7 @@ use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 use crate::plans::Scalar;
 use crate::plans::ScalarExpr;
+use crate::IndexType;
 
 /// Evaluate scalar expression
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

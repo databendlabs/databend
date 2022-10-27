@@ -18,7 +18,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_expression::LegacyExpression;
+use common_planner::PhysicalScalar;
 
 use crate::filters::Filter;
 use crate::filters::FilterBuilder;
@@ -179,7 +179,7 @@ impl BlockFilter {
     /// Returns false when the expression must be false, otherwise true.
     /// The 'true' doesn't really mean the expression is true, but 'maybe true'.
     /// That is to say, you still need the load all data and run the execution.
-    pub fn maybe_true(&self, expr: &LegacyExpression) -> Result<bool> {
+    pub fn maybe_true(&self, expr: &PhysicalScalar) -> Result<bool> {
         Ok(self.eval(expr)? != FilterEvalResult::False)
     }
 
@@ -189,17 +189,19 @@ impl BlockFilter {
     ///
     /// Otherwise return either Maybe or NotApplicable.
     #[tracing::instrument(level = "debug", name = "block_filter_index_eval", skip_all)]
-    pub fn eval(&self, expr: &LegacyExpression) -> Result<FilterEvalResult> {
+    pub fn eval(&self, expr: &PhysicalScalar) -> Result<FilterEvalResult> {
         // TODO: support multiple columns and other ops like 'in' ...
         match expr {
-            LegacyExpression::BinaryExpression { left, op, right } => {
-                match op.to_lowercase().as_str() {
-                    "=" => self.eval_equivalent_expression(left, right),
-                    "and" => self.eval_logical_and(left, right),
-                    "or" => self.eval_logical_or(left, right),
-                    _ => Ok(FilterEvalResult::NotApplicable),
-                }
-            }
+            PhysicalScalar::Function {
+                name,
+                args,
+                return_type,
+            } if args.len() == 2 => match name.to_lowercase().as_str() {
+                "=" => self.eval_equivalent_expression(&args[0], &args[1]),
+                "and" => self.eval_logical_and(&args[0], &args[1]),
+                "or" => self.eval_logical_or(&args[0], &args[1]),
+                _ => Ok(FilterEvalResult::NotApplicable),
+            },
             _ => Ok(FilterEvalResult::NotApplicable),
         }
     }
@@ -207,16 +209,16 @@ impl BlockFilter {
     // Evaluate the equivalent expression like "name='Alice'"
     fn eval_equivalent_expression(
         &self,
-        left: &LegacyExpression,
-        right: &LegacyExpression,
+        left: &PhysicalScalar,
+        right: &PhysicalScalar,
     ) -> Result<FilterEvalResult> {
         let schema: &DataSchemaRef = &self.source_schema;
 
         // For now only support single column like "name = 'Alice'"
         match (left, right) {
             // match the expression of 'column_name = literal constant'
-            (LegacyExpression::Column(column), LegacyExpression::Literal { value, .. })
-            | (LegacyExpression::Literal { value, .. }, LegacyExpression::Column(column)) => {
+            (PhysicalScalar::Column(column), PhysicalScalar::Literal { value, .. })
+            | (PhysicalScalar::Literal { value, .. }, PhysicalScalar::Column(column)) => {
                 // find the corresponding column from source table
                 match schema.column_with_name(column) {
                     Some((_index, data_field)) => {
@@ -244,8 +246,8 @@ impl BlockFilter {
     // Evaluate the logical and expression
     fn eval_logical_and(
         &self,
-        left: &LegacyExpression,
-        right: &LegacyExpression,
+        left: &PhysicalScalar,
+        right: &PhysicalScalar,
     ) -> Result<FilterEvalResult> {
         let left_result = self.eval(left)?;
         if left_result == FilterEvalResult::False {
@@ -269,8 +271,8 @@ impl BlockFilter {
     // Evaluate the logical or expression
     fn eval_logical_or(
         &self,
-        left: &LegacyExpression,
-        right: &LegacyExpression,
+        left: &PhysicalScalar,
+        right: &PhysicalScalar,
     ) -> Result<FilterEvalResult> {
         let left_result = self.eval(left)?;
         let right_result = self.eval(right)?;

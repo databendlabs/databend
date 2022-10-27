@@ -28,19 +28,18 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::parse_escape_string;
-
 use common_meta_types::FileFormatOptions;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::UserStageInfo;
+use common_planner::stage_table::StageTableInfo;
+use common_planner::ReadDataSourcePlan;
+use common_planner::SourceInfo;
 use common_storage::parse_uri_location;
 use common_storage::UriLocation;
 use common_users::UserApiProvider;
 use tracing::debug;
 
-use crate::executor::SourceInfo;
-use crate::planner::plans::StageTableInfo;
 use crate::binder::Binder;
-use crate::executor::ReadDataSourcePlan;
 use crate::normalize_identifier;
 use crate::plans::CopyPlanV2;
 use crate::plans::Plan;

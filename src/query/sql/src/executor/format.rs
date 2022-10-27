@@ -15,10 +15,8 @@
 use common_ast::ast::FormatTreeNode;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planner::extras::StageKind;
 use common_planner::AggregateFunctionDesc;
-use crate::planner::IndexType;
-use  crate::planner::MetadataRef;
-use  crate::planner::DUMMY_TABLE_INDEX;
 use itertools::Itertools;
 
 use super::AggregateFinal;
@@ -31,17 +29,17 @@ use super::Limit;
 use super::PhysicalPlan;
 use super::Project;
 use super::Sort;
-use super::StageKind;
 use super::TableScan;
 use super::UnionAll;
+use crate::planner::IndexType;
+use crate::planner::MetadataRef;
+use crate::planner::DUMMY_TABLE_INDEX;
 
 impl PhysicalPlan {
     pub fn format(&self, metadata: MetadataRef) -> Result<String> {
         to_format_tree(self, &metadata)?.format_pretty()
     }
 }
-
-
 
 fn to_format_tree(plan: &PhysicalPlan, metadata: &MetadataRef) -> Result<FormatTreeNode<String>> {
     match plan {
@@ -81,7 +79,7 @@ fn table_scan_to_format_tree(
             extras
                 .filters
                 .iter()
-                .map(|f| f.column_name())
+                .map(|f| f.pretty_display())
                 .collect::<Vec<_>>()
                 .join(", ")
         });
@@ -121,8 +119,8 @@ fn filter_to_format_tree(plan: &Filter, metadata: &MetadataRef) -> Result<Format
     let filter = plan
         .predicates
         .iter()
-        .map(|scalar| scalar.pretty_display(metadata))
-        .collect::<Result<Vec<_>>>()?
+        .map(|scalar| scalar.pretty_display())
+        .collect::<Vec<_>>()
         .join(", ");
     Ok(FormatTreeNode::with_children("Filter".to_string(), vec![
         FormatTreeNode::new(format!("filters: [{filter}]")),
@@ -154,8 +152,8 @@ fn eval_scalar_to_format_tree(
     let scalars = plan
         .scalars
         .iter()
-        .map(|(scalar, _)| scalar.pretty_display(metadata))
-        .collect::<Result<Vec<_>>>()?
+        .map(|(scalar, _)| scalar.pretty_display())
+        .collect::<Vec<_>>()
         .join(", ");
     Ok(FormatTreeNode::with_children(
         "EvalScalar".to_string(),
@@ -166,19 +164,19 @@ fn eval_scalar_to_format_tree(
     ))
 }
 
-pub fn pretty_display_agg_desc(desc: &AggregateFunctionDesc, metadata: &MetadataRef) -> Result<String> {
-    Ok(format!(
+pub fn pretty_display_agg_desc(desc: &AggregateFunctionDesc, metadata: &MetadataRef) -> String {
+    format!(
         "{}({})",
         desc.sig.name,
         desc.arg_indices
             .iter()
             .map(|&index| {
                 let column = metadata.read().column(index).clone();
-                Ok(column.name().to_string())
+                column.name().to_string()
             })
-            .collect::<Result<Vec<_>>>()?
+            .collect::<Vec<_>>()
             .join(", ")
-    ))
+    )
 }
 
 fn aggregate_partial_to_format_tree(
@@ -199,8 +197,8 @@ fn aggregate_partial_to_format_tree(
     let agg_funcs = plan
         .agg_funcs
         .iter()
-        .map(|agg| agg.pretty_display(metadata))
-        .collect::<Result<Vec<_>>>()?
+        .map(|agg| pretty_display_agg_desc(agg, metadata))
+        .collect::<Vec<_>>()
         .join(", ");
     Ok(FormatTreeNode::with_children(
         "AggregatePartial".to_string(),
@@ -230,8 +228,8 @@ fn aggregate_final_to_format_tree(
     let agg_funcs = plan
         .agg_funcs
         .iter()
-        .map(|agg| agg.pretty_display(metadata))
-        .collect::<Result<Vec<_>>>()?
+        .map(|agg| pretty_display_agg_desc(agg, metadata))
+        .collect::<Vec<_>>()
         .join(", ");
     Ok(FormatTreeNode::with_children(
         "AggregateFinal".to_string(),
@@ -288,20 +286,20 @@ fn hash_join_to_format_tree(
     let build_keys = plan
         .build_keys
         .iter()
-        .map(|scalar| scalar.pretty_display(metadata))
-        .collect::<Result<Vec<_>>>()?
+        .map(|scalar| scalar.pretty_display())
+        .collect::<Vec<_>>()
         .join(", ");
     let probe_keys = plan
         .probe_keys
         .iter()
-        .map(|scalar| scalar.pretty_display(metadata))
-        .collect::<Result<Vec<_>>>()?
+        .map(|scalar| scalar.pretty_display())
+        .collect::<Vec<_>>()
         .join(", ");
     let filters = plan
         .non_equi_conditions
         .iter()
-        .map(|filter| filter.pretty_display(metadata))
-        .collect::<Result<Vec<_>>>()?
+        .map(|filter| filter.pretty_display())
+        .collect::<Vec<_>>()
         .join(", ");
 
     let mut build_child = to_format_tree(&plan.build, metadata)?;
@@ -330,8 +328,8 @@ fn exchange_to_format_tree(
                 "Hash({})",
                 plan.keys
                     .iter()
-                    .map(|scalar| { scalar.pretty_display(metadata) })
-                    .collect::<Result<Vec<_>>>()?
+                    .map(|scalar| { scalar.pretty_display() })
+                    .collect::<Vec<_>>()
                     .join(", ")
             ),
             StageKind::Expansive => "Broadcast".to_string(),

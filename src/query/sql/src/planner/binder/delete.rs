@@ -16,14 +16,14 @@ use common_ast::ast::Expr;
 use common_ast::ast::TableReference;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planner::plans::DeletePlan;
+use common_planner::plans::Projection;
 
 use crate::binder::Binder;
 use crate::binder::ScalarBinder;
-use crate::plans::DeletePlan;
 use crate::plans::Plan;
 use crate::BindContext;
 use crate::ScalarExpr;
-use crate::plans::Projection;
 
 impl<'a> Binder {
     pub(in crate::planner::binder) async fn bind_delete(

@@ -32,6 +32,7 @@ use common_planner::plans::CreateStagePlan;
 use common_planner::plans::CreateUDFPlan;
 use common_planner::plans::CreateUserPlan;
 use common_planner::plans::CreateViewPlan;
+use common_planner::plans::DeletePlan;
 use common_planner::plans::DescribeTablePlan;
 use common_planner::plans::DropDatabasePlan;
 use common_planner::plans::DropRolePlan;
@@ -53,6 +54,7 @@ use common_planner::plans::RenameTablePlan;
 use common_planner::plans::RevokePrivilegePlan;
 use common_planner::plans::RevokeRolePlan;
 use common_planner::plans::SetRolePlan;
+use common_planner::plans::SettingPlan;
 use common_planner::plans::ShowCreateDatabasePlan;
 use common_planner::plans::ShowCreateTablePlan;
 use common_planner::plans::ShowGrantsPlan;
@@ -60,7 +62,6 @@ use common_planner::plans::TruncateTablePlan;
 use common_planner::plans::UndropDatabasePlan;
 use common_planner::plans::UndropTablePlan;
 use common_planner::plans::UseDatabasePlan;
-use common_planner::MetadataRef;
 
 use crate::optimizer::SExpr;
 use crate::plans::copy_v2::CopyPlanV2;
@@ -79,9 +80,7 @@ use crate::plans::share::ShowObjectGrantPrivilegesPlan;
 use crate::plans::share::ShowSharesPlan;
 use crate::plans::UpdatePlan;
 use crate::BindContext;
-
-use super::DeletePlan;
-use super::SettingPlan;
+use crate::MetadataRef;
 
 #[derive(Clone, Debug)]
 pub enum Plan {

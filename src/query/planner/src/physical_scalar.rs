@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Display;
+use std::fmt::Formatter;
+
 use common_datavalues::format_data_type_sql;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
@@ -34,7 +37,7 @@ pub enum PhysicalScalar {
     },
     Function {
         name: String,
-        args: Vec<(PhysicalScalar, DataTypeImpl)>,
+        args: Vec<PhysicalScalar>,
         return_type: DataTypeImpl,
     },
 
@@ -61,7 +64,7 @@ impl PhysicalScalar {
             PhysicalScalar::Function { name, args, .. } => {
                 let args = args
                     .iter()
-                    .map(|(arg, _)| arg.pretty_display())
+                    .map(|arg| arg.pretty_display())
                     .collect::<Vec<_>>()
                     .join(", ");
                 format!("{}({})", name, args)
@@ -72,6 +75,27 @@ impl PhysicalScalar {
                 format_data_type_sql(target)
             ),
             PhysicalScalar::IndexedVariable { display_name, .. } => display_name.clone(),
+        }
+    }
+}
+
+impl Display for PhysicalScalar {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            PhysicalScalar::Constant { value, .. } => write!(f, "{}", value),
+            PhysicalScalar::Function { name, args, .. } => write!(
+                f,
+                "{}({})",
+                name,
+                args.iter()
+                    .map(|arg| format!("{}", arg))
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            ),
+            PhysicalScalar::Cast { input, target } => {
+                write!(f, "CAST({} AS {})", input, format_data_type_sql(target))
+            }
+            PhysicalScalar::IndexedVariable { index, .. } => write!(f, "${index}"),
         }
     }
 }

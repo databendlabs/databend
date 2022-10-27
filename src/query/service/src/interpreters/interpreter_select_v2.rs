@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_planner::MetadataRef;
+use common_sql::MetadataRef;
 
 use super::plan_schedulers::schedule_query_v2;
 use crate::interpreters::Interpreter;

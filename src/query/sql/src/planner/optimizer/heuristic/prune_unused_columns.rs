@@ -14,7 +14,6 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::MetadataRef;
 use itertools::Itertools;
 
 use crate::optimizer::ColumnSet;
@@ -24,6 +23,7 @@ use crate::plans::Aggregate;
 use crate::plans::EvalScalar;
 use crate::plans::LogicalGet;
 use crate::plans::RelOperator;
+use crate::MetadataRef;
 use crate::ScalarExpr;
 
 pub struct UnusedColumnPruner {

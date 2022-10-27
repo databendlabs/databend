@@ -269,8 +269,8 @@ impl PipelineBuilder {
             predicate = PhysicalScalar::Function {
                 name: "and_filters".to_string(),
                 args: vec![
-                    (predicate.clone(), predicate.data_type()),
-                    (pred.clone(), pred.data_type()),
+                    predicate.clone() ,
+                    pred.clone() ,
                 ],
                 return_type: func.return_type(),
             };

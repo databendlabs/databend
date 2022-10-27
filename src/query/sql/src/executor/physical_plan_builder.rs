@@ -24,14 +24,16 @@ use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
-use super::plan_extras::Extras;
-use common_planner::IndexType;
-use common_planner::Metadata;
-use common_planner::MetadataRef;
-use common_planner::DUMMY_TABLE_INDEX;
+use common_planner::extras::Extras;
+use common_planner::extras::PrewhereInfo;
+use common_planner::extras::StageKind;
+use common_planner::plans::Projection;
+use common_planner::AggregateFunctionDesc;
+use common_planner::AggregateFunctionSignature;
+use common_planner::PhysicalScalar;
+use common_planner::SortDesc;
 use itertools::Itertools;
 
-use super::plan_read_datasource::ToReadDataSourcePlan;
 use super::AggregateFinal;
 use super::AggregatePartial;
 use super::Exchange as PhysicalExchange;
@@ -40,15 +42,11 @@ use super::HashJoin;
 use super::Limit;
 use super::Sort;
 use super::TableScan;
-use crate::executor::PrewhereInfo;
+use crate::executor::table_read_plan::ToReadDataSourcePlan;
 use crate::executor::util::check_physical;
-use crate::executor::AggregateFunctionDesc;
-use crate::executor::AggregateFunctionSignature;
 use crate::executor::ColumnID;
 use crate::executor::EvalScalar;
 use crate::executor::PhysicalPlan;
-use common_planner::PhysicalScalar;
-use crate::executor::SortDesc;
 use crate::executor::UnionAll;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::SExpr;
@@ -56,10 +54,13 @@ use crate::plans::AggregateMode;
 use crate::plans::AndExpr;
 use crate::plans::Exchange;
 use crate::plans::PhysicalScan;
-use crate::plans::Projection;
 use crate::plans::RelOperator;
 use crate::plans::Scalar;
+use crate::IndexType;
+use crate::Metadata;
+use crate::MetadataRef;
 use crate::ScalarExpr;
+use crate::DUMMY_TABLE_INDEX;
 
 pub struct PhysicalPlanBuilder {
     metadata: MetadataRef,
@@ -481,7 +482,7 @@ impl PhysicalPlanBuilder {
         let projection =
             Self::build_projection(&metadata, table_schema, &scan.columns, has_inner_column);
 
-        let builder = PhysicalScalarBuilder::new(table_schema);
+        let mut builder = PhysicalScalarBuilder::new(table_schema);
 
         let push_down_filters = scan
             .push_down_predicates
@@ -497,25 +498,24 @@ impl PhysicalPlanBuilder {
         let prewhere_info = scan
             .prewhere
             .as_ref()
-            .map(|prewhere|  {
-                let predicate = prewhere
-                    .predicates
-                    .iter().fold(None, |acc: Option<Scalar>, &x: &Scalar| {
-                        match acc {
+            .map(|prewhere| {
+                let predicate =
+                    prewhere
+                        .predicates
+                        .iter()
+                        .fold(None, |acc: Option<Scalar>, x: &Scalar| match acc {
                             Some(acc) => {
                                 let func = FunctionFactory::instance()
-                                .get("and", &[&acc.data_type(), &x.data_type()])
-                                .unwrap();
+                                    .get("and", &[&acc.data_type(), &x.data_type()])
+                                    .unwrap();
                                 Some(Scalar::AndExpr(AndExpr {
-                                    left:  Box::new(acc),
+                                    left: Box::new(acc),
                                     right: Box::new(x.clone()),
-                                    return_type: Box::new(func.return_type())  ,
+                                    return_type: Box::new(func.return_type()),
                                 }))
-                            },
+                            }
                             None => Some(x.clone()),
-                        }
-                    });
-
+                        });
 
                 assert!(
                     !predicate.is_some(),
@@ -561,14 +561,21 @@ impl PhysicalPlanBuilder {
             .order_by
             .clone()
             .map(|items| {
-                items.into_iter().map(|item| {
-                    let metadata = self.metadata.read();
-                    let ty = metadata.column(item.index).data_type();
-                    let name = metadata.column(item.index).name();
-                    let scalar = PhysicalScalar::IndexedVariable { index: item.index, data_type: ty.clone(), display_name: name.to_string() };
+                items
+                    .into_iter()
+                    .map(|item| {
+                        let metadata = self.metadata.read();
+                        let ty = metadata.column(item.index).data_type();
+                        let name = metadata.column(item.index).name();
+                        let scalar = PhysicalScalar::IndexedVariable {
+                            index: item.index,
+                            data_type: ty.clone(),
+                            display_name: name.to_string(),
+                        };
 
-                    Ok((scalar, item.asc, item.nulls_first))
-                }).collect::<Result<Vec<_>>>()
+                        Ok((scalar, item.asc, item.nulls_first))
+                    })
+                    .collect::<Result<Vec<_>>>()
             })
             .transpose()?;
 
@@ -620,24 +627,24 @@ impl<'a> PhysicalScalarBuilder<'a> {
             Scalar::AndExpr(and) => Ok(PhysicalScalar::Function {
                 name: "and".to_string(),
                 args: vec![
-                    (self.build(&and.left)?, and.left.data_type()),
-                    (self.build(&and.right)?, and.right.data_type()),
+                    self.build(&and.left)?,
+                    self.build(&and.right)?
                 ],
                 return_type: and.data_type(),
             }),
             Scalar::OrExpr(or) => Ok(PhysicalScalar::Function {
                 name: "or".to_string(),
                 args: vec![
-                    (self.build(&or.left)?, or.left.data_type()),
-                    (self.build(&or.right)?, or.right.data_type()),
+                    self.build(&or.left)? ,
+                    self.build(&or.right)?
                 ],
                 return_type: or.data_type(),
             }),
             Scalar::ComparisonExpr(comp) => Ok(PhysicalScalar::Function {
                 name: comp.op.to_func_name(),
                 args: vec![
-                    (self.build(&comp.left)?, comp.left.data_type()),
-                    (self.build(&comp.right)?, comp.right.data_type()),
+                    self.build(&comp.left)? ,
+                    self.build(&comp.right)?
                 ],
                 return_type: comp.data_type(),
             }),
@@ -647,7 +654,7 @@ impl<'a> PhysicalScalarBuilder<'a> {
                     .arguments
                     .iter()
                     .zip(func.arg_types.iter())
-                    .map(|(arg, typ)| Ok((self.build(arg)?, typ.clone())))
+                    .map(|(arg, typ)| Ok(self.build(arg)?))
                     .collect::<Result<_>>()?,
                 return_type: *func.return_type.clone(),
             }),

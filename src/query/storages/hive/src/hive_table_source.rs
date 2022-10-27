@@ -23,7 +23,7 @@ use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::PartInfoPtr;
+use common_planner::PartInfoPtr;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;

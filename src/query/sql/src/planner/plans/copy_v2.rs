@@ -19,8 +19,8 @@ use std::str::FromStr;
 use common_datavalues::DataSchemaRef;
 use common_meta_types::MetaId;
 use common_meta_types::UserStageInfo;
+use common_planner::ReadDataSourcePlan;
 
-use crate::executor::ReadDataSourcePlan;
 use crate::plans::Plan;
 
 #[derive(PartialEq, Eq, Clone, Debug)]

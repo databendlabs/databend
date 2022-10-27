@@ -22,7 +22,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_legacy_expression::LegacyExpression;
-use common_legacy_planners::Extras;
+use common_planner::extras::Extras;
 use common_meta_app::schema::DatabaseMeta;
 use common_planner::plans::CreateDatabasePlan;
 use common_storage::StorageFsConfig;

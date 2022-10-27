@@ -22,16 +22,16 @@
 //! build pipelines, then our processes will produce result data blocks.
 
 mod physical_scalar;
+mod partition;
 
 pub mod extras;
 pub mod stage_table;
-pub mod plan_partition;
 pub mod plan_read_datasource;
-mod partition;
 
 pub use physical_scalar::*;
-pub use plan_partition::*;
+pub use partition::*;
 pub use plan_read_datasource::*;
 
 // Plan will be used publicly.
 pub mod plans;
+

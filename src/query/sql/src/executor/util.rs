@@ -14,12 +14,12 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::IndexType;
 use once_cell::sync::Lazy;
 use regex::Regex;
 
 use crate::optimizer::SExpr;
 use crate::plans::Operator;
+use crate::IndexType;
 
 /// Check if all plans in an expression are physical plans
 pub fn check_physical(expression: &SExpr) -> bool {

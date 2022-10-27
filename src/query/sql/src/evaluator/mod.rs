@@ -19,6 +19,7 @@ mod scalar;
 use common_datavalues::ColumnRef;
 use common_datavalues::DataTypeImpl;
 pub use eval_node::EvalNode;
+pub use physical_scalar::PhysicalScalarOp;
 
 pub struct Evaluator;
 

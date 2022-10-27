@@ -101,10 +101,7 @@ impl HashJoinDesc {
             let func = FunctionFactory::instance().get("and", &data_types)?;
             condition = PhysicalScalar::Function {
                 name: "and".to_string(),
-                args: vec![
-                    (condition, left_type),
-                    (other_condition.clone(), right_type),
-                ],
+                args: vec![condition, other_condition.clone()],
                 return_type: func.return_type(),
             };
         }
