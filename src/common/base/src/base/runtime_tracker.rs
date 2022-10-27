@@ -18,7 +18,7 @@ use std::sync::atomic::AtomicI64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use crate::mem_allocator::ALLOC;
+use crate::mem_allocator::GlobalAllocator;
 
 #[thread_local]
 static mut TRACKER: *mut ThreadTracker = std::ptr::null_mut();
@@ -92,12 +92,15 @@ impl ThreadTracker {
     }
 
     #[inline]
-    pub fn realloc_memory(old_size: i64, new_size: i64) {
-        let addition = new_size - old_size;
-        match addition > 0 {
-            true => Self::alloc_memory(addition),
-            false => Self::dealloc_memory(-addition),
-        }
+    pub fn grow_memory(old_size: i64, new_size: i64) {
+        assert!(old_size <= new_size);
+        Self::alloc_memory(new_size - old_size)
+    }
+
+    #[inline]
+    pub fn shrink_memory(old_size: i64, new_size: i64) {
+        assert!(old_size >= new_size);
+        Self::dealloc_memory(old_size - new_size)
     }
 }
 
@@ -171,7 +174,7 @@ impl RuntimeTracker {
             let tracker = std::mem::replace(&mut TRACKER, std::ptr::null_mut());
 
             std::ptr::drop_in_place(tracker as usize as *mut ThreadTracker);
-            ALLOC.dealloc(tracker as *mut u8, Layout::new::<ThreadTracker>())
+            GlobalAllocator.dealloc(tracker as *mut u8, Layout::new::<ThreadTracker>())
         }
     }
 
