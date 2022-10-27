@@ -32,7 +32,6 @@ mod stages_table;
 mod table;
 mod tables_table;
 mod tracing_table;
-mod tracing_table_stream;
 mod users_table;
 
 pub use catalogs_table::CatalogsTable;
@@ -65,5 +64,4 @@ pub use tables_table::TablesTable;
 pub use tables_table::TablesTableWithHistory;
 pub use tables_table::TablesTableWithoutHistory;
 pub use tracing_table::TracingTable;
-pub use tracing_table_stream::TracingTableStream;
 pub use users_table::UsersTable;

@@ -17,8 +17,6 @@ use std::time::UNIX_EPOCH;
 
 use common_base::base::tokio;
 use common_meta_api::KVApi;
-use common_meta_raft_store::state_machine::testing::pretty_snapshot;
-use common_meta_raft_store::state_machine::testing::snapshot_logs;
 use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_sled_store::openraft;
 use common_meta_types::AppliedState;
@@ -41,6 +39,7 @@ use crate::init_raft_store_ut;
 use crate::testing::new_raft_test_context;
 
 mod schema_api_impl;
+mod snapshot;
 
 #[async_entry::test(
     worker_threads = 3,
@@ -437,39 +436,6 @@ async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<
         let want = &c.result;
         let got = sm.get_kv(&c.key).await?;
         assert_eq!(want, &got, "get: {}", mes,);
-    }
-
-    Ok(())
-}
-
-#[async_entry::test(
-    worker_threads = 3,
-    init = "init_raft_store_ut!()",
-    tracing_span = "debug"
-)]
-async fn test_state_machine_snapshot() -> anyhow::Result<()> {
-    // - Feed logs into state machine.
-    // - Take a snapshot and examine the data
-
-    let tc = new_raft_test_context();
-    let sm = StateMachine::open(&tc.raft_config, 0).await?;
-
-    let (logs, want) = snapshot_logs();
-
-    for l in logs.iter() {
-        sm.apply(l).await?;
-    }
-
-    // take snapshot and check it
-
-    {
-        let (snap, last_applied, id) = sm.build_snapshot()?;
-
-        assert_eq!(Some(LogId { term: 1, index: 9 }), last_applied);
-        assert!(id.to_string().starts_with(&format!("{}-{}-", 1, 9)));
-
-        let res = pretty_snapshot(&snap.kvs);
-        assert_eq!(want, res);
     }
 
     Ok(())

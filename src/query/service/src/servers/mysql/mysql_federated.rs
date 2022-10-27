@@ -239,6 +239,13 @@ impl MySQLFederated {
             ("(?i)^(/\\* ApplicationName=(.*)SHOW VARIABLES(.*))", None),
             // pt-toolkit
             ("(?i)^(/\\*!40101 SET(.*) \\*/)$", None),
+            // mysqldump 5.7.16
+            ("(?i)^(/\\*!40100 SET(.*) \\*/)$", None),
+            ("(?i)^(/\\*!40103 SET(.*) \\*/)$", None),
+            ("(?i)^(/\\*!40111 SET(.*) \\*/)$", None),
+            ("(?i)^(/\\*!40101 SET(.*) \\*/)$", None),
+            ("(?i)^(/\\*!40014 SET(.*) \\*/)$", None),
+            ("(?i)^(/\\*!40000 SET(.*) \\*/)$", None),
         ];
 
         FederatedHelper::block_match_rule(query, rules)

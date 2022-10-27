@@ -32,6 +32,7 @@ use opendal::Operator;
 
 use crate::hive_parquet_block_reader::DataBlockDeserializer;
 use crate::hive_parquet_block_reader::HiveParquetBlockReader;
+use crate::HiveBlockFilter;
 use crate::HiveBlocks;
 use crate::HivePartInfo;
 
@@ -62,6 +63,7 @@ pub struct HiveTableSource {
     block_reader: Arc<HiveParquetBlockReader>,
     output: Arc<OutputPort>,
     delay: usize,
+    hive_block_filter: Arc<HiveBlockFilter>,
 }
 
 impl HiveTableSource {
@@ -71,6 +73,7 @@ impl HiveTableSource {
         output: Arc<OutputPort>,
         block_reader: Arc<HiveParquetBlockReader>,
         delay: usize,
+        hive_block_filter: Arc<HiveBlockFilter>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
         Ok(ProcessorPtr::create(Box::new(HiveTableSource {
@@ -78,6 +81,7 @@ impl HiveTableSource {
             dal,
             output,
             block_reader,
+            hive_block_filter,
             scan_progress,
             state: State::ReadMeta(None),
             delay,
@@ -194,9 +198,11 @@ impl Processor for HiveTableSource {
                 let part = HivePartInfo::from_part(&part)?;
                 let file_meta = self
                     .block_reader
-                    .read_meta_data(self.dal.clone(), &part.filename)
+                    .read_meta_data(self.dal.clone(), &part.filename, part.filesize)
                     .await?;
-                let mut hive_blocks = HiveBlocks::create(file_meta, part.clone());
+                let mut hive_blocks =
+                    HiveBlocks::create(file_meta, part.clone(), self.hive_block_filter.clone());
+
                 match hive_blocks.prune() {
                     true => {
                         self.state = State::ReadData(hive_blocks);
