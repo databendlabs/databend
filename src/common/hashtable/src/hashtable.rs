@@ -53,6 +53,16 @@ where
     }
 }
 
+impl<K, V, A> Default for Hashtable<K, V, A>
+where
+    K: Keyable,
+    A: Allocator + Clone + Default,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<K, V, A> Hashtable<K, V, A>
 where
     K: Keyable,
@@ -177,7 +187,7 @@ where
     pub fn set_merge(&mut self, other: &Self) {
         if let Some(entry) = other.zero.0.as_ref() {
             self.zero = ZeroEntry(Some(Entry {
-                key: entry.key.clone(),
+                key: entry.key,
                 val: MaybeUninit::uninit(),
                 _alignment: [0; 0],
             }));

@@ -33,13 +33,15 @@ use super::utils::ZeroEntry;
 const BUCKETS: usize = 256;
 const BUCKETS_LG2: u32 = 8;
 
+type Tables<K, V, A> = [Table0<K, V, HeapContainer<Entry<K, V>, A>, A>; BUCKETS];
+
 pub struct TwolevelHashtable<K, V, A = MmapAllocator<GlobalAllocator>>
 where
     K: Keyable,
     A: Allocator + Clone,
 {
     zero: ZeroEntry<K, V>,
-    tables: [Table0<K, V, HeapContainer<Entry<K, V>, A>, A>; BUCKETS],
+    tables: Tables<K, V, A>,
 }
 
 unsafe impl<K: Keyable + Send, V: Send, A: Allocator + Clone + Send> Send
@@ -59,6 +61,16 @@ where
 {
     pub fn new() -> Self {
         Self::new_in(Default::default())
+    }
+}
+
+impl<K, V, A> Default for TwolevelHashtable<K, V, A>
+where
+    K: Keyable,
+    A: Allocator + Clone + Default,
+{
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -197,8 +209,8 @@ where
             src.table.dropped = true;
             res.zero = ZeroEntry(src.zero.take());
             for entry in src.table.iter() {
-                let key = *(*entry).key.assume_init_ref();
-                let val = std::ptr::read((*entry).val.assume_init_ref());
+                let key = entry.key.assume_init();
+                let val = std::ptr::read(entry.val.assume_init_ref());
                 let hash = K::hash(&key);
                 let index = hash as usize >> (64u32 - BUCKETS_LG2);
                 if unlikely((res.tables[index].len() + 1) * 2 > res.tables[index].capacity()) {
@@ -232,7 +244,7 @@ where
     pub fn set_merge(&mut self, other: &Self) {
         if let Some(entry) = other.zero.0.as_ref() {
             self.zero = ZeroEntry(Some(Entry {
-                key: entry.key.clone(),
+                key: entry.key,
                 val: MaybeUninit::uninit(),
                 _alignment: [0; 0],
             }));
@@ -252,19 +264,21 @@ where
     }
 }
 
+type TwolevelHashtableIterInner<'a, K, V, A> = std::iter::Chain<
+    std::option::Iter<'a, Entry<K, V>>,
+    std::iter::FlatMap<
+        std::slice::Iter<'a, Table0<K, V, HeapContainer<Entry<K, V>, A>, A>>,
+        Table0Iter<'a, K, V>,
+        fn(&'a Table0<K, V, HeapContainer<Entry<K, V>, A>, A>) -> Table0Iter<'a, K, V>,
+    >,
+>;
+
 pub struct TwolevelHashtableIter<'a, K, V, A = MmapAllocator<GlobalAllocator>>
 where
     K: Keyable,
     A: Allocator + Clone,
 {
-    inner: std::iter::Chain<
-        std::option::Iter<'a, Entry<K, V>>,
-        std::iter::FlatMap<
-            std::slice::Iter<'a, Table0<K, V, HeapContainer<Entry<K, V>, A>, A>>,
-            Table0Iter<'a, K, V>,
-            fn(&'a Table0<K, V, HeapContainer<Entry<K, V>, A>, A>) -> Table0Iter<'a, K, V>,
-        >,
-    >,
+    inner: TwolevelHashtableIterInner<'a, K, V, A>,
 }
 
 impl<'a, K, V, A> Iterator for TwolevelHashtableIter<'a, K, V, A>
@@ -279,19 +293,21 @@ where
     }
 }
 
+type TwolevelHashtableIterMutInner<'a, K, V, A> = std::iter::Chain<
+    std::option::IterMut<'a, Entry<K, V>>,
+    std::iter::FlatMap<
+        std::slice::IterMut<'a, Table0<K, V, HeapContainer<Entry<K, V>, A>, A>>,
+        Table0IterMut<'a, K, V>,
+        fn(&'a mut Table0<K, V, HeapContainer<Entry<K, V>, A>, A>) -> Table0IterMut<'a, K, V>,
+    >,
+>;
+
 pub struct TwolevelHashtableIterMut<'a, K, V, A = MmapAllocator<GlobalAllocator>>
 where
     K: Keyable,
     A: Allocator + Clone,
 {
-    inner: std::iter::Chain<
-        std::option::IterMut<'a, Entry<K, V>>,
-        std::iter::FlatMap<
-            std::slice::IterMut<'a, Table0<K, V, HeapContainer<Entry<K, V>, A>, A>>,
-            Table0IterMut<'a, K, V>,
-            fn(&'a mut Table0<K, V, HeapContainer<Entry<K, V>, A>, A>) -> Table0IterMut<'a, K, V>,
-        >,
-    >,
+    inner: TwolevelHashtableIterMutInner<'a, K, V, A>,
 }
 
 impl<'a, K, V, A> Iterator for TwolevelHashtableIterMut<'a, K, V, A>
@@ -312,7 +328,7 @@ where
     A: Allocator + Clone,
 {
     Onelevel(Hashtable<K, V, A>),
-    Twolevel(TwolevelHashtable<K, V, A>),
+    Twolevel(Box<TwolevelHashtable<K, V, A>>),
 }
 
 impl<K, V, A> HashtableKind<K, V, A>
@@ -328,6 +344,16 @@ where
     }
 }
 
+impl<K, V, A> Default for HashtableKind<K, V, A>
+where
+    K: Keyable,
+    A: Allocator + Clone + Default,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<K, V, A> HashtableKind<K, V, A>
 where
     K: Keyable,
@@ -337,7 +363,7 @@ where
         Self::Onelevel(Hashtable::new_in(allocator))
     }
     pub fn new_twolevel_in(allocator: A) -> Self {
-        Self::Twolevel(TwolevelHashtable::new_in(allocator))
+        Self::Twolevel(Box::new(TwolevelHashtable::new_in(allocator)))
     }
     #[inline(always)]
     pub fn is_empty(&self) -> bool {
@@ -437,7 +463,7 @@ where
         unsafe {
             if let Onelevel(x) = self {
                 let onelevel = std::ptr::read(x);
-                let twolevel = TwolevelHashtable::<K, V, A>::from(onelevel);
+                let twolevel = Box::new(TwolevelHashtable::<K, V, A>::from(onelevel));
                 std::ptr::write(self, Twolevel(twolevel));
             }
         }

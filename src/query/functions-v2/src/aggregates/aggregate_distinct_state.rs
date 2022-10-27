@@ -174,8 +174,7 @@ impl AggregateDistinctStringState {
                     holder.commit_row();
                     let value = unsafe { holder.index_unchecked(holder.len() - 1) };
                     unsafe {
-                        *(entity.key() as *const _ as *mut _) =
-                            KeysRef::create(value.as_ptr() as usize, value.len());
+                        entity.set_key(KeysRef::create(value.as_ptr() as usize, value.len()));
                     }
                     self.holders.push(holder);
                 } else {
@@ -183,8 +182,7 @@ impl AggregateDistinctStringState {
                     holder.commit_row();
                     let value = unsafe { holder.index_unchecked(holder.len() - 1) };
                     unsafe {
-                        *(entity.key() as *const _ as *mut _) =
-                            KeysRef::create(value.as_ptr() as usize, value.len());
+                        entity.set_key(KeysRef::create(value.as_ptr() as usize, value.len()));
                     }
                 }
             }

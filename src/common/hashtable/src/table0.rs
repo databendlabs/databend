@@ -37,6 +37,14 @@ impl<K: Keyable, V> Entry<K, V> {
         unsafe { self.key.assume_init_ref() }
     }
     // this function can only be used in external crates
+    /// # Safety
+    ///
+    /// The new key should be equals the old key.
+    #[inline(always)]
+    pub unsafe fn set_key(&mut self, key: K) {
+        self.key.write(key);
+    }
+    // this function can only be used in external crates
     #[inline(always)]
     pub fn get(&self) -> &V {
         unsafe { self.val.assume_init_ref() }
@@ -267,7 +275,7 @@ where
     pub unsafe fn set_merge(&mut self, other: &Self) {
         assert!(self.capacity() >= self.len() + other.len());
         for entry in other.iter() {
-            let key = *(*entry).key.assume_init_ref();
+            let key = entry.key.assume_init();
             let _ = self.insert(key);
         }
     }

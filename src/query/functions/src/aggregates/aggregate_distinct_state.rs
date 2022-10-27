@@ -198,16 +198,14 @@ impl AggregateDistinctStringState {
                     holder.push(data);
                     let value = unsafe { holder.value_unchecked(holder.len() - 1) };
                     unsafe {
-                        *(entity.key() as *const _ as *mut _) =
-                            KeysRef::create(value.as_ptr() as usize, value.len());
+                        entity.set_key(KeysRef::create(value.as_ptr() as usize, value.len()));
                     }
                     self.holders.push(holder);
                 } else {
                     holder.push(data);
                     let value = unsafe { holder.value_unchecked(holder.len() - 1) };
                     unsafe {
-                        *(entity.key() as *const _ as *mut _) =
-                            KeysRef::create(value.as_ptr() as usize, value.len());
+                        entity.set_key(KeysRef::create(value.as_ptr() as usize, value.len()));
                     }
                 }
             }
@@ -343,7 +341,7 @@ where
     fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
         writer.write_uvarint(self.set.len() as u64)?;
         for value in self.set.iter() {
-            let t: T = value.key().clone().into();
+            let t: T = (*value.key()).into();
             serialize_into_buf(writer, &t)?
         }
         Ok(())
@@ -402,13 +400,13 @@ where
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
         for x in rhs.set.iter() {
-            let _ = self.set.set_insert(x.key().clone());
+            let _ = self.set.set_insert(*x.key());
         }
         Ok(())
     }
 
     fn build_columns(&mut self, _fields: &[DataField]) -> Result<Vec<ColumnRef>> {
-        let values: Vec<T> = self.set.iter().map(|e| e.key().clone().into()).collect();
+        let values: Vec<T> = self.set.iter().map(|e| (*e.key()).into()).collect();
         let result = PrimitiveColumn::<T>::new_from_vec(values);
         Ok(vec![result.arc()])
     }

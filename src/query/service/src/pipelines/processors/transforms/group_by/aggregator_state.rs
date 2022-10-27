@@ -362,7 +362,7 @@ impl AggregatorState<HashMethodSerializer> for SerializedKeysAggregatorState {
         inserted: &mut bool,
     ) -> Self::EntityMutRef<'_> {
         unsafe {
-            match self.data_state_map.insert_and_entry(&*key_ref) {
+            match self.data_state_map.insert_and_entry(key_ref) {
                 Ok(e) => {
                     *inserted = true;
                     e

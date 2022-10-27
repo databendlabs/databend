@@ -20,6 +20,9 @@ use std::ops::DerefMut;
 use std::ptr::null_mut;
 use std::ptr::NonNull;
 
+/// # Safety
+///
+/// Any foreign type shouldn't implement this trait.
 pub unsafe trait Container
 where Self: Deref<Target = [Self::T]> + DerefMut
 {

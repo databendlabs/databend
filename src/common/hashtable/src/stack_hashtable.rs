@@ -59,6 +59,16 @@ where
     }
 }
 
+impl<K, V, A, const N: usize> Default for StackHashtable<K, V, N, A>
+where
+    K: Keyable,
+    A: Allocator + Clone + Default,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<K, V, A, const N: usize> StackHashtable<K, V, N, A>
 where
     K: Keyable,
@@ -183,7 +193,7 @@ where
     pub fn set_merge(&mut self, other: &Self) {
         if let Some(entry) = other.zero.0.as_ref() {
             self.zero = ZeroEntry(Some(Entry {
-                key: entry.key.clone(),
+                key: entry.key,
                 val: MaybeUninit::uninit(),
                 _alignment: [0; 0],
             }));

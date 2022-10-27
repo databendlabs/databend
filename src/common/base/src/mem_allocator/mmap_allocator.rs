@@ -21,6 +21,12 @@ pub struct MmapAllocator<T> {
     allocator: T,
 }
 
+impl<T> MmapAllocator<T> {
+    pub fn new(allocator: T) -> Self {
+        Self { allocator }
+    }
+}
+
 #[cfg(target_os = "linux")]
 pub mod linux {
     use std::alloc::AllocError;
@@ -255,7 +261,7 @@ pub mod linux {
             while length < uname.release.len() && uname.release[length] != 0 {
                 length += 1;
             }
-            let slice = unsafe { &*(&uname.release[..length] as *const [i8] as *const [u8]) };
+            let slice = unsafe { &*(&uname.release[..length] as *const _ as *const [u8]) };
             let ver = std::str::from_utf8(slice).unwrap();
             let semver = semver::Version::parse(ver).unwrap();
             let result = (semver.major.min(65535) as u32) << 16
@@ -272,6 +278,13 @@ pub mod linux {
 
 #[cfg(not(target_os = "linux"))]
 pub mod fallback {
+    use std::alloc::AllocError;
+    use std::alloc::Allocator;
+    use std::alloc::Layout;
+    use std::ptr::NonNull;
+
+    use super::MmapAllocator;
+
     impl<T> MmapAllocator<T> {
         pub const FALLBACK: bool = true;
     }

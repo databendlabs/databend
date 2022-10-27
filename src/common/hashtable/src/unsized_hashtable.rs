@@ -70,6 +70,16 @@ where
     }
 }
 
+impl<K, V, A> Default for UnsizedHashtable<K, V, A>
+where
+    K: UnsizedKeyable + ?Sized,
+    A: Allocator + Clone + Default,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<K, V, A> UnsizedHashtable<K, V, A>
 where
     K: UnsizedKeyable + ?Sized,

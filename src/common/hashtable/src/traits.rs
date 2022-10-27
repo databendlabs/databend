@@ -30,9 +30,16 @@ pub unsafe trait Keyable: Sized + Copy + Eq {
     fn hash(&self) -> u64;
 }
 
-pub trait UnsizedKeyable {
+/// # Safety
+///
+/// There shouldn't be any uninitialized bytes or interior mutability in `Self`.
+/// The implementation promises `from_bytes(as_bytes(self))` is `self`.
+/// `as_bytes` should returns a slice that is valid for reads.
+pub unsafe trait UnsizedKeyable {
     fn as_bytes(&self) -> &[u8];
 
+    /// # Safety
+    /// The argument should be a return value of `as_bytes` in the same implementation.
     unsafe fn from_bytes(bytes: &[u8]) -> &Self;
 }
 
@@ -153,7 +160,7 @@ unsafe impl<const N: usize> Keyable for [u8; N] {
     }
 }
 
-impl UnsizedKeyable for [u8] {
+unsafe impl UnsizedKeyable for [u8] {
     fn as_bytes(&self) -> &[u8] {
         self
     }
@@ -163,7 +170,7 @@ impl UnsizedKeyable for [u8] {
     }
 }
 
-impl UnsizedKeyable for str {
+unsafe impl UnsizedKeyable for str {
     fn as_bytes(&self) -> &[u8] {
         self.as_bytes()
     }

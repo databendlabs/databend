@@ -91,7 +91,7 @@ pub trait PolymorphicKeysHelper<Method: HashMethod> {
         Self: 'a,
         Self::State: 'a;
 
-    fn keys_column_builder<'a>(&'a self, capacity: usize) -> Self::ColumnBuilder<'a>;
+    fn keys_column_builder(&self, capacity: usize) -> Self::ColumnBuilder<'_>;
 
     type KeysColumnIter<'a>: KeysColumnIter<<Self::State as AggregatorState<Method>>::KeyRef<'a>>
     where

@@ -104,7 +104,7 @@ impl<'a> GroupColumnsBuilder for SerializedKeysGroupColumnsBuilder<'a> {
         if self.group_data_types.len() == 1
             && self.group_data_types[0].data_type_id() == TypeID::String
         {
-            let col = StringColumn::from_slice(&keys);
+            let col = StringColumn::from_slice(keys);
             return Ok(vec![col.arc()]);
         }
 

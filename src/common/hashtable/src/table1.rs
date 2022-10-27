@@ -16,6 +16,8 @@ use std::alloc::Allocator;
 
 use super::table0::Entry;
 
+type Ent<V> = Entry<[u8; 2], V>;
+
 pub struct Table1<V, A: Allocator + Clone> {
     pub(crate) data: Box<[Entry<[u8; 2], V>; 65536], A>,
     pub(crate) len: usize,
@@ -39,7 +41,7 @@ impl<V, A: Allocator + Clone> Table1<V, A> {
     pub fn len(&self) -> usize {
         self.len
     }
-    pub fn get(&self, key: [u8; 2]) -> Option<&Entry<[u8; 2], V>> {
+    pub fn get(&self, key: [u8; 2]) -> Option<&Ent<V>> {
         let e = &self.data[key[1] as usize * 256 + key[0] as usize];
         if unsafe { e.key.assume_init() } == key {
             Some(e)
@@ -47,7 +49,7 @@ impl<V, A: Allocator + Clone> Table1<V, A> {
             None
         }
     }
-    pub fn get_mut(&mut self, key: [u8; 2]) -> Option<&mut Entry<[u8; 2], V>> {
+    pub fn get_mut(&mut self, key: [u8; 2]) -> Option<&mut Ent<V>> {
         let e = &mut self.data[key[1] as usize * 256 + key[0] as usize];
         if unsafe { e.key.assume_init() } == key {
             Some(e)
@@ -58,10 +60,7 @@ impl<V, A: Allocator + Clone> Table1<V, A> {
     /// # Safety
     ///
     /// The resulted `MaybeUninit` should be initialized immedidately.
-    pub fn insert(
-        &mut self,
-        key: [u8; 2],
-    ) -> Result<&mut Entry<[u8; 2], V>, &mut Entry<[u8; 2], V>> {
+    pub fn insert(&mut self, key: [u8; 2]) -> Result<&mut Ent<V>, &mut Ent<V>> {
         let e = &mut self.data[key[1] as usize * 256 + key[0] as usize];
         if unsafe { e.key.assume_init() } == key {
             Err(e)

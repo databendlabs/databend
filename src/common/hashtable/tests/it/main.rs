@@ -120,7 +120,7 @@ fn test_unsized_hash_map() {
     }
     let mut hashtable = UnsizedHashMap::<[u8], U64>::new();
     for s in sequence.iter() {
-        match unsafe { hashtable.insert_and_entry(&s) } {
+        match unsafe { hashtable.insert_and_entry(s) } {
             Ok(mut e) => {
                 e.write(U64::new(1u64));
             }
