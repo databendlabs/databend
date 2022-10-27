@@ -29,6 +29,7 @@ use common_functions::scalars::Monotonicity;
 use common_functions::scalars::PatternType;
 use common_fuse_meta::meta::StatisticsOfColumns;
 use common_planner::PhysicalScalar;
+use common_planner::RequireColumnsVisitor;
 use common_sql::evaluator::EvalNode;
 use common_sql::evaluator::Evaluator;
 use common_sql::evaluator::PhysicalScalarOp;
@@ -50,6 +51,7 @@ impl RangeFilter {
     ) -> Result<Self> {
         debug_assert!(!exprs.is_empty());
         let mut stat_columns: StatColumns = Vec::new();
+
         let verifiable_expr = exprs
             .iter()
             .fold(None, |acc: Option<PhysicalScalar>, expr| {
@@ -136,10 +138,35 @@ pub fn build_verifiable_expr(
         data_type: bool::to_data_type(),
     };
 
-    // TODO(sundy)
-    todo!()
-    // VerifiableExprBuilder::try_create(exprs, op.to_lowercase().as_str(), schema, stat_columns)
-    // .map_or(unhandled.clone(), |mut v| v.build().unwrap_or(unhandled))
+    /// TODO: Try to convert `not(is_not_null)` to `is_null`.
+    let (exprs, op) = match expr {
+        PhysicalScalar::Constant { .. } => return expr.clone(),
+        PhysicalScalar::Function {
+            name,
+            args,
+            return_type,
+        } if args.len() == 2 => {
+            let left = &args[0];
+            let right = &args[1];
+            match name.to_lowercase().as_str() {
+                "and" => {
+                    let left = build_verifiable_expr(left, schema, stat_columns);
+                    let right = build_verifiable_expr(right, schema, stat_columns);
+                    return left.and(&right).unwrap();
+                }
+                "or" => {
+                    let left = build_verifiable_expr(left, schema, stat_columns);
+                    let right = build_verifiable_expr(right, schema, stat_columns);
+                    return left.or(&right).unwrap();
+                }
+                _ => (vec![left.clone(), right.clone()], name.clone()),
+            }
+        }
+        _ => return unhandled,
+    };
+
+    VerifiableExprBuilder::try_create(exprs, op.to_lowercase().as_str(), schema, stat_columns)
+        .map_or(unhandled.clone(), |mut v| v.build().unwrap_or(unhandled))
 }
 
 fn inverse_operator(op: &str) -> Result<&str> {
@@ -155,25 +182,6 @@ fn inverse_operator(op: &str) -> Result<&str> {
         _ => Ok(op),
     }
 }
-
-/// Try to convert `not(is_not_null)` to `is_null`.
-// TODO(sundy)
-// fn try_convert_is_null(op: &str, args: Vec<PhysicalScalar>) -> (Vec<PhysicalScalar>, String) {
-//     // `is null` will be converted to `not(is not null)` in the parser.
-//     // we should convert it back to `is null` here.
-//     if op == "not" && args.len() == 1 {
-//         if let PhysicalScalar::ScalarFunction {
-//             op: inner_op,
-//             args: inner_args,
-//         } = &args[0]
-//         {
-//             if inner_op == "is_not_null" {
-//                 return (inner_args.clone(), String::from("is_null"));
-//             }
-//         }
-//     }
-//     (args, String::from(op))
-// }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 enum StatType {
@@ -316,8 +324,77 @@ impl<'a> VerifiableExprBuilder<'a> {
         schema: &'a DataSchemaRef,
         stat_columns: &'a mut StatColumns,
     ) -> Result<Self> {
-        // TODO(sundy)
-        todo!()
+        // collect state columns
+        // exprs's len must be 2
+        let lhs_cols = RequireColumnsVisitor::collect_columns_from_expr(&exprs[0])?;
+        let rhs_cols = RequireColumnsVisitor::collect_columns_from_expr(&exprs[1])?;
+        let (args, cols, op) = match (lhs_cols.len(), rhs_cols.len()) {
+            (0, 0) => {
+                return Err(ErrorCode::UnknownException(
+                    "Constant expression donot need to be handled",
+                ));
+            }
+            (_, 0) => (vec![exprs[0].clone(), exprs[1].clone()], vec![lhs_cols], op),
+            (0, _) => {
+                let op = inverse_operator(op)?;
+                (vec![exprs[1].clone(), exprs[0].clone()], vec![rhs_cols], op)
+            }
+            _ => {
+                if !lhs_cols.is_disjoint(&rhs_cols) {
+                    return Err(ErrorCode::UnknownException(
+                        "Unsupported condition for left and right have same columns",
+                    ));
+                }
+
+                if !matches!(op, "=" | "<" | "<=" | ">" | ">=") {
+                    return Err(ErrorCode::UnknownException(format!(
+                        "Unsupported operator '{:?}' for multi-column expression",
+                        op
+                    )));
+                }
+
+                if !check_maybe_monotonic(&exprs[1])? {
+                    return Err(ErrorCode::UnknownException(
+                        "Only support the monotonic expression",
+                    ));
+                }
+
+                (
+                    vec![exprs[0].clone(), exprs[1].clone()],
+                    vec![lhs_cols, rhs_cols],
+                    op,
+                )
+            }
+        };
+
+        if !check_maybe_monotonic(&args[0])? {
+            return Err(ErrorCode::UnknownException(
+                "Only support the monotonic expression",
+            ));
+        }
+
+        let mut fields = Vec::with_capacity(cols.len());
+
+        let left_cols = get_column_fields(schema, cols[0].clone())?;
+
+        let left_name = args[0].pretty_display();
+        let left_field = DataField::new(&left_name, args[0].data_type().clone());
+
+        fields.push((left_field, left_cols));
+
+        if cols.len() > 1 {
+            let right_cols = get_column_fields(schema, cols[1].clone())?;
+            let right_name = args[1].pretty_display();
+            let right_field = DataField::new(&right_name, args[1].data_type().clone());
+            fields.push((right_field, right_cols));
+        }
+
+        Ok(Self {
+            op,
+            args,
+            fields,
+            stat_columns,
+        })
     }
 
     fn build(&mut self) -> Result<PhysicalScalar> {
@@ -615,17 +692,14 @@ pub fn check_maybe_monotonic(expr: &PhysicalScalar) -> Result<bool> {
         PhysicalScalar::IndexedVariable { .. } => Ok(true),
         PhysicalScalar::Function { name, args, .. } => get_maybe_monotonic(name, args),
         PhysicalScalar::Cast { input, .. } => check_maybe_monotonic(input.as_ref()),
-        _ => Ok(false),
     }
 }
 
-fn get_column_fields(schema: &DataSchemaRef, cols: HashSet<String>) -> Result<ColumnFields> {
+fn get_column_fields(schema: &DataSchemaRef, cols: HashSet<usize>) -> Result<ColumnFields> {
     let mut column_fields = HashMap::with_capacity(cols.len());
+
     for col in &cols {
-        let (index, field) = schema
-            .column_with_name(col.as_str())
-            .ok_or_else(|| ErrorCode::UnknownException("Unable to find the column name"))?;
-        column_fields.insert(index as u32, field.clone());
+        column_fields.insert(*col as u32, schema.field(*col).clone());
     }
     Ok(column_fields)
 }

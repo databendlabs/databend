@@ -1883,6 +1883,7 @@ name = "common-planner"
 version = "0.1.0"
 dependencies = [
  "common-datavalues",
+ "common-exception",
  "common-meta-app",
  "common-meta-types",
  "once_cell",

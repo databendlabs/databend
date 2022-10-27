@@ -23,9 +23,9 @@ use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::TableCopiedFileInfo;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_types::UserStageInfo;
+use common_planner::stage_table::StageTableInfo;
 use common_planner::ReadDataSourcePlan;
 use common_planner::SourceInfo;
-use common_planner::stage_table::StageTableInfo;
 use regex::Regex;
 
 use super::append2table;

@@ -128,14 +128,14 @@ impl Table for NumbersTable {
         let mut limit = None;
 
         if let Some(extras) = &push_downs {
-            if extras.limit.is_some() && extras.filters.is_empty() && extras.order_by.is_empty()  {
+            if extras.limit.is_some() && extras.filters.is_empty() && extras.order_by.is_empty() {
                 // It is allowed to have an error when we can't get sort columns from the expression. For
                 // example 'select number from numbers(10) order by number+4 limit 10', the column 'number+4'
                 // doesn't exist in the numbers table.
                 // For case like that, we ignore the error and don't apply any optimization.
 
                 // No order by case
-                    limit = extras.limit;
+                limit = extras.limit;
             }
         }
         let total = match limit {

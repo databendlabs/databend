@@ -25,11 +25,13 @@ mod partition;
 mod physical_scalar;
 
 pub mod extras;
+mod physical_scalar_visitor;
 pub mod plan_read_datasource;
 pub mod stage_table;
 
 pub use partition::*;
 pub use physical_scalar::*;
+pub use physical_scalar_visitor::*;
 pub use plan_read_datasource::*;
 
 // Plan will be used publicly.

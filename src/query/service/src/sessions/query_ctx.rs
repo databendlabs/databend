@@ -37,6 +37,7 @@ use common_functions::scalars::FunctionContext;
 use common_io::prelude::FormatSettings;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::UserInfo;
+use common_planner::stage_table::StageTableInfo;
 use common_planner::PartInfoPtr;
 use common_planner::Partitions;
 use common_planner::ReadDataSourcePlan;

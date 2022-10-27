@@ -22,6 +22,7 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipe;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sources::processors::sources::StreamSource;
+use common_sql::validate_function_arg;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
@@ -38,12 +39,21 @@ pub trait Procedure: Sync + Send {
 
     fn validate(&self, ctx: Arc<QueryContext>, args: &[String]) -> Result<()> {
         let features = self.features();
+
+        validate_function_arg(
+            self.name(),
+            args.len(),
+            features.variadic_arguments,
+            features.num_arguments,
+        )?;
+
         if features.management_mode_required && !ctx.get_config().query.management_mode {
             return Err(ErrorCode::ManagementModePermissionDenied(format!(
                 "Access denied: '{}' only used in management-mode",
                 self.name()
             )));
         }
+
         if let Some(user_option_flag) = features.user_option_flag {
             let user_info = ctx.get_current_user()?;
             if !user_info.has_option_flag(user_option_flag) {

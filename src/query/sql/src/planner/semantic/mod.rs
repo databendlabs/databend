@@ -20,4 +20,5 @@ pub use grouping_check::GroupingChecker;
 pub use name_resolution::normalize_identifier;
 pub use name_resolution::IdentifierNormalizer;
 pub use name_resolution::NameResolutionContext;
+pub use type_check::validate_function_arg;
 pub use type_check::TypeChecker;

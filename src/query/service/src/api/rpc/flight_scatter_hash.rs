@@ -89,7 +89,10 @@ impl HashFlightScatter {
                     input: Box::new(expr),
                     target: u64::to_data_type(),
                 },
-                PhysicalScalar::Constant { value:   DataValue::UInt64(num as u64), data_type: u64::to_data_type() }
+                PhysicalScalar::Constant {
+                    value: DataValue::UInt64(num as u64),
+                    data_type: u64::to_data_type(),
+                },
             ],
             return_type: u64::to_data_type(),
         }
