@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataField;
 use common_exception::ErrorCode;
@@ -51,7 +52,9 @@ impl FuseTable {
 
         // check if unconditional deletion
         if let Some(filter) = &plan.selection {
-            let physical_scalars = PhysicalScalarParser::parse_exprs(plan.schema(), filter)?;
+            let table_meta = Arc::new(self.clone());
+            let physical_scalars =
+                PhysicalScalarParser::parse_exprs(plan.schema(), table_meta, filter)?;
             if physical_scalars.is_empty() {
                 return Err(ErrorCode::IndexOutOfBounds(
                     "expression should be valid, but not",
@@ -153,9 +156,10 @@ impl FuseTable {
         let input_schema = self.table_info.schema();
         let mut merged = input_schema.fields().clone();
 
-        let mut cluster_key_index = Vec::with_capacity(self.cluster_keys.len());
-        let mut extra_key_index = Vec::with_capacity(self.cluster_keys.len());
-        for expr in &self.cluster_keys {
+        let cluster_keys = self.cluster_keys();
+        let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());
+        let mut extra_key_index = Vec::with_capacity(cluster_keys.len());
+        for expr in &cluster_keys {
             let cname = expr.pretty_display();
             let index = match merged.iter().position(|x| x.name() == &cname) {
                 None => {

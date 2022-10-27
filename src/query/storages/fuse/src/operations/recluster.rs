@@ -146,7 +146,7 @@ impl FuseTable {
 
         // sort
         let sort_descs: Vec<SortColumnDescription> = self
-            .cluster_keys
+            .cluster_keys()
             .iter()
             .map(|expr| SortColumnDescription {
                 column_name: expr.pretty_display(),

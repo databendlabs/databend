@@ -15,6 +15,7 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
+use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datablocks::SortColumnDescription;
 use common_datavalues::DataField;
@@ -55,10 +56,10 @@ impl FuseTable {
         let cluster_stats_gen =
             self.get_cluster_stats_gen(ctx.clone(), pipeline, 0, block_compactor)?;
 
-        if !self.cluster_keys.is_empty() {
+        let cluster_keys = self.cluster_keys();
+        if !cluster_keys.is_empty() {
             // sort
-            let sort_descs: Vec<SortColumnDescription> = self
-                .cluster_keys
+            let sort_descs: Vec<SortColumnDescription> = cluster_keys
                 .iter()
                 .map(|expr| SortColumnDescription {
                     // todo(sundy): use index instead
@@ -113,19 +114,20 @@ impl FuseTable {
         level: i32,
         block_compactor: BlockCompactor,
     ) -> Result<ClusterStatsGenerator> {
-        if self.cluster_keys.is_empty() {
+        let cluster_keys = self.cluster_keys();
+        if cluster_keys.is_empty() {
             return Ok(ClusterStatsGenerator::default());
         }
 
         let input_schema = self.table_info.schema();
         let mut merged = input_schema.fields().clone();
 
-        let mut cluster_key_index = Vec::with_capacity(self.cluster_keys.len());
-        let mut extra_key_index = Vec::with_capacity(self.cluster_keys.len());
+        let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());
+        let mut extra_key_index = Vec::with_capacity(cluster_keys.len());
 
-        let mut operators = Vec::with_capacity(self.cluster_keys.len());
+        let mut operators = Vec::with_capacity(cluster_keys.len());
 
-        for expr in &self.cluster_keys {
+        for expr in &cluster_keys {
             let cname = expr.pretty_display();
 
             let index = match merged.iter().position(|x| x.name() == &cname) {

@@ -73,7 +73,6 @@ pub struct FuseTable {
     pub(crate) table_info: TableInfo,
     pub(crate) meta_location_generator: TableMetaLocationGenerator,
 
-    pub(crate) cluster_keys: Vec<PhysicalScalar>,
     pub(crate) cluster_key_meta: Option<ClusterKey>,
     pub(crate) read_only: bool,
 
@@ -90,11 +89,6 @@ impl FuseTable {
     pub fn do_create(table_info: TableInfo, read_only: bool) -> Result<Box<FuseTable>> {
         let storage_prefix = Self::parse_storage_prefix(&table_info)?;
         let cluster_key_meta = table_info.meta.cluster_key();
-        let schema = table_info.schema();
-        let mut cluster_keys = Vec::new();
-        if let Some((_, order)) = &cluster_key_meta {
-            cluster_keys = PhysicalScalarParser::parse_exprs(schema, order)?;
-        }
         let mut operator = match table_info.from_share {
             Some(ref from_share) => create_share_table_operator(
                 ShareTableConfig::share_endpoint_address(),
@@ -119,9 +113,8 @@ impl FuseTable {
 
         Ok(Box::new(FuseTable {
             table_info,
-            cluster_keys,
-            cluster_key_meta,
             meta_location_generator: TableMetaLocationGenerator::with_prefix(storage_prefix),
+            cluster_key_meta,
             read_only,
             operator,
             data_metrics,
@@ -254,7 +247,14 @@ impl Table for FuseTable {
     }
 
     fn cluster_keys(&self) -> Vec<PhysicalScalar> {
-        self.cluster_keys.clone()
+        let schema = self.table_info.schema();
+        let table_meta = Arc::new(self.clone());
+        if let Some((_, order)) = &self.cluster_key_meta {
+            let cluster_keys =
+                PhysicalScalarParser::parse_exprs(schema, table_meta, order).unwrap();
+            return cluster_keys;
+        }
+        vec![]
     }
 
     fn support_prewhere(&self) -> bool {

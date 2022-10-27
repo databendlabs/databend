@@ -1344,10 +1344,10 @@ impl<'a> SyncTypeChecker<'a> {
     fn resolve_map_access_pushdown(
         &mut self,
         data_type: DataTypeImpl,
-        mut accessors: Vec<MapAccessor<'async_recursion>>,
-        database: Option<Identifier<'async_recursion>>,
-        table: Option<Identifier<'async_recursion>>,
-        column: Identifier<'async_recursion>,
+        mut accessors: Vec<MapAccessor>,
+        database: Option<Identifier>,
+        table: Option<Identifier>,
+        column: Identifier,
     ) -> Result<Box<(Scalar, DataTypeImpl)>> {
         let mut names = Vec::new();
         let column_name = normalize_identifier(&column, self.name_resolution_ctx).name;

@@ -12,6 +12,8 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::sync::Arc;
+
 use common_catalog::table::Table;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -39,7 +41,9 @@ pub fn parse_func_table_args(table_args: &TableArgs) -> Result<(String, String)>
 
 pub fn get_cluster_keys(table: &FuseTable, definition: &str) -> Result<Vec<PhysicalScalar>> {
     let cluster_keys = if !definition.is_empty() {
-        let physical_scalars = PhysicalScalarParser::parse_exprs(table.schema(), definition)?;
+        let table_meta = Arc::new(table.clone());
+        let physical_scalars =
+            PhysicalScalarParser::parse_exprs(table.schema(), table_meta, definition)?;
         physical_scalars
     } else {
         table.cluster_keys()
