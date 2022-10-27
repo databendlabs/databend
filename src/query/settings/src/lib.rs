@@ -366,7 +366,7 @@ impl Settings {
                 possible_values: None,
             },
             SettingValue {
-                default_value: UserSettingValue::String("\"".to_owned()),
+                default_value: UserSettingValue::UInt64(1),
                 user_setting: UserSetting::create(
                     "enable_distributed_eval_index",
                     UserSettingValue::UInt64(1),
