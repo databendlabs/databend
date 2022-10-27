@@ -179,7 +179,7 @@ pub mod linux_or_macos {
             new_layout: Layout,
         ) -> Result<NonNull<[u8]>, AllocError> {
             debug_assert_eq!(old_layout.align(), new_layout.align());
-            debug_assert!(old_layout.size() <= new_layout.size());
+            debug_assert!(old_layout.size() >= new_layout.size());
             if old_layout.size() == 0 {
                 debug_assert_eq!(ptr.as_ptr() as usize, old_layout.align());
                 let slice = std::slice::from_raw_parts_mut(ptr.as_ptr(), 0);
