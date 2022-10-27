@@ -202,6 +202,10 @@ build_exceptions! {
     DropDbWithDropTime(2315),
     UndropDbWithNoDropTime(2316),
     TxnRetryMaxTimes(2317),
+    CreateCatalogUnsupported(2318),
+    CatalogAlreadyExists(2319),
+    CreateCatalogWithDropTime(2320),
+    DropCatalogWithDropTime(2321),
 
     // Cluster error codes.
     ClusterUnknownNode(2401),

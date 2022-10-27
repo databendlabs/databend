@@ -14,13 +14,19 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 use common_base::base::Singleton;
 use common_catalog::catalog::Catalog;
 pub use common_catalog::catalog::CatalogManager;
 use common_catalog::catalog::CATALOG_DEFAULT;
 use common_config::Config;
+use common_exception::ErrorCode;
 use common_exception::Result;
+#[cfg(feature = "hive")]
+use common_meta_app::schema::CatalogType;
+#[cfg(feature = "hive")]
+use common_meta_app::schema::CreateCatalogReq;
 #[cfg(feature = "hive")]
 use common_storages_hive::CATALOG_HIVE;
 
@@ -32,10 +38,13 @@ pub trait CatalogManagerHelper {
 
     async fn try_create(conf: &Config) -> Result<Arc<CatalogManager>>;
 
-    async fn register_build_in_catalogs(&mut self, conf: &Config) -> Result<()>;
+    async fn register_build_in_catalogs(&self, conf: &Config) -> Result<()>;
 
     #[cfg(feature = "hive")]
-    fn register_external_catalogs(&mut self, conf: &Config) -> Result<()>;
+    fn register_external_catalogs(&self, conf: &Config) -> Result<()>;
+
+    #[cfg(feature = "hive")]
+    async fn create_user_defined_catalog(&self, req: CreateCatalogReq) -> Result<()>;
 }
 
 #[async_trait::async_trait]
@@ -47,8 +56,8 @@ impl CatalogManagerHelper for CatalogManager {
     }
 
     async fn try_create(conf: &Config) -> Result<Arc<CatalogManager>> {
-        let mut catalog_manager = CatalogManager {
-            catalogs: HashMap::new(),
+        let catalog_manager = CatalogManager {
+            catalogs: Mutex::new(HashMap::new()),
         };
 
         catalog_manager.register_build_in_catalogs(conf).await?;
@@ -61,22 +70,82 @@ impl CatalogManagerHelper for CatalogManager {
         Ok(Arc::new(catalog_manager))
     }
 
-    async fn register_build_in_catalogs(&mut self, conf: &Config) -> Result<()> {
+    async fn register_build_in_catalogs(&self, conf: &Config) -> Result<()> {
         let default_catalog: Arc<dyn Catalog> =
             Arc::new(DatabaseCatalog::try_create_with_config(conf.clone()).await?);
-        self.catalogs
-            .insert(CATALOG_DEFAULT.to_owned(), default_catalog);
+        {
+            self.catalogs
+                .lock()
+                .map_err(|e| {
+                    ErrorCode::InternalError(format!("acquire catalog manager lock error: {:?}", e))
+                })?
+                .insert(CATALOG_DEFAULT.to_owned(), default_catalog);
+        }
         Ok(())
     }
 
     #[cfg(feature = "hive")]
-    fn register_external_catalogs(&mut self, conf: &Config) -> Result<()> {
+    fn register_external_catalogs(&self, conf: &Config) -> Result<()> {
         use crate::catalogs::hive::HiveCatalog;
         let hms_address = &conf.catalog.meta_store_address;
         if !hms_address.is_empty() {
             // register hive catalog
             let hive_catalog: Arc<dyn Catalog> = Arc::new(HiveCatalog::try_create(hms_address)?);
-            self.catalogs.insert(CATALOG_HIVE.to_owned(), hive_catalog);
+            {
+                self.catalogs
+                    .lock()
+                    .map_err(|e| {
+                        ErrorCode::InternalError(format!(
+                            "acquire catalog manager lock error: {:?}",
+                            e
+                        ))
+                    })?
+                    .insert(CATALOG_HIVE.to_owned(), hive_catalog);
+            }
+        }
+        Ok(())
+    }
+
+    #[cfg(feature = "hive")]
+    // TODO: support more catalog types
+    async fn create_user_defined_catalog(&self, req: CreateCatalogReq) -> Result<()> {
+        use crate::catalogs::hive::HiveCatalog;
+        if req.name_ident.tenant.is_empty() {
+            return Err(ErrorCode::TenantIsEmpty(
+                "Tenant cannot be empty(while create catalog)",
+            ));
+        }
+        tracing::info!("Creat user defined catalog from req: {:?}", req);
+
+        // create catalog first and check conflict later
+        let ctl_name = &req.name_ident.ctl_name;
+        let ctl_type = &req.meta.catalog_type;
+        let udc: Arc<dyn Catalog> = match ctl_type {
+            CatalogType::Default => unreachable!(),
+            CatalogType::Hive => {
+                if let Some(hms_address) = req.meta.options.get("HMS_ADDRESS") {
+                    Arc::new(HiveCatalog::try_create(hms_address)?)
+                } else {
+                    return Err(ErrorCode::UnknownCatalogType(format!(
+                        "Hive catalog type must have HMS_ADDRESS in options, but got: {:?}",
+                        req.meta.options
+                    )));
+                }
+            }
+        };
+
+        let if_not_exists = req.if_not_exists;
+        {
+            let mut guard = self.catalogs.lock().map_err(|e| {
+                ErrorCode::InternalError(format!("acquire catalog manager lock error: {:?}", e))
+            })?;
+            if guard.contains_key(ctl_name) && !if_not_exists {
+                return Err(ErrorCode::CatalogAlreadyExists(format!(
+                    "{} catalog exisits",
+                    ctl_name
+                )));
+            }
+            guard.insert(ctl_name.to_owned(), udc);
         }
         Ok(())
     }

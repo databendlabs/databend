@@ -19,6 +19,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use tracing::error;
 
+use super::interpreter_catalog_create::CreateCatalogInterpreter;
 use super::interpreter_share_desc::DescShareInterpreter;
 use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::*;
@@ -89,7 +90,10 @@ impl InterpreterFactory {
 
             // catalogs
             Plan::ShowCreateCatalog(_) => todo!(),
-            Plan::CreateCatalog(_) => todo!(),
+            Plan::CreateCatalog(plan) => Ok(Arc::new(CreateCatalogInterpreter::try_create(
+                ctx,
+                *plan.clone(),
+            )?)),
             Plan::DropCatalog(_) => todo!(),
 
             // Databases

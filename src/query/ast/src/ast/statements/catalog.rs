@@ -16,6 +16,8 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use common_meta_app::schema::CatalogType;
+
 use super::ShowLimit;
 use crate::ast::Identifier;
 
@@ -78,26 +80,5 @@ impl Display for DropCatalogStmt<'_> {
             write!(f, "IF EXISTS ")?;
         }
         write!(f, "{}", self.catalog)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CatalogType {
-    Default,
-    Hive,
-}
-
-impl Default for CatalogType {
-    fn default() -> Self {
-        CatalogType::Default
-    }
-}
-
-impl Display for CatalogType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            CatalogType::Default => write!(f, "DEFAULT"),
-            CatalogType::Hive => write!(f, "HIVE"),
-        }
     }
 }

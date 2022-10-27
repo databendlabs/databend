@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 use common_base::base::Singleton;
 use common_exception::ErrorCode;
@@ -62,12 +63,16 @@ pub const CATALOG_DEFAULT: &str = "default";
 static CATALOG_MANAGER: OnceCell<Singleton<Arc<CatalogManager>>> = OnceCell::new();
 
 pub struct CatalogManager {
-    pub catalogs: HashMap<String, Arc<dyn Catalog>>,
+    pub catalogs: Mutex<HashMap<String, Arc<dyn Catalog>>>,
 }
 
 impl CatalogManager {
     pub fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
         self.catalogs
+            .lock()
+            .map_err(|e| {
+                ErrorCode::InternalError(format!("acquire catalog manager lock error: {:?}", e))
+            })?
             .get(catalog_name)
             .cloned()
             .ok_or_else(|| ErrorCode::BadArguments(format!("no such catalog {}", catalog_name)))

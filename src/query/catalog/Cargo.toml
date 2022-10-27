@@ -9,6 +9,7 @@ doctest = false
 test = false
 
 [dependencies]
+common-ast = { path = "../ast" }
 common-base = { path = "../../common/base" }
 common-config = { path = "../config" }
 common-datablocks = { path = "../datablocks" }

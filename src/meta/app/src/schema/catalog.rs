@@ -26,12 +26,34 @@
 
 use std::collections::BTreeMap;
 use std::fmt::Display;
+use std::fmt::Formatter;
 use std::ops::Deref;
 
 use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Utc;
 use serde::Deserialize;
 use serde::Serialize;
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CatalogType {
+    Default,
+    Hive,
+}
+
+impl Default for CatalogType {
+    fn default() -> Self {
+        CatalogType::Default
+    }
+}
+
+impl Display for CatalogType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CatalogType::Default => write!(f, "DEFAULT"),
+            CatalogType::Hive => write!(f, "HIVE"),
+        }
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct CatalogNameIdent {
@@ -52,14 +74,14 @@ pub struct CatalogInfo {
 }
 
 impl CatalogInfo {
-    pub fn catalog_type(&self) -> &str {
-        &self.meta.catalog_type
+    pub fn catalog_type(&self) -> CatalogType {
+        self.meta.catalog_type
     }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct CatalogMeta {
-    pub catalog_type: String,
+    pub catalog_type: CatalogType,
     pub options: BTreeMap<String, String>,
     pub created_on: Option<DateTime<Utc>>,
     pub droped_on: Option<DateTime<Utc>>,

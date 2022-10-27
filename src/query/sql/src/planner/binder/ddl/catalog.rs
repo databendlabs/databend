@@ -16,7 +16,6 @@ use std::collections::BTreeMap;
 use std::fmt::Write;
 
 use chrono::Utc;
-use common_ast::ast::CatalogType;
 use common_ast::ast::CreateCatalogStmt;
 use common_ast::ast::DropCatalogStmt;
 use common_ast::ast::ShowCatalogsStmt;
@@ -28,6 +27,7 @@ use common_datavalues::ToDataType;
 use common_datavalues::Vu8;
 use common_exception::Result;
 use common_meta_app::schema::CatalogMeta;
+use common_meta_app::schema::CatalogType;
 use common_planner::plans::CreateCatalogPlan;
 use common_planner::plans::DropCatalogPlan;
 use common_planner::plans::ShowCreateCatalogPlan;
@@ -91,12 +91,12 @@ impl<'a> Binder {
 
         let tenant = self.ctx.get_tenant();
 
-        let meta = self.catalog_meta(catalog_type, options);
+        let meta = self.catalog_meta(*catalog_type, options);
 
         Ok(Plan::CreateCatalog(Box::new(CreateCatalogPlan {
             if_not_exists: *if_not_exists,
             tenant,
-            catalog: catalog.to_string(),
+            catalog_name: catalog.to_string(),
             meta,
         })))
     }
@@ -117,12 +117,12 @@ impl<'a> Binder {
 
     fn catalog_meta(
         &self,
-        catalog_type: &CatalogType,
+        catalog_type: CatalogType,
         options: &BTreeMap<String, String>,
     ) -> CatalogMeta {
         let options = options.clone();
         CatalogMeta {
-            catalog_type: catalog_type.to_string(),
+            catalog_type,
             options,
             created_on: Some(Utc::now()),
             droped_on: None,

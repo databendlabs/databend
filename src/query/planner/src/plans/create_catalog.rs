@@ -24,7 +24,7 @@ use common_meta_app::schema::CreateCatalogReq;
 pub struct CreateCatalogPlan {
     pub if_not_exists: bool,
     pub tenant: String,
-    pub catalog: String,
+    pub catalog_name: String,
     pub meta: CatalogMeta,
 }
 
@@ -34,7 +34,7 @@ impl From<CreateCatalogPlan> for CreateCatalogReq {
             if_not_exists: p.if_not_exists,
             name_ident: CatalogNameIdent {
                 tenant: p.tenant,
-                ctl_name: p.catalog,
+                ctl_name: p.catalog_name,
             },
             meta: p.meta,
         }
@@ -47,7 +47,7 @@ impl From<&CreateCatalogPlan> for CreateCatalogReq {
             if_not_exists: p.if_not_exists,
             name_ident: CatalogNameIdent {
                 tenant: p.tenant.clone(),
-                ctl_name: p.catalog.clone(),
+                ctl_name: p.catalog_name.clone(),
             },
             meta: p.meta.clone(),
         }

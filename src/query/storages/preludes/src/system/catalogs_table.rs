@@ -23,6 +23,7 @@ use common_datavalues::Series;
 use common_datavalues::SeriesFrom;
 use common_datavalues::ToDataType;
 use common_datavalues::Vu8;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
@@ -47,7 +48,13 @@ impl AsyncSystemTable for CatalogsTable {
     async fn get_full_data(&self, _ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let cm = CatalogManager::instance();
 
-        let catalog_names: Vec<&[u8]> = cm.catalogs.keys().map(|x| x.as_bytes()).collect();
+        let catalog_names: Vec<String> = {
+            let guard = cm.catalogs.lock().map_err(|e| {
+                ErrorCode::InternalError(format!("acquire catalog manager lock error: {:?}", e))
+            })?;
+
+            guard.keys().cloned().collect()
+        };
 
         Ok(DataBlock::create(self.table_info.schema(), vec![
             Series::from_data(catalog_names),

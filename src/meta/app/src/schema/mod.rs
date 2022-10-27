@@ -24,6 +24,7 @@ pub use catalog::CatalogIdToName;
 pub use catalog::CatalogInfo;
 pub use catalog::CatalogMeta;
 pub use catalog::CatalogNameIdent;
+pub use catalog::CatalogType;
 pub use catalog::CreateCatalogReply;
 pub use catalog::CreateCatalogReq;
 pub use catalog::DropCatalogReply;
