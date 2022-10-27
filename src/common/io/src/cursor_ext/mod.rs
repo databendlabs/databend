@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,28 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// https://github.com/rust-lang/rust-clippy/issues/8334
-#![allow(clippy::ptr_arg)]
-#![feature(can_vector)]
-#![feature(read_buf)]
-#![feature(slice_internals)]
-#![feature(maybe_uninit_slice)]
-#![feature(new_uninit)]
-#![feature(cursor_remaining)]
-#![feature(buf_read_has_data_left)]
+mod cursor_checkpoint_ext;
+mod cursor_read_bytes_ext;
+mod cursor_read_datetime_ext;
+mod cursor_read_number_ext;
+mod cursor_read_string_ext;
 
-pub mod consts;
-pub mod format_diagnostic;
-pub mod prelude;
-
-mod binary_read;
-mod binary_write;
-
-mod buffer;
-pub mod cursor_ext;
-mod file_split;
-mod format_settings;
-mod options_deserializer;
-mod position;
-mod stat_buffer;
-mod utils;
+pub use cursor_checkpoint_ext::ReadCheckPointExt;
+pub use cursor_read_bytes_ext::ReadBytesExt;
+pub use cursor_read_datetime_ext::BufferReadDateTimeExt;
+pub use cursor_read_number_ext::ReadNumberExt;
+pub use cursor_read_string_ext::BufferReadStringExt;
