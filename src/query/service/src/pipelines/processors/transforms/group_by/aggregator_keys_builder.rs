@@ -18,12 +18,12 @@ use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
 use common_datavalues::prelude::*;
 
-use crate::pipelines::processors::transforms::group_by::keys_ref::KeysRef;
-
 /// Remove the group by key from the state and rebuild it into a column
-pub trait KeysColumnBuilder<Key> {
+pub trait KeysColumnBuilder {
+    type T;
+
+    fn append_value(&mut self, v: Self::T);
     fn finish(self) -> ColumnRef;
-    fn append_value(&mut self, v: &Key);
 }
 
 pub struct FixedKeysColumnBuilder<T>
@@ -32,36 +32,47 @@ where T: PrimitiveType
     pub inner_builder: MutablePrimitiveColumn<T>,
 }
 
-impl<T> KeysColumnBuilder<T> for FixedKeysColumnBuilder<T>
+impl<T> KeysColumnBuilder for FixedKeysColumnBuilder<T>
 where
     T: PrimitiveType,
     for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey = T>,
 {
+    type T = T;
+
     #[inline]
     fn finish(mut self) -> ColumnRef {
         self.inner_builder.to_column()
     }
 
     #[inline]
-    fn append_value(&mut self, v: &T) {
-        self.inner_builder.append_value(*v)
+    fn append_value(&mut self, v: T) {
+        self.inner_builder.append_value(v)
     }
 }
 
-pub struct SerializedKeysColumnBuilder {
+pub struct SerializedKeysColumnBuilder<'a> {
     pub inner_builder: MutableStringColumn,
+    _phantom: PhantomData<&'a ()>,
 }
 
-impl KeysColumnBuilder<KeysRef> for SerializedKeysColumnBuilder {
+impl<'a> SerializedKeysColumnBuilder<'a> {
+    pub fn create(capacity: usize) -> Self {
+        SerializedKeysColumnBuilder {
+            inner_builder: MutableStringColumn::with_capacity(capacity),
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<'a> KeysColumnBuilder for SerializedKeysColumnBuilder<'a> {
+    type T = &'a [u8];
+
     fn finish(mut self) -> ColumnRef {
         self.inner_builder.to_column()
     }
 
-    fn append_value(&mut self, v: &KeysRef) {
-        unsafe {
-            let value = std::slice::from_raw_parts(v.address as *const u8, v.length);
-            self.inner_builder.append_value(value);
-        }
+    fn append_value(&mut self, v: &'a [u8]) {
+        self.inner_builder.append_value(v);
     }
 }
 
@@ -72,18 +83,20 @@ where T: LargePrimitive
     pub _t: PhantomData<T>,
 }
 
-impl<T> KeysColumnBuilder<T> for LargeFixedKeysColumnBuilder<T>
+impl<T> KeysColumnBuilder for LargeFixedKeysColumnBuilder<T>
 where
     T: LargePrimitive,
     for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey = T>,
 {
+    type T = T;
+
     #[inline]
     fn finish(mut self) -> ColumnRef {
         self.inner_builder.to_column()
     }
 
     #[inline]
-    fn append_value(&mut self, v: &T) {
+    fn append_value(&mut self, v: T) {
         let values = self.inner_builder.values_mut();
         let new_len = values.len() + T::BYTE_SIZE;
         values.resize(new_len, 0);

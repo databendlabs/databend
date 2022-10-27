@@ -20,8 +20,6 @@ use common_datavalues::ScalarColumn;
 use common_datavalues::StringColumn;
 use common_exception::Result;
 
-use crate::pipelines::processors::transforms::group_by::keys_ref::KeysRef;
-
 pub trait KeysColumnIter<T> {
     fn get_slice(&self) -> &[T];
 }
@@ -77,14 +75,14 @@ where T: LargePrimitive
     }
 }
 
-pub struct SerializedKeysColumnIter {
-    inner: Vec<KeysRef>,
+pub struct SerializedKeysColumnIter<'a> {
+    inner: Vec<&'a [u8]>,
     #[allow(unused)]
     column: StringColumn,
 }
 
-impl SerializedKeysColumnIter {
-    pub fn create(column: &StringColumn) -> Result<SerializedKeysColumnIter> {
+impl<'a> SerializedKeysColumnIter<'a> {
+    pub fn create(column: &'a StringColumn) -> Result<SerializedKeysColumnIter<'a>> {
         let values = column.values();
         let offsets = column.offsets();
 
@@ -92,8 +90,10 @@ impl SerializedKeysColumnIter {
         for index in 0..(offsets.len() - 1) {
             let offset = offsets[index] as usize;
             let offset_1 = offsets[index + 1] as usize;
-            let address = unsafe { values.as_ptr().add(offset) as usize };
-            inner.push(KeysRef::create(address, offset_1 - offset));
+            unsafe {
+                let address = values.as_ptr().add(offset) as *const u8;
+                inner.push(std::slice::from_raw_parts(address, offset_1 - offset));
+            }
         }
 
         Ok(SerializedKeysColumnIter {
@@ -103,8 +103,8 @@ impl SerializedKeysColumnIter {
     }
 }
 
-impl KeysColumnIter<KeysRef> for SerializedKeysColumnIter {
-    fn get_slice(&self) -> &[KeysRef] {
+impl<'a> KeysColumnIter<&'a [u8]> for SerializedKeysColumnIter<'a> {
+    fn get_slice(&self) -> &[&'a [u8]] {
         self.inner.as_slice()
     }
 }

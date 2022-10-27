@@ -15,39 +15,30 @@
 use crate::pipelines::processors::transforms::group_by::aggregator_state_entity::ShortFixedKeyable;
 use crate::pipelines::processors::transforms::group_by::aggregator_state_entity::ShortFixedKeysStateEntity;
 
-type Entities<Key> = *mut ShortFixedKeysStateEntity<Key>;
-
-pub struct ShortFixedKeysStateIterator<Key: ShortFixedKeyable> {
-    index: isize,
-    capacity: isize,
-    entities: *mut ShortFixedKeysStateEntity<Key>,
+pub struct ShortFixedKeysStateIterator<'a, Key: ShortFixedKeyable> {
+    index: usize,
+    entities: &'a [ShortFixedKeysStateEntity<Key>],
 }
 
-impl<Key: ShortFixedKeyable> ShortFixedKeysStateIterator<Key> {
-    pub fn create(entities: Entities<Key>, capacity: isize) -> Self {
-        ShortFixedKeysStateIterator::<Key> {
-            index: 0,
-            capacity,
-            entities,
-        }
+impl<'a, Key: ShortFixedKeyable> ShortFixedKeysStateIterator<'a, Key> {
+    pub fn create(entities: &'a [ShortFixedKeysStateEntity<Key>]) -> Self {
+        Self { index: 0, entities }
     }
 }
 
-impl<Key: ShortFixedKeyable> Iterator for ShortFixedKeysStateIterator<Key> {
-    type Item = *mut ShortFixedKeysStateEntity<Key>;
+impl<'a, Key: ShortFixedKeyable> Iterator for ShortFixedKeysStateIterator<'a, Key> {
+    type Item = &'a ShortFixedKeysStateEntity<Key>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        unsafe {
-            while self.index < self.capacity {
-                let entity = self.entities.offset(self.index);
-                self.index += 1;
+        while self.index < self.entities.len() {
+            let entity = &self.entities[self.index];
+            self.index += 1;
 
-                if (*entity).fill {
-                    return Some(entity);
-                }
+            if entity.fill {
+                return Some(entity);
             }
-
-            None
         }
+
+        None
     }
 }

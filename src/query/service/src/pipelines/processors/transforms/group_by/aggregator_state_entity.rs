@@ -12,14 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_hashtable::HashTableEntity;
-use common_hashtable::HashTableKeyable;
-use common_hashtable::KeyValueEntity;
+use common_hashtable::HashtableEntry;
+use common_hashtable::HashtableKeyable;
+use common_hashtable::UnsizedHashtableEntryMutRef;
+use common_hashtable::UnsizedHashtableEntryRef;
 
-pub trait StateEntity<Key> {
-    fn get_state_key<'a>(self: *mut Self) -> &'a Key;
-    fn set_state_value(self: *mut Self, value: usize);
-    fn get_state_value<'a>(self: *mut Self) -> &'a usize;
+pub trait StateEntityRef {
+    type KeyRef: Copy;
+
+    fn get_state_key(&self) -> Self::KeyRef;
+    fn get_state_value(&self) -> usize;
+}
+
+pub trait StateEntityMutRef {
+    type KeyRef: Copy;
+
+    fn get_state_key(&self) -> Self::KeyRef;
+    fn get_state_value(&self) -> usize;
+    fn set_state_value(&mut self, value: usize);
 }
 
 pub trait ShortFixedKeyable: Sized + Clone {
@@ -33,37 +43,104 @@ pub struct ShortFixedKeysStateEntity<Key: ShortFixedKeyable> {
     pub fill: bool,
 }
 
-impl<Key: ShortFixedKeyable> StateEntity<Key> for ShortFixedKeysStateEntity<Key> {
+impl<'a, Key: ShortFixedKeyable + Copy> StateEntityRef for &'a ShortFixedKeysStateEntity<Key> {
+    type KeyRef = Key;
+
     #[inline(always)]
-    fn get_state_key<'a>(self: *mut Self) -> &'a Key {
-        unsafe { &(*self).key }
+    fn get_state_key(&self) -> Key {
+        self.key
     }
 
     #[inline(always)]
-    fn set_state_value(self: *mut Self, value: usize) {
-        unsafe { (*self).value = value }
-    }
-
-    #[inline(always)]
-    fn get_state_value<'a>(self: *mut Self) -> &'a usize {
-        unsafe { &(*self).value }
+    fn get_state_value(&self) -> usize {
+        self.value
     }
 }
 
-impl<Key: HashTableKeyable> StateEntity<Key> for KeyValueEntity<Key, usize> {
+impl<'a, Key: ShortFixedKeyable + Copy> StateEntityMutRef
+    for &'a mut ShortFixedKeysStateEntity<Key>
+{
+    type KeyRef = Key;
+
     #[inline(always)]
-    fn get_state_key<'a>(self: *mut Self) -> &'a Key {
-        self.get_key()
+    fn get_state_key(&self) -> Key {
+        self.key
     }
 
     #[inline(always)]
-    fn set_state_value(self: *mut Self, value: usize) {
-        self.set_value(value)
+    fn get_state_value(&self) -> usize {
+        self.value
     }
 
     #[inline(always)]
-    fn get_state_value<'a>(self: *mut Self) -> &'a usize {
-        self.get_value()
+    fn set_state_value(&mut self, value: usize) {
+        self.value = value;
+    }
+}
+
+impl<'a, Key: HashtableKeyable> StateEntityRef for &'a HashtableEntry<Key, usize> {
+    type KeyRef = Key;
+
+    #[inline(always)]
+    fn get_state_key(&self) -> Key {
+        *self.key()
+    }
+
+    #[inline(always)]
+    fn get_state_value(&self) -> usize {
+        *self.get()
+    }
+}
+
+impl<'a, Key: HashtableKeyable> StateEntityMutRef for &'a mut HashtableEntry<Key, usize> {
+    type KeyRef = Key;
+
+    #[inline(always)]
+    fn get_state_key(&self) -> Key {
+        *self.key()
+    }
+
+    #[inline(always)]
+    fn get_state_value(&self) -> usize {
+        *self.get()
+    }
+
+    #[inline(always)]
+    fn set_state_value(&mut self, value: usize) {
+        *self.get_mut() = value;
+    }
+}
+
+impl<'a> StateEntityRef for UnsizedHashtableEntryRef<'a, [u8], usize> {
+    type KeyRef = &'a [u8];
+
+    #[inline(always)]
+    fn get_state_key(&self) -> &'a [u8] {
+        self.key()
+    }
+
+    #[inline(always)]
+    fn get_state_value(&self) -> usize {
+        *self.get()
+    }
+}
+
+impl<'a> StateEntityMutRef for UnsizedHashtableEntryMutRef<'a, [u8], usize> {
+    type KeyRef = &'a [u8];
+
+    #[inline(always)]
+    fn get_state_key(&self) -> &'a [u8] {
+        self.key()
+    }
+
+    #[inline(always)]
+    fn get_state_value(&self) -> usize {
+        *self.get()
+    }
+
+    #[inline(always)]
+    fn set_state_value(&mut self, value: usize) {
+        *self.get_mut() = value;
     }
 }
 
