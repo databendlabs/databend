@@ -66,7 +66,7 @@ impl HashFlightScatter {
         schema: DataSchemaRef,
         num: usize,
         expr: PhysicalScalar,
-        ctx: Arc<QueryContext>,
+        _ctx: Arc<QueryContext>,
     ) -> Result<Self> {
         let expression = Self::expr_action(num, expr);
         let indices_expr_executor = Evaluator::eval_physical_scalar(&expression)?;
@@ -75,10 +75,6 @@ impl HashFlightScatter {
             scatter_expression_executor: Arc::new(indices_expr_executor),
             scattered_size: num,
         })
-    }
-
-    fn indices_expr_schema(output_name: &str) -> DataSchemaRef {
-        DataSchemaRefExt::create(vec![DataField::new(output_name, u64::to_data_type())])
     }
 
     fn expr_action(num: usize, expr: PhysicalScalar) -> PhysicalScalar {

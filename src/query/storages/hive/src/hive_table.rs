@@ -42,6 +42,7 @@ use common_planner::plans::Projection;
 use common_planner::Partitions;
 use common_planner::PhysicalScalar;
 use common_planner::ReadDataSourcePlan;
+use common_planner::RequireColumnsVisitor;
 use common_storage::init_operator;
 use common_storage::DataOperator;
 use common_storages_index::RangeFilter;
@@ -212,7 +213,7 @@ impl HiveTable {
 
             // filter out the partition column related expressions
             let partition_keys = self.get_partition_key_sets();
-            let columns = Self::get_columns_from_expressions(f);
+            let columns = Self::get_columns_from_expressions(f, &plan.schema());
             if columns.difference(&partition_keys).count() == 0 {
                 return true;
             }
@@ -227,13 +228,19 @@ impl HiveTable {
         }
     }
 
-    fn get_columns_from_expressions(expressions: &[PhysicalScalar]) -> HashSet<String> {
-        // todo(sundy)
-        todo!()
-        // expressions
-        //     .iter()
-        //     .flat_map(|e| RequireColumnsVisitor::collect_columns_from_expr(e).unwrap())
-        //     .collect::<HashSet<_>>()
+    fn get_columns_from_expressions(
+        expressions: &[PhysicalScalar],
+        schema: &DataSchemaRef,
+    ) -> HashSet<String> {
+        let result = expressions
+            .iter()
+            .flat_map(|e| RequireColumnsVisitor::collect_columns_from_expr(e).unwrap())
+            .collect::<HashSet<_>>();
+
+        result
+            .iter()
+            .map(|index| schema.field(*index).name().clone())
+            .collect()
     }
 
     fn get_projections(&self, push_downs: &Option<Extras>) -> Result<Vec<usize>> {
