@@ -23,6 +23,21 @@ You can explore more flags with `./databend-query -h`.
 * Default: `"INFO"`
 * Env variable: `LOG_LEVEL`
 
+### format
+
+* Log formats for "file" and "stderr".
+  - `text`: Databend outputs plain text logs.
+  - `json`: Databend outputs logs in JSON format.
+* Default:
+
+    ```log
+    [log.file]
+    format = "json"
+
+    [log.stderr]
+    format = "text"
+    ```
+
 ## 2. Meta Service Config
 
 ### address
