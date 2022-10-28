@@ -47,7 +47,7 @@ impl OutputFormat for ValuesOutputFormat {
                 if i != 0 {
                     buf.push(b',');
                 }
-                serializer.write_field_quoted(row_index, &mut buf, &self.format_settings, b'\'');
+                serializer.write_field_values(row_index, &mut buf, &self.format_settings);
             }
             buf.push(b')');
         }
