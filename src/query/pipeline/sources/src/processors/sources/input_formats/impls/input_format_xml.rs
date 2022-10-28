@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 use std::collections::HashMap;
+use std::io::Cursor;
 use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
@@ -25,6 +26,7 @@ use common_io::prelude::NestedCheckpointReader;
 use common_meta_types::StageFileFormatType;
 use common_settings::Settings;
 use xml::reader::XmlEvent;
+use xml::EventReader;
 use xml::ParserConfig;
 
 use crate::processors::sources::input_formats::input_format_text::get_time_zone;
@@ -133,12 +135,18 @@ impl InputFormatTextBase for InputFormatXML {
     }
 
     fn align(state: &mut AligningState<Self>, buf: &[u8]) -> Result<Vec<RowBatch>> {
-        let xml_state = state.xml_reader.as_ref().expect("must be success");
+        let xml_state = state.xml_reader.as_mut().expect("must be success");
+        xml_state.put_part_xml_data(buf);
 
+        if !xml_state.is_end() {
+            return Ok(vec![]);
+        }
+
+        let binding = xml_state.get_date();
+        let mut buf = binding.as_slice();
         let start_row = state.rows;
         state.offset += buf.len();
 
-        let mut buf = buf;
         let reader = ParserConfig::new().create_reader(&mut buf);
 
         let mut rows_to_skip = state.rows_to_skip;
@@ -258,6 +266,9 @@ pub struct XmlReaderState {
     // In xml format, this field is represented as a row tag, e.g. <row>...</row>
     row_tag: Vec<u8>,
     field_tag: Vec<u8>,
+    end_tag: Vec<u8>,
+    data: Vec<u8>,
+    is_end: bool,
 }
 
 impl XmlReaderState {
@@ -265,6 +276,62 @@ impl XmlReaderState {
         XmlReaderState {
             row_tag: ctx.format_settings.row_tag.clone(),
             field_tag: vec![b'f', b'i', b'e', b'l', b'd'],
+            end_tag: vec![],
+            data: vec![],
+            is_end: false,
         }
+    }
+
+    fn is_end(&self) -> bool {
+        self.is_end
+    }
+
+    fn get_date(&self) -> Vec<u8> {
+        self.data.clone()
+    }
+
+    fn put_part_xml_data(&mut self, input: &[u8]) {
+        let buf = Cursor::new(input);
+        let mut reader = EventReader::new(buf).into_iter();
+        let mut tmp_end_tag = vec![];
+        if self.end_tag.is_empty() {
+            while let Some(Ok(event)) = reader.next() {
+                if let XmlEvent::StartElement { name, .. } = event {
+                    let name_byte = name.local_name.into_bytes();
+                    if !name_byte.eq(&self.row_tag) && tmp_end_tag.is_empty() {
+                        // maybe column name.
+                        tmp_end_tag = name_byte.clone();
+                    }
+                    if name_byte.eq(&self.row_tag)
+                        && self.end_tag.is_empty()
+                        && !tmp_end_tag.is_empty()
+                    {
+                        self.end_tag = tmp_end_tag;
+                        let n_end_tag = self.end_tag.len();
+                        if input.len() > n_end_tag {
+                            // remove '/' and '>'
+                            if self
+                                .end_tag
+                                .eq(&input[input.len() - n_end_tag - 1..input.len() - 1])
+                            {
+                                self.is_end = true;
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+        } else {
+            let n_end_tag = self.end_tag.len();
+            if input.len() > n_end_tag {
+                if self
+                    .end_tag
+                    .eq(&input[input.len() - n_end_tag - 1..input.len() - 1])
+                {
+                    self.is_end = true;
+                }
+            }
+        }
+        self.data.extend_from_slice(input);
     }
 }
