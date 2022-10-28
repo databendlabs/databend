@@ -409,9 +409,11 @@ impl MultiSortMergeProcessor {
                 if i != *j && !self.blocks[i].is_empty() {
                     let left = self.blocks[i].back().unwrap();
                     let mut cmp = self.compare_map.write().unwrap();
-                    let comparators = DataBlock::build_compare(left, right)?;
+                    let comparators =
+                        DataBlock::build_compare(left, right, &self.sort_columns_descriptions)?;
                     cmp[i][*j] = comparators;
-                    let comparators = DataBlock::build_compare(right, left)?;
+                    let comparators =
+                        DataBlock::build_compare(right, left, &self.sort_columns_descriptions)?;
                     cmp[*j][i] = comparators;
                 }
             }

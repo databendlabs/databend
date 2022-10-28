@@ -140,3 +140,18 @@ SELECT id, arr FROM t3 ORDER BY arr DESC;
 statement ok
 DROP TABLE t3;
 
+statement query I
+SELECT number FROM numbers(10000) ORDER BY number LIMIT 3;
+
+----
+0
+1
+2
+
+statement query I
+SELECT number FROM numbers(10000) ORDER BY number DESC LIMIT 3;
+
+----
+9999
+9998
+9997
