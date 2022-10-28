@@ -63,6 +63,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     ),
     (15, "2022-10-12: Remove: precision in TimestampType"),
     (16, "2022-09-29: Add: CopyOptions::split_size"),
+    (17, "2022-10-28: Add: StageType::LegacyInternal"),
 ];
 
 pub const VER: u64 = META_CHANGE_LOG.last().unwrap().0;

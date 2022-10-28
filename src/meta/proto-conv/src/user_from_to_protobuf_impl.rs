@@ -399,15 +399,17 @@ impl FromToProto for mt::StageType {
     fn from_pb(p: pb::user_stage_info::StageType) -> Result<Self, Incompatible>
     where Self: Sized {
         match p {
-            pb::user_stage_info::StageType::Interval => Ok(mt::StageType::Internal),
+            pb::user_stage_info::StageType::LegacyInternal => Ok(mt::StageType::LegacyInternal),
             pb::user_stage_info::StageType::External => Ok(mt::StageType::External),
+            pb::user_stage_info::StageType::Internal => Ok(mt::StageType::Internal),
         }
     }
 
     fn to_pb(&self) -> Result<pb::user_stage_info::StageType, Incompatible> {
         match *self {
-            mt::StageType::Internal => Ok(pb::user_stage_info::StageType::Interval),
+            mt::StageType::LegacyInternal => Ok(pb::user_stage_info::StageType::LegacyInternal),
             mt::StageType::External => Ok(pb::user_stage_info::StageType::External),
+            mt::StageType::Internal => Ok(pb::user_stage_info::StageType::Internal),
         }
     }
 }

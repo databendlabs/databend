@@ -50,15 +50,24 @@ use crate::UserIdentity;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum StageType {
-    Internal,
+    /// LegacyInternal will be depracated.
+    ///
+    /// Please never use this variant except in `proto_conv`. We keep this
+    /// stage type for backword compatible.
+    ///
+    /// TODO(xuanwo): remove this when we are releasing v0.9.
+    LegacyInternal,
     External,
+    Internal,
 }
 
 impl fmt::Display for StageType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let name = match self {
-            StageType::Internal => "Internal",
+            // LegacyInternal will print the same name as Internal, this is by design.
+            StageType::LegacyInternal => "Internal",
             StageType::External => "External",
+            StageType::Internal => "Internal",
         };
         write!(f, "{}", name)
     }
@@ -245,6 +254,23 @@ impl UserStageInfo {
             stage_type: StageType::External,
             stage_params: StageParams { storage },
             ..Default::default()
+        }
+    }
+
+    /// Get the prefix of stage.
+    ///
+    /// Use this function to get the prefix of this stage in the data operator.
+    ///
+    /// # Notes
+    ///
+    /// This function should never be called on external stage because it's meanless. Something must be wrong.
+    pub fn stage_prefix(&self) -> String {
+        match self.stage_type {
+            StageType::LegacyInternal => format!("/stage/{}/", self.stage_name),
+            StageType::External => {
+                unreachable!("stage_prefix should never be called on external stage, must be a bug")
+            }
+            StageType::Internal => format!("/stage/internal/{}/", self.stage_name),
         }
     }
 }
