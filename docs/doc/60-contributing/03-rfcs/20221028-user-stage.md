@@ -78,6 +78,8 @@ The stage prefix rule will be:
 - `User` => `stage/user/{user_name}`
 - `External` => spcified location.
 
+Notes: `StageType::User` will not be stored in metasrv and will constantly build in memory directly.
+
 ## Drawbacks
 
 None.
