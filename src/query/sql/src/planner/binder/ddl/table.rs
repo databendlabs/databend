@@ -146,18 +146,10 @@ impl<'a> Binder {
             with_history,
         } = stmt;
 
-        let mut database = database
+        let database = database
             .as_ref()
             .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
-
-        if self
-            .ctx
-            .get_catalog(&self.ctx.get_current_catalog())?
-            .is_case_insensitive_db(database.as_str())
-        {
-            database = database.to_uppercase();
-        }
 
         let mut select_builder = if stmt.with_history {
             SelectBuilder::from("system.tables_with_history")

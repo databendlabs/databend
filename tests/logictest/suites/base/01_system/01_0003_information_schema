@@ -2,21 +2,21 @@ statement query T
 show tables from information_schema;
 
 ----
-COLUMNS
-KEYWORDS
-SCHEMATA
-TABLES
-VIEWS
+columns
+keywords
+schemata
+tables
+views
 
 statement query T 
 SHOW TABLES FROM INFORMATION_SCHEMA;
 
 ----
-COLUMNS
-KEYWORDS
-SCHEMATA
-TABLES
-VIEWS
+columns
+keywords
+schemata
+tables
+views
 
 statement query B
 select count(1) > 1 from information_schema.columns;
@@ -32,11 +32,11 @@ select count(1) > 1 from information_Schema.Columns;
 1
 
 statement query T
-SELECT t.table_catalog FROM information_schema.TABLES t WHERE t.TABLE_SCHEMA = 'INFORMATION_SCHEMA';
+SELECT t.table_catalog FROM information_schema.TABLES t WHERE t.TABLE_SCHEMA = 'information_schema';
 
 ----
-INFORMATION_SCHEMA
-INFORMATION_SCHEMA
-INFORMATION_SCHEMA
-INFORMATION_SCHEMA
-INFORMATION_SCHEMA
+information_schema
+information_schema
+information_schema
+information_schema
+information_schema
