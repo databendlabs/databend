@@ -30,3 +30,13 @@ select count(1) > 1 from information_Schema.Columns;
 
 ----
 1
+
+statement query T
+SELECT t.table_catalog FROM information_schema.TABLES t WHERE t.TABLE_SCHEMA = 'INFORMATION_SCHEMA';
+
+----
+INFORMATION_SCHEMA
+INFORMATION_SCHEMA
+INFORMATION_SCHEMA
+INFORMATION_SCHEMA
+INFORMATION_SCHEMA
