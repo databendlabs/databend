@@ -31,7 +31,7 @@ use common_exception::Result;
 use common_hashtable::HashMap;
 use common_hashtable::HashtableKeyable;
 use common_hashtable::UnsizedHashMap;
-use common_planner::PhysicalScalar;
+use common_sql::executor::PhysicalScalar;
 use parking_lot::RwLock;
 use primitive_types::U256;
 use primitive_types::U512;

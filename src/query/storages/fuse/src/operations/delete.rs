@@ -53,8 +53,7 @@ impl FuseTable {
         // check if unconditional deletion
         if let Some(filter) = &plan.selection {
             let table_meta = Arc::new(self.clone());
-            let physical_scalars =
-                ExpressionParser::parse_exprs(plan.schema(), table_meta, filter)?;
+            let physical_scalars = ExpressionParser::parse_exprs(table_meta, filter)?;
             if physical_scalars.is_empty() {
                 return Err(ErrorCode::IndexOutOfBounds(
                     "expression should be valid, but not",

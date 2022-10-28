@@ -37,11 +37,7 @@ use crate::Visibility;
 pub struct ExpressionParser;
 
 impl ExpressionParser {
-    pub fn parse_exprs(
-        schema: DataSchemaRef,
-        table_meta: Arc<dyn Table>,
-        sql: &str,
-    ) -> Result<Vec<Expression>> {
+    pub fn parse_exprs(table_meta: Arc<dyn Table>, sql: &str) -> Result<Vec<Expression>> {
         let sql_dialect = Dialect::MySQL;
         let tokens = tokenize_sql(sql)?;
         let backtrace = Backtrace::new();

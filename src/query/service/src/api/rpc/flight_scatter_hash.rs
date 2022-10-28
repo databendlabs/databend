@@ -19,9 +19,9 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionContext;
-use common_planner::PhysicalScalar;
 use common_sql::evaluator::EvalNode;
 use common_sql::evaluator::Evaluator;
+use common_sql::executor::PhysicalScalar;
 
 use crate::api::rpc::flight_scatter::FlightScatter;
 use crate::sessions::QueryContext;

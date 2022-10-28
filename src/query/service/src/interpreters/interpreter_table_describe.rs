@@ -19,7 +19,7 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planner::plans::DescribeTablePlan;
-use common_planner::PhysicalScalar;
+use common_sql::executor::PhysicalScalar;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

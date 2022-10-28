@@ -17,7 +17,7 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
-use common_planner::PhysicalScalar;
+use common_sql::executor::PhysicalScalar;
 use common_sql::IndexType;
 use parking_lot::RwLock;
 

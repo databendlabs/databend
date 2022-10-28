@@ -22,7 +22,7 @@ use common_exception::Result;
 use common_functions::scalars::Function;
 use common_functions::scalars::FunctionContext;
 use common_functions::scalars::FunctionFactory;
-use common_planner::PhysicalScalar;
+use common_sql::executor::PhysicalScalar;
 
 use crate::api::rpc::flight_scatter::FlightScatter;
 use crate::sql::evaluator::EvalNode;

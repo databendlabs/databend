@@ -17,6 +17,7 @@ use std::time::SystemTime;
 
 use common_exception::Result;
 use common_planner::extras::Extras;
+use common_sql::executor::ExpressionBuilderWithoutRenaming;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
@@ -26,7 +27,6 @@ use crate::pipelines::Pipeline;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::executor::PhysicalScalarBuilder;
 use crate::sql::plans::ReclusterTablePlan;
 
 pub struct ReclusterTableInterpreter {
@@ -57,15 +57,15 @@ impl Interpreter for ReclusterTableInterpreter {
         let extras = match &plan.push_downs {
             None => None,
             Some(scalar) => {
-                let schema = self.plan.schema();
-                let mut builder = PhysicalScalarBuilder::new(&schema);
-                let physical_scalar = builder.build(scalar)?;
+                let eb = ExpressionBuilderWithoutRenaming::create(plan.metadata.clone());
+                let pred_expr = eb.build(scalar)?;
                 Some(Extras {
-                    filters: vec![physical_scalar],
+                    filters: vec![pred_expr],
                     ..Extras::default()
                 })
             }
         };
+
         loop {
             let table = self
                 .ctx

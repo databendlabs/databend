@@ -18,7 +18,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planner::plans::ShowCreateTablePlan;
-use common_planner::PhysicalScalar;
+use common_sql::executor::PhysicalScalar;
 use tracing::debug;
 
 use crate::interpreters::Interpreter;

@@ -42,7 +42,7 @@ pub fn parse_func_table_args(table_args: &TableArgs) -> Result<(String, String)>
 pub fn get_cluster_keys(table: &FuseTable, definition: &str) -> Result<Vec<Expression>> {
     let cluster_keys = if !definition.is_empty() {
         let table_meta = Arc::new(table.clone());
-        ExpressionParser::parse_exprs(table.schema(), table_meta, definition)?
+        ExpressionParser::parse_exprs(table_meta, definition)?
     } else {
         table.cluster_keys()
     };
