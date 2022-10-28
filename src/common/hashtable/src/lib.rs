@@ -13,61 +13,69 @@
 // limitations under the License.
 
 #![feature(core_intrinsics)]
+#![feature(allocator_api)]
 #![feature(arbitrary_self_types)]
+#![feature(new_uninit)]
+#![feature(ptr_metadata)]
+#![feature(maybe_uninit_slice)]
 
-use common_base::mem_allocator::StackfulAllocator;
-pub use hash_table::HashTable;
-pub use hash_table_entity::HashTableEntity;
-pub use hash_table_entity::KeyValueEntity;
-pub use hash_table_grower::HashTableGrower;
-pub use hash_table_grower::SingleLevelGrower;
-pub use hash_table_grower::TwoLevelGrower;
-pub use hash_table_iter::HashTableIter;
-pub use hash_table_iter::HashTableIteratorKind;
-pub use hash_table_iter::TwoLevelHashTableIter;
-pub use hash_table_key::HashTableKeyable;
-pub use two_level_hash_table::HashTableKind;
-pub use two_level_hash_table::TwoLevelHashTable;
-
-mod hash_set;
-mod hash_table;
-#[allow(clippy::missing_safety_doc, clippy::not_unsafe_ptr_arg_deref)]
-mod hash_table_entity;
-mod hash_table_grower;
-mod hash_table_iter;
-mod hash_table_key;
+mod container;
+mod hashtable;
 mod keys_ref;
-mod two_level_hash_table;
+mod stack_hashtable;
+mod table0;
+mod table1;
+mod traits;
+mod twolevel_hashtable;
+mod unsized_hashtable;
+mod utils;
+
+pub use table0::Entry as HashtableEntry;
+pub use traits::EntryMutRefLike as HashtableEntryMutRefLike;
+pub use traits::EntryRefLike as HashtableEntryRefLike;
+pub use traits::FastHash;
+pub use traits::HashtableLike;
+pub use traits::Keyable as HashtableKeyable;
+pub use traits::UnsizedKeyable as HashtableUnsizedKeyable;
+
+pub type Hashed<K> = utils::Hashed<K>;
+
+pub type HashMap<K, V> = hashtable::Hashtable<K, V>;
+pub type HashMapIter<'a, K, V> = hashtable::HashtableIter<'a, K, V>;
+pub type HashMapIterMut<'a, K, V> = hashtable::HashtableIter<'a, K, V>;
+pub type HashSet<K> = hashtable::Hashtable<K, ()>;
+pub type HashSetIter<'a, K> = hashtable::HashtableIter<'a, K, ()>;
+pub type HashSetIterMut<'a, K> = hashtable::HashtableIter<'a, K, ()>;
+
+pub type StackHashMap<K, V, const N: usize = 16> = stack_hashtable::StackHashtable<K, V, N>;
+pub type StackHashMapIter<'a, K, V> = stack_hashtable::StackHashtableIter<'a, K, V>;
+pub type StackHashMapIterMut<'a, K, V> = stack_hashtable::StackHashtableIter<'a, K, V>;
+pub type StackHashSet<K, const N: usize = 16> = stack_hashtable::StackHashtable<K, (), N>;
+pub type StackHashSetIter<'a, K> = stack_hashtable::StackHashtableIter<'a, K, ()>;
+pub type StackHashSetIterMut<'a, K> = stack_hashtable::StackHashtableIter<'a, K, ()>;
+
+pub type TwolevelHashMap<K, V> = twolevel_hashtable::TwolevelHashtable<K, V>;
+pub type TwolevelHashMapIter<'a, K, V> = twolevel_hashtable::TwolevelHashtableIter<'a, K, V>;
+pub type TwolevelHashMapIterMut<'a, K, V> = twolevel_hashtable::TwolevelHashtableIterMut<'a, K, V>;
+pub type TwolevelHashSet<K> = twolevel_hashtable::TwolevelHashtable<K, ()>;
+pub type TwolevelHashSetIter<'a, K> = twolevel_hashtable::TwolevelHashtableIter<'a, K, ()>;
+pub type TwolevelHashSetIterMut<'a, K> = twolevel_hashtable::TwolevelHashtableIterMut<'a, K, ()>;
+
+pub type HashMapKind<K, V> = twolevel_hashtable::HashtableKind<K, V>;
+pub type HashMapKindIter<'a, K, V> = twolevel_hashtable::HashtableKindIter<'a, K, V>;
+pub type HashMapKindIterMut<'a, K, V> = twolevel_hashtable::HashtableKindIterMut<'a, K, V>;
+pub type HashSetKind<K> = twolevel_hashtable::HashtableKind<K, ()>;
+pub type HashSetKindIter<'a, K> = twolevel_hashtable::HashtableKindIter<'a, K, ()>;
+pub type HashSetKindIterMut<'a, K> = twolevel_hashtable::HashtableKindIterMut<'a, K, ()>;
+
+pub type UnsizedHashMap<K, V> = unsized_hashtable::UnsizedHashtable<K, V>;
+pub type UnsizedHashMapIter<'a, K, V> = unsized_hashtable::UnsizedHashtableIter<'a, K, V>;
+pub type UnsizedHashMapIterMut<'a, K, V> = unsized_hashtable::UnsizedHashtableIterMut<'a, K, V>;
+pub type UnsizedHashSet<K> = unsized_hashtable::UnsizedHashtable<K, ()>;
+pub type UnsizedHashSetIter<'a, K> = unsized_hashtable::UnsizedHashtableIter<'a, K, ()>;
+pub type UnsizedHashSetIterMut<'a, K> = unsized_hashtable::UnsizedHashtableIterMut<'a, K, ()>;
+pub type UnsizedHashtableEntryRef<'a, K, V> = unsized_hashtable::UnsizedHashtableEntryRef<'a, K, V>;
+pub type UnsizedHashtableEntryMutRef<'a, K, V> =
+    unsized_hashtable::UnsizedHashtableEntryMutRef<'a, K, V>;
 
 pub use keys_ref::KeysRef;
-
-#[cfg(not(target_os = "linux"))]
-type HashTableAllocator = common_base::mem_allocator::JEAllocator;
-#[cfg(target_os = "linux")]
-type HashTableAllocator = common_base::mem_allocator::MmapAllocator<true>;
-
-type HashTableAllocatorWithStackMemory<const INIT_BYTES: usize = 64> =
-    StackfulAllocator<INIT_BYTES, HashTableAllocator>;
-
-pub type HashMap<Key, Value, Grower = SingleLevelGrower, Allocator = HashTableAllocator> =
-    HashTable<Key, KeyValueEntity<Key, Value>, Grower, Allocator>;
-
-pub type HashSet<Key, Grower = SingleLevelGrower, Allocator = HashTableAllocator> =
-    HashTable<Key, KeyValueEntity<Key, ()>, Grower, Allocator>;
-
-pub type TwoLevelHashMap<Key, Value, Grower = SingleLevelGrower, Allocator = HashTableAllocator> =
-    TwoLevelHashTable<Key, KeyValueEntity<Key, Value>, Grower, Allocator>;
-pub type TwoLevelHashSet<Key, Grower = SingleLevelGrower, Allocator = HashTableAllocator> =
-    TwoLevelHashTable<Key, KeyValueEntity<Key, ()>, Grower, Allocator>;
-
-pub type HashMapIteratorKind<Key, Value> = HashTableIteratorKind<Key, KeyValueEntity<Key, Value>>;
-pub type HashMapKind<Key, Value> = HashTableKind<
-    Key,
-    KeyValueEntity<Key, Value>,
-    SingleLevelGrower,
-    TwoLevelGrower,
-    HashTableAllocator,
->;
-
-pub type HashSetWithStackMemory<const INIT_BYTES: usize, Key> =
-    HashSet<Key, SingleLevelGrower, HashTableAllocatorWithStackMemory<INIT_BYTES>>;

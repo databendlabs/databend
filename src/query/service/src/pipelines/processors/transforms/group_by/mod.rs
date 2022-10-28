@@ -19,11 +19,11 @@ mod aggregator_polymorphic_keys;
 mod aggregator_state;
 mod aggregator_state_entity;
 mod aggregator_state_iterator;
-pub(crate) mod keys_ref;
 
 pub use aggregator_groups_builder::GroupColumnsBuilder;
 pub use aggregator_keys_builder::KeysColumnBuilder;
 pub use aggregator_keys_iter::KeysColumnIter;
 pub use aggregator_polymorphic_keys::PolymorphicKeysHelper;
 pub use aggregator_state::AggregatorState;
-pub use aggregator_state_entity::StateEntity;
+pub use aggregator_state_entity::StateEntityMutRef;
+pub use aggregator_state_entity::StateEntityRef;

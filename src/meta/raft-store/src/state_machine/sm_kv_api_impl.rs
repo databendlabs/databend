@@ -92,7 +92,7 @@ impl KVApi for StateMachine {
 
         for x in keys.iter() {
             let v = kvs.get(x)?;
-            let v = Self::unexpired_opt(v, local_now_ms);
+            let (_, v) = Self::expire_seq_v(v, local_now_ms);
             res.push(v)
         }
 

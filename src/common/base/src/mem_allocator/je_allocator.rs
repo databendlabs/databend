@@ -16,41 +16,43 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-#[global_allocator]
-pub static ALLOC: JEAllocator = JEAllocator;
+#[derive(Debug, Clone, Copy, Default)]
+pub struct JEAllocator<T> {
+    #[allow(dead_code)]
+    allocator: T,
+}
 
-pub use platform::*;
-pub use tikv_jemalloc_sys;
+impl<T> JEAllocator<T> {
+    pub fn new(allocator: T) -> Self {
+        Self { allocator }
+    }
+}
 
-mod platform {
-    use std::alloc::GlobalAlloc;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+pub mod linux_or_macos {
+    use std::alloc::AllocError;
+    use std::alloc::Allocator;
     use std::alloc::Layout;
-    use std::os::raw::c_int;
+    use std::ptr::NonNull;
 
+    use libc::c_int;
+    use libc::c_void;
     use tikv_jemalloc_sys as ffi;
 
+    use super::JEAllocator;
     use crate::base::ThreadTracker;
-    use crate::mem_allocator::Allocator;
 
-    /// Memory allocation APIs compatible with libc
-    pub mod libc_compat {
-        pub use super::ffi::free;
-        pub use super::ffi::malloc;
-        pub use super::ffi::realloc;
+    impl<T> JEAllocator<T> {
+        pub const FALLBACK: bool = false;
     }
 
-    #[derive(Debug, Clone, Copy, Default)]
-    pub struct JEAllocator;
-
-    // The minimum alignment guaranteed by the architecture. This value is used to
-    // add fast paths for low alignment values.
     #[cfg(all(any(
         target_arch = "arm",
         target_arch = "mips",
         target_arch = "mipsel",
         target_arch = "powerpc"
     )))]
-    const MIN_ALIGN: usize = 8;
+    const ALIGNOF_MAX_ALIGN_T: usize = 8;
     #[cfg(all(any(
         target_arch = "x86",
         target_arch = "x86_64",
@@ -58,124 +60,204 @@ mod platform {
         target_arch = "powerpc64",
         target_arch = "powerpc64le",
         target_arch = "mips64",
+        target_arch = "riscv64",
         target_arch = "s390x",
         target_arch = "sparc64"
     )))]
-    const MIN_ALIGN: usize = 16;
+    const ALIGNOF_MAX_ALIGN_T: usize = 16;
 
+    /// If `align` is less than `_Alignof(max_align_t)`, and if the requested
+    /// allocation `size` is larger than the alignment, we are guaranteed to get a
+    /// suitably aligned allocation by default, without passing extra flags, and
+    /// this function returns `0`.
+    ///
+    /// Otherwise, it returns the alignment flag to pass to the jemalloc APIs.
     fn layout_to_flags(align: usize, size: usize) -> c_int {
-        // If our alignment is less than the minimum alignment they we may not
-        // have to pass special flags asking for a higher alignment. If the
-        // alignment is greater than the size, however, then this hits a sort of odd
-        // case where we still need to ask for a custom alignment. See #25 for more
-        // info.
-        if align <= MIN_ALIGN && align <= size {
+        if align <= ALIGNOF_MAX_ALIGN_T && align <= size {
             0
         } else {
-            // Equivalent to the MALLOCX_ALIGN(a) macro.
-            align.trailing_zeros() as _
+            ffi::MALLOCX_ALIGN(align)
         }
     }
 
-    unsafe impl GlobalAlloc for JEAllocator {
-        #[inline]
-        unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+    unsafe impl<T: Allocator> Allocator for JEAllocator<T> {
+        #[inline(always)]
+        fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+            let data_address = if layout.size() == 0 {
+                unsafe { NonNull::new(layout.align() as *mut ()).unwrap_unchecked() }
+            } else {
+                let flags = layout_to_flags(layout.align(), layout.size());
+                unsafe {
+                    NonNull::new(ffi::mallocx(layout.size(), flags) as *mut ()).ok_or(AllocError)?
+                }
+            };
             ThreadTracker::alloc_memory(layout.size() as i64);
-            let flags = layout_to_flags(layout.align(), layout.size());
-            ffi::mallocx(layout.size(), flags) as *mut u8
+            Ok(NonNull::<[u8]>::from_raw_parts(data_address, layout.size()))
         }
 
-        #[inline]
-        unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-            ThreadTracker::dealloc_memory(layout.size() as i64);
-
-            let flags = layout_to_flags(layout.align(), layout.size());
-            ffi::sdallocx(ptr as *mut _, layout.size(), flags)
+        #[inline(always)]
+        unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
+            if layout.size() == 0 {
+                debug_assert_eq!(ptr.as_ptr() as usize, layout.align());
+            } else {
+                let flags = layout_to_flags(layout.align(), layout.size());
+                ffi::sdallocx(ptr.as_ptr() as *mut _, layout.size(), flags)
+            }
         }
 
-        #[inline]
-        unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-            ThreadTracker::alloc_memory(layout.size() as i64);
-
-            if layout.align() <= MIN_ALIGN && layout.align() <= layout.size() {
-                ffi::calloc(1, layout.size()) as *mut u8
+        #[inline(always)]
+        fn allocate_zeroed(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+            let data_address = if layout.size() == 0 {
+                unsafe { NonNull::new(layout.align() as *mut ()).unwrap_unchecked() }
             } else {
                 let flags = layout_to_flags(layout.align(), layout.size()) | ffi::MALLOCX_ZERO;
-                ffi::mallocx(layout.size(), flags) as *mut u8
-            }
+                unsafe {
+                    NonNull::new(ffi::mallocx(layout.size(), flags) as *mut ()).ok_or(AllocError)?
+                }
+            };
+            Ok(NonNull::<[u8]>::from_raw_parts(data_address, layout.size()))
         }
 
-        #[inline]
-        unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-            ThreadTracker::realloc_memory(layout.size() as i64, new_size as i64);
-
-            let flags = layout_to_flags(layout.align(), new_size);
-            ffi::rallocx(ptr as *mut _, new_size, flags) as *mut u8
-        }
-    }
-
-    unsafe impl Allocator for JEAllocator {
-        unsafe fn allocx(&mut self, layout: Layout, clear_mem: bool) -> *mut u8 {
-            if clear_mem {
-                self.alloc_zeroed(layout)
+        unsafe fn grow(
+            &self,
+            ptr: NonNull<u8>,
+            old_layout: Layout,
+            new_layout: Layout,
+        ) -> Result<NonNull<[u8]>, AllocError> {
+            debug_assert_eq!(old_layout.align(), new_layout.align());
+            debug_assert!(old_layout.size() <= new_layout.size());
+            let data_address = if new_layout.size() == 0 {
+                NonNull::new(new_layout.align() as *mut ()).unwrap_unchecked()
+            } else if old_layout.size() == 0 {
+                let flags = layout_to_flags(new_layout.align(), new_layout.size());
+                NonNull::new(ffi::mallocx(new_layout.size(), flags) as *mut ()).ok_or(AllocError)?
             } else {
-                self.alloc(layout)
-            }
+                let flags = layout_to_flags(new_layout.align(), new_layout.size());
+                NonNull::new(ffi::rallocx(ptr.cast().as_ptr(), new_layout.size(), flags) as *mut ())
+                    .unwrap()
+            };
+            Ok(NonNull::<[u8]>::from_raw_parts(
+                data_address,
+                new_layout.size(),
+            ))
         }
 
-        unsafe fn deallocx(&mut self, ptr: *mut u8, layout: Layout) {
-            self.dealloc(ptr, layout)
+        unsafe fn grow_zeroed(
+            &self,
+            ptr: NonNull<u8>,
+            old_layout: Layout,
+            new_layout: Layout,
+        ) -> Result<NonNull<[u8]>, AllocError> {
+            debug_assert_eq!(old_layout.align(), new_layout.align());
+            debug_assert!(old_layout.size() <= new_layout.size());
+            let data_address = if new_layout.size() == 0 {
+                NonNull::new(new_layout.align() as *mut ()).unwrap_unchecked()
+            } else if old_layout.size() == 0 {
+                let flags =
+                    layout_to_flags(new_layout.align(), new_layout.size()) | ffi::MALLOCX_ZERO;
+                NonNull::new(ffi::mallocx(new_layout.size(), flags) as *mut ()).ok_or(AllocError)?
+            } else {
+                let flags = layout_to_flags(new_layout.align(), new_layout.size());
+                // Jemalloc doesn't support `grow_zeroed`, so it might be better to use
+                // mmap allocator for large frequent memory allocation and take jemalloc
+                // as fallback.
+                let raw = ffi::rallocx(ptr.cast().as_ptr(), new_layout.size(), flags) as *mut u8;
+                raw.add(old_layout.size())
+                    .write_bytes(0, new_layout.size() - old_layout.size());
+                NonNull::new(raw as *mut ()).unwrap()
+            };
+            Ok(NonNull::<[u8]>::from_raw_parts(
+                data_address,
+                new_layout.size(),
+            ))
         }
 
-        unsafe fn reallocx(
-            &mut self,
-            ptr: *mut u8,
-            layout: Layout,
-            new_size: usize,
-            clear_mem: bool,
-        ) -> *mut u8 {
-            ThreadTracker::realloc_memory(layout.size() as i64, new_size as i64);
-
-            let mut flags = layout_to_flags(layout.align(), new_size);
-            if clear_mem {
-                flags |= ffi::MALLOCX_ZERO;
+        unsafe fn shrink(
+            &self,
+            ptr: NonNull<u8>,
+            old_layout: Layout,
+            new_layout: Layout,
+        ) -> Result<NonNull<[u8]>, AllocError> {
+            debug_assert_eq!(old_layout.align(), new_layout.align());
+            debug_assert!(old_layout.size() >= new_layout.size());
+            if old_layout.size() == 0 {
+                debug_assert_eq!(ptr.as_ptr() as usize, old_layout.align());
+                let slice = std::slice::from_raw_parts_mut(ptr.as_ptr(), 0);
+                let ptr = NonNull::new(slice).unwrap_unchecked();
+                return Ok(ptr);
             }
-            ffi::rallocx(ptr as *mut _, new_size, flags) as *mut u8
+            let flags = layout_to_flags(new_layout.align(), new_layout.size());
+            if new_layout.size() == 0 {
+                ffi::sdallocx(ptr.as_ptr() as *mut c_void, new_layout.size(), flags);
+                let slice = std::slice::from_raw_parts_mut(new_layout.align() as *mut u8, 0);
+                let ptr = NonNull::new(slice).unwrap_unchecked();
+                Ok(ptr)
+            } else {
+                let data_address =
+                    ffi::rallocx(ptr.cast().as_ptr(), new_layout.size(), flags) as *mut u8;
+                let metadata = new_layout.size();
+                let slice = std::slice::from_raw_parts_mut(data_address, metadata);
+                let ptr = NonNull::new(slice).ok_or(AllocError)?;
+                Ok(ptr)
+            }
         }
     }
 }
 
-#[cfg(test)]
-mod test {
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+pub mod fallback {
+    use std::alloc::AllocError;
+    use std::alloc::Allocator;
     use std::alloc::Layout;
+    use std::ptr::NonNull;
 
-    use crate::mem_allocator::Allocator;
-    use crate::mem_allocator::JEAllocator;
+    use super::JEAllocator;
 
-    #[test]
-    fn test_malloc() {
-        type T = i64;
-        let mut alloc = JEAllocator::default();
+    impl<T> JEAllocator<T> {
+        pub const FALLBACK: bool = true;
+    }
 
-        let align = std::mem::align_of::<T>();
-        let size = std::mem::size_of::<T>() * 100;
-        let new_size = std::mem::size_of::<T>() * 1000000;
+    unsafe impl<T: Allocator> Allocator for JEAllocator<T> {
+        #[inline(always)]
+        fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+            self.allocator.allocate(layout)
+        }
 
-        unsafe {
-            let layout = Layout::from_size_align_unchecked(size, align);
-            let ptr = alloc.allocx(layout, true) as *mut T;
-            *ptr = 84;
-            assert_eq!(84, *ptr);
-            assert_eq!(0, *(ptr.offset(5)));
+        #[inline(always)]
+        unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
+            self.allocator.deallocate(ptr, layout)
+        }
 
-            *(ptr.offset(5)) = 1000;
+        #[inline(always)]
+        fn allocate_zeroed(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+            self.allocator.allocate_zeroed(layout)
+        }
 
-            let new_ptr = alloc.reallocx(ptr as *mut u8, layout, new_size, true) as *mut T;
-            assert_eq!(84, *new_ptr);
-            assert_eq!(0, *(new_ptr.offset(4)));
-            assert_eq!(1000, *(new_ptr.offset(5)));
+        unsafe fn grow(
+            &self,
+            ptr: NonNull<u8>,
+            old_layout: Layout,
+            new_layout: Layout,
+        ) -> Result<NonNull<[u8]>, AllocError> {
+            self.allocator.grow(ptr, old_layout, new_layout)
+        }
 
-            alloc.deallocx(new_ptr as *mut u8, layout)
+        unsafe fn grow_zeroed(
+            &self,
+            ptr: NonNull<u8>,
+            old_layout: Layout,
+            new_layout: Layout,
+        ) -> Result<NonNull<[u8]>, AllocError> {
+            self.allocator.grow_zeroed(ptr, old_layout, new_layout)
+        }
+
+        unsafe fn shrink(
+            &self,
+            ptr: NonNull<u8>,
+            old_layout: Layout,
+            new_layout: Layout,
+        ) -> Result<NonNull<[u8]>, AllocError> {
+            self.allocator.shrink(ptr, old_layout, new_layout)
         }
     }
 }

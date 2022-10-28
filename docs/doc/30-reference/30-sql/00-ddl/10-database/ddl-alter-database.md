@@ -22,7 +22,7 @@ SHOW DATABASES;
 | Database           |
 +--------------------+
 | DATABEND           |
-| INFORMATION_SCHEMA |
+| information_schema |
 | default            |
 | system             |
 +--------------------+
@@ -37,7 +37,7 @@ SHOW DATABASES;
 +--------------------+
 | Database           |
 +--------------------+
-| INFORMATION_SCHEMA |
+| information_schema |
 | NEW_DATABEND       |
 | default            |
 | system             |

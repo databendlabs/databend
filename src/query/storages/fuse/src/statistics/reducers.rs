@@ -126,7 +126,7 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(block_metas: &[T]) -> Result<Sta
         block_count += 1;
         uncompressed_byte_size += b.block_size;
         compressed_byte_size += b.file_size;
-        index_size = b.bloom_filter_index_size;
+        index_size += b.bloom_filter_index_size;
     });
 
     let stats = block_metas

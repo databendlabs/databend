@@ -21,8 +21,8 @@ use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_hashtable::HashMap;
-use common_hashtable::HashTableKeyable;
+use common_hashtable::HashtableEntryRefLike;
+use common_hashtable::HashtableLike;
 
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
@@ -31,16 +31,16 @@ use crate::sql::plans::JoinType;
 
 impl JoinHashTable {
     /// Used by right join/right semi(anti) join
-    pub(crate) fn probe_right_join<Key, IT>(
+    pub(crate) fn probe_right_join<'a, H: HashtableLike<Value = Vec<RowPtr>>, IT>(
         &self,
-        hash_table: &HashMap<Key, Vec<RowPtr>>,
+        hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
         input: &DataBlock,
     ) -> Result<Vec<DataBlock>>
     where
-        Key: HashTableKeyable + Clone + 'static,
-        IT: Iterator<Item = Key> + TrustedLen,
+        IT: Iterator<Item = H::KeyRef<'a>> + TrustedLen,
+        H::Key: 'a,
     {
         let valids = &probe_state.valids;
         let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
@@ -57,7 +57,7 @@ impl JoinHashTable {
             let probe_result_ptr = self.probe_key(hash_table, key, valids, i);
 
             if let Some(v) = probe_result_ptr {
-                let probed_rows = v.get_value();
+                let probed_rows = v.get();
 
                 if probe_indexes.len() + probed_rows.len() < probe_indexes.capacity() {
                     build_indexes.extend(probed_rows);
