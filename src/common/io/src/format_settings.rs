@@ -54,7 +54,7 @@ impl Default for FormatSettings {
             json_escape_forward_slashes: true,
             ident_case_sensitive: false,
             quote_char: b'\'',
-            escape: Some(b'\\')
+            escape: Some(b'\\'),
         }
     }
 }
