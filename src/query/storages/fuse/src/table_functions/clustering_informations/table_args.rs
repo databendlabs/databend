@@ -17,7 +17,7 @@ use std::sync::Arc;
 use common_catalog::table::Table;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::PhysicalScalar;
+use common_planner::Expression;
 use common_sql::PhysicalScalarParser;
 
 use crate::table_functions::string_value;
@@ -39,7 +39,7 @@ pub fn parse_func_table_args(table_args: &TableArgs) -> Result<(String, String)>
     }
 }
 
-pub fn get_cluster_keys(table: &FuseTable, definition: &str) -> Result<Vec<PhysicalScalar>> {
+pub fn get_cluster_keys(table: &FuseTable, definition: &str) -> Result<Vec<Expression>> {
     let cluster_keys = if !definition.is_empty() {
         let table_meta = Arc::new(table.clone());
         PhysicalScalarParser::parse_exprs(table.schema(), table_meta, definition)?
@@ -53,6 +53,8 @@ pub fn get_cluster_keys(table: &FuseTable, definition: &str) -> Result<Vec<Physi
             table.name()
         )));
     }
+
+
 
     Ok(cluster_keys)
 }

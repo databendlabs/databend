@@ -18,7 +18,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::PhysicalScalar;
+use common_planner::Expression;
 
 use crate::filters::Filter;
 use crate::filters::FilterBuilder;
@@ -74,16 +74,16 @@ pub enum FilterEvalResult {
 impl BlockFilter {
     /// For every applicable column, we will create a filter.
     /// The filter will be stored with field name 'Bloom(column_name)'
-    pub fn build_filter_column(index: usize) -> String {
-        format!("Bloom({})", index)
+    pub fn build_filter_column(name: &str) -> String {
+        format!("Bloom({})", name)
     }
     pub fn build_filter_schema(data_schema: &DataSchema) -> DataSchema {
         let mut filter_fields = vec![];
         let fields = data_schema.fields();
-        for (index, field) in fields.iter().enumerate() {
+        for field in fields.iter() {
             if Xor8Filter::is_supported_type(field.data_type()) {
                 // create field for applicable ones
-                let column_name = Self::build_filter_column(index);
+                let column_name = Self::build_filter_column(field.name());
                 let filter_field = DataField::new(&column_name, Vu8::to_data_type());
 
                 filter_fields.push(filter_field);
@@ -153,11 +153,11 @@ impl BlockFilter {
 
     pub fn find(
         &self,
-        index: usize,
+        name: &str,
         target: DataValue,
         typ: &DataTypeImpl,
     ) -> Result<FilterEvalResult> {
-        let filter_column = Self::build_filter_column(index);
+        let filter_column = Self::build_filter_column(name);
         if !self.filter_block.schema().has_field(&filter_column)
             || !Xor8Filter::is_supported_type(typ)
             || target.is_null()
@@ -178,7 +178,7 @@ impl BlockFilter {
     /// Returns false when the expression must be false, otherwise true.
     /// The 'true' doesn't really mean the expression is true, but 'maybe true'.
     /// That is to say, you still need the load all data and run the execution.
-    pub fn maybe_true(&self, expr: &PhysicalScalar) -> Result<bool> {
+    pub fn maybe_true(&self, expr: &Expression) -> Result<bool> {
         Ok(self.eval(expr)? != FilterEvalResult::False)
     }
 
@@ -188,10 +188,10 @@ impl BlockFilter {
     ///
     /// Otherwise return either Maybe or NotApplicable.
     #[tracing::instrument(level = "debug", name = "block_filter_index_eval", skip_all)]
-    pub fn eval(&self, expr: &PhysicalScalar) -> Result<FilterEvalResult> {
+    pub fn eval(&self, expr: &Expression) -> Result<FilterEvalResult> {
         // TODO: support multiple columns and other ops like 'in' ...
         match expr {
-            PhysicalScalar::Function { name, args, .. } if args.len() == 2 => {
+            Expression::Function { name, args, .. } if args.len() == 2 => {
                 match name.to_lowercase().as_str() {
                     "=" => self.eval_equivalent_expression(&args[0], &args[1]),
                     "and" => self.eval_logical_and(&args[0], &args[1]),
@@ -206,24 +206,18 @@ impl BlockFilter {
     // Evaluate the equivalent expression like "name='Alice'"
     fn eval_equivalent_expression(
         &self,
-        left: &PhysicalScalar,
-        right: &PhysicalScalar,
+        left: &Expression,
+        right: &Expression,
     ) -> Result<FilterEvalResult> {
         let schema: &DataSchemaRef = &self.source_schema;
 
         // For now only support single column like "name = 'Alice'"
         match (left, right) {
             // match the expression of 'column_name = literal constant'
-            (
-                PhysicalScalar::IndexedVariable { index, .. },
-                PhysicalScalar::Constant { value, .. },
-            )
-            | (
-                PhysicalScalar::Constant { value, .. },
-                PhysicalScalar::IndexedVariable { index, .. },
-            ) => {
+            (Expression::IndexedVariable { name, .. }, Expression::Constant { value, .. })
+            | (Expression::Constant { value, .. }, Expression::IndexedVariable { name, .. }) => {
                 // find the corresponding column from source table
-                let data_field = schema.field(*index);
+                let data_field = schema.field_with_name(name)?;
                 let data_type = data_field.data_type();
 
                 // check if cast needed
@@ -233,18 +227,14 @@ impl BlockFilter {
                 } else {
                     value.clone()
                 };
-                self.find(*index, value, data_type)
+                self.find(name, value, data_type)
             }
             _ => Ok(FilterEvalResult::NotApplicable),
         }
     }
 
     // Evaluate the logical and expression
-    fn eval_logical_and(
-        &self,
-        left: &PhysicalScalar,
-        right: &PhysicalScalar,
-    ) -> Result<FilterEvalResult> {
+    fn eval_logical_and(&self, left: &Expression, right: &Expression) -> Result<FilterEvalResult> {
         let left_result = self.eval(left)?;
         if left_result == FilterEvalResult::False {
             return Ok(FilterEvalResult::False);
@@ -265,11 +255,7 @@ impl BlockFilter {
     }
 
     // Evaluate the logical or expression
-    fn eval_logical_or(
-        &self,
-        left: &PhysicalScalar,
-        right: &PhysicalScalar,
-    ) -> Result<FilterEvalResult> {
+    fn eval_logical_or(&self, left: &Expression, right: &Expression) -> Result<FilterEvalResult> {
         let left_result = self.eval(left)?;
         let right_result = self.eval(right)?;
         match (&left_result, &right_result) {

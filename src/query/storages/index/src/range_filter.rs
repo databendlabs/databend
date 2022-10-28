@@ -27,12 +27,12 @@ use common_functions::scalars::FunctionContext;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::PatternType;
 use common_fuse_meta::meta::StatisticsOfColumns;
-use common_planner::PhysicalScalar;
+use common_planner::Expression;
 use common_planner::RequireColumnsVisitor;
 use common_sql::evaluator::EvalNode;
 use common_sql::evaluator::Evaluator;
-use common_sql::evaluator::PhysicalScalarMonotonicityVisitor;
-use common_sql::evaluator::PhysicalScalarOp;
+use common_sql::evaluator::ExpressionMonotonicityVisitor;
+use common_sql::executor::ExpressionOp;
 
 #[derive(Clone)]
 pub struct RangeFilter {
@@ -46,7 +46,7 @@ pub struct RangeFilter {
 impl RangeFilter {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
-        exprs: &[PhysicalScalar],
+        exprs: &[Expression],
         schema: DataSchemaRef,
     ) -> Result<Self> {
         debug_assert!(!exprs.is_empty());
@@ -54,7 +54,7 @@ impl RangeFilter {
 
         let verifiable_expr = exprs
             .iter()
-            .fold(None, |acc: Option<PhysicalScalar>, expr| {
+            .fold(None, |acc: Option<Expression>, expr| {
                 let verifiable_expr = build_verifiable_expr(expr, &schema, &mut stat_columns);
                 match acc {
                     Some(acc) => Some(acc.and(&verifiable_expr).unwrap()),
@@ -68,8 +68,8 @@ impl RangeFilter {
             .map(|c| c.stat_field.clone())
             .collect::<Vec<_>>();
         let input_schema = Arc::new(DataSchema::new(input_fields));
+        let executor = Evaluator::eval_expression(&verifiable_expr, &input_schema)?;
 
-        let executor = Evaluator::eval_physical_scalar(&verifiable_expr)?;
         let func_ctx = ctx.try_get_function_context()?;
 
         Ok(Self {
@@ -129,19 +129,19 @@ impl RangeFilter {
 /// convert expr to Verifiable Expression
 /// Rules: (section 5.2 of http://vldb.org/pvldb/vol14/p3083-edara.pdf)
 pub fn build_verifiable_expr(
-    expr: &PhysicalScalar,
+    expr: &Expression,
     schema: &DataSchemaRef,
     stat_columns: &mut StatColumns,
-) -> PhysicalScalar {
-    let unhandled = PhysicalScalar::Constant {
+) -> Expression {
+    let unhandled = Expression::Constant {
         value: DataValue::Boolean(true),
         data_type: bool::to_data_type(),
     };
 
     // TODO: Try to convert `not(is_not_null)` to `is_null`.
     let (exprs, op) = match expr {
-        PhysicalScalar::Constant { .. } => return expr.clone(),
-        PhysicalScalar::Function { name, args, .. } if args.len() == 2 => {
+        Expression::Constant { .. } => return expr.clone(),
+        Expression::Function { name, args, .. } if args.len() == 2 => {
             let left = &args[0];
             let right = &args[1];
             match name.to_lowercase().as_str() {
@@ -206,7 +206,7 @@ pub struct StatColumn {
     column_fields: ColumnFields,
     stat_type: StatType,
     stat_field: DataField,
-    expr: PhysicalScalar,
+    expr: Expression,
 }
 
 impl StatColumn {
@@ -214,7 +214,7 @@ impl StatColumn {
         column_fields: ColumnFields,
         stat_type: StatType,
         field: &DataField,
-        expr: PhysicalScalar,
+        expr: Expression,
     ) -> Self {
         let column_new = format!("{}_{}", stat_type, field.name());
         let data_type = if matches!(stat_type, StatType::Nulls | StatType::RowCount) {
@@ -270,10 +270,10 @@ impl StatColumn {
 
             let max_col = v.data_type().create_constant_column(&stat.max, 1)?;
             let variable_right = Some(ColumnWithField::new(max_col, v.clone()));
-            variables.insert(*k, (variable_left, variable_right));
+            variables.insert(v.name().clone(), (variable_left, variable_right));
         }
 
-        let monotonicity = PhysicalScalarMonotonicityVisitor::check_expression(
+        let monotonicity = ExpressionMonotonicityVisitor::check_expression(
             schema,
             &self.expr,
             variables,
@@ -307,14 +307,14 @@ impl StatColumn {
 
 struct VerifiableExprBuilder<'a> {
     op: &'a str,
-    args: Vec<PhysicalScalar>,
+    args: Vec<Expression>,
     fields: Vec<(DataField, ColumnFields)>,
     stat_columns: &'a mut StatColumns,
 }
 
 impl<'a> VerifiableExprBuilder<'a> {
     fn try_create(
-        exprs: Vec<PhysicalScalar>,
+        exprs: Vec<Expression>,
         op: &'a str,
         schema: &'a DataSchemaRef,
         stat_columns: &'a mut StatColumns,
@@ -371,16 +371,13 @@ impl<'a> VerifiableExprBuilder<'a> {
         let mut fields = Vec::with_capacity(cols.len());
 
         let left_cols = get_column_fields(schema, cols[0].clone())?;
-
-        let left_name = args[0].pretty_display();
-        let left_field = DataField::new(&left_name, args[0].data_type());
+        let left_field = args[0].to_data_field();
 
         fields.push((left_field, left_cols));
 
         if cols.len() > 1 {
             let right_cols = get_column_fields(schema, cols[1].clone())?;
-            let right_name = args[1].pretty_display();
-            let right_field = DataField::new(&right_name, args[1].data_type());
+            let right_field = args[1].to_data_field();
             fields.push((right_field, right_cols));
         }
 
@@ -392,13 +389,13 @@ impl<'a> VerifiableExprBuilder<'a> {
         })
     }
 
-    fn build(&mut self) -> Result<PhysicalScalar> {
+    fn build(&mut self) -> Result<Expression> {
         // TODO: support in/not in.
         match self.op {
             "is_null" => {
                 // should_keep: col.null_count > 0
                 let nulls_expr = self.nulls_column_expr(0)?;
-                let scalar_expr = PhysicalScalar::Constant {
+                let scalar_expr = Expression::Constant {
                     value: DataValue::UInt64(0),
                     data_type: u64::to_data_type(),
                 };
@@ -486,7 +483,7 @@ impl<'a> VerifiableExprBuilder<'a> {
                 left_min.lt_eq(&right_max)
             }
             "like" => {
-                if let PhysicalScalar::Constant {
+                if let Expression::Constant {
                     value: DataValue::String(v),
                     ..
                 } = &self.args[1]
@@ -496,7 +493,7 @@ impl<'a> VerifiableExprBuilder<'a> {
                     if !left.is_empty() {
                         let right = right_bound_for_like_pattern(left.clone());
 
-                        let left_scalar = PhysicalScalar::Constant {
+                        let left_scalar = Expression::Constant {
                             value: DataValue::String(left),
                             data_type: Vu8::to_data_type(),
                         };
@@ -505,7 +502,7 @@ impl<'a> VerifiableExprBuilder<'a> {
                         if right.is_empty() {
                             return max_expr.gt_eq(&left_scalar);
                         } else {
-                            let right_scalar = PhysicalScalar::Constant {
+                            let right_scalar = Expression::Constant {
                                 value: DataValue::String(right),
                                 data_type: Vu8::to_data_type(),
                             };
@@ -522,7 +519,7 @@ impl<'a> VerifiableExprBuilder<'a> {
                 ))
             }
             "not like" => {
-                if let PhysicalScalar::Constant {
+                if let Expression::Constant {
                     value: DataValue::String(v),
                     ..
                 } = &self.args[1]
@@ -532,7 +529,7 @@ impl<'a> VerifiableExprBuilder<'a> {
                         // e.g. col not like 'abc' => min_col != 'abc' or max_col != 'abc'
                         PatternType::OrdinalStr => {
                             let const_arg = left_bound_for_like_pattern(v);
-                            let const_arg_scalar = PhysicalScalar::Constant {
+                            let const_arg_scalar = Expression::Constant {
                                 value: DataValue::String(const_arg),
                                 data_type: Vu8::to_data_type(),
                             };
@@ -550,7 +547,7 @@ impl<'a> VerifiableExprBuilder<'a> {
                             if !left.is_empty() {
                                 let right = right_bound_for_like_pattern(left.clone());
 
-                                let left_scalar = PhysicalScalar::Constant {
+                                let left_scalar = Expression::Constant {
                                     value: DataValue::String(left),
                                     data_type: Vu8::to_data_type(),
                                 };
@@ -559,7 +556,7 @@ impl<'a> VerifiableExprBuilder<'a> {
                                 if right.is_empty() {
                                     return min_expr.lt(&left_scalar);
                                 } else {
-                                    let right_scalar = PhysicalScalar::Constant {
+                                    let right_scalar = Expression::Constant {
                                         value: DataValue::String(right),
                                         data_type: Vu8::to_data_type(),
                                     };
@@ -584,7 +581,7 @@ impl<'a> VerifiableExprBuilder<'a> {
         }
     }
 
-    fn stat_column_expr(&mut self, stat_type: StatType, index: usize) -> Result<PhysicalScalar> {
+    fn stat_column_expr(&mut self, stat_type: StatType, index: usize) -> Result<Expression> {
         let (data_field, column_fields) = self.fields[index].clone();
         let stat_col = StatColumn::create(
             column_fields,
@@ -593,38 +590,33 @@ impl<'a> VerifiableExprBuilder<'a> {
             self.args[index].clone(),
         );
 
-        let column_index =
-            self.stat_columns.iter().enumerate().find(|&(_, c)| {
-                c.stat_type == stat_type && c.stat_field.name() == data_field.name()
-            });
-
-        let column_index = if let Some((column_index, _)) = column_index {
-            column_index
-        } else {
+        if !self
+            .stat_columns
+            .iter()
+            .any(|c| c.stat_type == stat_type && c.stat_field.name() == data_field.name())
+        {
             self.stat_columns.push(stat_col.clone());
-            self.stat_columns.len() - 1
-        };
+        }
 
-        Ok(PhysicalScalar::IndexedVariable {
-            index: column_index,
+        Ok(Expression::IndexedVariable {
+            name: stat_col.stat_field.name().to_string(),
             data_type: stat_col.stat_field.data_type().clone(),
-            display_name: stat_col.stat_field.name().to_string(),
         })
     }
 
-    fn min_column_expr(&mut self, index: usize) -> Result<PhysicalScalar> {
+    fn min_column_expr(&mut self, index: usize) -> Result<Expression> {
         self.stat_column_expr(StatType::Min, index)
     }
 
-    fn max_column_expr(&mut self, index: usize) -> Result<PhysicalScalar> {
+    fn max_column_expr(&mut self, index: usize) -> Result<Expression> {
         self.stat_column_expr(StatType::Max, index)
     }
 
-    fn nulls_column_expr(&mut self, index: usize) -> Result<PhysicalScalar> {
+    fn nulls_column_expr(&mut self, index: usize) -> Result<Expression> {
         self.stat_column_expr(StatType::Nulls, index)
     }
 
-    fn row_count_column_expr(&mut self, index: usize) -> Result<PhysicalScalar> {
+    fn row_count_column_expr(&mut self, index: usize) -> Result<Expression> {
         self.stat_column_expr(StatType::RowCount, index)
     }
 }
@@ -671,7 +663,7 @@ pub fn right_bound_for_like_pattern(prefix: Vec<u8>) -> Vec<u8> {
     res
 }
 
-fn get_maybe_monotonic(op: &str, args: &Vec<PhysicalScalar>) -> Result<bool> {
+fn get_maybe_monotonic(op: &str, args: &Vec<Expression>) -> Result<bool> {
     let factory = FunctionFactory::instance();
     let function_features = factory.get_features(op)?;
     if !function_features.maybe_monotonic {
@@ -686,20 +678,21 @@ fn get_maybe_monotonic(op: &str, args: &Vec<PhysicalScalar>) -> Result<bool> {
     Ok(true)
 }
 
-pub fn check_maybe_monotonic(expr: &PhysicalScalar) -> Result<bool> {
+pub fn check_maybe_monotonic(expr: &Expression) -> Result<bool> {
     match expr {
-        PhysicalScalar::Constant { .. } => Ok(true),
-        PhysicalScalar::IndexedVariable { .. } => Ok(true),
-        PhysicalScalar::Function { name, args, .. } => get_maybe_monotonic(name, args),
-        PhysicalScalar::Cast { input, .. } => check_maybe_monotonic(input.as_ref()),
+        Expression::Constant { .. } => Ok(true),
+        Expression::IndexedVariable { .. } => Ok(true),
+        Expression::Function { name, args, .. } => get_maybe_monotonic(name, args),
+        Expression::Cast { input, .. } => check_maybe_monotonic(input.as_ref()),
     }
 }
 
-fn get_column_fields(schema: &DataSchemaRef, cols: HashSet<usize>) -> Result<ColumnFields> {
+fn get_column_fields(schema: &DataSchemaRef, cols: HashSet<String>) -> Result<ColumnFields> {
     let mut column_fields = HashMap::with_capacity(cols.len());
 
     for col in &cols {
-        column_fields.insert(*col, schema.field(*col).clone());
+        let index = schema.index_of(col)?;
+        column_fields.insert(index, schema.field(index).clone());
     }
     Ok(column_fields)
 }

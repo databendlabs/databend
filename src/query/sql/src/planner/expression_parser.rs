@@ -22,11 +22,11 @@ use common_catalog::catalog::CATALOG_DEFAULT;
 use common_catalog::table::Table;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_planner::Expression;
 use common_settings::Settings;
 use parking_lot::RwLock;
 
-use crate::executor::PhysicalScalar;
-use crate::executor::PhysicalScalarBuilder;
+use crate::executor::ExpressionBuilderWithoutRenaming;
 use crate::planner::semantic::SyncTypeChecker;
 use crate::BindContext;
 use crate::ColumnBinding;
@@ -34,14 +34,14 @@ use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::Visibility;
 
-pub struct PhysicalScalarParser;
+pub struct ExpressionParser;
 
-impl PhysicalScalarParser {
+impl ExpressionParser {
     pub fn parse_exprs(
         schema: DataSchemaRef,
         table_meta: Arc<dyn Table>,
         sql: &str,
-    ) -> Result<Vec<PhysicalScalar>> {
+    ) -> Result<Vec<Expression>> {
         let sql_dialect = Dialect::MySQL;
         let tokens = tokenize_sql(sql)?;
         let backtrace = Backtrace::new();
@@ -80,13 +80,15 @@ impl PhysicalScalarParser {
 
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
         let mut type_checker = SyncTypeChecker::new(&bind_context, &name_resolution_ctx, &[]);
-        let mut physical_scalars = Vec::with_capacity(exprs.len());
-        let mut builder = PhysicalScalarBuilder::new(&schema);
+        let mut expressions = Vec::with_capacity(exprs.len());
+
+        let builder = ExpressionBuilderWithoutRenaming::create(metadata.clone());
+
         for expr in exprs.iter() {
             let (scalar, _) = *type_checker.resolve(expr, None)?;
-            let physical_scalar = builder.build(&scalar)?;
-            physical_scalars.push(physical_scalar);
+            let expr = builder.build(&scalar)?;
+            expressions.push(expr);
         }
-        Ok(physical_scalars)
+        Ok(expressions)
     }
 }

@@ -23,12 +23,11 @@ use common_functions::scalars::Function;
 use common_functions::scalars::FunctionContext;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::Monotonicity;
+use common_planner::Expression;
+use common_planner::ExpressionVisitor;
+use common_planner::Recursion;
 
-use crate::executor::PhysicalScalar;
-use crate::executor::PhysicalScalarVisitor;
-use crate::executor::Recursion;
-
-// PhysicalScalarMonotonicityVisitor visit the expression tree to calculate monotonicity.
+// ExpressionMonotonicityVisitor visit the expression tree to calculate monotonicity.
 // For example, a function of Add(Neg(number), 5) for number < -100 will have a tree like this:
 //
 // .                   MonotonicityNode::Function -- 'Add'
@@ -47,21 +46,21 @@ use crate::executor::Recursion;
 // every function. Each function is responsible to implement its own monotonicity
 // function.
 #[derive(Clone)]
-pub struct PhysicalScalarMonotonicityVisitor {
+pub struct ExpressionMonotonicityVisitor {
     input_schema: DataSchemaRef,
     // HashMap<column_name, (variable_left, variable_right)>
     // variable_left: the variable range left.
     // variable_right: the variable range right.
-    variables: HashMap<usize, (Option<ColumnWithField>, Option<ColumnWithField>)>,
+    variables: HashMap<String, (Option<ColumnWithField>, Option<ColumnWithField>)>,
     stack: Vec<(DataTypeImpl, Monotonicity)>,
 
     single_point: bool,
 }
 
-impl PhysicalScalarMonotonicityVisitor {
+impl ExpressionMonotonicityVisitor {
     fn create(
         input_schema: DataSchemaRef,
-        variables: HashMap<usize, (Option<ColumnWithField>, Option<ColumnWithField>)>,
+        variables: HashMap<String, (Option<ColumnWithField>, Option<ColumnWithField>)>,
         single_point: bool,
     ) -> Self {
         Self {
@@ -79,7 +78,7 @@ impl PhysicalScalarMonotonicityVisitor {
                 Ok(monotonic)
             }
             _ => Err(ErrorCode::LogicalError(
-                "Stack has too many elements in PhysicalScalarMonotonicityVisitor::finalize",
+                "Stack has too many elements in ExpressionMonotonicityVisitor::finalize",
             )),
         }
     }
@@ -164,8 +163,8 @@ impl PhysicalScalarMonotonicityVisitor {
     /// Return the monotonicity information, together with column name if any.
     pub fn check_expression(
         schema: DataSchemaRef,
-        expr: &PhysicalScalar,
-        variables: HashMap<usize, (Option<ColumnWithField>, Option<ColumnWithField>)>,
+        expr: &Expression,
+        variables: HashMap<String, (Option<ColumnWithField>, Option<ColumnWithField>)>,
         single_point: bool,
     ) -> Monotonicity {
         let visitor = Self::create(schema, variables, single_point);
@@ -175,19 +174,19 @@ impl PhysicalScalarMonotonicityVisitor {
     }
 }
 
-impl PhysicalScalarVisitor for PhysicalScalarMonotonicityVisitor {
-    fn pre_visit(self, _expr: &PhysicalScalar) -> Result<Recursion<Self>> {
+impl ExpressionVisitor for ExpressionMonotonicityVisitor {
+    fn pre_visit(self, _expr: &Expression) -> Result<Recursion<Self>> {
         Ok(Recursion::Continue(self))
     }
 
-    fn post_visit(mut self, expr: &PhysicalScalar) -> Result<Self> {
+    fn post_visit(mut self, expr: &Expression) -> Result<Self> {
         match expr {
-            PhysicalScalar::IndexedVariable { index, .. } => {
-                let (left, right) = self.variables.get(index).ok_or_else(|| {
-                    ErrorCode::BadArguments(format!("Cannot find the column: '{:?}'", *index))
+            Expression::IndexedVariable { name, .. } => {
+                let (left, right) = self.variables.get(name).ok_or_else(|| {
+                    ErrorCode::BadArguments(format!("Cannot find the column: '{:?}'", name))
                 })?;
 
-                let field = self.input_schema.field(*index);
+                let field = self.input_schema.field_with_name(name)?;
                 let return_type = field.data_type();
 
                 let monotonic = Monotonicity {
@@ -201,7 +200,7 @@ impl PhysicalScalarVisitor for PhysicalScalarMonotonicityVisitor {
                 self.stack.push((return_type.clone(), monotonic));
                 Ok(self)
             }
-            PhysicalScalar::Constant { value, data_type } => {
+            Expression::Constant { value, data_type } => {
                 let name = value.to_string();
                 let data_field = DataField::new(&name, data_type.clone());
 
@@ -218,7 +217,7 @@ impl PhysicalScalarVisitor for PhysicalScalarMonotonicityVisitor {
                 self.stack.push((data_type.clone(), monotonic));
                 Ok(self)
             }
-            PhysicalScalar::Function { name, args, .. } => self.visit_function(name, args.len()),
+            Expression::Function { name, args, .. } => self.visit_function(name, args.len()),
             _ => Err(ErrorCode::UnknownException("Unable to get monotonicity")),
         }
     }

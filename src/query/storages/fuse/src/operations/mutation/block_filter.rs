@@ -22,7 +22,7 @@ use common_datavalues::Series;
 use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
 use common_planner::plans::Projection;
-use common_planner::PhysicalScalar;
+use common_planner::Expression;
 use common_sql::evaluator::Evaluator;
 
 use crate::operations::mutation::deletion_mutator::Deletion;

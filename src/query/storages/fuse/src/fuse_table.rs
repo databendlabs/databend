@@ -38,7 +38,7 @@ use common_planner::extras::Extras;
 use common_planner::extras::Statistics;
 use common_planner::plans::DeletePlan;
 use common_planner::Partitions;
-use common_planner::PhysicalScalar;
+use common_planner::Expression;
 use common_planner::ReadDataSourcePlan;
 use common_sharing::create_share_table_operator;
 use common_sql::PhysicalScalarParser;
@@ -246,7 +246,7 @@ impl Table for FuseTable {
         true
     }
 
-    fn cluster_keys(&self) -> Vec<PhysicalScalar> {
+    fn cluster_keys(&self) -> Vec<Expression> {
         let schema = self.table_info.schema();
         let table_meta = Arc::new(self.clone());
         if let Some((_, order)) = &self.cluster_key_meta {

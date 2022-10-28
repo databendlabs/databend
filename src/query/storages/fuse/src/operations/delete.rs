@@ -22,7 +22,7 @@ use common_exception::Result;
 use common_fuse_meta::meta::TableSnapshot;
 use common_planner::extras::Extras;
 use common_planner::plans::DeletePlan;
-use common_planner::PhysicalScalar;
+use common_planner::Expression;
 use common_sql::PhysicalScalarParser;
 use tracing::debug;
 

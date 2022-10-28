@@ -22,7 +22,7 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
-use common_planner::PhysicalScalar;
+use common_planner::Expression;
 use serde_json::json;
 
 use crate::io::MetaReaders;

@@ -19,8 +19,8 @@ use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_fuse_meta::meta::Location;
-use common_planner::PhysicalScalar;
-use common_sql::evaluator::PhysicalScalarOp;
+use common_planner::Expression;
+use common_sql::executor::ExpressionOp;
 use common_storages_index::BlockFilter;
 use opendal::Operator;
 
