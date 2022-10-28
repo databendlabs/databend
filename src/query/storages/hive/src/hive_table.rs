@@ -228,19 +228,11 @@ impl HiveTable {
         }
     }
 
-    fn get_columns_from_expressions(
-        expressions: &[Expression],
-        schema: &DataSchemaRef,
-    ) -> HashSet<String> {
-        let result = expressions
+    fn get_columns_from_expressions(expressions: &[Expression]) -> HashSet<String> {
+        expressions
             .iter()
             .flat_map(|e| RequireColumnsVisitor::collect_columns_from_expr(e).unwrap())
-            .collect::<HashSet<_>>();
-
-        result
-            .iter()
-            .map(|index| schema.field(*index).name().clone())
-            .collect()
+            .collect::<HashSet<_>>()
     }
 
     fn get_projections(&self, push_downs: &Option<Extras>) -> Result<Vec<usize>> {
