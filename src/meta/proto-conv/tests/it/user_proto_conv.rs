@@ -81,6 +81,7 @@ pub(crate) fn test_fs_stage_info() -> mt::UserStageInfo {
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
+            escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
         },
         copy_options: mt::CopyOptions {
@@ -116,6 +117,7 @@ pub(crate) fn test_s3_stage_info() -> mt::UserStageInfo {
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
+            escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
         },
         copy_options: mt::CopyOptions {
@@ -153,6 +155,7 @@ pub(crate) fn test_s3_stage_info_v16() -> mt::UserStageInfo {
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
+            escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
         },
         copy_options: mt::CopyOptions {
@@ -190,6 +193,7 @@ pub(crate) fn test_s3_stage_info_v14() -> mt::UserStageInfo {
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
+            escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
         },
         copy_options: mt::CopyOptions {
@@ -223,6 +227,7 @@ pub(crate) fn test_gcs_stage_info() -> mt::UserStageInfo {
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
+            escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
         },
         copy_options: mt::CopyOptions {
@@ -257,6 +262,7 @@ pub(crate) fn test_oss_stage_info() -> mt::UserStageInfo {
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
+            escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
         },
         copy_options: mt::CopyOptions {

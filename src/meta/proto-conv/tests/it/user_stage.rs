@@ -77,6 +77,7 @@ fn test_user_stage_fs_v16() -> anyhow::Result<()> {
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
+            escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
         },
         copy_options: mt::CopyOptions {
@@ -132,6 +133,7 @@ fn test_user_stage_s3_v16() -> anyhow::Result<()> {
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
+            escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
         },
         copy_options: mt::CopyOptions {
@@ -181,6 +183,7 @@ fn test_user_stage_gcs_v16() -> anyhow::Result<()> {
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
+            escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
         },
         copy_options: mt::CopyOptions {
@@ -232,6 +235,7 @@ fn test_user_stage_oss_v16() -> anyhow::Result<()> {
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
+            escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
         },
         copy_options: mt::CopyOptions {
@@ -285,6 +289,7 @@ fn test_user_stage_oss_v13() -> anyhow::Result<()> {
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
+            escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
         },
         copy_options: mt::CopyOptions {
@@ -339,6 +344,7 @@ fn test_user_stage_s3_v11() -> anyhow::Result<()> {
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
+            escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
         },
         copy_options: mt::CopyOptions {
@@ -391,6 +397,7 @@ fn test_user_stage_s3_v9() -> anyhow::Result<()> {
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
+            escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
         },
         copy_options: mt::CopyOptions {
@@ -434,6 +441,7 @@ fn test_user_stage_fs_v6() -> anyhow::Result<()> {
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
+            escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
         },
         copy_options: mt::CopyOptions {
@@ -487,6 +495,7 @@ fn test_user_stage_s3_v6() -> anyhow::Result<()> {
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
+            escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
         },
         copy_options: mt::CopyOptions {
@@ -536,6 +545,7 @@ fn test_user_stage_gcs_v6() -> anyhow::Result<()> {
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
+            escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
         },
         copy_options: mt::CopyOptions {
@@ -578,6 +588,7 @@ fn test_user_stage_fs_v4() -> anyhow::Result<()> {
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
+            escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
         },
         copy_options: mt::CopyOptions {
@@ -631,6 +642,7 @@ fn test_user_stage_s3_v4() -> anyhow::Result<()> {
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
+            escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
         },
         copy_options: mt::CopyOptions {
@@ -679,6 +691,7 @@ fn test_user_stage_gcs_v4() -> anyhow::Result<()> {
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
+            escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
         },
         copy_options: mt::CopyOptions {
@@ -729,6 +742,7 @@ fn test_user_stage_s3_v1() -> anyhow::Result<()> {
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
+            escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
         },
         copy_options: mt::CopyOptions {
