@@ -336,8 +336,8 @@ impl Settings {
                     UserSettingValue::String("PostgreSQL".to_owned()),
                 ),
                 level: ScopeLevel::Session,
-                desc: "SQL dialect, support \"PostgreSQL\" and \"MySQL\", default value: \"PostgreSQL\".",
-                possible_values: Some(vec!["PostgreSQL", "MySQL"]),
+                desc: "SQL dialect, support \"PostgreSQL\" \"MySQL\" and \"Hive\", default value: \"PostgreSQL\".",
+                possible_values: Some(vec!["PostgreSQL", "MySQL", "Hive"]),
             },
             SettingValue {
                 default_value: UserSettingValue::UInt64(1),
@@ -594,12 +594,10 @@ impl Settings {
         let key = "sql_dialect";
         self.check_and_get_setting_value(key)
             .and_then(|v| v.user_setting.value.as_string())
-            .map(|v| {
-                if v == "MySQL" {
-                    Dialect::MySQL
-                } else {
-                    Dialect::PostgreSQL
-                }
+            .map(|v| match &*v {
+                "MySQL" => Dialect::MySQL,
+                "Hive" => Dialect::Hive,
+                _ => Dialect::PostgreSQL,
             })
     }
 

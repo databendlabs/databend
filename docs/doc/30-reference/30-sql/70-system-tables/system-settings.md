@@ -181,7 +181,7 @@ set skip_header=3;
 
 ## sql_dialect
 
-SQL dialect, support "PostgreSQL" and "MySQL", default value: "PostgreSQL".
+SQL dialect, support "PostgreSQL" "MySQL" and "Hive", default value: "PostgreSQL".
 
 ```sql
 set sql_dialect='PostgreSQL';
