@@ -43,7 +43,7 @@ impl InformationSchemaDatabase {
             SchemataTable::create(sys_db_meta.next_table_id()),
         ];
 
-        let db = "INFORMATION_SCHEMA";
+        let db = "information_schema";
 
         for tbl in table_list.into_iter() {
             sys_db_meta.insert(db, tbl);
@@ -71,7 +71,7 @@ impl InformationSchemaDatabase {
 #[async_trait::async_trait]
 impl Database for InformationSchemaDatabase {
     fn name(&self) -> &str {
-        "INFORMATION_SCHEMA"
+        "information_schema"
     }
 
     fn get_db_info(&self) -> &DatabaseInfo {

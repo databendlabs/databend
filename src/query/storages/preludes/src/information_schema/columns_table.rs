@@ -57,8 +57,8 @@ impl ColumnsTable {
         let mut options = BTreeMap::new();
         options.insert(QUERY.to_string(), query.to_string());
         let table_info = TableInfo {
-            desc: "'INFORMATION_SCHEMA'.'COLUMNS'".to_string(),
-            name: "COLUMNS".to_string(),
+            desc: "'information_schema'.'columns'".to_string(),
+            name: "columns".to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {
                 options,
