@@ -124,7 +124,7 @@ message UserStageInfo {
   uint64 min_compatible = 101;
 
   enum StageType {
-    Interval = 0;
+    LegacyInternal = 0;
     External = 1;
   }
 
