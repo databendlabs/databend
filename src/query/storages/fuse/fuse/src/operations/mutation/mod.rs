@@ -23,6 +23,7 @@ pub use abort_operation::AbortOperation;
 pub use base_mutator::BaseMutator;
 pub use block_filter::delete_from_block;
 pub use compact_mutator::FullCompactMutator;
+pub use compact_mutator::SegmentAccumulator;
 pub use compact_mutator::SegmentCompactMutator;
 pub use deletion_mutator::DeletionMutator;
 pub use recluster_mutator::ReclusterMutator;

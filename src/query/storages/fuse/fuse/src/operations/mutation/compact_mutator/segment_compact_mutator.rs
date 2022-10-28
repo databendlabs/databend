@@ -18,7 +18,6 @@ use std::time::Instant;
 use common_catalog::table::Table;
 use common_exception::Result;
 use common_storages_fuse_meta::caches::CacheManager;
-use common_storages_fuse_meta::meta::BlockMeta;
 use common_storages_fuse_meta::meta::Location;
 use common_storages_fuse_meta::meta::SegmentInfo;
 use common_storages_fuse_meta::meta::Statistics;
@@ -30,44 +29,10 @@ use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::mutation::AbortOperation;
 use crate::operations::CompactOptions;
-use crate::statistics::merge_statistics;
-use crate::statistics::reducers::reduce_block_metas;
+use crate::statistics::reducers::merge_statistics_mut;
 use crate::FuseTable;
 use crate::TableContext;
 use crate::TableMutator;
-
-// The rough idea goes like this:
-// 1. `target_select` will working and the base_snapshot: compact segments and keep the compactions
-// 2. `try_commit` will try to commit the compacted snapshot to the meta store.
-//     in condition of reconcilable conflicts detected, compactor will try to resolve the conflict and try again.
-//     after MAX_RETRIES attempts, if still failed, abort the operation even if conflict resolvable.
-//
-// example of a merge process:
-// - segments of base_snapshot:
-//  [a, b, c, d, e, f, g]
-//  suppose a and d are compacted enough, and others are not.
-// - after `select_target`:
-//  unchanged_segments : [a, d]
-//  compacted_segments : [x, y], where
-//     [b, c] compacted into x
-//     [e, f, g] compacted into y
-// - if there is a concurrent tx, committed BEFORE compact segments,
-//   and suppose the segments of the tx's snapshot is
-//  [a, b, c, d, e, f, g, h, i]
-//  compare with the base_snapshot's segments
-//  [a, b, c, d, e, f, g]
-// we know that tx is appended(only) on the base of base_snapshot
-// and the `appended_segments` is [h, i]
-//
-// The final merged segments should be
-// [x, y, a, d, h, i]
-//
-// note that
-// 1. the concurrently appended(and committed) segment will NOT be compacted during tx
-//     conflicts resolving to make the committing of compact operation agile
-// 2. in the implementation, the order of segment in the vector is arranged in reversed order
-//    - compaction starts from the head of the snapshot's segment vector.
-//    - newly compacted segments will be added to the end of snapshot's segment list
 
 pub struct SegmentCompactMutator {
     ctx: Arc<dyn TableContext>,
@@ -111,6 +76,7 @@ impl TableMutator for SegmentCompactMutator {
     async fn target_select(&mut self) -> Result<bool> {
         let select_begin = Instant::now();
 
+        // read all the segments
         let fuse_segment_io = SegmentsIO::create(self.ctx.clone(), self.data_accessor.clone());
         let base_segment_locations = &self.compact_params.base_snapshot.segments;
         let base_segments = fuse_segment_io
@@ -119,100 +85,36 @@ impl TableMutator for SegmentCompactMutator {
             .into_iter()
             .collect::<Result<Vec<_>>>()?;
         let number_segments = base_segments.len();
-
-        let blocks_per_segment_threshold = self.compact_params.block_per_seg;
-
-        let mut segments_tobe_compacted = Vec::with_capacity(number_segments / 2);
-
-        let mut unchanged_segment_locations = Vec::with_capacity(number_segments / 2);
-
-        let mut unchanged_segment_statistics = Statistics::default();
-
-        let mut start = 0;
         let limit = self.compact_params.limit.unwrap_or(number_segments);
-        loop {
-            let end = std::cmp::min(start + limit, number_segments);
 
-            for idx in start..end {
-                let number_blocks = base_segments[idx].blocks.len();
-                if number_blocks >= blocks_per_segment_threshold {
-                    // skip if current segment is large enough, mark it as unchanged
-                    unchanged_segment_locations.push(base_segment_locations[idx].clone());
-                    unchanged_segment_statistics = merge_statistics(
-                        &unchanged_segment_statistics,
-                        &base_segments[idx].summary,
-                    )?;
-                    continue;
-                } else {
-                    // if number of blocks meets the threshold, mark them down
-                    segments_tobe_compacted.push(&base_segments[idx])
-                }
-            }
-
-            // check if necessary to compact the segment meta: at least two segments were marked as segments_tobe_compacted
-            if segments_tobe_compacted.len() > 1 {
-                if end < number_segments {
-                    unchanged_segment_locations = base_segment_locations[end..]
-                        .iter()
-                        .chain(unchanged_segment_locations.iter())
-                        .cloned()
-                        .collect();
-                    for segment in &base_segments[end..] {
-                        unchanged_segment_statistics =
-                            merge_statistics(&unchanged_segment_statistics, &segment.summary)?;
-                    }
-                }
-                break;
-            }
-
-            if end == number_segments {
-                return Ok(false);
-            }
-            start = end;
-        }
-
-        // flatten the block metas of segments being compacted
-        let blocks_of_new_segments: Vec<Arc<BlockMeta>> = segments_tobe_compacted
-            .iter()
-            .flat_map(|v| v.blocks.iter())
-            .cloned()
-            .collect();
-
-        // split the block metas into chunks of blocks, with chunk size set to block_per_seg
-        let chunk_of_blocks = blocks_of_new_segments.chunks(blocks_per_segment_threshold);
-        // Build new segments which are compacted according to the setting of `block_per_seg`
-        // note that the newly segments will be persistent into storage, such that if retry
-        // happens during the later `try_commit` phase, they do not need to be written again.
-        let mut compacted_segment_statistics = Statistics::default();
-        let mut compacted_segment_locations = Vec::with_capacity(number_segments / 2);
+        // prepare accumulator
         let segment_info_cache = CacheManager::instance().get_table_segment_cache();
         let segment_writer = SegmentWriter::new(
             &self.data_accessor,
             &self.location_generator,
             &segment_info_cache,
         );
-        for chunk in chunk_of_blocks {
-            let stats = reduce_block_metas(chunk)?;
-            compacted_segment_statistics = merge_statistics(&compacted_segment_statistics, &stats)?;
-            let new_segment = SegmentInfo::new(chunk.to_vec(), stats);
-            let location = segment_writer.write_segment(new_segment).await?;
-            compacted_segment_locations.push(location);
+
+        let mut accumulator =
+            SegmentAccumulator::new(self.compact_params.block_per_seg as u64, segment_writer);
+
+        // feed segments into accumulator
+        let mut compacted = 0;
+        for (idx, x) in base_segments.iter().enumerate() {
+            accumulator
+                .add(x, base_segment_locations[idx].clone())
+                .await?;
+            compacted += 1;
+            if compacted >= limit {
+                break;
+            }
         }
+        accumulator.finalize().await?;
 
-        // collect all the paths of newly created segments
-        self.new_segment_paths = compacted_segment_locations
-            .iter()
-            .map(|(path, _version)| path.clone())
-            .collect();
-
-        self.merged_segment_statistics =
-            merge_statistics(&compacted_segment_statistics, &unchanged_segment_statistics)?;
-
-        self.merged_segments_locations = {
-            // place the newly generated compacted segment to the tail of the vector
-            unchanged_segment_locations.append(&mut compacted_segment_locations);
-            unchanged_segment_locations
-        };
+        // gather the results
+        self.new_segment_paths = accumulator.new_segments;
+        self.merged_segment_statistics = accumulator.merged_statistics;
+        self.merged_segments_locations = accumulator.segment_locations;
 
         gauge!(
             "fuse_compact_segments_select_duration_second",
@@ -242,5 +144,128 @@ impl TableMutator for SegmentCompactMutator {
                 abort_action,
             )
             .await
+    }
+}
+
+pub struct SegmentAccumulator<'a> {
+    // summary statistics of compacted segments (merged and unchanged segments)
+    pub merged_statistics: Statistics,
+    // locations of compacted segments (merged and unchanged segments)
+    pub segment_locations: Vec<Location>,
+    // locations of newly generated segments, need this do undo the operation
+    pub new_segments: Vec<String>,
+    threshold: u64,
+    accumulated_num_blocks: u64,
+    fragmented_segments: Vec<(&'a SegmentInfo, Location)>,
+    segment_writer: SegmentWriter<'a>,
+}
+
+impl<'a> SegmentAccumulator<'a> {
+    pub fn new(threshold: u64, segment_writer: SegmentWriter<'a>) -> Self {
+        Self {
+            threshold,
+            accumulated_num_blocks: 0,
+            merged_statistics: Statistics::default(),
+            segment_locations: vec![],
+            fragmented_segments: vec![],
+            new_segments: vec![],
+            segment_writer,
+        }
+    }
+
+    // accumulate one segment
+    pub async fn add(&mut self, segment_info: &'a SegmentInfo, location: Location) -> Result<()> {
+        let num_blocks_current_segment = segment_info.blocks.len() as u64;
+
+        if num_blocks_current_segment == 0 {
+            return Ok(());
+        }
+
+        if num_blocks_current_segment < self.threshold {
+            let s = self.accumulated_num_blocks + num_blocks_current_segment;
+            if s < self.threshold {
+                // not enough blocks yet, just keep this segment
+                self.accumulated_num_blocks = s;
+                self.fragmented_segments.push((segment_info, location));
+                return Ok(());
+            } else if s >= self.threshold && s < 2 * self.threshold {
+                // compact the fragmented segments
+                self.fragmented_segments.push((segment_info, location));
+                self.compact_fragments().await?;
+                return Ok(());
+            }
+        }
+        // TODO doc this
+        self.barrier_compact_with(segment_info, location).await?;
+
+        Ok(())
+    }
+
+    async fn compact_fragments(&mut self) -> Result<()> {
+        // 1. take the fragments and reset
+        let fragments = std::mem::take(&mut self.fragmented_segments);
+        self.accumulated_num_blocks = 0;
+
+        // 2. build and write down the compacted segment
+
+        // check if only one fragment left
+
+        if fragments.len() == 1 {
+            let (segment, location) = &fragments[0];
+            merge_statistics_mut(&mut self.merged_statistics, &segment.summary)?;
+            self.segment_locations.push(location.clone());
+            return Ok(());
+        }
+
+        // 2.1 build new segment and merge statistics
+        let mut blocks = Vec::with_capacity(self.threshold as usize);
+        let mut new_statistics = Statistics::default();
+        for (segment, _location) in fragments {
+            merge_statistics_mut(&mut new_statistics, &segment.summary)?;
+            blocks.append(&mut segment.blocks.clone());
+        }
+        merge_statistics_mut(&mut self.merged_statistics, &new_statistics)?;
+
+        // 2.2 write down new segment
+        let new_segment = SegmentInfo::new(blocks, new_statistics);
+        let location = self.segment_writer.write_segment(new_segment).await?;
+        self.new_segments.push(location.0.clone());
+        self.segment_locations.push(location);
+        Ok(())
+    }
+
+    async fn barrier_compact_with(
+        &mut self,
+        segment_info: &'a SegmentInfo,
+        location: Location,
+    ) -> Result<()> {
+        let num_block = segment_info.blocks.len() as u64;
+        if self.accumulated_num_blocks + num_block < 2 * self.threshold {
+            // TODO doc why we need this branch
+            merge_statistics_mut(&mut self.merged_statistics, &segment_info.summary)?;
+            self.segment_locations.push(location);
+            self.compact_fragments().await?;
+        } else {
+            // we have no choice but to compact the fragmented segments collected so far,
+            // in this situation, after compaction, the size compacted segment may NOT
+            // be of perfect size (smaller, but not larger).
+            // this happens if the size of segment BEFORE compaction is already
+            // larger than threshold.
+            self.compact_fragments().await?;
+            // after compaction, we keep this segment directly as compacted, since
+            // it is large enough
+            merge_statistics_mut(&mut self.merged_statistics, &segment_info.summary)?;
+            self.segment_locations.push(location);
+        }
+
+        Ok(())
+    }
+
+    pub async fn finalize(&mut self) -> Result<()> {
+        if self.fragmented_segments.is_empty() {
+            // some fragments left, compact them with the last compacted segment
+            self.compact_fragments().await?;
+        }
+        Ok(())
     }
 }

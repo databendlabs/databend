@@ -64,7 +64,7 @@ pub struct BlockMeta {
     /// `Lz4` is merely for backward compatibility, it will NO longer be
     /// used in the write path.
     #[serde(default = "Compression::legacy")]
-    compression: Compression,
+    pub compression: Compression,
 }
 
 impl BlockMeta {

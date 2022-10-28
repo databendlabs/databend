@@ -200,8 +200,8 @@ impl TestFixture {
         Ok(())
     }
 
-    pub fn gen_sample_blocks(num: usize, start: i32) -> Vec<Result<DataBlock>> {
-        Self::gen_sample_blocks_ex(num, 3, start)
+    pub fn gen_sample_blocks(num_of_blocks: usize, start: i32) -> Vec<Result<DataBlock>> {
+        Self::gen_sample_blocks_ex(num_of_blocks, 3, start)
     }
 
     pub fn gen_sample_blocks_ex(

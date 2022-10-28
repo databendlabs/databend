@@ -21,6 +21,15 @@ use common_catalog::table::TableExt;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::meta::BlockMeta;
+use common_fuse_meta::meta::SegmentInfo;
+use common_fuse_meta::meta::Statistics;
+use common_storages_fuse::io::BlockWriter;
+use common_storages_fuse::io::SegmentWriter;
+use common_storages_fuse::io::TableMetaLocationGenerator;
+use common_storages_fuse::operations::SegmentAccumulator;
+use common_storages_fuse::statistics::BlockStatistics;
+use common_storages_fuse::statistics::StatisticsAccumulator;
 use common_storages_fuse::FuseTable;
 use common_streams::SendableDataBlockStream;
 use databend_query::sessions::QueryContext;
@@ -201,4 +210,234 @@ async fn compact_segment(ctx: Arc<QueryContext>, table: &Arc<dyn Table>) -> Resu
         .await?
         .unwrap();
     mutator.try_commit(table.clone()).await
+}
+
+#[tokio::test]
+async fn test_segment_accumulator() -> Result<()> {
+    // TODO refactor this suite
+
+    let fixture = TestFixture::new().await;
+    let ctx = fixture.ctx();
+    let data_accessor = ctx.get_data_operator()?;
+    let location_gen = TableMetaLocationGenerator::with_prefix("test/".to_owned());
+
+    let block_per_seg = 10;
+
+    // empty segment will be dropped
+    {
+        let segment_writer = SegmentWriter::new(&data_accessor, &location_gen, &None);
+        let mut accumulator = SegmentAccumulator::new(block_per_seg, segment_writer);
+
+        let seg = SegmentInfo::new(vec![], Statistics::default());
+        accumulator.add(&seg, ("test".to_owned(), 1)).await?;
+        accumulator.finalize().await?;
+        assert_eq!(accumulator.new_segments.len(), 0);
+    }
+
+    // all the segments feed in combined, is still a fragmented segment
+    {
+        let segment_writer = SegmentWriter::new(&data_accessor, &location_gen, &None);
+        let mut accumulator = SegmentAccumulator::new(block_per_seg, segment_writer);
+
+        let mut segs = vec![];
+        for _ in 0..9 {
+            let block_meta = BlockMeta::new(
+                0,
+                0,
+                0,
+                Default::default(),
+                Default::default(),
+                None,
+                ("".to_string(), 0),
+                None,
+                0,
+            );
+            let statistics = Statistics {
+                row_count: 0,
+                block_count: 1,
+                uncompressed_byte_size: 0,
+                compressed_byte_size: 0,
+                index_size: 0,
+                col_stats: Default::default(),
+            };
+
+            let seg = SegmentInfo::new(vec![Arc::new(block_meta)], statistics);
+            segs.push(seg);
+        }
+
+        for x in &segs {
+            accumulator.add(x, ("test".to_owned(), 1)).await?;
+        }
+        accumulator.finalize().await?;
+        assert_eq!(accumulator.new_segments.len(), 1);
+        assert_eq!(accumulator.merged_statistics.block_count, 9);
+    }
+
+    {
+        let segment_writer = SegmentWriter::new(&data_accessor, &location_gen, &None);
+        let mut seg_acc = SegmentAccumulator::new(block_per_seg, segment_writer);
+
+        let block_writer = BlockWriter::new(&data_accessor, &location_gen);
+        let mut stats_acc = StatisticsAccumulator::new();
+
+        // let mut rng = rand::thread_rng();
+        let blocks = TestFixture::gen_sample_blocks(120, 1)
+            .into_iter()
+            .collect::<Result<Vec<_>>>()?;
+
+        for block in blocks {
+            let block_statistics = BlockStatistics::from(&block, "".to_owned(), None)?;
+            let block_meta = block_writer.write(block, None).await?;
+            stats_acc.add_with_block_meta(block_meta, block_statistics)?;
+        }
+
+        assert_eq!(stats_acc.summary_block_count, 120);
+
+        let col_stats = stats_acc.summary()?;
+        let segment_info = SegmentInfo::new(stats_acc.blocks_metas, Statistics {
+            row_count: stats_acc.summary_row_count,
+            block_count: stats_acc.summary_block_count,
+            uncompressed_byte_size: stats_acc.in_memory_size,
+            compressed_byte_size: stats_acc.file_size,
+            index_size: stats_acc.index_size,
+            col_stats,
+        });
+        seg_acc.add(&segment_info, ("".to_owned(), 1)).await?;
+        seg_acc.finalize().await?;
+
+        assert_eq!(seg_acc.new_segments.len(), 1);
+        assert_eq!(seg_acc.merged_statistics.block_count, 120);
+    }
+
+    {
+        eprintln!("=================");
+        let segment_writer = SegmentWriter::new(&data_accessor, &location_gen, &None);
+
+        let block_per_seg = 10;
+        let mut seg_acc = SegmentAccumulator::new(block_per_seg, segment_writer);
+        let block_writer = BlockWriter::new(&data_accessor, &location_gen);
+
+        let num_block_of_segments = vec![2, 3, 6, 5];
+
+        // in this case,
+        // - the first 3 segments should be merged
+        // - the last segment will be kept and unchanged
+
+        let segments = gen_segments(block_writer, &num_block_of_segments).await?;
+        for seg in &segments {
+            seg_acc.add(seg, ("".to_owned(), 1)).await?;
+        }
+        seg_acc.finalize().await?;
+
+        assert_eq!(seg_acc.new_segments.len(), 1);
+        assert_eq!(seg_acc.segment_locations.len(), 2);
+        assert_eq!(
+            seg_acc.merged_statistics.block_count as usize,
+            num_block_of_segments.into_iter().sum::<usize>()
+        );
+    }
+
+    {
+        let segment_writer = SegmentWriter::new(&data_accessor, &location_gen, &None);
+
+        let block_per_seg = 3;
+        let mut seg_acc = SegmentAccumulator::new(block_per_seg, segment_writer);
+        let block_writer = BlockWriter::new(&data_accessor, &location_gen);
+
+        // in this case,
+        // - the first 3 segments should be merged
+        // - the last segment will be kept and unchanged
+        let num_block_of_segments = vec![1, 1, 1, 1];
+
+        let segments = gen_segments(block_writer, &num_block_of_segments).await?;
+        for seg in &segments {
+            seg_acc.add(seg, ("".to_owned(), 1)).await?;
+        }
+        seg_acc.finalize().await?;
+
+        assert_eq!(seg_acc.new_segments.len(), 1);
+        assert_eq!(seg_acc.segment_locations.len(), 2);
+        assert_eq!(
+            seg_acc.merged_statistics.block_count as usize,
+            num_block_of_segments.into_iter().sum::<usize>()
+        );
+    }
+
+    {
+        let segment_writer = SegmentWriter::new(&data_accessor, &location_gen, &None);
+
+        let block_per_seg = 3;
+        let mut seg_acc = SegmentAccumulator::new(block_per_seg, segment_writer);
+        let block_writer = BlockWriter::new(&data_accessor, &location_gen);
+
+        // in this case,
+        // - the first 3 segments should be merged
+        // - the last segment will be kept and unchanged
+        let num_block_of_segments = vec![2, 1, 2, 1];
+
+        let segments = gen_segments(block_writer, &num_block_of_segments).await?;
+        for seg in &segments {
+            seg_acc.add(seg, ("".to_owned(), 1)).await?;
+        }
+        seg_acc.finalize().await?;
+
+        assert_eq!(seg_acc.new_segments.len(), 2);
+        assert_eq!(
+            seg_acc.merged_statistics.block_count as usize,
+            num_block_of_segments.into_iter().sum::<usize>()
+        );
+    }
+
+    {
+        let segment_writer = SegmentWriter::new(&data_accessor, &location_gen, &None);
+
+        let block_per_seg = 10;
+        let mut seg_acc = SegmentAccumulator::new(block_per_seg, segment_writer);
+        let block_writer = BlockWriter::new(&data_accessor, &location_gen);
+
+        // in this case,
+        // - the first 3 segments should be merged
+        // - the last segment will be kept and unchanged
+        let num_block_of_segments = vec![8, 3, 1];
+
+        let segments = gen_segments(block_writer, &num_block_of_segments).await?;
+        for seg in &segments {
+            seg_acc.add(seg, ("".to_owned(), 1)).await?;
+        }
+        seg_acc.finalize().await?;
+
+        assert_eq!(seg_acc.new_segments.len(), 1);
+        assert_eq!(seg_acc.segment_locations.len(), 2);
+        assert_eq!(
+            seg_acc.merged_statistics.block_count as usize,
+            num_block_of_segments.into_iter().sum::<usize>()
+        );
+    }
+
+    Ok(())
+}
+
+async fn gen_segments(block_writer: BlockWriter<'_>, sizes: &[usize]) -> Result<Vec<SegmentInfo>> {
+    let mut segments = vec![];
+    for num_blocks in sizes {
+        let blocks = TestFixture::gen_sample_blocks_ex(*num_blocks, 1, 1);
+        let mut stats_acc = StatisticsAccumulator::new();
+        for block in blocks {
+            let block = block?;
+            let block_statistics = BlockStatistics::from(&block, "".to_owned(), None)?;
+            let block_meta = block_writer.write(block, None).await?;
+            stats_acc.add_with_block_meta(block_meta, block_statistics)?;
+        }
+        let col_stats = stats_acc.summary()?;
+        let segment_info = SegmentInfo::new(stats_acc.blocks_metas, Statistics {
+            row_count: stats_acc.summary_row_count,
+            block_count: stats_acc.summary_block_count,
+            uncompressed_byte_size: stats_acc.in_memory_size,
+            compressed_byte_size: stats_acc.file_size,
+            index_size: stats_acc.index_size,
+            col_stats,
+        });
+        segments.push(segment_info);
+    }
+    Ok(segments)
 }

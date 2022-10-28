@@ -17,4 +17,5 @@ mod full_compact_mutator;
 mod segment_compact_mutator;
 
 pub use full_compact_mutator::FullCompactMutator;
+pub use segment_compact_mutator::SegmentAccumulator;
 pub use segment_compact_mutator::SegmentCompactMutator;
