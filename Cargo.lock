@@ -2187,7 +2187,6 @@ dependencies = [
  "common-exception",
  "common-functions",
  "common-fuse-meta",
- "common-pipeline-transforms",
  "common-planner",
  "common-sql",
  "criterion",

@@ -213,7 +213,7 @@ impl HiveTable {
 
             // filter out the partition column related expressions
             let partition_keys = self.get_partition_key_sets();
-            let columns = Self::get_columns_from_expressions(f, &plan.schema());
+            let columns = Self::get_columns_from_expressions(f);
             if columns.difference(&partition_keys).count() == 0 {
                 return true;
             }
