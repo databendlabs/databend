@@ -76,14 +76,14 @@ statement query T
 select * from system.databases where name not like '%sys%' order by name;
 
 ----
-INFORMATION_SCHEMA
+information_schema
 default
 
 statement query T
 select * from system.databases where name not like '_ef_ul_' order by name;
 
 ----
-INFORMATION_SCHEMA
+information_schema
 system
 
 statement query B

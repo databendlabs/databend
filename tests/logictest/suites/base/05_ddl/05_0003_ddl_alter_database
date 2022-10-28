@@ -42,7 +42,7 @@ SELECT * FROM system.databases;
 
 ----
 system
-INFORMATION_SCHEMA
+information_schema
 a
 b
 default
@@ -58,7 +58,7 @@ SELECT * FROM system.databases;
 
 ----
 system
-INFORMATION_SCHEMA
+information_schema
 a
 b
 default
@@ -74,7 +74,7 @@ SELECT * FROM system.databases;
 
 ----
 system
-INFORMATION_SCHEMA
+information_schema
 a
 b
 default
@@ -90,7 +90,7 @@ SELECT * FROM system.databases;
 
 ----
 system
-INFORMATION_SCHEMA
+information_schema
 a
 b
 default
@@ -103,7 +103,7 @@ SELECT * FROM system.databases;
 
 ----
 system
-INFORMATION_SCHEMA
+information_schema
 a2
 b
 default
@@ -131,7 +131,7 @@ SELECT * FROM system.databases;
 
 ----
 system
-INFORMATION_SCHEMA
+information_schema
 a2
 b
 default
@@ -150,7 +150,7 @@ SELECT * FROM system.databases;
 
 ----
 system
-INFORMATION_SCHEMA
+information_schema
 a2
 b2
 default
