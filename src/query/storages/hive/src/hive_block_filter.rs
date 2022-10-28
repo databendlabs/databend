@@ -72,12 +72,12 @@ impl HiveBlockFilter {
                         if let (true, max, min, null_count) =
                             Self::get_max_min_stats(col.data_type(), &*stats)
                         {
-                            let col_stats = ColumnStatistics {
+                            let col_stats = ColumnStatistics::new(
                                 min,
                                 max,
-                                null_count: null_count as u64,
-                                in_memory_size: in_memory_size as u64,
-                            };
+                                null_count as u64,
+                                in_memory_size as u64,
+                            );
                             if let Ok(idx) = self.data_schema.index_of(col.name()) {
                                 statistics.insert(idx as u32, col_stats);
                             }
@@ -89,12 +89,8 @@ impl HiveBlockFilter {
             for (p_key, p_value) in part_columns {
                 if let Ok(idx) = self.data_schema.index_of(&p_key) {
                     let v = DataValue::String(p_value.as_bytes().to_vec());
-                    let col_stats = ColumnStatistics {
-                        min: v.clone(),
-                        max: v,
-                        null_count: 0,
-                        in_memory_size: 0,
-                    };
+                    let col_stats = ColumnStatistics::new(v.clone(), v, 0, 0);
+
                     statistics.insert(idx as u32, col_stats);
                 }
             }
