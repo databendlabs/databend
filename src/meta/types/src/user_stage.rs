@@ -50,14 +50,17 @@ use crate::UserIdentity;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum StageType {
-    Internal,
+    /// LegacyInternal will be depracated.
+    ///
+    /// We keep this stage type for backword compatible.
+    LegacyInternal,
     External,
 }
 
 impl fmt::Display for StageType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let name = match self {
-            StageType::Internal => "Internal",
+            StageType::LegacyInternal => "Internal",
             StageType::External => "External",
         };
         write!(f, "{}", name)

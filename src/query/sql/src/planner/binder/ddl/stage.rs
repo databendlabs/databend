@@ -81,7 +81,7 @@ impl<'a> Binder {
 
         let mut stage_info = match location {
             None => UserStageInfo {
-                stage_type: StageType::Internal,
+                stage_type: StageType::LegacyInternal,
                 ..Default::default()
             },
             Some(uri) => {

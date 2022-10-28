@@ -65,7 +65,7 @@ fn test_user_stage_fs_v16() -> anyhow::Result<()> {
 
     let want = mt::UserStageInfo {
         stage_name: "fs://dir/to/files".to_string(),
-        stage_type: mt::StageType::Internal,
+        stage_type: mt::StageType::LegacyInternal,
         stage_params: mt::StageParams {
             storage: StorageParams::Fs(StorageFsConfig {
                 root: "/dir/to/files".to_string(),
@@ -422,7 +422,7 @@ fn test_user_stage_fs_v6() -> anyhow::Result<()> {
 
     let want = mt::UserStageInfo {
         stage_name: "fs://dir/to/files".to_string(),
-        stage_type: mt::StageType::Internal,
+        stage_type: mt::StageType::LegacyInternal,
         stage_params: mt::StageParams {
             storage: StorageParams::Fs(StorageFsConfig {
                 root: "/dir/to/files".to_string(),
@@ -566,7 +566,7 @@ fn test_user_stage_fs_v4() -> anyhow::Result<()> {
 
     let want = mt::UserStageInfo {
         stage_name: "fs://dir/to/files".to_string(),
-        stage_type: mt::StageType::Internal,
+        stage_type: mt::StageType::LegacyInternal,
         stage_params: mt::StageParams {
             storage: StorageParams::Fs(StorageFsConfig {
                 root: "/dir/to/files".to_string(),

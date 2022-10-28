@@ -58,7 +58,7 @@ impl Interpreter for CreateUserStageInterpreter {
             )));
         };
 
-        if user_stage.stage_type == StageType::Internal {
+        if user_stage.stage_type == StageType::LegacyInternal {
             let prefix = format!("stage/{}/", user_stage.stage_name);
             let op = self.ctx.get_data_operator()?.operator();
             op.object(&prefix).create().await?

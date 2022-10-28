@@ -70,7 +70,7 @@ fn test_user_info() -> UserInfo {
 pub(crate) fn test_fs_stage_info() -> mt::UserStageInfo {
     mt::UserStageInfo {
         stage_name: "fs://dir/to/files".to_string(),
-        stage_type: mt::StageType::Internal,
+        stage_type: mt::StageType::LegacyInternal,
         stage_params: mt::StageParams {
             storage: StorageParams::Fs(StorageFsConfig {
                 root: "/dir/to/files".to_string(),
