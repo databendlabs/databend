@@ -84,12 +84,19 @@ impl InputFormatTextBase for InputFormatCSV {
                 "quote_char can only contain one char",
             ));
         }
+        let escape = settings.get_format_escape()?;
+        let escape  = if escape.is_empty() {
+            None
+        } else  {
+           Some(escape.into_bytes()[0])
+        };
         Ok(FormatSettings {
             record_delimiter: settings.get_format_record_delimiter()?.into_bytes(),
             field_delimiter: settings.get_format_field_delimiter()?.into_bytes(),
             empty_as_default: settings.get_format_empty_as_default()? > 0,
             quote_char: quote_char[0],
             null_bytes: vec![b'\\', b'N'],
+            escape,
             timezone,
             ..Default::default()
         })
