@@ -149,8 +149,12 @@ impl Cursor {
                 (false, false) => {}
                 (true, true) => match comparators[i](self.row_index, other.row_index) {
                     Ordering::Equal => {}
-                    o if !option.asc => Ok(o.reverse()),
-                    o => Ok(o),
+                    o if !option.asc => {
+                        return Ok(o.reverse());
+                    }
+                    o => {
+                        return Ok(o);
+                    }
                 },
             }
         }
@@ -240,7 +244,6 @@ impl MultiSortMergeProcessor {
         sort_columns_descriptions: Vec<SortColumnDescription>,
     ) -> Self {
         let input_size = inputs.len();
-
         Self {
             inputs,
             output,
@@ -267,10 +270,8 @@ impl MultiSortMergeProcessor {
                 continue;
             }
             input.set_need_data();
-            if self.cursor_finished[i] {
-                if input.has_data() {
-                    data.push((i, input.pull_data().unwrap()?));
-                }
+            if self.cursor_finished[i] && input.has_data() {
+                data.push((i, input.pull_data().unwrap()?));
             }
         }
         Ok(data)
@@ -303,6 +304,12 @@ impl MultiSortMergeProcessor {
                     let block_index = self.blocks[input_index].len() - 1;
                     self.in_progess_rows
                         .push((input_index, block_index, row_index));
+                    if let Some(limit) = self.limit {
+                        if self.in_progess_rows.len() == limit {
+                            need_output = true;
+                            break;
+                        }
+                    }
                     // Reach the block size, need to output.
                     if self.in_progess_rows.len() >= self.block_size {
                         need_output = true;
@@ -446,10 +453,27 @@ impl Processor for MultiSortMergeProcessor {
             return Ok(Event::NeedConsume);
         }
 
+        if let Some(limit) = self.limit {
+            if limit == 0 {
+                for input in self.inputs.iter() {
+                    input.finish();
+                }
+                self.output.finish();
+                return Ok(Event::Finished);
+            }
+        }
+
         if matches!(self.state, ProcessorState::Generated(_)) {
             if let ProcessorState::Generated(data_block) =
                 std::mem::replace(&mut self.state, ProcessorState::Consume)
             {
+                self.limit = self.limit.map(|limit| {
+                    if data_block.num_rows() > limit {
+                        0
+                    } else {
+                        limit - data_block.num_rows()
+                    }
+                });
                 self.output.push_data(Ok(data_block));
                 return Ok(Event::NeedConsume);
             }
@@ -475,7 +499,7 @@ impl Processor for MultiSortMergeProcessor {
                         return Ok(Event::Sync);
                     }
                     self.output.finish();
-                    return Ok(Event::Finished);
+                    Ok(Event::Finished)
                 } else {
                     // `data_blocks` is empty
                     if !self.heap.is_empty() {
