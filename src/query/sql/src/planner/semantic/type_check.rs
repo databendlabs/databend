@@ -30,6 +30,7 @@ use common_ast::parser::parse_expr;
 use common_ast::parser::token::Token;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
+use common_ast::Dialect;
 use common_ast::DisplayError;
 use common_catalog::catalog::CatalogManager;
 use common_catalog::table_context::TableContext;
@@ -897,6 +898,18 @@ impl<'a> TypeChecker<'a> {
         Ok(Box::new(self.post_resolve(&scalar, &data_type)?))
     }
 
+    fn rewrite_substring(args: &mut [Scalar]) {
+        if let Scalar::ConstantExpr(expr) = &args[1] {
+            if let Ok(0) = expr.value.as_u64() {
+                args[1] = ConstantExpr {
+                    value: DataValue::Int64(1),
+                    data_type: expr.data_type.clone(),
+                }
+                .into();
+            }
+        }
+    }
+
     /// Resolve function call.
     #[async_recursion::async_recursion]
     pub async fn resolve_function(
@@ -926,6 +939,13 @@ impl<'a> TypeChecker<'a> {
             }
             args.push(arg);
             arg_types.push(arg_type);
+        }
+
+        // rewrite substr('xx', 0, xx) -> substr('xx', 1, xx)
+        if self.ctx.get_settings().get_sql_dialect().unwrap() == Dialect::Hive
+            && (func_name == "substr" || func_name == "substring")
+        {
+            Self::rewrite_substring(&mut args);
         }
 
         let arg_types_ref: Vec<&DataTypeImpl> = arg_types.iter().collect();
