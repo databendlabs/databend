@@ -38,11 +38,8 @@ fn test_to_partitions() -> Result<()> {
     let num_of_col = 10;
     let num_of_block = 5;
 
-    let col_stats_gen = |col_size| ColumnStatistics {
-        min: DataValue::Int64(1),
-        max: DataValue::Int64(2),
-        null_count: 0,
-        in_memory_size: col_size as u64,
+    let col_stats_gen = |col_size| {
+        ColumnStatistics::new(DataValue::Int64(1), DataValue::Int64(2), 0, col_size as u64)
     };
 
     let col_metas_gen = |col_size| ColumnMeta {

@@ -13,12 +13,14 @@
 //  limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use common_base::base::uuid::Uuid;
+use common_datavalues::Column;
 use common_datavalues::DataValue;
 use serde::Deserialize;
 use serde::Serialize;
-
+use streaming_algorithms::HyperLogLog;
 pub type ColumnId = u32;
 pub type FormatVersion = u64;
 pub type SnapshotId = Uuid;
@@ -37,6 +39,53 @@ pub struct ColumnStatistics {
     #[serde(alias = "unset_bits")]
     pub null_count: u64,
     pub in_memory_size: u64,
+    pub hll: Option<HyperLogLog<DataValue>>,
+}
+
+impl ColumnStatistics {
+    pub fn new(min: DataValue, max: DataValue, null_count: u64, in_memory_size: u64) -> Self {
+        ColumnStatistics {
+            min,
+            max,
+            null_count,
+            in_memory_size,
+            hll: Some(HyperLogLog::new(0.00408)),
+        }
+    }
+
+    pub fn new_empty() -> Self {
+        ColumnStatistics {
+            min: DataValue::Null,
+            max: DataValue::Null,
+            null_count: 0,
+            in_memory_size: 0,
+            hll: Some(HyperLogLog::new(0.00408)),
+        }
+    }
+
+    pub fn add(&mut self, value: &DataValue) {
+        self.hll.as_mut().unwrap().push(value);
+    }
+
+    pub fn hll(&self) -> &HyperLogLog<DataValue> {
+        self.hll.as_ref().unwrap()
+    }
+
+    pub fn merge(&mut self, other: &ColumnStatistics) {
+        if let Some(ref hll) = other.hll {
+            self.hll.as_mut().unwrap().union(hll);
+        }
+    }
+
+    pub fn number_of_distinct_values(&self) -> u64 {
+        self.hll.as_ref().unwrap().len() as u64
+    }
+
+    pub fn calc_number_of_distinct_values(&mut self, col: &Arc<dyn Column>) {
+        col.to_values().iter().for_each(|value| {
+            self.add(value);
+        });
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]

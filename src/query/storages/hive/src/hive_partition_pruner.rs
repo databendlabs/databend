@@ -76,12 +76,7 @@ impl HivePartitionPruner {
                     }
                 };
 
-                let column_stats = ColumnStatistics {
-                    min: v.clone(),
-                    max: v,
-                    null_count: 0,
-                    in_memory_size: 0,
-                };
+                let column_stats = ColumnStatistics::new(v.clone(), v, 0, 0);
                 stats.insert(index as u32, column_stats);
             }
             datas.push(stats);

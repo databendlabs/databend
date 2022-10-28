@@ -68,13 +68,10 @@ pub fn gen_columns_statistics(data_block: &DataBlock) -> Result<StatisticsOfColu
             (false, None) => 0,
         };
 
-        let in_memory_size = col.memory_size() as u64;
-        let col_stats = ColumnStatistics {
-            min,
-            max,
-            null_count: unset_bits as u64,
-            in_memory_size,
-        };
+        let mut col_stats = ColumnStatistics::new(min, max, unset_bits as u64, 0);
+        col_stats.calc_number_of_distinct_values(col);
+
+        col_stats.in_memory_size = col.memory_size() as u64;
 
         statistics.insert(idx as u32, col_stats);
     }

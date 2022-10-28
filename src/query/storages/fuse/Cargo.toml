@@ -44,6 +44,7 @@ futures-util = "0.3.24"
 itertools = "0.10.5"
 metrics = "0.20.1"
 opendal = { version = "0.19", features = ["layers-retry"] }
+
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = "0.1.36"

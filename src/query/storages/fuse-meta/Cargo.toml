@@ -21,3 +21,4 @@ common-metrics = { path = "../../../common/metrics" }
 once_cell = "1.15.0"
 parking_lot = "0.12.1"
 serde = { workspace = true }
+streaming_algorithms = { git = "https://github.com/lichuang/streaming_algorithms", tag = "hyperloglog_refator" }

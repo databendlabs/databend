@@ -51,11 +51,14 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
             let mut null_count = 0;
             let mut in_memory_size = 0;
 
+            let mut mut_col_stats = ColumnStatistics::new_empty();
+
             for col_stats in stats {
                 min_stats.push(col_stats.min.clone());
                 max_stats.push(col_stats.max.clone());
 
                 null_count += col_stats.null_count;
+                mut_col_stats.merge(col_stats);
                 in_memory_size += col_stats.in_memory_size;
             }
 
@@ -68,26 +71,24 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
             // like this:
             //   `let maxs = eval_aggr("max", vec![], &[column_field], rows)?`
             // we should unify these logics, or at least, ensure the ways they compares do NOT diverge
-            let min = min_stats
+            mut_col_stats.min = min_stats
                 .iter()
                 .filter(|s| !s.is_null())
                 .min_by(|&x, &y| x.cmp(y))
                 .cloned()
                 .unwrap_or(DataValue::Null);
 
-            let max = max_stats
+            mut_col_stats.max = max_stats
                 .iter()
                 .filter(|s| !s.is_null())
                 .max_by(|&x, &y| x.cmp(y))
                 .cloned()
                 .unwrap_or(DataValue::Null);
 
-            acc.insert(*id, ColumnStatistics {
-                min,
-                max,
-                null_count,
-                in_memory_size,
-            });
+            mut_col_stats.null_count = null_count;
+            mut_col_stats.in_memory_size = in_memory_size;
+
+            acc.insert(*id, mut_col_stats);
             Ok(acc)
         })
 }

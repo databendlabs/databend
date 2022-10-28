@@ -12,7 +12,6 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use common_datavalues::DataValue;
 use common_fuse_meta::meta::ColumnStatistics;
 use serde_json::Value;
 
@@ -22,12 +21,7 @@ use serde_json::Value;
 #[test]
 fn test_issue_6556_column_statistics_ser_de_compatability_null_count_alias()
 -> common_exception::Result<()> {
-    let col_stats = ColumnStatistics {
-        min: DataValue::Null,
-        max: DataValue::Null,
-        null_count: 0,
-        in_memory_size: 0,
-    };
+    let col_stats = ColumnStatistics::new_empty();
 
     let mut json_value = serde_json::to_value(&col_stats)?;
 

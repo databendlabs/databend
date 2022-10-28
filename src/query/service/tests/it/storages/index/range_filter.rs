@@ -37,24 +37,23 @@ async fn test_range_filter() -> Result<()> {
     ]);
 
     let mut stats: StatisticsOfColumns = HashMap::new();
-    stats.insert(0u32, ColumnStatistics {
-        min: DataValue::Int64(1),
-        max: DataValue::Int64(20),
-        null_count: 1,
-        in_memory_size: 0,
-    });
-    stats.insert(1u32, ColumnStatistics {
-        min: DataValue::Int64(3),
-        max: DataValue::Int64(10),
-        null_count: 0,
-        in_memory_size: 0,
-    });
-    stats.insert(2u32, ColumnStatistics {
-        min: DataValue::String("abc".as_bytes().to_vec()),
-        max: DataValue::String("bcd".as_bytes().to_vec()),
-        null_count: 0,
-        in_memory_size: 0,
-    });
+    stats.insert(
+        0u32,
+        ColumnStatistics::new(DataValue::Int64(1), DataValue::Int64(20), 1, 0),
+    );
+    stats.insert(
+        1u32,
+        ColumnStatistics::new(DataValue::Int64(3), DataValue::Int64(10), 0, 0),
+    );
+    stats.insert(
+        2u32,
+        ColumnStatistics::new(
+            DataValue::String("abc".as_bytes().to_vec()),
+            DataValue::String("bcd".as_bytes().to_vec()),
+            0,
+            0,
+        ),
+    );
 
     let tests: Vec<Test> = vec![
         Test {
