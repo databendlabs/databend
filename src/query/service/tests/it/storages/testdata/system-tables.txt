@@ -274,8 +274,8 @@ DB.Table: 'system'.'databases', Table: databases-table_id:1, ver:0, Engine: Syst
 +--------------------+
 | name               |
 +--------------------+
-| INFORMATION_SCHEMA |
 | default            |
+| information_schema |
 | system             |
 +--------------------+
 

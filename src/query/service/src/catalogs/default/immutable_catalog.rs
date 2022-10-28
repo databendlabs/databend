@@ -60,7 +60,7 @@ use crate::storages::Table;
 
 /// System Catalog contains ... all the system databases (no surprise :)
 /// Currently, this is only one database here, the "system" db.
-/// "INFORMATION_SCHEMA" db is supposed to held here
+/// "information_schema" db is supposed to held here
 #[derive(Clone)]
 pub struct ImmutableCatalog {
     // it's case sensitive, so we will need two same database only with the name's case
@@ -74,7 +74,7 @@ impl ImmutableCatalog {
         // The global db meta.
         let mut sys_db_meta = InMemoryMetas::create(SYS_DB_ID_BEGIN, SYS_TBL_ID_BEGIN);
         sys_db_meta.init_db("system");
-        sys_db_meta.init_db("INFORMATION_SCHEMA");
+        sys_db_meta.init_db("information_schema");
 
         let sys_db = SystemDatabase::create(&mut sys_db_meta, conf);
         let info_schema_db = InformationSchemaDatabase::create(&mut sys_db_meta);
@@ -93,14 +93,10 @@ impl Catalog for ImmutableCatalog {
         self
     }
 
-    fn is_case_insensitive_db(&self, _: &str) -> bool {
-        unimplemented!()
-    }
-
     async fn get_database(&self, _tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
         match db_name {
             "system" => Ok(self.sys_db.clone()),
-            "INFORMATION_SCHEMA" => Ok(self.info_schema_db.clone()),
+            "information_schema" => Ok(self.info_schema_db.clone()),
             _ => Err(ErrorCode::UnknownDatabase(format!(
                 "Unknown database {}",
                 db_name
