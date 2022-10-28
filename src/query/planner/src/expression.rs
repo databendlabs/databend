@@ -1,0 +1,103 @@
+// Copyright 2022 Datafuse Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use std::fmt::Display;
+use std::fmt::Formatter;
+
+use common_datavalues::format_data_type_sql;
+use common_datavalues::DataField;
+use common_datavalues::DataTypeImpl;
+use common_datavalues::DataValue;
+
+/// Serializable and desugared representation of `Scalar`.
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum Expression {
+    IndexedVariable {
+        name: String,
+        data_type: DataTypeImpl,
+    },
+    Constant {
+        value: DataValue,
+        data_type: DataTypeImpl,
+    },
+    Function {
+        name: String,
+        args: Vec<Expression>,
+        return_type: DataTypeImpl,
+    },
+
+    Cast {
+        input: Box<Expression>,
+        target: DataTypeImpl,
+    },
+}
+
+impl Expression {
+    pub fn data_type(&self) -> DataTypeImpl {
+        match self {
+            Expression::Constant { data_type, .. } => data_type.clone(),
+            Expression::Function { return_type, .. } => return_type.clone(),
+            Expression::Cast { target, .. } => target.clone(),
+            Expression::IndexedVariable { data_type, .. } => data_type.clone(),
+        }
+    }
+
+    pub fn to_data_field(&self) -> DataField {
+        let name = self.column_name();
+        let data_type = self.data_type();
+        DataField::new(&name, data_type)
+    }
+
+    /// Display with readable variable name.
+    pub fn column_name(&self) -> String {
+        match self {
+            Expression::Constant { value, .. } => value.to_string(),
+            Expression::Function { name, args, .. } => {
+                let args = args
+                    .iter()
+                    .map(|arg| arg.column_name())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("{}({})", name, args)
+            }
+            Expression::Cast { input, target } => format!(
+                "CAST({} AS {})",
+                input.column_name(),
+                format_data_type_sql(target)
+            ),
+            Expression::IndexedVariable { name, .. } => name.clone(),
+        }
+    }
+}
+
+impl Display for Expression {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            Expression::Constant { value, .. } => write!(f, "{}", value),
+            Expression::Function { name, args, .. } => write!(
+                f,
+                "{}({})",
+                name,
+                args.iter()
+                    .map(|arg| format!("{}", arg))
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            ),
+            Expression::Cast { input, target } => {
+                write!(f, "CAST({} AS {})", input, format_data_type_sql(target))
+            }
+            Expression::IndexedVariable { name, .. } => write!(f, "${name}"),
+        }
+    }
+}
