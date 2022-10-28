@@ -185,7 +185,7 @@ impl InputContext {
         };
 
         let format_settings =
-            format.get_format_settings_from_options(&settings, &file_format_options)?;
+            format.get_format_settings_from_options(&settings, file_format_options)?;
 
         let rows_to_skip = file_format_options.skip_header as usize;
         let field_delimiter = {

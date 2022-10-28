@@ -42,13 +42,13 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
+use common_meta_types::FileFormatOptions;
 use common_pipeline_core::Pipeline;
 use common_settings::Settings;
 use futures::AsyncRead;
 use futures::AsyncSeek;
 use opendal::Operator;
 use similar_asserts::traits::MakeDiff;
-use common_meta_types::FileFormatOptions;
 
 use crate::processors::sources::input_formats::delimiter::RecordDelimiter;
 use crate::processors::sources::input_formats::input_context::CopyIntoPlan;
