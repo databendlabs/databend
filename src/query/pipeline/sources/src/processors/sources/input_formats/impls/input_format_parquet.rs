@@ -48,6 +48,7 @@ use futures::AsyncRead;
 use futures::AsyncSeek;
 use opendal::Operator;
 use similar_asserts::traits::MakeDiff;
+use common_meta_types::FileFormatOptions;
 
 use crate::processors::sources::input_formats::delimiter::RecordDelimiter;
 use crate::processors::sources::input_formats::input_context::CopyIntoPlan;
@@ -76,7 +77,19 @@ fn col_offset(meta: &ColumnChunkMetaData) -> i64 {
 
 #[async_trait::async_trait]
 impl InputFormat for InputFormatParquet {
-    fn get_format_settings_from_settings(&self, _settings: &Arc<Settings>) -> Result<FormatSettings> {
+    fn get_format_settings_from_options(
+        &self,
+        _settings: &Arc<Settings>,
+        _options: &FileFormatOptions,
+    ) -> Result<FormatSettings> {
+        // not used now
+        Ok(FormatSettings::default())
+    }
+
+    fn get_format_settings_from_settings(
+        &self,
+        _settings: &Arc<Settings>,
+    ) -> Result<FormatSettings> {
         // not used now
         Ok(FormatSettings::default())
     }
