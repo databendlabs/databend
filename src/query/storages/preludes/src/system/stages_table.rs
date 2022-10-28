@@ -60,7 +60,7 @@ impl AsyncSystemTable for StagesTable {
             copy_options.push(format!("{:?}", stage.copy_options).into_bytes());
             file_format_options.push(format!("{:?}", stage.file_format_options).into_bytes());
             match stage.stage_type {
-                StageType::LegacyInternal => {
+                StageType::LegacyInternal | StageType::Internal => {
                     number_of_files.push(Some(stage.number_of_files));
                 }
                 StageType::External => {

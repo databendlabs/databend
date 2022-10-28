@@ -126,6 +126,7 @@ message UserStageInfo {
   enum StageType {
     LegacyInternal = 0;
     External = 1;
+    Internal = 2;
   }
 
   message StageStorage {

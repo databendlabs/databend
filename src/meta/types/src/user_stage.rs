@@ -55,13 +55,16 @@ pub enum StageType {
     /// We keep this stage type for backword compatible.
     LegacyInternal,
     External,
+    Internal,
 }
 
 impl fmt::Display for StageType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let name = match self {
+            // LegacyInternal will print the same name as Internal, this is by design.
             StageType::LegacyInternal => "Internal",
             StageType::External => "External",
+            StageType::Internal => "Internal",
         };
         write!(f, "{}", name)
     }
