@@ -42,7 +42,7 @@ use crate::sql::plans::Plan;
 use crate::storages::stage::StageTable;
 
 const MAX_QUERY_COPIED_FILES_NUM: usize = 50;
-
+const TABLE_COPIED_FILE_KEY_EXPIRE_AT: Option<u64> = Some(7);
 pub struct CopyInterpreterV2 {
     ctx: Arc<QueryContext>,
     plan: CopyPlanV2,
@@ -87,7 +87,7 @@ impl CopyInterpreterV2 {
         let req = UpsertTableCopiedFileReq {
             table_id,
             file_info: copy_stage_files.clone(),
-            expire_at: None,
+            expire_at: TABLE_COPIED_FILE_KEY_EXPIRE_AT,
         };
         catalog
             .upsert_table_copied_file_info(&tenant, &database_name, req)
