@@ -39,7 +39,7 @@ struct FilterPruner {
     index_columns: Vec<String>,
 
     /// the expression that would be evaluate
-    filter_expression: PhysicalScalar,
+    filter_expression: Expression,
 
     /// the data accessor
     dal: Operator,
@@ -52,7 +52,7 @@ impl FilterPruner {
     pub fn new(
         ctx: Arc<dyn TableContext>,
         index_columns: Vec<String>,
-        filter_expression: PhysicalScalar,
+        filter_expression: Expression,
         dal: Operator,
         data_schema: DataSchemaRef,
     ) -> Self {
@@ -103,7 +103,7 @@ impl Pruner for FilterPruner {
 /// otherwise, a [Filter] backed pruner will be return
 pub fn new_filter_pruner(
     ctx: &Arc<dyn TableContext>,
-    filter_exprs: Option<&[PhysicalScalar]>,
+    filter_exprs: Option<&[Expression]>,
     schema: &DataSchemaRef,
     dal: Operator,
 ) -> Result<Option<Arc<dyn Pruner + Send + Sync>>> {
@@ -114,18 +114,18 @@ pub fn new_filter_pruner(
         // check if there were applicable filter conditions
         let expr = exprs
             .iter()
-            .fold(None, |acc: Option<PhysicalScalar>, item| match acc {
+            .fold(None, |acc: Option<Expression>, item| match acc {
                 Some(acc) => Some(acc.and(item).unwrap()),
                 None => Some(item.clone()),
             })
             .unwrap();
 
-        let point_query_cols = columns_indices_of_eq_expressions(&expr)?;
+        let point_query_cols = columns_of_eq_expressions(&expr)?;
         if !point_query_cols.is_empty() {
             // convert to filter column names
             let filter_block_cols = point_query_cols
-                .into_iter()
-                .map(BlockFilter::build_filter_column)
+                .iter()
+                .map(|c| BlockFilter::build_filter_column(c.as_str()))
                 .collect();
 
             return Ok(Some(Arc::new(FilterPruner::new(
@@ -144,7 +144,7 @@ pub fn new_filter_pruner(
 
 mod util {
     use common_exception::ErrorCode;
-    use common_planner::PhysicalScalarVisitor;
+    use common_planner::ExpressionVisitor;
 
     use super::*;
     #[tracing::instrument(level = "debug", skip_all)]
@@ -152,7 +152,7 @@ mod util {
         ctx: Arc<dyn TableContext>,
         dal: Operator,
         schema: &DataSchemaRef,
-        filter_expr: &PhysicalScalar,
+        filter_expr: &Expression,
         filter_col_names: &[String],
         index_location: &Location,
         index_length: u64,
@@ -178,27 +178,22 @@ mod util {
 
     struct PointQueryVisitor {
         // indices of columns which used by point query kept here
-        columns: HashSet<usize>,
+        columns: HashSet<String>,
     }
 
-    impl PhysicalScalarVisitor for PointQueryVisitor {
-        fn pre_visit(mut self, expr: &PhysicalScalar) -> Result<common_planner::Recursion<Self>> {
+    impl ExpressionVisitor for PointQueryVisitor {
+        fn pre_visit(mut self, expr: &Expression) -> Result<common_planner::Recursion<Self>> {
             // 1. only binary op "=" is considered, which is NOT enough
             // 2. should combine this logic with Filter
             match expr {
-                PhysicalScalar::Function { name, args, .. }
+                Expression::Function { name, args, .. }
                     if name.as_str() == "=" && args.len() == 2 =>
                 {
                     match (&args[0], &args[1]) {
-                        (
-                            PhysicalScalar::IndexedVariable { index, .. },
-                            PhysicalScalar::Constant { .. },
-                        )
-                        | (
-                            PhysicalScalar::Constant { .. },
-                            PhysicalScalar::IndexedVariable { index, .. },
-                        ) => {
-                            self.columns.insert(*index);
+                        (Expression::IndexedVariable { name, .. }, Expression::Constant { .. })
+                        | (Expression::Constant { .. }, Expression::IndexedVariable { name, .. }) =>
+                        {
+                            self.columns.insert(name.clone());
                             Ok(common_planner::Recursion::Stop(self))
                         }
                         _ => Ok(common_planner::Recursion::Continue(self)),
@@ -209,7 +204,7 @@ mod util {
         }
     }
 
-    pub fn columns_indices_of_eq_expressions(filter_expr: &PhysicalScalar) -> Result<Vec<usize>> {
+    pub fn columns_of_eq_expressions(filter_expr: &Expression) -> Result<Vec<String>> {
         let visitor = PointQueryVisitor {
             columns: HashSet::new(),
         };

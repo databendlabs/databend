@@ -157,7 +157,7 @@ impl BlockPruner {
             let push_down = push_down.as_ref().unwrap();
             let limit = push_down.limit.unwrap();
             let sort = push_down.order_by.clone();
-            let tpruner = topn_pruner::TopNPrunner::new(sort, limit);
+            let tpruner = topn_pruner::TopNPrunner::new(schema, sort, limit);
             return tpruner.prune(metas);
         }
 

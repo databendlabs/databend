@@ -23,7 +23,7 @@ use common_fuse_meta::meta::TableSnapshot;
 use common_planner::extras::Extras;
 use common_planner::plans::DeletePlan;
 use common_planner::Expression;
-use common_sql::PhysicalScalarParser;
+use common_sql::ExpressionParser;
 use tracing::debug;
 
 use crate::operations::mutation::delete_from_block;
@@ -54,7 +54,7 @@ impl FuseTable {
         if let Some(filter) = &plan.selection {
             let table_meta = Arc::new(self.clone());
             let physical_scalars =
-                PhysicalScalarParser::parse_exprs(plan.schema(), table_meta, filter)?;
+                ExpressionParser::parse_exprs(plan.schema(), table_meta, filter)?;
             if physical_scalars.is_empty() {
                 return Err(ErrorCode::IndexOutOfBounds(
                     "expression should be valid, but not",
@@ -77,7 +77,7 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         snapshot: &Arc<TableSnapshot>,
-        filter: &PhysicalScalar,
+        filter: &Expression,
         plan: &DeletePlan,
     ) -> Result<()> {
         let cluster_stats_gen = self.cluster_stats_gen()?;
@@ -160,7 +160,7 @@ impl FuseTable {
         let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());
         let mut extra_key_index = Vec::with_capacity(cluster_keys.len());
         for expr in &cluster_keys {
-            let cname = expr.pretty_display();
+            let cname = expr.column_name();
             let index = match merged.iter().position(|x| x.name() == &cname) {
                 None => {
                     let field = DataField::new(&cname, expr.data_type());

@@ -63,7 +63,7 @@ impl FuseTable {
                 .iter()
                 .map(|expr| SortColumnDescription {
                     // todo(sundy): use index instead
-                    column_name: expr.pretty_display(),
+                    column_name: expr.column_name(),
                     asc: true,
                     nulls_first: false,
                 })
@@ -128,13 +128,13 @@ impl FuseTable {
         let mut operators = Vec::with_capacity(cluster_keys.len());
 
         for expr in &cluster_keys {
-            let cname = expr.pretty_display();
+            let cname = expr.column_name();
 
             let index = match merged.iter().position(|x| x.name() == &cname) {
                 None => {
                     let field = DataField::new(&cname, expr.data_type());
                     operators.push(ChunkOperator::Map {
-                        eval: Evaluator::eval_physical_scalar(expr)?,
+                        eval: Evaluator::eval_expression(expr, &input_schema)?,
                         name: field.name().to_string(),
                     });
                     extra_key_index.push(merged.len() - 1);

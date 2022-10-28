@@ -33,7 +33,7 @@ use crate::Table;
 pub struct ClusteringInformation<'a> {
     pub ctx: Arc<dyn TableContext>,
     pub table: &'a FuseTable,
-    pub cluster_keys: Vec<PhysicalScalar>,
+    pub cluster_keys: Vec<Expression>,
 }
 
 struct ClusteringStatistics {
@@ -48,7 +48,7 @@ impl<'a> ClusteringInformation<'a> {
     pub fn new(
         ctx: Arc<dyn TableContext>,
         table: &'a FuseTable,
-        cluster_keys: Vec<PhysicalScalar>,
+        cluster_keys: Vec<Expression>,
     ) -> Self {
         Self {
             ctx,
@@ -75,7 +75,7 @@ impl<'a> ClusteringInformation<'a> {
         let names = self
             .cluster_keys
             .iter()
-            .map(|x| x.pretty_display())
+            .map(|x| x.column_name())
             .collect::<Vec<String>>()
             .join(", ");
         let cluster_by_keys = format!("({})", names);

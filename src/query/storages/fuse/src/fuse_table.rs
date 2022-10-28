@@ -37,11 +37,11 @@ use common_meta_app::schema::TableInfo;
 use common_planner::extras::Extras;
 use common_planner::extras::Statistics;
 use common_planner::plans::DeletePlan;
-use common_planner::Partitions;
 use common_planner::Expression;
+use common_planner::Partitions;
 use common_planner::ReadDataSourcePlan;
 use common_sharing::create_share_table_operator;
-use common_sql::PhysicalScalarParser;
+use common_sql::ExpressionParser;
 use common_storage::init_operator;
 use common_storage::DataOperator;
 use common_storage::ShareTableConfig;
@@ -250,8 +250,7 @@ impl Table for FuseTable {
         let schema = self.table_info.schema();
         let table_meta = Arc::new(self.clone());
         if let Some((_, order)) = &self.cluster_key_meta {
-            let cluster_keys =
-                PhysicalScalarParser::parse_exprs(schema, table_meta, order).unwrap();
+            let cluster_keys = ExpressionParser::parse_exprs(schema, table_meta, order).unwrap();
             return cluster_keys;
         }
         vec![]

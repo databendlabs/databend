@@ -33,7 +33,7 @@ pub async fn delete_from_block(
     block_meta: &BlockMeta,
     ctx: &Arc<dyn TableContext>,
     filter_column_proj: Projection,
-    filter_expr: &PhysicalScalar,
+    filter_expr: &Expression,
 ) -> Result<Deletion> {
     let mut filtering_whole_block = false;
 
@@ -61,7 +61,7 @@ pub async fn delete_from_block(
     let reader = table.create_block_reader(proj)?;
     let data_block = reader.read_with_block_meta(block_meta).await?;
 
-    let eval_node = Evaluator::eval_physical_scalar(filter_expr)?;
+    let eval_node = Evaluator::eval_expression(filter_expr, data_block.schema().as_ref())?;
     let filter_result = eval_node
         .eval(&ctx.try_get_function_context()?, &data_block)?
         .vector;

@@ -57,7 +57,7 @@ impl RangePruner for RangeFilter {
 
 pub fn new_range_pruner<'a>(
     ctx: &Arc<dyn TableContext>,
-    filter_expr: Option<&'a [PhysicalScalar]>,
+    filter_expr: Option<&'a [Expression]>,
     schema: &'a DataSchemaRef,
 ) -> Result<Arc<dyn RangePruner + Send + Sync>> {
     Ok(match filter_expr {

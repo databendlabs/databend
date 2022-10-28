@@ -21,6 +21,7 @@ use common_base::base::Runtime;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datavalues::ColumnRef;
+use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionContext;
@@ -99,11 +100,12 @@ impl FuseTable {
         &self,
         _ctx: Arc<dyn TableContext>,
         plan: &ReadDataSourcePlan,
+        schema: DataSchemaRef,
     ) -> Result<Arc<Option<EvalNode>>> {
         Ok(match self.prewhere_of_push_downs(&plan.push_downs) {
             None => Arc::new(None),
             Some(v) => {
-                let executor = Evaluator::eval_physical_scalar(&v.filter)?;
+                let executor = Evaluator::eval_expression(&v.filter, schema.as_ref())?;
                 Arc::new(Some(executor))
             }
         })
@@ -178,7 +180,8 @@ impl FuseTable {
 
         let block_reader = self.build_block_reader(plan)?;
         let prewhere_reader = self.build_prewhere_reader(plan)?;
-        let prewhere_filter = self.build_prewhere_filter_executor(ctx.clone(), plan)?;
+        let prewhere_filter =
+            self.build_prewhere_filter_executor(ctx.clone(), plan, prewhere_reader.schema())?;
         let remain_reader = self.build_remain_reader(plan)?;
 
         info!("read block data adjust max io requests:{}", max_io_requests);

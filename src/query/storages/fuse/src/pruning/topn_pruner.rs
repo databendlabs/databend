@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
@@ -19,13 +20,22 @@ use common_fuse_meta::meta::ColumnStatistics;
 use common_planner::Expression;
 
 pub(crate) struct TopNPrunner {
-    sort: Vec<(PhysicalScalar, bool, bool)>,
+    schema: DataSchemaRef,
+    sort: Vec<(Expression, bool, bool)>,
     limit: usize,
 }
 
 impl TopNPrunner {
-    pub(crate) fn new(sort: Vec<(PhysicalScalar, bool, bool)>, limit: usize) -> Self {
-        Self { sort, limit }
+    pub(crate) fn new(
+        schema: DataSchemaRef,
+        sort: Vec<(Expression, bool, bool)>,
+        limit: usize,
+    ) -> Self {
+        Self {
+            schema,
+            sort,
+            limit,
+        }
     }
 }
 
@@ -42,8 +52,17 @@ impl TopNPrunner {
         let (sort, asc, nulls_first) = &self.sort[0];
         // Currently, we only support topn on single-column sort.
         // TODO: support monadic + multi expression + order by cluster key sort.
-        let sort_idx = if let PhysicalScalar::IndexedVariable { index, .. } = sort {
-            *index as u32
+
+        // Currently, we only support topn on single-column sort.
+        // TODO: support monadic + multi expression + order by cluster key sort.
+        let column = if let Expression::IndexedVariable { name, .. } = sort {
+            name
+        } else {
+            return Ok(metas);
+        };
+
+        let sort_idx = if let Ok(index) = self.schema.index_of(column.as_str()) {
+            index as u32
         } else {
             return Ok(metas);
         };
