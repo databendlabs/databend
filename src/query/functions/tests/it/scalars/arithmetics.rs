@@ -66,7 +66,7 @@ fn test_arithmetic_function() -> Result<()> {
                 Series::from_data(vec![4i64, 3, 2]),
                 Series::from_data(vec![1i64, 2, 3]),
             ],
-            expect: Series::from_data(vec![4.0, 1.5, 0.6666666666666666]),
+            expect: Series::from_data(vec![Some(4.0), Some(1.5), Some(0.6666666666666666)]),
             error: "",
         }),
         ("div", ScalarFunctionTest {

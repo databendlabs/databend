@@ -140,7 +140,13 @@ impl<'a> Binder {
                         let backtrace = Backtrace::new();
                         let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace)?;
                         if let Statement::Query(query) = &stmt {
-                            self.bind_query(bind_context, query).await
+                            // view maybe has alias, e.g. select v1.col1 from v as v1;
+                            let (s_expr, mut bind_context) =
+                                self.bind_query(bind_context, query).await?;
+                            if let Some(alias) = alias {
+                                bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                            }
+                            Ok((s_expr, bind_context))
                         } else {
                             Err(ErrorCode::LogicalError(format!(
                                 "Invalid VIEW object: {}",

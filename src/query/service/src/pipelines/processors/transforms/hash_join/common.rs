@@ -32,9 +32,7 @@ use common_datavalues::NullableType;
 use common_datavalues::Series;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_hashtable::HashMap;
-use common_hashtable::HashTableKeyable;
-use common_hashtable::KeyValueEntity;
+use common_hashtable::HashtableLike;
 
 use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
@@ -62,15 +60,15 @@ impl JoinHashTable {
     }
 
     #[inline]
-    pub(crate) fn probe_key<Key: HashTableKeyable>(
+    pub(crate) fn probe_key<'a, H: HashtableLike<Value = Vec<RowPtr>>>(
         &self,
-        hash_table: &HashMap<Key, Vec<RowPtr>>,
-        key: Key,
+        hash_table: &'a H,
+        key: H::KeyRef<'_>,
         valids: &Option<Bitmap>,
         i: usize,
-    ) -> Option<*mut KeyValueEntity<Key, Vec<RowPtr>>> {
+    ) -> Option<H::EntryRef<'a>> {
         if valids.as_ref().map_or(true, |v| v.get_bit(i)) {
-            return hash_table.find_key(&key);
+            return hash_table.entry(key);
         }
         None
     }

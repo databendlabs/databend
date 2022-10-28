@@ -17,39 +17,57 @@ use std::sync::Arc;
 use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::metadata::RowGroupMetaData;
 
+use crate::HiveBlockFilter;
 use crate::HivePartInfo;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct HiveBlocks {
     pub file_meta: Arc<FileMetaData>,
     pub part: HivePartInfo,
     pub valid_rowgroups: Vec<usize>,
     pub current_index: usize,
+    pub hive_block_filter: Arc<HiveBlockFilter>,
 }
 
 impl HiveBlocks {
-    pub fn create(file_meta: Arc<FileMetaData>, part: HivePartInfo) -> Self {
+    pub fn create(
+        file_meta: Arc<FileMetaData>,
+        part: HivePartInfo,
+        hive_block_filter: Arc<HiveBlockFilter>,
+    ) -> Self {
         Self {
             file_meta,
             part,
             valid_rowgroups: vec![],
             current_index: 0,
+            hive_block_filter,
         }
     }
 
     // there are some conditions to filter invalid row_groups:
     // 1. the rowgroup doesn't belong to the partition
-    // 2. filtered by predict pushdown (todo)
+    // 2. filtered by predict pushdown
     pub fn prune(&mut self) -> bool {
+        let mut pruned_rg_cnt = 0;
         for (idx, row_group) in self.file_meta.row_groups.iter().enumerate() {
             let start = row_group.columns()[0].byte_range().0;
             let mid = start + row_group.compressed_size() as u64 / 2;
             if !self.part.range.contains(&mid) {
                 continue;
             }
-            // todo predict pushdown
-            self.valid_rowgroups.push(idx);
+            if self
+                .hive_block_filter
+                .filter(row_group, self.part.get_partition_map())
+            {
+                pruned_rg_cnt += 1;
+            } else {
+                self.valid_rowgroups.push(idx);
+            }
         }
+        tracing::debug!(
+            "hive parquet predict pushdown have pruned {} rowgroups",
+            pruned_rg_cnt
+        );
         self.has_blocks()
     }
 

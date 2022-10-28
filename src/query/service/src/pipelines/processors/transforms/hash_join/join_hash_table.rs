@@ -29,12 +29,13 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataTypeImpl;
 use common_exception::Result;
 use common_hashtable::HashMap;
+use common_hashtable::HashtableKeyable;
+use common_hashtable::UnsizedHashMap;
 use parking_lot::RwLock;
 use primitive_types::U256;
 use primitive_types::U512;
 
 use super::ProbeState;
-use crate::pipelines::processors::transforms::group_by::keys_ref::KeysRef;
 use crate::pipelines::processors::transforms::hash_join::desc::HashJoinDesc;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::processors::transforms::hash_join::row::RowSpace;
@@ -46,54 +47,24 @@ use crate::sql::executor::PhysicalScalar;
 use crate::sql::planner::plans::JoinType;
 
 pub struct SerializerHashTable {
-    pub(crate) hash_table: HashMap<KeysRef, Vec<RowPtr>>,
+    pub(crate) hash_table: UnsizedHashMap<[u8], Vec<RowPtr>>,
     pub(crate) hash_method: HashMethodSerializer,
 }
 
-pub struct KeyU8HashTable {
-    pub(crate) hash_table: HashMap<u8, Vec<RowPtr>>,
-    pub(crate) hash_method: HashMethodFixedKeys<u8>,
-}
-
-pub struct KeyU16HashTable {
-    pub(crate) hash_table: HashMap<u16, Vec<RowPtr>>,
-    pub(crate) hash_method: HashMethodFixedKeys<u16>,
-}
-
-pub struct KeyU32HashTable {
-    pub(crate) hash_table: HashMap<u32, Vec<RowPtr>>,
-    pub(crate) hash_method: HashMethodFixedKeys<u32>,
-}
-
-pub struct KeyU64HashTable {
-    pub(crate) hash_table: HashMap<u64, Vec<RowPtr>>,
-    pub(crate) hash_method: HashMethodFixedKeys<u64>,
-}
-
-pub struct KeyU128HashTable {
-    pub(crate) hash_table: HashMap<u128, Vec<RowPtr>>,
-    pub(crate) hash_method: HashMethodFixedKeys<u128>,
-}
-
-pub struct KeyU256HashTable {
-    pub(crate) hash_table: HashMap<U256, Vec<RowPtr>>,
-    pub(crate) hash_method: HashMethodFixedKeys<U256>,
-}
-
-pub struct KeyU512HashTable {
-    pub(crate) hash_table: HashMap<U512, Vec<RowPtr>>,
-    pub(crate) hash_method: HashMethodFixedKeys<U512>,
+pub struct FixedKeyHashTable<T: HashtableKeyable> {
+    pub(crate) hash_table: HashMap<T, Vec<RowPtr>>,
+    pub(crate) hash_method: HashMethodFixedKeys<T>,
 }
 
 pub enum HashTable {
     SerializerHashTable(SerializerHashTable),
-    KeyU8HashTable(KeyU8HashTable),
-    KeyU16HashTable(KeyU16HashTable),
-    KeyU32HashTable(KeyU32HashTable),
-    KeyU64HashTable(KeyU64HashTable),
-    KeyU128HashTable(KeyU128HashTable),
-    KeyU256HashTable(KeyU256HashTable),
-    KeyU512HashTable(KeyU512HashTable),
+    KeyU8HashTable(FixedKeyHashTable<u8>),
+    KeyU16HashTable(FixedKeyHashTable<u16>),
+    KeyU32HashTable(FixedKeyHashTable<u32>),
+    KeyU64HashTable(FixedKeyHashTable<u64>),
+    KeyU128HashTable(FixedKeyHashTable<u128>),
+    KeyU256HashTable(FixedKeyHashTable<U256>),
+    KeyU512HashTable(FixedKeyHashTable<U512>),
 }
 
 pub struct JoinHashTable {
@@ -126,7 +97,7 @@ impl JoinHashTable {
             HashMethodKind::Serializer(_) => Arc::new(JoinHashTable::try_create(
                 ctx,
                 HashTable::SerializerHashTable(SerializerHashTable {
-                    hash_table: HashMap::<KeysRef, Vec<RowPtr>>::create(),
+                    hash_table: UnsizedHashMap::<[u8], Vec<RowPtr>>::new(),
                     hash_method: HashMethodSerializer::default(),
                 }),
                 build_schema,
@@ -135,8 +106,8 @@ impl JoinHashTable {
             )?),
             HashMethodKind::KeysU8(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
-                HashTable::KeyU8HashTable(KeyU8HashTable {
-                    hash_table: HashMap::<u8, Vec<RowPtr>>::create(),
+                HashTable::KeyU8HashTable(FixedKeyHashTable {
+                    hash_table: HashMap::<u8, Vec<RowPtr>>::new(),
                     hash_method,
                 }),
                 build_schema,
@@ -145,8 +116,8 @@ impl JoinHashTable {
             )?),
             HashMethodKind::KeysU16(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
-                HashTable::KeyU16HashTable(KeyU16HashTable {
-                    hash_table: HashMap::<u16, Vec<RowPtr>>::create(),
+                HashTable::KeyU16HashTable(FixedKeyHashTable {
+                    hash_table: HashMap::<u16, Vec<RowPtr>>::new(),
                     hash_method,
                 }),
                 build_schema,
@@ -155,8 +126,8 @@ impl JoinHashTable {
             )?),
             HashMethodKind::KeysU32(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
-                HashTable::KeyU32HashTable(KeyU32HashTable {
-                    hash_table: HashMap::<u32, Vec<RowPtr>>::create(),
+                HashTable::KeyU32HashTable(FixedKeyHashTable {
+                    hash_table: HashMap::<u32, Vec<RowPtr>>::new(),
                     hash_method,
                 }),
                 build_schema,
@@ -165,8 +136,8 @@ impl JoinHashTable {
             )?),
             HashMethodKind::KeysU64(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
-                HashTable::KeyU64HashTable(KeyU64HashTable {
-                    hash_table: HashMap::<u64, Vec<RowPtr>>::create(),
+                HashTable::KeyU64HashTable(FixedKeyHashTable {
+                    hash_table: HashMap::<u64, Vec<RowPtr>>::new(),
                     hash_method,
                 }),
                 build_schema,
@@ -175,8 +146,8 @@ impl JoinHashTable {
             )?),
             HashMethodKind::KeysU128(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
-                HashTable::KeyU128HashTable(KeyU128HashTable {
-                    hash_table: HashMap::<u128, Vec<RowPtr>>::create(),
+                HashTable::KeyU128HashTable(FixedKeyHashTable {
+                    hash_table: HashMap::<u128, Vec<RowPtr>>::new(),
                     hash_method,
                 }),
                 build_schema,
@@ -185,8 +156,8 @@ impl JoinHashTable {
             )?),
             HashMethodKind::KeysU256(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
-                HashTable::KeyU256HashTable(KeyU256HashTable {
-                    hash_table: HashMap::<U256, Vec<RowPtr>>::create(),
+                HashTable::KeyU256HashTable(FixedKeyHashTable {
+                    hash_table: HashMap::<U256, Vec<RowPtr>>::new(),
                     hash_method,
                 }),
                 build_schema,
@@ -195,8 +166,8 @@ impl JoinHashTable {
             )?),
             HashMethodKind::KeysU512(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
-                HashTable::KeyU512HashTable(KeyU512HashTable {
-                    hash_table: HashMap::<U512, Vec<RowPtr>>::create(),
+                HashTable::KeyU512HashTable(FixedKeyHashTable {
+                    hash_table: HashMap::<U512, Vec<RowPtr>>::new(),
                     hash_method,
                 }),
                 build_schema,
@@ -279,10 +250,8 @@ impl JoinHashTable {
                     .hash_method
                     .build_keys_state(&probe_keys, input.num_rows())?;
                 let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
-                let keys_ref =
-                    keys_iter.map(|key| KeysRef::create(key.as_ptr() as usize, key.len()));
 
-                self.result_blocks(&table.hash_table, probe_state, keys_ref, input)
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, input)
             }
             HashTable::KeyU8HashTable(table) => {
                 let keys_state = table

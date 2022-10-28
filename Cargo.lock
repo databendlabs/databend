@@ -1223,6 +1223,7 @@ dependencies = [
  "once_cell",
  "pprof",
  "rand 0.8.5",
+ "semver 1.0.14",
  "serde",
  "tikv-jemalloc-ctl",
  "tikv-jemalloc-sys",
@@ -1521,10 +1522,14 @@ name = "common-hashtable"
 version = "0.1.0"
 dependencies = [
  "ahash 0.8.0",
+ "bumpalo",
+ "cfg-if",
  "common-base",
+ "libc",
  "ordered-float 3.3.0",
  "primitive-types",
  "rand 0.8.5",
+ "semver 1.0.14",
 ]
 
 [[package]]
