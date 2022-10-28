@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datavalues::serializations::write_csv_string;
 use common_datavalues::serializations::write_escaped_string;
 use common_datavalues::serializations::write_json_string;
 use common_io::prelude::FormatSettings;
@@ -102,5 +103,15 @@ fn test_json_escape() {
         let mut buf = vec![];
         write_json_string(s.as_bytes(), &mut buf, &setting);
         assert_eq!(&buf, b"123\\u2028\\u2029abc")
+    }
+}
+
+#[test]
+fn test_csv_string() {
+    {
+        let s = "a\"\nb";
+        let mut buf = vec![];
+        write_csv_string(s.as_bytes(), &mut buf, b'"');
+        assert_eq!(&buf, b"a\"\"\nb")
     }
 }
