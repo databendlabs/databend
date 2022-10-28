@@ -351,6 +351,7 @@ impl CsvReaderState {
         let reader = csv_core::ReaderBuilder::new()
             .delimiter(ctx.field_delimiter)
             .quote(ctx.format_settings.quote_char)
+            .escape(ctx.format_settings.escape)
             .terminator(match ctx.record_delimiter {
                 RecordDelimiter::Crlf => csv_core::Terminator::CRLF,
                 RecordDelimiter::Any(v) => csv_core::Terminator::Any(v),
