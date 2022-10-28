@@ -132,12 +132,7 @@ impl<const STRINGS: bool, const COMPACT: bool, const WITH_NAMES: bool, const WIT
 
                 if STRINGS {
                     buf.push(b'"');
-                    serializer.write_field_escaped(
-                        row_index,
-                        &mut buf,
-                        &self.format_settings,
-                        b'\"',
-                    );
+                    serializer.write_field_json(row_index, &mut buf, &self.format_settings);
                     buf.push(b'"');
                 } else {
                     serializer.write_field_json(row_index, &mut buf, &self.format_settings);
