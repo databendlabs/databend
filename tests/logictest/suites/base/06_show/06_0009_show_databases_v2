@@ -1,7 +1,4 @@
 statement ok
-SET enable_planner_v2=1;
-
-statement ok
 DROP DATABASE IF EXISTS ss;
 
 statement ok
@@ -43,7 +40,3 @@ DROP DATABASE IF EXISTS ss1;
 
 statement ok
 DROP DATABASE IF EXISTS ss2;
-
-statement ok
-SET enable_planner_v2=0;
-
