@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_datablocks::DataBlock;
+use common_datavalues::serializations::write_csv_string;
 use common_datavalues::serializations::write_escaped_string;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
@@ -73,7 +74,7 @@ impl<const TSV: bool, const WITH_NAMES: bool, const WITH_TYPES: bool>
                 write_escaped_string(v.as_bytes(), &mut buf, b'\'');
             } else {
                 buf.push(b'\"');
-                write_escaped_string(v.as_bytes(), &mut buf, b'\"');
+                write_csv_string(v.as_bytes(), &mut buf, b'\"');
                 buf.push(b'\"');
             };
         }
@@ -116,14 +117,9 @@ impl<const TSV: bool, const WITH_NAMES: bool, const WITH_TYPES: bool> OutputForm
                     buf.push(fd);
                 }
                 if TSV {
-                    serializer.write_field_escaped(
-                        row_index,
-                        &mut buf,
-                        &self.format_settings,
-                        b'\'',
-                    );
+                    serializer.write_field_tsv(row_index, &mut buf, &self.format_settings);
                 } else {
-                    serializer.write_field_quoted(row_index, &mut buf, &self.format_settings, b'\"')
+                    serializer.write_field_csv(row_index, &mut buf, &self.format_settings)
                 };
             }
             buf.push(rd)
