@@ -137,15 +137,16 @@ impl FuseTable {
                         eval: Evaluator::eval_expression(expr, &input_schema)?,
                         name: field.name().to_string(),
                     });
-                    extra_key_index.push(merged.len() - 1);
-
                     merged.push(field);
+
+                    extra_key_index.push(merged.len() - 1);
                     merged.len() - 1
                 }
                 Some(idx) => idx,
             };
             cluster_key_index.push(index);
         }
+
         if !operators.is_empty() {
             let func_ctx = ctx.try_get_function_context()?;
             pipeline.add_transform(move |input, output| {

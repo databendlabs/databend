@@ -63,14 +63,25 @@ impl Expression {
     pub fn column_name(&self) -> String {
         match self {
             Expression::Constant { value, .. } => value.to_string(),
-            Expression::Function { name, args, .. } => {
-                let args = args
-                    .iter()
-                    .map(|arg| arg.column_name())
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                format!("{}({})", name, args)
-            }
+            Expression::Function { name, args, .. } => match name.as_str() {
+                "+" | "-" | "*" | "/" | "%" => {
+                    format!(
+                        "({})",
+                        args.iter()
+                            .map(|arg| arg.column_name())
+                            .collect::<Vec<_>>()
+                            .join(name)
+                    )
+                }
+                _ => {
+                    let args = args
+                        .iter()
+                        .map(|arg| arg.column_name())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    format!("{}({})", name, args)
+                }
+            },
             Expression::Cast { input, target } => format!(
                 "CAST({} AS {})",
                 input.column_name(),

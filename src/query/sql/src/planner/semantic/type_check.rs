@@ -1426,7 +1426,8 @@ impl<'a> TypeChecker<'a> {
             outer_columns: rel_prop.outer_columns,
         };
 
-        Ok(Box::new((subquery_expr.into(), *data_type)))
+        let data_type = subquery_expr.data_type();
+        Ok(Box::new((subquery_expr.into(), data_type)))
     }
 
     fn is_rewritable_scalar_function(func_name: &str) -> bool {
