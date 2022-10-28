@@ -2,7 +2,7 @@
 title: User Stage
 ---
 
-- RFC PR: [datafuselabs/databend#0000](https://github.com/datafuselabs/databend/pull/0000)
+- RFC PR: [datafuselabs/databend#8519](https://github.com/datafuselabs/databend/pull/8519)
 - Tracking Issue: [datafuselabs/databend#0000](https://github.com/datafuselabs/databend/issues/0000)
 
 ## Summary
