@@ -24,6 +24,7 @@ use common_storage::StorageS3Config;
 use crate::common;
 use crate::user_proto_conv::test_fs_stage_info;
 use crate::user_proto_conv::test_gcs_stage_info;
+use crate::user_proto_conv::test_internal_stage_info_v17;
 use crate::user_proto_conv::test_oss_stage_info;
 use crate::user_proto_conv::test_s3_stage_info;
 
@@ -743,5 +744,11 @@ fn test_user_stage_s3_v1() -> anyhow::Result<()> {
     };
 
     common::test_load_old(func_name!(), user_stage_s3_v1.as_slice(), want)?;
+    Ok(())
+}
+
+#[test]
+fn test_internal_stage_v17() -> anyhow::Result<()> {
+    common::test_pb_from_to("internal_stage_v17", test_internal_stage_info_v17())?;
     Ok(())
 }
