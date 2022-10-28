@@ -19,7 +19,7 @@ use common_meta_app::schema::TableInfo;
 use once_cell::sync::Lazy;
 
 use crate::plans::Projection;
-use crate::PhysicalScalar;
+use crate::Expression;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum StageKind {
@@ -37,7 +37,7 @@ pub struct PrewhereInfo {
     /// remain_columns = scan.columns - need_columns
     pub remain_columns: Projection,
     /// filter for prewhere
-    pub filter: PhysicalScalar,
+    pub filter: Expression,
 }
 
 /// Extras is a wrapper for push down items.
@@ -47,14 +47,14 @@ pub struct Extras {
     pub projection: Option<Projection>,
     /// Optional filter expression plan
     /// split_conjunctions by `and` operator
-    pub filters: Vec<PhysicalScalar>,
+    pub filters: Vec<Expression>,
     /// Optional prewhere information
     /// used for prewhere optimization
     pub prewhere: Option<PrewhereInfo>,
     /// Optional limit to skip read
     pub limit: Option<usize>,
     /// Optional order_by expression plan, asc, null_first
-    pub order_by: Vec<(PhysicalScalar, bool, bool)>,
+    pub order_by: Vec<(Expression, bool, bool)>,
 }
 
 impl Extras {

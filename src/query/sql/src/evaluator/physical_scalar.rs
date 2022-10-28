@@ -20,59 +20,10 @@ use common_exception::Result;
 use common_functions::scalars::in_evaluator;
 use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
-use common_planner::PhysicalScalar;
 
 use crate::evaluator::eval_node::EvalNode;
 use crate::evaluator::Evaluator;
-
-pub trait PhysicalScalarOp {
-    fn binary_op(&self, name: &str, other: &Self) -> Result<PhysicalScalar>;
-
-    fn and(&self, other: &Self) -> Result<PhysicalScalar> {
-        self.binary_op("and", other)
-    }
-
-    fn or(&self, other: &Self) -> Result<PhysicalScalar> {
-        self.binary_op("or", other)
-    }
-
-    fn eq(&self, other: &Self) -> Result<PhysicalScalar> {
-        self.binary_op("=", other)
-    }
-
-    fn not_eq(&self, other: &Self) -> Result<PhysicalScalar> {
-        self.binary_op("!=", other)
-    }
-
-    fn gt_eq(&self, other: &Self) -> Result<PhysicalScalar> {
-        self.binary_op(">=", other)
-    }
-
-    fn gt(&self, other: &Self) -> Result<PhysicalScalar> {
-        self.binary_op(">", other)
-    }
-
-    fn lt_eq(&self, other: &Self) -> Result<PhysicalScalar> {
-        self.binary_op("<=", other)
-    }
-
-    fn lt(&self, other: &Self) -> Result<PhysicalScalar> {
-        self.binary_op("=", other)
-    }
-}
-
-impl PhysicalScalarOp for PhysicalScalar {
-    fn binary_op(&self, name: &str, other: &PhysicalScalar) -> Result<PhysicalScalar> {
-        let func =
-            FunctionFactory::instance().get(name, &[&self.data_type(), &other.data_type()])?;
-
-        Ok(PhysicalScalar::Function {
-            name: name.to_owned(),
-            args: vec![self.clone(), other.clone()],
-            return_type: func.return_type(),
-        })
-    }
-}
+use crate::executor::PhysicalScalar;
 
 impl Evaluator {
     pub fn eval_physical_scalars(physical_scalars: &[PhysicalScalar]) -> Result<Vec<EvalNode>> {

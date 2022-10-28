@@ -23,9 +23,10 @@ use common_functions::scalars::Function;
 use common_functions::scalars::FunctionContext;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::Monotonicity;
-use common_planner::PhysicalScalar;
-use common_planner::PhysicalScalarVisitor;
-use common_planner::Recursion;
+
+use crate::executor::PhysicalScalar;
+use crate::executor::PhysicalScalarVisitor;
+use crate::executor::Recursion;
 
 // PhysicalScalarMonotonicityVisitor visit the expression tree to calculate monotonicity.
 // For example, a function of Add(Neg(number), 5) for number < -100 will have a tree like this:

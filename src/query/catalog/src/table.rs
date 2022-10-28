@@ -31,7 +31,7 @@ use common_planner::extras::Extras;
 use common_planner::extras::Statistics;
 use common_planner::plans::DeletePlan;
 use common_planner::Partitions;
-use common_planner::PhysicalScalar;
+use common_planner::Expression;
 use common_planner::ReadDataSourcePlan;
 use common_storage::StorageMetrics;
 
@@ -90,7 +90,7 @@ pub trait Table: Sync + Send {
         false
     }
 
-    fn cluster_keys(&self) -> Vec<PhysicalScalar> {
+    fn cluster_keys(&self) -> Vec<Expression> {
         vec![]
     }
 

@@ -28,13 +28,12 @@ use common_planner::extras::Extras;
 use common_planner::extras::PrewhereInfo;
 use common_planner::extras::StageKind;
 use common_planner::plans::Projection;
-use common_planner::AggregateFunctionDesc;
-use common_planner::AggregateFunctionSignature;
-use common_planner::PhysicalScalar;
-use common_planner::SortDesc;
+use common_planner::Expression;
 use itertools::Itertools;
 
 use super::AggregateFinal;
+use super::AggregateFunctionDesc;
+use super::AggregateFunctionSignature;
 use super::AggregatePartial;
 use super::Exchange as PhysicalExchange;
 use super::Filter;
@@ -46,7 +45,10 @@ use crate::executor::table_read_plan::ToReadDataSourcePlan;
 use crate::executor::util::check_physical;
 use crate::executor::ColumnID;
 use crate::executor::EvalScalar;
+use crate::executor::ExpressionBuilderWithoutRenaming;
 use crate::executor::PhysicalPlan;
+use crate::executor::PhysicalScalar;
+use crate::executor::SortDesc;
 use crate::executor::UnionAll;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::SExpr;
@@ -482,12 +484,11 @@ impl PhysicalPlanBuilder {
         let projection =
             Self::build_projection(&metadata, table_schema, &scan.columns, has_inner_column);
 
-        let mut builder = PhysicalScalarBuilder::new(table_schema);
-
         let push_down_filters = scan
             .push_down_predicates
             .clone()
             .map(|predicates| {
+                let builder = ExpressionBuilderWithoutRenaming::create(self.metadata.clone());
                 predicates
                     .into_iter()
                     .map(|scalar| builder.build(&scalar))
@@ -522,6 +523,7 @@ impl PhysicalPlanBuilder {
                     "There should be at least one predicate in prewhere"
                 );
 
+                let builder = ExpressionBuilderWithoutRenaming::create(self.metadata.clone());
                 let filter = builder.build(&predicate.unwrap())?;
 
                 let remain_columns = scan
@@ -529,6 +531,7 @@ impl PhysicalPlanBuilder {
                     .difference(&prewhere.prewhere_columns)
                     .copied()
                     .collect::<HashSet<usize>>();
+
                 let output_columns = Self::build_projection(
                     &metadata,
                     table_schema,
@@ -569,10 +572,9 @@ impl PhysicalPlanBuilder {
                         let name = metadata.column(item.index).name();
 
                         // sort item is already a column
-                        let scalar = PhysicalScalar::IndexedVariable {
-                            index: item.index,
+                        let scalar = Expression::IndexedVariable {
+                            name: name.to_string(),
                             data_type: ty.clone(),
-                            display_name: name.to_string(),
                         };
 
                         Ok((scalar, item.asc, item.nulls_first))

@@ -22,10 +22,10 @@ use common_catalog::catalog::CATALOG_DEFAULT;
 use common_catalog::table::Table;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_planner::PhysicalScalar;
 use common_settings::Settings;
 use parking_lot::RwLock;
 
+use crate::executor::PhysicalScalar;
 use crate::executor::PhysicalScalarBuilder;
 use crate::planner::semantic::SyncTypeChecker;
 use crate::BindContext;

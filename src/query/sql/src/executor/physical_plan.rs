@@ -27,11 +27,11 @@ use common_exception::Result;
 use common_meta_app::schema::TableInfo;
 use common_planner::extras::StageKind;
 use common_planner::extras::SINK_SCHEMA;
-use common_planner::AggregateFunctionDesc;
-use common_planner::PhysicalScalar;
 use common_planner::ReadDataSourcePlan;
-use common_planner::SortDesc;
 
+use super::AggregateFunctionDesc;
+use super::SortDesc;
+use crate::executor::PhysicalScalar;
 use crate::optimizer::ColumnSet;
 use crate::plans::JoinType;
 use crate::ColumnBinding;

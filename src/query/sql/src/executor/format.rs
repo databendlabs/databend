@@ -16,10 +16,10 @@ use common_ast::ast::FormatTreeNode;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planner::extras::StageKind;
-use common_planner::AggregateFunctionDesc;
 use itertools::Itertools;
 
 use super::AggregateFinal;
+use super::AggregateFunctionDesc;
 use super::AggregatePartial;
 use super::EvalScalar;
 use super::Exchange;
@@ -79,7 +79,7 @@ fn table_scan_to_format_tree(
             extras
                 .filters
                 .iter()
-                .map(|f| f.pretty_display())
+                .map(|f| f.column_name())
                 .collect::<Vec<_>>()
                 .join(", ")
         });
