@@ -26,6 +26,7 @@ pub struct FormatSettings {
     pub nan_bytes: Vec<u8>,
     pub inf_bytes: Vec<u8>,
     pub quote_char: u8,
+    pub escape: Option<u8>,
 
     pub csv_null_bytes: Vec<u8>,
     pub tsv_null_bytes: Vec<u8>,
@@ -53,6 +54,7 @@ impl Default for FormatSettings {
             json_escape_forward_slashes: true,
             ident_case_sensitive: false,
             quote_char: b'\'',
+            escape: Some(b'\\')
         }
     }
 }
