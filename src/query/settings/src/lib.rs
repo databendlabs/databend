@@ -594,9 +594,9 @@ impl Settings {
         let key = "sql_dialect";
         self.check_and_get_setting_value(key)
             .and_then(|v| v.user_setting.value.as_string())
-            .map(|v| match &*v {
-                "MySQL" => Dialect::MySQL,
-                "Hive" => Dialect::Hive,
+            .map(|v| match &*v.to_lowercase() {
+                "mysql" => Dialect::MySQL,
+                "hive" => Dialect::Hive,
                 _ => Dialect::PostgreSQL,
             })
     }
