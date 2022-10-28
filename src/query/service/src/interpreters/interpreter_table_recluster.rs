@@ -59,7 +59,7 @@ impl Interpreter for ReclusterTableInterpreter {
             Some(scalar) => {
                 let schema = self.plan.schema();
                 let mut builder = PhysicalScalarBuilder::new(&schema);
-                let physical_scalar = builder.build(&scalar)?;
+                let physical_scalar = builder.build(scalar)?;
                 Some(Extras {
                     filters: vec![physical_scalar],
                     ..Extras::default()

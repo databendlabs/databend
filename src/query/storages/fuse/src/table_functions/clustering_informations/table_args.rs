@@ -42,9 +42,7 @@ pub fn parse_func_table_args(table_args: &TableArgs) -> Result<(String, String)>
 pub fn get_cluster_keys(table: &FuseTable, definition: &str) -> Result<Vec<PhysicalScalar>> {
     let cluster_keys = if !definition.is_empty() {
         let table_meta = Arc::new(table.clone());
-        let physical_scalars =
-            PhysicalScalarParser::parse_exprs(table.schema(), table_meta, definition)?;
-        physical_scalars
+        PhysicalScalarParser::parse_exprs(table.schema(), table_meta, definition)?
     } else {
         table.cluster_keys()
     };

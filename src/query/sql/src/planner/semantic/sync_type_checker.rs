@@ -382,46 +382,36 @@ impl<'a> SyncTypeChecker<'a> {
                     subquery, modifier, ..
                 } = &**right
                 {
-                    if let Some(subquery_modifier) = modifier {
-                        match subquery_modifier {
-                            SubqueryModifier::Any | SubqueryModifier::Some => {
-                                return Err(ErrorCode::SemanticError(
-                                    expr.span()
-                                        .display_error("not support subquery".to_string()),
-                                ));
-                            }
-                            SubqueryModifier::All => {
-                                let contrary_op = op.to_contrary()?;
-                                let rewritten_subquery = Expr::Subquery {
-                                    span: right.span(),
-                                    modifier: Some(SubqueryModifier::Any),
-                                    subquery: (*subquery).clone(),
-                                };
-                                self.resolve_function(
-                                    span,
-                                    "not",
-                                    &[&Expr::BinaryOp {
-                                        span,
-                                        op: contrary_op,
-                                        left: (*left).clone(),
-                                        right: Box::new(rewritten_subquery),
-                                    }],
-                                    None,
-                                )?
-                            }
+                    match modifier {
+                        Some(SubqueryModifier::Any) | Some(SubqueryModifier::Some) => {
+                            return Err(ErrorCode::SemanticError(
+                                expr.span()
+                                    .display_error("not support subquery".to_string()),
+                            ));
                         }
-                    } else {
-                        self.resolve_binary_op(
-                            span,
-                            op,
-                            left.as_ref(),
-                            right.as_ref(),
-                            required_type,
-                        )?
+                        Some(SubqueryModifier::All) => {
+                            let contrary_op = op.to_contrary()?;
+                            let rewritten_subquery = Expr::Subquery {
+                                span: right.span(),
+                                modifier: Some(SubqueryModifier::Any),
+                                subquery: (*subquery).clone(),
+                            };
+                            return self.resolve_function(
+                                span,
+                                "not",
+                                &[&Expr::BinaryOp {
+                                    span,
+                                    op: contrary_op,
+                                    left: (*left).clone(),
+                                    right: Box::new(rewritten_subquery),
+                                }],
+                                None,
+                            );
+                        }
+                        None => {}
                     }
-                } else {
-                    self.resolve_binary_op(span, op, left.as_ref(), right.as_ref(), required_type)?
                 }
+                self.resolve_binary_op(span, op, left.as_ref(), right.as_ref(), required_type)?
             }
 
             Expr::UnaryOp { span, op, expr, .. } => {
@@ -1353,7 +1343,7 @@ impl<'a> SyncTypeChecker<'a> {
         let column_name = normalize_identifier(&column, self.name_resolution_ctx).name;
         names.push(column_name);
         let mut data_types = Vec::new();
-        data_types.push(data_type.clone());
+        data_types.push(data_type);
 
         while !accessors.is_empty() {
             let data_type = data_types.pop().unwrap();

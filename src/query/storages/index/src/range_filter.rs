@@ -373,14 +373,14 @@ impl<'a> VerifiableExprBuilder<'a> {
         let left_cols = get_column_fields(schema, cols[0].clone())?;
 
         let left_name = args[0].pretty_display();
-        let left_field = DataField::new(&left_name, args[0].data_type().clone());
+        let left_field = DataField::new(&left_name, args[0].data_type());
 
         fields.push((left_field, left_cols));
 
         if cols.len() > 1 {
             let right_cols = get_column_fields(schema, cols[1].clone())?;
             let right_name = args[1].pretty_display();
-            let right_field = DataField::new(&right_name, args[1].data_type().clone());
+            let right_field = DataField::new(&right_name, args[1].data_type());
             fields.push((right_field, right_cols));
         }
 
@@ -679,7 +679,7 @@ fn get_maybe_monotonic(op: &str, args: &Vec<PhysicalScalar>) -> Result<bool> {
     }
 
     for arg in args {
-        if !check_maybe_monotonic(&arg)? {
+        if !check_maybe_monotonic(arg)? {
             return Ok(false);
         }
     }

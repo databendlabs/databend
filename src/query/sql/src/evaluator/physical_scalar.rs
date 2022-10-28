@@ -120,8 +120,7 @@ impl Evaluator {
                 }
 
                 let data_types: Vec<DataTypeImpl> = args.iter().map(|v| v.data_type()).collect();
-                let data_types: Vec<&DataTypeImpl> = data_types.iter().map(|v| v).collect();
-
+                let data_types: Vec<&DataTypeImpl> = data_types.iter().collect();
                 let func = FunctionFactory::instance().get(name, &data_types)?;
                 Ok(EvalNode::Function {
                     func,

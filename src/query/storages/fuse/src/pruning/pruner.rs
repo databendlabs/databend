@@ -125,7 +125,7 @@ pub fn new_filter_pruner(
             // convert to filter column names
             let filter_block_cols = point_query_cols
                 .into_iter()
-                .map(|index| BlockFilter::build_filter_column(index))
+                .map(BlockFilter::build_filter_column)
                 .collect();
 
             return Ok(Some(Arc::new(FilterPruner::new(
@@ -159,7 +159,7 @@ mod util {
     ) -> Result<bool> {
         // load the relevant index columns
         let maybe_filter = index_location
-            .read_filter(ctx.clone(), dal, &filter_col_names, index_length)
+            .read_filter(ctx.clone(), dal, filter_col_names, index_length)
             .await;
 
         match maybe_filter {
