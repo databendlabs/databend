@@ -64,18 +64,18 @@ We will add two new stage types:
 pub enum StageType {
     LegacyInternal,
     External,
-    Named,
+    Internal,
     User,
 }
 ```
 
-`StageType::Named` will deprecate `StageType::LegacyInternal`. Since this RFC, we will not create a new stage with `StageType::LegacyInternal` anymore.
+`StageType::Internal` will deprecate `StageType::LegacyInternal`. Since this RFC, we will not create a new stage with `StageType::LegacyInternal` anymore.
 
 The stage prefix rule will be:
 
 - `LegacyInternal` => `stage/{stage_name}`
 - `External` => spcified location.
-- `Named` => `stage/named/{stage_name}`
+- `Internal` => `stage/internal/{stage_name}`
 - `User` => `stage/user/{user_name}`
 
 Notes: `StageType::User` will not be stored in metasrv and will constantly build in memory directly.
