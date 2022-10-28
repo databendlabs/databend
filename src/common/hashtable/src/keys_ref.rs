@@ -12,21 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::hash::Hash;
 use std::hash::Hasher;
+use std::mem::MaybeUninit;
 
-use ahash::AHasher;
-
-use super::HashTableKeyable;
+use super::FastHash;
+use super::HashtableKeyable;
 
 #[derive(Clone, Copy)]
 pub struct KeysRef {
     pub length: usize,
     pub address: usize,
+    pub hash: u64,
 }
 
 impl KeysRef {
     pub fn create(address: usize, length: usize) -> KeysRef {
-        KeysRef { length, address }
+        let hash = unsafe { std::slice::from_raw_parts(address as *const u8, length).fast_hash() };
+        KeysRef {
+            length,
+            address,
+            hash,
+        }
     }
 
     #[allow(clippy::missing_safety_doc)]
@@ -48,32 +55,22 @@ impl PartialEq for KeysRef {
     }
 }
 
-impl HashTableKeyable for KeysRef {
-    const BEFORE_EQ_HASH: bool = true;
-
-    fn is_zero(&self) -> bool {
-        self.length == 0
+unsafe impl HashtableKeyable for KeysRef {
+    fn is_zero(this: &MaybeUninit<Self>) -> bool {
+        unsafe { this.assume_init_ref().address == 0 }
     }
 
-    fn fast_hash(&self) -> u64 {
-        unsafe {
-            // TODO(Winter) We need more efficient hash algorithm
-            let value = std::slice::from_raw_parts(self.address as *const u8, self.length);
-
-            let mut hasher = AHasher::default();
-            hasher.write(value);
-            hasher.finish()
-        }
+    fn equals_zero(this: &Self) -> bool {
+        this.address == 0
     }
 
-    fn set_key(&mut self, new_value: &Self) {
-        self.length = new_value.length;
-        self.address = new_value.address;
+    fn hash(&self) -> u64 {
+        self.hash
     }
 }
 
-impl std::hash::Hash for KeysRef {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+impl Hash for KeysRef {
+    fn hash<H: Hasher>(&self, state: &mut H) {
         let self_value =
             unsafe { std::slice::from_raw_parts(self.address as *const u8, self.length) };
         self_value.hash(state);

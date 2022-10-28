@@ -15,6 +15,7 @@
 #![deny(unused_crate_dependencies)]
 
 mod converters;
+mod hive_block_filter;
 mod hive_blocks;
 mod hive_catalog;
 mod hive_database;
@@ -29,6 +30,7 @@ mod hive_table_source;
 
 pub const CATALOG_HIVE: &str = "hive";
 
+pub use hive_block_filter::HiveBlockFilter;
 pub use hive_blocks::HiveBlocks;
 pub use hive_catalog::HiveCatalog;
 pub use hive_file_splitter::HiveFileSplitter;

@@ -25,11 +25,11 @@ use common_datavalues::TypeID;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
 
-use crate::pipelines::processors::transforms::group_by::keys_ref::KeysRef;
 use crate::pipelines::processors::AggregatorParams;
 
-pub trait GroupColumnsBuilder<Key> {
-    fn append_value(&mut self, v: &Key);
+pub trait GroupColumnsBuilder {
+    type T;
+    fn append_value(&mut self, v: Self::T);
     fn finish(self) -> Result<Vec<ColumnRef>>;
 }
 
@@ -51,12 +51,14 @@ where for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey = T>
     }
 }
 
-impl<T: Copy + Send + Sync + 'static> GroupColumnsBuilder<T> for FixedKeysGroupColumnsBuilder<T>
+impl<T: Copy + Send + Sync + 'static> GroupColumnsBuilder for FixedKeysGroupColumnsBuilder<T>
 where for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey = T>
 {
+    type T = T;
+
     #[inline]
-    fn append_value(&mut self, v: &T) {
-        self.data.push(*v);
+    fn append_value(&mut self, v: T) {
+        self.data.push(v);
     }
 
     #[inline]
@@ -74,12 +76,12 @@ where for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey = T>
     }
 }
 
-pub struct SerializedKeysGroupColumnsBuilder {
-    data: Vec<KeysRef>,
+pub struct SerializedKeysGroupColumnsBuilder<'a> {
+    data: Vec<&'a [u8]>,
     group_data_types: Vec<DataTypeImpl>,
 }
 
-impl SerializedKeysGroupColumnsBuilder {
+impl<'a> SerializedKeysGroupColumnsBuilder<'a> {
     pub fn create(capacity: usize, params: &AggregatorParams) -> Self {
         Self {
             data: Vec::with_capacity(capacity),
@@ -88,29 +90,24 @@ impl SerializedKeysGroupColumnsBuilder {
     }
 }
 
-impl GroupColumnsBuilder<KeysRef> for SerializedKeysGroupColumnsBuilder {
-    fn append_value(&mut self, v: &KeysRef) {
-        self.data.push(*v);
+impl<'a> GroupColumnsBuilder for SerializedKeysGroupColumnsBuilder<'a> {
+    type T = &'a [u8];
+
+    fn append_value(&mut self, v: &'a [u8]) {
+        self.data.push(v);
     }
 
-    fn finish(self) -> Result<Vec<ColumnRef>> {
-        let mut keys = Vec::with_capacity(self.data.len());
-
-        for v in &self.data {
-            unsafe {
-                let value = std::slice::from_raw_parts(v.address as *const u8, v.length);
-                keys.push(value);
-            }
-        }
+    fn finish(mut self) -> Result<Vec<ColumnRef>> {
+        let rows = self.data.len();
+        let keys = self.data.as_mut_slice();
 
         if self.group_data_types.len() == 1
             && self.group_data_types[0].data_type_id() == TypeID::String
         {
-            let col = StringColumn::from_slice(&keys);
+            let col = StringColumn::from_slice(keys);
             return Ok(vec![col.arc()]);
         }
 
-        let rows = self.data.len();
         let mut res = Vec::with_capacity(self.group_data_types.len());
         let format = FormatSettings::default();
         for data_type in self.group_data_types.iter() {

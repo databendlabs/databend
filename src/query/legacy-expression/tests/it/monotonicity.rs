@@ -228,7 +228,7 @@ fn test_arithmetic_mul_div() -> Result<()> {
             left: create_f64(5.0),
             right: create_f64(10.0),
             expect_mono: Monotonicity {
-                is_monotonic: true,
+                is_monotonic: false,
                 is_positive: true,
                 is_constant: false,
                 left: create_f64(-0.2),
@@ -242,7 +242,7 @@ fn test_arithmetic_mul_div() -> Result<()> {
             left: None,
             right: None,
             expect_mono: Monotonicity {
-                is_monotonic: true,
+                is_monotonic: false,
                 is_positive: true,
                 is_constant: false,
                 left: None,
@@ -288,7 +288,7 @@ fn test_arithmetic_mul_div() -> Result<()> {
             left: create_f64(1.0),
             right: create_f64(2.0),
             expect_mono: Monotonicity {
-                is_monotonic: true,
+                is_monotonic: false,
                 is_positive: true,
                 is_constant: false,
                 left: create_f64(1.0),
@@ -323,7 +323,7 @@ fn test_arithmetic_mul_div() -> Result<()> {
             left: create_f64(4.0),
             right: create_f64(10.0),
             expect_mono: Monotonicity {
-                is_monotonic: true,
+                is_monotonic: false,
                 is_positive: false,
                 is_constant: false,
                 left: create_f64(-4.0),
