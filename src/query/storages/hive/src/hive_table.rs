@@ -39,8 +39,8 @@ use common_pipeline_sources::processors::sources::sync_source::SyncSourcer;
 use common_planner::extras::Extras;
 use common_planner::extras::Statistics;
 use common_planner::plans::Projection;
+use common_planner::Expression;
 use common_planner::Partitions;
-use common_planner::PhysicalScalar;
 use common_planner::ReadDataSourcePlan;
 use common_planner::RequireColumnsVisitor;
 use common_storage::init_operator;
@@ -229,7 +229,7 @@ impl HiveTable {
     }
 
     fn get_columns_from_expressions(
-        expressions: &[PhysicalScalar],
+        expressions: &[Expression],
         schema: &DataSchemaRef,
     ) -> HashSet<String> {
         let result = expressions
@@ -302,7 +302,7 @@ impl HiveTable {
         &self,
         ctx: Arc<dyn TableContext>,
         partition_keys: Vec<String>,
-        filter_expressions: Vec<PhysicalScalar>,
+        filter_expressions: Vec<Expression>,
     ) -> Result<Vec<(String, Option<String>)>> {
         let hive_catalog = ctx.get_catalog(CATALOG_HIVE)?;
         let hive_catalog = hive_catalog.as_any().downcast_ref::<HiveCatalog>().unwrap();

@@ -81,34 +81,76 @@ impl PhysicalScalar {
         }
     }
 
-    // todo(sundy)
     pub fn from_expression(expression: &Expression, schema: &DataSchema) -> Result<Self> {
         match expression {
-            Expression::IndexedVariable { name, data_type } => todo!(),
-            Expression::Constant { value, data_type } => todo!(),
+            Expression::IndexedVariable { name, data_type } => {
+                Ok(PhysicalScalar::IndexedVariable {
+                    index: schema.index_of(name)?,
+                    display_name: name.to_string(),
+                    data_type: data_type.clone(),
+                })
+            }
+            Expression::Constant { value, data_type } => Ok(PhysicalScalar::Constant {
+                value: value.clone(),
+                data_type: data_type.clone(),
+            }),
             Expression::Function {
                 name,
                 args,
                 return_type,
-            } => todo!(),
-            Expression::Cast { input, target } => todo!(),
+            } => {
+                let mut new_args = Vec::with_capacity(args.len());
+                for arg in args.iter() {
+                    let new_arg = Self::from_expression(arg, schema)?;
+                    new_args.push(new_arg);
+                }
+                Ok(PhysicalScalar::Function {
+                    name: name.to_string(),
+                    args: new_args,
+                    return_type: return_type.clone(),
+                })
+            }
+            Expression::Cast { input, target } => Ok(PhysicalScalar::Cast {
+                input: Box::new(Self::from_expression(input, schema)?),
+                target: target.clone(),
+            }),
         }
     }
 
     pub fn to_expression(&self, schema: &DataSchema) -> Result<Expression> {
         match self {
             PhysicalScalar::IndexedVariable {
-                index,
                 data_type,
                 display_name,
-            } => todo!(),
-            PhysicalScalar::Constant { value, data_type } => todo!(),
+                ..
+            } => Ok(Expression::IndexedVariable {
+                data_type: data_type.clone(),
+                name: display_name.to_string(),
+            }),
+            PhysicalScalar::Constant { value, data_type } => Ok(Expression::Constant {
+                value: value.clone(),
+                data_type: data_type.clone(),
+            }),
             PhysicalScalar::Function {
                 name,
                 args,
                 return_type,
-            } => todo!(),
-            PhysicalScalar::Cast { input, target } => todo!(),
+            } => {
+                let mut new_args = Vec::with_capacity(args.len());
+                for arg in args.iter() {
+                    let new_arg = arg.to_expression(schema)?;
+                    new_args.push(new_arg);
+                }
+                Ok(Expression::Function {
+                    name: name.to_string(),
+                    args: new_args,
+                    return_type: return_type.clone(),
+                })
+            }
+            PhysicalScalar::Cast { input, target } => Ok(Expression::Cast {
+                input: Box::new(input.to_expression(schema)?),
+                target: target.clone(),
+            }),
         }
     }
 }
