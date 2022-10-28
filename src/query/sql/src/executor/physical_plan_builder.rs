@@ -519,7 +519,7 @@ impl PhysicalPlanBuilder {
                         });
 
                 assert!(
-                    predicate.is_none(),
+                    predicate.is_some(),
                     "There should be at least one predicate in prewhere"
                 );
 

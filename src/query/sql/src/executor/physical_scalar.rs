@@ -120,13 +120,14 @@ impl PhysicalScalar {
     pub fn to_expression(&self, schema: &DataSchema) -> Result<Expression> {
         match self {
             PhysicalScalar::IndexedVariable {
-                data_type,
-                display_name,
-                ..
-            } => Ok(Expression::IndexedVariable {
-                data_type: data_type.clone(),
-                name: display_name.to_string(),
-            }),
+                index, data_type, ..
+            } => {
+                let name = schema.field(*index);
+                Ok(Expression::IndexedVariable {
+                    data_type: data_type.clone(),
+                    name: name.name().clone(),
+                })
+            }
             PhysicalScalar::Constant { value, data_type } => Ok(Expression::Constant {
                 value: value.clone(),
                 data_type: data_type.clone(),
