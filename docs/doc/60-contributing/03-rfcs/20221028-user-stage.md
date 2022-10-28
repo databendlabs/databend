@@ -86,7 +86,7 @@ None.
 
 ### Preserve stage name prefix
 
-To simplify, we can preserve all stages prefixed by `bend_internal`_`. Users can't create and drop stages with this prefix.
+To simplify, we can preserve all stages prefixed by `bend_internal_`. Users can't create and drop stages with this prefix.
 
 By adding this limitation, we can implement the user stage easier. Every time user tries to access their own user stage, we will expand to `bend_internal_user_<user_name>`.
 
