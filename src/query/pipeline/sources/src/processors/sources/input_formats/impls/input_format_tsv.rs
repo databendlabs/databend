@@ -129,7 +129,7 @@ impl InputFormatTextBase for InputFormatTSV {
         true
     }
 
-    fn get_format_settings(settings: &Arc<Settings>) -> Result<FormatSettings> {
+    fn get_format_settings_from_settings(settings: &Arc<Settings>) -> Result<FormatSettings> {
         let timezone = get_time_zone(settings)?;
         Ok(FormatSettings {
             record_delimiter: settings.get_format_record_delimiter()?.into_bytes(),

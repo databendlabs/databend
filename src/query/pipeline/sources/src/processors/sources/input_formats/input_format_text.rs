@@ -52,7 +52,7 @@ pub trait InputFormatTextBase: Sized + Send + Sync + 'static {
         false
     }
 
-    fn get_format_settings(settings: &Arc<Settings>) -> Result<FormatSettings>;
+    fn get_format_settings_from_settings(settings: &Arc<Settings>) -> Result<FormatSettings>;
 
     fn default_record_delimiter() -> RecordDelimiter {
         RecordDelimiter::Crlf
@@ -92,8 +92,8 @@ impl<T: InputFormatTextBase> InputFormatPipe for InputFormatTextPipe<T> {
 
 #[async_trait::async_trait]
 impl<T: InputFormatTextBase> InputFormat for InputFormatText<T> {
-    fn get_format_settings(&self, settings: &Arc<Settings>) -> Result<FormatSettings> {
-        T::get_format_settings(settings)
+    fn get_format_settings_from_settings(&self, settings: &Arc<Settings>) -> Result<FormatSettings> {
+        T::get_format_settings_from_settings(settings)
     }
 
     fn default_record_delimiter(&self) -> RecordDelimiter {

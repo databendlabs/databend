@@ -28,7 +28,7 @@ use crate::processors::sources::input_formats::input_split::SplitInfo;
 
 #[async_trait::async_trait]
 pub trait InputFormat: Send + Sync {
-    fn get_format_settings(&self, settings: &Arc<Settings>) -> Result<FormatSettings>;
+    fn get_format_settings_from_settings(&self, settings: &Arc<Settings>) -> Result<FormatSettings>;
 
     fn default_record_delimiter(&self) -> RecordDelimiter;
 

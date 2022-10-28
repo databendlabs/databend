@@ -79,7 +79,7 @@ impl InputFormatTextBase for InputFormatNDJson {
         true
     }
 
-    fn get_format_settings(settings: &Arc<Settings>) -> Result<FormatSettings> {
+    fn get_format_settings_from_settings(settings: &Arc<Settings>) -> Result<FormatSettings> {
         let timezone = get_time_zone(settings)?;
         Ok(FormatSettings {
             ident_case_sensitive: settings.get_unquoted_ident_case_sensitive()?,

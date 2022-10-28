@@ -76,7 +76,7 @@ impl InputFormatTextBase for InputFormatCSV {
         StageFileFormatType::Csv
     }
 
-    fn get_format_settings(settings: &Arc<Settings>) -> Result<FormatSettings> {
+    fn get_format_settings_from_settings(settings: &Arc<Settings>) -> Result<FormatSettings> {
         let timezone = get_time_zone(settings)?;
         let quote_char = settings.get_format_quote_char()?.into_bytes();
         if quote_char.len() != 1 {

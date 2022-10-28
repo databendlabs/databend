@@ -225,7 +225,7 @@ impl InputContext {
         let format_type =
             StageFileFormatType::from_str(format_name).map_err(ErrorCode::UnknownFormat)?;
         let format = Self::get_input_format(&format_type)?;
-        let format_settings = format.get_format_settings(&settings)?;
+        let format_settings = format.get_format_settings_from_settings(&settings)?;
         let read_batch_size = settings.get_input_read_buffer_size()? as usize;
         let rows_per_block = MIN_ROW_PER_BLOCK;
         let field_delimiter = settings.get_format_field_delimiter()?;

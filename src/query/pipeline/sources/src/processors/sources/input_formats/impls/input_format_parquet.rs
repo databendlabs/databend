@@ -76,7 +76,7 @@ fn col_offset(meta: &ColumnChunkMetaData) -> i64 {
 
 #[async_trait::async_trait]
 impl InputFormat for InputFormatParquet {
-    fn get_format_settings(&self, _settings: &Arc<Settings>) -> Result<FormatSettings> {
+    fn get_format_settings_from_settings(&self, _settings: &Arc<Settings>) -> Result<FormatSettings> {
         // not used now
         Ok(FormatSettings::default())
     }
