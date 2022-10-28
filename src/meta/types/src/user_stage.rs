@@ -253,6 +253,23 @@ impl UserStageInfo {
             ..Default::default()
         }
     }
+
+    /// Get the prefix of stage.
+    ///
+    /// Use this function to get the prefix of this stage in the data operator.
+    ///
+    /// # Notes
+    ///
+    /// This function should never be called on external stage because it's meanless. Something must be wrong.
+    pub fn stage_prefix(&self) -> String {
+        match self.stage_type {
+            StageType::LegacyInternal => format!("/stage/{}/", self.stage_name),
+            StageType::External => {
+                unreachable!("stage_prefix should never be called on external stage, must be a bug")
+            }
+            StageType::Internal => format!("/stage/internal/{}/", self.stage_name),
+        }
+    }
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]

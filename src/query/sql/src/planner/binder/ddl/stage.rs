@@ -81,7 +81,7 @@ impl<'a> Binder {
 
         let mut stage_info = match location {
             None => UserStageInfo {
-                stage_type: StageType::LegacyInternal,
+                stage_type: StageType::Internal,
                 ..Default::default()
             },
             Some(uri) => {
@@ -91,17 +91,6 @@ impl<'a> Binder {
                     path: uri.path.clone(),
                     connection: uri.connection.clone(),
                 };
-
-                // Make sure the behavior under older planner is the same
-                // with before which always use the same endpoint with config.
-                //
-                // TODO: remove me while removing old planner
-                // if self.ctx.get_settings().get_enable_planner_v2()? == 0 {
-                //     if let StorageParams::S3(v) = self.ctx.get_config().storage.params {
-                //         uri.connection
-                //             .insert("endpoint_url".to_string(), v.endpoint_url);
-                //     }
-                // }
 
                 let (stage_storage, path) = parse_uri_location(&uri)?;
 

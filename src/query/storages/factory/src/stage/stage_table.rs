@@ -68,12 +68,11 @@ impl StageTable {
 
     /// Get operator with correctly prefix.
     pub fn get_op(ctx: &Arc<dyn TableContext>, stage: &UserStageInfo) -> Result<Operator> {
-        if stage.stage_type == StageType::LegacyInternal {
-            let prefix = format!("/stage/{}/", stage.stage_name);
-            let pop = ctx.get_data_operator()?.operator();
-            Ok(pop.layer(SubdirLayer::new(&prefix)))
-        } else {
+        if stage.stage_type == StageType::External {
             Ok(init_operator(&stage.stage_params.storage)?)
+        } else {
+            let pop = ctx.get_data_operator()?.operator();
+            Ok(pop.layer(SubdirLayer::new(&stage.stage_prefix())))
         }
     }
 }
