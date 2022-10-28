@@ -77,7 +77,7 @@ impl ExpressionParser {
         let mut type_checker = SyncTypeChecker::new(&bind_context, &name_resolution_ctx, &[]);
         let mut expressions = Vec::with_capacity(exprs.len());
 
-        let builder = ExpressionBuilderWithoutRenaming::create(metadata.clone());
+        let builder = ExpressionBuilderWithoutRenaming::create(metadata);
 
         for expr in exprs.iter() {
             let (scalar, _) = *type_checker.resolve(expr, None)?;
