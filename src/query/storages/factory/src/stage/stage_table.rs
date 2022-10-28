@@ -98,7 +98,6 @@ impl Table for StageTable {
             InputContext::try_create_from_copy(
                 operator,
                 ctx.get_settings().clone(),
-                ctx.get_format_settings()?,
                 self.table_info.schema.clone(),
                 self.table_info.stage_info.clone(),
                 self.table_info.files.clone(),
