@@ -31,6 +31,10 @@ copy_from_location_cases=(
   "copy into ontime200 from 'fs://${DATADIR}/' PATTERN = 'ontime.*parquet' FILE_FORMAT = (type = 'PARQUET')"
   # copy ndjson with split size
   "copy into ontime200 from 'fs://${DATADIR}/ontime_200.ndjson' FILE_FORMAT = (type = 'ndjson') split_size = 10240"
+  # copy xml
+  "copy into ontime200 from 'fs://${DATADIR}/ontime_200_v1.xml' FILE_FORMAT = (type = 'XML' row_tag = 'row')"
+  "copy into ontime200 from 'fs://${DATADIR}/ontime_200_v2.xml' FILE_FORMAT = (type = 'XML' row_tag = 'row')"
+  "copy into ontime200 from 'fs://${DATADIR}/ontime_200_v3.xml' FILE_FORMAT = (type = 'XML' row_tag = 'row')"
 )
 
 for i in "${copy_from_location_cases[@]}"; do

@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 //  Copyright 2022 Datafuse Labs.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,6 +11,7 @@ use std::collections::HashMap;
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
@@ -19,6 +19,7 @@ use common_datavalues::TypeDeserializer;
 use common_datavalues::TypeDeserializerImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::BufferReadExt;
 use common_io::prelude::FormatSettings;
 use common_io::prelude::NestedCheckpointReader;
 use common_meta_types::StageFileFormatType;
@@ -26,7 +27,6 @@ use common_settings::Settings;
 use xml::reader::XmlEvent;
 use xml::ParserConfig;
 
-use crate::processors::sources::input_formats::impls::input_format_tsv::format_column_error;
 use crate::processors::sources::input_formats::input_format_text::get_time_zone;
 use crate::processors::sources::input_formats::input_format_text::AligningState;
 use crate::processors::sources::input_formats::input_format_text::BlockBuilder;
@@ -45,29 +45,43 @@ impl InputFormatXML {
         path: &str,
         row_index: usize,
     ) -> Result<()> {
-        let mut row_json: serde_json::Value = serde_json::from_reader(buf)?;
+        let mut raw_data: HashMap<String, Vec<u8>> = serde_json::from_reader(buf)?;
 
         if !format_settings.ident_case_sensitive {
-            if let serde_json::Value::Object(x) = row_json {
-                let y = x.into_iter().map(|(k, v)| (k.to_lowercase(), v)).collect();
-                row_json = serde_json::Value::Object(y);
-            }
+            raw_data = raw_data
+                .into_iter()
+                .map(|(k, v)| (k.to_lowercase(), v))
+                .collect();
         }
 
         for (field, deserializer) in schema.fields().iter().zip(deserializers.iter_mut()) {
             let value = if format_settings.ident_case_sensitive {
-                &row_json[field.name().to_owned()]
+                raw_data.get(field.name())
             } else {
-                &row_json[field.name().to_lowercase()]
+                raw_data.get(&field.name().to_lowercase())
             };
 
-            deserializer.de_json(value, format_settings).map_err(|e| {
-                let value_str = format!("{:?}", value);
-                let err_msg = format!("{}. column={} value={}", e, field.name(), value_str);
-                xml_error(&err_msg, path, row_index)
-            })?;
+            if let Some(value) = value {
+                let mut reader = NestedCheckpointReader::new(&**value);
+                if reader.eof().expect("must success") {
+                    deserializer.de_default(format_settings);
+                } else {
+                    if let Err(e) = deserializer.de_text(&mut reader, format_settings) {
+                        let value_str = format!("{:?}", value);
+                        let err_msg = format!("{}. column={} value={}", e, field.name(), value_str);
+                        return Err(xml_error(&err_msg, path, row_index));
+                    };
+                    if reader.must_eof().is_err() {
+                        let value_str = format!("{:?}", value);
+                        let err_msg =
+                            format!("bad field end. column={} value={}", field.name(), value_str);
+                        return Err(xml_error(&err_msg, path, row_index));
+                    }
+                }
+            } else {
+                deserializer.de_default(format_settings);
+            }
         }
-
         Ok(())
     }
 }
@@ -100,7 +114,6 @@ impl InputFormatTextBase for InputFormatXML {
             batch.offset,
         );
         let columns = &mut builder.mutable_columns;
-        let n_column = columns.len();
 
         let mut start = 0usize;
         let start_row = batch.start_row.expect("must be success");
@@ -140,7 +153,7 @@ impl InputFormatTextBase for InputFormatXML {
             start_row: Some(state.rows),
         };
 
-        let mut cols = HashMap::<String, String>::with_capacity(state.num_fields);
+        let mut cols = HashMap::with_capacity(state.num_fields);
 
         let mut key = None;
         let mut row_end = 0usize;
@@ -184,7 +197,7 @@ impl InputFormatTextBase for InputFormatXML {
                                     for attr in attributes {
                                         let key = attr.name.local_name;
                                         let value = attr.value;
-                                        cols.insert(key, value);
+                                        cols.insert(key, value.into_bytes());
                                     }
                                 } else if name_byte.eq(&xml_state.field_tag) {
                                     if attributes.len() > 1 {
@@ -216,7 +229,7 @@ impl InputFormatTextBase for InputFormatXML {
                     }
                     Ok(XmlEvent::Characters(v)) => {
                         if let Some(key) = key.take() {
-                            cols.insert(key, v);
+                            cols.insert(key, v.into_bytes());
                         }
                     }
                     Err(e) => {
@@ -243,8 +256,8 @@ fn xml_error(msg: &str, path: &str, row: usize) -> ErrorCode {
 
 pub struct XmlReaderState {
     // In xml format, this field is represented as a row tag, e.g. <row>...</row>
-    pub row_tag: Vec<u8>,
-    pub field_tag: Vec<u8>,
+    row_tag: Vec<u8>,
+    field_tag: Vec<u8>,
 }
 
 impl XmlReaderState {
