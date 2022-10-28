@@ -137,7 +137,7 @@ pub trait ExpressionOp {
     }
 
     fn lt(&self, other: &Self) -> Result<Expression> {
-        self.binary_op("=", other)
+        self.binary_op("<", other)
     }
 }
 

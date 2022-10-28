@@ -63,6 +63,7 @@ impl RangeFilter {
             })
             .unwrap();
 
+        tracing::debug!("verifiable_expr: {}", verifiable_expr);
         let input_fields = stat_columns
             .iter()
             .map(|c| c.stat_field.clone())

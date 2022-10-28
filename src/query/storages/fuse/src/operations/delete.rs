@@ -152,6 +152,10 @@ impl FuseTable {
     }
 
     fn cluster_stats_gen(&self) -> Result<ClusterStatsGenerator> {
+        if self.cluster_key_meta.is_none() {
+            return Ok(ClusterStatsGenerator::default());
+        }
+
         let input_schema = self.table_info.schema();
         let mut merged = input_schema.fields().clone();
 
