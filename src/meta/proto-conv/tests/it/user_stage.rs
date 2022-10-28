@@ -53,10 +53,10 @@ fn test_user_stage_oss_latest() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_user_stage_fs_v17() -> anyhow::Result<()> {
+fn test_user_stage_fs_v18() -> anyhow::Result<()> {
     // Encoded data of version 17 of user_stage_fs:
     // It is generated with common::test_pb_from_to.
-    let user_stage_fs_v17 = vec![
+    let user_stage_fs_v18 = vec![
         10, 17, 102, 115, 58, 47, 47, 100, 105, 114, 47, 116, 111, 47, 102, 105, 108, 101, 115, 26,
         25, 10, 23, 18, 21, 10, 13, 47, 100, 105, 114, 47, 116, 111, 47, 102, 105, 108, 101, 115,
         160, 6, 16, 168, 6, 1, 34, 20, 8, 1, 16, 128, 8, 26, 1, 124, 34, 2, 47, 47, 40, 2, 160, 6,
@@ -92,7 +92,7 @@ fn test_user_stage_fs_v17() -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    common::test_load_old(func_name!(), user_stage_fs_v17.as_slice(), want)?;
+    common::test_load_old(func_name!(), user_stage_fs_v18.as_slice(), want)?;
 
     Ok(())
 }
@@ -833,6 +833,7 @@ fn test_internal_stage_v17() -> anyhow::Result<()> {
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
+            escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
         },
         copy_options: mt::CopyOptions {
