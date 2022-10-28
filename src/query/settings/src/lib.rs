@@ -250,6 +250,16 @@ impl Settings {
                 possible_values: None,
             },
             SettingValue {
+                default_value: UserSettingValue::String("".to_owned()),
+                user_setting: UserSetting::create(
+                    "format_escape",
+                    UserSettingValue::String("".to_owned()),
+                ),
+                level: ScopeLevel::Session,
+                desc: "format escape char, default value: \"\", which means the format`s default setting.",
+                possible_values: None,
+            },
+            SettingValue {
                 default_value: UserSettingValue::String("\"".to_owned()),
                 user_setting: UserSetting::create(
                     "format_quote_char",
@@ -480,6 +490,12 @@ impl Settings {
 
     pub fn get_format_compression(&self) -> Result<String> {
         let key = "format_compression";
+        self.check_and_get_setting_value(key)
+            .and_then(|v| v.user_setting.value.as_string())
+    }
+
+    pub fn get_format_escape(&self) -> Result<String> {
+        let key = "format_escape";
         self.check_and_get_setting_value(key)
             .and_then(|v| v.user_setting.value.as_string())
     }
