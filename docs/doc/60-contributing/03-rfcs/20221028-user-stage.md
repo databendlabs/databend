@@ -131,3 +131,7 @@ COPY INTO my_table FROM @#my_table;
 ### Cleanup while drop users
 
 Users' stage should be purged while dropping user.
+
+### Garbage Collection for user stage
+
+We can support garbage collection for user stages so that obsoleted files can be removed.
