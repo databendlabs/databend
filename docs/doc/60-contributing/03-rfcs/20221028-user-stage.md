@@ -56,7 +56,7 @@ pub enum StageType {
 }
 ```
 
-Databend will generate a unique prefix for the internal stage, like `stage/`{stage_name}`.
+Databend will generate a unique prefix for the internal stage, like `stage/{stage_name}`.
 
 We will add two new stage types:
 
