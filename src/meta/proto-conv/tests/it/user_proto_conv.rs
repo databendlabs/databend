@@ -664,6 +664,7 @@ pub(crate) fn test_internal_stage_info_v17() -> mt::UserStageInfo {
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
+            escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
         },
         copy_options: mt::CopyOptions {
