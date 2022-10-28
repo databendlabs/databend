@@ -60,7 +60,7 @@ where ExpressionBuilder<T>: FiledNameFormat
                 let name = metadata.column(column_ref.column.index).name();
                 Ok(Expression::IndexedVariable {
                     name: name.to_string(),
-                    data_type:  (*column_ref.column.data_type).clone(),
+                    data_type: (*column_ref.column.data_type).clone(),
                 })
             }
             Scalar::ConstantExpr(constant) => Ok(Expression::Constant {

@@ -16,8 +16,11 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use common_datavalues::format_data_type_sql;
+use common_datavalues::DataSchema;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
+use common_exception::Result;
+use common_planner::Expression;
 
 type ColumnID = String;
 type IndexType = usize;
@@ -75,6 +78,37 @@ impl PhysicalScalar {
                 format_data_type_sql(target)
             ),
             PhysicalScalar::IndexedVariable { display_name, .. } => display_name.clone(),
+        }
+    }
+
+    // todo(sundy)
+    pub fn from_expression(expression: &Expression, schema: &DataSchema) -> Result<Self> {
+        match expression {
+            Expression::IndexedVariable { name, data_type } => todo!(),
+            Expression::Constant { value, data_type } => todo!(),
+            Expression::Function {
+                name,
+                args,
+                return_type,
+            } => todo!(),
+            Expression::Cast { input, target } => todo!(),
+        }
+    }
+
+    pub fn to_expression(&self, schema: &DataSchema) -> Result<Expression> {
+        match self {
+            PhysicalScalar::IndexedVariable {
+                index,
+                data_type,
+                display_name,
+            } => todo!(),
+            PhysicalScalar::Constant { value, data_type } => todo!(),
+            PhysicalScalar::Function {
+                name,
+                args,
+                return_type,
+            } => todo!(),
+            PhysicalScalar::Cast { input, target } => todo!(),
         }
     }
 }
