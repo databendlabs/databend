@@ -74,8 +74,8 @@ pub enum FilterEvalResult {
 impl BlockFilter {
     /// For every applicable column, we will create a filter.
     /// The filter will be stored with field name 'Bloom(column_name)'
-    pub fn build_filter_column(name: &str) -> String {
-        format!("Bloom({})", name)
+    pub fn build_filter_column_name(column_name: &str) -> String {
+        format!("Bloom({})", column_name)
     }
     pub fn build_filter_schema(data_schema: &DataSchema) -> DataSchema {
         let mut filter_fields = vec![];
@@ -83,7 +83,8 @@ impl BlockFilter {
         for field in fields.iter() {
             if Xor8Filter::is_supported_type(field.data_type()) {
                 // create field for applicable ones
-                let column_name = Self::build_filter_column(field.name());
+
+                let column_name = Self::build_filter_column_name(field.name());
                 let filter_field = DataField::new(&column_name, Vu8::to_data_type());
 
                 filter_fields.push(filter_field);
@@ -153,11 +154,11 @@ impl BlockFilter {
 
     pub fn find(
         &self,
-        name: &str,
+        column_name: &str,
         target: DataValue,
         typ: &DataTypeImpl,
     ) -> Result<FilterEvalResult> {
-        let filter_column = Self::build_filter_column(name);
+        let filter_column = Self::build_filter_column_name(column_name);
         if !self.filter_block.schema().has_field(&filter_column)
             || !Xor8Filter::is_supported_type(typ)
             || target.is_null()

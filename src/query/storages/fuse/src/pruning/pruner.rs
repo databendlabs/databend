@@ -125,7 +125,7 @@ pub fn new_filter_pruner(
             // convert to filter column names
             let filter_block_cols = point_query_cols
                 .iter()
-                .map(|c| BlockFilter::build_filter_column(c.as_str()))
+                .map(|n| BlockFilter::build_filter_column_name(&n))
                 .collect();
 
             return Ok(Some(Arc::new(FilterPruner::new(
