@@ -250,6 +250,16 @@ impl Settings {
                 possible_values: None,
             },
             SettingValue {
+                default_value: UserSettingValue::String("".to_owned()),
+                user_setting: UserSetting::create(
+                    "format_escape",
+                    UserSettingValue::String("".to_owned()),
+                ),
+                level: ScopeLevel::Session,
+                desc: "format escape char, default value: \"\", which means the format`s default setting.",
+                possible_values: None,
+            },
+            SettingValue {
                 default_value: UserSettingValue::String("\"".to_owned()),
                 user_setting: UserSetting::create(
                     "format_quote_char",
@@ -336,8 +346,8 @@ impl Settings {
                     UserSettingValue::String("PostgreSQL".to_owned()),
                 ),
                 level: ScopeLevel::Session,
-                desc: "SQL dialect, support \"PostgreSQL\" and \"MySQL\", default value: \"PostgreSQL\".",
-                possible_values: Some(vec!["PostgreSQL", "MySQL"]),
+                desc: "SQL dialect, support \"PostgreSQL\" \"MySQL\" and \"Hive\", default value: \"PostgreSQL\".",
+                possible_values: Some(vec!["PostgreSQL", "MySQL", "Hive"]),
             },
             SettingValue {
                 default_value: UserSettingValue::UInt64(1),
@@ -484,6 +494,12 @@ impl Settings {
             .and_then(|v| v.user_setting.value.as_string())
     }
 
+    pub fn get_format_escape(&self) -> Result<String> {
+        let key = "format_escape";
+        self.check_and_get_setting_value(key)
+            .and_then(|v| v.user_setting.value.as_string())
+    }
+
     pub fn get_format_empty_as_default(&self) -> Result<u64> {
         let key = "format_empty_as_default";
         self.try_get_u64(key)
@@ -594,12 +610,10 @@ impl Settings {
         let key = "sql_dialect";
         self.check_and_get_setting_value(key)
             .and_then(|v| v.user_setting.value.as_string())
-            .map(|v| {
-                if v == "MySQL" {
-                    Dialect::MySQL
-                } else {
-                    Dialect::PostgreSQL
-                }
+            .map(|v| match &*v.to_lowercase() {
+                "mysql" => Dialect::MySQL,
+                "hive" => Dialect::Hive,
+                _ => Dialect::PostgreSQL,
             })
     }
 
