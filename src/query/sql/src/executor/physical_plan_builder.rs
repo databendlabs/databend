@@ -483,6 +483,7 @@ impl PhysicalPlanBuilder {
 
         let projection =
             Self::build_projection(&metadata, table_schema, &scan.columns, has_inner_column);
+        let project_schema = projection.project_schema(table_schema);
 
         let push_down_filters = scan
             .push_down_predicates
@@ -495,7 +496,7 @@ impl PhysicalPlanBuilder {
                         let expression = builder.build(&scalar)?;
                         ExpressionBuilderWithoutRenaming::normalize_schema(
                             &expression,
-                            table_schema.as_ref(),
+                            &project_schema,
                         )
                     })
                     .collect::<Result<Vec<_>>>()
@@ -531,10 +532,8 @@ impl PhysicalPlanBuilder {
 
                 let builder = ExpressionBuilderWithoutRenaming::create(self.metadata.clone());
                 let filter = builder.build(&predicate.unwrap())?;
-                let filter = ExpressionBuilderWithoutRenaming::normalize_schema(
-                    &filter,
-                    table_schema.as_ref(),
-                )?;
+                let filter =
+                    ExpressionBuilderWithoutRenaming::normalize_schema(&filter, &project_schema)?;
 
                 let remain_columns = scan
                     .columns

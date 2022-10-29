@@ -62,7 +62,7 @@ impl Expression {
     /// Display with readable variable name.
     pub fn column_name(&self) -> String {
         match self {
-            Expression::Constant { value, .. } => value.to_string(),
+            Expression::Constant { value, .. } => common_datavalues::format_datavalue_sql(value),
             Expression::Function { name, args, .. } => match name.as_str() {
                 "+" | "-" | "*" | "/" | "%" if args.len() == 2 => {
                     format!(
@@ -73,7 +73,7 @@ impl Expression {
                             .join(name)
                     )
                 }
-                ">=" | "<=" | "=" | ">" | "<" if args.len() == 2 => {
+                ">=" | "<=" | "=" | ">" | "<" | "or" | "and" if args.len() == 2 => {
                     format!(
                         "({} {} {})",
                         args[0].column_name(),
