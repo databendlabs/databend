@@ -165,6 +165,7 @@ pub struct FileFormatOptions {
     pub skip_header: u64,
     pub field_delimiter: String,
     pub record_delimiter: String,
+    pub escape: String,
     pub compression: StageFileCompression,
 }
 
@@ -175,6 +176,7 @@ impl Default for FileFormatOptions {
             record_delimiter: "\n".to_string(),
             field_delimiter: ",".to_string(),
             skip_header: 0,
+            escape: "".to_string(),
             compression: StageFileCompression::default(),
         }
     }

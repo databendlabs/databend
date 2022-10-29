@@ -180,6 +180,8 @@ message UserStageInfo {
     string record_delimiter = 4;
 
     StageFileCompression compression = 5;
+
+    string escape = 6;
   }
 
   message OnErrorMode {

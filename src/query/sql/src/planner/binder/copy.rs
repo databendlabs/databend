@@ -610,6 +610,14 @@ pub fn parse_copy_file_format_options(
             .as_bytes(),
     );
 
+    // Escape
+    let escape = parse_escape_string(
+        file_format_options
+            .get("escape")
+            .unwrap_or(&"".to_string())
+            .as_bytes(),
+    );
+
     // Compression delimiter.
     let compression = parse_escape_string(
         file_format_options
@@ -625,6 +633,7 @@ pub fn parse_copy_file_format_options(
         skip_header,
         field_delimiter,
         record_delimiter,
+        escape,
         compression,
     })
 }
