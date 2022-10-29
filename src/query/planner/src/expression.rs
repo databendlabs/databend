@@ -64,13 +64,21 @@ impl Expression {
         match self {
             Expression::Constant { value, .. } => value.to_string(),
             Expression::Function { name, args, .. } => match name.as_str() {
-                "+" | "-" | "*" | "/" | "%" => {
+                "+" | "-" | "*" | "/" | "%" if args.len() == 2 => {
                     format!(
                         "({})",
                         args.iter()
                             .map(|arg| arg.column_name())
                             .collect::<Vec<_>>()
                             .join(name)
+                    )
+                }
+                ">=" | "<=" | "=" | ">" | "<" if args.len() == 2 => {
+                    format!(
+                        "({} {} {})",
+                        args[0].column_name(),
+                        name,
+                        args[1].column_name()
                     )
                 }
                 _ => {
