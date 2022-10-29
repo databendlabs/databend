@@ -121,6 +121,7 @@ jobs:
       matrix:
         dirs:
           - "base"
+          - "query"
           - "ydb"
           - "crdb"
           - "duckdb"
@@ -139,6 +140,7 @@ jobs:
       matrix:
         dirs:
           - "base"
+          - "query"
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_sqllogic_cluster_linux
