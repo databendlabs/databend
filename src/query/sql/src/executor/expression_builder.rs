@@ -110,7 +110,10 @@ where ExpressionBuilder<T>: FiledNameFormat
     pub fn normalize_schema(expression: &Expression, schema: &DataSchema) -> Result<Expression> {
         match expression {
             Expression::IndexedVariable { name, .. } => {
-                let data_type = schema.field_with_name(name)?.data_type().clone();
+                let data_type = match schema.field_with_name(name) {
+                    Ok(f) => f.data_type().clone(),
+                    Err(_) => return Ok(expression.clone()),
+                };
                 Ok(Expression::IndexedVariable {
                     name: name.clone(),
                     data_type,
