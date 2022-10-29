@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
@@ -101,6 +102,44 @@ where ExpressionBuilder<T>: FiledNameFormat
                 "Unsupported physical scalar: {:?}",
                 scalar
             ))),
+        }
+    }
+
+    // the datatype may be wrong if the expression is push down from the upper node (join)
+    // todo(leisky)
+    pub fn normalize_schema(expression: &Expression, schema: &DataSchema) -> Result<Expression> {
+        match expression {
+            Expression::IndexedVariable { name, .. } => {
+                let data_type = schema.field_with_name(name)?.data_type().clone();
+                Ok(Expression::IndexedVariable {
+                    name: name.clone(),
+                    data_type,
+                })
+            }
+            Expression::Function { name, args, .. } => {
+                let args = args
+                    .iter()
+                    .map(|arg| Self::normalize_schema(arg, schema))
+                    .collect::<Result<Vec<_>>>();
+
+                let args = args?;
+
+                let types = args.iter().map(|arg| arg.data_type()).collect::<Vec<_>>();
+                let types = types.iter().collect::<Vec<_>>();
+                let func = FunctionFactory::instance().get(name, &types)?;
+
+                Ok(Expression::Function {
+                    name: name.clone(),
+                    args,
+                    return_type: func.return_type(),
+                })
+            }
+
+            Expression::Cast { input, target } => Ok(Expression::Cast {
+                input: Box::new(Self::normalize_schema(input.as_ref(), schema)?),
+                target: target.clone(),
+            }),
+            Expression::Constant { .. } => Ok(expression.clone()),
         }
     }
 }

@@ -491,7 +491,13 @@ impl PhysicalPlanBuilder {
                 let builder = ExpressionBuilderWithoutRenaming::create(self.metadata.clone());
                 predicates
                     .into_iter()
-                    .map(|scalar| builder.build(&scalar))
+                    .map(|scalar| {
+                        let expression = builder.build(&scalar)?;
+                        ExpressionBuilderWithoutRenaming::normalize_schema(
+                            &expression,
+                            table_schema.as_ref(),
+                        )
+                    })
                     .collect::<Result<Vec<_>>>()
             })
             .transpose()?;
@@ -525,6 +531,10 @@ impl PhysicalPlanBuilder {
 
                 let builder = ExpressionBuilderWithoutRenaming::create(self.metadata.clone());
                 let filter = builder.build(&predicate.unwrap())?;
+                let filter = ExpressionBuilderWithoutRenaming::normalize_schema(
+                    &filter,
+                    table_schema.as_ref(),
+                )?;
 
                 let remain_columns = scan
                     .columns
