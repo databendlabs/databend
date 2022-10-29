@@ -54,7 +54,7 @@ fn test_user_stage_oss_latest() -> anyhow::Result<()> {
 
 #[test]
 fn test_user_stage_fs_v18() -> anyhow::Result<()> {
-    // Encoded data of version 17 of user_stage_fs:
+    // Encoded data of version 18 of user_stage_fs:
     // It is generated with common::test_pb_from_to.
     let user_stage_fs_v18 = vec![
         10, 17, 102, 115, 58, 47, 47, 100, 105, 114, 47, 116, 111, 47, 102, 105, 108, 101, 115, 26,
