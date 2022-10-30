@@ -134,7 +134,7 @@ async fn test_range_filter() -> Result<()> {
         },
         Test {
             name: "c not like 'ac%'",
-            expr: col("c", Vu8::to_data_type()).binary_op("not_like", &lit("ac%".as_bytes()))?,
+            expr: col("c", Vu8::to_data_type()).binary_op("not like", &lit("ac%".as_bytes()))?,
             expect: true,
             error: "",
         },
@@ -283,28 +283,28 @@ fn test_build_verifiable_function() -> Result<()> {
         },
         Test {
             name: "c not like 'sys\\%'",
-            expr: col("c", Vu8::to_data_type()).binary_op("not_like", &lit("sys\\%".as_bytes()))?,
+            expr: col("c", Vu8::to_data_type()).binary_op("not like", &lit("sys\\%".as_bytes()))?,
             expect: "((min_c != sys%) or (max_c != sys%))",
         },
         Test {
             name: "c not like 'sys\\s'",
-            expr: col("c", Vu8::to_data_type()).binary_op("not_like", &lit("sys\\s".as_bytes()))?,
+            expr: col("c", Vu8::to_data_type()).binary_op("not like", &lit("sys\\s".as_bytes()))?,
             expect: "((min_c != sys\\s) or (max_c != sys\\s))",
         },
         Test {
             name: "c not like 'sys%'",
-            expr: col("c", Vu8::to_data_type()).binary_op("not_like", &lit("sys%".as_bytes()))?,
+            expr: col("c", Vu8::to_data_type()).binary_op("not like", &lit("sys%".as_bytes()))?,
             expect: "((min_c < sys) or (max_c >= syt))",
         },
         Test {
             name: "c not like 'sys%a'",
-            expr: col("c", Vu8::to_data_type()).binary_op("not_like", &lit("sys%a".as_bytes()))?,
+            expr: col("c", Vu8::to_data_type()).binary_op("not like", &lit("sys%a".as_bytes()))?,
             expect: "true",
         },
         Test {
             name: "c not like 0xffffff%",
             expr: col("c", Vu8::to_data_type())
-                .binary_op("not_like", &lit(vec![255u8, 255, 255, 37]))?,
+                .binary_op("not like", &lit(vec![255u8, 255, 255, 37]))?,
             expect: "(min_c < ffffff)",
         },
         Test {
