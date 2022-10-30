@@ -83,7 +83,6 @@ backon = "0.2"
 bumpalo = "3.11.0"
 byteorder = "1.4.3"
 bytes = "1.2.1"
-unicode-segmentation = "1.10.0"
 chrono = "0.4.22"
 chrono-tz = "0.6.3"
 futures = "0.3.24"
@@ -114,6 +113,7 @@ tokio-stream = { version = "0.1.10", features = ["net"] }
 tonic = "0.8.1"
 tracing = "0.1.36"
 typetag = "0.2.3"
+unicode-segmentation = "1.10.0"
 uuid = { version = "1.1.2", features = ["serde", "v4"] }
 
 [dev-dependencies]
