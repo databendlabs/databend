@@ -217,7 +217,7 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
     assert_eq!(vec![DataValue::Int64(3)], stats.max);
 
     // add expression executor.
-    let expr = add(col("a", i64::to_data_type()), lit(1));
+    let expr = add(col("a", i32::to_data_type()), lit(1));
     let eval_node = Evaluator::eval_expression(&expr, &schema)?;
     let func_ctx = FunctionContext::default();
     let result = eval_node.eval(&func_ctx, &blocks)?;

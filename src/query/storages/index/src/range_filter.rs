@@ -139,24 +139,27 @@ pub fn build_verifiable_expr(
         data_type: bool::to_data_type(),
     };
 
-    // TODO: Try to convert `not(is_not_null)` to `is_null`.
     let (exprs, op) = match expr {
         Expression::Constant { .. } => return expr.clone(),
-        Expression::Function { name, args, .. } if args.len() == 2 => {
-            let left = &args[0];
-            let right = &args[1];
-            match name.to_lowercase().as_str() {
-                "and" => {
-                    let left = build_verifiable_expr(left, schema, stat_columns);
-                    let right = build_verifiable_expr(right, schema, stat_columns);
-                    return left.and(&right).unwrap();
+        Expression::Function { name, args, .. } => {
+            if args.len() == 2 {
+                let left = &args[0];
+                let right = &args[1];
+                match name.to_lowercase().as_str() {
+                    "and" => {
+                        let left = build_verifiable_expr(left, schema, stat_columns);
+                        let right = build_verifiable_expr(right, schema, stat_columns);
+                        return left.and(&right).unwrap();
+                    }
+                    "or" => {
+                        let left = build_verifiable_expr(left, schema, stat_columns);
+                        let right = build_verifiable_expr(right, schema, stat_columns);
+                        return left.or(&right).unwrap();
+                    }
+                    _ => (vec![left.clone(), right.clone()], name.clone()),
                 }
-                "or" => {
-                    let left = build_verifiable_expr(left, schema, stat_columns);
-                    let right = build_verifiable_expr(right, schema, stat_columns);
-                    return left.or(&right).unwrap();
-                }
-                _ => (vec![left.clone(), right.clone()], name.clone()),
+            } else {
+                try_convert_is_null(name.to_lowercase().as_str(), args.clone())
             }
         }
         _ => return unhandled,
@@ -178,6 +181,25 @@ fn inverse_operator(op: &str) -> Result<&str> {
         ))),
         _ => Ok(op),
     }
+}
+
+/// Try to convert `not(is_not_null)` to `is_null`.
+fn try_convert_is_null(name: &str, args: Vec<Expression>) -> (Vec<Expression>, String) {
+    // `is null` will be converted to `not(is not null)` in the parser.
+    // we should convert it back to `is null` here.
+    if name == "not" && args.len() == 1 {
+        if let Expression::Function {
+            name: inner_name,
+            args: inner_args,
+            ..
+        } = &args[0]
+        {
+            if inner_name == "is_not_null" {
+                return (inner_args.clone(), String::from("is_null"));
+            }
+        }
+    }
+    (args, String::from(name))
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -322,44 +344,65 @@ impl<'a> VerifiableExprBuilder<'a> {
     ) -> Result<Self> {
         // collect state columns
         // exprs's len must be 2
-        let lhs_cols = RequireColumnsVisitor::collect_columns_from_expr(&exprs[0])?;
-        let rhs_cols = RequireColumnsVisitor::collect_columns_from_expr(&exprs[1])?;
-        let (args, cols, op) = match (lhs_cols.len(), rhs_cols.len()) {
-            (0, 0) => {
-                return Err(ErrorCode::UnknownException(
-                    "Constant expression donot need to be handled",
-                ));
+        let (args, cols, op) = match exprs.len() {
+            1 => {
+                let cols = RequireColumnsVisitor::collect_columns_from_expr(&exprs[0])?;
+                match cols.len() {
+                    1 => (exprs, vec![cols], op),
+                    _ => {
+                        return Err(ErrorCode::UnknownException(
+                            "Multi-column expressions are not currently supported",
+                        ));
+                    }
+                }
             }
-            (_, 0) => (vec![exprs[0].clone(), exprs[1].clone()], vec![lhs_cols], op),
-            (0, _) => {
-                let op = inverse_operator(op)?;
-                (vec![exprs[1].clone(), exprs[0].clone()], vec![rhs_cols], op)
+            2 => {
+                let lhs_cols = RequireColumnsVisitor::collect_columns_from_expr(&exprs[0])?;
+                let rhs_cols = RequireColumnsVisitor::collect_columns_from_expr(&exprs[1])?;
+
+                match (lhs_cols.len(), rhs_cols.len()) {
+                    (0, 0) => {
+                        return Err(ErrorCode::UnknownException(
+                            "Constant expression donot need to be handled",
+                        ));
+                    }
+                    (_, 0) => (vec![exprs[0].clone(), exprs[1].clone()], vec![lhs_cols], op),
+                    (0, _) => {
+                        let op = inverse_operator(op)?;
+                        (vec![exprs[1].clone(), exprs[0].clone()], vec![rhs_cols], op)
+                    }
+                    _ => {
+                        if !lhs_cols.is_disjoint(&rhs_cols) {
+                            return Err(ErrorCode::UnknownException(
+                                "Unsupported condition for left and right have same columns",
+                            ));
+                        }
+
+                        if !matches!(op, "=" | "<" | "<=" | ">" | ">=") {
+                            return Err(ErrorCode::UnknownException(format!(
+                                "Unsupported operator '{:?}' for multi-column expression",
+                                op
+                            )));
+                        }
+
+                        if !check_maybe_monotonic(&exprs[1])? {
+                            return Err(ErrorCode::UnknownException(
+                                "Only support the monotonic expression",
+                            ));
+                        }
+
+                        (
+                            vec![exprs[0].clone(), exprs[1].clone()],
+                            vec![lhs_cols, rhs_cols],
+                            op,
+                        )
+                    }
+                }
             }
             _ => {
-                if !lhs_cols.is_disjoint(&rhs_cols) {
-                    return Err(ErrorCode::UnknownException(
-                        "Unsupported condition for left and right have same columns",
-                    ));
-                }
-
-                if !matches!(op, "=" | "<" | "<=" | ">" | ">=") {
-                    return Err(ErrorCode::UnknownException(format!(
-                        "Unsupported operator '{:?}' for multi-column expression",
-                        op
-                    )));
-                }
-
-                if !check_maybe_monotonic(&exprs[1])? {
-                    return Err(ErrorCode::UnknownException(
-                        "Only support the monotonic expression",
-                    ));
-                }
-
-                (
-                    vec![exprs[0].clone(), exprs[1].clone()],
-                    vec![lhs_cols, rhs_cols],
-                    op,
-                )
+                return Err(ErrorCode::UnknownException(
+                    "Expressions with more than two args are not currently supported",
+                ));
             }
         };
 

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
@@ -21,7 +22,7 @@ use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 
 /// Serializable and desugared representation of `Scalar`.
-#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum Expression {
     IndexedVariable {
         name: String,
@@ -64,16 +65,10 @@ impl Expression {
         match self {
             Expression::Constant { value, .. } => common_datavalues::format_datavalue_sql(value),
             Expression::Function { name, args, .. } => match name.as_str() {
-                "+" | "-" | "*" | "/" | "%" if args.len() == 2 => {
-                    format!(
-                        "({})",
-                        args.iter()
-                            .map(|arg| arg.column_name())
-                            .collect::<Vec<_>>()
-                            .join(name)
-                    )
-                }
-                ">=" | "<=" | "=" | ">" | "<" | "or" | "and" if args.len() == 2 => {
+                "+" | "-" | "*" | "/" | "%" | ">=" | "<=" | "=" | "!=" | ">" | "<" | "or"
+                | "and"
+                    if args.len() == 2 =>
+                {
                     format!(
                         "({} {} {})",
                         args[0].column_name(),
@@ -117,6 +112,36 @@ impl Display for Expression {
                 write!(f, "CAST({} AS {})", input, format_data_type_sql(target))
             }
             Expression::IndexedVariable { name, .. } => write!(f, "${name}"),
+        }
+    }
+}
+
+impl Debug for Expression {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            Expression::Constant { value, .. } => write!(f, "{:#}", value),
+            Expression::Function { name, args, .. } => match name.as_str() {
+                "+" | "-" | "*" | "/" | "%" | ">=" | "<=" | "=" | "!=" | ">" | "<" | "or"
+                | "and"
+                    if args.len() == 2 =>
+                {
+                    write!(f, "({:?} {} {:?})", args[0], name, args[1])
+                }
+                _ => {
+                    write!(f, "{}(", name)?;
+                    for (i, _) in args.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{:?}", args[i])?;
+                    }
+                    write!(f, ")")
+                }
+            },
+            Expression::Cast { input, target } => {
+                write!(f, "cast({:?} as {})", input, format_data_type_sql(target))
+            }
+            Expression::IndexedVariable { name, .. } => write!(f, "{:#}", name),
         }
     }
 }

@@ -241,7 +241,7 @@ fn test_build_verifiable_function() -> Result<()> {
             expr: lit(1)
                 .gt(&neg(col("a", i64::to_data_type())))?
                 .or(&lit(3).gt_eq(&col("b", i32::to_data_type()))?)?,
-            expect: "((min_(negate a) < 1) or (min_b <= 3))",
+            expect: "((min_negate(a) < 1) or (min_b <= 3))",
         },
         Test {
             name: "a = 1 and b != 3",
