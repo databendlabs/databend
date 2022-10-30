@@ -13,6 +13,11 @@
 // limitations under the License.
 
 use common_datavalues::DataSchema;
+use common_datavalues::DataTypeImpl;
+use common_datavalues::DataValue;
+use common_datavalues::NullType;
+use common_datavalues::StringType;
+use common_datavalues::ToDataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
@@ -150,6 +155,8 @@ where ExpressionBuilder<T>: FiledNameFormat
 pub trait ExpressionOp {
     fn binary_op(&self, name: &str, other: &Self) -> Result<Expression>;
 
+    fn unary_op(&self, name: &str) -> Result<Expression>;
+
     fn and(&self, other: &Self) -> Result<Expression> {
         self.binary_op("and", other)
     }
@@ -193,5 +200,128 @@ impl ExpressionOp for Expression {
             args: vec![self.clone(), other.clone()],
             return_type: func.return_type(),
         })
+    }
+
+    fn unary_op(&self, name: &str) -> Result<Expression> {
+        let func = FunctionFactory::instance().get(name, &[&self.data_type()])?;
+
+        Ok(Expression::Function {
+            name: name.to_owned(),
+            args: vec![self.clone()],
+            return_type: func.return_type(),
+        })
+    }
+}
+
+/// Add binary function.
+pub fn add(left: Expression, right: Expression) -> Expression {
+    left.binary_op("+", &right).unwrap()
+}
+
+/// Sub binary function.
+pub fn sub(left: Expression, right: Expression) -> Expression {
+    left.binary_op("-", &right).unwrap()
+}
+
+/// Not.
+pub fn not(other: Expression) -> Expression {
+    other.unary_op("not").unwrap()
+}
+
+// Neg.
+pub fn neg(other: Expression) -> Expression {
+    other.unary_op("negate").unwrap()
+}
+
+/// Mod binary function.
+pub fn modular(left: Expression, right: Expression) -> Expression {
+    left.binary_op("%", &right).unwrap()
+}
+
+/// sum() aggregate function.
+pub fn sum(other: Expression) -> Expression {
+    other.unary_op("sum").unwrap()
+}
+
+/// avg() aggregate function.
+pub fn avg(other: Expression) -> Expression {
+    other.unary_op("avg").unwrap()
+}
+
+pub fn func(name: &str) -> Result<Expression> {
+    let func = FunctionFactory::instance().get(name, &[])?;
+
+    Ok(Expression::Function {
+        name: name.to_owned(),
+        args: vec![],
+        return_type: func.return_type(),
+    })
+}
+
+pub fn col(name: &str, data_type: DataTypeImpl) -> Expression {
+    Expression::IndexedVariable {
+        name: name.to_string(),
+        data_type,
+    }
+}
+
+pub trait Literal {
+    fn to_literal(&self) -> Expression;
+}
+
+impl Literal for &[u8] {
+    fn to_literal(&self) -> Expression {
+        Expression::Constant {
+            value: DataValue::String(self.to_vec()),
+            data_type: *Box::new(StringType::new_impl()),
+        }
+    }
+}
+
+impl Literal for Vec<u8> {
+    fn to_literal(&self) -> Expression {
+        Expression::Constant {
+            value: DataValue::String(self.clone()),
+            data_type: *Box::new(StringType::new_impl()),
+        }
+    }
+}
+
+macro_rules! make_literal {
+    ($TYPE: ty, $SUPER: ident, $SCALAR: ident) => {
+        #[allow(missing_docs)]
+        impl Literal for $TYPE {
+            fn to_literal(&self) -> Expression {
+                Expression::Constant {
+                    value: DataValue::$SCALAR(*self as $SUPER),
+                    data_type: *Box::new($SUPER::to_data_type()),
+                }
+            }
+        }
+    };
+}
+
+make_literal!(bool, bool, Boolean);
+make_literal!(f32, f64, Float64);
+make_literal!(f64, f64, Float64);
+
+make_literal!(i8, i64, Int64);
+make_literal!(i16, i64, Int64);
+make_literal!(i32, i64, Int64);
+make_literal!(i64, i64, Int64);
+
+make_literal!(u8, u64, UInt64);
+make_literal!(u16, u64, UInt64);
+make_literal!(u32, u64, UInt64);
+make_literal!(u64, u64, UInt64);
+
+pub fn lit<T: Literal>(n: T) -> Expression {
+    n.to_literal()
+}
+
+pub fn lit_null() -> Expression {
+    Expression::Constant {
+        value: DataValue::Null,
+        data_type: *Box::new(NullType::new_impl()),
     }
 }

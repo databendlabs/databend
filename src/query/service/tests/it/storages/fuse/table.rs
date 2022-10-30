@@ -22,6 +22,7 @@ use common_planner::plans::AlterTableClusterKeyPlan;
 use common_planner::plans::DropTableClusterKeyPlan;
 use common_planner::ReadDataSourcePlan;
 use common_planner::SourceInfo;
+use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_query::interpreters::AlterTableClusterKeyInterpreter;
 use databend_query::interpreters::CreateTableInterpreterV2;
 use databend_query::interpreters::DropTableClusterKeyInterpreter;
@@ -34,7 +35,6 @@ use databend_query::sql::OPT_KEY_DATABASE_ID;
 use databend_query::sql::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::FuseTable;
-use databend_query::storages::ToReadDataSourcePlan;
 use databend_query::stream::DataBlockStream;
 use futures::TryStreamExt;
 
