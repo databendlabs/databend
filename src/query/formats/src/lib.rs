@@ -14,11 +14,8 @@
 
 mod clickhouse;
 mod file_format_type;
-mod format_factory;
 pub mod output_format;
 pub mod output_format_csv;
 mod output_format_json_each_row;
 mod output_format_parquet;
 mod output_format_values;
-
-pub use format_factory::FormatFactory;

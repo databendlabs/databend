@@ -43,10 +43,6 @@ impl<const TSV: bool, const WITH_NAMES: bool, const WITH_TYPES: bool>
     TCSVOutputFormat<TSV, WITH_NAMES, WITH_TYPES>
 {
     pub fn create(schema: DataSchemaRef, format_settings: FormatSettings) -> Self {
-        let format_settings = FormatSettings {
-            null_bytes: format_settings.null_bytes,
-            ..format_settings
-        };
         Self {
             schema,
             format_settings,
@@ -55,11 +51,7 @@ impl<const TSV: bool, const WITH_NAMES: bool, const WITH_TYPES: bool>
 
     fn serialize_strings(&self, values: Vec<String>, format: &FormatSettings) -> Vec<u8> {
         let mut buf = vec![];
-        let fd = if TSV {
-            FIELD_DELIMITER
-        } else {
-            format.field_delimiter[0]
-        };
+        let fd = format.field_delimiter[0];
 
         for (col_index, v) in values.iter().enumerate() {
             if col_index != 0 {
@@ -68,9 +60,7 @@ impl<const TSV: bool, const WITH_NAMES: bool, const WITH_TYPES: bool>
             if TSV {
                 write_escaped_string(v.as_bytes(), &mut buf, b'\'');
             } else {
-                buf.push(b'\"');
                 write_csv_string(v.as_bytes(), &mut buf, b'\"');
-                buf.push(b'\"');
             };
         }
 
