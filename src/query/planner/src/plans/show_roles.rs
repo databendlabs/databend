@@ -21,6 +21,8 @@ impl ShowRolesPlan {
         DataSchemaRefExt::create(vec![
             DataField::new("name", Vu8::to_data_type()),
             DataField::new("inherited_roles", u64::to_data_type()),
+            DataField::new("is_current", bool::to_data_type()),
+            DataField::new("is_default", bool::to_data_type()),
         ])
     }
 }

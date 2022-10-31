@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ use common_datavalues::prelude::*;
 use common_datavalues::Series;
 use common_exception::Result;
 use common_planner::plans::ShowRolesPlan;
-use common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -48,17 +47,30 @@ impl Interpreter for ShowRolesInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let session = self.ctx.get_current_session();
         let roles = session.get_all_available_roles().await?;
+        let current_role_name = session
+            .get_current_role()
+            .map(|r| r.name)
+            .unwrap_or_default();
+        let default_role_name = session
+            .get_current_user()?
+            .option
+            .default_role()
+            .cloned()
+            .unwrap_or_default();
 
         let names: Vec<&str> = roles.iter().map(|x| x.name.as_str()).collect();
         let inherited_roles: Vec<u64> = roles
             .iter()
             .map(|x| x.grants.roles().len() as u64)
             .collect();
+        let is_currents: Vec<bool> = roles.iter().map(|r| r.name == current_role_name).collect();
+        let is_defaults: Vec<bool> = roles.iter().map(|r| r.name == default_role_name).collect();
 
-        // TODO
         PipelineBuildResult::from_blocks(vec![DataBlock::create(self.plan.schema(), vec![
             Series::from_data(names),
             Series::from_data(inherited_roles),
+            Series::from_data(is_currents),
+            Series::from_data(is_defaults),
         ])])
     }
 }
