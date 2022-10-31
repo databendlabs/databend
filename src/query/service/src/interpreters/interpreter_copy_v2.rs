@@ -16,6 +16,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use common_base::base::GlobalIORuntime;
+use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -42,7 +43,7 @@ use crate::sql::plans::Plan;
 use crate::storages::stage::StageTable;
 
 const MAX_QUERY_COPIED_FILES_NUM: usize = 50;
-
+const TABLE_COPIED_FILE_KEY_EXPIRE_AFTER_DAYS: Option<u64> = Some(7);
 pub struct CopyInterpreterV2 {
     ctx: Arc<QueryContext>,
     plan: CopyPlanV2,
@@ -78,6 +79,7 @@ impl CopyInterpreterV2 {
     }
 
     async fn do_upsert_copied_files_info(
+        expire_at: Option<u64>,
         tenant: String,
         database_name: String,
         table_id: u64,
@@ -87,7 +89,7 @@ impl CopyInterpreterV2 {
         let req = UpsertTableCopiedFileReq {
             table_id,
             file_info: copy_stage_files.clone(),
-            expire_at: None,
+            expire_at,
         };
         catalog
             .upsert_table_copied_file_info(&tenant, &database_name, req)
@@ -191,11 +193,14 @@ impl CopyInterpreterV2 {
             return Ok(());
         }
 
+        let expire_at = TABLE_COPIED_FILE_KEY_EXPIRE_AFTER_DAYS
+            .map(|after_days| after_days * 86400 + Utc::now().timestamp() as u64);
         let mut do_copy_stage_files = BTreeMap::new();
         for (file_name, file_info) in copy_stage_files {
             do_copy_stage_files.insert(file_name.clone(), file_info);
             if do_copy_stage_files.len() > MAX_QUERY_COPIED_FILES_NUM {
                 CopyInterpreterV2::do_upsert_copied_files_info(
+                    expire_at,
                     tenant.clone(),
                     database_name.clone(),
                     table_id,
@@ -207,6 +212,7 @@ impl CopyInterpreterV2 {
         }
         if !do_copy_stage_files.is_empty() {
             CopyInterpreterV2::do_upsert_copied_files_info(
+                expire_at,
                 tenant.clone(),
                 database_name.clone(),
                 table_id,

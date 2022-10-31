@@ -70,7 +70,7 @@ fn test_user_info() -> UserInfo {
 pub(crate) fn test_fs_stage_info() -> mt::UserStageInfo {
     mt::UserStageInfo {
         stage_name: "fs://dir/to/files".to_string(),
-        stage_type: mt::StageType::Internal,
+        stage_type: mt::StageType::LegacyInternal,
         stage_params: mt::StageParams {
             storage: StorageParams::Fs(StorageFsConfig {
                 root: "/dir/to/files".to_string(),
@@ -81,6 +81,7 @@ pub(crate) fn test_fs_stage_info() -> mt::UserStageInfo {
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
+            escape: "\\".to_string(),
             compression: mt::StageFileCompression::Bz2,
         },
         copy_options: mt::CopyOptions {
@@ -116,6 +117,7 @@ pub(crate) fn test_s3_stage_info() -> mt::UserStageInfo {
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
+            escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
         },
         copy_options: mt::CopyOptions {
@@ -153,6 +155,7 @@ pub(crate) fn test_s3_stage_info_v16() -> mt::UserStageInfo {
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
+            escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
         },
         copy_options: mt::CopyOptions {
@@ -190,6 +193,7 @@ pub(crate) fn test_s3_stage_info_v14() -> mt::UserStageInfo {
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
+            escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
         },
         copy_options: mt::CopyOptions {
@@ -223,6 +227,7 @@ pub(crate) fn test_gcs_stage_info() -> mt::UserStageInfo {
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
+            escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
         },
         copy_options: mt::CopyOptions {
@@ -257,6 +262,7 @@ pub(crate) fn test_oss_stage_info() -> mt::UserStageInfo {
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
+            escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
         },
         copy_options: mt::CopyOptions {
@@ -642,4 +648,34 @@ fn test_old_stage_file() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+pub(crate) fn test_internal_stage_info_v17() -> mt::UserStageInfo {
+    mt::UserStageInfo {
+        stage_name: "fs://dir/to/files".to_string(),
+        stage_type: mt::StageType::Internal,
+        stage_params: mt::StageParams {
+            storage: StorageParams::Fs(StorageFsConfig {
+                root: "/dir/to/files".to_string(),
+            }),
+        },
+        file_format_options: mt::FileFormatOptions {
+            format: mt::StageFileFormatType::Json,
+            skip_header: 1024,
+            field_delimiter: "|".to_string(),
+            record_delimiter: "//".to_string(),
+            escape: "".to_string(),
+            compression: mt::StageFileCompression::Bz2,
+        },
+        copy_options: mt::CopyOptions {
+            on_error: mt::OnErrorMode::SkipFileNum(666),
+            size_limit: 1038,
+            split_size: 0,
+            purge: true,
+            single: false,
+            max_file_size: 0,
+        },
+        comment: "test".to_string(),
+        ..Default::default()
+    }
 }
