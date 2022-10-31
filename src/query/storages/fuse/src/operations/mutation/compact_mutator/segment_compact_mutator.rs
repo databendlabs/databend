@@ -31,7 +31,7 @@ use crate::io::TableMetaLocationGenerator;
 use crate::operations::mutation::AbortOperation;
 use crate::operations::CompactOptions;
 use crate::statistics::merge_statistics;
-use crate::statistics::reducers::reduce_block_metas_new;
+use crate::statistics::reducers::reduce_block_metas;
 use crate::FuseTable;
 use crate::TableContext;
 use crate::TableMutator;
@@ -172,12 +172,11 @@ impl TableMutator for SegmentCompactMutator {
         }
 
         // flatten the block metas of segments being compacted
-        let mut blocks_of_new_segments: Vec<&Arc<BlockMeta>> = vec![];
-        for segment in segments_tobe_compacted {
-            for x in &segment.blocks {
-                blocks_of_new_segments.push(x);
-            }
-        }
+        let blocks_of_new_segments: Vec<Arc<BlockMeta>> = segments_tobe_compacted
+            .iter()
+            .flat_map(|v| v.blocks.iter())
+            .cloned()
+            .collect();
 
         // split the block metas into chunks of blocks, with chunk size set to block_per_seg
         let chunk_of_blocks = blocks_of_new_segments.chunks(blocks_per_segment_threshold);
@@ -193,11 +192,9 @@ impl TableMutator for SegmentCompactMutator {
             &segment_info_cache,
         );
         for chunk in chunk_of_blocks {
-            let stats = reduce_block_metas_new(chunk)?;
+            let stats = reduce_block_metas(chunk)?;
             compacted_segment_statistics = merge_statistics(&compacted_segment_statistics, &stats)?;
-            let blocks: Vec<Arc<BlockMeta>> =
-                chunk.iter().map(|block| Clone::clone(*block)).collect();
-            let new_segment = SegmentInfo::new(blocks, stats);
+            let new_segment = SegmentInfo::new(chunk.to_vec(), stats);
             let location = segment_writer.write_segment(new_segment).await?;
             compacted_segment_locations.push(location);
         }

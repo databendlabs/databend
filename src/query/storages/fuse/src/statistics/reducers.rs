@@ -14,7 +14,6 @@
 
 use std::borrow::Borrow;
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use common_datavalues::DataValue;
 use common_exception::Result;
@@ -140,34 +139,6 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(block_metas: &[T]) -> Result<Sta
         .iter()
         .map(|v| &v.borrow().col_stats)
         .collect::<Vec<_>>();
-    let merged_col_stats = reduce_block_statistics(&stats)?;
-
-    Ok(Statistics {
-        row_count,
-        block_count,
-        uncompressed_byte_size,
-        compressed_byte_size,
-        index_size,
-        col_stats: merged_col_stats,
-    })
-}
-
-pub fn reduce_block_metas_new(block_metas: &[&Arc<BlockMeta>]) -> Result<Statistics> {
-    let mut row_count: u64 = 0;
-    let mut block_count: u64 = 0;
-    let mut uncompressed_byte_size: u64 = 0;
-    let mut compressed_byte_size: u64 = 0;
-    let mut index_size: u64 = 0;
-
-    block_metas.iter().for_each(|b| {
-        row_count += b.row_count;
-        block_count += 1;
-        uncompressed_byte_size += b.block_size;
-        compressed_byte_size += b.file_size;
-        index_size += b.bloom_filter_index_size;
-    });
-
-    let stats = block_metas.iter().map(|v| &v.col_stats).collect::<Vec<_>>();
     let merged_col_stats = reduce_block_statistics(&stats)?;
 
     Ok(Statistics {
