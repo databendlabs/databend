@@ -36,12 +36,12 @@ use common_planner::plans::DropUDFPlan;
 use common_planner::plans::DropUserPlan;
 use common_planner::plans::ShowGrantsPlan;
 use common_planner::plans::UseDatabasePlan;
-use common_planner::MetadataRef;
 
 use crate::plans::Plan;
 use crate::plans::RewriteKind;
 use crate::BindContext;
 use crate::ColumnBinding;
+use crate::MetadataRef;
 use crate::NameResolutionContext;
 use crate::Visibility;
 

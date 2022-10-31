@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use chrono_tz::Tz;
+use common_exception::ErrorCode;
+use common_exception::Result;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FormatSettings {
@@ -26,6 +28,7 @@ pub struct FormatSettings {
     pub nan_bytes: Vec<u8>,
     pub inf_bytes: Vec<u8>,
     pub quote_char: u8,
+    pub escape: Option<u8>,
 
     pub csv_null_bytes: Vec<u8>,
     pub tsv_null_bytes: Vec<u8>,
@@ -33,6 +36,30 @@ pub struct FormatSettings {
     pub json_escape_forward_slashes: bool,
 
     pub ident_case_sensitive: bool,
+}
+
+impl FormatSettings {
+    pub fn parse_escape(option: &str, default: Option<u8>) -> Result<Option<u8>> {
+        if option.is_empty() {
+            Ok(default)
+        } else if option.len() > 1 {
+            Err(ErrorCode::InvalidArgument(
+                "escape can only contain one char",
+            ))
+        } else {
+            Ok(Some(option.as_bytes()[0]))
+        }
+    }
+
+    pub fn parse_quote(option: &str) -> Result<u8> {
+        if option.len() != 1 {
+            Err(ErrorCode::InvalidArgument(
+                "quote_char can only contain one char",
+            ))
+        } else {
+            Ok(option.as_bytes()[0])
+        }
+    }
 }
 
 impl Default for FormatSettings {
@@ -53,6 +80,7 @@ impl Default for FormatSettings {
             json_escape_forward_slashes: true,
             ident_case_sensitive: false,
             quote_char: b'\'',
+            escape: Some(b'\\'),
         }
     }
 }

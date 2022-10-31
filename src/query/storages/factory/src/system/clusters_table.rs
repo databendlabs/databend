@@ -14,13 +14,13 @@
 
 use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use common_storages_fuse::TableContext;
 
 use crate::system::SyncOneBlockSystemTable;
 use crate::system::SyncSystemTable;

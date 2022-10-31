@@ -17,13 +17,13 @@ use std::sync::Arc;
 
 use backon::ExponentialBackoff;
 use backon::Retryable;
+use common_catalog::table_context::TableContext;
 use common_datablocks::serialize_data_blocks;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::Statistics as FuseMetaStatistics;
-use common_legacy_planners::PartInfoPtr;
-use common_storages_fuse::TableContext;
+use common_planner::PartInfoPtr;
 use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
 use opendal::Operator;

@@ -22,9 +22,9 @@ use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::Compression;
-use common_legacy_planners::PartInfo;
-use common_legacy_planners::PartInfoPtr;
-use common_legacy_planners::Projection;
+use common_planner::plans::Projection;
+use common_planner::PartInfo;
+use common_planner::PartInfoPtr;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct ColumnMeta {

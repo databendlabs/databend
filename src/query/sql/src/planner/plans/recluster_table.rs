@@ -15,9 +15,9 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
-use common_planner::MetadataRef;
 
 use crate::plans::Scalar;
+use crate::MetadataRef;
 
 #[derive(Clone, Debug)]
 pub struct ReclusterTablePlan {

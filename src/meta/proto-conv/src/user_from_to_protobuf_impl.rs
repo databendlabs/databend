@@ -399,15 +399,17 @@ impl FromToProto for mt::StageType {
     fn from_pb(p: pb::user_stage_info::StageType) -> Result<Self, Incompatible>
     where Self: Sized {
         match p {
-            pb::user_stage_info::StageType::Interval => Ok(mt::StageType::Internal),
+            pb::user_stage_info::StageType::LegacyInternal => Ok(mt::StageType::LegacyInternal),
             pb::user_stage_info::StageType::External => Ok(mt::StageType::External),
+            pb::user_stage_info::StageType::Internal => Ok(mt::StageType::Internal),
         }
     }
 
     fn to_pb(&self) -> Result<pb::user_stage_info::StageType, Incompatible> {
         match *self {
-            mt::StageType::Internal => Ok(pb::user_stage_info::StageType::Interval),
+            mt::StageType::LegacyInternal => Ok(pb::user_stage_info::StageType::LegacyInternal),
             mt::StageType::External => Ok(pb::user_stage_info::StageType::External),
+            mt::StageType::Internal => Ok(pb::user_stage_info::StageType::Internal),
         }
     }
 }
@@ -495,6 +497,7 @@ impl FromToProto for mt::FileFormatOptions {
             skip_header: p.skip_header,
             field_delimiter: p.field_delimiter.clone(),
             record_delimiter: p.record_delimiter,
+            escape: p.escape,
             compression,
         })
     }
@@ -510,6 +513,7 @@ impl FromToProto for mt::FileFormatOptions {
             field_delimiter: self.field_delimiter.clone(),
             record_delimiter: self.record_delimiter.clone(),
             compression,
+            escape: self.escape.clone(),
         })
     }
 }

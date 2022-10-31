@@ -12,14 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Display;
+use std::fmt::Formatter;
+
 use common_datavalues::format_data_type_sql;
+use common_datavalues::DataSchema;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use common_exception::Result;
-use common_planner::IndexType;
-use common_planner::MetadataRef;
+use common_planner::Expression;
 
-use super::ColumnID;
+type ColumnID = String;
+type IndexType = usize;
 
 /// Serializable and desugared representation of `Scalar`.
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -36,7 +40,7 @@ pub enum PhysicalScalar {
     },
     Function {
         name: String,
-        args: Vec<(PhysicalScalar, DataTypeImpl)>,
+        args: Vec<PhysicalScalar>,
         return_type: DataTypeImpl,
     },
 
@@ -57,23 +61,118 @@ impl PhysicalScalar {
     }
 
     /// Display with readable variable name.
-    pub fn pretty_display(&self, _metadata: &MetadataRef) -> Result<String> {
+    pub fn pretty_display(&self) -> String {
         match self {
-            PhysicalScalar::Constant { value, .. } => Ok(value.to_string()),
+            PhysicalScalar::Constant { value, .. } => value.to_string(),
             PhysicalScalar::Function { name, args, .. } => {
                 let args = args
                     .iter()
-                    .map(|(arg, _)| arg.pretty_display(_metadata))
-                    .collect::<Result<Vec<_>>>()?
+                    .map(|arg| arg.pretty_display())
+                    .collect::<Vec<_>>()
                     .join(", ");
-                Ok(format!("{}({})", name, args))
+                format!("{}({})", name, args)
             }
-            PhysicalScalar::Cast { input, target } => Ok(format!(
+            PhysicalScalar::Cast { input, target } => format!(
                 "CAST({} AS {})",
-                input.pretty_display(_metadata)?,
+                input.pretty_display(),
                 format_data_type_sql(target)
-            )),
-            PhysicalScalar::IndexedVariable { display_name, .. } => Ok(display_name.clone()),
+            ),
+            PhysicalScalar::IndexedVariable { display_name, .. } => display_name.clone(),
+        }
+    }
+
+    pub fn from_expression(expression: &Expression, schema: &DataSchema) -> Result<Self> {
+        match expression {
+            Expression::IndexedVariable { name, data_type } => {
+                Ok(PhysicalScalar::IndexedVariable {
+                    index: schema.index_of(name)?,
+                    display_name: name.to_string(),
+                    data_type: data_type.clone(),
+                })
+            }
+            Expression::Constant { value, data_type } => Ok(PhysicalScalar::Constant {
+                value: value.clone(),
+                data_type: data_type.clone(),
+            }),
+            Expression::Function {
+                name,
+                args,
+                return_type,
+            } => {
+                let mut new_args = Vec::with_capacity(args.len());
+                for arg in args.iter() {
+                    let new_arg = Self::from_expression(arg, schema)?;
+                    new_args.push(new_arg);
+                }
+                Ok(PhysicalScalar::Function {
+                    name: name.to_string(),
+                    args: new_args,
+                    return_type: return_type.clone(),
+                })
+            }
+            Expression::Cast { input, target } => Ok(PhysicalScalar::Cast {
+                input: Box::new(Self::from_expression(input, schema)?),
+                target: target.clone(),
+            }),
+        }
+    }
+
+    pub fn to_expression(&self, schema: &DataSchema) -> Result<Expression> {
+        match self {
+            PhysicalScalar::IndexedVariable {
+                index, data_type, ..
+            } => {
+                let name = schema.field(*index);
+                Ok(Expression::IndexedVariable {
+                    data_type: data_type.clone(),
+                    name: name.name().clone(),
+                })
+            }
+            PhysicalScalar::Constant { value, data_type } => Ok(Expression::Constant {
+                value: value.clone(),
+                data_type: data_type.clone(),
+            }),
+            PhysicalScalar::Function {
+                name,
+                args,
+                return_type,
+            } => {
+                let mut new_args = Vec::with_capacity(args.len());
+                for arg in args.iter() {
+                    let new_arg = arg.to_expression(schema)?;
+                    new_args.push(new_arg);
+                }
+                Ok(Expression::Function {
+                    name: name.to_string(),
+                    args: new_args,
+                    return_type: return_type.clone(),
+                })
+            }
+            PhysicalScalar::Cast { input, target } => Ok(Expression::Cast {
+                input: Box::new(input.to_expression(schema)?),
+                target: target.clone(),
+            }),
+        }
+    }
+}
+
+impl Display for PhysicalScalar {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            PhysicalScalar::Constant { value, .. } => write!(f, "{}", value),
+            PhysicalScalar::Function { name, args, .. } => write!(
+                f,
+                "{}({})",
+                name,
+                args.iter()
+                    .map(|arg| format!("{}", arg))
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            ),
+            PhysicalScalar::Cast { input, target } => {
+                write!(f, "CAST({} AS {})", input, format_data_type_sql(target))
+            }
+            PhysicalScalar::IndexedVariable { index, .. } => write!(f, "${index}"),
         }
     }
 }
@@ -86,23 +185,6 @@ pub struct AggregateFunctionDesc {
 
     /// Only used for debugging
     pub arg_indices: Vec<IndexType>,
-}
-
-impl AggregateFunctionDesc {
-    pub fn pretty_display(&self, metadata: &MetadataRef) -> Result<String> {
-        Ok(format!(
-            "{}({})",
-            self.sig.name,
-            self.arg_indices
-                .iter()
-                .map(|&index| {
-                    let column = metadata.read().column(index).clone();
-                    Ok(column.name().to_string())
-                })
-                .collect::<Result<Vec<_>>>()?
-                .join(", ")
-        ))
-    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]

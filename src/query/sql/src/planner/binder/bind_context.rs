@@ -25,13 +25,13 @@ use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::IndexType;
 use parking_lot::RwLock;
 
 use super::AggregateInfo;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::plans::Scalar;
+use crate::IndexType;
 use crate::NameResolutionContext;
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]

@@ -18,7 +18,7 @@ aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontim
 
 
 # do the Data integrity check
-echo "33b1243ecd881e701a1c33cc8d621ecbf9817be006dce8722cfc6dd7ef0637f9 /tmp/ontime_200.csv" | sha256sum --check > /dev/null 2>&1
+echo "d54d63b56af74548bb9310a549c6a4b0b7f4d87fe05cf5aec43db8206600bc44 /tmp/ontime_200.csv" | sha256sum --check > /dev/null 2>&1
 if [ $? -ne 0 ]; then
 	echo "The downloaded dataset has been corrupted, please remove and fetch it again."
 	exit 1

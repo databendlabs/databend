@@ -15,16 +15,17 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
+use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datablocks::SortColumnDescription;
-use common_datavalues::DataSchemaRefExt;
+use common_datavalues::DataField;
 use common_exception::Result;
-use common_legacy_expression::LegacyExpression;
 use common_pipeline_core::Pipeline;
-use common_pipeline_transforms::processors::transforms::ExpressionTransform;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_pipeline_transforms::processors::transforms::TransformSortPartial;
-use common_pipeline_transforms::processors::ExpressionExecutor;
+use common_sql::evaluator::ChunkOperator;
+use common_sql::evaluator::CompoundChunkOperator;
+use common_sql::evaluator::Evaluator;
 
 use crate::io::BlockCompactor;
 use crate::operations::FuseTableSink;
@@ -54,12 +55,14 @@ impl FuseTable {
 
         let cluster_stats_gen =
             self.get_cluster_stats_gen(ctx.clone(), pipeline, 0, block_compactor)?;
-        if !self.cluster_keys.is_empty() {
+
+        let cluster_keys = self.cluster_keys();
+        if !cluster_keys.is_empty() {
             // sort
-            let sort_descs: Vec<SortColumnDescription> = self
-                .cluster_keys
+            let sort_descs: Vec<SortColumnDescription> = cluster_keys
                 .iter()
                 .map(|expr| SortColumnDescription {
+                    // todo(sundy): use index instead
                     column_name: expr.column_name(),
                     asc: true,
                     nulls_first: false,
@@ -111,19 +114,32 @@ impl FuseTable {
         level: i32,
         block_compactor: BlockCompactor,
     ) -> Result<ClusterStatsGenerator> {
-        if self.cluster_keys.is_empty() {
+        let cluster_keys = self.cluster_keys();
+        if cluster_keys.is_empty() {
             return Ok(ClusterStatsGenerator::default());
         }
 
         let input_schema = self.table_info.schema();
         let mut merged = input_schema.fields().clone();
 
-        let mut cluster_key_index = Vec::with_capacity(self.cluster_keys.len());
-        for expr in &self.cluster_keys {
+        let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());
+        let mut extra_key_index = Vec::with_capacity(cluster_keys.len());
+
+        let mut operators = Vec::with_capacity(cluster_keys.len());
+
+        for expr in &cluster_keys {
             let cname = expr.column_name();
+
             let index = match merged.iter().position(|x| x.name() == &cname) {
                 None => {
-                    merged.push(expr.to_data_field(&input_schema)?);
+                    let field = DataField::new(&cname, expr.data_type());
+                    operators.push(ChunkOperator::Map {
+                        eval: Evaluator::eval_expression(expr, &input_schema)?,
+                        name: field.name().to_string(),
+                    });
+                    merged.push(field);
+
+                    extra_key_index.push(merged.len() - 1);
                     merged.len() - 1
                 }
                 Some(idx) => idx,
@@ -131,43 +147,22 @@ impl FuseTable {
             cluster_key_index.push(index);
         }
 
-        let output_schema = DataSchemaRefExt::create(merged);
-
-        let mut expression_executor = None;
-        if output_schema != input_schema {
-            pipeline.add_transform(|transform_input_port, transform_output_port| {
-                ExpressionTransform::try_create(
-                    transform_input_port,
-                    transform_output_port,
-                    input_schema.clone(),
-                    output_schema.clone(),
-                    self.cluster_keys.clone(),
-                    ctx.clone(),
-                )
+        if !operators.is_empty() {
+            let func_ctx = ctx.try_get_function_context()?;
+            pipeline.add_transform(move |input, output| {
+                Ok(CompoundChunkOperator::create(
+                    input,
+                    output,
+                    func_ctx.clone(),
+                    operators.clone(),
+                ))
             })?;
-
-            let exprs: Vec<LegacyExpression> = output_schema
-                .fields()
-                .iter()
-                .map(|f| LegacyExpression::Column(f.name().to_owned()))
-                .collect();
-
-            let executor = ExpressionExecutor::try_create(
-                ctx.clone(),
-                "remove unused columns",
-                output_schema.clone(),
-                input_schema.clone(),
-                exprs,
-                true,
-            )?;
-            executor.validate()?;
-            expression_executor = Some(executor);
         }
 
         Ok(ClusterStatsGenerator::new(
             self.cluster_key_meta.as_ref().unwrap().0,
             cluster_key_index,
-            expression_executor,
+            extra_key_index,
             level,
             block_compactor,
         ))

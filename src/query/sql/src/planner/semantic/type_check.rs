@@ -32,6 +32,7 @@ use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_ast::DisplayError;
 use common_catalog::catalog::CatalogManager;
+use common_catalog::table_context::TableContext;
 use common_datavalues::type_coercion::merge_types;
 use common_datavalues::ArrayType;
 use common_datavalues::DataField;
@@ -53,9 +54,6 @@ use common_functions::is_builtin_function;
 use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::TupleFunction;
-use common_legacy_expression::validate_function_arg;
-use common_planner::MetadataRef;
-use common_storages_fuse::TableContext;
 use common_users::UserApiProvider;
 
 use super::name_resolution::NameResolutionContext;
@@ -79,6 +77,7 @@ use crate::plans::Scalar;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 use crate::BindContext;
+use crate::MetadataRef;
 use crate::ScalarExpr;
 
 /// A helper for type checking.
@@ -1427,7 +1426,8 @@ impl<'a> TypeChecker<'a> {
             outer_columns: rel_prop.outer_columns,
         };
 
-        Ok(Box::new((subquery_expr.into(), *data_type)))
+        let data_type = subquery_expr.data_type();
+        Ok(Box::new((subquery_expr.into(), data_type)))
     }
 
     fn is_rewritable_scalar_function(func_name: &str) -> bool {
@@ -2171,6 +2171,36 @@ impl<'a> TypeChecker<'a> {
                 }),
                 _ => Ok(original_expr.clone()),
             },
+        }
+    }
+}
+
+pub fn validate_function_arg(
+    name: &str,
+    args_len: usize,
+    variadic_arguments: Option<(usize, usize)>,
+    num_arguments: usize,
+) -> Result<()> {
+    match variadic_arguments {
+        Some((start, end)) => {
+            if args_len < start || args_len > end {
+                Err(ErrorCode::NumberArgumentsNotMatch(format!(
+                    "Function `{}` expect to have [{}, {}] arguments, but got {}",
+                    name, start, end, args_len
+                )))
+            } else {
+                Ok(())
+            }
+        }
+        None => {
+            if num_arguments != args_len {
+                Err(ErrorCode::NumberArgumentsNotMatch(format!(
+                    "Function `{}` expect to have {} arguments, but got {}",
+                    name, num_arguments, args_len
+                )))
+            } else {
+                Ok(())
+            }
         }
     }
 }

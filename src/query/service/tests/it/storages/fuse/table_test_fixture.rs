@@ -21,10 +21,10 @@ use common_datablocks::assert_blocks_sorted_eq_with_name;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_legacy_expression::LegacyExpression;
-use common_legacy_planners::Extras;
 use common_meta_app::schema::DatabaseMeta;
+use common_planner::extras::Extras;
 use common_planner::plans::CreateDatabasePlan;
+use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_storage::StorageFsConfig;
 use common_storage::StorageParams;
 use common_storages_fuse::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
@@ -47,7 +47,6 @@ use databend_query::storages::fuse::FUSE_TBL_BLOCK_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SEGMENT_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use databend_query::storages::Table;
-use databend_query::storages::ToReadDataSourcePlan;
 use databend_query::stream::DataBlockStream;
 use databend_query::table_functions::TableArgs;
 use futures::TryStreamExt;
@@ -321,10 +320,7 @@ pub async fn test_drive(
         None => DataValue::Null,
     };
 
-    let tbl_args = Some(vec![
-        LegacyExpression::create_literal(arg_db),
-        LegacyExpression::create_literal(arg_tbl),
-    ]);
+    let tbl_args = Some(vec![arg_db, arg_tbl]);
 
     test_drive_with_args(ctx, tbl_args).await
 }

@@ -16,7 +16,6 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use common_exception::Result;
-use common_planner::IndexType;
 
 use super::ScalarExpr;
 use crate::optimizer::ColumnSet;
@@ -27,6 +26,7 @@ use crate::plans::Operator;
 use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 use crate::plans::Scalar;
+use crate::IndexType;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum JoinType {

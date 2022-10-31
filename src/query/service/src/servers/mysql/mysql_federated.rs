@@ -217,8 +217,13 @@ impl MySQLFederated {
                 None,
             ),
             // mydumper.
+            ("(?i)^(/\\*!80003 SET(.*) \\*/)$", None),
             ("(?i)^(SHOW MASTER STATUS)", None),
             ("(?i)^(SHOW ALL SLAVES STATUS)", None),
+            ("(?i)^(LOCK BINLOG FOR BACKUP)", None),
+            ("(?i)^(LOCK TABLES FOR BACKUP)", None),
+            ("(?i)^(UNLOCK BINLOG(.*))", None),
+            ("(?i)^(/\\*!40101 SET(.*) \\*/)$", None),
             // DBeaver.
             ("(?i)^(SHOW WARNINGS)", None),
             ("(?i)^(/\\* ApplicationName=(.*)SHOW WARNINGS)", None),

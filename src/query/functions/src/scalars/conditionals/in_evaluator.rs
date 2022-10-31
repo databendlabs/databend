@@ -21,9 +21,9 @@ use common_datavalues::type_coercion::numerical_coercion;
 use common_datavalues::with_match_physical_primitive_type;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_hashtable::HashSetWithStackMemory;
-use common_hashtable::HashTableKeyable;
+use common_hashtable::HashtableKeyable;
 use common_hashtable::KeysRef;
+use common_hashtable::StackHashSet;
 
 use crate::scalars::default_column_cast;
 use crate::scalars::AlwaysNullFunction;
@@ -31,10 +31,10 @@ use crate::scalars::Function;
 use crate::scalars::FunctionContext;
 
 #[derive(Clone)]
-pub struct InEvaluatorImpl<const NEGATED: bool, S: Scalar + Clone, Key: HashTableKeyable + Clone> {
+pub struct InEvaluatorImpl<const NEGATED: bool, S: Scalar + Clone, Key: HashtableKeyable + Clone> {
     input_type: DataTypeImpl,
     nonull_least_super_dt: DataTypeImpl,
-    set: Arc<HashSetWithStackMemory<64, Key>>,
+    set: Arc<StackHashSet<Key, 64>>,
     _col: ColumnRef,
     _s: PhantomData<S>,
 }
@@ -114,7 +114,7 @@ pub fn create_by_values<const NEGATED: bool>(
 impl<const NEGATED: bool, S, Key> Function for InEvaluatorImpl<NEGATED, S, Key>
 where
     S: Scalar<KeyType = Key> + Sync + Send + Clone,
-    Key: HashTableKeyable + Clone + 'static + Sync + Send,
+    Key: HashtableKeyable + Clone + 'static + Sync + Send,
 {
     fn name(&self) -> &str {
         if NEGATED { "NOT IN" } else { "IN" }
@@ -164,7 +164,7 @@ where
 impl<const NEGATED: bool, S, Key> InEvaluatorImpl<NEGATED, S, Key>
 where
     S: Scalar<KeyType = Key> + Clone + Sync + Send,
-    Key: HashTableKeyable + Clone + Send + Sync + 'static,
+    Key: HashtableKeyable + Clone + Send + Sync + 'static,
 {
     fn try_create(
         input_type: DataTypeImpl,
@@ -175,10 +175,9 @@ where
         let col = col.convert_full_column();
         let c = Series::check_get_scalar::<S>(&col)?;
 
-        let mut set = HashSetWithStackMemory::with_capacity(c.len());
-        let mut inserted = false;
+        let mut set = StackHashSet::with_capacity(c.len());
         for data in c.scalar_iter() {
-            set.insert_key(&data.to_key(), &mut inserted);
+            let _ = set.set_insert(data.to_key());
         }
         Ok(Box::new(Self {
             input_type,
@@ -213,7 +212,7 @@ where
 impl<const NEGATED: bool, S, Key> fmt::Display for InEvaluatorImpl<NEGATED, S, Key>
 where
     S: Clone + Scalar<KeyType = Key> + Sync + Send,
-    Key: HashTableKeyable + Clone + Send + Sync + 'static,
+    Key: HashtableKeyable + Clone + Send + Sync + 'static,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if NEGATED {
