@@ -285,11 +285,7 @@ impl HashJoinState for JoinHashTable {
             )?]);
         }
 
-        let probe_block = DataBlock::concat_blocks(blocks)?;
-        // Get build block
-        let build_indexes = self.hash_join_desc.right_join_desc.build_indexes.read();
-        let build_block = self.row_space.gather(&build_indexes)?;
-        let input_block = self.merge_eq_block(&build_block, &probe_block)?;
+        let input_block = self.rest_block_for_right_join(blocks)?;
 
         if unmatched_build_indexes.is_empty() && self.hash_join_desc.other_predicate.is_none() {
             return Ok(vec![input_block]);
@@ -356,11 +352,7 @@ impl HashJoinState for JoinHashTable {
             return Ok(vec![]);
         }
 
-        let probe_block = DataBlock::concat_blocks(blocks)?;
-        // Get build block
-        let build_indexes = self.hash_join_desc.right_join_desc.build_indexes.read();
-        let build_block = self.row_space.gather(&build_indexes)?;
-        let input_block = self.merge_eq_block(&build_block, &probe_block)?;
+        let input_block = self.rest_block_for_right_join(blocks)?;
 
         let probe_fields_len = self.probe_schema.fields().len();
         let build_columns = input_block.columns()[probe_fields_len..].to_vec();
