@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,25 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// https://github.com/rust-lang/rust-clippy/issues/8334
-#![allow(clippy::ptr_arg)]
-#![feature(can_vector)]
-#![feature(read_buf)]
-#![feature(slice_internals)]
-#![feature(maybe_uninit_slice)]
-#![feature(new_uninit)]
-
-pub mod consts;
-pub mod format_diagnostic;
-pub mod prelude;
-
-mod binary_read;
-mod binary_write;
-
-mod buffer;
-mod file_split;
-mod format_settings;
-mod options_deserializer;
-mod position;
-mod stat_buffer;
-mod utils;
+pub const TRUE_BYTES_LOWER: &str = "true";
+pub const FALSE_BYTES_LOWER: &str = "false";
+pub const TRUE_BYTES_NUM: &str = "1";
+pub const FALSE_BYTES_NUM: &str = "0";
+pub const NULL_BYTES_UPPER: &str = "NULL";
+pub const NULL_BYTES_LOWER: &str = "null";
+pub const NULL_BYTES_ESCAPE: &str = "\\N";
+pub const NAN_BYTES_LOWER: &str = "nan";
+pub const INF_BYTES_LOWER: &str = "inf";

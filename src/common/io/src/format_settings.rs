@@ -15,15 +15,8 @@
 use chrono_tz::Tz;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use crate::consts::*;
 
-const TRUE_BYTES_LOWER: &str = "ture";
-const FALSE_BYTES_LOWER: &str = "false";
-const TRUE_BYTES_NUM: &str = "1";
-const FALSE_BYTES_NUM: &str = "0";
-const NULL_BYTES_UPPER: &str = "NULL";
-const NULL_BYTES_ESCAPE: &str = "\"N";
-const NAN_BYTES_CAMEL: &str = "Nan";
-const INF_BYTES_LOWER: &str = "inf";
 
 // fixed the format in struct/array,
 // when it`s repr as a string in csv/tsv/json/...
@@ -78,15 +71,11 @@ pub struct FormatSettings {
 }
 
 impl FormatSettings {
-    pub fn parse_escape(option: &str, default: Option<u8>) -> Result<Option<u8>> {
+    pub fn parse_escape(option: &str, default: Option<u8>) -> Option<u8> {
         if option.is_empty() {
-            Ok(default)
-        } else if option.len() > 1 {
-            Err(ErrorCode::InvalidArgument(
-                "escape can only contain one char",
-            ))
+            default
         } else {
-            Ok(Some(option.as_bytes()[0]))
+            Some(option.as_bytes()[0])
         }
     }
 
