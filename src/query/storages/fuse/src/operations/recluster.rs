@@ -70,7 +70,7 @@ impl FuseTable {
         .await?;
 
         let default_cluster_key_id = self.cluster_key_meta.clone().unwrap().0;
-        let mut blocks_map: BTreeMap<i32, Vec<(usize, BlockMeta)>> = BTreeMap::new();
+        let mut blocks_map: BTreeMap<i32, Vec<(usize, Arc<BlockMeta>)>> = BTreeMap::new();
         block_metas.iter().for_each(|(idx, b)| {
             if let Some(stats) = &b.cluster_stats {
                 if stats.cluster_key_id == default_cluster_key_id && stats.level >= 0 {

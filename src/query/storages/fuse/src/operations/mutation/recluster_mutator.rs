@@ -41,8 +41,8 @@ static MAX_BLOCK_COUNT: usize = 50;
 #[derive(Clone)]
 pub struct ReclusterMutator {
     base_mutator: BaseMutator,
-    blocks_map: BTreeMap<i32, Vec<(usize, BlockMeta)>>,
-    selected_blocks: Vec<BlockMeta>,
+    blocks_map: BTreeMap<i32, Vec<(usize, Arc<BlockMeta>)>>,
+    selected_blocks: Vec<Arc<BlockMeta>>,
     level: i32,
     block_compactor: BlockCompactor,
     threshold: f64,
@@ -55,7 +55,7 @@ impl ReclusterMutator {
         base_snapshot: Arc<TableSnapshot>,
         threshold: f64,
         block_compactor: BlockCompactor,
-        blocks_map: BTreeMap<i32, Vec<(usize, BlockMeta)>>,
+        blocks_map: BTreeMap<i32, Vec<(usize, Arc<BlockMeta>)>>,
         data_accessor: Operator,
     ) -> Result<Self> {
         let base_mutator =
@@ -74,7 +74,7 @@ impl ReclusterMutator {
         self.base_mutator.base_snapshot.summary.block_count as usize
     }
 
-    pub fn selected_blocks(&self) -> Vec<BlockMeta> {
+    pub fn selected_blocks(&self) -> Vec<Arc<BlockMeta>> {
         self.selected_blocks.clone()
     }
 
