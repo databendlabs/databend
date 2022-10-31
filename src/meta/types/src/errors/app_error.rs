@@ -28,6 +28,36 @@ pub trait AppErrorMessage: Display {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("CreateCatalogWithDropTime: `{ctl_name}` with drop_on")]
+pub struct CreateCatalogWithDropTime {
+    ctl_name: String,
+}
+
+impl CreateCatalogWithDropTime {
+    pub fn new(ctl_name: impl Into<String>) -> Self {
+        Self {
+            ctl_name: ctl_name.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("CatalogAlreadyExists: `{ctl_name}` while `{context}`")]
+pub struct CatalogAlreadyExists {
+    ctl_name: String,
+    context: String,
+}
+
+impl CatalogAlreadyExists {
+    pub fn new(ctl_name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            ctl_name: ctl_name.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("DatabaseAlreadyExists: `{db_name}` while `{context}`")]
 pub struct DatabaseAlreadyExists {
     db_name: String,
@@ -457,6 +487,12 @@ pub enum AppError {
     UndropTableHasNoHistory(#[from] UndropTableHasNoHistory),
 
     #[error(transparent)]
+    CreateCatalogWithDropTime(#[from] CreateCatalogWithDropTime),
+
+    #[error(transparent)]
+    CatalogAlreadyExists(#[from] CatalogAlreadyExists),
+
+    #[error(transparent)]
     DatabaseAlreadyExists(#[from] DatabaseAlreadyExists),
 
     #[error(transparent)]
@@ -536,6 +572,18 @@ impl AppErrorMessage for CreateDatabaseWithDropTime {
 impl AppErrorMessage for UndropDbHasNoHistory {
     fn message(&self) -> String {
         format!("Undrop database '{}' has no id history", self.db_name)
+    }
+}
+
+impl AppErrorMessage for CreateCatalogWithDropTime {
+    fn message(&self) -> String {
+        format!("Create catalog '{}' with drop time", self.ctl_name)
+    }
+}
+
+impl AppErrorMessage for CatalogAlreadyExists {
+    fn message(&self) -> String {
+        format!("Catalog '{}' already exists", self.ctl_name)
     }
 }
 
@@ -726,6 +774,10 @@ impl From<AppError> for ErrorCode {
             }
             AppError::WrongShare(err) => ErrorCode::WrongShare(err.message()),
             AppError::TxnRetryMaxTimes(err) => ErrorCode::TxnRetryMaxTimes(err.message()),
+            AppError::CreateCatalogWithDropTime(err) => {
+                ErrorCode::CreateCatalogWithDropTime(err.message())
+            }
+            AppError::CatalogAlreadyExists(err) => ErrorCode::CatalogAlreadyExists(err.message()),
         }
     }
 }

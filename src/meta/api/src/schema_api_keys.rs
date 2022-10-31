@@ -14,6 +14,10 @@
 
 //! Defines structured keys used by SchemaApi
 
+use common_meta_app::schema::CatalogId;
+use common_meta_app::schema::CatalogIdListKey;
+use common_meta_app::schema::CatalogIdToName;
+use common_meta_app::schema::CatalogNameIdent;
 use common_meta_app::schema::CountTablesKey;
 use common_meta_app::schema::DBIdTableName;
 use common_meta_app::schema::DatabaseId;
@@ -36,6 +40,10 @@ use crate::kv_api_key;
 use crate::KVApiKey;
 use crate::KVApiKeyError;
 
+const PREFIX_CATALOG: &str = "__fd_catalog";
+const PREFIX_CATALOG_BY_ID: &str = "__fd_catalog_by_id";
+const PREFIX_CATALOG_ID_LIST: &str = "__fd_catalog_id_list";
+const PREFIX_CATALOG_ID_TO_NAME: &str = "__fd_catalog_id_to_name";
 const PREFIX_DATABASE: &str = "__fd_database";
 const PREFIX_DATABASE_BY_ID: &str = "__fd_database_by_id";
 const PREFIX_DB_ID_LIST: &str = "__fd_db_id_list";
@@ -50,6 +58,101 @@ const PREFIX_TABLE_COPIED_FILES_LOCK: &str = "__fd_table_copied_file_lock";
 
 pub(crate) const ID_GEN_TABLE: &str = "table_id";
 pub(crate) const ID_GEN_DATABASE: &str = "database_id";
+pub(crate) const ID_GEN_CATALOG: &str = "catalog_id";
+
+/// __fd_catalog/<tenant>/<ctl_name> -> <ctl_id>
+impl KVApiKey for CatalogNameIdent {
+    const PREFIX: &'static str = PREFIX_CATALOG;
+
+    fn to_key(&self) -> String {
+        format!("{}/{}", self.tenant, self.ctl_name)
+    }
+
+    fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
+        let mut elts = s.split('/');
+        let prefix = check_segment_present(elts.next(), 0, s)?;
+        check_segment(prefix, 0, Self::PREFIX)?;
+
+        let tenant = check_segment_present(elts.next(), 1, s)?;
+        let ctl_name = check_segment_present(elts.next(), 2, s)?;
+
+        check_segment_absent(elts.next(), 3, s)?;
+
+        let tenant = unescape(tenant)?;
+        let ctl_name = unescape(ctl_name)?;
+
+        Ok(CatalogNameIdent { tenant, ctl_name })
+    }
+}
+
+/// __fd_catalog_by_id/<ctl_id>
+impl KVApiKey for CatalogId {
+    const PREFIX: &'static str = PREFIX_CATALOG_BY_ID;
+
+    fn to_key(&self) -> String {
+        format!("{}/{}", Self::PREFIX, self.ctl_id)
+    }
+
+    fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
+        let mut elts = s.split('/');
+        let prefix = check_segment_present(elts.next(), 0, s)?;
+        check_segment(prefix, 0, Self::PREFIX)?;
+
+        let ctl_id = check_segment_present(elts.next(), 1, s)?;
+        check_segment_absent(elts.next(), 2, s)?;
+
+        let ctl_id = decode_id(ctl_id)?;
+
+        Ok(CatalogId { ctl_id })
+    }
+}
+
+/// __fd_catalog_id_list/<tenant>/<ctl_name> -> ctl_id_list
+impl KVApiKey for CatalogIdListKey {
+    const PREFIX: &'static str = PREFIX_CATALOG_ID_LIST;
+
+    fn to_key(&self) -> String {
+        format!("{}/{}", self.tenant, self.ctl_name)
+    }
+
+    fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
+        let mut elts = s.split('/');
+        let prefix = check_segment_present(elts.next(), 0, s)?;
+        check_segment(prefix, 0, Self::PREFIX)?;
+
+        let tenant = check_segment_present(elts.next(), 1, s)?;
+        let ctl_name = check_segment_present(elts.next(), 2, s)?;
+
+        check_segment_absent(elts.next(), 3, s)?;
+
+        let tenant = unescape(tenant)?;
+        let ctl_name = unescape(ctl_name)?;
+
+        Ok(CatalogIdListKey { tenant, ctl_name })
+    }
+}
+
+/// __fd_catalog_id_to_name/<db_id> -> CatalogNameIdent
+impl KVApiKey for CatalogIdToName {
+    const PREFIX: &'static str = PREFIX_CATALOG_ID_TO_NAME;
+
+    fn to_key(&self) -> String {
+        format!("{}/{}", Self::PREFIX, self.ctl_id)
+    }
+
+    fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
+        let mut elts = s.split('/');
+        let prefix = check_segment_present(elts.next(), 0, s)?;
+        check_segment(prefix, 0, Self::PREFIX)?;
+
+        let ctl_id = check_segment_present(elts.next(), 1, s)?;
+        check_segment_absent(elts.next(), 2, s)?;
+
+        let ctl_id = decode_id(ctl_id)?;
+
+        Ok(CatalogIdToName { ctl_id })
+    }
+}
 
 /// __fd_database/<tenant>/<db_name> -> <db_id>
 impl KVApiKey for DatabaseNameIdent {

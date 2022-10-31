@@ -1,0 +1,63 @@
+// Copyright 2022 Datafuse Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// The identifier of a database by name. Names can be changed.
+// There is no guarantee that two get-database request by name will return the
+// same instance.
+
+syntax = "proto3";
+
+package databend_proto;
+
+message CatalogNameIdent {
+  uint64 ver = 100;
+  uint64 min_compatible = 101;
+
+  // The user this catalog belongs to
+  string tenant = 1;
+
+  // catalog name
+  string ctl_name = 2;
+}
+
+message CatalogMeta {
+  uint64 ver = 100;
+  uint64 min_compatible = 101;
+
+  // catalog type
+  string catalog_type=1;
+
+  // catalog options
+  map<string, string> options =2;
+
+  // the time catalog created
+  string created_on = 20;
+
+  // the time catalog dropped
+  optional string dropped_on = 21;
+}
+
+message CatalogIdList {
+  uint64 ver = 100;
+  uint64 min_compatible = 101;
+
+  repeated uint64 ids = 1;
+}
+
+message CatalogType {
+  uint64 ver = 100;
+  uint64 min_compatible = 101;
+
+  uint32 ctl_type = 1;
+}

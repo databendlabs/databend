@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
+use common_meta_app::schema::CreateCatalogReply;
+use common_meta_app::schema::CreateCatalogReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateTableReply;
@@ -59,7 +61,10 @@ use common_meta_types::MetaId;
 /// SchemaApi defines APIs that provides schema storage, such as database, table.
 #[async_trait::async_trait]
 pub trait SchemaApi: Send + Sync {
-    // TODO(ClSlaid): catalog API
+    // catalog API
+
+    async fn create_catalog(&self, req: CreateCatalogReq)
+    -> Result<CreateCatalogReply, KVAppError>;
 
     // database
 

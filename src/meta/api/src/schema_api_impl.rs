@@ -19,9 +19,15 @@ use std::sync::Arc;
 
 use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Utc;
+use common_meta_app::schema::CatalogId;
+use common_meta_app::schema::CatalogIdList;
+use common_meta_app::schema::CatalogIdListKey;
+use common_meta_app::schema::CatalogIdToName;
 use common_meta_app::schema::CountTablesKey;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
+use common_meta_app::schema::CreateCatalogReply;
+use common_meta_app::schema::CreateCatalogReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateTableReply;
@@ -78,6 +84,8 @@ use common_meta_app::share::ShareGrantObjectPrivilege;
 use common_meta_app::share::ShareId;
 use common_meta_app::share::ShareNameIdent;
 use common_meta_types::errors::app_error::AppError;
+use common_meta_types::errors::app_error::CatalogAlreadyExists;
+use common_meta_types::errors::app_error::CreateCatalogWithDropTime;
 use common_meta_types::errors::app_error::CreateDatabaseWithDropTime;
 use common_meta_types::errors::app_error::CreateTableWithDropTime;
 use common_meta_types::errors::app_error::DatabaseAlreadyExists;
@@ -145,6 +153,112 @@ const DEFAULT_DATA_RETENTION_SECONDS: i64 = 24 * 60 * 60;
 /// Thus every type that impl KVApi impls SchemaApi.
 #[tonic::async_trait]
 impl<KV: KVApi> SchemaApi for KV {
+    #[tracing::instrument(level = "debug", ret, err, skip_all)]
+    async fn create_catalog(
+        &self,
+        req: CreateCatalogReq,
+    ) -> Result<CreateCatalogReply, KVAppError> {
+        debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
+        let name_key = &req.name_ident;
+        if req.meta.dropped_on.is_some() {
+            return Err(KVAppError::AppError(AppError::CreateCatalogWithDropTime(
+                CreateCatalogWithDropTime::new(&name_key.ctl_name),
+            )));
+        }
+
+        let mut retry = 0;
+        while retry < TXN_MAX_RETRY_TIMES {
+            retry += 1;
+            let (ctl_id_seq, ctl_id) = get_u64_value(self, name_key).await?;
+            debug!(ctl_id_seq, ctl_id, ?name_key, "get_catalog");
+
+            if ctl_id_seq > 0 {
+                return if req.if_not_exists {
+                    Ok(CreateCatalogReply { ctl_id })
+                } else {
+                    Err(KVAppError::AppError(AppError::CatalogAlreadyExists(
+                        CatalogAlreadyExists::new(
+                            &name_key.ctl_name,
+                            format!("create catalog: tenant: {}", name_key.tenant),
+                        ),
+                    )))
+                };
+            }
+
+            // get ctl id list from _fd_ctl_id_list/ctl_id
+            let ctl_id_list_key = CatalogIdListKey {
+                tenant: name_key.tenant.clone(),
+                ctl_name: name_key.ctl_name.clone(),
+            };
+
+            let (ctl_id_list_seq, ctl_id_list_opt) =
+                get_struct_value(self, &ctl_id_list_key).await?;
+
+            let mut ctl_id_list = if ctl_id_list_seq == 0 {
+                CatalogIdList::new()
+            } else {
+                match ctl_id_list_opt {
+                    Some(list) => list,
+                    None => CatalogIdList::new(),
+                }
+            };
+
+            // Create Catalog, insert records:
+            // (tenant, ctl_name) -> ctl_id
+            // (ctl_id) -> ctl_meta
+            // append ctl_id into _fd_catalog_id_list/<tenant>/<ctl_name>
+            // (ctl_id) -> (tenant, ctl_name)
+
+            let ctl_id = fetch_id(self, IdGenerator::catalog_id()).await?;
+            let id_key = CatalogId { ctl_id };
+            let id_to_name_key = CatalogIdToName { ctl_id };
+
+            debug!(ctl_id, name_key = debug(&name_key), "new catalog id");
+
+            {
+                // append ctl_id into ctl_id_list
+                ctl_id_list.append(ctl_id);
+
+                let mut condition = vec![
+                    txn_cond_seq(name_key, Eq, 0),
+                    txn_cond_seq(&id_to_name_key, Eq, 0),
+                    txn_cond_seq(&ctl_id_list_key, Eq, ctl_id_list_seq),
+                ];
+
+                let mut if_then = vec![
+                    txn_op_put(name_key, serialize_u64(ctl_id)?),
+                    txn_op_put(&id_key, serialize_struct(&req.meta)?),
+                    txn_op_put(&ctl_id_list_key, serialize_struct(&ctl_id_list_key)?),
+                    txn_op_put(&id_to_name_key, serialize_struct(name_key)?),
+                ];
+
+                let txn_req = TxnRequest {
+                    condition,
+                    if_then,
+                    else_then: vec![],
+                };
+
+                let (succ, _response) = send_txn(self, txn_req).await?;
+
+                debug!(
+                    name = debug(&name_key),
+                    id = debug(&id_key),
+                    succ = display(succ),
+                    "create_catalog"
+                );
+
+                if succ {
+                    return Ok(CreateCatalogReply { ctl_id });
+                }
+            }
+        }
+
+        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
+            TxnRetryMaxTimes::new("create_catalog", TXN_MAX_RETRY_TIMES),
+        )))
+    }
+
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
     async fn create_database(
         &self,

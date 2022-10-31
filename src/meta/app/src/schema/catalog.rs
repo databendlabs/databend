@@ -207,12 +207,12 @@ impl CatalogIdList {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct CatalogIdToName {
-    pub db_id: u64,
+    pub ctl_id: u64,
 }
 
 impl Display for CatalogIdToName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.db_id)
+        write!(f, "{}", self.ctl_id)
     }
 }
 
@@ -225,5 +225,16 @@ pub struct CatalogIdListKey {
 impl Display for CatalogIdListKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "'{}'/'{}'", self.tenant, self.ctl_name)
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+pub struct CatalogId {
+    pub ctl_id: u64,
+}
+
+impl Display for CatalogId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.ctl_id)
     }
 }

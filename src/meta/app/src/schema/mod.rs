@@ -18,6 +18,7 @@ mod catalog;
 mod database;
 mod table;
 
+pub use catalog::CatalogId;
 pub use catalog::CatalogIdList;
 pub use catalog::CatalogIdListKey;
 pub use catalog::CatalogIdToName;

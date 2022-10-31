@@ -15,6 +15,7 @@
 use crate::kv_api_key::check_segment;
 use crate::kv_api_key::check_segment_absent;
 use crate::kv_api_key::check_segment_present;
+use crate::schema_api_keys::ID_GEN_CATALOG;
 use crate::schema_api_keys::ID_GEN_DATABASE;
 use crate::schema_api_keys::ID_GEN_TABLE;
 use crate::share_api_keys::ID_GEN_SHARE;
@@ -45,6 +46,13 @@ impl IdGenerator {
     pub fn database_id() -> Self {
         Self {
             resource: ID_GEN_DATABASE.to_string(),
+        }
+    }
+
+    /// Create a key for generating catalog id with KVApi
+    pub fn catalog_id() -> Self {
+        Self {
+            resource: ID_GEN_CATALOG.to_string(),
         }
     }
 
@@ -101,6 +109,16 @@ mod t {
             let g = IdGenerator::database_id();
             let k = g.to_key();
             assert_eq!("__fd_id_gen/database_id", k);
+
+            let t2 = IdGenerator::from_key(&k)?;
+            assert_eq!(g, t2);
+        }
+
+        // Catalog id generator
+        {
+            let g = IdGenerator::catalog_id();
+            let k = g.to_key();
+            assert_eq!("__fd_id_gen/catalog_id", k);
 
             let t2 = IdGenerator::from_key(&k)?;
             assert_eq!(g, t2);
