@@ -655,6 +655,8 @@ pub enum TokenKind {
     STRING,
     #[token("SUBSTRING", ignore(ascii_case))]
     SUBSTRING,
+    #[token("SUBSTR", ignore(ascii_case))]
+    SUBSTR,
     #[token("SEMI", ignore(ascii_case))]
     SEMI,
     #[token("TABLE", ignore(ascii_case))]
@@ -902,6 +904,7 @@ impl TokenKind {
             | TokenKind::SMALLINT
             | TokenKind::SOME
             | TokenKind::SUBSTRING
+            | TokenKind::SUBSTR
             // | TokenKind::SYMMETRIC
             | TokenKind::TABLE
             | TokenKind::THEN
