@@ -210,9 +210,7 @@ impl Session {
         self.session_ctx.set_current_user(user);
     }
 
-    // Call this function on establishing connections.
-    // if both current_role and user's current role is not set or not found, defaults as the PUBLIC
-    // role
+    // Call this method after authentication (after set_current_user() and set_auth_role() get called).
     pub async fn refresh_current_role(self: &Arc<Self>) -> Result<()> {
         let tenant = self.get_current_tenant();
         let public_role = RoleCacheManager::instance()
@@ -220,17 +218,22 @@ impl Session {
             .await?
             .unwrap_or_else(|| RoleInfo::new(BUILTIN_ROLE_PUBLIC));
 
-        // if CURRENT ROLE is not set, take current user's DEFAULT ROLE
-        let current_role_name = match self.session_ctx.get_current_role() {
-            Some(current_role) => Some(current_role.name),
-            None => self
+        // if CURRENT ROLE is not set, take current session's AUTH ROLE
+        let mut current_role_name = self.get_current_role().map(|r| r.name);
+        if current_role_name.is_none() {
+            current_role_name = self.session_ctx.get_auth_role();
+        }
+
+        // if CURRENT ROLE and AUTH ROLE is not set, take current user's DEFAULT ROLE
+        if current_role_name.is_none() {
+            current_role_name = self
                 .session_ctx
                 .get_current_user()
                 .map(|u| u.option.default_role().cloned())
-                .unwrap_or(None),
+                .unwrap_or(None)
         };
 
-        // both CURRENT ROLE and DEFAULT ROLE is not set, take PUBLIC role
+        // if CURRENT ROLE, AUTH ROLE and DEFAULT ROLE is not set, take PUBLIC role
         let current_role_name = match current_role_name {
             None => {
                 self.session_ctx.set_current_role(Some(public_role));
@@ -261,7 +264,7 @@ impl Session {
     }
 
     pub fn set_auth_role(self: &Arc<Self>, role: String) {
-        self.session_ctx.set_auth_role(role)
+        self.session_ctx.set_auth_role(role);
     }
 
     // Returns all the roles the current session has. If the user have been granted auth_role,
