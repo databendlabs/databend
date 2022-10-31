@@ -126,7 +126,7 @@ impl CatalogManagerHelper for CatalogManager {
                 if let Some(hms_address) = req.meta.options.get("HMS_ADDRESS") {
                     Arc::new(HiveCatalog::try_create(hms_address)?)
                 } else {
-                    return Err(ErrorCode::UnknownCatalogType(format!(
+                    return Err(ErrorCode::CreateUnsupportedCatalog(format!(
                         "Hive catalog type must have HMS_ADDRESS in options, but got: {:?}",
                         req.meta.options
                     )));

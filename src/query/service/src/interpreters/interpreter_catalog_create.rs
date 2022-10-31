@@ -55,14 +55,14 @@ impl Interpreter for CreateCatalogInterpreter {
         }
         match catalog_type {
             CatalogType::Default => {
-                let err = ErrorCode::CreateCatalogUnsupported(
+                let err = ErrorCode::CreateUnsupportedCatalog(
                     "Creating default catalog is not allowed!".to_string(),
                 );
                 return Err(err);
             }
             CatalogType::Hive => {
                 if !cfg!(feature = "hive") {
-                    let err = ErrorCode::CreateCatalogUnsupported(
+                    let err = ErrorCode::CreateUnsupportedCatalog(
                         "Hive catalog support is not enabled in your databend-query distribution."
                             .to_string(),
                     );

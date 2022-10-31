@@ -354,6 +354,15 @@ fn new_table_copied_file_lock_v7() -> mt::TableCopiedFileLock {
     mt::TableCopiedFileLock {}
 }
 
+fn new_catalog_meta() -> mt::CatalogMeta {
+    mt::CatalogMeta {
+        catalog_type: mt::CatalogType::Hive,
+        options: btreemap! {s("xyz") => s("foo")},
+        created_on: Utc.ymd(2022, 10, 31).and_hms(19, 51, 16),
+        dropped_on: None,
+    }
+}
+
 #[test]
 fn test_pb_from_to() -> anyhow::Result<()> {
     let db = new_db_meta();
@@ -375,6 +384,12 @@ fn test_pb_from_to() -> anyhow::Result<()> {
     let p = share_account_meta.to_pb()?;
     let got = share::ShareAccountMeta::from_pb(p)?;
     assert_eq!(share_account_meta, got);
+
+    let catalog_meta = new_catalog_meta();
+    let p = catalog_meta.to_pb()?;
+    let got = mt::CatalogMeta::from_pb(p)?;
+    assert_eq!(catalog_meta, got);
+
     Ok(())
 }
 
@@ -478,6 +493,16 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("copied_file_lock:{:?}", buf);
+    }
+
+    // CatalogMeta
+    {
+        let ctl_meta = new_catalog_meta();
+        let p = ctl_meta.to_pb()?;
+
+        let mut buf = vec![];
+        common_protos::prost::Message::encode(&p, &mut buf)?;
+        println!("ctl_meta:{:?}", buf);
     }
 
     Ok(())
