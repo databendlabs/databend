@@ -20,8 +20,8 @@
 #![feature(maybe_uninit_slice)]
 #![feature(new_uninit)]
 
-pub mod prelude;
 pub mod format_diagnostic;
+pub mod prelude;
 
 mod binary_read;
 mod binary_write;

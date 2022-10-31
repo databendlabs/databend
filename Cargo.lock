@@ -1395,6 +1395,8 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-io",
+ "common-meta-types",
+ "common-settings",
  "once_cell",
  "pretty_assertions",
  "strum",

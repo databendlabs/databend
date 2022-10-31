@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod file_format_type;
 mod format_factory;
 pub mod output_format;
 pub mod output_format_csv;
