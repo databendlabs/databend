@@ -35,6 +35,7 @@ use common_planner::plans::DropStagePlan;
 use common_planner::plans::DropUDFPlan;
 use common_planner::plans::DropUserPlan;
 use common_planner::plans::ShowGrantsPlan;
+use common_planner::plans::ShowRolesPlan;
 use common_planner::plans::UseDatabasePlan;
 
 use crate::plans::Plan;
@@ -172,7 +173,7 @@ impl<'a> Binder {
             Statement::AlterUser(stmt) => self.bind_alter_user(stmt).await?,
 
             // Roles
-            Statement::ShowRoles => self.bind_rewrite_to_query(bind_context, "SELECT name, inherited_roles FROM system.roles ORDER BY name", RewriteKind::ShowRoles).await?,
+            Statement::ShowRoles => Plan::ShowRoles(Box::new(ShowRolesPlan {})),
             Statement::CreateRole {
                 if_not_exists,
                 role_name,
