@@ -269,10 +269,6 @@ impl HashJoinState for JoinHashTable {
     }
 
     fn right_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
-        if blocks.is_empty() && self.hash_join_desc.join_type != JoinType::Full {
-            return Ok(vec![]);
-        }
-
         let mut row_state = self.row_state_for_right_join()?;
         let unmatched_build_indexes = self.find_unmatched_build_indexes(&row_state)?;
 
@@ -294,6 +290,10 @@ impl HashJoinState for JoinHashTable {
         if self.hash_join_desc.other_predicate.is_none() {
             let null_block = self.null_blocks_for_right_join(&unmatched_build_indexes)?;
             return Ok(vec![DataBlock::concat_blocks(&[input_block, null_block])?]);
+        }
+
+        if input_block.is_empty() {
+            return Ok(vec![]);
         }
 
         let (bm, all_true, all_false) = self.get_other_filters(
@@ -348,11 +348,12 @@ impl HashJoinState for JoinHashTable {
             let unmatched_build_block = self.row_space.gather(&unmatched_build_indexes)?;
             return Ok(vec![unmatched_build_block]);
         }
-        if blocks.is_empty() {
-            return Ok(vec![]);
-        }
 
         let input_block = self.rest_block_for_right_join(blocks)?;
+
+        if input_block.is_empty() {
+            return Ok(vec![]);
+        }
 
         let probe_fields_len = self.probe_schema.fields().len();
         let build_columns = input_block.columns()[probe_fields_len..].to_vec();

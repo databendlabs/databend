@@ -278,6 +278,13 @@ impl JoinHashTable {
 
     pub(crate) fn rest_block_for_right_join(&self, blocks: &[DataBlock]) -> Result<DataBlock> {
         let rest_probe_blocks = self.hash_join_desc.right_join_desc.rest_probe_blocks.read();
+        if rest_probe_blocks.is_empty() {
+            return if !blocks.is_empty() {
+                DataBlock::concat_blocks(blocks)
+            } else {
+                Ok(DataBlock::empty())
+            };
+        }
         let probe_block = DataBlock::concat_blocks(&rest_probe_blocks)?;
         let rest_build_indexes = self
             .hash_join_desc
