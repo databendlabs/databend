@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use chrono_tz::Tz;
+use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
@@ -12,6 +13,15 @@ use common_meta_types::StageFileFormatType;
 use common_settings::Settings;
 
 use super::clickhouse::ClickhouseSuffix;
+use crate::output_format::OutputFormat;
+use crate::output_format_csv::CSVOutputFormat;
+use crate::output_format_csv::CSVWithNamesAndTypesOutputFormat;
+use crate::output_format_csv::CSVWithNamesOutputFormat;
+use crate::output_format_csv::TSVOutputFormat;
+use crate::output_format_csv::TSVWithNamesAndTypesOutputFormat;
+use crate::output_format_csv::TSVWithNamesOutputFormat;
+use crate::output_format_json_each_row::JsonEachRowOutputFormatBase;
+use crate::output_format_parquet::ParquetOutputFormat;
 
 pub trait FileFormatTypeExt {
     fn get_ext_from_stage(stage: FileFormatOptions) -> FileFormatOptionsExt;
@@ -19,7 +29,7 @@ pub trait FileFormatTypeExt {
     fn get_file_format_options_from_setting(
         &self,
         settings: &Settings,
-        clickhouse_suffix: ClickhouseSuffix,
+        clickhouse_suffix: Option<ClickhouseSuffix>,
     ) -> Result<FileFormatOptionsExt>;
 
     fn final_file_format_options(
@@ -44,6 +54,154 @@ pub struct FileFormatOptionsExt {
     headers: usize,
     json_compact: bool,
     json_strings: bool,
+}
+
+impl FileFormatOptionsExt {
+    fn get_output_format_from_settings(
+        format_name: &str,
+        schema: DataSchemaRef,
+        settings: &Settings,
+        is_clickhouse: bool,
+    ) -> Result<Box<dyn OutputFormat>> {
+        let (typ, suf) = if is_clickhouse {
+            let (typ, suf) = ClickhouseSuffix::parse_clickhouse_format(format_name)?;
+            (typ, Some(suf))
+        } else {
+            (
+                StageFileFormatType::from_str(format_name).map_err(ErrorCode::InvalidArgument)?,
+                None,
+            )
+        };
+        let options = typ.get_file_format_options_from_setting(settings, suf)?;
+        options.get_output_format(schema, settings)
+    }
+
+    fn get_output_format_from_options(
+        schema: DataSchemaRef,
+        options: FileFormatOptions,
+        settings: &Settings,
+    ) -> Result<Box<dyn OutputFormat>> {
+        let options = StageFileFormatType::get_ext_from_stage(options);
+        options.get_output_format(schema, settings)
+    }
+
+    fn get_output_format(
+        &self,
+        schema: DataSchemaRef,
+        settings: &Settings,
+    ) -> Result<Box<dyn OutputFormat>> {
+        let fmt = &self.stage.format;
+        let options = fmt.final_file_format_options(self)?;
+        let format_settings = fmt.get_format_settings(self, settings)?;
+        let output: Box<dyn OutputFormat> = match options.stage.format {
+            StageFileFormatType::Csv => match options.headers {
+                0 => Box::new(CSVOutputFormat::create(schema, format_settings)),
+                1 => Box::new(CSVWithNamesOutputFormat::create(schema, format_settings)),
+                2 => Box::new(CSVWithNamesAndTypesOutputFormat::create(
+                    schema,
+                    format_settings,
+                )),
+                _ => unreachable!(),
+            },
+            StageFileFormatType::Tsv => match options.headers {
+                0 => Box::new(TSVOutputFormat::create(schema, format_settings)),
+                1 => Box::new(TSVWithNamesOutputFormat::create(schema, format_settings)),
+                2 => Box::new(TSVWithNamesAndTypesOutputFormat::create(
+                    schema,
+                    format_settings,
+                )),
+                _ => unreachable!(),
+            },
+            StageFileFormatType::NdJson => {
+                match (options.headers, options.json_strings, options.json_compact) {
+                    // string, compact, name, type
+                    // not compact
+                    (0, false, false) => {
+                        Box::new(
+                            JsonEachRowOutputFormatBase::<false, false, false, false>::create(
+                                schema,
+                                format_settings,
+                            ),
+                        )
+                    }
+                    (0, true, false) => {
+                        Box::new(
+                            JsonEachRowOutputFormatBase::<true, false, false, false>::create(
+                                schema,
+                                format_settings,
+                            ),
+                        )
+                    }
+                    // compact
+                    (0, false, true) => {
+                        Box::new(
+                            JsonEachRowOutputFormatBase::<false, true, false, false>::create(
+                                schema,
+                                format_settings,
+                            ),
+                        )
+                    }
+                    (0, true, true) => {
+                        Box::new(
+                            JsonEachRowOutputFormatBase::<true, true, false, false>::create(
+                                schema,
+                                format_settings,
+                            ),
+                        )
+                    }
+                    (1, false, true) => {
+                        Box::new(
+                            JsonEachRowOutputFormatBase::<false, true, true, false>::create(
+                                schema,
+                                format_settings,
+                            ),
+                        )
+                    }
+                    (1, true, true) => {
+                        Box::new(
+                            JsonEachRowOutputFormatBase::<true, true, true, false>::create(
+                                schema,
+                                format_settings,
+                            ),
+                        )
+                    }
+                    (2, false, true) => {
+                        Box::new(
+                            JsonEachRowOutputFormatBase::<false, true, true, true>::create(
+                                schema,
+                                format_settings,
+                            ),
+                        )
+                    }
+                    (2, true, true) => {
+                        Box::new(
+                            JsonEachRowOutputFormatBase::<true, true, true, true>::create(
+                                schema,
+                                format_settings,
+                            ),
+                        )
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            StageFileFormatType::Parquet => {
+                Box::new(ParquetOutputFormat::create(schema, format_settings))
+            }
+            StageFileFormatType::Json => {
+                unreachable!()
+            }
+            StageFileFormatType::Avro => {
+                unreachable!()
+            }
+            StageFileFormatType::Orc => {
+                unreachable!()
+            }
+            StageFileFormatType::Xml => {
+                unreachable!()
+            }
+        };
+        Ok(output)
+    }
 }
 
 impl FileFormatTypeExt for StageFileFormatType {
@@ -84,7 +242,7 @@ impl FileFormatTypeExt for StageFileFormatType {
             json_strings: false,
         };
         if let Some(suf) = clickhouse_suffix {
-            options.headers = suf.headersh;
+            options.headers = suf.headers;
             if let Some(json) = &suf.json {
                 options.json_compact = json.is_compact;
                 options.json_strings = json.is_strings;
