@@ -59,7 +59,7 @@ impl AsyncSystemTable for StagesTable {
             copy_options.push(format!("{:?}", stage.copy_options).into_bytes());
             file_format_options.push(format!("{:?}", stage.file_format_options).into_bytes());
             number_of_files.push(None);
-            creator.push(None);
+            creator.push(stage.creator.map(|c| c.to_string().into_bytes()));
             comment.push(stage.comment.clone().into_bytes());
         }
         Ok(DataBlock::create(self.table_info.schema(), vec![

@@ -252,7 +252,6 @@ pub struct UserStageInfo {
     pub comment: String,
     /// TODO(xuanwo): stage doesn't have this info anymore, remove it.
     pub number_of_files: u64,
-    /// TODO(xuanwo): stage doesn't have this info anymore, remove it.
     pub creator: Option<UserIdentity>,
 }
 
