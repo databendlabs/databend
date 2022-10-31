@@ -11,7 +11,7 @@ use common_meta_types::StageFileCompression;
 use common_meta_types::StageFileFormatType;
 use common_settings::Settings;
 
-trait FileFormatTypeExt {
+pub trait FileFormatTypeExt {
     fn get_ext_from_stage(stage: FileFormatOptions) -> FileFormatOptionsExt;
 
     fn get_file_format_options_from_setting(
@@ -29,10 +29,12 @@ trait FileFormatTypeExt {
         final_options: &FileFormatOptionsExt,
         settings: &Settings,
     ) -> Result<FormatSettings>;
+
+    fn get_content_type(&self) -> String;
 }
 
 #[derive(Clone, Debug)]
-struct FileFormatOptionsExt {
+pub struct FileFormatOptionsExt {
     stage: FileFormatOptions,
     quote: u8,
     ident_case_sensitive: bool,
@@ -118,6 +120,17 @@ impl FileFormatTypeExt for StageFileFormatType {
             }
         };
         Ok(format_setting)
+    }
+
+    fn get_content_type(&self) -> String {
+        match self {
+            StageFileFormatType::Tsv => "text/tab-separated-values; charset=UTF-8",
+            StageFileFormatType::Csv => "text/csv; charset=UTF-8",
+            StageFileFormatType::Parquet => "application/octet-stream",
+            StageFileFormatType::NdJson => "application/x-ndjson; charset=UTF-8",
+            _ => "text/plain; charset=UTF-8",
+        }
+        .to_string()
     }
 }
 
