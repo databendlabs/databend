@@ -50,7 +50,9 @@ impl Interpreter for ShowRolesInterpreter {
     #[tracing::instrument(level = "debug", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let session = self.ctx.get_current_session();
-        let roles = session.get_all_available_roles().await?;
+        let mut roles = session.get_all_available_roles().await?;
+        roles.sort_by(|a, b| a.name.cmp(&b.name));
+
         let current_role_name = session
             .get_current_role()
             .map(|r| r.name)
