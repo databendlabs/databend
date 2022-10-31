@@ -273,23 +273,29 @@ impl HashJoinState for JoinHashTable {
             return Ok(vec![]);
         }
 
+        let mut row_state = self.row_state_for_right_join()?;
+        let unmatched_build_indexes = self.find_unmatched_build_indexes(&row_state)?;
+
+        // Don't need process non-equi conditions for full join in the method
+        // Because non-equi conditions have been processed in left probe join
+        if self.hash_join_desc.join_type == JoinType::Full {
+            let null_block = self.null_blocks_for_right_join(&unmatched_build_indexes)?;
+            return Ok(vec![DataBlock::concat_blocks(
+                &[blocks, &[null_block]].concat(),
+            )?]);
+        }
+
         let probe_block = DataBlock::concat_blocks(blocks)?;
         // Get build block
         let build_indexes = self.hash_join_desc.right_join_desc.build_indexes.read();
         let build_block = self.row_space.gather(&build_indexes)?;
         let input_block = self.merge_eq_block(&build_block, &probe_block)?;
 
-        let mut row_state = self.row_state_for_right_join()?;
-        let unmatched_build_indexes = self.find_unmatched_build_indexes(&row_state)?;
         if unmatched_build_indexes.is_empty() && self.hash_join_desc.other_predicate.is_none() {
             return Ok(vec![input_block]);
         }
 
-        // Don't need process non-equi conditions for full join in the method
-        // Because non-equi conditions have been processed in left probe join
-        if self.hash_join_desc.other_predicate.is_none()
-            || self.hash_join_desc.join_type == JoinType::Full
-        {
+        if self.hash_join_desc.other_predicate.is_none() {
             let null_block = self.null_blocks_for_right_join(&unmatched_build_indexes)?;
             return Ok(vec![DataBlock::concat_blocks(&[input_block, null_block])?]);
         }
