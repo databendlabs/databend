@@ -14,8 +14,12 @@
 
 use std::sync::Arc;
 
+use common_datablocks::DataBlock;
+use common_datavalues::prelude::*;
+use common_datavalues::Series;
 use common_exception::Result;
 use common_planner::plans::ShowRolesPlan;
+use common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -43,8 +47,18 @@ impl Interpreter for ShowRolesInterpreter {
     #[tracing::instrument(level = "debug", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let session = self.ctx.get_current_session();
+        let roles = session.get_all_available_roles().await?;
+
+        let names: Vec<&str> = roles.iter().map(|x| x.name.as_str()).collect();
+        let inherited_roles: Vec<u64> = roles
+            .iter()
+            .map(|x| x.grants.roles().len() as u64)
+            .collect();
 
         // TODO
-        Ok(PipelineBuildResult::create())
+        PipelineBuildResult::from_blocks(vec![DataBlock::create(self.plan.schema(), vec![
+            Series::from_data(names),
+            Series::from_data(inherited_roles),
+        ])])
     }
 }
