@@ -15,8 +15,8 @@
 use chrono_tz::Tz;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use crate::consts::*;
 
+use crate::consts::*;
 
 // fixed the format in struct/array,
 // when it`s repr as a string in csv/tsv/json/...
@@ -37,7 +37,7 @@ impl Default for NestedFormatSettings {
             true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
             false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
             null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
-            nan_bytes: NAN_BYTES_CAMEL.as_bytes().to_vec(),
+            nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
             inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
             quote_char: b'\'',
         }
@@ -96,7 +96,7 @@ impl FormatSettings {
 
             true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
             false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
-            nan_bytes: NAN_BYTES_CAMEL.as_bytes().to_vec(),
+            nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
             inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
             null_bytes: NULL_BYTES_ESCAPE.as_bytes().to_vec(),
             quote_char: b'\'',
@@ -112,33 +112,9 @@ impl FormatSettings {
             ident_case_sensitive: false,
         }
     }
-
-    #[allow(unused)]
-    fn csv_default() -> Self {
-        Self {
-            timezone: "UTC".parse::<Tz>().unwrap(),
-            nested: Default::default(),
-
-            true_bytes: vec![b'1'],
-            false_bytes: vec![b'0'],
-            nan_bytes: NAN_BYTES_CAMEL.as_bytes().to_vec(),
-            inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
-            null_bytes: NULL_BYTES_ESCAPE.as_bytes().to_vec(),
-            quote_char: b'\"',
-            escape: Some(b'"'),
-
-            record_delimiter: vec![b'\n'],
-            field_delimiter: vec![b','],
-
-            // not used
-            empty_as_default: true,
-            json_quote_denormals: false,
-            json_escape_forward_slashes: true,
-            ident_case_sensitive: false,
-        }
-    }
 }
 
+// only used for tests
 impl Default for FormatSettings {
     fn default() -> Self {
         FormatSettings::tsv_default()

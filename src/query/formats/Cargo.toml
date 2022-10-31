@@ -11,6 +11,7 @@ doctest = false
 test = false
 
 [dependencies] # In alphabetical order
+chrono-tz = "0.6.3"
 # Workspace dependencies
 common-datablocks = { path = "../datablocks" }
 common-datavalues = { path = "../datavalues" }

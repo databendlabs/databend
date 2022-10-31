@@ -82,7 +82,7 @@ impl InputFormatTextBase for InputFormatCSV {
         options: &FileFormatOptions,
     ) -> Result<FormatSettings> {
         let timezone = get_time_zone(settings)?;
-        let escape = FormatSettings::parse_escape(&options.escape, None)?;
+        let escape = FormatSettings::parse_escape(&options.escape, None);
 
         Ok(FormatSettings {
             record_delimiter: settings.get_format_record_delimiter()?.into_bytes(),
@@ -99,7 +99,7 @@ impl InputFormatTextBase for InputFormatCSV {
     fn get_format_settings_from_settings(settings: &Arc<Settings>) -> Result<FormatSettings> {
         let timezone = get_time_zone(settings)?;
         let quote_char = FormatSettings::parse_quote(&settings.get_format_quote_char()?)?;
-        let escape = FormatSettings::parse_escape(&settings.get_format_escape()?, None)?;
+        let escape = FormatSettings::parse_escape(&settings.get_format_escape()?, None);
         Ok(FormatSettings {
             record_delimiter: settings.get_format_record_delimiter()?.into_bytes(),
             field_delimiter: settings.get_format_field_delimiter()?.into_bytes(),
