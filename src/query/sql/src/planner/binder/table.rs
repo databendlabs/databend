@@ -139,12 +139,21 @@ impl<'a> Binder {
                         let tokens = tokenize_sql(query.as_str())?;
                         let backtrace = Backtrace::new();
                         let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace)?;
+
                         if let Statement::Query(query) = &stmt {
-                            // view maybe has alias, e.g. select v1.col1 from v as v1;
                             let (s_expr, mut bind_context) =
                                 self.bind_query(bind_context, query).await?;
                             if let Some(alias) = alias {
+                                // view maybe has alias, e.g. select v1.col1 from v as v1;
                                 bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                            } else {
+                                // e.g. select v0.c0 from v0;
+                                for column in bind_context.columns.iter_mut() {
+                                    column.database_name = None;
+                                    column.table_name = Some(
+                                        normalize_identifier(table, &self.name_resolution_ctx).name,
+                                    );
+                                }
                             }
                             Ok((s_expr, bind_context))
                         } else {
