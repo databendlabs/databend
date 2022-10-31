@@ -62,7 +62,7 @@ async fn run_query(query_ctx: &Arc<QueryContext>) -> Result<Arc<dyn Interpreter>
         .await?;
     query_ctx
         .get_current_session()
-        .set_authed_user(user)
+        .set_authed_user(user, None)
         .await?;
     let mut planner = Planner::new(query_ctx.clone());
     let (plan, _, _) = planner.plan_sql(sql).await?;

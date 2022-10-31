@@ -61,7 +61,7 @@ async fn create_query_context_with_session(
         UserPrivilegeSet::available_privileges_on_global(),
     );
 
-    dummy_session.set_authed_user(user_info).await?;
+    dummy_session.set_authed_user(user_info, None).await?;
 
     let dummy_query_context = dummy_session.create_query_context().await?;
     dummy_query_context.get_settings().set_max_threads(8)?;
@@ -93,7 +93,7 @@ pub async fn create_query_context_with_config(
     }
 
     dummy_session
-        .set_authed_user(current_user.unwrap())
+        .set_authed_user(current_user.unwrap(), None)
         .await?;
     let dummy_query_context = dummy_session.create_query_context().await?;
 
