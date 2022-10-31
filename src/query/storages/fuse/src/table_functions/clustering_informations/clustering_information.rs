@@ -25,7 +25,7 @@ use common_fuse_meta::meta::BlockMeta;
 use common_planner::Expression;
 use serde_json::json;
 
-use crate::io::MetaReaders;
+use crate::io::SegmentsIO;
 use crate::sessions::TableContext;
 use crate::FuseTable;
 use crate::Table;
@@ -44,6 +44,18 @@ struct ClusteringStatistics {
     block_depth_histogram: VariantValue,
 }
 
+impl Default for ClusteringStatistics {
+    fn default() -> Self {
+        ClusteringStatistics {
+            total_block_count: 0,
+            total_constant_block_count: 0,
+            average_overlaps: 0.0,
+            average_depth: 0.0,
+            block_depth_histogram: VariantValue::from(json!({})),
+        }
+    }
+}
+
 impl<'a> ClusteringInformation<'a> {
     pub fn new(
         ctx: Arc<dyn TableContext>,
@@ -60,18 +72,20 @@ impl<'a> ClusteringInformation<'a> {
     pub async fn get_clustering_info(&self) -> Result<DataBlock> {
         let snapshot = self.table.read_table_snapshot().await?;
 
-        let mut blocks = Vec::new();
+        let mut info = ClusteringStatistics::default();
         if let Some(snapshot) = snapshot {
-            let reader = MetaReaders::segment_info_reader(self.table.get_operator());
-            for (x, ver) in &snapshot.segments {
-                let res = reader.read(x, None, *ver).await?;
-                let mut block = res.blocks.clone();
-                blocks.append(&mut block);
+            let segment_locations = &snapshot.segments;
+            let segments_io = SegmentsIO::create(self.ctx.clone(), self.table.operator.clone());
+            let segments = segments_io
+                .read_segments(segment_locations)
+                .await?
+                .into_iter()
+                .collect::<Result<Vec<_>>>()?;
+            if !segments.is_empty() {
+                let blocks = segments.iter().flat_map(|s| s.blocks.iter());
+                info = self.get_clustering_stats(blocks)?
             }
         };
-
-        // TODO iterator of blocks
-        let info = self.get_clustering_stats(blocks)?;
 
         let names = self
             .cluster_keys
@@ -94,38 +108,32 @@ impl<'a> ClusteringInformation<'a> {
     fn get_min_max_stats(&self, block: &BlockMeta) -> Result<(Vec<DataValue>, Vec<DataValue>)> {
         if self.table.cluster_keys() != self.cluster_keys || block.cluster_stats.is_none() {
             // Todo(zhyass): support manually specifying the cluster key.
-            return Err(ErrorCode::UnImplement("Unimplement error"));
+            return Err(ErrorCode::UnImplement("Unimplemented"));
         }
 
         let cluster_key_id = block.cluster_stats.clone().unwrap().cluster_key_id;
         let default_cluster_key_id = self.table.cluster_key_meta.clone().unwrap().0;
         if cluster_key_id != default_cluster_key_id {
-            return Err(ErrorCode::UnImplement("Unimplement error"));
+            return Err(ErrorCode::UnImplement("Unimplemented"));
         }
 
         let cluster_stats = block.cluster_stats.clone().unwrap();
         Ok((cluster_stats.min, cluster_stats.max))
     }
 
-    fn get_clustering_stats(&self, blocks: Vec<Arc<BlockMeta>>) -> Result<ClusteringStatistics> {
-        if blocks.is_empty() {
-            return Ok(ClusteringStatistics {
-                total_block_count: 0,
-                total_constant_block_count: 0,
-                average_overlaps: 0.0,
-                average_depth: 0.0,
-                block_depth_histogram: VariantValue::from(json!({})),
-            });
-        }
-
+    fn get_clustering_stats<'b>(
+        &self,
+        blocks: impl Iterator<Item = &'b Arc<BlockMeta>>,
+    ) -> Result<ClusteringStatistics> {
         // Gather all cluster statistics points to a sorted Map.
         // Key: The cluster statistics points.
         // Value: 0: The block indexes with key as min value;
         //        1: The block indexes with key as max value;
         let mut points_map: BTreeMap<Vec<DataValue>, (Vec<usize>, Vec<usize>)> = BTreeMap::new();
         let mut total_constant_block_count = 0;
-        for (i, block) in blocks.iter().enumerate() {
-            let (min, max) = self.get_min_max_stats(block)?;
+        let mut total_block_count = 0;
+        for (i, block) in blocks.enumerate() {
+            let (min, max) = self.get_min_max_stats(block.as_ref())?;
             if min.eq(&max) {
                 total_constant_block_count += 1;
             }
@@ -139,6 +147,7 @@ impl<'a> ClusteringInformation<'a> {
                 .entry(max.clone())
                 .and_modify(|v| v.1.push(i))
                 .or_insert((vec![], vec![i]));
+            total_block_count += 1;
         }
 
         // calculate overlaps and depth.
@@ -192,7 +201,7 @@ impl<'a> ClusteringInformation<'a> {
         let block_depth_histogram = VariantValue::from(serde_json::Value::Object(objects));
 
         Ok(ClusteringStatistics {
-            total_block_count: blocks.len() as u64,
+            total_block_count,
             total_constant_block_count,
             average_overlaps,
             average_depth,
