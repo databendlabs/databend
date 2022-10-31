@@ -147,6 +147,21 @@ For information about how to manage buckets and Access Keys for your cloud objec
 - https://docs.microsoft.com/en-us/azure/storage/common/storage-account-keys-manage?tabs=azure-portal#view-account-access-keys
 
 </TabItem>
+
+<TabItem value="Huawei Cloud OBS" label="Huawei Cloud OBS">
+
+Before deploying Databend, make sure you have successfully set up your object storage environment in the cloud, and the following tasks have been completed:
+
+- Create a bucket or container named `databend`.
+- Get the endpoint URL for connecting to the bucket or container you created.
+- Get the Access Key ID and Secret Access Key for your account.
+
+For information about how to manage buckets and Access Keys for your cloud object storage, refer to the user manual from the solution provider. Here are some useful links you may need:
+
+- https://support.huaweicloud.com/intl/en-us/usermanual-obs/en-us_topic_0045853662.html
+- https://support.huaweicloud.com/intl/en-us/api-obs/obs_04_0116.html
+
+</TabItem>
 </Tabs>
 
 ### Downloading Databend
@@ -155,14 +170,21 @@ a. Create a folder named `databend` in the directory `/usr/local`.
 b. Download and extract the latest Databend release for your platform from [Github Release](https://github.com/datafuselabs/databend/releases):
 
 <Tabs groupId="operating-systems">
-<TabItem value="linux" label="Linux">
+<TabItem value="mac-x86_64" label="MacOS(x86)">
+
+```shell
+curl -LJO https://github.com/datafuselabs/databend/releases/download/${version}/databend-${version}-x86_64-apple-darwin.tar.gz
+```
+
+</TabItem>
+<TabItem value="linux-x86_64" label="Linux(x86)">
 
 ```shell
 curl -LJO https://github.com/datafuselabs/databend/releases/download/${version}/databend-${version}-x86_64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
-<TabItem value="mac" label="MacOS">
+<TabItem value="mac-arm64" label="MacOS(arm)">
 
 ```shell
 curl -LJO https://github.com/datafuselabs/databend/releases/download/${version}/databend-${version}-aarch64-apple-darwin.tar.gz
@@ -170,7 +192,7 @@ curl -LJO https://github.com/datafuselabs/databend/releases/download/${version}/
 
 </TabItem>
 
-<TabItem value="arm" label="Linux Arm">
+<TabItem value="linux-arm64" label="Linux(arm)">
 
 ```shell
 curl -LJO https://github.com/datafuselabs/databend/releases/download/${version}/databend-${version}-aarch64-unknown-linux-musl.tar.gz
@@ -180,14 +202,21 @@ curl -LJO https://github.com/datafuselabs/databend/releases/download/${version}/
 </Tabs>
 
 <Tabs groupId="operating-systems">
-<TabItem value="linux" label="Linux">
+<TabItem value="mac-x86_64" label="MacOS(x86)">
+
+```shell
+tar xzvf databend-${version}-x86_64-apple-darwin.tar.gz
+```
+
+</TabItem>
+<TabItem value="linux-x86_64" label="Linux(x86)">
 
 ```shell
 tar xzvf databend-${version}-x86_64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
-<TabItem value="mac" label="MacOS">
+<TabItem value="mac-arm64" label="MacOS(arm)">
 
 ```shell
 tar xzvf databend-${version}-aarch64-apple-darwin.tar.gz
@@ -195,7 +224,7 @@ tar xzvf databend-${version}-aarch64-apple-darwin.tar.gz
 
 </TabItem>
 
-<TabItem value="arm" label="Linux Arm">
+<TabItem value="linux-arm64" label="Linux(arm)">
 
 ```shell
 tar xzvf databend-${version}-aarch64-unknown-linux-musl.tar.gz
@@ -204,7 +233,7 @@ tar xzvf databend-${version}-aarch64-unknown-linux-musl.tar.gz
 </TabItem>
 </Tabs>
 
-c. Move the extracted folders `bin` and `configs` to the folder `/usr/local/databend`.
+c. Move the extracted folders `bin`, `configs`, and `scripts` to the folder `/usr/local/databend`.
 
 ### Deploying a Meta Node
 a. Open the file `databend-meta.toml` in the folder `/usr/local/databend/configs`, and replace `127.0.0.1` with `0.0.0.0` within the whole file.
@@ -491,7 +520,7 @@ type = "obs"
 # How to create a bucket:
 # https://support.huaweicloud.com/intl/en-us/usermanual-obs/en-us_topic_0045853662.html
 // highlight-next-line
-bucket = "databend-1253727613"
+bucket = "databend"
 
 # You can get the URL from the bucket detail page.
 // highlight-next-line
@@ -557,5 +586,17 @@ CREATE TABLE t1(a int);
 INSERT INTO t1 VALUES(1), (2);
 
 SELECT * FROM t1;
+```
+
+### Starting and Stopping Databend
+
+Each time you start and stop Databend, simply run the scripts in the folder `/usr/local/databend/scripts`:
+
+```shell
+# Start Databend
+./script/start.sh
+
+# Stop Databend
+./script/stop.sh
 ```
 <GetLatest/>
