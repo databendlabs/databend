@@ -18,7 +18,6 @@ use std::collections::HashMap;
 use common_ast::ast::Expr;
 use common_ast::ast::Literal;
 use common_ast::ast::OrderByExpr;
-use common_ast::Dialect;
 use common_ast::DisplayError;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -263,8 +262,12 @@ impl<'a> Binder {
 
             // null is the largest value in databend, smallest in hive
             // todo: rewrite after https://github.com/jorgecarleitao/arrow2/pull/1286 is merged
-            let default_nulls_first =
-                self.ctx.get_settings().get_sql_dialect().unwrap() == Dialect::Hive;
+            let default_nulls_first = !self
+                .ctx
+                .get_settings()
+                .get_sql_dialect()
+                .unwrap()
+                .is_null_biggest();
             let order_by_item = SortItem {
                 index: order.index,
                 asc: order.expr.asc.unwrap_or(true),

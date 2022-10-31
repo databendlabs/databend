@@ -30,7 +30,6 @@ use common_ast::parser::parse_expr;
 use common_ast::parser::token::Token;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
-use common_ast::Dialect;
 use common_ast::DisplayError;
 use common_catalog::catalog::CatalogManager;
 use common_catalog::table_context::TableContext;
@@ -942,8 +941,13 @@ impl<'a> TypeChecker<'a> {
         }
 
         // rewrite substr('xx', 0, xx) -> substr('xx', 1, xx)
-        if self.ctx.get_settings().get_sql_dialect().unwrap() == Dialect::Hive
-            && (func_name == "substr" || func_name == "substring")
+        if (func_name == "substr" || func_name == "substring")
+            && self
+                .ctx
+                .get_settings()
+                .get_sql_dialect()
+                .unwrap()
+                .substr_index_zero_literal_as_one()
         {
             Self::rewrite_substring(&mut args);
         }
