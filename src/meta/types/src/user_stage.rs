@@ -256,6 +256,15 @@ pub struct UserStageInfo {
 }
 
 impl UserStageInfo {
+    /// Create a new internal stage.
+    pub fn new_internal_stage(name: &str) -> UserStageInfo {
+        UserStageInfo {
+            stage_name: name.to_string(),
+            stage_type: StageType::Internal,
+            ..Default::default()
+        }
+    }
+
     pub fn new_external_stage(storage: StorageParams, path: &str) -> UserStageInfo {
         UserStageInfo {
             stage_name: format!("{storage},path={path}"),
@@ -263,6 +272,21 @@ impl UserStageInfo {
             stage_params: StageParams { storage },
             ..Default::default()
         }
+    }
+
+    /// Create a new user stage.
+    pub fn new_user_stage(user: &str) -> UserStageInfo {
+        UserStageInfo {
+            stage_name: user.to_string(),
+            stage_type: StageType::User,
+            ..Default::default()
+        }
+    }
+
+    /// Update user stage with stage name.
+    pub fn with_stage_name(mut self, name: &str) -> UserStageInfo {
+        self.stage_name = name.to_string();
+        self
     }
 
     /// Get the prefix of stage.
