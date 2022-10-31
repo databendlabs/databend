@@ -857,7 +857,7 @@ fn test_internal_stage_v17() -> anyhow::Result<()> {
 fn test_user_stage_v18() -> anyhow::Result<()> {
     common::test_pb_from_to("user_stage_v18", test_user_stage_info_v18())?;
 
-    // Encoded data of version v17 of internal:
+    // Encoded data of version v18 of user_stage:
     // It is generated with common::test_pb_from_to.
     let user_stage_v18 = vec![
         10, 4, 114, 111, 111, 116, 16, 3, 26, 25, 10, 23, 18, 21, 10, 13, 47, 100, 105, 114, 47,
