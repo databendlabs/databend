@@ -235,7 +235,7 @@ impl Session {
             current_role_name = self.session_ctx.get_auth_role();
         }
 
-        // if CURRENT ROLE and AUTH ROLE is not set, take current user's DEFAULT ROLE
+        // if CURRENT ROLE and AUTH ROLE are not set, take current user's DEFAULT ROLE
         if current_role_name.is_none() {
             current_role_name = self
                 .session_ctx
@@ -244,30 +244,50 @@ impl Session {
                 .unwrap_or(None)
         };
 
-        // if CURRENT ROLE, AUTH ROLE and DEFAULT ROLE is not set, take PUBLIC role
-        let current_role_name = match current_role_name {
-            None => {
-                self.session_ctx.set_current_role(Some(public_role));
-                return Ok(());
-            }
-            Some(current_role_name) => current_role_name,
-        };
+        // if CURRENT ROLE, AUTH ROLE and DEFAULT ROLE are not set, take PUBLIC role
+        let current_role_name =
+            current_role_name.unwrap_or_else(|| BUILTIN_ROLE_PUBLIC.to_string());
 
         // I can not use the CURRENT ROLE, reset to PUBLIC role
-        let available_roles = self.get_all_available_roles().await?;
-        let role = available_roles
-            .into_iter()
-            .find(|r| r.name == current_role_name);
-        if role.is_none() {
-            self.session_ctx.set_current_role(Some(public_role));
-            return Ok(());
-        }
-        self.session_ctx.set_current_role(role);
+        let role = self
+            .validate_available_role(&current_role_name)
+            .await
+            .or_else(|e| {
+                if e.code() == ErrorCode::invalid_role_code() {
+                    Ok(public_role)
+                } else {
+                    Err(e)
+                }
+            })?;
+        self.session_ctx.set_current_role(Some(role));
         Ok(())
     }
 
-    pub fn set_current_role(self: &Arc<Self>, role: Option<RoleInfo>) {
-        self.session_ctx.set_current_role(role);
+    pub async fn validate_available_role(self: &Arc<Self>, role_name: &str) -> Result<RoleInfo> {
+        let available_roles = self.get_all_available_roles().await?;
+        let role = available_roles.iter().find(|r| r.name == role_name);
+        match role {
+            Some(role) => Ok(role.clone()),
+            None => {
+                let available_role_names = available_roles
+                    .iter()
+                    .map(|r| r.name.clone())
+                    .collect::<Vec<_>>()
+                    .join(",");
+                Err(ErrorCode::InvalidRole(format!(
+                    "Invalid role {} for current session, available: {}",
+                    role_name, available_role_names,
+                )))
+            }
+        }
+    }
+
+    // Only the available role can be set as current role. The current role can be set by the SET
+    // ROLE statement, or by the X-DATABEND-ROLE header in HTTP protocol (not implemented yet).
+    pub async fn set_current_role_checked(self: &Arc<Self>, role_name: &str) -> Result<()> {
+        let role = self.validate_available_role(role_name).await?;
+        self.session_ctx.set_current_role(Some(role));
+        Ok(())
     }
 
     pub fn get_current_role(self: &Arc<Self>) -> Option<RoleInfo> {
