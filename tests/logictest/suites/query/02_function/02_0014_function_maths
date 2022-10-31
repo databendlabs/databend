@@ -222,9 +222,6 @@ SELECT asin(1.1);
 ----
 nan
 
----- http
-NaN
-
 statement query F
 SELECT acos(1);
 
@@ -236,9 +233,6 @@ SELECT acos(1.0001);
 
 ----
 nan
-
----- http
-NaN
 
 statement query F
 SELECT atan(1);
@@ -319,10 +313,6 @@ SELECT sqrt(-4);
 
 ----
 nan
-
----- http
-NaN
-
 
 statement error 1065
 SELECT sqrt('a'); 
