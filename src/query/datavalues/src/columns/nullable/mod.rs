@@ -153,7 +153,9 @@ impl Column for NullableColumn {
         let inner = self.inner().filter(filter);
 
         let validity = if self.validity.unset_bits() == 0 {
-            self.validity.clone().slice(0, filter.len())
+            self.validity
+                .clone()
+                .slice(0, filter.len() - filter.values().unset_bits())
         } else {
             let iter = self
                 .validity
@@ -163,7 +165,7 @@ impl Column for NullableColumn {
                 .map(|(v, _)| v);
             MutableBitmap::from_iter(iter).into()
         };
-        Arc::new(Self::new(inner, validity.into()))
+        Arc::new(Self::new(inner, validity))
     }
 
     fn scatter(&self, indices: &[usize], scattered_size: usize) -> Vec<ColumnRef> {
