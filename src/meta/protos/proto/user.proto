@@ -127,6 +127,7 @@ message UserStageInfo {
     LegacyInternal = 0;
     External = 1;
     Internal = 2;
+    User = 3;
   }
 
   message StageStorage {
