@@ -435,6 +435,8 @@ pub enum TokenKind {
     HAVING,
     #[token("HISTORY", ignore(ascii_case))]
     HISTORY,
+    #[token("HIVE", ignore(ascii_case))]
+    HIVE,
     #[token("HOUR", ignore(ascii_case))]
     HOUR,
     #[token("INTERSECT", ignore(ascii_case))]

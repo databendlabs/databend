@@ -186,14 +186,14 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     let create_catalog = map(
         rule! {
             CREATE ~ ( CATALOG ) ~ ( IF ~ NOT ~ EXISTS )?
-            ~ #literal_string
+            ~ #ident
             ~ ( TYPE ~ "=" ~ #catalog_type )
             ~ ( CONNECTION ~ "=" ~ #options )
         },
         |(_, _, opt_if_not_exists, catalog, (_, _, ty), (_, _, options))| {
             Statement::CreateCatalog(CreateCatalogStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
-                catalog,
+                catalog_name: catalog.to_string(),
                 catalog_type: ty,
                 options,
             })
@@ -1623,7 +1623,10 @@ pub fn create_database_option(i: Input) -> IResult<CreateDatabaseOption> {
 }
 
 pub fn catalog_type(i: Input) -> IResult<CatalogType> {
-    let catalog_type = alt((value(CatalogType::Default, rule! {DEFAULT}),));
+    let catalog_type = alt((
+        value(CatalogType::Default, rule! {DEFAULT}),
+        value(CatalogType::Hive, rule! {HIVE}),
+    ));
     map(rule! { ^#catalog_type }, |catalog_type| catalog_type)(i)
 }
 

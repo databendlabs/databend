@@ -51,7 +51,7 @@ impl Display for ShowCreateCatalogStmt<'_> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CreateCatalogStmt {
     pub if_not_exists: bool,
-    pub catalog: String,
+    pub catalog_name: String,
     pub catalog_type: CatalogType,
     pub options: BTreeMap<String, String>,
 }
@@ -62,7 +62,7 @@ impl Display for CreateCatalogStmt {
         if self.if_not_exists {
             write!(f, " IF NOT EXISTS")?;
         }
-        write!(f, " {}", self.catalog)?;
+        write!(f, " {}", self.catalog_name)?;
         write!(f, " TYPE='{}'", self.catalog_type)
     }
 }

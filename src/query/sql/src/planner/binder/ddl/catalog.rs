@@ -84,7 +84,7 @@ impl<'a> Binder {
     ) -> Result<Plan> {
         let CreateCatalogStmt {
             if_not_exists,
-            catalog,
+            catalog_name: catalog,
             catalog_type,
             options,
         } = stmt;
