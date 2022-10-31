@@ -58,7 +58,7 @@ async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
         // structures are filled with arbitrary values, no effects for this test case
         let block_id = Uuid::new_v4().simple().to_string();
         let location = (block_id, DataBlock::VERSION);
-        let test_block_meta = BlockMeta::new(
+        let test_block_meta = Arc::new(BlockMeta::new(
             1,
             1,
             1,
@@ -68,7 +68,7 @@ async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
             location.clone(),
             None,
             0,
-        );
+        ));
         let segment = SegmentInfo::new(vec![test_block_meta], Statistics::default());
         Ok::<_, ErrorCode>((seg_writer.write_segment(segment).await?, location))
     };

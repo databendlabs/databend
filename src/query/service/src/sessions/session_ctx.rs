@@ -163,9 +163,9 @@ impl SessionContext {
         lock.clone()
     }
 
-    pub fn set_auth_role(&self, role: String) {
+    pub fn set_auth_role(&self, role: Option<String>) {
         let mut lock = self.auth_role.write();
-        *lock = Some(role);
+        *lock = role;
     }
 
     pub fn get_client_host(&self) -> Option<SocketAddr> {

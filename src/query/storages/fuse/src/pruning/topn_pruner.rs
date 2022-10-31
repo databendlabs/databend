@@ -12,6 +12,8 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::sync::Arc;
+
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -40,7 +42,10 @@ impl TopNPrunner {
 }
 
 impl TopNPrunner {
-    pub(crate) fn prune(&self, metas: Vec<(usize, BlockMeta)>) -> Result<Vec<(usize, BlockMeta)>> {
+    pub(crate) fn prune(
+        &self,
+        metas: Vec<(usize, Arc<BlockMeta>)>,
+    ) -> Result<Vec<(usize, Arc<BlockMeta>)>> {
         if self.sort.len() != 1 {
             return Ok(metas);
         }
@@ -78,7 +83,7 @@ impl TopNPrunner {
                 })?;
                 Ok((*id, stat.clone(), meta.clone()))
             })
-            .collect::<Result<Vec<(usize, ColumnStatistics, BlockMeta)>>>()?;
+            .collect::<Result<Vec<(usize, ColumnStatistics, Arc<BlockMeta>)>>>()?;
 
         id_stats.sort_by(|a, b| {
             if a.1.null_count + b.1.null_count != 0 && *nulls_first {

@@ -54,7 +54,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     let gen_test_seg = |cluster_stats: Option<ClusterStatistics>| async {
         let block_id = Uuid::new_v4().simple().to_string();
         let location = (block_id, DataBlock::VERSION);
-        let test_block_meta = BlockMeta::new(
+        let test_block_meta = Arc::new(BlockMeta::new(
             1,
             1,
             1,
@@ -64,7 +64,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
             location.clone(),
             None,
             0,
-        );
+        ));
         let segment = SegmentInfo::new(vec![test_block_meta], Statistics::default());
         Ok::<_, ErrorCode>((seg_writer.write_segment(segment).await?, location))
     };
