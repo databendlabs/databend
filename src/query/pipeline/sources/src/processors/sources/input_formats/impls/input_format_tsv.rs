@@ -18,7 +18,7 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::TypeDeserializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_formats::verbose_string;
+use common_io::format_diagnostic::verbose_string;
 use common_io::prelude::BufferReadExt;
 use common_io::prelude::FormatSettings;
 use common_io::prelude::NestedCheckpointReader;

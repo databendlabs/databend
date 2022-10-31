@@ -1851,7 +1851,6 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
- "common-formats",
  "common-io",
  "common-meta-types",
  "common-pipeline-core",

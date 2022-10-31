@@ -21,6 +21,7 @@
 #![feature(new_uninit)]
 
 pub mod prelude;
+pub mod format_diagnostic;
 
 mod binary_read;
 mod binary_write;

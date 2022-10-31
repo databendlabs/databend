@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod format_diagnostic;
 mod format_factory;
 pub mod output_format;
 pub mod output_format_csv;
@@ -20,5 +19,4 @@ mod output_format_json_each_row;
 mod output_format_parquet;
 mod output_format_values;
 
-pub use format_diagnostic::verbose_string;
 pub use format_factory::FormatFactory;
