@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_datablocks::DataBlock;
@@ -28,7 +29,7 @@ use crate::statistics::block_statistics::BlockStatistics;
 
 #[derive(Default)]
 pub struct StatisticsAccumulator {
-    pub blocks_metas: Vec<BlockMeta>,
+    pub blocks_metas: Vec<Arc<BlockMeta>>,
     pub blocks_statistics: Vec<StatisticsOfColumns>,
     pub summary_row_count: u64,
     pub summary_block_count: u64,
@@ -105,7 +106,7 @@ impl StatisticsAccumulator {
         let data_location = (block_statistics.block_file_location, DataBlock::VERSION);
         let cluster_stats = block_statistics.block_cluster_statistics;
 
-        self.blocks_metas.push(BlockMeta::new(
+        self.blocks_metas.push(Arc::new(BlockMeta::new(
             row_count,
             block_size,
             file_size,
@@ -115,7 +116,7 @@ impl StatisticsAccumulator {
             data_location,
             bloom_filter_index_location,
             bloom_filter_index_size,
-        ));
+        )));
 
         Ok(())
     }

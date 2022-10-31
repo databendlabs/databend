@@ -70,6 +70,7 @@ impl<'a> ClusteringInformation<'a> {
             }
         };
 
+        // TODO iterator of blocks
         let info = self.get_clustering_stats(blocks)?;
 
         let names = self
@@ -106,7 +107,7 @@ impl<'a> ClusteringInformation<'a> {
         Ok((cluster_stats.min, cluster_stats.max))
     }
 
-    fn get_clustering_stats(&self, blocks: Vec<BlockMeta>) -> Result<ClusteringStatistics> {
+    fn get_clustering_stats(&self, blocks: Vec<Arc<BlockMeta>>) -> Result<ClusteringStatistics> {
         if blocks.is_empty() {
             return Ok(ClusteringStatistics {
                 total_block_count: 0,
