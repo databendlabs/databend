@@ -36,8 +36,8 @@ use serde::Serialize;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CatalogType {
-    Default,
-    Hive,
+    Default = 0,
+    Hive = 1,
 }
 
 impl Default for CatalogType {
@@ -83,7 +83,7 @@ impl CatalogInfo {
 pub struct CatalogMeta {
     pub catalog_type: CatalogType,
     pub options: BTreeMap<String, String>,
-    pub created_on: Option<DateTime<Utc>>,
+    pub created_on: DateTime<Utc>,
     pub dropped_on: Option<DateTime<Utc>>,
 }
 

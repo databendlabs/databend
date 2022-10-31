@@ -36,7 +36,7 @@ message CatalogMeta {
   uint64 min_compatible = 101;
 
   // catalog type
-  string catalog_type=1;
+  uint32 catalog_type=1;
 
   // catalog options
   map<string, string> options =2;
@@ -53,11 +53,4 @@ message CatalogIdList {
   uint64 min_compatible = 101;
 
   repeated uint64 ids = 1;
-}
-
-message CatalogType {
-  uint64 ver = 100;
-  uint64 min_compatible = 101;
-
-  uint32 ctl_type = 1;
 }

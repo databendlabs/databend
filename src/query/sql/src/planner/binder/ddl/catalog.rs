@@ -124,7 +124,7 @@ impl<'a> Binder {
         CatalogMeta {
             catalog_type,
             options,
-            created_on: Some(Utc::now()),
+            created_on: Utc::now(),
             dropped_on: None,
         }
     }

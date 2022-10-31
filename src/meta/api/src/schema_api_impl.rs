@@ -220,16 +220,16 @@ impl<KV: KVApi> SchemaApi for KV {
                 // append ctl_id into ctl_id_list
                 ctl_id_list.append(ctl_id);
 
-                let mut condition = vec![
+                let condition = vec![
                     txn_cond_seq(name_key, Eq, 0),
                     txn_cond_seq(&id_to_name_key, Eq, 0),
                     txn_cond_seq(&ctl_id_list_key, Eq, ctl_id_list_seq),
                 ];
 
-                let mut if_then = vec![
+                let if_then = vec![
                     txn_op_put(name_key, serialize_u64(ctl_id)?),
                     txn_op_put(&id_key, serialize_struct(&req.meta)?),
-                    txn_op_put(&ctl_id_list_key, serialize_struct(&ctl_id_list_key)?),
+                    txn_op_put(&ctl_id_list_key, serialize_struct(&ctl_id_list)?),
                     txn_op_put(&id_to_name_key, serialize_struct(name_key)?),
                 ];
 

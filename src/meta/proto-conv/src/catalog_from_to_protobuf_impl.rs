@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datavalues::chrono::DateTime;
+use common_datavalues::chrono::Utc;
 use common_meta_app::schema as mt;
 use common_protos::pb;
 
@@ -51,8 +53,18 @@ impl FromToProto for mt::CatalogMeta {
     where Self: Sized {
         check_ver(p.ver, p.min_compatible)?;
 
+        let catalog_type = match p.catalog_type {
+            0 => mt::CatalogType::Default,
+            1 => mt::CatalogType::Hive,
+            _ => {
+                return Err(Incompatible {
+                    reason: format!("Unknown catalog type: {}", p.catalog_type),
+                });
+            }
+        };
+
         let v = Self {
-            catalog_type: CatalogType::from_pb(p.catalog_type)?,
+            catalog_type,
             options: p.options,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
             dropped_on: match p.dropped_on {
@@ -67,10 +79,10 @@ impl FromToProto for mt::CatalogMeta {
         let p = pb::CatalogMeta {
             ver: VER,
             min_compatible: MIN_COMPATIBLE_VER,
-            catalog_type: self.catalog_type.to_pb()?,
+            catalog_type: self.catalog_type as u32,
             options: self.options.clone(),
             created_on: self.created_on.to_pb()?,
-            dropped_on: match self.dropped_on.clone() {
+            dropped_on: match self.dropped_on {
                 Some(dropped_on) => Some(dropped_on.to_pb()?),
                 None => None,
             },
@@ -79,34 +91,9 @@ impl FromToProto for mt::CatalogMeta {
     }
 }
 
-impl FromToProto for mt::CatalogType {
-    type PB = pb::CatalogType;
-
-    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
-    where Self: Sized {
-        match p.ctl_type {
-            0 => Ok(Self::Default),
-            1 => Ok(Self::Hive),
-            _ => Err(Incompatible),
-        }
-    }
-
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        let ctl_type = match self {
-            CatalogType::Default => 0,
-            CatalogType::Hive => 1,
-        };
-        Ok(PB {
-            ver: VER,
-            min_compatible: MIN_COMPATIBLE_VER,
-            ctl_type,
-        })
-    }
-}
-
 impl FromToProto for mt::CatalogIdList {
     type PB = pb::CatalogIdList;
-    fn from_pb(p: pb::DbIdList) -> Result<Self, Incompatible> {
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible> {
         check_ver(p.ver, p.min_compatible)?;
 
         let v = Self { id_list: p.ids };
