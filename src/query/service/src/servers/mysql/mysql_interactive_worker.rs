@@ -66,6 +66,7 @@ fn has_result_set_by_plan(plan: &Plan) -> bool {
             | Plan::Call(_)
             | Plan::ShowCreateDatabase(_)
             | Plan::ShowCreateTable(_)
+            | Plan::ShowRoles(_)
             | Plan::DescShare(_)
             | Plan::ShowShares(_)
             | Plan::ShowObjectGrantPrivileges(_)
