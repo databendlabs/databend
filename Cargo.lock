@@ -7580,7 +7580,7 @@ checksum = "d55dd09aaa2f85ef8767cc9177294d63c30d62c8533329e75aa51d8b94976e22"
 [[package]]
 name = "streaming_algorithms"
 version = "0.3.0"
-source = "git+https://github.com/lichuang/streaming_algorithms?tag=hyperloglog_refator#647005b35f61ac1bd207fd3b77e38035583d2f50"
+source = "git+https://github.com/lichuang/streaming_algorithms?tag=hyperloglog_refator-v2#51e3873069b3fbf1d6fd8df6fba26bc51d36cfd8"
 dependencies = [
  "rand 0.7.3",
  "serde",

@@ -58,7 +58,7 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
                 max_stats.push(col_stats.max.clone());
 
                 null_count += col_stats.null_count;
-                mut_col_stats.merge(col_stats);
+                mut_col_stats.merge_number_of_distinct_values(col_stats);
                 in_memory_size += col_stats.in_memory_size;
             }
 
