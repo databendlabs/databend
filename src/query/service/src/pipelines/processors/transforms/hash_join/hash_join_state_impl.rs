@@ -269,14 +269,20 @@ impl HashJoinState for JoinHashTable {
     }
 
     fn right_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
+        if blocks.is_empty() && self.hash_join_desc.join_type != JoinType::Full {
+            return Ok(vec![]);
+        }
+
+        let probe_block = DataBlock::concat_blocks(blocks)?;
+        // Get build block
+        let build_indexes = self.hash_join_desc.right_join_desc.build_indexes.read();
+        let build_block = self.row_space.gather(&build_indexes)?;
+        let input_block = self.merge_eq_block(&build_block, &probe_block)?;
+
         let mut row_state = self.row_state_for_right_join()?;
         let unmatched_build_indexes = self.find_unmatched_build_indexes(&row_state)?;
         if unmatched_build_indexes.is_empty() && self.hash_join_desc.other_predicate.is_none() {
-            return Ok(blocks.to_vec());
-        }
-
-        if blocks.is_empty() && self.hash_join_desc.join_type != JoinType::Full {
-            return Ok(vec![]);
+            return Ok(vec![input_block]);
         }
 
         // Don't need process non-equi conditions for full join in the method
@@ -285,12 +291,9 @@ impl HashJoinState for JoinHashTable {
             || self.hash_join_desc.join_type == JoinType::Full
         {
             let null_block = self.null_blocks_for_right_join(&unmatched_build_indexes)?;
-            return Ok(vec![DataBlock::concat_blocks(
-                &[blocks, &[null_block]].concat(),
-            )?]);
+            return Ok(vec![DataBlock::concat_blocks(&[input_block, null_block])?]);
         }
 
-        let input_block = DataBlock::concat_blocks(blocks)?;
         let (bm, all_true, all_false) = self.get_other_filters(
             &input_block,
             self.hash_join_desc.other_predicate.as_ref().unwrap(),
@@ -346,7 +349,13 @@ impl HashJoinState for JoinHashTable {
         if blocks.is_empty() {
             return Ok(vec![]);
         }
-        let input_block = DataBlock::concat_blocks(blocks)?;
+
+        let probe_block = DataBlock::concat_blocks(blocks)?;
+        // Get build block
+        let build_indexes = self.hash_join_desc.right_join_desc.build_indexes.read();
+        let build_block = self.row_space.gather(&build_indexes)?;
+        let input_block = self.merge_eq_block(&build_block, &probe_block)?;
+
         let probe_fields_len = self.probe_schema.fields().len();
         let build_columns = input_block.columns()[probe_fields_len..].to_vec();
         let build_block = DataBlock::create(self.row_space.data_schema.clone(), build_columns);
