@@ -206,12 +206,17 @@ impl Session {
             .ok_or_else(|| ErrorCode::AuthenticateFailure("unauthenticated"))
     }
 
-    pub fn set_current_user(self: &Arc<Self>, user: UserInfo) {
+    // set_authed_user() is called after authentication is passed in various protocol handlers, like
+    // HTTP handler, clickhouse query handler, mysql query handler.
+    // TODO(liyz): add current_role: Option<String> to the parameter to handle X-DATABEND-ROLE
+    pub async fn set_authed_user(self: &Arc<Self>, user: UserInfo) -> Result<()> {
         self.session_ctx.set_current_user(user);
+        self.ensure_current_role().await?;
+        Ok(())
     }
 
-    // Call this method after authentication (after set_current_user() and set_auth_role() get called).
-    pub async fn refresh_current_role(self: &Arc<Self>) -> Result<()> {
+    // ensure_current_role() is called after authentication and before any privilege checks
+    async fn ensure_current_role(self: &Arc<Self>) -> Result<()> {
         let tenant = self.get_current_tenant();
         let public_role = RoleCacheManager::instance()
             .find_role(&tenant, BUILTIN_ROLE_PUBLIC)
@@ -299,7 +304,7 @@ impl Session {
         }
 
         // 2. check the current role's privilege set
-        self.refresh_current_role().await?;
+        self.ensure_current_role().await?;
         let current_role = self.get_current_role();
         let role_verified = current_role
             .map(|r| r.grants.verify_privilege(object, privilege))

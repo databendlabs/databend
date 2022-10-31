@@ -60,7 +60,10 @@ async fn run_query(query_ctx: &Arc<QueryContext>) -> Result<Arc<dyn Interpreter>
     let user = UserApiProvider::instance()
         .get_user("test", UserIdentity::new("root", "localhost"))
         .await?;
-    query_ctx.set_current_user(user);
+    query_ctx
+        .get_current_session()
+        .set_authed_user(user)
+        .await?;
     let mut planner = Planner::new(query_ctx.clone());
     let (plan, _, _) = planner.plan_sql(sql).await?;
     query_ctx.attach_query_str(plan.to_string(), sql);

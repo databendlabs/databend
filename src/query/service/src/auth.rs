@@ -99,8 +99,7 @@ impl AuthMgr {
                 }?
             }
         };
-        session.set_current_user(user_info);
-        session.refresh_current_role().await?;
+        session.set_authed_user(user_info).await?;
         Ok(())
     }
 

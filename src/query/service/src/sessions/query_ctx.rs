@@ -281,9 +281,6 @@ impl TableContext for QueryContext {
     fn get_current_user(&self) -> Result<UserInfo> {
         self.shared.get_current_user()
     }
-    fn set_current_user(&self, user: UserInfo) {
-        self.shared.set_current_user(user)
-    }
     fn get_current_role(&self) -> Option<RoleInfo> {
         self.shared.get_current_role()
     }
