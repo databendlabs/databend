@@ -22,7 +22,6 @@ use common_exception::Result;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use common_meta_types::StageType;
 use common_users::UserApiProvider;
 
 use super::table::AsyncOneBlockSystemTable;
@@ -59,15 +58,8 @@ impl AsyncSystemTable for StagesTable {
             stage_params.push(format!("{:?}", stage.stage_params).into_bytes());
             copy_options.push(format!("{:?}", stage.copy_options).into_bytes());
             file_format_options.push(format!("{:?}", stage.file_format_options).into_bytes());
-            match stage.stage_type {
-                StageType::LegacyInternal | StageType::Internal => {
-                    number_of_files.push(Some(stage.number_of_files));
-                }
-                StageType::External => {
-                    number_of_files.push(None);
-                }
-            };
-            creator.push(stage.creator.map(|c| c.to_string().into_bytes()));
+            number_of_files.push(None);
+            creator.push(None);
             comment.push(stage.comment.clone().into_bytes());
         }
         Ok(DataBlock::create(self.table_info.schema(), vec![

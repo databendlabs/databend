@@ -59,6 +59,10 @@ pub enum StageType {
     LegacyInternal,
     External,
     Internal,
+    /// User Stage is the stage for every sql user.
+    ///
+    /// This is a stage that just in memory. We will not persist in metasrv
+    User,
 }
 
 impl fmt::Display for StageType {
@@ -68,6 +72,7 @@ impl fmt::Display for StageType {
             StageType::LegacyInternal => "Internal",
             StageType::External => "External",
             StageType::Internal => "Internal",
+            StageType::User => "User",
         };
         write!(f, "{}", name)
     }
@@ -245,7 +250,9 @@ pub struct UserStageInfo {
     pub file_format_options: FileFormatOptions,
     pub copy_options: CopyOptions,
     pub comment: String,
+    /// TODO(xuanwo): stage doesn't have this info anymore, remove it.
     pub number_of_files: u64,
+    /// TODO(xuanwo): stage doesn't have this info anymore, remove it.
     pub creator: Option<UserIdentity>,
 }
 
@@ -273,6 +280,7 @@ impl UserStageInfo {
                 unreachable!("stage_prefix should never be called on external stage, must be a bug")
             }
             StageType::Internal => format!("/stage/internal/{}/", self.stage_name),
+            StageType::User => format!("/stage/user/{}/", self.stage_name),
         }
     }
 }
