@@ -84,7 +84,7 @@ pub struct CatalogMeta {
     pub catalog_type: CatalogType,
     pub options: BTreeMap<String, String>,
     pub created_on: Option<DateTime<Utc>>,
-    pub droped_on: Option<DateTime<Utc>>,
+    pub dropped_on: Option<DateTime<Utc>>,
 }
 
 impl Display for CatalogMeta {

@@ -49,7 +49,7 @@ impl Interpreter for CreateCatalogInterpreter {
     #[tracing::instrument(level = "debug", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let catalog_type = self.plan.meta.catalog_type;
-        if self.plan.meta.droped_on.is_some() {
+        if self.plan.meta.dropped_on.is_some() {
             let err = ErrorCode::CreateCatalogWithDropTime("Create with drop time is not allowed");
             return Err(err);
         }

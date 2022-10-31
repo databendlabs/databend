@@ -125,7 +125,7 @@ impl<'a> Binder {
             catalog_type,
             options,
             created_on: Some(Utc::now()),
-            droped_on: None,
+            dropped_on: None,
         }
     }
 }
