@@ -18,14 +18,14 @@ use std::sync::Arc;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
-use common_legacy_expression::LegacyExpression;
+use common_datavalues::DataValue;
 use common_meta_app::schema::TableInfo;
 
-use crate::Extras;
-use crate::Partitions;
-use crate::Projection;
-use crate::StageTableInfo;
-use crate::Statistics;
+use crate::extras::Extras;
+use crate::extras::Statistics;
+use crate::partition::Partitions;
+use crate::plans::Projection;
+use crate::stage_table::StageTableInfo;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum SourceInfo {
@@ -71,7 +71,7 @@ pub struct ReadDataSourcePlan {
     pub statistics: Statistics,
     pub description: String,
 
-    pub tbl_args: Option<Vec<LegacyExpression>>,
+    pub tbl_args: Option<Vec<DataValue>>,
     pub push_downs: Option<Extras>,
 }
 

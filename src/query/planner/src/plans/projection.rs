@@ -13,11 +13,9 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::fmt::Debug;
 use std::fmt::Formatter;
 
 use common_datavalues::DataSchema;
-use common_legacy_expression::LegacyExpression;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub enum Projection {
@@ -53,7 +51,7 @@ impl Projection {
     }
 }
 
-impl Debug for Projection {
+impl core::fmt::Debug for Projection {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             Projection::Columns(indices) => write!(f, "{:?}", indices),
@@ -61,47 +59,6 @@ impl Debug for Projection {
                 let paths: Vec<&Vec<usize>> = path_indices.values().collect();
                 write!(f, "{:?}", paths)
             }
-        }
-    }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct PrewhereInfo {
-    /// columns to be ouput be prewhere scan
-    pub output_columns: Projection,
-    /// columns used for prewhere
-    pub prewhere_columns: Projection,
-    /// remain_columns = scan.columns - need_columns
-    pub remain_columns: Projection,
-    /// filter for prewhere
-    pub filter: LegacyExpression,
-}
-
-/// Extras is a wrapper for push down items.
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Default)]
-pub struct Extras {
-    /// Optional column indices to use as a projection
-    pub projection: Option<Projection>,
-    /// Optional filter expression plan
-    /// split_conjunctions by `and` operator
-    pub filters: Vec<LegacyExpression>,
-    /// Optional prewhere information
-    /// used for prewhere optimization
-    pub prewhere: Option<PrewhereInfo>,
-    /// Optional limit to skip read
-    pub limit: Option<usize>,
-    /// Optional order_by expression plan
-    pub order_by: Vec<LegacyExpression>,
-}
-
-impl Extras {
-    pub fn default() -> Self {
-        Extras {
-            projection: None,
-            filters: vec![],
-            prewhere: None,
-            limit: None,
-            order_by: vec![],
         }
     }
 }

@@ -18,14 +18,15 @@ use common_base::base::tokio;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_functions::aggregates::eval_aggr;
+use common_functions::scalars::FunctionContext;
 use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::ClusterStatistics;
 use common_fuse_meta::meta::ColumnStatistics;
 use common_fuse_meta::meta::Statistics;
-use common_legacy_expression::add;
-use common_legacy_expression::col;
-use common_legacy_expression::lit;
-use common_pipeline_transforms::processors::ExpressionExecutor;
+use common_sql::evaluator::Evaluator;
+use common_sql::executor::add;
+use common_sql::executor::col;
+use common_sql::executor::lit;
 use common_storages_fuse::statistics::reducers::reduce_block_metas;
 use common_storages_fuse::statistics::Trim;
 use common_storages_fuse::statistics::STATS_REPLACEMENT_CHAR;
@@ -179,14 +180,14 @@ fn test_ft_stats_cluster_stats() -> common_exception::Result<()> {
     ]);
 
     let block_compactor = BlockCompactor::new(1_000_000, 800_000, 100 * 1024 * 1024);
-    let stats_gen = ClusterStatsGenerator::new(0, vec![0], None, 0, block_compactor.clone());
+    let stats_gen = ClusterStatsGenerator::new(0, vec![0], vec![], 0, block_compactor.clone());
     let (stats, _) = stats_gen.gen_stats_for_append(&blocks)?;
     assert!(stats.is_some());
     let stats = stats.unwrap();
     assert_eq!(vec![DataValue::Int64(1)], stats.min);
     assert_eq!(vec![DataValue::Int64(3)], stats.max);
 
-    let stats_gen = ClusterStatsGenerator::new(1, vec![1], None, 0, block_compactor);
+    let stats_gen = ClusterStatsGenerator::new(1, vec![1], vec![], 0, block_compactor);
     let (stats, _) = stats_gen.gen_stats_for_append(&blocks)?;
     assert!(stats.is_some());
     let stats = stats.unwrap();
@@ -208,7 +209,7 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
     });
 
     let block_compactor = BlockCompactor::new(1_000_000, 800_000, 100 * 1024 * 1024);
-    let stats_gen = ClusterStatsGenerator::new(0, vec![0], None, 0, block_compactor.clone());
+    let stats_gen = ClusterStatsGenerator::new(0, vec![0], vec![], 0, block_compactor.clone());
     let stats = stats_gen.gen_with_origin_stats(&blocks, origin.clone())?;
     assert!(stats.is_some());
     let stats = stats.unwrap();
@@ -216,20 +217,15 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
     assert_eq!(vec![DataValue::Int64(3)], stats.max);
 
     // add expression executor.
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
+    let expr = add(col("a", i32::to_data_type()), lit(1));
+    let eval_node = Evaluator::eval_expression(&expr, &schema)?;
+    let func_ctx = FunctionContext::default();
+    let result = eval_node.eval(&func_ctx, &blocks)?;
     let output_schema =
         DataSchemaRefExt::create(vec![DataField::new("(a + 1)", i64::to_data_type())]);
-    let executor = ExpressionExecutor::try_create(
-        ctx,
-        "expression executor for generator cluster statistics",
-        schema,
-        output_schema,
-        vec![add(col("a"), lit(1))],
-        true,
-    )?;
-    let stats_gen =
-        ClusterStatsGenerator::new(0, vec![0], Some(executor), 0, block_compactor.clone());
+    let blocks = DataBlock::create(output_schema, vec![result.vector]);
+
+    let stats_gen = ClusterStatsGenerator::new(0, vec![0], vec![], 0, block_compactor.clone());
     let stats = stats_gen.gen_with_origin_stats(&blocks, origin.clone())?;
     assert!(stats.is_some());
     let stats = stats.unwrap();
@@ -237,7 +233,7 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
     assert_eq!(vec![DataValue::Int64(4)], stats.max);
 
     // different cluster_key_id.
-    let stats_gen = ClusterStatsGenerator::new(1, vec![0], None, 0, block_compactor);
+    let stats_gen = ClusterStatsGenerator::new(1, vec![0], vec![], 0, block_compactor);
     let stats = stats_gen.gen_with_origin_stats(&blocks, origin)?;
     assert!(stats.is_none());
 

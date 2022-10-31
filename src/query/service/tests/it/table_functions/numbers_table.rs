@@ -15,14 +15,13 @@
 use common_base::base::tokio;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_legacy_expression::*;
-use common_legacy_planners::*;
+use common_planner::extras::Extras;
+use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
 use databend_query::sessions::TableContext;
 use databend_query::sql::Planner;
-use databend_query::storages::ToReadDataSourcePlan;
 use databend_query::stream::DataBlockStream;
 use databend_query::table_functions::NumbersTable;
 use futures::TryStreamExt;
@@ -33,7 +32,7 @@ use crate::tests::TestGlobalServices;
 
 #[tokio::test]
 async fn test_number_table() -> Result<()> {
-    let tbl_args = Some(vec![LegacyExpression::create_literal(DataValue::UInt64(8))]);
+    let tbl_args = Some(vec![DataValue::UInt64(8)]);
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let table = NumbersTable::create("system", "numbers_mt", 1, tbl_args)?;
 

@@ -17,7 +17,8 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
-use common_planner::IndexType;
+use common_sql::executor::PhysicalScalar;
+use common_sql::IndexType;
 use parking_lot::RwLock;
 
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
@@ -25,7 +26,6 @@ use crate::sessions::QueryContext;
 use crate::sql::evaluator::EvalNode;
 use crate::sql::evaluator::Evaluator;
 use crate::sql::executor::HashJoin;
-use crate::sql::executor::PhysicalScalar;
 use crate::sql::plans::JoinType;
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug, Hash)]
@@ -101,10 +101,7 @@ impl HashJoinDesc {
             let func = FunctionFactory::instance().get("and", &data_types)?;
             condition = PhysicalScalar::Function {
                 name: "and".to_string(),
-                args: vec![
-                    (condition, left_type),
-                    (other_condition.clone(), right_type),
-                ],
+                args: vec![condition, other_condition.clone()],
                 return_type: func.return_type(),
             };
         }

@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
+
 use common_exception::Result;
 
-use crate::LegacyExpression;
+use crate::Expression;
 
 /// Controls how the visitor recursion should proceed.
 pub enum Recursion<V: ExpressionVisitor> {
@@ -26,14 +28,14 @@ pub enum Recursion<V: ExpressionVisitor> {
 }
 
 /// Encode the traversal of an expression tree. When passed to
-/// `Expr::accept`, `ExpressionVisitor::visit` is invoked
+/// `ExpressionVisitor::accept`, `ExpressionVisitor::visit` is invoked
 /// recursively on all nodes of an expression tree. See the comments
-/// on `Expr::accept` for details on its use
+/// on `ExpressionVisitor::accept` for details on its use
 pub trait ExpressionVisitor: Sized {
     /// Invoked before any children of `expr` are visisted.
-    fn pre_visit(self, expr: &LegacyExpression) -> Result<Recursion<Self>>;
+    fn pre_visit(self, expr: &Expression) -> Result<Recursion<Self>>;
 
-    fn visit(mut self, predecessor_expr: &LegacyExpression) -> Result<Self> {
+    fn visit(mut self, predecessor_expr: &Expression) -> Result<Self> {
         let mut stack = vec![RecursionProcessing::Call(predecessor_expr)];
         while let Some(element) = stack.pop() {
             match element {
@@ -46,36 +48,13 @@ pub trait ExpressionVisitor: Sized {
                         Recursion::Stop(visitor) => visitor,
                         Recursion::Continue(visitor) => {
                             match expr {
-                                LegacyExpression::Alias(_, expr) => {
-                                    stack.push(RecursionProcessing::Call(expr))
-                                }
-                                LegacyExpression::BinaryExpression { left, right, .. } => {
-                                    stack.push(RecursionProcessing::Call(left));
-                                    stack.push(RecursionProcessing::Call(right));
-                                }
-                                LegacyExpression::UnaryExpression { expr, .. } => {
-                                    stack.push(RecursionProcessing::Call(expr));
-                                }
-                                LegacyExpression::ScalarFunction { args, .. } => {
+                                Expression::Function { args, .. } => {
                                     for arg in args {
                                         stack.push(RecursionProcessing::Call(arg));
                                     }
                                 }
-                                LegacyExpression::AggregateFunction { args, .. } => {
-                                    for arg in args {
-                                        stack.push(RecursionProcessing::Call(arg));
-                                    }
-                                }
-                                LegacyExpression::Cast { expr, .. } => {
-                                    stack.push(RecursionProcessing::Call(expr));
-                                }
-                                LegacyExpression::Sort { expr, .. } => {
-                                    stack.push(RecursionProcessing::Call(expr));
-                                }
-                                LegacyExpression::MapAccess { args, .. } => {
-                                    for arg in args {
-                                        stack.push(RecursionProcessing::Call(arg));
-                                    }
+                                Expression::Cast { input, .. } => {
+                                    stack.push(RecursionProcessing::Call(input));
                                 }
                                 _ => {}
                             };
@@ -90,14 +69,14 @@ pub trait ExpressionVisitor: Sized {
         Ok(self)
     }
 
-    /// Invoked after all children of `expr` are visited. Default
+    /// Invoked after all children of `scalar` are visited. Default
     /// implementation does nothing.
-    fn post_visit(self, _expr: &LegacyExpression) -> Result<Self> {
+    fn post_visit(self, _scalar: &Expression) -> Result<Self> {
         Ok(self)
     }
 }
 
-impl LegacyExpression {
+impl Expression {
     /// Performs a depth first walk of an expression and
     /// its children, calling [`ExpressionVisitor::pre_visit`] and
     /// `visitor.post_visit`.
@@ -138,6 +117,38 @@ impl LegacyExpression {
 }
 
 enum RecursionProcessing<'a> {
-    Call(&'a LegacyExpression),
-    Ret(&'a LegacyExpression),
+    Call(&'a Expression),
+    Ret(&'a Expression),
+}
+
+// This visitor is for recursively visiting expression tree and collects all columns.
+pub struct RequireColumnsVisitor {
+    pub required_columns: HashSet<String>,
+}
+
+impl RequireColumnsVisitor {
+    pub fn default() -> Self {
+        Self {
+            required_columns: HashSet::new(),
+        }
+    }
+
+    pub fn collect_columns_from_expr(expr: &Expression) -> Result<HashSet<String>> {
+        let mut visitor = Self::default();
+        visitor = expr.accept(visitor)?;
+        Ok(visitor.required_columns)
+    }
+}
+
+impl ExpressionVisitor for RequireColumnsVisitor {
+    fn pre_visit(self, expr: &Expression) -> Result<Recursion<Self>> {
+        match expr {
+            Expression::IndexedVariable { name, .. } => {
+                let mut v = self;
+                v.required_columns.insert(name.clone());
+                Ok(Recursion::Continue(v))
+            }
+            _ => Ok(Recursion::Continue(self)),
+        }
+    }
 }

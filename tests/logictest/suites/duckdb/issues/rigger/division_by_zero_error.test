@@ -16,7 +16,7 @@ INSERT INTO t0 VALUES(0.0,NULL);
 statement error 1006
 SELECT t0.c1, (1/t0.c1) IS NULL FROM t0 order by c1;
 
-statement query T
+statement ok
 SELECT t0.c1 FROM t0 WHERE (((1/(t0.c1))) IS NULL) order by c1;
 
 ----

@@ -21,8 +21,8 @@ common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
 common-functions = { path = "../../functions" }
 common-fuse-meta = { path = "../fuse-meta" }
-common-legacy-expression = { path = "../../legacy-expression" }
-common-pipeline-transforms = { path = "../../pipeline/transforms" }
+common-planner = { path = "../../planner" }
+common-sql = { path = "../../sql" }
 
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", features = [
     "cbordata",

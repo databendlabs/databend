@@ -23,10 +23,9 @@ use common_functions::scalars::Function;
 use common_functions::scalars::FunctionContext;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::Monotonicity;
-
-use crate::ExpressionVisitor;
-use crate::LegacyExpression;
-use crate::Recursion;
+use common_planner::Expression;
+use common_planner::ExpressionVisitor;
+use common_planner::Recursion;
 
 // ExpressionMonotonicityVisitor visit the expression tree to calculate monotonicity.
 // For example, a function of Add(Neg(number), 5) for number < -100 will have a tree like this:
@@ -49,12 +48,10 @@ use crate::Recursion;
 #[derive(Clone)]
 pub struct ExpressionMonotonicityVisitor {
     input_schema: DataSchemaRef,
-
     // HashMap<column_name, (variable_left, variable_right)>
     // variable_left: the variable range left.
     // variable_right: the variable range right.
     variables: HashMap<String, (Option<ColumnWithField>, Option<ColumnWithField>)>,
-
     stack: Vec<(DataTypeImpl, Monotonicity)>,
 
     single_point: bool,
@@ -166,7 +163,7 @@ impl ExpressionMonotonicityVisitor {
     /// Return the monotonicity information, together with column name if any.
     pub fn check_expression(
         schema: DataSchemaRef,
-        expr: &LegacyExpression,
+        expr: &Expression,
         variables: HashMap<String, (Option<ColumnWithField>, Option<ColumnWithField>)>,
         single_point: bool,
     ) -> Monotonicity {
@@ -178,18 +175,18 @@ impl ExpressionMonotonicityVisitor {
 }
 
 impl ExpressionVisitor for ExpressionMonotonicityVisitor {
-    fn pre_visit(self, _expr: &LegacyExpression) -> Result<Recursion<Self>> {
+    fn pre_visit(self, _expr: &Expression) -> Result<Recursion<Self>> {
         Ok(Recursion::Continue(self))
     }
 
-    fn post_visit(mut self, expr: &LegacyExpression) -> Result<Self> {
+    fn post_visit(mut self, expr: &Expression) -> Result<Self> {
         match expr {
-            LegacyExpression::Column(s) => {
-                let (left, right) = self.variables.get(s).ok_or_else(|| {
-                    ErrorCode::BadArguments(format!("Cannot find the column name '{:?}'", *s))
+            Expression::IndexedVariable { name, .. } => {
+                let (left, right) = self.variables.get(name).ok_or_else(|| {
+                    ErrorCode::BadArguments(format!("Cannot find the column: '{:?}'", name))
                 })?;
 
-                let field = self.input_schema.field_with_name(s)?;
+                let field = self.input_schema.field_with_name(name)?;
                 let return_type = field.data_type();
 
                 let monotonic = Monotonicity {
@@ -203,13 +200,10 @@ impl ExpressionVisitor for ExpressionMonotonicityVisitor {
                 self.stack.push((return_type.clone(), monotonic));
                 Ok(self)
             }
-            LegacyExpression::Literal {
-                value,
-                column_name,
-                data_type,
-            } => {
-                let name = column_name.clone().unwrap_or_else(|| value.to_string());
+            Expression::Constant { value, data_type } => {
+                let name = value.to_string();
                 let data_field = DataField::new(&name, data_type.clone());
+
                 let col = data_type.create_constant_column(value, 1)?;
                 let data_column_field = ColumnWithField::new(col, data_field);
                 let monotonic = Monotonicity {
@@ -223,10 +217,7 @@ impl ExpressionVisitor for ExpressionMonotonicityVisitor {
                 self.stack.push((data_type.clone(), monotonic));
                 Ok(self)
             }
-            LegacyExpression::BinaryExpression { op, .. } => self.visit_function(op, 2),
-            LegacyExpression::UnaryExpression { op, .. } => self.visit_function(op, 1),
-            LegacyExpression::ScalarFunction { op, args } => self.visit_function(op, args.len()),
-            // Todo: Expression::Cast
+            Expression::Function { name, args, .. } => self.visit_function(name, args.len()),
             _ => Err(ErrorCode::UnknownException("Unable to get monotonicity")),
         }
     }

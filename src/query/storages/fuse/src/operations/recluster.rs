@@ -20,14 +20,14 @@ use common_catalog::table_context::TableContext;
 use common_datablocks::SortColumnDescription;
 use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
-use common_legacy_planners::Extras;
-use common_legacy_planners::ReadDataSourcePlan;
-use common_legacy_planners::SourceInfo;
 use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::SortMergeCompactor;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_pipeline_transforms::processors::transforms::TransformSortMerge;
 use common_pipeline_transforms::processors::transforms::TransformSortPartial;
+use common_planner::extras::Extras;
+use common_planner::ReadDataSourcePlan;
+use common_planner::SourceInfo;
 
 use crate::operations::FuseTableSink;
 use crate::operations::ReclusterMutator;
@@ -146,7 +146,7 @@ impl FuseTable {
 
         // sort
         let sort_descs: Vec<SortColumnDescription> = self
-            .cluster_keys
+            .cluster_keys()
             .iter()
             .map(|expr| SortColumnDescription {
                 column_name: expr.column_name(),
@@ -154,6 +154,7 @@ impl FuseTable {
                 nulls_first: false,
             })
             .collect();
+
         pipeline.add_transform(|transform_input_port, transform_output_port| {
             TransformSortPartial::try_create(
                 transform_input_port,

@@ -33,8 +33,6 @@ use common_catalog::table_function::TableFunction;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_expression::LegacyExpression;
-use common_planner::IndexType;
 use common_storages_preludes::view::view_table::QUERY;
 
 use crate::binder::scalar::ScalarBinder;
@@ -49,6 +47,7 @@ use crate::plans::ConstantExpr;
 use crate::plans::LogicalGet;
 use crate::plans::Scalar;
 use crate::BindContext;
+use crate::IndexType;
 
 impl<'a> Binder {
     pub(super) async fn bind_one_table(
@@ -190,19 +189,13 @@ impl<'a> Binder {
                 let expressions = args
                     .into_iter()
                     .map(|(scalar, _)| match scalar {
-                        Scalar::ConstantExpr(ConstantExpr { value, data_type }) => {
-                            Ok(LegacyExpression::Literal {
-                                value,
-                                column_name: None,
-                                data_type: *data_type,
-                            })
-                        }
+                        Scalar::ConstantExpr(ConstantExpr { value, .. }) => Ok(value),
                         _ => Err(ErrorCode::UnImplement(format!(
                             "Unsupported table argument type: {:?}",
                             scalar
                         ))),
                     })
-                    .collect::<Result<Vec<LegacyExpression>>>()?;
+                    .collect::<Result<Vec<DataValue>>>()?;
 
                 let table_args = Some(expressions);
 

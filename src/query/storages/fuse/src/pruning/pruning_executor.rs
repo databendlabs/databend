@@ -27,7 +27,7 @@ use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SegmentInfo;
-use common_legacy_planners::Extras;
+use common_planner::extras::Extras;
 use futures::future;
 use opendal::Operator;
 use tracing::warn;

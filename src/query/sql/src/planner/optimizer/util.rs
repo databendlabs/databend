@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_planner::MetadataRef;
-
 use super::SExpr;
 use crate::plans::JoinType;
 use crate::plans::RelOperator;
+use crate::MetadataRef;
 
 /// Check if a query will read data from local tables(e.g. system tables).
 pub fn contains_local_table_scan(s_expr: &SExpr, metadata: &MetadataRef) -> bool {

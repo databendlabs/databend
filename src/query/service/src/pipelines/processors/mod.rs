@@ -35,8 +35,6 @@ pub use sources::SyncSourcer;
 pub use transforms::AggregatorParams;
 pub use transforms::AggregatorTransformParams;
 pub use transforms::BlockCompactor;
-pub use transforms::ExpressionTransform;
-pub use transforms::FixedKeyHashTable;
 pub use transforms::HashJoinDesc;
 pub use transforms::HashJoinState;
 pub use transforms::HashTable;

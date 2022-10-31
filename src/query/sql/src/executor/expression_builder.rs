@@ -12,24 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datavalues::DataSchema;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
+use common_datavalues::NullType;
+use common_datavalues::StringType;
+use common_datavalues::ToDataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_expression::LegacyExpression;
-use common_planner::IndexType;
-use common_planner::MetadataRef;
+use common_functions::scalars::FunctionFactory;
+use common_planner::Expression;
 
 use crate::executor::util::format_field_name;
-use crate::plans::AggregateFunction;
-use crate::plans::AndExpr;
-use crate::plans::BoundColumnRef;
-use crate::plans::CastExpr;
-use crate::plans::ComparisonExpr;
-use crate::plans::ConstantExpr;
-use crate::plans::FunctionCall;
-use crate::plans::OrExpr;
 use crate::plans::Scalar;
+use crate::IndexType;
+use crate::MetadataRef;
+use crate::ScalarExpr;
 
 pub trait FiledNameFormat {
     fn format(display_name: &str, index: IndexType) -> String;
@@ -61,131 +59,269 @@ where ExpressionBuilder<T>: FiledNameFormat
         ExpressionBuilder { metadata }
     }
 
-    pub fn build_and_rename(&self, scalar: &Scalar, index: IndexType) -> Result<LegacyExpression> {
-        let expr = self.build(scalar)?;
-        let metadata = self.metadata.read();
-        let name = metadata.column(index).name();
-        Ok(LegacyExpression::Alias(
-            Self::format(name, index),
-            Box::new(expr),
-        ))
-    }
-
-    pub fn build(&self, scalar: &Scalar) -> Result<LegacyExpression> {
+    pub fn build(&self, scalar: &Scalar) -> Result<Expression> {
         match scalar {
-            Scalar::BoundColumnRef(BoundColumnRef { column }) => {
-                self.build_column_ref(column.index)
-            }
-            Scalar::ConstantExpr(ConstantExpr { value, data_type }) => {
-                self.build_literal(value, data_type)
-            }
-            Scalar::ComparisonExpr(ComparisonExpr {
-                op, left, right, ..
-            }) => self.build_binary_operator(left, right, op.to_func_name()),
-            Scalar::AggregateFunction(AggregateFunction {
-                func_name,
-                distinct,
-                params,
-                args,
-                ..
-            }) => self.build_aggr_function(func_name.clone(), *distinct, params.clone(), args),
-            Scalar::AndExpr(AndExpr { left, right, .. }) => {
-                let left = self.build(left)?;
-                let right = self.build(right)?;
-                Ok(LegacyExpression::BinaryExpression {
-                    left: Box::new(left),
-                    op: "and".to_string(),
-                    right: Box::new(right),
+            Scalar::BoundColumnRef(column_ref) => {
+                let metadata = self.metadata.read();
+                let name = metadata.column(column_ref.column.index).name();
+                Ok(Expression::IndexedVariable {
+                    name: name.to_string(),
+                    data_type: (*column_ref.column.data_type).clone(),
                 })
             }
-            Scalar::OrExpr(OrExpr { left, right, .. }) => {
-                let left = self.build(left)?;
-                let right = self.build(right)?;
-                Ok(LegacyExpression::BinaryExpression {
-                    left: Box::new(left),
-                    op: "or".to_string(),
-                    right: Box::new(right),
-                })
-            }
-            Scalar::FunctionCall(FunctionCall {
-                arguments,
-                func_name,
-                ..
-            }) => {
-                let args = arguments
+            Scalar::ConstantExpr(constant) => Ok(Expression::Constant {
+                value: constant.value.clone(),
+                data_type: *constant.data_type.clone(),
+            }),
+            Scalar::AndExpr(and) => Ok(Expression::Function {
+                name: "and".to_string(),
+                args: vec![self.build(&and.left)?, self.build(&and.right)?],
+                return_type: and.data_type(),
+            }),
+            Scalar::OrExpr(or) => Ok(Expression::Function {
+                name: "or".to_string(),
+                args: vec![self.build(&or.left)?, self.build(&or.right)?],
+                return_type: or.data_type(),
+            }),
+            Scalar::ComparisonExpr(comp) => Ok(Expression::Function {
+                name: comp.op.to_func_name(),
+                args: vec![self.build(&comp.left)?, self.build(&comp.right)?],
+                return_type: comp.data_type(),
+            }),
+            Scalar::FunctionCall(func) => Ok(Expression::Function {
+                name: func.func_name.clone(),
+                args: func
+                    .arguments
                     .iter()
-                    .map(|arg| self.build(arg))
-                    .collect::<Result<Vec<_>>>()?;
-                Ok(LegacyExpression::ScalarFunction {
-                    op: func_name.clone(),
+                    .zip(func.arg_types.iter())
+                    .map(|(arg, _)| self.build(arg))
+                    .collect::<Result<_>>()?,
+                return_type: *func.return_type.clone(),
+            }),
+            Scalar::CastExpr(cast) => Ok(Expression::Cast {
+                input: Box::new(self.build(&cast.argument)?),
+                target: *cast.target_type.clone(),
+            }),
+
+            _ => Err(ErrorCode::LogicalError(format!(
+                "Unsupported physical scalar: {:?}",
+                scalar
+            ))),
+        }
+    }
+
+    // the datatype may be wrong if the expression is push down from the upper node (join)
+    // todo(leisky)
+    pub fn normalize_schema(expression: &Expression, schema: &DataSchema) -> Result<Expression> {
+        match expression {
+            Expression::IndexedVariable { name, .. } => {
+                let data_type = match schema.field_with_name(name) {
+                    Ok(f) => f.data_type().clone(),
+                    Err(_) => return Ok(expression.clone()),
+                };
+                Ok(Expression::IndexedVariable {
+                    name: name.clone(),
+                    data_type,
+                })
+            }
+            Expression::Function { name, args, .. } => {
+                let args = args
+                    .iter()
+                    .map(|arg| Self::normalize_schema(arg, schema))
+                    .collect::<Result<Vec<_>>>();
+
+                let args = args?;
+
+                let types = args.iter().map(|arg| arg.data_type()).collect::<Vec<_>>();
+                let types = types.iter().collect::<Vec<_>>();
+                let func = FunctionFactory::instance().get(name, &types)?;
+
+                Ok(Expression::Function {
+                    name: name.clone(),
                     args,
+                    return_type: func.return_type(),
                 })
             }
-            Scalar::CastExpr(CastExpr {
-                argument,
-                target_type,
-                ..
-            }) => {
-                let arg = self.build(argument)?;
-                Ok(LegacyExpression::Cast {
-                    expr: Box::new(arg),
-                    data_type: *target_type.clone(),
-                    pg_style: false,
-                })
+
+            Expression::Cast { input, target } => Ok(Expression::Cast {
+                input: Box::new(Self::normalize_schema(input.as_ref(), schema)?),
+                target: target.clone(),
+            }),
+            Expression::Constant { .. } => Ok(expression.clone()),
+        }
+    }
+}
+
+pub trait ExpressionOp {
+    fn binary_op(&self, name: &str, other: &Self) -> Result<Expression>;
+
+    fn unary_op(&self, name: &str) -> Result<Expression>;
+
+    fn and(&self, other: &Self) -> Result<Expression> {
+        self.binary_op("and", other)
+    }
+
+    fn or(&self, other: &Self) -> Result<Expression> {
+        self.binary_op("or", other)
+    }
+
+    fn eq(&self, other: &Self) -> Result<Expression> {
+        self.binary_op("=", other)
+    }
+
+    fn not_eq(&self, other: &Self) -> Result<Expression> {
+        self.binary_op("!=", other)
+    }
+
+    fn gt_eq(&self, other: &Self) -> Result<Expression> {
+        self.binary_op(">=", other)
+    }
+
+    fn gt(&self, other: &Self) -> Result<Expression> {
+        self.binary_op(">", other)
+    }
+
+    fn lt_eq(&self, other: &Self) -> Result<Expression> {
+        self.binary_op("<=", other)
+    }
+
+    fn lt(&self, other: &Self) -> Result<Expression> {
+        self.binary_op("<", other)
+    }
+}
+
+impl ExpressionOp for Expression {
+    fn binary_op(&self, name: &str, other: &Expression) -> Result<Expression> {
+        let func =
+            FunctionFactory::instance().get(name, &[&self.data_type(), &other.data_type()])?;
+
+        Ok(Expression::Function {
+            name: name.to_owned(),
+            args: vec![self.clone(), other.clone()],
+            return_type: func.return_type(),
+        })
+    }
+
+    fn unary_op(&self, name: &str) -> Result<Expression> {
+        let func = FunctionFactory::instance().get(name, &[&self.data_type()])?;
+
+        Ok(Expression::Function {
+            name: name.to_owned(),
+            args: vec![self.clone()],
+            return_type: func.return_type(),
+        })
+    }
+}
+
+/// Add binary function.
+pub fn add(left: Expression, right: Expression) -> Expression {
+    left.binary_op("+", &right).unwrap()
+}
+
+/// Sub binary function.
+pub fn sub(left: Expression, right: Expression) -> Expression {
+    left.binary_op("-", &right).unwrap()
+}
+
+/// Not.
+pub fn not(other: Expression) -> Expression {
+    other.unary_op("not").unwrap()
+}
+
+// Neg.
+pub fn neg(other: Expression) -> Expression {
+    other.unary_op("negate").unwrap()
+}
+
+/// Mod binary function.
+pub fn modular(left: Expression, right: Expression) -> Expression {
+    left.binary_op("%", &right).unwrap()
+}
+
+/// sum() aggregate function.
+pub fn sum(other: Expression) -> Expression {
+    other.unary_op("sum").unwrap()
+}
+
+/// avg() aggregate function.
+pub fn avg(other: Expression) -> Expression {
+    other.unary_op("avg").unwrap()
+}
+
+pub fn func(name: &str) -> Result<Expression> {
+    let func = FunctionFactory::instance().get(name, &[])?;
+
+    Ok(Expression::Function {
+        name: name.to_owned(),
+        args: vec![],
+        return_type: func.return_type(),
+    })
+}
+
+pub fn col(name: &str, data_type: DataTypeImpl) -> Expression {
+    Expression::IndexedVariable {
+        name: name.to_string(),
+        data_type,
+    }
+}
+
+pub trait Literal {
+    fn to_literal(&self) -> Expression;
+}
+
+impl Literal for &[u8] {
+    fn to_literal(&self) -> Expression {
+        Expression::Constant {
+            value: DataValue::String(self.to_vec()),
+            data_type: *Box::new(StringType::new_impl()),
+        }
+    }
+}
+
+impl Literal for Vec<u8> {
+    fn to_literal(&self) -> Expression {
+        Expression::Constant {
+            value: DataValue::String(self.clone()),
+            data_type: *Box::new(StringType::new_impl()),
+        }
+    }
+}
+
+macro_rules! make_literal {
+    ($TYPE: ty, $SUPER: ident, $SCALAR: ident) => {
+        #[allow(missing_docs)]
+        impl Literal for $TYPE {
+            fn to_literal(&self) -> Expression {
+                Expression::Constant {
+                    value: DataValue::$SCALAR(*self as $SUPER),
+                    data_type: *Box::new($SUPER::to_data_type()),
+                }
             }
-            Scalar::SubqueryExpr(_) => Err(ErrorCode::UnImplement("Unsupported subquery expr")),
         }
-    }
+    };
+}
 
-    pub fn build_column_ref(&self, index: IndexType) -> Result<LegacyExpression> {
-        let metadata = self.metadata.read();
-        let name = metadata.column(index).name();
-        Ok(LegacyExpression::Column(Self::format(name, index)))
-    }
+make_literal!(bool, bool, Boolean);
+make_literal!(f32, f64, Float64);
+make_literal!(f64, f64, Float64);
 
-    pub fn build_literal(
-        &self,
-        data_value: &DataValue,
-        data_type: &DataTypeImpl,
-    ) -> Result<LegacyExpression> {
-        Ok(LegacyExpression::Literal {
-            value: data_value.clone(),
-            column_name: None,
-            data_type: data_type.clone(),
-        })
-    }
+make_literal!(i8, i64, Int64);
+make_literal!(i16, i64, Int64);
+make_literal!(i32, i64, Int64);
+make_literal!(i64, i64, Int64);
 
-    pub fn build_binary_operator(
-        &self,
-        left: &Scalar,
-        right: &Scalar,
-        op: String,
-    ) -> Result<LegacyExpression> {
-        let left_child = self.build(left)?;
-        let right_child = self.build(right)?;
-        Ok(LegacyExpression::BinaryExpression {
-            left: Box::new(left_child),
-            op,
-            right: Box::new(right_child),
-        })
-    }
+make_literal!(u8, u64, UInt64);
+make_literal!(u16, u64, UInt64);
+make_literal!(u32, u64, UInt64);
+make_literal!(u64, u64, UInt64);
 
-    pub fn build_aggr_function(
-        &self,
-        op: String,
-        distinct: bool,
-        params: Vec<DataValue>,
-        args: &Vec<Scalar>,
-    ) -> Result<LegacyExpression> {
-        let mut arg_exprs = Vec::with_capacity(args.len());
-        for arg in args.iter() {
-            arg_exprs.push(self.build(arg)?);
-        }
-        Ok(LegacyExpression::AggregateFunction {
-            op,
-            distinct,
-            params,
-            args: arg_exprs,
-        })
+pub fn lit<T: Literal>(n: T) -> Expression {
+    n.to_literal()
+}
+
+pub fn lit_null() -> Expression {
+    Expression::Constant {
+        value: DataValue::Null,
+        data_type: *Box::new(NullType::new_impl()),
     }
 }

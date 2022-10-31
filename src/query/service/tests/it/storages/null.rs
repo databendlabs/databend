@@ -17,9 +17,9 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_query::sql::plans::create_table_v2::TableOptions;
 use databend_query::storages::null::NullTable;
-use databend_query::storages::ToReadDataSourcePlan;
 use databend_query::stream::DataBlockStream;
 use futures::TryStreamExt;
 

@@ -46,5 +46,6 @@ impl PartialEq for Box<dyn PartInfo> {
     }
 }
 
+#[allow(dead_code)]
 pub type PartInfoPtr = Arc<Box<dyn PartInfo>>;
-pub type Partitions = Vec<Arc<Box<dyn PartInfo>>>;
+pub type Partitions = Vec<PartInfoPtr>;
