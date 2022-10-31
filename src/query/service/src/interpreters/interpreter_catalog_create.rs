@@ -74,7 +74,7 @@ impl Interpreter for CreateCatalogInterpreter {
         {
             let catalog_manager = CatalogManager::instance();
             catalog_manager
-                .create_user_defined_catalog(self.plan.into())
+                .create_user_defined_catalog(self.plan.clone().into())
                 .await?;
         }
 
