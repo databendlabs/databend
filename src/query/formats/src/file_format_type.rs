@@ -11,12 +11,15 @@ use common_meta_types::StageFileCompression;
 use common_meta_types::StageFileFormatType;
 use common_settings::Settings;
 
+use super::clickhouse::ClickhouseSuffix;
+
 pub trait FileFormatTypeExt {
     fn get_ext_from_stage(stage: FileFormatOptions) -> FileFormatOptionsExt;
 
     fn get_file_format_options_from_setting(
         &self,
         settings: &Settings,
+        clickhouse_suffix: ClickhouseSuffix,
     ) -> Result<FileFormatOptionsExt>;
 
     fn final_file_format_options(
@@ -38,6 +41,9 @@ pub struct FileFormatOptionsExt {
     stage: FileFormatOptions,
     quote: u8,
     ident_case_sensitive: bool,
+    headers: usize,
+    json_compact: bool,
+    json_strings: bool,
 }
 
 impl FileFormatTypeExt for StageFileFormatType {
@@ -46,12 +52,16 @@ impl FileFormatTypeExt for StageFileFormatType {
             stage,
             quote: 0,
             ident_case_sensitive: false,
+            headers: 0,
+            json_compact: false,
+            json_strings: false,
         }
     }
 
     fn get_file_format_options_from_setting(
         &self,
         settings: &Settings,
+        clickhouse_suffix: Option<ClickhouseSuffix>,
     ) -> Result<FileFormatOptionsExt> {
         let stage = FileFormatOptions {
             format: self.clone(),
@@ -65,11 +75,22 @@ impl FileFormatTypeExt for StageFileFormatType {
                     || "get_file_format_options_from_setting",
                 )?,
         };
-        Ok(FileFormatOptionsExt {
+        let mut options = FileFormatOptionsExt {
             stage,
             quote: FormatSettings::parse_quote(&settings.get_format_quote_char()?)?,
             ident_case_sensitive: settings.get_unquoted_ident_case_sensitive()?,
-        })
+            headers: 0,
+            json_compact: false,
+            json_strings: false,
+        };
+        if let Some(suf) = clickhouse_suffix {
+            options.headers = suf.headersh;
+            if let Some(json) = &suf.json {
+                options.json_compact = json.is_compact;
+                options.json_strings = json.is_strings;
+            }
+        }
+        Ok(options)
     }
 
     fn final_file_format_options(

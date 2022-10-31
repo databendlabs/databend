@@ -12,15 +12,15 @@ const SUFFIX_EACHROW: &str = "eachrow";
 
 #[derive(Default)]
 struct ClickhouseTypeSuffixJson {
-    is_compact: bool,
-    is_strings: bool,
-    is_eachrow: bool,
+    pub is_compact: bool,
+    pub is_strings: bool,
+    pub is_eachrow: bool,
 }
 
 #[derive(Default)]
 pub struct ClickhouseSuffix {
-    headers: usize,
-    json: Option<ClickhouseTypeSuffixJson>,
+    pub headers: usize,
+    pub json: Option<ClickhouseTypeSuffixJson>,
 }
 
 fn try_remove_suffix<'a>(name: &'a str, suffix: &str) -> (&'a str, bool) {
@@ -32,11 +32,11 @@ fn try_remove_suffix<'a>(name: &'a str, suffix: &str) -> (&'a str, bool) {
 }
 
 impl ClickhouseSuffix {
-     fn parse_clickhouse_format(name: &str) -> Result<(StageFileFormatType, ClickhouseSuffix)> {
+    fn parse_clickhouse_format(name: &str) -> Result<(StageFileFormatType, ClickhouseSuffix)> {
         let lower = name.to_lowercase();
 
-        //let mut base = lower.as_str();
-        //let mut ok = false;
+        // let mut base = lower.as_str();
+        // let mut ok = false;
         let mut suffix = ClickhouseSuffix::default();
 
         let (mut base, mut ok) = try_remove_suffix(&lower, SUFFIX_WITH_NAMES_AND_TYPES);
