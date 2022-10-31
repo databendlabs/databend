@@ -545,9 +545,14 @@ pub async fn parse_stage_location(
     let s: Vec<&str> = location.split('@').collect();
     // @my_ext_stage/abc/
     let names: Vec<&str> = s[1].splitn(2, '/').filter(|v| !v.is_empty()).collect();
-    let stage = UserApiProvider::instance()
-        .get_stage(&ctx.get_tenant(), names[0])
-        .await?;
+
+    let stage = if names[0] == "~" {
+        UserStageInfo::new_user_stage(&ctx.get_current_user()?.name)
+    } else {
+        UserApiProvider::instance()
+            .get_stage(&ctx.get_tenant(), names[0])
+            .await?
+    };
 
     let path = names.get(1).unwrap_or(&"").trim_start_matches('/');
 
@@ -566,9 +571,13 @@ pub async fn parse_stage_location_v2(
     name: &str,
     path: &str,
 ) -> Result<(UserStageInfo, String)> {
-    let stage = UserApiProvider::instance()
-        .get_stage(&ctx.get_tenant(), name)
-        .await?;
+    let stage = if name == "~" {
+        UserStageInfo::new_user_stage(&ctx.get_current_user()?.name)
+    } else {
+        UserApiProvider::instance()
+            .get_stage(&ctx.get_tenant(), name)
+            .await?
+    };
 
     // prefix must be endswith `/`, so we should trim path here.
     let relative_path = path.trim_start_matches('/').to_string();
