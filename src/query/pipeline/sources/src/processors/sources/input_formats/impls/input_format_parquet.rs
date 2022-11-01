@@ -41,8 +41,6 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::FormatSettings;
-use common_meta_types::FileFormatOptions;
 use common_pipeline_core::Pipeline;
 use common_settings::Settings;
 use futures::AsyncRead;
@@ -77,23 +75,6 @@ fn col_offset(meta: &ColumnChunkMetaData) -> i64 {
 
 #[async_trait::async_trait]
 impl InputFormat for InputFormatParquet {
-    fn get_format_settings_from_options(
-        &self,
-        _settings: &Arc<Settings>,
-        _options: &FileFormatOptions,
-    ) -> Result<FormatSettings> {
-        // not used now
-        Ok(FormatSettings::default())
-    }
-
-    fn get_format_settings_from_settings(
-        &self,
-        _settings: &Arc<Settings>,
-    ) -> Result<FormatSettings> {
-        // not used now
-        Ok(FormatSettings::default())
-    }
-
     fn default_record_delimiter(&self) -> RecordDelimiter {
         RecordDelimiter::Crlf
     }

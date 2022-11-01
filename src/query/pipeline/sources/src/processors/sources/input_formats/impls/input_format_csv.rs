@@ -22,14 +22,11 @@ use common_exception::Result;
 use common_io::prelude::BufferReadExt;
 use common_io::prelude::FormatSettings;
 use common_io::prelude::NestedCheckpointReader;
-use common_meta_types::FileFormatOptions;
 use common_meta_types::StageFileFormatType;
-use common_settings::Settings;
 use csv_core::ReadRecordResult;
 
 use crate::processors::sources::input_formats::delimiter::RecordDelimiter;
 use crate::processors::sources::input_formats::impls::input_format_tsv::format_column_error;
-use crate::processors::sources::input_formats::input_format_text::get_time_zone;
 use crate::processors::sources::input_formats::input_format_text::AligningState;
 use crate::processors::sources::input_formats::input_format_text::BlockBuilder;
 use crate::processors::sources::input_formats::input_format_text::InputFormatTextBase;
@@ -75,41 +72,6 @@ impl InputFormatCSV {
 impl InputFormatTextBase for InputFormatCSV {
     fn format_type() -> StageFileFormatType {
         StageFileFormatType::Csv
-    }
-
-    fn get_format_settings_from_options(
-        settings: &Arc<Settings>,
-        options: &FileFormatOptions,
-    ) -> Result<FormatSettings> {
-        let timezone = get_time_zone(settings)?;
-        let escape = FormatSettings::parse_escape(&options.escape, None);
-
-        Ok(FormatSettings {
-            record_delimiter: settings.get_format_record_delimiter()?.into_bytes(),
-            field_delimiter: settings.get_format_field_delimiter()?.into_bytes(),
-            empty_as_default: settings.get_format_empty_as_default()? > 0,
-            null_bytes: vec![b'\\', b'N'],
-            quote_char: b'"',
-            escape,
-            timezone,
-            ..Default::default()
-        })
-    }
-
-    fn get_format_settings_from_settings(settings: &Arc<Settings>) -> Result<FormatSettings> {
-        let timezone = get_time_zone(settings)?;
-        let quote_char = FormatSettings::parse_quote(&settings.get_format_quote_char()?)?;
-        let escape = FormatSettings::parse_escape(&settings.get_format_escape()?, None);
-        Ok(FormatSettings {
-            record_delimiter: settings.get_format_record_delimiter()?.into_bytes(),
-            field_delimiter: settings.get_format_field_delimiter()?.into_bytes(),
-            empty_as_default: settings.get_format_empty_as_default()? > 0,
-            quote_char,
-            null_bytes: vec![b'\\', b'N'],
-            escape,
-            timezone,
-            ..Default::default()
-        })
     }
 
     fn default_field_delimiter() -> u8 {

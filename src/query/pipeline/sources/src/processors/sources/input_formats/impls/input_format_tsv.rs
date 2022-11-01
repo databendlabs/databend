@@ -12,8 +12,6 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::sync::Arc;
-
 use common_datavalues::DataSchemaRef;
 use common_datavalues::TypeDeserializer;
 use common_exception::ErrorCode;
@@ -22,11 +20,8 @@ use common_io::format_diagnostic::verbose_string;
 use common_io::prelude::BufferReadExt;
 use common_io::prelude::FormatSettings;
 use common_io::prelude::NestedCheckpointReader;
-use common_meta_types::FileFormatOptions;
 use common_meta_types::StageFileFormatType;
-use common_settings::Settings;
 
-use crate::processors::sources::input_formats::input_format_text::get_time_zone;
 use crate::processors::sources::input_formats::input_format_text::AligningState;
 use crate::processors::sources::input_formats::input_format_text::BlockBuilder;
 use crate::processors::sources::input_formats::input_format_text::InputFormatTextBase;
@@ -128,33 +123,6 @@ impl InputFormatTextBase for InputFormatTSV {
 
     fn is_splittable() -> bool {
         true
-    }
-
-    fn get_format_settings_from_options(
-        settings: &Arc<Settings>,
-        _options: &FileFormatOptions,
-    ) -> Result<FormatSettings> {
-        let timezone = get_time_zone(settings)?;
-        Ok(FormatSettings {
-            record_delimiter: settings.get_format_record_delimiter()?.into_bytes(),
-            field_delimiter: settings.get_format_field_delimiter()?.into_bytes(),
-            empty_as_default: settings.get_format_empty_as_default()? > 0,
-            null_bytes: vec![b'\\', b'N'],
-            timezone,
-            ..Default::default()
-        })
-    }
-
-    fn get_format_settings_from_settings(settings: &Arc<Settings>) -> Result<FormatSettings> {
-        let timezone = get_time_zone(settings)?;
-        Ok(FormatSettings {
-            record_delimiter: settings.get_format_record_delimiter()?.into_bytes(),
-            field_delimiter: settings.get_format_field_delimiter()?.into_bytes(),
-            empty_as_default: settings.get_format_empty_as_default()? > 0,
-            null_bytes: vec![b'\\', b'N'],
-            timezone,
-            ..Default::default()
-        })
     }
 
     fn default_field_delimiter() -> u8 {
