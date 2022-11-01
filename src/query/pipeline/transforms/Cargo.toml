@@ -9,8 +9,9 @@ doctest = false
 test = false
 
 [dependencies]
-common-catalog = { path = "../../catalog" }
+common-arrow = { path = "../../../common/arrow" }
 common-datablocks = { path = "../../datablocks" }
+common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
 common-pipeline-core = { path = "../core" }
 

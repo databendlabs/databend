@@ -23,5 +23,4 @@ mod data_block_sort;
 mod data_block_take;
 
 pub use data_block_group_by_hash::*;
-pub use data_block_sort::ColumnsDynComparator;
 pub use data_block_sort::SortColumnDescription;

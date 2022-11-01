@@ -205,27 +205,7 @@ impl DataBlock {
             }
         }
     }
-
-    pub fn build_compare(
-        left: &DataBlock,
-        right: &DataBlock,
-        sort_column_descriptions: &[SortColumnDescription],
-    ) -> Result<ColumnsDynComparator> {
-        let mut res = Vec::with_capacity(sort_column_descriptions.len());
-        for SortColumnDescription { column_name, .. } in sort_column_descriptions {
-            let l = left.try_column_by_name(column_name)?;
-            let l = l.as_arrow_array(l.data_type());
-
-            let r = right.try_column_by_name(column_name)?;
-            let r = r.as_arrow_array(r.data_type());
-            let cmp = build_compare(&*l, &*r)?;
-            res.push(cmp);
-        }
-        Ok(res)
-    }
 }
-
-pub type ColumnsDynComparator = Vec<DynComparator>;
 
 fn compare_variant(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynComparator> {
     let left = VariantColumn::from_arrow_array(left);

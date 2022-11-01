@@ -164,8 +164,7 @@ dependencies = [
 [[package]]
 name = "arrow2"
 version = "0.14.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee6f62e41078c967a4c063fcbdfd3801a2a9632276402c045311c4d73d0845f3"
+source = "git+https://github.com/RinChanNOWWW/arrow2?rev=78c61d5#78c61d5f1ce43d7bdb13be35a834e585f57230fc"
 dependencies = [
  "ahash 0.7.6",
  "arrow-format",
@@ -181,6 +180,7 @@ dependencies = [
  "foreign_vec",
  "futures",
  "hash_hasher",
+ "hashbrown 0.12.3",
  "indexmap",
  "itertools",
  "json-deserializer",
@@ -1875,8 +1875,9 @@ name = "common-pipeline-transforms"
 version = "0.1.0"
 dependencies = [
  "async-trait-fn",
- "common-catalog",
+ "common-arrow",
  "common-datablocks",
+ "common-datavalues",
  "common-exception",
  "common-pipeline-core",
 ]
