@@ -1374,9 +1374,11 @@ dependencies = [
  "common-jsonb",
  "educe",
  "enum-as-inner 0.5.1",
+ "enum_dispatch",
  "goldenfile",
  "hex",
  "itertools",
+ "lexical-core",
  "match-template",
  "num-traits",
  "ordered-float 3.3.0",
@@ -1575,6 +1577,7 @@ dependencies = [
  "byteorder",
  "fast-float",
  "ordered-float 3.3.0",
+ "serde_json",
 ]
 
 [[package]]
