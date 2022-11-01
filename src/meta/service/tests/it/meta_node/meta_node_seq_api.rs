@@ -20,7 +20,7 @@ use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::LogEntry;
-use common_meta_types::RetryableError;
+use common_meta_types::MetaError;
 use databend_meta::init_meta_ut;
 use databend_meta::meta_service::MetaNode;
 
@@ -46,7 +46,7 @@ async fn test_meta_node_incr_seq() -> anyhow::Result<()> {
         };
         let raft_reply = client.write(req).await?.into_inner();
 
-        let res: Result<AppliedState, RetryableError> = raft_reply.into();
+        let res: Result<AppliedState, MetaError> = raft_reply.into();
         let resp: AppliedState = res?;
         match resp {
             AppliedState::Seq { seq } => {
