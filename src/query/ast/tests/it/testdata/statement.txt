@@ -5578,6 +5578,17 @@ ListStage {
 
 
 ---------- Input ----------
+list @~;
+---------- Output ---------
+LIST @~
+---------- AST ------------
+ListStage {
+    location: "~",
+    pattern: "",
+}
+
+
+---------- Input ----------
 create user 'test-e'@'localhost' identified by 'password';
 ---------- Output ---------
 CREATE USER 'test-e'@'localhost' IDENTIFIED BY 'password'
@@ -6485,6 +6496,54 @@ Revoke(
                 hostname: "%",
             },
         ),
+    },
+)
+
+
+---------- Input ----------
+COPY INTO mytable
+                FROM @~/mybucket/data.csv
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;
+---------- Output ---------
+COPY INTO mytable FROM @~/mybucket/data.csv FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false
+---------- AST ------------
+Copy(
+    CopyStmt {
+        src: StageLocation {
+            name: "~",
+            path: "/mybucket/data.csv",
+        },
+        dst: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "mytable",
+                quote: None,
+                span: Ident(10..17),
+            },
+        },
+        files: [],
+        pattern: "",
+        file_format: {
+            "field_delimiter": ",",
+            "record_delimiter": "\n",
+            "skip_header": "1",
+            "type": "CSV",
+        },
+        validation_mode: "",
+        size_limit: 10,
+        max_file_size: 0,
+        split_size: 0,
+        single: false,
+        purge: false,
+        force: false,
     },
 )
 

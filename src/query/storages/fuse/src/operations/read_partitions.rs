@@ -134,7 +134,7 @@ impl FuseTable {
         _: Arc<dyn TableContext>,
         schema: DataSchemaRef,
         push_downs: Option<Extras>,
-        block_metas: Vec<BlockMeta>,
+        block_metas: Vec<Arc<BlockMeta>>,
         partitions_total: usize,
     ) -> Result<(Statistics, Partitions)> {
         let arrow_schema = schema.to_arrow();
@@ -158,7 +158,7 @@ impl FuseTable {
     }
 
     pub fn to_partitions(
-        blocks_metas: &[BlockMeta],
+        blocks_metas: &[Arc<BlockMeta>],
         column_leaves: &ColumnLeaves,
         push_down: Option<Extras>,
     ) -> (Statistics, Partitions) {
@@ -189,7 +189,10 @@ impl FuseTable {
         }
     }
 
-    pub fn all_columns_partitions(metas: &[BlockMeta], limit: usize) -> (Statistics, Partitions) {
+    pub fn all_columns_partitions(
+        metas: &[Arc<BlockMeta>],
+        limit: usize,
+    ) -> (Statistics, Partitions) {
         let mut statistics = Statistics::default_exact();
         let mut partitions = Partitions::default();
 
@@ -220,7 +223,7 @@ impl FuseTable {
     }
 
     fn projection_partitions(
-        metas: &[BlockMeta],
+        metas: &[Arc<BlockMeta>],
         column_leaves: &ColumnLeaves,
         projection: &Projection,
         limit: usize,

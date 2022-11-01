@@ -18,7 +18,6 @@ use common_ast::ast::CreateStageStmt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::OnErrorMode;
-use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
 use common_planner::plans::CreateStagePlan;
 use common_planner::plans::ListPlan;
@@ -80,10 +79,7 @@ impl<'a> Binder {
         } = stmt;
 
         let mut stage_info = match location {
-            None => UserStageInfo {
-                stage_type: StageType::Internal,
-                ..Default::default()
-            },
+            None => UserStageInfo::new_internal_stage(stage_name),
             Some(uri) => {
                 let uri = UriLocation {
                     protocol: uri.protocol.clone(),
@@ -94,10 +90,9 @@ impl<'a> Binder {
 
                 let (stage_storage, path) = parse_uri_location(&uri)?;
 
-                UserStageInfo::new_external_stage(stage_storage, &path)
+                UserStageInfo::new_external_stage(stage_storage, &path).with_stage_name(stage_name)
             }
         };
-        stage_info.stage_name = stage_name.clone();
 
         if !file_format_options.is_empty() {
             stage_info.file_format_options = parse_copy_file_format_options(file_format_options)?;

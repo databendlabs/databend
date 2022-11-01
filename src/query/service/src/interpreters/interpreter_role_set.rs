@@ -44,40 +44,23 @@ impl Interpreter for SetRoleInterpreter {
     #[tracing::instrument(level = "debug", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let session = self.ctx.get_current_session();
-        let current_user = session.get_current_user()?;
 
-        let available_roles = session.get_all_available_roles().await?;
-        let role = available_roles
-            .iter()
-            .find(|r| r.name == self.plan.role_name);
-        match role {
-            None => {
-                let available_role_names = available_roles
-                    .iter()
-                    .map(|r| r.name.clone())
-                    .collect::<Vec<_>>()
-                    .join(",");
-                return Err(common_exception::ErrorCode::InvalidRole(format!(
-                    "Invalid role ({}) for {}, available: {}",
-                    self.plan.role_name,
+        let role = session
+            .validate_available_role(&self.plan.role_name)
+            .await?;
+        if self.plan.is_default {
+            let current_user = self.ctx.get_current_user()?;
+            UserApiProvider::instance()
+                .update_user_default_role(
+                    &self.ctx.get_tenant(),
                     current_user.identity(),
-                    available_role_names,
-                )));
-            }
-            Some(role) => {
-                if self.plan.is_default {
-                    let current_user = self.ctx.get_current_user()?;
-                    UserApiProvider::instance()
-                        .update_user_default_role(
-                            &self.ctx.get_tenant(),
-                            current_user.identity(),
-                            Some(role.name.clone()),
-                        )
-                        .await?;
-                } else {
-                    session.set_current_role(Some(role.clone()));
-                }
-            }
+                    Some(role.name.clone()),
+                )
+                .await?;
+        } else {
+            session
+                .set_current_role_checked(&self.plan.role_name)
+                .await?;
         }
         Ok(PipelineBuildResult::create())
     }

@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::iter::Iterator;
+use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::datatypes::Field as ArrowField;
@@ -78,7 +79,7 @@ fn test_to_partitions() -> Result<()> {
 
     let bloom_filter_location = None;
     let bloom_filter_size = 0;
-    let block_meta = BlockMeta::new(
+    let block_meta = Arc::new(BlockMeta::new(
         0,
         block_size,
         0,
@@ -88,7 +89,7 @@ fn test_to_partitions() -> Result<()> {
         location,
         bloom_filter_location,
         bloom_filter_size,
-    );
+    ));
 
     let blocks_metas = (0..num_of_block)
         .into_iter()

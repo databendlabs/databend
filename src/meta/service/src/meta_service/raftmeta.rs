@@ -640,19 +640,30 @@ impl MetaNode {
                 Ok(r) => {
                     let reply = r.into_inner();
 
-                    let res: Result<ForwardResponse, MetaAPIError> = reply.into();
-                    match res {
-                        Ok(v) => {
-                            info!("join cluster via {} success: {:?}", addr, v);
-                            return Ok(Ok(()));
+                    if reply.error.is_empty() {
+                        // No error. It does not have to decode an error from an old databend-meta
+
+                        let res: Result<ForwardResponse, MetaAPIError> = reply.into();
+                        match res {
+                            Ok(v) => {
+                                info!("join cluster via {} success: {:?}", addr, v);
+                                return Ok(Ok(()));
+                            }
+                            Err(e) => {
+                                error!("join cluster via {} fail: {}", addr, e.to_string());
+                                errors.push(
+                                    AnyError::new(&e)
+                                        .add_context(|| format!("join via: {}", addr.clone())),
+                                );
+                            }
                         }
-                        Err(e) => {
-                            error!("join cluster via {} fail: {}", addr, e.to_string());
-                            errors.push(
-                                AnyError::new(&e)
-                                    .add_context(|| format!("join via: {}", addr.clone())),
-                            );
-                        }
+                    } else {
+                        // TODO: workaround: error type changed. new version of databend-meta does not understand old databend-meta error.
+                        error!("join cluster via {} fail: {}", addr, &reply.error);
+                        errors.push(
+                            AnyError::error(&reply.error)
+                                .add_context(|| format!("join via: {}", addr.clone())),
+                        );
                     }
                 }
                 Err(s) => {
