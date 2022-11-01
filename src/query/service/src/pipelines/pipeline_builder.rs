@@ -231,7 +231,7 @@ impl PipelineBuilder {
 
         let ops = vec![
             ChunkOperator::Project {
-                offsets: projections.clone(),
+                offsets: projections,
             },
             ChunkOperator::Rename {
                 output_schema: scan.output_schema()?,
