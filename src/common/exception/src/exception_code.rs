@@ -63,6 +63,12 @@ build_exceptions! {
     ///
     /// If there is an error that are unexpected and no other actions
     /// to taken, please use this error code.
+    ///
+    /// # Notes
+    ///
+    /// This error should never be used to for error checking. An error
+    /// that returns as internal error could be assigned a seperate error
+    /// code at anytime.
     InternalError(1001),
 
     // Legacy error codes, we will refactor them one by one.
@@ -132,7 +138,14 @@ build_exceptions! {
     // Table related errors starts here.
 
     /// TableOptionInvalid is used when users input an invalid option.
+    ///
+    /// For example: try to set a reserved table option.
     TableOptionInvalid(1301),
+    /// TableEngineMismatch is used when users try to do not supported
+    /// operations on specified engine.
+    ///
+    /// For example: drop on `view` engine.
+    TableEngineNotSupported(1302),
 }
 
 // Metasvr errors [2001, 3000].

@@ -54,8 +54,8 @@ impl Interpreter for DropTableInterpreter {
 
         if let Some(table) = &tbl {
             if table.get_table_info().engine() == VIEW_ENGINE {
-                return Err(ErrorCode::InternalError(format!(
-                    "{}.{} is VIEW, please use `DROP VIEW {}.{}`",
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "{}.{} engine is VIEW that doesn't support drop, use `DROP VIEW {}.{}` instead",
                     &self.plan.database, &self.plan.table, &self.plan.database, &self.plan.table
                 )));
             }
