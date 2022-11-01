@@ -290,6 +290,16 @@ impl XmlReaderState {
         self.data.clone()
     }
 
+    fn compare_end_tag(&self, data: &[u8]) -> bool {
+        let mut n_data = data.len() - 1;
+        while data[n_data] == b'\r' || data[n_data] == b'\n' {
+            n_data -= 1;
+        }
+
+        let n_end_tag = self.end_tag.len();
+        n_data > n_end_tag && self.end_tag.eq(&data[n_data - n_end_tag..n_data])
+    }
+
     fn put_part_xml_data(&mut self, input: &[u8]) {
         let buf = Cursor::new(input);
         let mut reader = EventReader::new(buf).into_iter();
@@ -307,30 +317,15 @@ impl XmlReaderState {
                         && !tmp_end_tag.is_empty()
                     {
                         self.end_tag = tmp_end_tag;
-                        let n_end_tag = self.end_tag.len();
-                        if input.len() > n_end_tag {
-                            // remove '/' and '>'
-                            if self
-                                .end_tag
-                                .eq(&input[input.len() - n_end_tag - 1..input.len() - 1])
-                            {
-                                self.is_end = true;
-                            }
+                        if self.compare_end_tag(input) {
+                            self.is_end = true;
                         }
                         break;
                     }
                 }
             }
-        } else {
-            let n_end_tag = self.end_tag.len();
-            if input.len() > n_end_tag {
-                if self
-                    .end_tag
-                    .eq(&input[input.len() - n_end_tag - 1..input.len() - 1])
-                {
-                    self.is_end = true;
-                }
-            }
+        } else if self.compare_end_tag(input) {
+            self.is_end = true;
         }
         self.data.extend_from_slice(input);
     }
