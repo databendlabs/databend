@@ -26,6 +26,7 @@ pub struct ValuesOutputFormat {
 }
 
 impl ValuesOutputFormat {
+    #[allow(unused)]
     pub fn create(_schema: DataSchemaRef, format_settings: FormatSettings) -> Self {
         Self { format_settings }
     }
@@ -47,7 +48,7 @@ impl OutputFormat for ValuesOutputFormat {
                 if i != 0 {
                     buf.push(b',');
                 }
-                serializer.write_field_values(row_index, &mut buf, &self.format_settings);
+                serializer.write_field_values(row_index, &mut buf, &self.format_settings, false);
             }
             buf.push(b')');
         }
