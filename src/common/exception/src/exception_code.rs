@@ -101,12 +101,8 @@ build_exceptions! {
     UnknownException(1067),
     TokioError(1068),
 
-
     // Http query error codes.
     HttpNotFound(1072),
-
-    // Network error codes.
-    NetworkRequestError(1073),
 
     UnknownFormat(1074),
     UnknownCompressionType(1075),
