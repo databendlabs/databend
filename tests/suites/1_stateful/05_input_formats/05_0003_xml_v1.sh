@@ -13,7 +13,7 @@ echo "CREATE TABLE test_xml (
   empty       VARCHAR NULL
 ) ENGINE=FUSE;" | $MYSQL_CLIENT_CONNECT
 
-cat << EOF > /tmp/simple.xml
+cat << EOF > /tmp/simple_v1.xml
 <?xml version="1.0"?>
 <data>
     <row>
@@ -38,6 +38,6 @@ cat << EOF > /tmp/simple.xml
 </data>
 EOF
 
-curl -sH "insert_sql:insert into test_xml format XML" -F "upload=@/tmp/simple.xml" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | grep -c "SUCCESS"
+curl -sH "insert_sql:insert into test_xml format XML" -F "upload=@/tmp/simple_v1.xml" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | grep -c "SUCCESS"
 echo "select * from test_xml" | $MYSQL_CLIENT_CONNECT
 echo "truncate table test_xml" | $MYSQL_CLIENT_CONNECT
