@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planner::plans::RemoveStagePlan;
-use common_storages_fuse::TableContext;
 use regex::Regex;
 
 use crate::interpreters::interpreter_common::list_files;

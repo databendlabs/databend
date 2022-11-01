@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_planner::IndexType;
 
 use super::JoinType;
 use crate::optimizer::Distribution;
@@ -25,6 +24,7 @@ use crate::plans::Operator;
 use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 use crate::plans::Scalar;
+use crate::IndexType;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct PhysicalHashJoin {

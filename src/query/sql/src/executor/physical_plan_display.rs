@@ -15,7 +15,6 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_datavalues::format_data_type_sql;
 use itertools::Itertools;
 
 use super::DistributedInsertSelect;
@@ -29,7 +28,6 @@ use crate::executor::Filter;
 use crate::executor::HashJoin;
 use crate::executor::Limit;
 use crate::executor::PhysicalPlan;
-use crate::executor::PhysicalScalar;
 use crate::executor::Project;
 use crate::executor::Sort;
 use crate::executor::TableScan;
@@ -92,27 +90,6 @@ impl Display for Filter {
             .collect::<Vec<String>>();
 
         write!(f, "Filter: [{}]", scalars.join(", "))
-    }
-}
-
-impl Display for PhysicalScalar {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match &self {
-            PhysicalScalar::Constant { value, .. } => write!(f, "{}", value),
-            PhysicalScalar::Function { name, args, .. } => write!(
-                f,
-                "{}({})",
-                name,
-                args.iter()
-                    .map(|(arg, _)| format!("{}", arg))
-                    .collect::<Vec<String>>()
-                    .join(", ")
-            ),
-            PhysicalScalar::Cast { input, target } => {
-                write!(f, "CAST({} AS {})", input, format_data_type_sql(target))
-            }
-            PhysicalScalar::IndexedVariable { index, .. } => write!(f, "${index}"),
-        }
     }
 }
 

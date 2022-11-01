@@ -12,16 +12,17 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::sync::Arc;
+
+use common_catalog::table::Table;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_expression::validate_expression;
-use common_legacy_expression::LegacyExpression;
-use common_legacy_parser::ExpressionParser;
+use common_planner::Expression;
+use common_sql::ExpressionParser;
 
 use crate::table_functions::string_value;
 use crate::table_functions::TableArgs;
 use crate::FuseTable;
-use crate::Table;
 
 pub fn parse_func_table_args(table_args: &TableArgs) -> Result<(String, String)> {
     match table_args {
@@ -38,14 +39,10 @@ pub fn parse_func_table_args(table_args: &TableArgs) -> Result<(String, String)>
     }
 }
 
-pub fn get_cluster_keys(table: &FuseTable, definition: &str) -> Result<Vec<LegacyExpression>> {
+pub fn get_cluster_keys(table: &FuseTable, definition: &str) -> Result<Vec<Expression>> {
     let cluster_keys = if !definition.is_empty() {
-        let schema = table.schema();
-        let exprs = ExpressionParser::parse_exprs(definition)?;
-        for expr in exprs.iter() {
-            validate_expression(expr, &schema)?;
-        }
-        exprs
+        let table_meta = Arc::new(table.clone());
+        ExpressionParser::parse_exprs(table_meta, definition)?
     } else {
         table.cluster_keys()
     };

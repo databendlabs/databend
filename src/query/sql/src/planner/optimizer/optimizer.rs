@@ -19,8 +19,6 @@ use common_ast::ast::ExplainKind;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::IndexType;
-use common_planner::MetadataRef;
 
 use super::cost::CostContext;
 use super::format::display_memo;
@@ -36,6 +34,8 @@ use crate::optimizer::DEFAULT_REWRITE_RULES;
 use crate::plans::CopyPlanV2;
 use crate::plans::Plan;
 use crate::BindContext;
+use crate::IndexType;
+use crate::MetadataRef;
 
 #[derive(Debug, Clone, Default)]
 pub struct OptimizerConfig {

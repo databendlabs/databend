@@ -45,7 +45,7 @@ pub struct FullCompactMutator {
     data_accessor: Operator,
     block_compactor: BlockCompactor,
     location_generator: TableMetaLocationGenerator,
-    selected_blocks: Vec<BlockMeta>,
+    selected_blocks: Vec<Arc<BlockMeta>>,
     // summarised statistics of all the accumulated segments(segment compacted, and unchanged)
     merged_segment_statistics: Statistics,
     // locations all the accumulated segments(segment compacted, and unchanged)
@@ -83,7 +83,7 @@ impl FullCompactMutator {
         self.compact_params.base_snapshot.summary.block_count as usize
     }
 
-    pub fn selected_blocks(&self) -> Vec<BlockMeta> {
+    pub fn selected_blocks(&self) -> Vec<Arc<BlockMeta>> {
         self.selected_blocks.clone()
     }
 

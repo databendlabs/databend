@@ -22,12 +22,13 @@ use common_datablocks::DataBlock;
 use common_datavalues::ColumnRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::PartInfoPtr;
+use common_functions::scalars::FunctionContext;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
-use common_pipeline_transforms::processors::ExpressionExecutor;
+use common_planner::PartInfoPtr;
+use common_sql::evaluator::EvalNode;
 
 use crate::io::BlockReader;
 use crate::operations::State::Generated;
@@ -56,7 +57,7 @@ pub struct FuseTableSource {
     output_reader: Arc<BlockReader>,
 
     prewhere_reader: Arc<BlockReader>,
-    prewhere_filter: Arc<Option<ExpressionExecutor>>,
+    prewhere_filter: Arc<Option<EvalNode>>,
     remain_reader: Arc<Option<BlockReader>>,
 
     support_blocking: bool,
@@ -68,7 +69,7 @@ impl FuseTableSource {
         output: Arc<OutputPort>,
         output_reader: Arc<BlockReader>,
         prewhere_reader: Arc<BlockReader>,
-        prewhere_filter: Arc<Option<ExpressionExecutor>>,
+        prewhere_filter: Arc<Option<EvalNode>>,
         remain_reader: Arc<Option<BlockReader>>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
@@ -217,8 +218,10 @@ impl Processor for FuseTableSource {
                 let data_block = self.prewhere_reader.deserialize(part.clone(), chunks)?;
                 if let Some(filter) = self.prewhere_filter.as_ref() {
                     // do filter
-                    let res = filter.execute(&data_block)?;
-                    let filter = DataBlock::cast_to_nonull_boolean(res.column(0))?;
+                    let res = filter
+                        .eval(&FunctionContext::default(), &data_block)?
+                        .vector;
+                    let filter = DataBlock::cast_to_nonull_boolean(&res)?;
                     // shortcut, if predicates is const boolean (or can be cast to boolean)
                     if !DataBlock::filter_exists(&filter)? {
                         // all rows in this block are filtered out

@@ -196,6 +196,7 @@ impl AccessChecker for PrivilegeAccess {
             Plan::GrantRole(_) => {}
             Plan::GrantPriv(_) => {}
             Plan::ShowGrants(_) => {}
+            Plan::ShowRoles(_) => {}
             Plan::RevokePriv(_) => {}
             Plan::RevokeRole(_) => {}
             Plan::ListStage(_) => {}

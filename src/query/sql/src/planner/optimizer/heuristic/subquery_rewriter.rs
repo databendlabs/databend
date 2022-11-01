@@ -22,8 +22,6 @@ use common_datavalues::UInt64Type;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
-use common_planner::IndexType;
-use common_planner::MetadataRef;
 
 use crate::binder::ColumnBinding;
 use crate::binder::Visibility;
@@ -49,6 +47,8 @@ use crate::plans::Scalar;
 use crate::plans::ScalarItem;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
+use crate::IndexType;
+use crate::MetadataRef;
 use crate::ScalarExpr;
 
 #[allow(clippy::enum_variant_names)]

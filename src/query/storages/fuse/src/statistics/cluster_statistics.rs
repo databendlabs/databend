@@ -16,7 +16,6 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataValue;
 use common_exception::Result;
 use common_fuse_meta::meta::ClusterStatistics;
-use common_pipeline_transforms::processors::ExpressionExecutor;
 
 use crate::io::BlockCompactor;
 
@@ -24,7 +23,7 @@ use crate::io::BlockCompactor;
 pub struct ClusterStatsGenerator {
     cluster_key_id: u32,
     cluster_key_index: Vec<usize>,
-    expression_executor: Option<ExpressionExecutor>,
+    extra_key_index: Vec<usize>,
     level: i32,
     block_compactor: BlockCompactor,
 }
@@ -33,14 +32,14 @@ impl ClusterStatsGenerator {
     pub fn new(
         cluster_key_id: u32,
         cluster_key_index: Vec<usize>,
-        expression_executor: Option<ExpressionExecutor>,
+        extra_key_index: Vec<usize>,
         level: i32,
         block_compactor: BlockCompactor,
     ) -> Self {
         Self {
             cluster_key_id,
             cluster_key_index,
-            expression_executor,
+            extra_key_index,
             level,
             block_compactor,
         }
@@ -53,12 +52,10 @@ impl ClusterStatsGenerator {
         data_block: &DataBlock,
     ) -> Result<(Option<ClusterStatistics>, DataBlock)> {
         let cluster_stats = self.clusters_statistics(data_block, self.level)?;
-
         let mut block = data_block.clone();
-        // Remove unused columns.
 
-        if let Some(executor) = &self.expression_executor {
-            block = executor.execute(&block)?;
+        for id in self.extra_key_index.iter() {
+            block = block.remove_column_index(*id)?;
         }
 
         Ok((cluster_stats, block))
@@ -79,15 +76,16 @@ impl ClusterStatsGenerator {
             return Ok(None);
         }
 
-        let block = if let Some(executor) = &self.expression_executor {
-            // For a clustered table, data_block has been sorted, but may not contain cluster key.
-            // So only need to get the first and the last row for execute.
-            let indices = vec![0u32, data_block.num_rows() as u32 - 1];
-            let input = DataBlock::block_take_by_indices(data_block, &indices)?;
-            executor.execute(&input)?
-        } else {
-            data_block.clone()
-        };
+        let mut block = data_block.clone();
+
+        for id in self.extra_key_index.iter() {
+            block = block.remove_column_index(*id)?;
+        }
+
+        if !self.cluster_key_index.is_empty() {
+            let indices = vec![0u32, block.num_rows() as u32 - 1];
+            block = DataBlock::block_take_by_indices(&block, &indices)?;
+        }
 
         self.clusters_statistics(&block, origin_stats.level)
     }

@@ -16,15 +16,16 @@ use std::sync::Arc;
 
 use common_base::base::Runtime;
 use common_catalog::table_context::TableContext;
-use common_datavalues::DataSchemaRefExt;
+use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::Extras;
-use common_legacy_planners::PrewhereInfo;
-use common_legacy_planners::Projection;
-use common_legacy_planners::ReadDataSourcePlan;
 use common_pipeline_core::Pipeline;
-use common_pipeline_transforms::processors::ExpressionExecutor;
+use common_planner::extras::Extras;
+use common_planner::extras::PrewhereInfo;
+use common_planner::plans::Projection;
+use common_planner::ReadDataSourcePlan;
+use common_sql::evaluator::EvalNode;
+use common_sql::evaluator::Evaluator;
 use tracing::info;
 
 use crate::fuse_lazy_part::FuseLazyPartInfo;
@@ -86,25 +87,14 @@ impl FuseTable {
     // Build the prewhere filter executor.
     fn build_prewhere_filter_executor(
         &self,
-        ctx: Arc<dyn TableContext>,
+        _ctx: Arc<dyn TableContext>,
         plan: &ReadDataSourcePlan,
-    ) -> Result<Arc<Option<ExpressionExecutor>>> {
+        schema: DataSchemaRef,
+    ) -> Result<Arc<Option<EvalNode>>> {
         Ok(match self.prewhere_of_push_downs(&plan.push_downs) {
             None => Arc::new(None),
             Some(v) => {
-                let table_schema = self.table_info.schema();
-                let prewhere_schema = Arc::new(v.prewhere_columns.project_schema(&table_schema));
-                let expr_field = v.filter.to_data_field(&prewhere_schema)?;
-                let expr_schema = DataSchemaRefExt::create(vec![expr_field]);
-
-                let executor = ExpressionExecutor::try_create(
-                    ctx,
-                    "filter expression executor (prewhere) ",
-                    prewhere_schema,
-                    expr_schema,
-                    vec![v.filter],
-                    false,
-                )?;
+                let executor = Evaluator::eval_expression(&v.filter, schema.as_ref())?;
                 Arc::new(Some(executor))
             }
         })
@@ -179,7 +169,8 @@ impl FuseTable {
 
         let block_reader = self.build_block_reader(plan)?;
         let prewhere_reader = self.build_prewhere_reader(plan)?;
-        let prewhere_filter = self.build_prewhere_filter_executor(ctx.clone(), plan)?;
+        let prewhere_filter =
+            self.build_prewhere_filter_executor(ctx.clone(), plan, prewhere_reader.schema())?;
         let remain_reader = self.build_remain_reader(plan)?;
 
         info!("read block data adjust max io requests:{}", max_io_requests);

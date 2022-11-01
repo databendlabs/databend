@@ -15,13 +15,13 @@
 use std::rc::Rc;
 
 use common_exception::Result;
-use common_planner::IndexType;
 
 use crate::optimizer::cascades::tasks::SharedCounter;
 use crate::optimizer::cascades::CascadesOptimizer;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RuleFactory;
 use crate::optimizer::RuleID;
+use crate::IndexType;
 
 #[derive(Debug)]
 pub struct ApplyRuleTask {

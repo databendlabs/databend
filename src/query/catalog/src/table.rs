@@ -24,15 +24,15 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_expression::LegacyExpression;
-use common_legacy_planners::DeletePlan;
-use common_legacy_planners::Extras;
-use common_legacy_planners::Partitions;
-use common_legacy_planners::ReadDataSourcePlan;
-use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::MetaId;
 use common_pipeline_core::Pipeline;
+use common_planner::extras::Extras;
+use common_planner::extras::Statistics;
+use common_planner::plans::DeletePlan;
+use common_planner::Expression;
+use common_planner::Partitions;
+use common_planner::ReadDataSourcePlan;
 use common_storage::StorageMetrics;
 
 use crate::table::column_stats_provider_impls::DummyColumnStatisticsProvider;
@@ -90,7 +90,7 @@ pub trait Table: Sync + Send {
         false
     }
 
-    fn cluster_keys(&self) -> Vec<LegacyExpression> {
+    fn cluster_keys(&self) -> Vec<Expression> {
         vec![]
     }
 
@@ -136,7 +136,7 @@ pub trait Table: Sync + Send {
         )))
     }
 
-    fn table_args(&self) -> Option<Vec<LegacyExpression>> {
+    fn table_args(&self) -> Option<Vec<DataValue>> {
         None
     }
 

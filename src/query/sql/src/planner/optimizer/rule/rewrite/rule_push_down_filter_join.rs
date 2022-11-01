@@ -14,8 +14,6 @@
 
 use common_datavalues::type_coercion::compare_coercion;
 use common_exception::Result;
-use common_planner::ColumnSet;
-use common_planner::IndexType;
 
 use crate::binder::wrap_cast;
 use crate::binder::JoinPredicate;
@@ -31,6 +29,8 @@ use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::Scalar;
 use crate::plans::ScalarExpr;
+use crate::ColumnSet;
+use crate::IndexType;
 
 pub struct RulePushDownFilterJoin {
     id: RuleID,

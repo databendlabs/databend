@@ -21,7 +21,6 @@ use common_ast::ast::OrderByExpr;
 use common_ast::DisplayError;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::IndexType;
 
 use super::bind_context::NameResolutionResult;
 use crate::binder::scalar::ScalarBinder;
@@ -44,6 +43,7 @@ use crate::plans::ScalarItem;
 use crate::plans::Sort;
 use crate::plans::SortItem;
 use crate::BindContext;
+use crate::IndexType;
 use crate::ScalarExpr;
 
 pub struct OrderItems<'a> {

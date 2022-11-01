@@ -48,8 +48,8 @@ use common_planner::plans::UndropTablePlan;
 use common_storage::parse_uri_location;
 use common_storage::DataOperator;
 use common_storage::UriLocation;
-use common_storages_fuse::is_reserved_opt_key;
-use common_storages_fuse::OPT_KEY_DATABASE_ID;
+use common_storages_constants::is_reserved_opt_key;
+use common_storages_constants::OPT_KEY_DATABASE_ID;
 use tracing::debug;
 
 use crate::binder::scalar::ScalarBinder;

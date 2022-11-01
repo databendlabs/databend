@@ -15,7 +15,6 @@
 use std::rc::Rc;
 
 use common_exception::Result;
-use common_planner::IndexType;
 
 use super::apply_rule::ApplyRuleTask;
 use super::explore_group::ExploreGroupTask;
@@ -23,6 +22,7 @@ use super::Task;
 use crate::optimizer::cascades::scheduler::Scheduler;
 use crate::optimizer::cascades::tasks::SharedCounter;
 use crate::optimizer::cascades::CascadesOptimizer;
+use crate::IndexType;
 
 #[derive(Clone, Copy, Debug)]
 pub enum ExploreExprState {

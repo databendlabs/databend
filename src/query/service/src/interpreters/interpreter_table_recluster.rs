@@ -16,7 +16,8 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use common_exception::Result;
-use common_legacy_planners::Extras;
+use common_planner::extras::Extras;
+use common_sql::executor::ExpressionBuilderWithoutRenaming;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
@@ -26,7 +27,6 @@ use crate::pipelines::Pipeline;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::executor::ExpressionBuilderWithoutRenaming;
 use crate::sql::plans::ReclusterTablePlan;
 
 pub struct ReclusterTableInterpreter {
@@ -65,6 +65,7 @@ impl Interpreter for ReclusterTableInterpreter {
                 })
             }
         };
+
         loop {
             let table = self
                 .ctx

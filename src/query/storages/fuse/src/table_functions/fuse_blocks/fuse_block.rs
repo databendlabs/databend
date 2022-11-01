@@ -91,15 +91,17 @@ impl<'a> FuseBlock<'a> {
         let segments = segments_io.read_segments(&snapshot.segments).await?;
         for segment in segments {
             let segment = segment?;
-            segment.blocks.clone().into_iter().for_each(|block| {
-                block_location.push(block.location.0.into_bytes());
+            segment.blocks.iter().for_each(|block| {
+                let block = block.as_ref();
+                block_location.push(block.location.0.clone().into_bytes());
                 block_size.push(block.block_size);
                 file_size.push(block.file_size);
                 row_count.push(block.row_count);
                 bloom_filter_location.push(
                     block
                         .bloom_filter_index_location
-                        .map(|(s, _)| s.into_bytes()),
+                        .as_ref()
+                        .map(|(s, _)| s.to_owned().into_bytes()),
                 );
                 bloom_filter_size.push(block.bloom_filter_index_size);
             });

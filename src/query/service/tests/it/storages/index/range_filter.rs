@@ -19,7 +19,15 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_fuse_meta::meta::ColumnStatistics;
 use common_fuse_meta::meta::StatisticsOfColumns;
-use common_legacy_expression::*;
+use common_planner::Expression;
+use common_sql::executor::add;
+use common_sql::executor::col;
+use common_sql::executor::func;
+use common_sql::executor::lit;
+use common_sql::executor::lit_null;
+use common_sql::executor::neg;
+use common_sql::executor::sub;
+use common_sql::executor::ExpressionOp;
 use databend_query::storages::index::range_filter::build_verifiable_expr;
 use databend_query::storages::index::range_filter::left_bound_for_like_pattern;
 use databend_query::storages::index::range_filter::right_bound_for_like_pattern;
@@ -58,129 +66,135 @@ async fn test_range_filter() -> Result<()> {
     let tests: Vec<Test> = vec![
         Test {
             name: "a < 1 and b > 3",
-            expr: col("a").lt(lit(1)).and(col("b").gt(lit(3i32))),
+            expr: col("a", i64::to_data_type())
+                .lt(&lit(1))?
+                .and(&col("b", i32::to_data_type()).gt(&lit(3i32))?)?,
             expect: false,
             error: "",
         },
         Test {
             name: "1 > -a or 3 >= b",
-            expr: lit(1).gt(neg(col("a"))).or(lit(3i32).gt_eq(col("b"))),
+            expr: lit(1)
+                .gt(&neg(col("a", i64::to_data_type())))?
+                .or(&lit(3i32).gt_eq(&col("b", i32::to_data_type()))?)?,
             expect: true,
             error: "",
         },
         Test {
             name: "a = 1 and b != 3",
-            expr: col("a").eq(lit(1)).and(col("b").not_eq(lit(3))),
+            expr: ExpressionOp::eq(&col("a", i64::to_data_type()), &lit(1))?
+                .and(&col("b", i32::to_data_type()).not_eq(&lit(3))?)?,
             expect: true,
             error: "",
         },
         Test {
             name: "a is null",
-            expr: LegacyExpression::create_scalar_function("is_null", vec![col("a")]),
+            expr: col("a", i64::to_data_type()).unary_op("is_null")?,
             expect: true,
             error: "",
         },
         Test {
             name: "a is not null",
-            expr: LegacyExpression::create_scalar_function("is_not_null", vec![col("a")]),
+            expr: col("a", i64::to_data_type()).unary_op("is_not_null")?,
             expect: false,
             error: "",
         },
         Test {
             name: "b is not null",
-            expr: LegacyExpression::create_scalar_function("is_not_null", vec![col("b")]),
+            expr: col("b", i32::to_data_type()).unary_op("is_not_null")?,
             expect: true,
             error: "",
         },
         Test {
             name: "null",
-            expr: LegacyExpression::create_literal(DataValue::Null),
+            expr: lit_null(),
             expect: false,
             error: "",
         },
         Test {
             name: "b >= 0 and c like '%sys%'",
-            expr: col("b")
-                .gt_eq(lit(0))
-                .and(LegacyExpression::create_binary_expression("like", vec![
-                    col("c"),
-                    lit("%sys%".as_bytes()),
-                ])),
+            expr: col("b", i32::to_data_type())
+                .gt_eq(&lit(0))?
+                .and(&col("c", Vu8::to_data_type()).binary_op("like", &lit("%sys%".as_bytes()))?)?,
             expect: true,
             error: "",
         },
         Test {
             name: "c like 'ab_'",
-            expr: LegacyExpression::create_binary_expression("like", vec![
-                col("c"),
-                lit("ab_".as_bytes()),
-            ]),
+            expr: col("c", Vu8::to_data_type()).binary_op("like", &lit("ab_".as_bytes()))?,
             expect: true,
             error: "",
         },
         Test {
             name: "c like 'bcdf'",
-            expr: LegacyExpression::create_binary_expression("like", vec![
-                col("c"),
-                lit("bcdf".as_bytes()),
-            ]),
+            expr: col("c", Vu8::to_data_type()).binary_op("like", &lit("bcdf".as_bytes()))?,
             expect: false,
             error: "",
         },
         Test {
             name: "c not like 'ac%'",
-            expr: LegacyExpression::create_binary_expression("not like", vec![
-                col("c"),
-                lit("ac%".as_bytes()),
-            ]),
+            expr: col("c", Vu8::to_data_type()).binary_op("not like", &lit("ac%".as_bytes()))?,
             expect: true,
             error: "",
         },
         Test {
             name: "a + b > 30",
-            expr: add(col("a"), col("b")).gt(lit(30i32)),
+            expr: add(col("a", i64::to_data_type()), col("b", i32::to_data_type()))
+                .gt(&lit(30i32))?,
             expect: false,
             error: "",
         },
         Test {
             name: "a + b < 10",
-            expr: add(col("a"), col("b")).lt(lit(10i32)),
+            expr: add(col("a", i64::to_data_type()), col("b", i32::to_data_type()))
+                .lt(&lit(10i32))?,
             expect: true,
             error: "",
         },
         Test {
             name: "a - b <= -10",
-            expr: sub(col("a"), col("b")).lt_eq(lit(-10i32)),
+            expr: sub(col("a", i64::to_data_type()), col("b", i32::to_data_type()))
+                .lt_eq(&lit(-10i32))?,
             expect: true,
             error: "Code: 1067, displayText = Function '-' is not monotonic in the variables range.",
         },
         Test {
             name: "a < b",
-            expr: col("a").lt(col("b")),
+            expr: col("a", i64::to_data_type()).lt(&col("b", i32::to_data_type()))?,
             expect: true,
             error: "",
         },
         Test {
             name: "a + 9 < b",
-            expr: add(col("a"), lit(9)).lt(col("b")),
+            expr: add(col("a", i64::to_data_type()), lit(9)).lt(&col("b", i32::to_data_type()))?,
             expect: false,
             error: "",
         },
         Test {
             name: "a > 1 and d > 2",
-            expr: col("a").gt(lit(1)).and(col("d").gt(lit(2))),
+            expr: col("a", i64::to_data_type())
+                .gt(&lit(1))?
+                .and(&col("d", i32::to_data_type()).gt(&lit(2))?)?,
             expect: true,
             error: "",
         },
         Test {
             name: "a > 100 or d > 2",
-            expr: col("a").gt(lit(100)).or(col("d").gt(lit(2))),
+            expr: col("a", i64::to_data_type()).gt(&lit(100))?.or(&col(
+                "d",
+                i32::to_data_type(),
+            )
+            .gt(&lit(2))?)?,
             expect: true,
             error: "",
         },
         Test {
             name: "a > 100 or a + d > 2",
-            expr: col("a").gt(lit(100)).or(add(col("a"), col("d")).gt(lit(2))),
+            expr: col("a", i64::to_data_type()).gt(&lit(100))?.or(&add(
+                col("a", i64::to_data_type()),
+                col("d", i32::to_data_type()),
+            )
+            .gt(&lit(2))?)?,
             expect: true,
             error: "",
         },
@@ -209,134 +223,114 @@ fn test_build_verifiable_function() -> Result<()> {
 
     struct Test {
         name: &'static str,
-        expr: LegacyExpression,
+        expr: Expression,
         expect: &'static str,
     }
 
     let tests: Vec<Test> = vec![
         Test {
             name: "a < 1 and b > 3",
-            expr: col("a").lt(lit(1)).and(col("b").gt(lit(3))),
+            expr: col("a", i64::to_data_type())
+                .lt(&lit(1))?
+                .and(&col("b", i32::to_data_type()).gt(&lit(3))?)?,
             expect: "((min_a < 1) and (max_b > 3))",
         },
         Test {
             name: "1 > -a or 3 >= b",
-            expr: lit(1).gt(neg(col("a"))).or(lit(3).gt_eq(col("b"))),
-            expect: "((min_(negate a) < 1) or (min_b <= 3))",
+            expr: lit(1)
+                .gt(&neg(col("a", i64::to_data_type())))?
+                .or(&lit(3).gt_eq(&col("b", i32::to_data_type()))?)?,
+            expect: "((min_negate(a) < 1) or (min_b <= 3))",
         },
         Test {
             name: "a = 1 and b != 3",
-            expr: col("a").eq(lit(1)).and(col("b").not_eq(lit(3))),
+            expr: ExpressionOp::eq(&col("a", i64::to_data_type()), &lit(1))?
+                .and(&col("b", i32::to_data_type()).not_eq(&lit(3))?)?,
             expect: "(((min_a <= 1) and (max_a >= 1)) and ((min_b != 3) or (max_b != 3)))",
         },
         Test {
             name: "a is null",
-            expr: LegacyExpression::create_scalar_function("is_null", vec![col("a")]),
+            expr: col("a", i64::to_data_type()).unary_op("is_null")?,
             expect: "(nulls_a > 0)",
         },
         Test {
             name: "a is not null",
-            expr: LegacyExpression::create_scalar_function("is_not_null", vec![col("a")]),
+            expr: col("a", i64::to_data_type()).unary_op("is_not_null")?,
             expect: "(nulls_a != row_count_a)",
         },
         Test {
             name: "b >= 0 and c like 0xffffff",
-            expr: col("b")
-                .gt_eq(lit(0))
-                .and(LegacyExpression::create_binary_expression("like", vec![
-                    col("c"),
-                    lit(vec![255u8, 255, 255]),
-                ])),
+            expr: col("b", i32::to_data_type()).gt_eq(&lit(0))?.and(
+                &col("c", Vu8::to_data_type()).binary_op("like", &lit(vec![255u8, 255, 255]))?,
+            )?,
             expect: "((max_b >= 0) and (max_c >= ffffff))",
         },
         Test {
             name: "c like 'sys_'",
-            expr: LegacyExpression::create_binary_expression("like", vec![
-                col("c"),
-                lit("sys_".as_bytes()),
-            ]),
+            expr: col("c", Vu8::to_data_type()).binary_op("like", &lit("sys_".as_bytes()))?,
             expect: "((max_c >= sys) and (min_c < syt))",
         },
         Test {
             name: "c like 'sys\\%'",
-            expr: LegacyExpression::create_binary_expression("like", vec![
-                col("c"),
-                lit("sys\\%".as_bytes()),
-            ]),
+            expr: col("c", Vu8::to_data_type()).binary_op("like", &lit("sys\\%".as_bytes()))?,
             expect: "((max_c >= sys%) and (min_c < sys&))",
         },
         Test {
             name: "c like 'sys\\t'",
-            expr: LegacyExpression::create_binary_expression("like", vec![
-                col("c"),
-                lit("sys\\t".as_bytes()),
-            ]),
+            expr: col("c", Vu8::to_data_type()).binary_op("like", &lit("sys\\t".as_bytes()))?,
             expect: "((max_c >= sys\\t) and (min_c < sys\\u))",
         },
         Test {
             name: "c not like 'sys\\%'",
-            expr: LegacyExpression::create_binary_expression("not like", vec![
-                col("c"),
-                lit("sys\\%".as_bytes()),
-            ]),
+            expr: col("c", Vu8::to_data_type()).binary_op("not like", &lit("sys\\%".as_bytes()))?,
             expect: "((min_c != sys%) or (max_c != sys%))",
         },
         Test {
             name: "c not like 'sys\\s'",
-            expr: LegacyExpression::create_binary_expression("not like", vec![
-                col("c"),
-                lit("sys\\s".as_bytes()),
-            ]),
+            expr: col("c", Vu8::to_data_type()).binary_op("not like", &lit("sys\\s".as_bytes()))?,
             expect: "((min_c != sys\\s) or (max_c != sys\\s))",
         },
         Test {
             name: "c not like 'sys%'",
-            expr: LegacyExpression::create_binary_expression("not like", vec![
-                col("c"),
-                lit("sys%".as_bytes()),
-            ]),
+            expr: col("c", Vu8::to_data_type()).binary_op("not like", &lit("sys%".as_bytes()))?,
             expect: "((min_c < sys) or (max_c >= syt))",
         },
         Test {
             name: "c not like 'sys%a'",
-            expr: LegacyExpression::create_binary_expression("not like", vec![
-                col("c"),
-                lit("sys%a".as_bytes()),
-            ]),
+            expr: col("c", Vu8::to_data_type()).binary_op("not like", &lit("sys%a".as_bytes()))?,
             expect: "true",
         },
         Test {
             name: "c not like 0xffffff%",
-            expr: LegacyExpression::create_binary_expression("not like", vec![
-                col("c"),
-                lit(vec![255u8, 255, 255, 37]),
-            ]),
+            expr: col("c", Vu8::to_data_type())
+                .binary_op("not like", &lit(vec![255u8, 255, 255, 37]))?,
             expect: "(min_c < ffffff)",
         },
         Test {
             name: "abs(a) = b - 3",
-            expr: LegacyExpression::create_scalar_function("abs", vec![col("a")])
-                .eq(add(col("b"), lit(3))),
+            expr: ExpressionOp::eq(
+                &col("a", i64::to_data_type()).unary_op("abs")?,
+                &add(col("b", i32::to_data_type()), lit(3)),
+            )?,
             expect: "((min_abs(a) <= max_(b + 3)) and (max_abs(a) >= min_(b + 3)))",
         },
         Test {
             name: "a + b <= 3",
-            expr: add(col("a"), col("b")).lt_eq(lit(3)),
+            expr: add(col("a", i64::to_data_type()), col("b", i32::to_data_type()))
+                .lt_eq(&lit(3))?,
             expect: "(min_(a + b) <= 3)",
         },
         Test {
             name: "a + b <= 10 - a",
-            expr: add(col("a"), col("b")).lt_eq(sub(lit(10), col("a"))),
+            expr: add(col("a", i64::to_data_type()), col("b", i32::to_data_type()))
+                .lt_eq(&sub(lit(10), col("a", i64::to_data_type())))?,
             expect: "true",
         },
         Test {
             name: "a <= b + rand()",
             expr: add(
-                col("a"),
-                add(
-                    col("b"),
-                    LegacyExpression::create_scalar_function("rand", vec![]),
-                ),
+                col("a", i64::to_data_type()),
+                add(col("b", i32::to_data_type()), func("rand")?),
             ),
             expect: "true",
         },
@@ -418,7 +412,7 @@ fn test_bound_for_like_pattern() -> Result<()> {
 
 struct Test {
     name: &'static str,
-    expr: LegacyExpression,
+    expr: Expression,
     expect: bool,
     error: &'static str,
 }

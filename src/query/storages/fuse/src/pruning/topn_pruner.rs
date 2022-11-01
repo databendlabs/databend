@@ -12,21 +12,27 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::sync::Arc;
+
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::ColumnStatistics;
-use common_legacy_expression::LegacyExpression;
+use common_planner::Expression;
 
 pub(crate) struct TopNPrunner {
     schema: DataSchemaRef,
-    sort: Vec<LegacyExpression>,
+    sort: Vec<(Expression, bool, bool)>,
     limit: usize,
 }
 
 impl TopNPrunner {
-    pub(crate) fn new(schema: DataSchemaRef, sort: Vec<LegacyExpression>, limit: usize) -> Self {
+    pub(crate) fn new(
+        schema: DataSchemaRef,
+        sort: Vec<(Expression, bool, bool)>,
+        limit: usize,
+    ) -> Self {
         Self {
             schema,
             sort,
@@ -36,7 +42,10 @@ impl TopNPrunner {
 }
 
 impl TopNPrunner {
-    pub(crate) fn prune(&self, metas: Vec<(usize, BlockMeta)>) -> Result<Vec<(usize, BlockMeta)>> {
+    pub(crate) fn prune(
+        &self,
+        metas: Vec<(usize, Arc<BlockMeta>)>,
+    ) -> Result<Vec<(usize, Arc<BlockMeta>)>> {
         if self.sort.len() != 1 {
             return Ok(metas);
         }
@@ -45,20 +54,14 @@ impl TopNPrunner {
             return Ok(metas);
         }
 
-        let (sort, asc, nulls_first) = match &self.sort[0] {
-            LegacyExpression::Sort {
-                expr,
-                asc,
-                nulls_first,
-                ..
-            } => (expr, asc, nulls_first),
-            _ => unreachable!(),
-        };
+        let (sort, asc, nulls_first) = &self.sort[0];
+        // Currently, we only support topn on single-column sort.
+        // TODO: support monadic + multi expression + order by cluster key sort.
 
         // Currently, we only support topn on single-column sort.
         // TODO: support monadic + multi expression + order by cluster key sort.
-        let column = if let LegacyExpression::Column(c) = sort.as_ref() {
-            c
+        let column = if let Expression::IndexedVariable { name, .. } = sort {
+            name
         } else {
             return Ok(metas);
         };
@@ -80,7 +83,7 @@ impl TopNPrunner {
                 })?;
                 Ok((*id, stat.clone(), meta.clone()))
             })
-            .collect::<Result<Vec<(usize, ColumnStatistics, BlockMeta)>>>()?;
+            .collect::<Result<Vec<(usize, ColumnStatistics, Arc<BlockMeta>)>>>()?;
 
         id_stats.sort_by(|a, b| {
             if a.1.null_count + b.1.null_count != 0 && *nulls_first {
