@@ -200,3 +200,21 @@ SELECT SUBSTR('12345', 2, 1);
 ----
 2
 
+
+statement ok
+set sql_dialect = 'hive';
+
+statement query T
+SELECT SUBSTR('12345', 0, 1);
+
+----
+1
+
+statement ok
+set sql_dialect = 'hive';
+
+statement query T
+SELECT SUBSTRING('12345', 0, 1);
+
+----
+1
