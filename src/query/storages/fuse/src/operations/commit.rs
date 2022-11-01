@@ -455,7 +455,7 @@ impl FuseTable {
             )
             .await
             {
-                Err(e) if e.code() == ErrorCode::table_version_mismatched_code() => {
+                Err(e) if e.code() == ErrorCode::TABLE_VERSION_MISMATCHED => {
                     latest_table_ref = self.refresh(ctx.as_ref()).await?;
                     let latest_fuse_table = FuseTable::try_from_table(latest_table_ref.as_ref())?;
                     latest_snapshot =
@@ -606,8 +606,8 @@ mod utils {
     #[inline]
     pub fn is_error_recoverable(e: &ErrorCode, is_table_transient: bool) -> bool {
         let code = e.code();
-        code == ErrorCode::table_version_mismatched_code()
-            || (is_table_transient && code == ErrorCode::storage_not_found_code())
+        code == ErrorCode::TABLE_VERSION_MISMATCHED
+            || (is_table_transient && code == ErrorCode::STORAGE_NOT_FOUND)
     }
 
     // check if there are any fuse table legacy options

@@ -87,7 +87,7 @@ async fn test_fuse_block_table() -> Result<()> {
         // TODO(xuanwo): assign a new error code
         expects_err(
             "unsupported_table_engine",
-            ErrorCode::internal_code(),
+            ErrorCode::INTERNAL,
             output_stream.collect::<Result<Vec<DataBlock>>>().await,
         );
     }

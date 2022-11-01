@@ -43,11 +43,6 @@ macro_rules! build_exceptions {
                         bt,
                     )
                 }
-                paste::item! {
-                    pub fn [< $body:snake _ code >] ()  -> u16{
-                        $code
-                    }
-                }
             )*
         }
     }

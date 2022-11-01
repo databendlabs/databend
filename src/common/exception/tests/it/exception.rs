@@ -46,7 +46,7 @@ fn test_error_code() {
 
     let err = ErrorCode::UnknownException("test message 1");
 
-    assert_eq!(err.code(), ErrorCode::unknown_exception_code(),);
+    assert_eq!(err.code(), ErrorCode::UNKNOWN_EXCEPTION);
 }
 
 #[test]

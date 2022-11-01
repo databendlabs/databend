@@ -116,7 +116,7 @@ impl Catalog for DatabaseCatalog {
         let r = self.immutable_catalog.get_database(tenant, db_name).await;
         match r {
             Err(e) => {
-                if e.code() == ErrorCode::unknown_database_code() {
+                if e.code() == ErrorCode::UNKNOWN_DATABASE {
                     self.mutable_catalog.get_database(tenant, db_name).await
                 } else {
                     Err(e)
@@ -208,7 +208,7 @@ impl Catalog for DatabaseCatalog {
         match res {
             Ok(t) => Ok(t),
             Err(e) => {
-                if e.code() == ErrorCode::unknown_table_code() {
+                if e.code() == ErrorCode::UNKNOWN_TABLE {
                     self.mutable_catalog.get_table_by_info(table_info)
                 } else {
                     Err(e)
@@ -246,7 +246,7 @@ impl Catalog for DatabaseCatalog {
         match res {
             Ok(v) => Ok(v),
             Err(e) => {
-                if e.code() == ErrorCode::unknown_database_code() {
+                if e.code() == ErrorCode::UNKNOWN_DATABASE {
                     self.mutable_catalog
                         .get_table(tenant, db_name, table_name)
                         .await
@@ -268,7 +268,7 @@ impl Catalog for DatabaseCatalog {
         match r {
             Ok(x) => Ok(x),
             Err(e) => {
-                if e.code() == ErrorCode::unknown_database_code() {
+                if e.code() == ErrorCode::UNKNOWN_DATABASE {
                     self.mutable_catalog.list_tables(tenant, db_name).await
                 } else {
                     Err(e)
@@ -295,7 +295,7 @@ impl Catalog for DatabaseCatalog {
         match r {
             Ok(x) => Ok(x),
             Err(e) => {
-                if e.code() == ErrorCode::unknown_database_code() {
+                if e.code() == ErrorCode::UNKNOWN_DATABASE {
                     self.mutable_catalog
                         .list_tables_history(tenant, db_name)
                         .await

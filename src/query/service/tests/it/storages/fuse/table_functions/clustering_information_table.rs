@@ -90,7 +90,7 @@ async fn test_clustering_information_table_read() -> Result<()> {
         // TODO(xuanwo): assign a new error code
         expects_err(
             "unsupported_table_engine",
-            ErrorCode::internal_code(),
+            ErrorCode::INTERNAL,
             output_stream.collect::<Result<Vec<DataBlock>>>().await,
         );
     }

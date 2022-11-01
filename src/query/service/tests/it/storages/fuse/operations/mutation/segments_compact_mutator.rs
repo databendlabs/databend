@@ -175,7 +175,7 @@ async fn test_compact_segment_unresolvable_conflict() -> Result<()> {
     // the compact operation committed latter should failed
     let r = mutator.try_commit(table.clone()).await;
     assert!(r.is_err());
-    assert_eq!(r.err().unwrap().code(), ErrorCode::storage_other_code());
+    assert_eq!(r.err().unwrap().code(), ErrorCode::STORAGE_OTHER);
 
     Ok(())
 }

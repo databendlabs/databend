@@ -253,7 +253,7 @@ impl Session {
             .validate_available_role(&current_role_name)
             .await
             .or_else(|e| {
-                if e.code() == ErrorCode::invalid_role_code() {
+                if e.code() == ErrorCode::INVALID_ROLE {
                     Ok(public_role)
                 } else {
                     Err(e)

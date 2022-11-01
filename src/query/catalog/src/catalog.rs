@@ -113,7 +113,7 @@ pub trait Catalog: DynClone + Send + Sync {
         match self.get_database(tenant, db_name).await {
             Ok(_) => Ok(true),
             Err(err) => {
-                if err.code() == ErrorCode::unknown_database_code() {
+                if err.code() == ErrorCode::UNKNOWN_DATABASE {
                     Ok(false)
                 } else {
                     Err(err)
@@ -156,7 +156,7 @@ pub trait Catalog: DynClone + Send + Sync {
         match self.get_table(tenant, db_name, table_name).await {
             Ok(_) => Ok(true),
             Err(err) => {
-                if err.code() == ErrorCode::unknown_table_code() {
+                if err.code() == ErrorCode::UNKNOWN_TABLE {
                     Ok(false)
                 } else {
                     Err(err)

@@ -32,7 +32,7 @@ impl UserApiProvider {
         match add_udf.await {
             Ok(res) => Ok(res),
             Err(e) => {
-                if if_not_exists && e.code() == ErrorCode::udf_already_exists_code() {
+                if if_not_exists && e.code() == ErrorCode::UDF_ALREADY_EXISTS {
                     Ok(u64::MIN)
                 } else {
                     Err(e)
