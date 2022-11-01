@@ -176,9 +176,10 @@ async fn test_fuse_snapshot_table_read() -> Result<()> {
 
         let qry = format!("select * from fuse_snapshot('{}', '{}')", db, "in_mem");
         let output_stream = execute_query(ctx.clone(), qry.as_str()).await?;
+        // TODO(xuanwo): assign a new error code
         expects_err(
             "unsupported_table_engine",
-            ErrorCode::internal_error_code(),
+            ErrorCode::internal_code(),
             output_stream.collect::<Result<Vec<DataBlock>>>().await,
         );
     }

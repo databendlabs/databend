@@ -71,9 +71,9 @@ build_exceptions! {
     /// code at anytime.
     Internal(1001),
 
-    /// Unimplemented means the error indicates this is a not implemented feature.
+    /// Unimplemented means this is a not implemented feature.
     ///
-    /// Deveopers could implement this at anytime.
+    /// Deveopers could implement the feature to resolve this error at anytime,
     ///
     /// # Notes
     ///

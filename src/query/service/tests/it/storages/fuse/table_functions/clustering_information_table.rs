@@ -87,9 +87,10 @@ async fn test_clustering_information_table_read() -> Result<()> {
             db, "in_mem"
         );
         let output_stream = execute_query(ctx.clone(), qry.as_str()).await?;
+        // TODO(xuanwo): assign a new error code
         expects_err(
             "unsupported_table_engine",
-            ErrorCode::internal_error_code(),
+            ErrorCode::internal_code(),
             output_stream.collect::<Result<Vec<DataBlock>>>().await,
         );
     }
