@@ -70,7 +70,6 @@ build_exceptions! {
     BadOption(1022),
     ParquetError(1024),
     UnknownTable(1025),
-    IllegalAggregateExp(1026),
     UnknownAggregateFunction(1027),
     NumberArgumentsNotMatch(1028),
     NotFoundStream(1029),
