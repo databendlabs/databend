@@ -139,7 +139,7 @@ build_exceptions! {
     TableInfoError(1106),
     ReadTableDataError(1107),
 
-    /// Related Errors
+    // Data Related Errors
 
     /// ParquetFileInvalid is used when given parquet file is invalid.
     ParquetFileInvalid(1201),
