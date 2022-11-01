@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+#![allow(clippy::too_many_arguments)]
 mod index;
 mod segment;
 mod snapshot;

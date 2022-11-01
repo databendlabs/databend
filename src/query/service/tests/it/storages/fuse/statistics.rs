@@ -53,7 +53,6 @@ fn test_ft_stats_block_stats() -> common_exception::Result<()> {
     let col_stats = r.get(&0).unwrap();
     assert_eq!(col_stats.min, DataValue::Int64(1));
     assert_eq!(col_stats.max, DataValue::Int64(3));
-    assert_eq!(col_stats.number_of_distinct_values(), 3);
     Ok(())
 }
 
@@ -75,11 +74,9 @@ fn test_ft_tuple_stats_block_stats() -> common_exception::Result<()> {
     let col0_stats = r.get(&0).unwrap();
     assert_eq!(col0_stats.min, DataValue::Int64(1));
     assert_eq!(col0_stats.max, DataValue::Int64(3));
-    assert_eq!(col0_stats.number_of_distinct_values(), 3);
     let col1_stats = r.get(&1).unwrap();
     assert_eq!(col1_stats.min, DataValue::Int64(4));
     assert_eq!(col1_stats.max, DataValue::Int64(6));
-    assert_eq!(col1_stats.number_of_distinct_values(), 3);
     Ok(())
 }
 
@@ -101,7 +98,6 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
     let col0_stats = r.get(&0).unwrap();
     assert_eq!(col0_stats.min, DataValue::Int64(val_start_with as i64));
     assert_eq!(col0_stats.max, DataValue::Int64(num_of_blocks as i64));
-    assert_eq!(col0_stats.number_of_distinct_values(), 10);
 
     let col1_stats = r.get(&1).unwrap();
     assert_eq!(
@@ -109,7 +105,6 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
         DataValue::Int64((val_start_with * 2) as i64)
     );
     assert_eq!(col1_stats.max, DataValue::Int64((num_of_blocks * 2) as i64));
-    assert_eq!(col1_stats.number_of_distinct_values(), 10);
 
     let col2_stats = r.get(&2).unwrap();
     assert_eq!(
@@ -117,7 +112,6 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
         DataValue::Int64((val_start_with * 3) as i64)
     );
     assert_eq!(col2_stats.max, DataValue::Int64((num_of_blocks * 3) as i64));
-    assert_eq!(col2_stats.number_of_distinct_values(), 10);
 
     Ok(())
 }
@@ -149,7 +143,6 @@ fn test_reduce_block_statistics_in_memory_size() -> common_exception::Result<()>
         assert_eq!(col_stats.in_memory_size, 2);
         // for each column, the reduced value of null_count should be 1 + 1
         assert_eq!(col_stats.null_count, 2);
-        assert_eq!(col_stats.number_of_distinct_values(), 0);
     }
     Ok(())
 }

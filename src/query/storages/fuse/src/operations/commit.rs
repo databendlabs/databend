@@ -31,6 +31,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::caches::CacheManager;
 use common_fuse_meta::meta::ClusterKey;
+use common_fuse_meta::meta::ColumnNDVs;
 use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::Statistics;
@@ -57,6 +58,7 @@ use crate::operations::mutation::AbortOperation;
 use crate::operations::AppendOperationLogEntry;
 use crate::operations::TableOperationLog;
 use crate::statistics;
+use crate::statistics::merge_column_ndvs;
 use crate::statistics::merge_statistics;
 use crate::FuseTable;
 use crate::OPT_KEY_LEGACY_SNAPSHOT_LOC;
@@ -72,6 +74,7 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         operation_log: TableOperationLog,
+        ndvs: ColumnNDVs,
         overwrite: bool,
     ) -> Result<()> {
         let mut tbl = self;
@@ -103,7 +106,10 @@ impl FuseTable {
 
         let transient = self.transient();
         loop {
-            match tbl.try_commit(ctx.clone(), &operation_log, overwrite).await {
+            match tbl
+                .try_commit(ctx.clone(), &operation_log, &ndvs, overwrite)
+                .await
+            {
                 Ok(_) => {
                     break {
                         if transient {
@@ -171,14 +177,20 @@ impl FuseTable {
         &'a self,
         ctx: Arc<dyn TableContext>,
         operation_log: &'a TableOperationLog,
+        ndvs: &'a ColumnNDVs,
         overwrite: bool,
     ) -> Result<()> {
         let prev = self.read_table_snapshot().await?;
         let prev_version = self.snapshot_format_version().await?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
+        let prev_ndvs = prev.as_ref().and_then(|v| v.cloumn_ndvs.as_ref());
         let schema = self.table_info.meta.schema.as_ref().clone();
         let (segments, summary) = Self::merge_append_operations(operation_log)?;
 
+        let mut mut_ndvs = ndvs.clone();
+        if let Some(prev_ndvs) = prev_ndvs {
+            merge_column_ndvs(&mut mut_ndvs, prev_ndvs);
+        }
         let progress_values = ProgressValues {
             rows: summary.row_count as usize,
             bytes: summary.uncompressed_byte_size as usize,
@@ -199,6 +211,7 @@ impl FuseTable {
                 summary,
                 segments,
                 self.cluster_key_meta.clone(),
+                Some(ndvs.clone()),
             )
         } else {
             Self::merge_table_operations(
@@ -208,6 +221,7 @@ impl FuseTable {
                 segments,
                 summary,
                 self.cluster_key_meta.clone(),
+                Some(ndvs.clone()),
             )?
         };
 
@@ -237,6 +251,7 @@ impl FuseTable {
         mut new_segments: Vec<Location>,
         statistics: Statistics,
         cluster_key_meta: Option<ClusterKey>,
+        ndvs: Option<ColumnNDVs>,
     ) -> Result<TableSnapshot> {
         // 1. merge stats with previous snapshot, if any
         let stats = if let Some(snapshot) = &previous {
@@ -262,6 +277,7 @@ impl FuseTable {
             stats,
             new_segments,
             cluster_key_meta,
+            ndvs,
         );
         Ok(new_snapshot)
     }

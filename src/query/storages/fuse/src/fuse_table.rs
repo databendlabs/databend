@@ -29,6 +29,7 @@ use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::ClusterKey;
+use common_fuse_meta::meta::ColumnNDVs;
 use common_fuse_meta::meta::ColumnStatistics as FuseColumnStatistics;
 use common_fuse_meta::meta::Statistics as FuseStatistics;
 use common_fuse_meta::meta::TableSnapshot;
@@ -55,6 +56,7 @@ use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::AppendOperationLogEntry;
 use crate::pipelines::Pipeline;
+use crate::statistics::calc_column_ndvs_of_data_blocks;
 use crate::table_storage_prefix;
 use crate::NavigationPoint;
 use crate::Table;
@@ -277,6 +279,11 @@ impl Table for FuseTable {
         let prev_version = self.snapshot_format_version().await?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let prev_snapshot_id = prev.as_ref().map(|v| (v.snapshot_id, prev_version));
+        let prev_ndvs = if let Some(ref v) = prev {
+            v.cloumn_ndvs.clone()
+        } else {
+            Some(ColumnNDVs::default())
+        };
         let (summary, segments) = if let Some(v) = prev {
             (v.summary.clone(), v.segments.clone())
         } else {
@@ -291,6 +298,7 @@ impl Table for FuseTable {
             summary,
             segments,
             cluster_key_meta,
+            prev_ndvs,
         );
 
         let mut table_info = self.table_info.clone();
@@ -321,10 +329,15 @@ impl Table for FuseTable {
         let prev_version = self.snapshot_format_version().await?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let prev_snapshot_id = prev.as_ref().map(|v| (v.snapshot_id, prev_version));
-        let (summary, segments) = if let Some(v) = prev {
+        let (summary, segments) = if let Some(ref v) = prev {
             (v.summary.clone(), v.segments.clone())
         } else {
             (FuseStatistics::default(), vec![])
+        };
+        let prev_ndvs = if let Some(ref v) = prev {
+            v.cloumn_ndvs.clone()
+        } else {
+            Some(ColumnNDVs::default())
         };
 
         let new_snapshot = TableSnapshot::new(
@@ -335,6 +348,7 @@ impl Table for FuseTable {
             summary,
             segments,
             None,
+            prev_ndvs,
         );
 
         let mut table_info = self.table_info.clone();
@@ -388,12 +402,14 @@ impl Table for FuseTable {
         overwrite: bool,
     ) -> Result<()> {
         self.check_mutable()?;
+        let ndvs = calc_column_ndvs_of_data_blocks(&operations)?;
         // only append operation supported currently
         let append_log_entries = operations
             .iter()
             .map(AppendOperationLogEntry::try_from)
             .collect::<Result<Vec<AppendOperationLogEntry>>>()?;
-        self.do_commit(ctx, append_log_entries, overwrite).await
+        self.do_commit(ctx, append_log_entries, ndvs, overwrite)
+            .await
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_truncate", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
@@ -423,6 +439,7 @@ impl Table for FuseTable {
             let stats = &snapshot.summary.col_stats;
             FuseTableColumnStatisticsProvider {
                 column_stats: stats.clone(),
+                column_ndvs: snapshot.get_number_of_distinct_values(),
             }
         } else {
             FuseTableColumnStatisticsProvider::default()
@@ -470,16 +487,21 @@ impl Table for FuseTable {
 #[derive(Default)]
 struct FuseTableColumnStatisticsProvider {
     column_stats: HashMap<ColumnId, FuseColumnStatistics>,
+    column_ndvs: HashMap<ColumnId, u64>,
 }
 
 impl ColumnStatisticsProvider for FuseTableColumnStatisticsProvider {
     fn column_statistics(&self, column_id: ColumnId) -> Option<ColumnStatistics> {
         let col_stats = &self.column_stats.get(&column_id);
+        let ndv = match self.column_ndvs.get(&column_id) {
+            Some(ndv) => *ndv,
+            None => 0,
+        };
         col_stats.map(|s| ColumnStatistics {
             min: s.min.clone(),
             max: s.max.clone(),
             null_count: s.null_count,
-            number_of_distinct_values: s.number_of_distinct_values(),
+            number_of_distinct_values: ndv,
         })
     }
 }

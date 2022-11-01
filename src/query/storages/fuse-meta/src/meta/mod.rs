@@ -23,6 +23,7 @@ mod versions;
 pub use common::ClusterKey;
 pub use common::ClusterStatistics;
 pub use common::ColumnId;
+pub use common::ColumnNDVs;
 pub use common::ColumnStatistics;
 pub use common::Compression;
 pub use common::Location;

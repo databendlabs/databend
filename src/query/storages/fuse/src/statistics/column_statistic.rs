@@ -18,6 +18,7 @@ use common_datavalues::DataField;
 use common_datavalues::DataValue;
 use common_exception::Result;
 use common_functions::aggregates::eval_aggr;
+use common_fuse_meta::meta::ColumnNDVs;
 use common_fuse_meta::meta::ColumnStatistics;
 use common_fuse_meta::meta::StatisticsOfColumns;
 use common_storages_index::MinMaxIndex;
@@ -69,7 +70,6 @@ pub fn gen_columns_statistics(data_block: &DataBlock) -> Result<StatisticsOfColu
         };
 
         let mut col_stats = ColumnStatistics::new(min, max, unset_bits as u64, 0);
-        col_stats.calc_number_of_distinct_values(col);
 
         col_stats.in_memory_size = col.memory_size() as u64;
 
@@ -210,4 +210,21 @@ impl Trim for DataValue {
             v => Some(v),
         }
     }
+}
+
+pub fn calc_column_ndvs_of_data_blocks(data_blocks: &Vec<DataBlock>) -> Result<ColumnNDVs> {
+    let mut ndvs = ColumnNDVs::default();
+
+    for block in data_blocks {
+        let leaves = traverse::traverse_columns_dfs(block.columns())?;
+        for (idx, col) in leaves.iter().enumerate() {
+            ndvs.calc_number_of_distinct_values(idx as u32, col);
+        }
+    }
+
+    Ok(ndvs)
+}
+
+pub fn merge_column_ndvs(ndvs: &mut ColumnNDVs, other: &ColumnNDVs) {
+    ndvs.merge_number_of_distinct_values(other);
 }
