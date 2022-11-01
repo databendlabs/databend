@@ -83,7 +83,6 @@ build_exceptions! {
     CannotListenerPort(1045),
     BadBytes(1046),
     InitPrometheusFailure(1047),
-    ScalarSubqueryBadRows(1048),
     Overflow(1049),
     InvalidMetaBinaryFormat(1050),
     AuthenticateFailure(1051),
