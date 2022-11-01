@@ -88,7 +88,6 @@ build_exceptions! {
     TLSConfigurationFailure(1052),
     UnknownSession(1053),
     UnexpectedError(1054),
-    BadPredicateRows(1056),
     SHA1CheckFailed(1057),
     UnknownColumn(1058),
     InvalidSourceFormat(1059),
