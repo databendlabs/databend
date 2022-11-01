@@ -43,7 +43,7 @@ The request usually includes many occurrences of the argument `-H` and each is f
 
 The [COPY INTO](../30-reference/30-sql/10-dml/dml-copy-into-table.md) command enables you to load data from files using insecure protocols, such as HTTP. This simplifies the data loading in some specific scenarios, for example, Databend is installed on-premises with MinIO. In such cases, you can load data from local files with the COPY INTO command. 
 
-Example
+Example:
 
 ```sql
 COPY INTO ontime200 FROM 'fs://<file_path>/ontime_200.csv' FILE_FORMAT = (type = 'CSV' field_delimiter = ','  record_delimiter = '\n' skip_header = 1);
@@ -60,7 +60,7 @@ allow_insecure = true
 ```
 
 :::caution
-For security reasons, Databend does NOT recommend insecure protocols for data loading. DO NOT set `allow_insecure` to `true` in any production environment. 
+For security reasons, Databend does NOT recommend insecure protocols for data loading. Use them for tests only. DO NOT set `allow_insecure` to `true` in any production environment. 
 :::
 
 ## Tutorial 1 - Load from a CSV File
