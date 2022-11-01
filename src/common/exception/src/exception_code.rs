@@ -61,7 +61,6 @@ build_exceptions! {
     IllegalDataType(1007),
     UnknownFunction(1008),
     BadDataValueType(1010),
-    UnknownPlan(1011),
     IllegalPipelineState(1012),
     BadTransformType(1013),
     IllegalTransformConnectionState(1014),
