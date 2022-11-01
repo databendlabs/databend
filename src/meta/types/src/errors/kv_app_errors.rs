@@ -17,6 +17,7 @@ use common_meta_stoerr::MetaStorageError;
 use tonic::Status;
 
 use crate::AppError;
+use crate::InvalidReply;
 use crate::MetaAPIError;
 use crate::MetaClientError;
 use crate::MetaError;
@@ -86,6 +87,13 @@ impl From<MetaNetworkError> for KVAppError {
 
 impl From<MetaAPIError> for KVAppError {
     fn from(e: MetaAPIError) -> Self {
+        let meta_err = MetaError::from(e);
+        Self::MetaError(meta_err)
+    }
+}
+
+impl From<InvalidReply> for KVAppError {
+    fn from(e: InvalidReply) -> Self {
         let meta_err = MetaError::from(e);
         Self::MetaError(meta_err)
     }
