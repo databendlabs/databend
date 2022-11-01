@@ -88,7 +88,6 @@ build_exceptions! {
     TLSConfigurationFailure(1052),
     UnknownSession(1053),
     UnexpectedError(1054),
-    DateTimeParseError(1055),
     BadPredicateRows(1056),
     SHA1CheckFailed(1057),
     UnknownColumn(1058),
