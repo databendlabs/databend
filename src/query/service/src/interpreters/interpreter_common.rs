@@ -175,9 +175,6 @@ pub async fn stat_files(
     stage: &UserStageInfo,
     files: impl IntoIterator<Item = impl AsRef<str>>,
 ) -> Result<Vec<Result<StageFile>>> {
-    let max_runtime_threads = ctx.get_settings().get_max_threads()? as usize;
-    let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
-
     // 1.1 combine all the tasks.
     let mut iter = files.into_iter();
     let tasks = std::iter::from_fn(move || {
@@ -194,7 +191,8 @@ pub async fn stat_files(
     });
 
     // 1.2 build the runtime.
-    let semaphore = Semaphore::new(max_io_requests);
+    let max_runtime_threads = ctx.get_settings().get_max_threads()? as usize;
+    let semaphore = Semaphore::new(max_runtime_threads);
     let stat_runtime = Arc::new(Runtime::with_worker_threads(
         max_runtime_threads,
         Some("stat-files-worker".to_owned()),
