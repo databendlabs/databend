@@ -60,7 +60,6 @@ build_exceptions! {
     BadArguments(1006),
     IllegalDataType(1007),
     UnknownFunction(1008),
-    IllegalFunctionState(1009),
     BadDataValueType(1010),
     UnknownPlan(1011),
     IllegalPipelineState(1012),
