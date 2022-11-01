@@ -77,6 +77,50 @@ pub fn function_name_after_as(i: Input) -> IResult<Identifier> {
     non_reserved_identifier(|token| token.is_reserved_function_name(true))(i)
 }
 
+/// Parse input into stage name.
+///
+/// Possible value:
+///
+/// - a valid Identifier
+/// - `~`
+pub fn stage_name(i: Input) -> IResult<Identifier> {
+    alt((
+        map(
+            alt((
+                rule! { (Ident | Tilde) },
+                non_reserved_keyword(|token| token.is_reserved_ident(false)),
+            )),
+            |token| Identifier {
+                span: token.clone(),
+                name: token.text().to_string(),
+                quote: None,
+            },
+        ),
+        move |i| {
+            match_token(QuotedString)(i).and_then(|(i2, token)| {
+                if token
+                    .text()
+                    .chars()
+                    .next()
+                    .filter(|c| i.1.is_ident_quote(*c))
+                    .is_some()
+                {
+                    Ok((i2, Identifier {
+                        span: token.clone(),
+                        name: token.text()[1..token.text().len() - 1].to_string(),
+                        quote: Some(token.text().chars().next().unwrap()),
+                    }))
+                } else {
+                    Err(nom::Err::Error(Error::from_error_kind(
+                        i,
+                        ErrorKind::ExpectToken(Ident),
+                    )))
+                }
+            })
+        },
+    ))(i)
+}
+
 fn non_reserved_identifier(
     is_reserved_keyword: fn(&TokenKind) -> bool,
 ) -> impl FnMut(Input) -> IResult<Identifier> {

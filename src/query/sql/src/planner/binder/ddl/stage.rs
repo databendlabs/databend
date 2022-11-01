@@ -79,7 +79,13 @@ impl<'a> Binder {
         } = stmt;
 
         let mut stage_info = match location {
-            None => UserStageInfo::new_internal_stage(stage_name),
+            None => {
+                if stage_name == "~" {
+                    UserStageInfo::new_user_stage(&self.ctx.get_current_user()?.name)
+                } else {
+                    UserStageInfo::new_internal_stage(stage_name)
+                }
+            }
             Some(uri) => {
                 let uri = UriLocation {
                     protocol: uri.protocol.clone(),
