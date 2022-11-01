@@ -259,10 +259,10 @@ pub mod linux {
             assert_ne!(-1, unsafe { libc::uname(&mut uname) });
             let mut length = 0usize;
 
-            // refer: https://semver.org/
+            // refer: https://semver.org/, here we stop at \0 and _
             while length < uname.release.len()
                 && uname.release[length] != 0
-                && uname.release[length] != b'_' as i8
+                && uname.release[length] != 95
             {
                 length += 1;
             }
@@ -360,7 +360,7 @@ mod test {
         let mut length = 0;
         while length < uname_release.len()
             && uname_release[length] != 0
-            && uname_release[length] != b'_'
+            && uname_release[length] != 95
         {
             length += 1;
         }
