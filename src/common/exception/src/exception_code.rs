@@ -73,7 +73,6 @@ build_exceptions! {
     UnknownAggregateFunction(1027),
     NumberArgumentsNotMatch(1028),
     EmptyDataFromServer(1030),
-    DuplicateClusterNode(1034),
     NotFoundClusterNode(1035),
     BadAddressFormat(1036),
     DnsParseError(1037),
