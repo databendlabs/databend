@@ -17,21 +17,16 @@ use std::sync::Arc;
 
 use chrono::TimeZone;
 use chrono::Utc;
-use common_base::base::tokio::sync::Semaphore;
 use common_base::base::GlobalIORuntime;
-use common_base::base::Runtime;
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::StageFile;
 use common_meta_types::UserStageInfo;
 use common_pipeline_core::Pipeline;
 use futures::TryStreamExt;
-use futures_util::future;
 use tracing::debug;
 use tracing::warn;
-use tracing::Instrument;
 
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
@@ -149,16 +144,16 @@ pub async fn validate_grant_object_exists(
     Ok(())
 }
 
-async fn stat_file(
-    ctx: Arc<QueryContext>,
-    stage: UserStageInfo,
-    path: String,
+pub async fn stat_file(
+    ctx: &Arc<QueryContext>,
+    stage: &UserStageInfo,
+    path: &str,
 ) -> Result<StageFile> {
     let table_ctx: Arc<dyn TableContext> = ctx.clone();
-    let op = StageTable::get_op(&table_ctx, &stage)?;
-    let meta = op.object(&path).metadata().await?;
+    let op = StageTable::get_op(&table_ctx, stage)?;
+    let meta = op.object(path).metadata().await?;
     Ok(StageFile {
-        path,
+        path: path.to_string(),
         size: meta.content_length(),
         md5: meta.content_md5().map(str::to_string),
         last_modified: meta
@@ -167,44 +162,6 @@ async fn stat_file(
         creator: None,
         etag: meta.etag().map(str::to_string),
     })
-}
-
-// Stat files in parallel.
-pub async fn stat_files(
-    ctx: &Arc<QueryContext>,
-    stage: &UserStageInfo,
-    files: impl IntoIterator<Item = impl AsRef<str>>,
-) -> Result<Vec<Result<StageFile>>> {
-    // 1.1 combine all the tasks.
-    let mut iter = files.into_iter();
-    let tasks = std::iter::from_fn(move || {
-        let ctx = ctx.clone();
-        if let Some(location) = iter.next() {
-            let location = location.as_ref().to_owned();
-            Some(
-                stat_file(ctx, stage.clone(), location)
-                    .instrument(tracing::debug_span!("stat_file")),
-            )
-        } else {
-            None
-        }
-    });
-
-    // 1.2 build the runtime.
-    let max_runtime_threads = ctx.get_settings().get_max_threads()? as usize;
-    let semaphore = Semaphore::new(max_runtime_threads);
-    let stat_runtime = Arc::new(Runtime::with_worker_threads(
-        max_runtime_threads,
-        Some("stat-files-worker".to_owned()),
-    )?);
-
-    // 1.3 spawn all the tasks to the runtime.
-    let join_handlers = stat_runtime.try_spawn_batch(semaphore, tasks).await?;
-
-    // 1.4 get all the result.
-    future::try_join_all(join_handlers)
-        .await
-        .map_err(|e| ErrorCode::LogicalError(format!("Stat files in parallel failure, {}", e)))
 }
 
 /// List files from DAL in recursive way.
