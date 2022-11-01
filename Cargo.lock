@@ -8985,7 +8985,7 @@ dependencies = [
 [[package]]
 name = "xorfilter-rs"
 version = "0.5.1"
-source = "git+https://github.com/datafuse-extras/xorfilter?rev=databend-alpha.1#008ca3ccdf8b13b2b123749d56d6179c4aac33f1"
+source = "git+https://github.com/datafuse-extras/xorfilter?tag=databend-alpha.1#008ca3ccdf8b13b2b123749d56d6179c4aac33f1"
 dependencies = [
  "cbordata",
 ]

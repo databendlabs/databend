@@ -46,13 +46,20 @@ pub struct ColumnStatistics {
 }
 
 impl ColumnStatistics {
+    // The error rate of hll, the less error rate, the more hll size
+    // Error rate  hll size(bytes)
+    // 0.04         1057
+    // 0.09         289
+    // 0.11         161
+    const HLL_ERROR_RATE: &'static f64 = &0.11;
+
     pub fn new(min: DataValue, max: DataValue, null_count: u64, in_memory_size: u64) -> Self {
         ColumnStatistics {
             min,
             max,
             null_count,
             in_memory_size,
-            hll: Some(HyperLogLogMagnitude::new(&0.00408)),
+            hll: Some(HyperLogLogMagnitude::new(ColumnStatistics::HLL_ERROR_RATE)),
         }
     }
 
@@ -62,7 +69,7 @@ impl ColumnStatistics {
             max: DataValue::Null,
             null_count: 0,
             in_memory_size: 0,
-            hll: Some(HyperLogLogMagnitude::new(&0.00408)),
+            hll: Some(HyperLogLogMagnitude::new(ColumnStatistics::HLL_ERROR_RATE)),
         }
     }
 
