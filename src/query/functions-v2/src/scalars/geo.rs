@@ -13,8 +13,10 @@
 // limitations under the License.
 
 use std::mem::MaybeUninit;
+use std::num::Wrapping;
 
 use common_expression::types::number::F32;
+use common_expression::types::number::F64;
 use common_expression::types::NumberType;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
@@ -46,12 +48,12 @@ pub fn register(registry: &mut FunctionRegistry) {
     geo_dist_init();
 
     // great circle distance
-    registry.register_4_arg::<NumberType<F32>, NumberType<F32>, NumberType<F32>, NumberType<F32>,NumberType<F32>,_, _>(
+    registry.register_4_arg::<NumberType<F64>, NumberType<F64>, NumberType<F64>, NumberType<F64>,NumberType<F32>,_, _>(
         "great_circle_distance",
         FunctionProperty::default(),
         |_,_,_,_|None,
-        |lon1:F32,lat1:F32,lon2:F32,lat2:F32,_| F32::from({
-            distance(lon1.0, lat1.0, lon2.0, lat2.0)
+        |lon1:F64,lat1:F64,lon2:F64,lat2:F64,_| F32::from({
+            distance(lon1.0 as f32, lat1.0 as f32, lon2.0 as f32, lat2.0 as f32)
         }),
     );
 }
@@ -102,6 +104,17 @@ pub fn geo_dist_init() {
         .unwrap();
 }
 
+#[allow(dead_code)]
+#[inline(always)]
+fn sqrf64(v: f64) -> f64 {
+    v * v
+}
+
+#[inline(always)]
+fn sqrf32(v: f32) -> f32 {
+    v * v
+}
+
 #[inline(always)]
 fn geodist_deg_diff(mut f: f32) -> f32 {
     f = f.abs();
@@ -125,8 +138,9 @@ fn geodist_fast_cos(x: f32) -> f32 {
 fn geodist_fast_sin(x: f32) -> f32 {
     let mut y = x.abs() * (COS_LUT_SIZE_F / PI_F / 2.0f32);
     let mut i = float_to_index(y);
-    y -= i as f32;
-    i = (i - COS_LUT_SIZE / 4) & (COS_LUT_SIZE - 1); // cos(x - pi / 2) = sin(x), costable / 4 = pi / 2
+    y = y - i as f32;
+    // cos(x - pi / 2) = sin(x), costable / 4 = pi / 2
+    i = (Wrapping(i) - Wrapping(COS_LUT_SIZE / 4)).0 & (COS_LUT_SIZE - 1);
     let cos_lut = COS_LUT.get().unwrap();
     cos_lut[i] + (cos_lut[i + 1] - cos_lut[i]) * y
 }
@@ -176,10 +190,10 @@ fn distance(lon1deg: f32, lat1deg: f32, lon2deg: f32, lat2deg: f32) -> f32 {
 
         (k_lat * lat_diff * lat_diff + k_lon * lon_diff * lon_diff).sqrt()
     } else {
-        let a: f32 = (geodist_fast_sin(lat_diff * RAD_IN_DEG_HALF)).sqrt()
+        let a: f32 = sqrf32(geodist_fast_sin(lat_diff * RAD_IN_DEG_HALF))
             + geodist_fast_cos(lat1deg * RAD_IN_DEG)
                 * geodist_fast_cos(lat2deg * RAD_IN_DEG)
-                * (geodist_fast_sin(lon_diff * RAD_IN_DEG_HALF)).sqrt();
+                * sqrf32(geodist_fast_sin(lon_diff * RAD_IN_DEG_HALF));
 
         EARTH_DIAMETER * geodist_fast_asin_sqrt(a)
     }

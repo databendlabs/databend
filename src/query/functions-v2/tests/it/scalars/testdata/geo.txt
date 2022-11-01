@@ -1,0 +1,9 @@
+ast            : great_circle_distance(55.755831, 37.617673, -55.755831, -37.617673)
+raw expr       : great_circle_distance(55.755831_f64, 37.617673_f64, minus(55.755831_f64), minus(37.617673_f64))
+checked expr   : great_circle_distance<Float64, Float64, Float64, Float64>(55.755831_f64, 37.617673_f64, minus<Float64>(55.755831_f64), minus<Float64>(37.617673_f64))
+optimized expr : 14128353_f32
+output type    : Float32
+output domain  : Unknown
+output         : 14128353
+
+
