@@ -64,7 +64,7 @@ pub trait FileFormatTypeExt {
 #[derive(Clone, Debug)]
 pub struct FileFormatOptionsExt {
     pub stage: FileFormatOptions,
-    pub quote: u8,
+    pub quote: String,
     pub ident_case_sensitive: bool,
     pub headers: usize,
     pub json_compact: bool,
@@ -108,7 +108,8 @@ impl FileFormatOptionsExt {
     ) -> Result<Box<dyn OutputFormat>> {
         let fmt = &self.stage.format;
         let options = fmt.final_file_format_options(self)?;
-        let format_settings = fmt.get_format_settings(self, settings)?;
+        let format_settings = fmt.get_format_settings(&options, settings)?;
+        // println!("format {:?} {:?} {:?}", fmt, options, format_settings);
         let output: Box<dyn OutputFormat> = match options.stage.format {
             StageFileFormatType::Csv => match options.headers {
                 0 => Box::new(CSVOutputFormat::create(schema, format_settings)),
@@ -224,7 +225,7 @@ impl FileFormatTypeExt for StageFileFormatType {
     fn get_ext_from_stage(stage: FileFormatOptions) -> FileFormatOptionsExt {
         FileFormatOptionsExt {
             stage,
-            quote: 0,
+            quote: "".to_string(),
             ident_case_sensitive: false,
             headers: 0,
             json_compact: false,
@@ -251,7 +252,7 @@ impl FileFormatTypeExt for StageFileFormatType {
         };
         let mut options = FileFormatOptionsExt {
             stage,
-            quote: FormatSettings::parse_quote(&settings.get_format_quote_char()?)?,
+            quote: settings.get_format_quote()?,
             ident_case_sensitive: settings.get_unquoted_ident_case_sensitive()?,
             headers: 0,
             json_compact: false,
@@ -348,12 +349,6 @@ fn check_options(options: &mut FileFormatOptions) -> Result<()> {
         ));
     };
 
-    if !["", "\n", "\r\n"].contains(&options.record_delimiter.as_str()) {
-        return Err(ErrorCode::InvalidArgument(
-            "currently record_delimiter can only be '\r\n' or '\n'",
-        ));
-    };
-
     if options.record_delimiter.is_empty() {
         options.record_delimiter = '\n'.to_string();
     }
@@ -366,12 +361,18 @@ fn final_csv_options(options: &mut FileFormatOptionsExt) -> Result<()> {
     if options.stage.field_delimiter.is_empty() {
         options.stage.field_delimiter = ','.to_string();
     }
+    if options.quote.is_empty() {
+        options.quote = "\"".to_string();
+    }
     Ok(())
 }
 
 fn final_tsv_options(options: &mut FileFormatOptionsExt) -> Result<()> {
     if options.stage.field_delimiter.is_empty() {
         options.stage.field_delimiter = '\t'.to_string();
+    }
+    if options.quote.is_empty() {
+        options.quote = "\'".to_string();
     }
     Ok(())
 }
@@ -385,7 +386,7 @@ fn format_setting_csv(options: &FileFormatOptionsExt, timezone: Tz) -> FormatSet
         nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
         inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
         null_bytes: NULL_BYTES_ESCAPE.as_bytes().to_vec(),
-        quote_char: options.quote,
+        quote_char: options.quote.as_bytes()[0],
         escape: FormatSettings::parse_escape(&options.stage.escape, None),
         record_delimiter: options.stage.record_delimiter.as_bytes().to_vec(),
         field_delimiter: options.stage.field_delimiter.as_bytes().to_vec(),
@@ -407,7 +408,7 @@ fn format_setting_tsv(options: &FileFormatOptionsExt, timezone: Tz) -> FormatSet
         nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
         inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
         null_bytes: NULL_BYTES_ESCAPE.as_bytes().to_vec(),
-        quote_char: 0, // not allowed for now
+        quote_char: options.quote.as_bytes()[0],
         escape: FormatSettings::parse_escape(&options.stage.escape, Some(b'\\')),
         record_delimiter: options.stage.record_delimiter.as_bytes().to_vec(),
         field_delimiter: options.stage.field_delimiter.as_bytes().to_vec(),
