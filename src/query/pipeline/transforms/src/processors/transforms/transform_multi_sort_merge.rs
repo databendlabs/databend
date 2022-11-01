@@ -26,6 +26,7 @@ use common_arrow::arrow::compute::sort::row::RowConverter;
 use common_arrow::arrow::compute::sort::row::Rows;
 use common_arrow::arrow::compute::sort::row::SortField;
 use common_arrow::arrow::compute::sort::SortOptions;
+use common_arrow::arrow::datatypes::DataType;
 use common_datablocks::DataBlock;
 use common_datablocks::SortColumnDescription;
 use common_datavalues::DataSchemaRef;
@@ -184,11 +185,18 @@ impl MultiSortMergeProcessor {
         let sort_fields = sort_columns_descriptions
             .iter()
             .map(|d| {
-                let data_type = output_schema
+                let data_type = match output_schema
                     .field_with_name(&d.column_name)?
                     .to_arrow()
                     .data_type()
-                    .clone();
+                {
+                    // The actual data type of `Data` and `Timestmap` will be `Int32` and `Int64`.
+                    DataType::Date32 | DataType::Time32(_) => DataType::Int32,
+                    DataType::Date64 | DataType::Time64(_) | DataType::Timestamp(_, _) => {
+                        DataType::Int64
+                    }
+                    date_type => date_type.clone(),
+                };
                 sort_field_indices.push(output_schema.index_of(&d.column_name)?);
                 Ok(SortField::new_with_options(data_type, SortOptions {
                     descending: !d.asc,
