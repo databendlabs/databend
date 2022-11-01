@@ -442,7 +442,7 @@ impl Interpreter for CopyInterpreterV2 {
                         stage_files.into_iter().map(|v| v.path).collect()
                     };
 
-                    tracing::info!("listed files: {:?}", &files);
+                    tracing::debug!("listed files: {:?}", &files);
 
                     // Pattern match check.
                     let pattern = &pattern;
@@ -457,7 +457,7 @@ impl Interpreter for CopyInterpreterV2 {
                         files.retain(|file| regex.is_match(file));
                     }
 
-                    tracing::info!("matched files: {:?}, pattern: {}", &files, pattern);
+                    tracing::debug!("matched files: {:?}, pattern: {}", &files, pattern);
 
                     let (table_id, copy_stage_files) = self
                         .filter_duplicate_files(
@@ -470,7 +470,7 @@ impl Interpreter for CopyInterpreterV2 {
                         )
                         .await?;
 
-                    tracing::info!(
+                    tracing::debug!(
                         "matched copy unduplicate files: {:?}",
                         &copy_stage_files.keys(),
                     );
