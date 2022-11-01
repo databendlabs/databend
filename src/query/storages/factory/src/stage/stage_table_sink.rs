@@ -14,7 +14,6 @@
 
 use std::any::Any;
 use std::io::ErrorKind;
-use std::str::FromStr;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -25,7 +24,7 @@ use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_formats::output_format::OutputFormat;
-use common_formats::output_format::OutputFormatType;
+use common_formats::FileFormatOptionsExt;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
@@ -75,24 +74,12 @@ impl StageTableSink {
         uuid: String,
         group_id: usize,
     ) -> Result<ProcessorPtr> {
-        let format_name = format!("{:?}", table_info.stage_info.file_format_options.format);
+        let output_format = FileFormatOptionsExt::get_output_format_from_options(
+            table_info.schema(),
+            table_info.stage_info.file_format_options.clone(),
+            &ctx.get_settings(),
+        )?;
 
-        let fmt = OutputFormatType::from_str(format_name.as_str())?;
-        let mut format_settings = ctx.get_format_settings()?;
-
-        let format_options = &table_info.stage_info.file_format_options;
-        {
-            if !format_options.field_delimiter.is_empty() {
-                format_settings.field_delimiter =
-                    format_options.field_delimiter.as_bytes().to_vec();
-            }
-            if !format_options.record_delimiter.is_empty() {
-                format_settings.record_delimiter =
-                    format_options.record_delimiter.as_bytes().to_vec();
-            }
-        }
-
-        let output_format = fmt.create_format(table_info.schema(), format_settings);
         let mut max_file_size = table_info.stage_info.copy_options.max_file_size;
         if max_file_size == 0 {
             // 64M per file by default

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::str::FromStr;
 use std::sync::Arc;
 
 use async_stream::stream;
@@ -26,7 +25,9 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
-use common_formats::output_format::OutputFormatType;
+use common_formats::ClickhouseFormatType;
+use common_formats::FileFormatOptionsExt;
+use common_formats::FileFormatTypeExt;
 use common_pipeline_sources::processors::sources::input_formats::InputContext;
 use common_pipeline_sources::processors::sources::input_formats::StreamingReadBatch;
 use futures::StreamExt;
@@ -104,13 +105,18 @@ async fn execute(
     ctx: Arc<QueryContext>,
     interpreter: InterpreterPtr,
     schema: DataSchemaRef,
-    format: OutputFormatType,
+    format: ClickhouseFormatType,
     params: StatementHandlerParams,
     handle: Option<JoinHandle<()>>,
 ) -> Result<WithContentType<Body>> {
+    let format_typ = format.typ.clone();
     let mut data_stream = interpreter.execute(ctx.clone()).await?;
-    let format_setting = ctx.get_format_settings()?;
-    let mut output_format = format.create_format(schema, format_setting);
+    let mut output_format = FileFormatOptionsExt::get_output_format_from_settings_clickhouse(
+        format,
+        schema,
+        &ctx.get_settings(),
+    )?;
+
     let prefix = Ok(output_format.serialize_prefix()?);
 
     let compress_fn = move |rb: Result<Vec<u8>>| -> Result<Vec<u8>> {
@@ -164,7 +170,7 @@ async fn execute(
         handle.await.expect("must")
     }
 
-    Ok(Body::from_bytes_stream(stream).with_content_type(format.get_content_type()))
+    Ok(Body::from_bytes_stream(stream).with_content_type(format_typ.get_content_type()))
 }
 
 #[poem::handler]
@@ -353,14 +359,18 @@ fn serialize_one_block(
     block: DataBlock,
     sql: &str,
     params: &StatementHandlerParams,
-    default_format: OutputFormatType,
+    default_format: ClickhouseFormatType,
 ) -> Result<WithContentType<Body>> {
-    let format_setting = ctx.get_format_settings()?;
-    let fmt = match ClickHouseFederated::get_format(sql) {
-        Some(format) => OutputFormatType::from_str(format.as_str())?,
+    let format = match ClickHouseFederated::get_format(sql) {
+        Some(format) => ClickhouseFormatType::parse_clickhouse_format(&format)?,
         None => default_format,
     };
-    let mut output_format = fmt.create_format(block.schema().clone(), format_setting);
+    let format_typ = format.typ.clone();
+    let mut output_format = FileFormatOptionsExt::get_output_format_from_settings_clickhouse(
+        format,
+        block.schema().clone(),
+        &ctx.get_settings(),
+    )?;
     let mut res = output_format.serialize_prefix()?;
     let mut data = output_format.serialize_block(&block)?;
     if params.compress() {
@@ -368,13 +378,13 @@ fn serialize_one_block(
     }
     res.append(&mut data);
     res.append(&mut output_format.finalize()?);
-    Ok(Body::from(res).with_content_type(fmt.get_content_type()))
+    Ok(Body::from(res).with_content_type(format_typ.get_content_type()))
 }
 
 fn get_default_format(
     params: &StatementHandlerParams,
     headers: &HeaderMap,
-) -> Result<OutputFormatType> {
+) -> Result<ClickhouseFormatType> {
     let name = match &params.default_format {
         None => match headers.get("X-CLICKHOUSE-FORMAT") {
             None => "TSV",
@@ -385,16 +395,16 @@ fn get_default_format(
         },
         Some(s) => s,
     };
-    OutputFormatType::from_str(name)
+    ClickhouseFormatType::parse_clickhouse_format(name)
 }
 
 fn get_format_with_default(
     format: Option<String>,
-    default_format: OutputFormatType,
-) -> PoemResult<OutputFormatType> {
+    default_format: ClickhouseFormatType,
+) -> PoemResult<ClickhouseFormatType> {
     match format {
         None => Ok(default_format),
-        Some(name) => OutputFormatType::from_str(&name).map_err(BadRequest),
+        Some(name) => ClickhouseFormatType::parse_clickhouse_format(&name).map_err(BadRequest),
     }
 }
 

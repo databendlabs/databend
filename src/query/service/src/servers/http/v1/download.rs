@@ -17,7 +17,8 @@ use std::sync::Arc;
 use async_stream::stream;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_formats::output_format::OutputFormatType;
+use common_formats::FileFormatOptionsExt;
+use common_meta_types::StageFileFormatType;
 use common_planner::extras::Extras;
 use common_planner::ReadDataSourcePlan;
 use common_planner::SourceInfo;
@@ -36,7 +37,7 @@ pub trait Downloader {
     async fn download(
         &self,
         ctx: Arc<QueryContext>,
-        fmt: OutputFormatType,
+        fmt: StageFileFormatType,
         limit: Option<usize>,
     ) -> Result<SendableVu8Stream>;
 }
@@ -46,7 +47,7 @@ impl Downloader for ResultTable {
     async fn download(
         &self,
         ctx: Arc<QueryContext>,
-        fmt: OutputFormatType,
+        fmt: StageFileFormatType,
         limit: Option<usize>,
     ) -> Result<SendableVu8Stream> {
         let push_downs = match limit {
@@ -73,8 +74,11 @@ impl Downloader for ResultTable {
                 push_downs,
             })
             .await?;
-        let fmt_setting = ctx.get_format_settings()?;
-        let mut output_format = fmt.create_format(self.schema(), fmt_setting);
+        let mut output_format = FileFormatOptionsExt::get_output_format_from_settings(
+            fmt,
+            self.schema(),
+            &ctx.get_settings(),
+        )?;
 
         let prefix = Ok(output_format.serialize_prefix()?);
         let stream = stream! {

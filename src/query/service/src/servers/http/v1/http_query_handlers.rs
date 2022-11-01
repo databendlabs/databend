@@ -16,8 +16,7 @@ use std::str::FromStr;
 
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
-use common_formats::output_format::OutputFormatType;
-use poem::error::BadRequest;
+use common_meta_types::StageFileFormatType;
 use poem::error::Error as PoemError;
 use poem::error::InternalServerError;
 use poem::error::NotFound;
@@ -41,7 +40,7 @@ use super::query::ExecuteStateKind;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
 use crate::servers::http::v1::query::Progresses;
-use crate::servers::http::v1::Dowloader;
+use crate::servers::http::v1::Downloader;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::HttpSessionConf;
@@ -335,8 +334,8 @@ async fn result_download_handler(
 ) -> PoemResult<Body> {
     let default_format = "csv".to_string();
     let session = ctx.get_session(SessionType::HTTPQuery);
-    let format =
-        OutputFormatType::from_str(&params.format.unwrap_or(default_format)).map_err(BadRequest)?;
+    let format = StageFileFormatType::from_str(&params.format.unwrap_or(default_format))
+        .map_err(|e| PoemError::from_string(e, StatusCode::BAD_REQUEST))?;
 
     let http_query_manager = HttpQueryManager::instance();
     if let Some(query) = http_query_manager.get_query(&query_id).await {
