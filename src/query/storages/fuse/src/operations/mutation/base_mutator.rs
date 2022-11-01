@@ -133,7 +133,7 @@ impl BaseMutator {
                     })?;
                 if let Some(block_meta) = replacement.new_block_meta {
                     abort_operation = abort_operation.add_block(&block_meta);
-                    block_editor.insert(*position, block_meta);
+                    block_editor.insert(*position, Arc::new(block_meta));
                 } else {
                     block_editor.remove(position);
                 }

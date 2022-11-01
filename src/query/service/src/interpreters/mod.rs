@@ -43,6 +43,7 @@ mod interpreter_role_drop;
 mod interpreter_role_grant;
 mod interpreter_role_revoke;
 mod interpreter_role_set;
+mod interpreter_role_show;
 mod interpreter_select_v2;
 mod interpreter_setting;
 mod interpreter_share_alter_tenants;

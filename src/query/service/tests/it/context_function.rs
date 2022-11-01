@@ -36,7 +36,7 @@ async fn test_context_function_build_arg_from_ctx() -> Result<()> {
     // Ok.
     {
         let args = ContextFunction::build_args_from_ctx(ctx.clone(), "current_role")?;
-        assert_eq!("", format!("{:?}", args[0]));
+        assert_eq!("public", format!("{:?}", args[0]));
     }
 
     // Ok.

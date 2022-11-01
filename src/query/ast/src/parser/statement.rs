@@ -728,7 +728,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     let create_stage = map_res(
         rule! {
             CREATE ~ STAGE ~ ( IF ~ NOT ~ EXISTS )?
-            ~ #ident
+            ~ ( #stage_name )
             ~ ( URL ~ "=" ~ #uri_location)?
             ~ ( FILE_FORMAT ~ "=" ~ #options)?
             ~ ( ON_ERROR ~ "=" ~ #ident)?
@@ -787,7 +787,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let drop_stage = map(
         rule! {
-            DROP ~ STAGE ~ ( IF ~ EXISTS )? ~ #ident
+            DROP ~ STAGE ~ ( IF ~ EXISTS )? ~ #stage_name
         },
         |(_, _, opt_if_exists, stage_name)| Statement::DropStage {
             if_exists: opt_if_exists.is_some(),
@@ -996,7 +996,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #alter_udf : "`ALTER FUNCTION <udf_name> (<parameter>, ...) -> <definition_expr> [DESC = <description>]`"
         ),
         rule!(
-            #create_stage: "`CREATE STAGE [ IF NOT EXISTS ] <internal_stage_name>
+            #create_stage: "`CREATE STAGE [ IF NOT EXISTS ] <stage_name>
                 [ FILE_FORMAT = ( { TYPE = { CSV | PARQUET } [ formatTypeOptions ] ) } ]
                 [ COPY_OPTIONS = ( copyOptions ) ]
                 [ COMMENT = '<string_literal>' ]`"

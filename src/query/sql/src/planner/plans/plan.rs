@@ -61,6 +61,7 @@ use common_planner::plans::ShowCreateCatalogPlan;
 use common_planner::plans::ShowCreateDatabasePlan;
 use common_planner::plans::ShowCreateTablePlan;
 use common_planner::plans::ShowGrantsPlan;
+use common_planner::plans::ShowRolesPlan;
 use common_planner::plans::TruncateTablePlan;
 use common_planner::plans::UndropDatabasePlan;
 use common_planner::plans::UndropTablePlan;
@@ -161,6 +162,7 @@ pub enum Plan {
     DropUDF(Box<DropUDFPlan>),
 
     // Role
+    ShowRoles(Box<ShowRolesPlan>),
     CreateRole(Box<CreateRolePlan>),
     DropRole(Box<DropRolePlan>),
     GrantRole(Box<GrantRolePlan>),
@@ -257,6 +259,7 @@ impl Display for Plan {
             Plan::GrantRole(_) => write!(f, "GrantRole"),
             Plan::GrantPriv(_) => write!(f, "GrantPriv"),
             Plan::ShowGrants(_) => write!(f, "ShowGrants"),
+            Plan::ShowRoles(_) => write!(f, "ShowRoles"),
             Plan::RevokePriv(_) => write!(f, "RevokePriv"),
             Plan::RevokeRole(_) => write!(f, "RevokeRole"),
             Plan::CreateUDF(_) => write!(f, "CreateUDF"),
@@ -328,6 +331,7 @@ impl Plan {
             Plan::DropUser(plan) => plan.schema(),
             Plan::CreateRole(plan) => plan.schema(),
             Plan::DropRole(plan) => plan.schema(),
+            Plan::ShowRoles(plan) => plan.schema(),
             Plan::GrantRole(plan) => plan.schema(),
             Plan::GrantPriv(plan) => plan.schema(),
             Plan::ShowGrants(plan) => plan.schema(),
