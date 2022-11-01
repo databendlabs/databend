@@ -72,7 +72,6 @@ build_exceptions! {
     UnknownTable(1025),
     UnknownAggregateFunction(1027),
     NumberArgumentsNotMatch(1028),
-    NotFoundStream(1029),
     EmptyDataFromServer(1030),
     NotFoundLocalNode(1031),
     PlanScheduleError(1032),
