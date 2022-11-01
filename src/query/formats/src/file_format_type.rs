@@ -22,6 +22,7 @@ use crate::output_format_csv::TSVWithNamesAndTypesOutputFormat;
 use crate::output_format_csv::TSVWithNamesOutputFormat;
 use crate::output_format_json_each_row::JsonEachRowOutputFormatBase;
 use crate::output_format_parquet::ParquetOutputFormat;
+use crate::ClickhouseFormatType;
 
 pub trait FileFormatTypeExt {
     fn get_ext_from_stage(stage: FileFormatOptions) -> FileFormatOptionsExt;
@@ -57,26 +58,27 @@ pub struct FileFormatOptionsExt {
 }
 
 impl FileFormatOptionsExt {
-    fn get_output_format_from_settings(
-        format_name: &str,
+    pub fn get_output_format_from_settings_clickhouse(
+        typ: ClickhouseFormatType,
         schema: DataSchemaRef,
         settings: &Settings,
-        is_clickhouse: bool,
     ) -> Result<Box<dyn OutputFormat>> {
-        let (typ, suf) = if is_clickhouse {
-            let (typ, suf) = ClickhouseSuffix::parse_clickhouse_format(format_name)?;
-            (typ, Some(suf))
-        } else {
-            (
-                StageFileFormatType::from_str(format_name).map_err(ErrorCode::InvalidArgument)?,
-                None,
-            )
-        };
-        let options = typ.get_file_format_options_from_setting(settings, suf)?;
+        let options = typ
+            .typ
+            .get_file_format_options_from_setting(settings, Some(typ.suffixes))?;
         options.get_output_format(schema, settings)
     }
 
-    fn get_output_format_from_options(
+    pub fn get_output_format_from_settings(
+        format: StageFileFormatType,
+        schema: DataSchemaRef,
+        settings: &Settings,
+    ) -> Result<Box<dyn OutputFormat>> {
+        let options = format.get_file_format_options_from_setting(settings, None)?;
+        options.get_output_format(schema, settings)
+    }
+
+    pub fn get_output_format_from_options(
         schema: DataSchemaRef,
         options: FileFormatOptions,
         settings: &Settings,

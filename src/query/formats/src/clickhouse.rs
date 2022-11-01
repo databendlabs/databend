@@ -10,17 +10,23 @@ const SUFFIX_COMPACT: &str = "compact";
 const SUFFIX_STRINGS: &str = "strings";
 const SUFFIX_EACHROW: &str = "eachrow";
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct ClickhouseTypeSuffixJson {
     pub is_compact: bool,
     pub is_strings: bool,
     pub is_eachrow: bool,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct ClickhouseSuffix {
     pub headers: usize,
     pub json: Option<ClickhouseTypeSuffixJson>,
+}
+
+#[derive(Default, Clone)]
+pub struct ClickhouseFormatType {
+    pub typ: StageFileFormatType,
+    pub suffixes: ClickhouseSuffix,
 }
 
 fn try_remove_suffix<'a>(name: &'a str, suffix: &str) -> (&'a str, bool) {
@@ -31,19 +37,19 @@ fn try_remove_suffix<'a>(name: &'a str, suffix: &str) -> (&'a str, bool) {
     }
 }
 
-impl ClickhouseSuffix {
-    pub fn parse_clickhouse_format(name: &str) -> Result<(StageFileFormatType, ClickhouseSuffix)> {
+impl ClickhouseFormatType {
+    pub fn parse_clickhouse_format(name: &str) -> Result<ClickhouseFormatType> {
         let lower = name.to_lowercase();
 
-        let mut suffix = ClickhouseSuffix::default();
+        let mut suffixes = ClickhouseSuffix::default();
 
         let (mut base, mut ok) = try_remove_suffix(&lower, SUFFIX_WITH_NAMES_AND_TYPES);
         if ok {
-            suffix.headers = 2;
+            suffixes.headers = 2;
         } else {
             (base, ok) = try_remove_suffix(base, SUFFIX_WITH_NAMES);
             if ok {
-                suffix.headers = 1;
+                suffixes.headers = 1;
             }
         }
 
@@ -55,18 +61,21 @@ impl ClickhouseSuffix {
             if base != "json" {
                 return Err(ErrorCode::UnknownFormat(name));
             } else {
-                if json.is_compact && suffix.headers != 0 {
+                if json.is_compact && suffixes.headers != 0 {
                     return Err(ErrorCode::UnknownFormat(name));
                 }
                 if json.is_eachrow {
                     base = "ndjson"
                 }
-                suffix.json = Some(json);
+                suffixes.json = Some(json);
             }
         }
 
         let format_type = StageFileFormatType::from_str(base).map_err(ErrorCode::UnknownFormat)?;
 
-        Ok((format_type, suffix))
+        Ok(ClickhouseFormatType {
+            typ: format_type,
+            suffixes,
+        })
     }
 }
