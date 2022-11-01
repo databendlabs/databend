@@ -177,7 +177,7 @@ impl<'a> Evaluator<'a> {
             }
             (scalar, DataType::Variant) => {
                 let mut buf = Vec::new();
-                cast_scalar_to_variant(scalar.as_ref(), &mut buf);
+                cast_scalar_to_variant(scalar.as_ref(), self.tz, &mut buf);
                 Ok(Scalar::Variant(buf))
             }
 
@@ -250,11 +250,11 @@ impl<'a> Evaluator<'a> {
             }
 
             (Scalar::Timestamp(ts), DataType::String) => Ok(Scalar::String(
-                timestamp_to_string(ts, &self.tz).as_bytes().to_vec(),
+                timestamp_to_string(ts, self.tz).as_bytes().to_vec(),
             )),
 
             (Scalar::Date(d), DataType::String) => Ok(Scalar::String(
-                date_to_string(d, &self.tz).as_bytes().to_vec(),
+                date_to_string(d, self.tz).as_bytes().to_vec(),
             )),
 
             // identical types
@@ -327,7 +327,7 @@ impl<'a> Evaluator<'a> {
                 })
             }
             (col, DataType::Variant) => {
-                let new_col = Column::Variant(cast_scalars_to_variants(col.iter()));
+                let new_col = Column::Variant(cast_scalars_to_variants(col.iter(), self.tz));
                 Ok(new_col)
             }
 
@@ -414,7 +414,7 @@ impl<'a> Evaluator<'a> {
                 // "YYYY-mm-DD HH:MM:SS.ssssss"
                 let mut builder = StringColumnBuilder::with_capacity(col.len(), col.len() * 26);
                 for val in col.iter() {
-                    let s = timestamp_to_string(*val, &self.tz);
+                    let s = timestamp_to_string(*val, self.tz);
                     builder.put_str(s.as_str());
                     builder.commit_row();
                 }
@@ -426,7 +426,7 @@ impl<'a> Evaluator<'a> {
                 // "YYYY-mm-DD"
                 let mut builder = StringColumnBuilder::with_capacity(col.len(), col.len() * 10);
                 for &val in col.iter() {
-                    let s = date_to_string(val, &self.tz);
+                    let s = date_to_string(val, self.tz);
                     builder.put_str(s.as_str());
                     builder.commit_row();
                 }
@@ -511,7 +511,7 @@ impl<'a> Evaluator<'a> {
                 }))
             }
             (col, DataType::Variant) => {
-                let new_col = Column::Variant(cast_scalars_to_variants(col.iter()));
+                let new_col = Column::Variant(cast_scalars_to_variants(col.iter(), self.tz));
                 Column::Nullable(Box::new(NullableColumn {
                     validity: constant_bitmap(true, new_col.len()).into(),
                     column: new_col,
@@ -621,7 +621,7 @@ impl<'a> Evaluator<'a> {
                 // "YYYY-mm-DD HH:MM:SS.ssssss"
                 let mut builder = StringColumnBuilder::with_capacity(col.len(), col.len() * 26);
                 for val in col.iter() {
-                    let s = timestamp_to_string(*val, &self.tz);
+                    let s = timestamp_to_string(*val, self.tz);
                     builder.put_str(s.as_str());
                     builder.commit_row();
                 }
@@ -637,7 +637,7 @@ impl<'a> Evaluator<'a> {
                 // "YYYY-mm-DD"
                 let mut builder = StringColumnBuilder::with_capacity(col.len(), col.len() * 10);
                 for &val in col.iter() {
-                    let s = date_to_string(val, &self.tz);
+                    let s = date_to_string(val, self.tz);
                     builder.put_str(s.as_str());
                     builder.commit_row();
                 }

@@ -16,7 +16,6 @@ use std::borrow::BorrowMut;
 use std::sync::Arc;
 
 use bumpalo::Bump;
-use bytes::BytesMut;
 use common_datablocks::DataBlock;
 use common_datavalues::ColumnRef;
 use common_datavalues::DataSchemaRef;
@@ -180,14 +179,13 @@ impl Aggregator for SingleStateAggregator<false> {
 
         self.is_finished = true;
         let mut columns = Vec::with_capacity(self.funcs.len());
-        let mut bytes = BytesMut::new();
 
         for (idx, func) in self.funcs.iter().enumerate() {
             let place = self.places[idx];
-            func.serialize(place, &mut bytes)?;
+
             let mut array_builder = MutableStringColumn::with_capacity(4);
-            array_builder.append_value(&bytes[..]);
-            bytes.clear();
+            func.serialize(place, array_builder.values_mut())?;
+            array_builder.commit_row();
             columns.push(array_builder.to_column());
         }
 

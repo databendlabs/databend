@@ -16,7 +16,6 @@ use std::alloc::Layout;
 use std::fmt;
 use std::sync::Arc;
 
-use bytes::BytesMut;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -62,7 +61,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn accumulate_row(&self, _place: StateAddr, _columns: &[ColumnRef], _row: usize) -> Result<()>;
 
     // serialize  the state into binary array
-    fn serialize(&self, _place: StateAddr, _writer: &mut BytesMut) -> Result<()>;
+    fn serialize(&self, _place: StateAddr, _writer: &mut Vec<u8>) -> Result<()>;
 
     fn deserialize(&self, _place: StateAddr, _reader: &mut &[u8]) -> Result<()>;
 
