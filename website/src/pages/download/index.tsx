@@ -22,7 +22,7 @@ const MAC_X86 = 'macOS (x86, 64-bit)';
 const MAC_ARM = 'macOS (ARM, 64-bit)';
 const Releases: FC = (): ReactElement=> {
   const [cacheTagName] = useLocalStorageState<string>('global-cache-tag-name');
-  const tagName = cacheTagName as string || 'v0.8.25';
+  const tagName = cacheTagName as string || 'v0.8.96-nightly';
   const DOWNLOAD_LINK = 'https://repo.databend.rs/databend/';
   const [releaseData, setReleaseData] = useState<IRow[]>([
     { 
