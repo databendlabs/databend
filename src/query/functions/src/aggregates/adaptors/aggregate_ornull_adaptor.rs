@@ -19,7 +19,7 @@ use std::sync::Arc;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_io::prelude::BinaryWriteBuf;
+use common_io::prelude::BinaryWrite;
 
 use super::AggregateFunctionBasicAdaptor;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionFeatures;
@@ -170,7 +170,7 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
     }
 
     #[inline]
-    fn serialize(&self, place: StateAddr, writer: &mut bytes::BytesMut) -> Result<()> {
+    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         self.inner.serialize(place, writer)?;
         writer.write_scalar(&self.get_flag(place))
     }

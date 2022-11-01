@@ -22,7 +22,7 @@ use common_expression::types::DataType;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Scalar;
-use common_io::prelude::BinaryWriteBuf;
+use common_io::prelude::BinaryWrite;
 
 use crate::aggregates::aggregate_function_factory::AggregateFunctionFeatures;
 use crate::aggregates::AggregateFunction;
@@ -167,7 +167,7 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
     }
 
     #[inline]
-    fn serialize(&self, place: StateAddr, writer: &mut bytes::BytesMut) -> Result<()> {
+    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         self.inner.serialize(place, writer)?;
         writer.write_scalar(&self.get_flag(place))
     }

@@ -87,6 +87,12 @@ impl MutableStringColumn {
         self.offsets.push(self.last_size as i64);
     }
 
+    #[inline]
+    pub fn commit_row(&mut self) {
+        self.last_size = self.values.len();
+        self.offsets.push(self.last_size as i64);
+    }
+
     pub fn pop_offset(&mut self) -> Option<usize> {
         self.offsets.pop().map(|offset| offset as usize)
     }

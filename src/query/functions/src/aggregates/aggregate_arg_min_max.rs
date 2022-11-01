@@ -46,7 +46,7 @@ pub trait AggregateArgMinMaxState<S: Scalar>: Send + Sync + 'static {
     ) -> Result<()>;
 
     fn merge(&mut self, rhs: &Self) -> Result<()>;
-    fn serialize(&self, writer: &mut BytesMut) -> Result<()>;
+    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()>;
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()>;
     fn merge_result(&mut self, column: &mut dyn MutableColumn) -> Result<()>;
 }
@@ -146,7 +146,7 @@ where
         Ok(())
     }
 
-    fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
+    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
         serialize_into_buf(writer, self)
     }
 
@@ -208,7 +208,7 @@ where C: ChangeIf<VariantValue> + Default
         Ok(())
     }
 
-    fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
+    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
         if let Some(val) = &self.state.value {
             let state_data = VariantStateData {
                 value: val.as_ref().to_string(),
@@ -301,7 +301,7 @@ where
         state.add(col.get_data(row), columns[0].get(row))
     }
 
-    fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
+    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<State>();
         state.serialize(writer)
     }
