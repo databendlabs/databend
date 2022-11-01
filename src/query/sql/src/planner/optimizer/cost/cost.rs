@@ -16,10 +16,10 @@ use std::fmt::Display;
 use std::ops::Add;
 
 use common_exception::Result;
-use common_planner::IndexType;
 
 use crate::optimizer::MExpr;
 use crate::optimizer::Memo;
+use crate::IndexType;
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Cost(pub f64);

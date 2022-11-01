@@ -26,7 +26,6 @@ use common_meta_sled_store::openraft;
 use common_meta_sled_store::openraft::EffectiveMembership;
 use common_meta_sled_store::openraft::MessageSummary;
 use common_meta_sled_store::AsKeySpace;
-use common_meta_sled_store::AsTxnKeySpace;
 use common_meta_sled_store::SledKeySpace;
 use common_meta_sled_store::SledTree;
 use common_meta_sled_store::Store;
@@ -74,11 +73,14 @@ use tracing::info;
 
 use crate::config::RaftConfig;
 use crate::sled_key_spaces::ClientLastResps;
+use crate::sled_key_spaces::Expire;
 use crate::sled_key_spaces::GenericKV;
 use crate::sled_key_spaces::Nodes;
 use crate::sled_key_spaces::Sequences;
 use crate::sled_key_spaces::StateMachineMeta;
 use crate::state_machine::ClientLastRespValue;
+use crate::state_machine::ExpireKey;
+use crate::state_machine::ExpireValue;
 use crate::state_machine::MetaSnapshotId;
 use crate::state_machine::StateMachineMetaKey;
 use crate::state_machine::StateMachineMetaKey::Initialized;
@@ -260,16 +262,21 @@ impl StateMachine {
     #[tracing::instrument(level = "debug", skip(self, entry), fields(log_id=%entry.log_id))]
     pub async fn apply(&self, entry: &Entry<LogEntry>) -> Result<AppliedState, MetaStorageError> {
         info!("apply: summary: {}", entry.summary(),);
+        debug!("sled tx start: {:?}", entry);
 
         let log_id = &entry.log_id;
+        let log_time_ms = Self::get_log_time(entry);
 
-        debug!("sled tx start: {:?}", entry);
+        let expired = self.list_expired_kvs(log_time_ms)?;
+        debug!("expired keys: {:?}", expired);
 
         let kv_pairs = self.scan_prefix_if_needed(entry)?;
 
         let result = self.sm_tree.txn(true, move |txn_tree| {
             let txn_sm_meta = txn_tree.key_space::<StateMachineMeta>();
             txn_sm_meta.insert(&LastApplied, &StateMachineMetaValue::LogId(*log_id))?;
+
+            self.clean_expired_kvs(&txn_tree, &expired)?;
 
             match entry.payload {
                 EntryPayload::Blank => {
@@ -285,24 +292,16 @@ impl StateMachine {
                         }
                     }
 
-                    let log_time_ms = match data.time_ms {
-                        None => {
-                            error!("log has no time: {}, treat every record with non-none `expire` as timed out", entry.summary());
-                            0
-                        }
-                        Some(x) => {
-                            let t = SystemTime::UNIX_EPOCH + Duration::from_millis(x);
-                            info!("apply: raft-log time: {:?}", t);
-                            x
-                        },
-                    };
-
                     let res = self.apply_cmd(&data.cmd, &txn_tree, kv_pairs.as_ref(), log_time_ms);
                     if let Ok(ok) = &res {
                         info!("apply_result: summary: {}; res ok: {}", entry.summary(), ok);
                     }
                     if let Err(err) = &res {
-                        info!("apply_result: summary: {}; res err: {:?}", entry.summary(), err);
+                        info!(
+                            "apply_result: summary: {}; res err: {:?}",
+                            entry.summary(),
+                            err
+                        );
                     }
 
                     let applied_state = res?;
@@ -344,13 +343,37 @@ impl StateMachine {
         Ok(applied_state)
     }
 
+    /// Retrieve the proposing time from a raft-log.
+    ///
+    /// Only `Normal` log has a time embedded.
+    #[tracing::instrument(level = "debug", skip_all)]
+    fn get_log_time(entry: &Entry<LogEntry>) -> u64 {
+        match &entry.payload {
+            EntryPayload::Normal(data) => match data.time_ms {
+                None => {
+                    error!(
+                        "log has no time: {}, treat every record with non-none `expire` as timed out",
+                        entry.summary()
+                    );
+                    0
+                }
+                Some(x) => {
+                    let t = SystemTime::UNIX_EPOCH + Duration::from_millis(x);
+                    info!("apply: raft-log time: {:?}", t);
+                    x
+                }
+            },
+            _ => 0,
+        }
+    }
+
     #[tracing::instrument(level = "debug", skip(self, txn_tree))]
     fn apply_incr_seq_cmd(
         &self,
         key: &str,
         txn_tree: &TransactionSledTree,
     ) -> Result<AppliedState, MetaStorageError> {
-        let r = self.txn_incr_seq(key, txn_tree)?;
+        let r = Self::txn_incr_seq(key, txn_tree)?;
 
         Ok(r.into())
     }
@@ -401,13 +424,17 @@ impl StateMachine {
     ) -> Result<AppliedState, MetaStorageError> {
         debug!(upsert_kv = debug(upsert_kv), "apply_update_kv_cmd");
 
-        let sub_tree = txn_tree.key_space::<GenericKV>();
-        let (prev, result) = self.txn_sub_tree_upsert(&sub_tree, upsert_kv, log_time_ms)?;
+        let (expired, prev, result) = Self::txn_upsert_kv(txn_tree, upsert_kv, log_time_ms)?;
 
         debug!("applied UpsertKV: {:?} {:?}", upsert_kv, result);
 
         if let Some(subscriber) = &self.subscriber {
-            subscriber.kv_changed(&upsert_kv.key, prev.clone(), result.clone());
+            if expired.is_some() {
+                subscriber.kv_changed(&upsert_kv.key, expired, None);
+            }
+            if prev != result {
+                subscriber.kv_changed(&upsert_kv.key, prev.clone(), result.clone());
+            }
         }
 
         Ok(Change::new(prev, result).into())
@@ -535,25 +562,21 @@ impl StateMachine {
         events: &mut Option<Vec<NotifyKVEvent>>,
         log_time_ms: u64,
     ) -> Result<(), MetaStorageError> {
-        let sub_tree = txn_tree.key_space::<GenericKV>();
-
-        let (prev, result) = match put.expire_at {
-            None => self.txn_sub_tree_upsert(
-                &sub_tree,
-                &UpsertKV::update(&put.key, &put.value),
-                log_time_ms,
-            )?,
-            Some(expire_at) => self.txn_sub_tree_upsert(
-                &sub_tree,
-                &UpsertKV::update(&put.key, &put.value).with(KVMeta {
-                    expire_at: Some(expire_at),
-                }),
-                log_time_ms,
-            )?,
-        };
+        let (expired, prev, result) = Self::txn_upsert_kv(
+            txn_tree,
+            &UpsertKV::update(&put.key, &put.value).with(KVMeta {
+                expire_at: put.expire_at,
+            }),
+            log_time_ms,
+        )?;
 
         if let Some(events) = events {
-            events.push((put.key.to_string(), prev.clone(), result));
+            if expired.is_some() {
+                events.push((put.key.to_string(), expired, None));
+            }
+            if prev != result {
+                events.push((put.key.to_string(), prev.clone(), result));
+            }
         }
 
         let put_resp = TxnPutResponse {
@@ -580,13 +603,16 @@ impl StateMachine {
         events: &mut Option<Vec<NotifyKVEvent>>,
         log_time_ms: u64,
     ) -> Result<(), MetaStorageError> {
-        let sub_tree = txn_tree.key_space::<GenericKV>();
-
-        let (prev, result) =
-            self.txn_sub_tree_upsert(&sub_tree, &UpsertKV::delete(&delete.key), log_time_ms)?;
+        let (expired, prev, result) =
+            Self::txn_upsert_kv(txn_tree, &UpsertKV::delete(&delete.key), log_time_ms)?;
 
         if let Some(events) = events {
-            events.push((delete.key.to_string(), prev.clone(), result));
+            if expired.is_some() {
+                events.push((delete.key.to_string(), expired, None));
+            }
+            if prev != result {
+                events.push((delete.key.to_string(), prev.clone(), result));
+            }
         }
 
         let del_resp = TxnDeleteResponse {
@@ -618,16 +644,19 @@ impl StateMachine {
         let mut count: u32 = 0;
         if let Some(kv_pairs) = kv_pairs {
             if let Some(kv_pairs) = kv_pairs.get(delete_by_prefix) {
-                let sub_tree = txn_tree.key_space::<GenericKV>();
                 for (key, _seq) in kv_pairs.iter() {
-                    let ret =
-                        self.txn_sub_tree_upsert(&sub_tree, &UpsertKV::delete(key), log_time_ms);
+                    let ret = Self::txn_upsert_kv(txn_tree, &UpsertKV::delete(key), log_time_ms);
 
                     if let Ok(ret) = ret {
                         count += 1;
 
                         if let Some(events) = events {
-                            events.push((key.to_string(), ret.0.clone(), ret.1));
+                            if ret.0.is_some() {
+                                events.push((key.to_string(), ret.0.clone(), None));
+                            }
+                            if ret.1 != ret.2 {
+                                events.push((key.to_string(), ret.1.clone(), ret.2));
+                            }
                         }
                     }
                 }
@@ -753,7 +782,7 @@ impl StateMachine {
     /// Already applied log should be filtered out before passing into this function.
     /// This is the only entry to modify state machine.
     /// The `cmd` is always committed by raft before applying.
-    #[tracing::instrument(level = "debug", skip(self, cmd, txn_tree))]
+    #[tracing::instrument(level = "debug", skip_all)]
     pub fn apply_cmd(
         &self,
         cmd: &Cmd,
@@ -788,60 +817,192 @@ impl StateMachine {
         res
     }
 
-    fn txn_incr_seq(
+    /// Before applying, list expired keys to clean.
+    ///
+    /// Apply is done in a sled-txn tree, which does not provide listing function.
+    #[tracing::instrument(level = "debug", skip_all)]
+    pub fn list_expired_kvs(
         &self,
-        key: &str,
-        txn_tree: &TransactionSledTree,
-    ) -> Result<u64, MetaStorageError> {
-        let seq_sub_tree = txn_tree.key_space::<Sequences>();
+        log_time_ms: u64,
+    ) -> Result<Vec<(String, ExpireKey)>, MetaStorageError> {
+        if log_time_ms == 0 {
+            return Ok(vec![]);
+        }
 
-        let key = key.to_string();
-        let curr = seq_sub_tree.update_and_fetch(&key, |old| Some(old.unwrap_or_default() + 1))?;
-        let curr = curr.unwrap();
+        let at_most = 32;
+        let mut to_clean = Vec::with_capacity(at_most);
 
-        debug!("applied IncrSeq: {}={}", key, curr);
+        info!("list_expired_kv, log_time_ts: {}", log_time_ms);
 
-        Ok(curr.0)
+        let expires = self.sm_tree.key_space::<Expire>();
+
+        let it = expires.range(..)?.take(at_most);
+        for item_res in it {
+            let item = item_res?;
+            let k: ExpireKey = item.key()?;
+            if log_time_ms > k.time_ms {
+                let v: ExpireValue = item.value()?;
+                to_clean.push((v.key, k))
+            }
+        }
+
+        Ok(to_clean)
     }
 
+    /// Remove expired key-values, and corresponding secondary expiration index record.
+    ///
+    /// This should be done inside a sled-transaction.
+    #[tracing::instrument(level = "debug", skip_all)]
+    fn clean_expired_kvs(
+        &self,
+        txn_tree: &TransactionSledTree,
+        expired: &[(String, ExpireKey)],
+    ) -> Result<(), MetaStorageError> {
+        let kvs = txn_tree.key_space::<GenericKV>();
+        let expires = txn_tree.key_space::<Expire>();
+
+        for (key, expire_key) in expired.iter() {
+            let sv = kvs.get(key)?;
+
+            if let Some(seq_v) = &sv {
+                if expire_key.seq == seq_v.seq {
+                    info!("clean expired: {}, {}", key, expire_key);
+
+                    kvs.remove(key)?;
+                    expires.remove(expire_key)?;
+
+                    if let Some(subscriber) = &self.subscriber {
+                        subscriber.kv_changed(key, sv, None);
+                    }
+                    continue;
+                }
+            }
+
+            unreachable!(
+                "trying to remove un-cleanable: {}, {}, kv-record: {:?}",
+                key, expire_key, sv
+            );
+        }
+        Ok(())
+    }
+
+    fn txn_incr_seq(key: &str, txn_tree: &TransactionSledTree) -> Result<u64, MetaStorageError> {
+        let seqs = txn_tree.key_space::<Sequences>();
+
+        let key = key.to_string();
+
+        let curr = seqs.get(&key)?;
+        let new_value = curr.unwrap_or_default() + 1;
+        seqs.insert(&key, &new_value)?;
+
+        debug!("txn_incr_seq: {}={}", key, new_value);
+
+        Ok(new_value.0)
+    }
+
+    /// Execute an upsert-kv operation on a transactional sled tree.
+    ///
+    /// KV has two indexes:
+    /// - The primary index: `key -> (seq, meta(expire_time), value)`,
+    /// - and a secondary expiration index: `(expire_time, seq) -> key`.
+    ///
+    /// Thus upsert a kv record is done in two steps:
+    /// update the primary index and optionally update the secondary index.
+    ///
+    /// It returns 3 SeqV:
+    /// - `(None, None, x)`: upsert nonexistent key;
+    /// - `(None, Some, x)`: upsert existent and non-expired key;
+    /// - `(Some, None, x)`: upsert existent but expired key;
     #[allow(clippy::type_complexity)]
-    fn txn_sub_tree_upsert<'s, KS>(
-        &'s self,
-        sub_tree: &AsTxnKeySpace<'s, KS>,
+    fn txn_upsert_kv(
+        txn_tree: &TransactionSledTree,
         upsert_kv: &UpsertKV,
         log_time_ms: u64,
-    ) -> Result<(Option<SeqV>, Option<SeqV>), MetaStorageError>
-    where
-        KS: SledKeySpace<K = String, V = SeqV>,
-    {
-        let prev = sub_tree.get(&upsert_kv.key)?;
+    ) -> Result<(Option<SeqV>, Option<SeqV>, Option<SeqV>), MetaStorageError> {
+        let (expired, prev, res) =
+            Self::txn_upsert_kv_primary_index(txn_tree, upsert_kv, log_time_ms)?;
 
-        // If prev is timed out, treat it as a None.
-        let prev = Self::unexpired_opt(prev, log_time_ms);
+        let expires = txn_tree.key_space::<Expire>();
+
+        if let Some(sv) = &expired {
+            if let Some(m) = &sv.meta {
+                if let Some(exp) = m.expire_at {
+                    expires.remove(&ExpireKey::new(exp * 1000, sv.seq))?;
+                }
+            }
+        }
+
+        // No change, no need to update expiration index
+        if prev == res {
+            return Ok((expired, prev, res));
+        }
+
+        // Remove previous expiration index, add a new one.
+
+        if let Some(sv) = &prev {
+            if let Some(m) = &sv.meta {
+                if let Some(exp) = m.expire_at {
+                    expires.remove(&ExpireKey::new(exp * 1000, sv.seq))?;
+                }
+            }
+        }
+
+        if let Some(sv) = &res {
+            if let Some(m) = &sv.meta {
+                if let Some(exp) = m.expire_at {
+                    let k = ExpireKey::new(exp * 1000, sv.seq);
+                    let v = ExpireValue {
+                        key: upsert_kv.key.clone(),
+                    };
+                    expires.insert(&k, &v)?;
+                }
+            }
+        }
+
+        Ok((expired, prev, res))
+    }
+
+    /// It returns 3 SeqV:
+    /// - The first one is `Some` if an existent record expired.
+    /// - The second and the third represent the change that is made by the upsert operation.
+    ///
+    /// Only one of the first and second can be `Some`.
+    #[allow(clippy::type_complexity)]
+    fn txn_upsert_kv_primary_index(
+        txn_tree: &TransactionSledTree,
+        upsert_kv: &UpsertKV,
+        log_time_ms: u64,
+    ) -> Result<(Option<SeqV>, Option<SeqV>, Option<SeqV>), MetaStorageError> {
+        let kvs = txn_tree.key_space::<GenericKV>();
+
+        let prev = kvs.get(&upsert_kv.key)?;
+
+        // If prev is timed out, treat it as a None. But still keep the original value for cleaning up it.
+        let (expired, prev) = Self::expire_seq_v(prev, log_time_ms);
 
         if upsert_kv.seq.match_seq(&prev).is_err() {
-            return Ok((prev.clone(), prev));
+            return Ok((expired, prev.clone(), prev));
         }
 
         let mut new_seq_v = match &upsert_kv.value {
             Operation::Update(v) => SeqV::with_meta(0, upsert_kv.value_meta.clone(), v.clone()),
             Operation::Delete => {
-                sub_tree.remove(&upsert_kv.key)?;
-                return Ok((prev, None));
+                kvs.remove(&upsert_kv.key)?;
+                return Ok((expired, prev, None));
             }
             Operation::AsIs => match prev {
-                None => return Ok((prev, None)),
+                None => return Ok((expired, prev, None)),
                 Some(ref prev_kv_value) => {
                     prev_kv_value.clone().set_meta(upsert_kv.value_meta.clone())
                 }
             },
         };
 
-        new_seq_v.seq = self.txn_incr_seq(KS::NAME, sub_tree)?;
-        sub_tree.insert(&upsert_kv.key, &new_seq_v)?;
+        new_seq_v.seq = Self::txn_incr_seq(GenericKV::NAME, txn_tree)?;
+        kvs.insert(&upsert_kv.key, &new_seq_v)?;
 
         debug!("applied upsert: {:?} res: {:?}", upsert_kv, new_seq_v);
-        Ok((prev, Some(new_seq_v)))
+        Ok((expired, prev, Some(new_seq_v)))
     }
 
     fn txn_client_last_resp_update(
@@ -922,11 +1083,23 @@ impl StateMachine {
         sm_nodes.range_values(..)
     }
 
-    pub fn unexpired_opt<V: Debug>(
+    /// Expire an `SeqV` and returns:
+    /// - `(Some, None)` if it expires.
+    /// - `(None, Some)` if it does not.
+    /// - `(None, None)` if the input is None.
+    pub fn expire_seq_v<V>(
         seq_value: Option<SeqV<V>>,
         log_time_ms: u64,
-    ) -> Option<SeqV<V>> {
-        seq_value.and_then(|x| Self::unexpired(x, log_time_ms))
+    ) -> (Option<SeqV<V>>, Option<SeqV<V>>) {
+        if let Some(s) = &seq_value {
+            if s.get_expire_at() < log_time_ms {
+                (seq_value, None)
+            } else {
+                (None, seq_value)
+            }
+        } else {
+            (None, None)
+        }
     }
 
     pub fn unexpired<V: Debug>(seq_value: SeqV<V>, log_time_ms: u64) -> Option<SeqV<V>> {
@@ -981,5 +1154,56 @@ impl StateMachine {
     /// storage of client last resp to keep idempotent.
     pub fn client_last_resps(&self) -> AsKeySpace<ClientLastResps> {
         self.sm_tree.key_space()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use common_meta_types::KVMeta;
+    use common_meta_types::SeqV;
+
+    use crate::state_machine::StateMachine;
+
+    #[test]
+    fn test_expire_seq_v() -> anyhow::Result<()> {
+        let sv = || SeqV::new(1, ());
+        let expire_seq_v = StateMachine::expire_seq_v;
+
+        assert_eq!((None, None), expire_seq_v(None, 10_000));
+        assert_eq!((None, Some(sv())), expire_seq_v(Some(sv()), 10_000));
+
+        assert_eq!(
+            (None, Some(sv().set_meta(Some(KVMeta { expire_at: None })))),
+            expire_seq_v(
+                Some(sv().set_meta(Some(KVMeta { expire_at: None }))),
+                10_000
+            )
+        );
+        assert_eq!(
+            (
+                None,
+                Some(sv().set_meta(Some(KVMeta {
+                    expire_at: Some(20)
+                })))
+            ),
+            expire_seq_v(
+                Some(sv().set_meta(Some(KVMeta {
+                    expire_at: Some(20)
+                }))),
+                10_000
+            )
+        );
+        assert_eq!(
+            (
+                Some(sv().set_meta(Some(KVMeta { expire_at: Some(5) }))),
+                None
+            ),
+            expire_seq_v(
+                Some(sv().set_meta(Some(KVMeta { expire_at: Some(5) }))),
+                10_000
+            )
+        );
+
+        Ok(())
     }
 }

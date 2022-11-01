@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_legacy_planners::StageKind;
+use common_planner::extras::StageKind;
 
 use super::FragmentType;
 use super::PlanFragment;
@@ -142,7 +142,7 @@ impl PhysicalPlanReplacer for Fragmenter {
             probe: Box::new(probe_input),
             build_keys: plan.build_keys.clone(),
             probe_keys: plan.probe_keys.clone(),
-            other_conditions: plan.other_conditions.clone(),
+            non_equi_conditions: plan.non_equi_conditions.clone(),
             join_type: plan.join_type.clone(),
             marker_index: plan.marker_index,
             from_correlated_subquery: plan.from_correlated_subquery,

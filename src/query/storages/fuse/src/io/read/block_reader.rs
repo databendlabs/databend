@@ -34,8 +34,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::Compression;
-use common_legacy_planners::PartInfoPtr;
-use common_legacy_planners::Projection;
+use common_planner::plans::Projection;
+use common_planner::PartInfoPtr;
 use futures::AsyncReadExt;
 use futures::StreamExt;
 use futures::TryStreamExt;
@@ -327,10 +327,10 @@ impl BlockReader {
 
     pub async fn read_columns_data(&self, part: PartInfoPtr) -> Result<Vec<(usize, Vec<u8>)>> {
         let part = FusePartInfo::from_part(&part)?;
-        let mut join_handlers = Vec::with_capacity(self.projection.len());
-
         let columns = self.column_leaves.get_by_projection(&self.projection)?;
         let indices = Self::build_projection_indices(&columns);
+        let mut join_handlers = Vec::with_capacity(indices.len());
+
         for index in indices {
             let column_meta = &part.columns_meta[&index];
             join_handlers.push(Self::read_column(
@@ -344,6 +344,33 @@ impl BlockReader {
         futures::future::try_join_all(join_handlers).await
     }
 
+    pub fn support_blocking_api(&self) -> bool {
+        self.operator.metadata().can_blocking()
+    }
+
+    pub fn sync_read_columns_data(&self, part: PartInfoPtr) -> Result<Vec<(usize, Vec<u8>)>> {
+        let part = FusePartInfo::from_part(&part)?;
+
+        let columns = self.column_leaves.get_by_projection(&self.projection)?;
+        let indices = Self::build_projection_indices(&columns);
+        let mut results = Vec::with_capacity(indices.len());
+
+        for index in indices {
+            let column_meta = &part.columns_meta[&index];
+
+            let op = self.operator.clone();
+
+            let location = part.location.clone();
+            let offset = column_meta.offset;
+            let length = column_meta.length;
+
+            let result = Self::sync_read_column(op.object(&location), index, offset, length);
+            results.push(result?);
+        }
+
+        Ok(results)
+    }
+
     pub async fn read_column(
         o: Object,
         index: usize,
@@ -354,6 +381,16 @@ impl BlockReader {
         let mut r = o.range_reader(offset..offset + length).await?;
         r.read_exact(&mut chunk).await?;
 
+        Ok((index, chunk))
+    }
+
+    pub fn sync_read_column(
+        o: Object,
+        index: usize,
+        offset: u64,
+        length: u64,
+    ) -> Result<(usize, Vec<u8>)> {
+        let chunk = o.blocking_range_read(offset..offset + length)?;
         Ok((index, chunk))
     }
 

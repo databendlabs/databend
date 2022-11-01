@@ -32,6 +32,9 @@ SELECT a,b,count() from (SELECT cast((number%4) AS bigint) as a, cast((number%20
 0 8 5
 
 statement ok
+DROP TABLE if EXISTS t;
+
+statement ok
 CREATE TABLE t(a UInt64 null, b UInt32 null, c UInt32) Engine = Fuse;
 
 statement ok

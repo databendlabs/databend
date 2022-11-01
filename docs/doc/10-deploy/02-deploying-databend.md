@@ -118,7 +118,7 @@ For information about how to manage buckets and Access Keys for your cloud objec
 
 </TabItem>
 
-<TabItem value="QingCloud QingStore" label="QingCloud QingStore">
+<TabItem value="QingCloud QingStor" label="QingCloud QingStor">
 
 Before deploying Databend, make sure you have successfully set up your object storage environment in the cloud, and the following tasks have been completed:
 
@@ -434,7 +434,7 @@ In this example Wasabi region is `us-east-2`.
 
 </TabItem>
 
-<TabItem value="QingCloud QingStore" label="QingCloud QingStore">
+<TabItem value="QingCloud QingStor" label="QingCloud QingStor">
 
 ```toml
 [storage]
@@ -455,7 +455,7 @@ secret_access_key = "<your-access-key>"
 ```
 
 :::tip
-In this example QingStore region is `pek3b`.
+In this example QingStor region is `pek3b`.
 :::
 
 </TabItem>

@@ -14,10 +14,10 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::IndexType;
 
 use crate::optimizer::m_expr::MExpr;
 use crate::optimizer::property::RelationalProperty;
+use crate::IndexType;
 
 /// State of a `Group`
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

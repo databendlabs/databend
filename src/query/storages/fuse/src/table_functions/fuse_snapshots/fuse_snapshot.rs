@@ -51,6 +51,7 @@ impl<'a> FuseSnapshot<'a> {
                     limit,
                     false,
                     snapshot.and_then(|s| s.timestamp),
+                    &|_| {},
                 )
                 .await?;
             return self.to_block(&meta_location_generator, &snapshots, snapshot_version);

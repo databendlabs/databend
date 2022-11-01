@@ -30,11 +30,13 @@ use common_functions::scalars::FunctionContext;
 use common_functions::scalars::FunctionFactory;
 use common_pipeline_core::Pipe;
 use common_pipeline_sinks::processors::sinks::UnionReceiveSink;
+use common_sql::evaluator::ChunkOperator;
+use common_sql::evaluator::CompoundChunkOperator;
+use common_sql::executor::AggregateFunctionDesc;
+use common_sql::executor::PhysicalScalar;
 
 use crate::interpreters::fill_missing_columns;
 use crate::pipelines::processors::port::InputPort;
-use crate::pipelines::processors::transforms::ChunkOperator;
-use crate::pipelines::processors::transforms::CompoundChunkOperator;
 use crate::pipelines::processors::transforms::HashJoinDesc;
 use crate::pipelines::processors::transforms::RightSemiAntiJoinCompactor;
 use crate::pipelines::processors::transforms::TransformMarkJoin;
@@ -61,7 +63,6 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::evaluator::Evaluator;
 use crate::sql::executor::AggregateFinal;
-use crate::sql::executor::AggregateFunctionDesc;
 use crate::sql::executor::AggregatePartial;
 use crate::sql::executor::ColumnID;
 use crate::sql::executor::DistributedInsertSelect;
@@ -72,7 +73,6 @@ use crate::sql::executor::Filter;
 use crate::sql::executor::HashJoin;
 use crate::sql::executor::Limit;
 use crate::sql::executor::PhysicalPlan;
-use crate::sql::executor::PhysicalScalar;
 use crate::sql::executor::Project;
 use crate::sql::executor::Sort;
 use crate::sql::executor::TableScan;
@@ -268,10 +268,7 @@ impl PipelineBuilder {
             let func = FunctionFactory::instance().get("and_filters", &data_types)?;
             predicate = PhysicalScalar::Function {
                 name: "and_filters".to_string(),
-                args: vec![
-                    (predicate.clone(), predicate.data_type()),
-                    (pred.clone(), pred.data_type()),
-                ],
+                args: vec![predicate.clone(), pred.clone()],
                 return_type: func.return_type(),
             };
         }

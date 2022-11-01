@@ -14,7 +14,6 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::IndexType;
 
 use super::group::Group;
 use crate::optimizer::memo::Memo;
@@ -24,6 +23,7 @@ use crate::optimizer::rule::TransformResult;
 use crate::optimizer::SExpr;
 use crate::plans::Operator;
 use crate::plans::RelOperator;
+use crate::IndexType;
 
 /// `MExpr` is abbreviation of multiple expression, which is the representation of relational
 /// expressions inside `Memo`.

@@ -35,15 +35,12 @@ members = [
     "src/query/formats",
     "src/query/functions",
     "src/query/functions-v2",
-    "src/query/legacy-parser",
     "src/query/management",
     "src/query/planner",
     "src/query/pipeline/core",
     "src/query/pipeline/sinks",
     "src/query/pipeline/sources",
     "src/query/pipeline/transforms",
-    "src/query/legacy-expression",
-    "src/query/legacy-planners",
     "src/query/settings",
     "src/query/sql",
     "src/query/storages/cache",
@@ -81,7 +78,7 @@ members = [
 
 [workspace.dependencies]
 # databend maintains:
-openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.7.4-alpha.2" }
+openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.7.4-alpha.3" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
 
 # error

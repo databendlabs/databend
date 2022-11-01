@@ -21,6 +21,7 @@ use common_meta_types::UserInfo;
 use common_meta_types::UserOption;
 use common_meta_types::UserPrivilegeSet;
 
+use crate::role_mgr::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use crate::UserApiProvider;
 
 impl UserApiProvider {
@@ -33,6 +34,12 @@ impl UserApiProvider {
                     &GrantObject::Global,
                     UserPrivilegeSet::available_privileges_on_global(),
                 );
+                user_info
+                    .grants
+                    .grant_role(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string());
+                user_info
+                    .option
+                    .set_default_role(Some(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string()));
                 user_info.option.set_all_flag();
             } else {
                 return Err(ErrorCode::UnknownUser(format!(
@@ -197,7 +204,7 @@ impl UserApiProvider {
         }
     }
 
-    // Update a user by name and hostname.
+    // Update an user by name and hostname.
     pub async fn update_user(
         &self,
         tenant: &str,
@@ -211,5 +218,18 @@ impl UserApiProvider {
             Ok(res) => Ok(res),
             Err(e) => Err(e.add_message_back("(while alter user).")),
         }
+    }
+
+    // Update an user's default role
+    pub async fn update_user_default_role(
+        &self,
+        tenant: &str,
+        user_name: UserIdentity,
+        default_role: Option<String>,
+    ) -> Result<Option<u64>> {
+        let mut user = self.get_user(tenant, user_name.clone()).await?;
+        user.option.set_default_role(default_role);
+        self.update_user(tenant, user_name, None, Some(user.option))
+            .await
     }
 }

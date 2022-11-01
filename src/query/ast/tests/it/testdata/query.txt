@@ -1,87 +1,4 @@
 ---------- Input ----------
-select * from a limit 3 offset 4 format csv
----------- Output ---------
-SELECT * FROM a LIMIT 3 OFFSET 4 FORMAT csv
----------- AST ------------
-Query {
-    span: [
-        SELECT(0..6),
-        Multiply(7..8),
-        FROM(9..13),
-        Ident(14..15),
-        LIMIT(16..21),
-        LiteralInteger(22..23),
-        OFFSET(24..30),
-        LiteralInteger(31..32),
-        FORMAT(33..39),
-        CSV(40..43),
-    ],
-    with: None,
-    body: Select(
-        SelectStmt {
-            span: [
-                SELECT(0..6),
-                Multiply(7..8),
-                FROM(9..13),
-                Ident(14..15),
-            ],
-            distinct: false,
-            select_list: [
-                QualifiedName(
-                    [
-                        Star,
-                    ],
-                ),
-            ],
-            from: [
-                Table {
-                    span: [
-                        Ident(14..15),
-                    ],
-                    catalog: None,
-                    database: None,
-                    table: Identifier {
-                        name: "a",
-                        quote: None,
-                        span: Ident(14..15),
-                    },
-                    alias: None,
-                    travel_point: None,
-                },
-            ],
-            selection: None,
-            group_by: [],
-            having: None,
-        },
-    ),
-    order_by: [],
-    limit: [
-        Literal {
-            span: [
-                LiteralInteger(22..23),
-            ],
-            lit: Integer(
-                3,
-            ),
-        },
-    ],
-    offset: Some(
-        Literal {
-            span: [
-                LiteralInteger(31..32),
-            ],
-            lit: Integer(
-                4,
-            ),
-        },
-    ),
-    format: Some(
-        "csv",
-    ),
-}
-
-
----------- Input ----------
 select * from customer inner join orders
 ---------- Output ---------
 SELECT * FROM customer INNER JOIN orders
@@ -164,7 +81,7 @@ Query {
     order_by: [],
     limit: [],
     offset: None,
-    format: None,
+    ignore_result: false,
 }
 
 
@@ -251,7 +168,7 @@ Query {
     order_by: [],
     limit: [],
     offset: None,
-    format: None,
+    ignore_result: false,
 }
 
 
@@ -388,7 +305,7 @@ Query {
         },
     ],
     offset: None,
-    format: None,
+    ignore_result: false,
 }
 
 
@@ -536,7 +453,7 @@ Query {
             ),
         },
     ),
-    format: None,
+    ignore_result: false,
 }
 
 
@@ -626,7 +543,7 @@ Query {
     order_by: [],
     limit: [],
     offset: None,
-    format: None,
+    ignore_result: false,
 }
 
 
@@ -762,7 +679,7 @@ Query {
     order_by: [],
     limit: [],
     offset: None,
-    format: None,
+    ignore_result: false,
 }
 
 
@@ -902,7 +819,7 @@ Query {
                         order_by: [],
                         limit: [],
                         offset: None,
-                        format: None,
+                        ignore_result: false,
                     },
                 },
             ],
@@ -1009,7 +926,7 @@ Query {
     order_by: [],
     limit: [],
     offset: None,
-    format: None,
+    ignore_result: false,
 }
 
 
@@ -1134,7 +1051,7 @@ Query {
                         order_by: [],
                         limit: [],
                         offset: None,
-                        format: None,
+                        ignore_result: false,
                     },
                 },
             ],
@@ -1241,7 +1158,7 @@ Query {
     order_by: [],
     limit: [],
     offset: None,
-    format: None,
+    ignore_result: false,
 }
 
 
@@ -1437,7 +1354,7 @@ Query {
                         order_by: [],
                         limit: [],
                         offset: None,
-                        format: None,
+                        ignore_result: false,
                     },
                 },
                 CTE {
@@ -1507,7 +1424,7 @@ Query {
                         order_by: [],
                         limit: [],
                         offset: None,
-                        format: None,
+                        ignore_result: false,
                     },
                 },
                 CTE {
@@ -1626,7 +1543,7 @@ Query {
                         order_by: [],
                         limit: [],
                         offset: None,
-                        format: None,
+                        ignore_result: false,
                     },
                 },
             ],
@@ -1819,7 +1736,7 @@ Query {
     order_by: [],
     limit: [],
     offset: None,
-    format: None,
+    ignore_result: false,
 }
 
 
@@ -2031,7 +1948,7 @@ Query {
                         order_by: [],
                         limit: [],
                         offset: None,
-                        format: None,
+                        ignore_result: false,
                     },
                 },
             ],
@@ -2097,7 +2014,7 @@ Query {
     order_by: [],
     limit: [],
     offset: None,
-    format: None,
+    ignore_result: false,
 }
 
 
@@ -2640,7 +2557,7 @@ Query {
                         order_by: [],
                         limit: [],
                         offset: None,
-                        format: None,
+                        ignore_result: false,
                     },
                     alias: Some(
                         TableAlias {
@@ -2753,7 +2670,7 @@ Query {
         },
     ],
     offset: None,
-    format: None,
+    ignore_result: false,
 }
 
 
@@ -2861,7 +2778,7 @@ Query {
     order_by: [],
     limit: [],
     offset: None,
-    format: None,
+    ignore_result: false,
 }
 
 
@@ -2969,7 +2886,7 @@ Query {
     order_by: [],
     limit: [],
     offset: None,
-    format: None,
+    ignore_result: false,
 }
 
 
@@ -3128,7 +3045,7 @@ Query {
     order_by: [],
     limit: [],
     offset: None,
-    format: None,
+    ignore_result: false,
 }
 
 
@@ -3289,7 +3206,7 @@ Query {
     order_by: [],
     limit: [],
     offset: None,
-    format: None,
+    ignore_result: false,
 }
 
 
@@ -3448,7 +3365,7 @@ Query {
     order_by: [],
     limit: [],
     offset: None,
-    format: None,
+    ignore_result: false,
 }
 
 
@@ -3609,7 +3526,7 @@ Query {
     order_by: [],
     limit: [],
     offset: None,
-    format: None,
+    ignore_result: false,
 }
 
 
@@ -3770,7 +3687,7 @@ Query {
     order_by: [],
     limit: [],
     offset: None,
-    format: None,
+    ignore_result: false,
 }
 
 

@@ -20,9 +20,9 @@ use common_datavalues::DataValue;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use common_planner::Metadata;
 use databend_query::sql::optimizer::SExpr;
 use databend_query::sql::planner::plans::JoinType;
+use databend_query::sql::planner::Metadata;
 use databend_query::sql::plans::BoundColumnRef;
 use databend_query::sql::plans::ConstantExpr;
 use databend_query::sql::plans::Filter;
@@ -117,7 +117,7 @@ fn test_format() {
                 }
                 .into(),
             ],
-            other_conditions: vec![],
+            non_equi_conditions: vec![],
             join_type: JoinType::Inner,
             marker_index: None,
             from_correlated_subquery: false,

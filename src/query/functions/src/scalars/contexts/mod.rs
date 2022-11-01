@@ -14,6 +14,7 @@
 
 mod connection_id;
 mod context;
+mod current_role;
 mod current_user;
 mod database;
 mod timezone;
@@ -22,6 +23,7 @@ mod version;
 
 pub use connection_id::ConnectionIdFunction;
 pub use context::ContextFunction;
+pub use current_role::CurrentRoleFunction;
 pub use current_user::CurrentUserFunction;
 pub use database::DatabaseFunction;
 pub use timezone::TzFunction;

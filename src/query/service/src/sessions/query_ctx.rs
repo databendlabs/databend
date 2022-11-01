@@ -30,18 +30,19 @@ use common_base::base::TrySpawn;
 use common_config::Config;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_datablocks::DataBlock;
+use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionContext;
 use common_io::prelude::FormatSettings;
-use common_legacy_expression::LegacyExpression;
-use common_legacy_planners::PartInfoPtr;
-use common_legacy_planners::Partitions;
-use common_legacy_planners::ReadDataSourcePlan;
-use common_legacy_planners::SourceInfo;
-use common_legacy_planners::StageTableInfo;
 use common_meta_app::schema::TableInfo;
+use common_meta_types::RoleInfo;
 use common_meta_types::UserInfo;
+use common_planner::stage_table::StageTableInfo;
+use common_planner::PartInfoPtr;
+use common_planner::Partitions;
+use common_planner::ReadDataSourcePlan;
+use common_planner::SourceInfo;
 use common_storage::DataOperator;
 use common_storage::StorageMetrics;
 use parking_lot::RwLock;
@@ -92,7 +93,7 @@ impl QueryContext {
         &self,
         catalog_name: &str,
         table_info: &TableInfo,
-        table_args: Option<Vec<LegacyExpression>>,
+        table_args: Option<Vec<DataValue>>,
     ) -> Result<Arc<dyn Table>> {
         let catalog = self.get_catalog(catalog_name)?;
         if table_args.is_none() {
@@ -111,7 +112,7 @@ impl QueryContext {
         &self,
         _catalog: &str,
         table_info: &StageTableInfo,
-        _table_args: Option<Vec<LegacyExpression>>,
+        _table_args: Option<Vec<DataValue>>,
     ) -> Result<Arc<dyn Table>> {
         StageTable::try_create(table_info.clone())
     }
@@ -259,6 +260,7 @@ impl TableContext for QueryContext {
             .catalog_manager
             .get_catalog(catalog_name.as_ref())
     }
+
     fn get_id(&self) -> String {
         self.shared.init_query_id.as_ref().read().clone()
     }
@@ -279,8 +281,8 @@ impl TableContext for QueryContext {
     fn get_current_user(&self) -> Result<UserInfo> {
         self.shared.get_current_user()
     }
-    fn set_current_user(&self, user: UserInfo) {
-        self.shared.set_current_user(user)
+    fn get_current_role(&self) -> Option<RoleInfo> {
+        self.shared.get_current_role()
     }
     fn get_fuse_version(&self) -> String {
         self.version.clone()

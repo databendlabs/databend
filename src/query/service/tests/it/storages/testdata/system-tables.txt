@@ -15,6 +15,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | cluster_by               | system   | tables_with_history | VARCHAR           |              |                    | false       |         |
 | cluster_id               | system   | query_log           | VARCHAR           |              |                    | false       |         |
 | columns                  | system   | query_log           | VARCHAR           |              |                    | false       |         |
+| command                  | system   | processes           | VARCHAR           |              |                    | false       |         |
 | comment                  | system   | columns             | VARCHAR           |              |                    | false       |         |
 | comment                  | system   | stages              | VARCHAR           |              |                    | false       |         |
 | copy_options             | system   | stages              | VARCHAR           |              |                    | false       |         |
@@ -25,10 +26,10 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | current_database         | system   | query_log           | VARCHAR           |              |                    | false       |         |
 | data_compressed_size     | system   | tables              | BIGINT UNSIGNED   |              |                    | true        |         |
 | data_compressed_size     | system   | tables_with_history | BIGINT UNSIGNED   |              |                    | true        |         |
-| data_read_bytes          | system   | processes           | BIGINT UNSIGNED   |              |                    | true        |         |
+| data_read_bytes          | system   | processes           | BIGINT UNSIGNED   |              |                    | false       |         |
 | data_size                | system   | tables              | BIGINT UNSIGNED   |              |                    | true        |         |
 | data_size                | system   | tables_with_history | BIGINT UNSIGNED   |              |                    | true        |         |
-| data_write_bytes         | system   | processes           | BIGINT UNSIGNED   |              |                    | true        |         |
+| data_write_bytes         | system   | processes           | BIGINT UNSIGNED   |              |                    | false       |         |
 | database                 | system   | clustering_history  | VARCHAR           |              |                    | false       |         |
 | database                 | system   | columns             | VARCHAR           |              |                    | false       |         |
 | database                 | system   | processes           | VARCHAR           |              |                    | false       |         |
@@ -49,19 +50,19 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | end_time                 | system   | clustering_history  | TIMESTAMP         |              |                    | false       |         |
 | engine                   | system   | tables              | VARCHAR           |              |                    | false       |         |
 | engine                   | system   | tables_with_history | VARCHAR           |              |                    | false       |         |
+| entry                    | system   | tracing             | VARCHAR           |              |                    | false       |         |
 | event_date               | system   | query_log           | DATE              |              |                    | false       |         |
 | event_time               | system   | query_log           | TIMESTAMP         |              |                    | false       |         |
 | example                  | system   | functions           | VARCHAR           |              |                    | false       |         |
 | exception_code           | system   | query_log           | INT               |              |                    | false       |         |
 | exception_text           | system   | query_log           | VARCHAR           |              |                    | false       |         |
 | extra                    | system   | query_log           | VARCHAR           |              |                    | false       |         |
-| extra_info               | system   | processes           | VARCHAR           |              |                    | true        |         |
+| extra_info               | system   | processes           | VARCHAR           |              |                    | false       |         |
 | file_format_options      | system   | stages              | VARCHAR           |              |                    | false       |         |
 | group                    | system   | configs             | VARCHAR           |              |                    | false       |         |
 | handler_type             | system   | query_log           | VARCHAR           |              |                    | false       |         |
 | host                     | system   | clusters            | VARCHAR           |              |                    | false       |         |
 | host                     | system   | processes           | VARCHAR           |              |                    | true        |         |
-| hostname                 | system   | tracing             | VARCHAR           |              |                    | false       |         |
 | hostname                 | system   | users               | VARCHAR           |              |                    | false       |         |
 | id                       | system   | processes           | VARCHAR           |              |                    | false       |         |
 | index_size               | system   | tables              | BIGINT UNSIGNED   |              |                    | true        |         |
@@ -73,14 +74,13 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | kind                     | system   | metrics             | VARCHAR           |              |                    | false       |         |
 | labels                   | system   | metrics             | VARCHAR           |              |                    | false       |         |
 | level                    | system   | settings            | VARCHAR           |              |                    | false       |         |
-| level                    | system   | tracing             | TINYINT           |              |                    | false       |         |
 | license                  | system   | credits             | VARCHAR           |              |                    | false       |         |
 | log_type                 | system   | query_log           | TINYINT           |              |                    | false       |         |
 | memory_usage             | system   | processes           | BIGINT            |              |                    | false       |         |
 | memory_usage             | system   | query_log           | BIGINT UNSIGNED   |              |                    | false       |         |
 | metric                   | system   | metrics             | VARCHAR           |              |                    | false       |         |
-| msg                      | system   | tracing             | VARCHAR           |              |                    | false       |         |
 | mysql_connection_id      | system   | processes           | INT UNSIGNED      |              |                    | true        |         |
+| name                     | system   | catalogs            | VARCHAR           |              |                    | false       |         |
 | name                     | system   | clusters            | VARCHAR           |              |                    | false       |         |
 | name                     | system   | columns             | VARCHAR           |              |                    | false       |         |
 | name                     | system   | configs             | VARCHAR           |              |                    | false       |         |
@@ -93,12 +93,10 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | name                     | system   | stages              | VARCHAR           |              |                    | false       |         |
 | name                     | system   | tables              | VARCHAR           |              |                    | false       |         |
 | name                     | system   | tables_with_history | VARCHAR           |              |                    | false       |         |
-| name                     | system   | tracing             | VARCHAR           |              |                    | false       |         |
 | name                     | system   | users               | VARCHAR           |              |                    | false       |         |
 | num_rows                 | system   | tables              | BIGINT UNSIGNED   |              |                    | true        |         |
 | num_rows                 | system   | tables_with_history | BIGINT UNSIGNED   |              |                    | true        |         |
 | number_of_files          | system   | stages              | BIGINT UNSIGNED   |              |                    | true        |         |
-| pid                      | system   | tracing             | BIGINT            |              |                    | false       |         |
 | port                     | system   | clusters            | SMALLINT UNSIGNED |              |                    | false       |         |
 | projections              | system   | query_log           | VARCHAR           |              |                    | false       |         |
 | query_duration_ms        | system   | query_log           | BIGINT            |              |                    | false       |         |
@@ -114,8 +112,8 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | scan_io_bytes            | system   | query_log           | BIGINT UNSIGNED   |              |                    | false       |         |
 | scan_io_bytes_cost_ms    | system   | query_log           | BIGINT UNSIGNED   |              |                    | false       |         |
 | scan_partitions          | system   | query_log           | BIGINT UNSIGNED   |              |                    | false       |         |
-| scan_progress_read_bytes | system   | processes           | BIGINT UNSIGNED   |              |                    | true        |         |
-| scan_progress_read_rows  | system   | processes           | BIGINT UNSIGNED   |              |                    | true        |         |
+| scan_progress_read_bytes | system   | processes           | BIGINT UNSIGNED   |              |                    | false       |         |
+| scan_progress_read_rows  | system   | processes           | BIGINT UNSIGNED   |              |                    | false       |         |
 | scan_rows                | system   | query_log           | BIGINT UNSIGNED   |              |                    | false       |         |
 | server_version           | system   | query_log           | VARCHAR           |              |                    | false       |         |
 | session_settings         | system   | query_log           | VARCHAR           |              |                    | false       |         |
@@ -126,20 +124,18 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | stage_params             | system   | stages              | VARCHAR           |              |                    | false       |         |
 | stage_type               | system   | stages              | VARCHAR           |              |                    | false       |         |
 | start_time               | system   | clustering_history  | TIMESTAMP         |              |                    | false       |         |
-| state                    | system   | processes           | VARCHAR           |              |                    | false       |         |
+| status                   | system   | processes           | VARCHAR           |              |                    | false       |         |
 | syntax                   | system   | functions           | VARCHAR           |              |                    | false       |         |
 | table                    | system   | clustering_history  | VARCHAR           |              |                    | false       |         |
 | table                    | system   | columns             | VARCHAR           |              |                    | false       |         |
 | tables                   | system   | query_log           | VARCHAR           |              |                    | false       |         |
 | tenant_id                | system   | query_log           | VARCHAR           |              |                    | false       |         |
 | time                     | system   | processes           | BIGINT UNSIGNED   |              |                    | false       |         |
-| time                     | system   | tracing             | VARCHAR           |              |                    | false       |         |
 | total_partitions         | system   | query_log           | BIGINT UNSIGNED   |              |                    | false       |         |
 | type                     | system   | columns             | VARCHAR           |              |                    | false       |         |
 | type                     | system   | processes           | VARCHAR           |              |                    | false       |         |
 | type                     | system   | settings            | VARCHAR           |              |                    | false       |         |
-| user                     | system   | processes           | VARCHAR           |              |                    | true        |         |
-| v                        | system   | tracing             | BIGINT            |              |                    | false       |         |
+| user                     | system   | processes           | VARCHAR           |              |                    | false       |         |
 | value                    | system   | configs             | VARCHAR           |              |                    | false       |         |
 | value                    | system   | metrics             | VARCHAR           |              |                    | false       |         |
 | value                    | system   | settings            | VARCHAR           |              |                    | false       |         |
@@ -160,10 +156,12 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 +---------+--------------------------------------+--------------------------------+-------------+
 | log     | dir                                  | ./.databend/logs               |             |
 | log     | file.dir                             | ./.databend/logs               |             |
+| log     | file.format                          | text                           |             |
 | log     | file.level                           | DEBUG                          |             |
 | log     | file.on                              | true                           |             |
 | log     | level                                | DEBUG                          |             |
 | log     | query_enabled                        | false                          |             |
+| log     | stderr.format                        | text                           |             |
 | log     | stderr.level                         | DEBUG                          |             |
 | log     | stderr.on                            | true                           |             |
 | meta    | address                              |                                |             |
@@ -261,13 +259,23 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 
 
 ---------- TABLE INFO ------------
+DB.Table: 'system'.'catalogs', Table: catalogs-table_id:1, ver:0, Engine: SystemCatalogs
+-------- TABLE CONTENTS ----------
++---------+
+| name    |
++---------+
+| default |
++---------+
+
+
+---------- TABLE INFO ------------
 DB.Table: 'system'.'databases', Table: databases-table_id:1, ver:0, Engine: SystemDatabases
 -------- TABLE CONTENTS ----------
 +--------------------+
 | name               |
 +--------------------+
-| INFORMATION_SCHEMA |
 | default            |
+| information_schema |
 | system             |
 +--------------------+
 
@@ -311,6 +319,7 @@ DB.Table: 'system'.'settings', Table: settings-table_id:1, ver:0, Engine: System
 | flight_client_timeout          | 60         | 60         | SESSION | Max duration the flight client request is allowed to take in seconds. By default, it is 60 seconds. | UInt64 |
 | format_compression             | None       | None       | SESSION | Format compression, default value: "None".                                                          | String |
 | format_empty_as_default        | 1          | 1          | SESSION | Format empty_as_default, default value: 1.                                                          | UInt64 |
+| format_escape                  |            |            | SESSION | format escape char, default value: "", which means the format`s default setting.                    | String |
 | format_field_delimiter         | ,          | ,          | SESSION | Format field delimiter, default value: ",".                                                         | String |
 | format_quote_char              | '"'        | '"'        | SESSION | The quote char for CSV. default value: '"'.                                                         | String |
 | format_record_delimiter        | "\n"       | "\n"       | SESSION | Format record_delimiter, default value: "\n".                                                       | String |
@@ -322,7 +331,7 @@ DB.Table: 'system'.'settings', Table: settings-table_id:1, ver:0, Engine: System
 | max_storage_io_requests        | 1000       | 1000       | SESSION | The maximum number of concurrent IO requests. By default, it is 1000.                               | UInt64 |
 | max_threads                    | 2          | 16         | SESSION | The maximum number of threads to execute the request. By default, it is determined automatically.   | UInt64 |
 | quoted_ident_case_sensitive    | 1          | 1          | SESSION | Case sensitivity of quoted identifiers, default value: 1 (aka case-sensitive).                      | UInt64 |
-| sql_dialect                    | PostgreSQL | PostgreSQL | SESSION | SQL dialect, support "PostgreSQL" and "MySQL", default value: "PostgreSQL".                         | String |
+| sql_dialect                    | PostgreSQL | PostgreSQL | SESSION | SQL dialect, support "PostgreSQL" "MySQL" and "Hive", default value: "PostgreSQL".                  | String |
 | storage_read_buffer_size       | 1048576    | 1048576    | SESSION | The size of buffer in bytes for buffered reader of dal. By default, it is 1MB.                      | UInt64 |
 | timezone                       | UTC        | UTC        | SESSION | Timezone, default value: "UTC".                                                                     | String |
 | unquoted_ident_case_sensitive  | 0          | 0          | SESSION | Case sensitivity of unquoted identifiers, default value: 0 (aka case-insensitive).                  | UInt64 |

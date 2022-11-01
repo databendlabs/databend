@@ -124,8 +124,10 @@ message UserStageInfo {
   uint64 min_compatible = 101;
 
   enum StageType {
-    Interval = 0;
+    LegacyInternal = 0;
     External = 1;
+    Internal = 2;
+    User = 3;
   }
 
   message StageStorage {
@@ -179,6 +181,8 @@ message UserStageInfo {
     string record_delimiter = 4;
 
     StageFileCompression compression = 5;
+
+    string escape = 6;
   }
 
   message OnErrorMode {

@@ -50,7 +50,7 @@ impl AuthMgr {
     }
 
     pub async fn auth(&self, session: Arc<Session>, credential: &Credential) -> Result<()> {
-        let user_info = match credential {
+        match credential {
             Credential::Jwt {
                 token: t,
                 hostname: h,
@@ -60,16 +60,17 @@ impl AuthMgr {
                     .as_ref()
                     .ok_or_else(|| ErrorCode::AuthenticateFailure("jwt auth not configured."))?;
                 let parsed_jwt = jwt_auth.parse_jwt(t.as_str()).await?;
-                let (tenant, user_name) = self
+                let (tenant, user_name, auth_role) = self
                     .process_jwt_claims(&session, parsed_jwt.claims())
                     .await?;
-                UserApiProvider::instance()
+                let user_info = UserApiProvider::instance()
                     .get_user_with_client_ip(
                         &tenant,
                         &user_name,
                         h.as_ref().unwrap_or(&"%".to_string()),
                     )
-                    .await?
+                    .await?;
+                session.set_authed_user(user_info, auth_role).await?;
             }
             Credential::Password {
                 name: n,
@@ -80,26 +81,26 @@ impl AuthMgr {
                 let user = UserApiProvider::instance()
                     .get_user_with_client_ip(&tenant, n, h.as_ref().unwrap_or(&"%".to_string()))
                     .await?;
-                match &user.auth_info {
-                    AuthInfo::None => Ok(user),
+                let user = match &user.auth_info {
+                    AuthInfo::None => user,
                     AuthInfo::Password {
                         hash_value: h,
                         hash_method: t,
                     } => match p {
-                        None => Err(ErrorCode::AuthenticateFailure("password required")),
+                        None => return Err(ErrorCode::AuthenticateFailure("password required")),
                         Some(p) => {
                             if *h == t.hash(p) {
-                                Ok(user)
+                                user
                             } else {
-                                Err(ErrorCode::AuthenticateFailure("wrong password"))
+                                return Err(ErrorCode::AuthenticateFailure("wrong password"));
                             }
                         }
                     },
-                    _ => Err(ErrorCode::AuthenticateFailure("wrong auth type")),
-                }?
+                    _ => return Err(ErrorCode::AuthenticateFailure("wrong auth type")),
+                };
+                session.set_authed_user(user, None).await?;
             }
         };
-        session.set_current_user(user_info);
         Ok(())
     }
 
@@ -107,7 +108,7 @@ impl AuthMgr {
         &self,
         session: &Arc<Session>,
         claims: &Claims<CustomClaims>,
-    ) -> Result<(String, String)> {
+    ) -> Result<(String, String, Option<String>)> {
         // setup tenant if the JWT claims contain extra.tenant_id
         if let Some(ref tenant) = claims.extra.tenant_id {
             session.set_current_tenant(tenant.clone());
@@ -121,9 +122,7 @@ impl AuthMgr {
             .ok_or_else(|| ErrorCode::AuthenticateFailure("sub not found in claims"))?;
 
         // set user auth_role if claims contain extra.role
-        if let Some(ref auth_role) = claims.extra.role {
-            session.set_auth_role(auth_role.clone());
-        }
+        let auth_role = claims.extra.role.clone();
 
         // create user if not exists when the JWT claims contains ensure_user
         if let Some(ref ensure_user) = claims.extra.ensure_user {
@@ -140,6 +139,6 @@ impl AuthMgr {
                 .add_user(&tenant, user_info.clone(), true)
                 .await?;
         }
-        Ok((tenant, user_name))
+        Ok((tenant, user_name, auth_role))
     }
 }

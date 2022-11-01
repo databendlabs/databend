@@ -12,6 +12,6 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use common_legacy_expression::LegacyExpression;
+use common_datavalues::DataValue;
 
-pub type TableArgs = Option<Vec<LegacyExpression>>;
+pub type TableArgs = Option<Vec<DataValue>>;

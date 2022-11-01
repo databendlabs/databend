@@ -35,13 +35,14 @@ use common_planner::plans::DropStagePlan;
 use common_planner::plans::DropUDFPlan;
 use common_planner::plans::DropUserPlan;
 use common_planner::plans::ShowGrantsPlan;
+use common_planner::plans::ShowRolesPlan;
 use common_planner::plans::UseDatabasePlan;
-use common_planner::MetadataRef;
 
 use crate::plans::Plan;
 use crate::plans::RewriteKind;
 use crate::BindContext;
 use crate::ColumnBinding;
+use crate::MetadataRef;
 use crate::NameResolutionContext;
 use crate::Visibility;
 
@@ -93,6 +94,7 @@ impl<'a> Binder {
                     metadata: self.metadata.clone(),
                     bind_context: Box::new(bind_context),
                     rewrite_kind: None,
+                    ignore_result: query.ignore_result,
                 }
             }
 
@@ -171,7 +173,7 @@ impl<'a> Binder {
             Statement::AlterUser(stmt) => self.bind_alter_user(stmt).await?,
 
             // Roles
-            Statement::ShowRoles => self.bind_rewrite_to_query(bind_context, "SELECT name, inherited_roles FROM system.roles ORDER BY name", RewriteKind::ShowRoles).await?,
+            Statement::ShowRoles => Plan::ShowRoles(Box::new(ShowRolesPlan {})),
             Statement::CreateRole {
                 if_not_exists,
                 role_name,
@@ -292,6 +294,14 @@ impl<'a> Binder {
                 self.bind_set_variable(bind_context, *is_global, variable, value)
                     .await?
             }
+
+            Statement::SetRole {
+                is_default,
+                role_name,
+            } => {
+                self.bind_set_role(bind_context, *is_default, role_name).await?
+            }
+
             Statement::KillStmt { kill_target, object_id } => {
                 self.bind_kill_stmt(bind_context, kill_target, object_id.as_str())
                     .await?

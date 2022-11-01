@@ -24,14 +24,14 @@ use common_expression::DataSchema;
 use common_expression::Scalar;
 use common_fuse_meta::meta::ColumnStatistics;
 use common_fuse_meta::meta::StatisticsOfColumns;
-use common_legacy_expression::LegacyExpression;
+use common_planner::Expression;
 use common_storages_index::range_filter::RangeFilter;
 
 use crate::utils::str_field_to_scalar;
 
 pub struct HivePartitionPruner {
     pub ctx: Arc<dyn TableContext>,
-    pub filters: Vec<LegacyExpression>,
+    pub filters: Vec<Expression>,
     // pub partitions: Vec<String>,
     pub partition_schema: Arc<DataSchema>,
 }
@@ -39,7 +39,7 @@ pub struct HivePartitionPruner {
 impl HivePartitionPruner {
     pub fn create(
         ctx: Arc<dyn TableContext>,
-        filters: Vec<LegacyExpression>,
+        filters: Vec<Expression>,
         partition_schema: Arc<DataSchema>,
     ) -> Self {
         HivePartitionPruner {

@@ -21,12 +21,11 @@ common-exception = { path = "../../../common/exception" }
 common-expression = { path = "../../expression" }
 common-fuse-meta = { path = "../fuse-meta" }
 common-hive-meta-store = { path = "../hive-meta-store" }
-common-legacy-expression = { path = "../../legacy-expression" }
-common-legacy-planners = { path = "../../legacy-planners" }
 common-meta-app = { path = "../../../meta/app" }
 common-meta-types = { path = "../../../meta/types" }
 common-pipeline-core = { path = "../../pipeline/core" }
 common-pipeline-sources = { path = "../../pipeline/sources" }
+common-planner = { path = "../../planner" }
 common-storage = { path = "../../../common/storage" }
 common-storages-cache = { path = "../cache" }
 common-storages-index = { path = "../index" }

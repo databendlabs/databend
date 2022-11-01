@@ -18,7 +18,6 @@ use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::is_builtin_function;
-use common_legacy_expression::LegacyExpression;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -28,10 +27,7 @@ pub struct ContextFunction;
 impl ContextFunction {
     // Some function args need from context
     // such as `SELECT database()`, the arg is ctx.get_default_db()
-    pub fn build_args_from_ctx(
-        ctx: Arc<QueryContext>,
-        name: &str,
-    ) -> Result<Vec<LegacyExpression>> {
+    pub fn build_args_from_ctx(ctx: Arc<QueryContext>, name: &str) -> Result<Vec<DataValue>> {
         // Check the function is supported in common functions.
         if !is_builtin_function(name) {
             return Result::Err(ErrorCode::UnknownFunction(format!(
@@ -42,22 +38,22 @@ impl ContextFunction {
 
         Ok(match name.to_lowercase().as_str() {
             "database" | "currentdatabase" | "current_database" => {
-                vec![LegacyExpression::create_literal(DataValue::String(
-                    ctx.get_current_database().into_bytes(),
-                ))]
+                vec![DataValue::String(ctx.get_current_database().into_bytes())]
             }
-            "version" => vec![LegacyExpression::create_literal(DataValue::String(
-                ctx.get_fuse_version().into_bytes(),
-            ))],
-            "user" | "currentuser" | "current_user" => vec![LegacyExpression::create_literal(
-                DataValue::String(ctx.get_current_user()?.identity().to_string().into_bytes()),
+            "version" => vec![DataValue::String(ctx.get_fuse_version().into_bytes())],
+            "user" | "currentuser" | "current_user" => vec![DataValue::String(
+                ctx.get_current_user()?.identity().to_string().into_bytes(),
             )],
-            "connection_id" => vec![LegacyExpression::create_literal(DataValue::String(
-                ctx.get_connection_id().into_bytes(),
-            ))],
-            "timezone" => vec![LegacyExpression::create_literal(DataValue::String(
+            "current_role" => vec![DataValue::String(
+                ctx.get_current_role()
+                    .map(|r| r.name)
+                    .unwrap_or_else(|| "".to_string())
+                    .into_bytes(),
+            )],
+            "connection_id" => vec![DataValue::String(ctx.get_connection_id().into_bytes())],
+            "timezone" => vec![DataValue::String(
                 ctx.get_settings().get_timezone()?.into_bytes(),
-            ))],
+            )],
             _ => vec![],
         })
     }

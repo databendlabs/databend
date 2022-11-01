@@ -26,7 +26,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use super::ProbeState;
-use crate::pipelines::processors::transforms::group_by::keys_ref::KeysRef;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::processors::HashTable;
@@ -99,7 +98,6 @@ impl HashJoinState for JoinHashTable {
                 let build_keys_iter = $method.build_keys_iter(&keys_state)?;
 
                 for (row_index, key) in build_keys_iter.enumerate().take($chunk.num_rows()) {
-                    let mut inserted = true;
                     let ptr = RowPtr {
                         chunk_index: $chunk_index,
                         row_index,
@@ -109,11 +107,13 @@ impl HashJoinState for JoinHashTable {
                         let mut self_row_ptrs = self.row_ptrs.write();
                         self_row_ptrs.push(ptr);
                     }
-                    let entity = $table.insert_key(&key, &mut inserted);
-                    if inserted {
-                        entity.set_value(vec![ptr]);
-                    } else {
-                        entity.get_mut_value().push(ptr);
+                    match unsafe { $table.insert(key) } {
+                        Ok(entity) => {
+                            entity.write(vec![ptr]);
+                        }
+                        Err(entity) => {
+                            entity.push(ptr);
+                        }
                     }
                 }
             }};
@@ -137,7 +137,7 @@ impl HashJoinState for JoinHashTable {
                     .map(|x| Some(*x))
                     .collect(),
                 JoinType::RightMark => {
-                    if !has_null {
+                    if !has_null && !chunk.cols.is_empty() {
                         if let Some(validity) = chunk.cols[0].validity().1 {
                             if validity.unset_bits() > 0 {
                                 has_null = true;
@@ -170,7 +170,6 @@ impl HashJoinState for JoinHashTable {
                         .hash_method
                         .build_keys_iter(chunk.keys_state.as_ref().unwrap())?;
                     for (row_index, key) in build_keys_iter.enumerate().take(chunk.num_rows()) {
-                        let mut inserted = true;
                         let ptr = RowPtr {
                             chunk_index,
                             row_index,
@@ -180,12 +179,13 @@ impl HashJoinState for JoinHashTable {
                             let mut self_row_ptrs = self.row_ptrs.write();
                             self_row_ptrs.push(ptr);
                         }
-                        let keys_ref = KeysRef::create(key.as_ptr() as usize, key.len());
-                        let entity = table.hash_table.insert_key(&keys_ref, &mut inserted);
-                        if inserted {
-                            entity.set_value(vec![ptr]);
-                        } else {
-                            entity.get_mut_value().push(ptr);
+                        match unsafe { table.hash_table.insert_borrowing(key) } {
+                            Ok(entity) => {
+                                entity.write(vec![ptr]);
+                            }
+                            Err(entity) => {
+                                entity.push(ptr);
+                            }
                         }
                     }
                 }

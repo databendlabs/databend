@@ -196,6 +196,7 @@ impl AccessChecker for PrivilegeAccess {
             Plan::GrantRole(_) => {}
             Plan::GrantPriv(_) => {}
             Plan::ShowGrants(_) => {}
+            Plan::ShowRoles(_) => {}
             Plan::RevokePriv(_) => {}
             Plan::RevokeRole(_) => {}
             Plan::ListStage(_) => {}
@@ -204,6 +205,7 @@ impl AccessChecker for PrivilegeAccess {
             Plan::RemoveStage(_) => {}
             Plan::Presign(_) => {}
             Plan::SetVariable(_) => {}
+            Plan::SetRole(_) => {}
             Plan::Kill(_) => {
                 session
                     .validate_privilege(&GrantObject::Global, UserPrivilegeType::Super)

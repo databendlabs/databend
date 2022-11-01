@@ -25,11 +25,13 @@ use super::*;
 use crate::interpreters::access::Accessor;
 use crate::interpreters::interpreter_copy_v2::CopyInterpreterV2;
 use crate::interpreters::interpreter_presign::PresignInterpreter;
+use crate::interpreters::interpreter_role_show::ShowRolesInterpreter;
 use crate::interpreters::interpreter_table_create_v2::CreateTableInterpreterV2;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::CreateShareInterpreter;
 use crate::interpreters::DropShareInterpreter;
 use crate::interpreters::DropUserInterpreter;
+use crate::interpreters::SetRoleInterpreter;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 
@@ -196,6 +198,14 @@ impl InterpreterFactory {
             Plan::DropRole(drop_role) => Ok(Arc::new(DropRoleInterpreter::try_create(
                 ctx,
                 *drop_role.clone(),
+            )?)),
+            Plan::SetRole(set_role) => Ok(Arc::new(SetRoleInterpreter::try_create(
+                ctx,
+                *set_role.clone(),
+            )?)),
+            Plan::ShowRoles(show_roles) => Ok(Arc::new(ShowRolesInterpreter::try_create(
+                ctx,
+                *show_roles.clone(),
             )?)),
 
             // Stages

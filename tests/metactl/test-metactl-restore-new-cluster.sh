@@ -11,11 +11,17 @@ echo " === start 3 meta node cluster"
 nohup ./target/debug/databend-meta --config-file=./tests/metactl/config/databend-meta-node-1.toml &
 python3 scripts/ci/wait_tcp.py --timeout 5 --port 9191
 
+sleep 1
+
 nohup ./target/debug/databend-meta --config-file=./tests/metactl/config/databend-meta-node-2.toml &
 python3 scripts/ci/wait_tcp.py --timeout 5 --port 28202
 
+sleep 1
+
 nohup ./target/debug/databend-meta --config-file=./tests/metactl/config/databend-meta-node-3.toml &
 python3 scripts/ci/wait_tcp.py --timeout 5 --port 28302
+
+sleep 1
 
 curl -sL http://127.0.0.1:28101/v1/cluster/status
 
@@ -58,9 +64,11 @@ time sleep 3
 
 echo " === dump new cluster state:"
 curl -sL http://127.0.0.1:28101/v1/cluster/status
+echo ""
 
 echo " === check new cluster state has the voters 4, 5, 6"
 curl -sL http://127.0.0.1:28101/v1/cluster/status \
     | grep '"voters":\[{"name":"4","endpoint":{"addr":"localhost","port":29103},"grpc_api_addr":"0.0.0.0:19191"},{"name":"5","endpoint":{"addr":"localhost","port":29203},"grpc_api_addr":"0.0.0.0:29191"},{"name":"6","endpoint":{"addr":"localhost","port":29303},"grpc_api_addr":"0.0.0.0:39191"}\]'
+echo ""
 
 killall databend-meta

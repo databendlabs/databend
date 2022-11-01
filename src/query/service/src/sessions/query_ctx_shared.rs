@@ -26,6 +26,7 @@ use common_config::Config;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::RoleInfo;
 use common_meta_types::UserInfo;
 use common_storage::DataOperator;
 use common_storage::StorageMetrics;
@@ -42,7 +43,6 @@ use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::Session;
 use crate::sessions::Settings;
-use crate::sql::SQLCommon;
 use crate::storages::Table;
 
 type DatabaseAndTable = (String, String, String);
@@ -154,8 +154,8 @@ impl QueryContextShared {
         self.session.get_current_user()
     }
 
-    pub fn set_current_user(&self, user: UserInfo) {
-        self.session.set_current_user(user);
+    pub fn get_current_role(&self) -> Option<RoleInfo> {
+        self.session.get_current_role()
     }
 
     pub fn set_current_tenant(&self, tenant: String) {
@@ -269,7 +269,7 @@ impl QueryContextShared {
     pub fn attach_query_str(&self, kind: String, query: &str) {
         {
             let mut running_query = self.running_query.write();
-            *running_query = Some(SQLCommon::short_sql(query));
+            *running_query = Some(short_sql(query));
         }
 
         {
@@ -329,5 +329,25 @@ impl QueryContextShared {
 
     pub fn get_created_time(&self) -> SystemTime {
         self.created_time
+    }
+}
+
+pub fn short_sql(query: &str) -> String {
+    use unicode_segmentation::UnicodeSegmentation;
+    let query = query.trim_start();
+    if query.len() >= 64 && query[..6].eq_ignore_ascii_case("INSERT") {
+        // keep first 64 graphemes
+        String::from_utf8(
+            query
+                .graphemes(true)
+                .take(64)
+                .flat_map(|g| g.as_bytes().iter())
+                .copied() // copied converts &u8 into u8
+                .chain(b"...".iter().copied())
+                .collect::<Vec<u8>>(),
+        )
+        .unwrap() // by construction, this cannot panic as we extracted unicode grapheme
+    } else {
+        query.to_string()
     }
 }

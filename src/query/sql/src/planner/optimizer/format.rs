@@ -16,13 +16,13 @@ use std::collections::HashMap;
 
 use common_ast::ast::FormatTreeNode;
 use common_exception::Result;
-use common_planner::IndexType;
 
 use super::cost::CostContext;
 use crate::optimizer::group::Group;
 use crate::optimizer::MExpr;
 use crate::optimizer::Memo;
 use crate::plans::RelOperator;
+use crate::IndexType;
 
 pub fn display_memo(memo: &Memo, cost_map: &HashMap<IndexType, CostContext>) -> Result<String> {
     Ok(memo

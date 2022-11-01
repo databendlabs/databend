@@ -17,7 +17,6 @@ use std::fmt::Display;
 use common_ast::ast::FormatTreeNode;
 use common_datavalues::format_data_type_sql;
 use common_functions::scalars::FunctionFactory;
-use common_planner::MetadataRef;
 use itertools::Itertools;
 
 use crate::optimizer::SExpr;
@@ -38,6 +37,7 @@ use crate::plans::PhysicalScan;
 use crate::plans::RelOperator;
 use crate::plans::Scalar;
 use crate::plans::Sort;
+use crate::MetadataRef;
 use crate::ScalarExpr;
 
 #[derive(Clone)]
@@ -366,8 +366,8 @@ pub fn logical_inner_join_to_format_tree(
             .into()
         })
         .collect();
-    let other_conditions = op
-        .other_conditions
+    let non_equi_conditions = op
+        .non_equi_conditions
         .iter()
         .map(|scalar| format_scalar(&metadata, scalar))
         .collect::<Vec<String>>();
@@ -400,8 +400,8 @@ pub fn logical_inner_join_to_format_tree(
                     equi_conditions
                 ))),
                 FormatTreeNode::new(FormatContext::Text(format!(
-                    "other conditions: [{}]",
-                    other_conditions.join(", ")
+                    "non-equi conditions: [{}]",
+                    non_equi_conditions.join(", ")
                 ))),
             ],
             children,
@@ -428,7 +428,7 @@ fn physical_hash_join_to_format_tree(
         .collect::<Vec<String>>()
         .join(", ");
     let join_filters = op
-        .other_conditions
+        .non_equi_conditions
         .iter()
         .map(|scalar| format_scalar(&metadata, scalar))
         .collect::<Vec<String>>()

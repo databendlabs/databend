@@ -698,11 +698,6 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             let offset_node = FormatTreeNode::with_children(offset_format_ctx, vec![offset_child]);
             children.push(offset_node);
         }
-        if let Some(format) = &query.format {
-            let format_format_ctx = AstFormatContext::new(format!("FormatElement {}", format));
-            let format_node = FormatTreeNode::new(format_format_ctx);
-            children.push(format_node);
-        }
 
         let name = "Query".to_string();
         let format_ctx = AstFormatContext::with_children(name, children.len());
@@ -1350,7 +1345,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         let mut children = Vec::new();
         self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
         children.push(self.children.pop().unwrap());
-        if let Some(action) = stmt.action {
+        if let Some(action) = &stmt.action {
             let action_name = format!("Action {}", action);
             let action_format_ctx = AstFormatContext::new(action_name);
             children.push(FormatTreeNode::new(action_format_ctx));

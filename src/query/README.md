@@ -12,7 +12,6 @@ Databend Query is a Distributed Query Engine at scale.
 - [`formats`](./formats/), the serialization and deserialization of data in various formats to the outside.
 - [`functions`](./functions/), scalar functions and aggregate functions, etc., will be gradually migrated to `functions-v2`.
 - [`functions-v2`](./functions-v2/), scalar functions and aggregate functions, etc., based on `expression`.
-- [`legacy-parser`](./legacy-parser/), the old parser, which will be replaced by ast, built with sqlparser-rs.
 - [`menagement`](./menagement/) for clusters, quotas, etc.
 - [`pipeline`](./pipeline/) implements the scheduling framework for physical operators.
 - [`planners`](./planners/) builds an execution plan from the user's SQL statement and represents the query with different types of relational operators.

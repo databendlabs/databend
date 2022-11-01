@@ -136,7 +136,7 @@ impl<'a> MetaLeader<'a> {
 
         self.meta_node
             .raft
-            .change_membership(membership, true)
+            .change_membership(membership, false)
             .await?;
         Ok(())
     }

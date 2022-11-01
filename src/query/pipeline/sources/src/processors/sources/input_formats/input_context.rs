@@ -160,7 +160,6 @@ impl InputContext {
     pub async fn try_create_from_copy(
         operator: Operator,
         settings: Arc<Settings>,
-        format_settings: FormatSettings,
         schema: DataSchemaRef,
         stage_info: UserStageInfo,
         files: Vec<String>,
@@ -185,6 +184,9 @@ impl InputContext {
             }
         };
 
+        let format_settings =
+            format.get_format_settings_from_options(&settings, file_format_options)?;
+
         let rows_to_skip = file_format_options.skip_header as usize;
         let field_delimiter = {
             if file_format_options.field_delimiter.is_empty() {
@@ -193,6 +195,7 @@ impl InputContext {
                 file_format_options.field_delimiter.as_bytes()[0]
             }
         };
+
         Ok(InputContext {
             format,
             schema,
@@ -225,7 +228,7 @@ impl InputContext {
         let format_type =
             StageFileFormatType::from_str(format_name).map_err(ErrorCode::UnknownFormat)?;
         let format = Self::get_input_format(&format_type)?;
-        let format_settings = format.get_format_settings(&settings)?;
+        let format_settings = format.get_format_settings_from_settings(&settings)?;
         let read_batch_size = settings.get_input_read_buffer_size()? as usize;
         let rows_per_block = MIN_ROW_PER_BLOCK;
         let field_delimiter = settings.get_format_field_delimiter()?;

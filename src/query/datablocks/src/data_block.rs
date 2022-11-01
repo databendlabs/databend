@@ -24,11 +24,13 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::pretty_format_blocks;
+use crate::MetaInfoPtr;
 
 #[derive(Clone, Eq, PartialEq)]
 pub struct DataBlock {
     schema: DataSchemaRef,
     columns: Vec<ColumnRef>,
+    meta: Option<MetaInfoPtr>,
 }
 
 impl DataBlock {
@@ -46,7 +48,36 @@ impl DataBlock {
                 .map(|c| c.data_type())
                 .collect::<Vec<DataTypeImpl>>()
         );
-        DataBlock { schema, columns }
+        DataBlock {
+            schema,
+            columns,
+            meta: None,
+        }
+    }
+
+    #[inline]
+    pub fn create_with_meta(
+        schema: DataSchemaRef,
+        columns: Vec<ColumnRef>,
+        meta: Option<MetaInfoPtr>,
+    ) -> Self {
+        debug_assert!(
+            schema.fields().iter().zip(columns.iter()).all(|(f, c)| f
+                .data_type()
+                .data_type_id()
+                .to_physical_type()
+                == c.data_type().data_type_id().to_physical_type()),
+            "Schema: {schema:?}, column types: {:?}",
+            &columns
+                .iter()
+                .map(|c| c.data_type())
+                .collect::<Vec<DataTypeImpl>>()
+        );
+        DataBlock {
+            schema,
+            columns,
+            meta,
+        }
     }
 
     #[inline]
@@ -54,6 +85,7 @@ impl DataBlock {
         DataBlock {
             schema: Arc::new(DataSchema::empty()),
             columns: vec![],
+            meta: None,
         }
     }
 
@@ -64,7 +96,7 @@ impl DataBlock {
             let col = f.data_type().create_column(&[]).unwrap();
             columns.push(col)
         }
-        DataBlock { schema, columns }
+        Self::create(schema, columns)
     }
 
     #[inline]
@@ -142,7 +174,7 @@ impl DataBlock {
         for i in 0..self.num_columns() {
             limited_columns.push(self.column(i).slice(offset, length));
         }
-        DataBlock::create(self.schema().clone(), limited_columns)
+        DataBlock::create_with_meta(self.schema().clone(), limited_columns, self.meta.clone())
     }
 
     #[inline]
@@ -158,15 +190,15 @@ impl DataBlock {
         Ok(Self {
             columns,
             schema: new_schema,
+            meta: self.meta,
         })
     }
 
     #[inline]
-    pub fn remove_column(self, name: &str) -> Result<Self> {
+    pub fn remove_column_index(self, idx: usize) -> Result<Self> {
         let mut columns = self.columns.clone();
         let mut fields = self.schema().fields().clone();
 
-        let idx = self.schema.index_of(name)?;
         columns.remove(idx);
         fields.remove(idx);
         let new_schema = Arc::new(DataSchema::new(fields));
@@ -174,7 +206,23 @@ impl DataBlock {
         Ok(Self {
             columns,
             schema: new_schema,
+            meta: self.meta,
         })
+    }
+
+    #[inline]
+    pub fn add_meta(self, meta: Option<MetaInfoPtr>) -> Result<Self> {
+        Ok(Self {
+            columns: self.columns.clone(),
+            schema: self.schema.clone(),
+            meta,
+        })
+    }
+
+    #[inline]
+    pub fn remove_column(self, name: &str) -> Result<Self> {
+        let idx = self.schema.index_of(name)?;
+        self.remove_column_index(idx)
     }
 
     #[inline]
@@ -185,7 +233,11 @@ impl DataBlock {
             columns.push(column.clone());
         }
 
-        Ok(Self { columns, schema })
+        Ok(Self {
+            columns,
+            schema,
+            meta: self.meta,
+        })
     }
 
     #[inline]
@@ -197,7 +249,11 @@ impl DataBlock {
             columns.push(column.convert_full_column());
         }
 
-        Ok(Self { columns, schema })
+        Ok(Self {
+            columns,
+            schema,
+            meta: self.meta,
+        })
     }
 
     pub fn from_chunk<A: AsRef<dyn Array>>(

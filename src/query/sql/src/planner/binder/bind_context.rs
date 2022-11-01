@@ -25,13 +25,13 @@ use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::IndexType;
 use parking_lot::RwLock;
 
 use super::AggregateInfo;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::plans::Scalar;
+use crate::IndexType;
 use crate::NameResolutionContext;
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -96,9 +96,6 @@ pub struct BindContext {
     /// functions, otherwise a grouping error will be raised.
     pub in_grouping: bool,
 
-    /// Format type of query output.
-    pub format: Option<String>,
-
     pub ctes_map: Arc<RwLock<HashMap<String, CteInfo>>>,
 }
 
@@ -116,7 +113,6 @@ impl BindContext {
             columns: Vec::new(),
             aggregate_info: AggregateInfo::default(),
             in_grouping: false,
-            format: None,
             ctes_map: Arc::new(RwLock::new(HashMap::new())),
         }
     }
@@ -127,7 +123,6 @@ impl BindContext {
             columns: vec![],
             aggregate_info: Default::default(),
             in_grouping: false,
-            format: None,
             ctes_map: parent.ctes_map.clone(),
         }
     }
@@ -276,14 +271,6 @@ impl BindContext {
             }
             _ => false,
         }
-    }
-
-    /// Get output format type.
-    /// For example, the output format type of query `SELECT 1,2 format CSV` is CSV.
-    /// Only used in Clickhouse http handler.
-    pub fn resolve_format(&mut self, format: String) -> Result<()> {
-        self.format = Some(format);
-        Ok(())
     }
 
     /// Get result columns of current context in order.

@@ -18,7 +18,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::MetadataRef;
+use common_sql::MetadataRef;
 
 use super::fragments::Fragmenter;
 use super::QueryFragmentsActions;

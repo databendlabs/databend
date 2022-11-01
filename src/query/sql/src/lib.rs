@@ -18,7 +18,5 @@ pub mod evaluator;
 pub mod executor;
 pub mod planner;
 
-use common_legacy_parser::sql_common;
 pub use common_storages_constants::*;
 pub use planner::*;
-pub use sql_common::SQLCommon;

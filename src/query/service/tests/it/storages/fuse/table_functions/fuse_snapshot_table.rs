@@ -17,7 +17,6 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_expression::*;
 use tokio_stream::StreamExt;
 
 use crate::storages::fuse::table_test_fixture::*;
@@ -51,14 +50,14 @@ async fn test_fuse_snapshot_table_args() -> Result<()> {
         test_drive_with_args(query_ctx.clone(), Some(vec![])).await,
     );
 
-    let arg_db = LegacyExpression::create_literal(DataValue::String(test_db.as_bytes().to_vec()));
+    let arg_db = DataValue::String(test_db.as_bytes().to_vec());
     expects_err(
         "bad argument (no table)",
         ErrorCode::bad_arguments_code(),
         test_drive_with_args(query_ctx.clone(), Some(vec![arg_db])).await,
     );
 
-    let arg_db = LegacyExpression::create_literal(DataValue::String(test_db.as_bytes().to_vec()));
+    let arg_db = DataValue::String(test_db.as_bytes().to_vec());
     expects_err(
         "bad argument (too many args)",
         ErrorCode::bad_arguments_code(),

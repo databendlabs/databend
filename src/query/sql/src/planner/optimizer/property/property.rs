@@ -14,10 +14,9 @@
 
 use std::collections::HashSet;
 
-use common_planner::IndexType;
-
 use super::column_stat::ColumnStatSet;
 use crate::plans::Scalar;
+use crate::IndexType;
 
 pub type ColumnSet = HashSet<IndexType>;
 
@@ -34,8 +33,14 @@ impl RequiredProperty {
 
 #[derive(Default, Clone, Debug)]
 pub struct RelationalProperty {
+    /// Output columns of a relational expression
     pub output_columns: ColumnSet,
+
+    /// Outer references of a relational expression
     pub outer_columns: ColumnSet,
+
+    /// Used columns of a relational expression
+    pub used_columns: ColumnSet,
 
     // TODO(leiysky): introduce upper bound of cardinality to
     // reduce error in estimation.
@@ -44,7 +49,7 @@ pub struct RelationalProperty {
     // which information is useful to optimize some queries like `COUNT(*)`.
     pub precise_cardinality: Option<u64>,
 
-    // Statistics of columns, column index -> column stat
+    /// Statistics of columns, column index -> column stat
     pub column_stats: ColumnStatSet,
 }
 

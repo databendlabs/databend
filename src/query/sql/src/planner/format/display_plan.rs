@@ -94,6 +94,7 @@ impl Plan {
             Plan::Presign(presign) => Ok(format!("{:?}", presign)),
 
             Plan::SetVariable(p) => Ok(format!("{:?}", p)),
+            Plan::SetRole(p) => Ok(format!("{:?}", p)),
             Plan::UseDatabase(p) => Ok(format!("{:?}", p)),
             Plan::Kill(p) => Ok(format!("{:?}", p)),
 
@@ -104,6 +105,7 @@ impl Plan {
             Plan::AlterShareTenants(p) => Ok(format!("{:?}", p)),
             Plan::DescShare(p) => Ok(format!("{:?}", p)),
             Plan::ShowShares(p) => Ok(format!("{:?}", p)),
+            Plan::ShowRoles(p) => Ok(format!("{:?}", p)),
             Plan::ShowObjectGrantPrivileges(p) => Ok(format!("{:?}", p)),
             Plan::ShowGrantTenantsOfShare(p) => Ok(format!("{:?}", p)),
         }

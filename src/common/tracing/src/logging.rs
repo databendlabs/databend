@@ -28,9 +28,9 @@ use tracing::Subscriber;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_appender::rolling::RollingFileAppender;
 use tracing_appender::rolling::Rotation;
-use tracing_bunyan_formatter::BunyanFormattingLayer;
 use tracing_log::LogTracer;
 use tracing_subscriber::fmt;
+use tracing_subscriber::fmt::format;
 use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::time::FormatTime;
 use tracing_subscriber::fmt::time::SystemTime;
@@ -58,46 +58,82 @@ use crate::Config;
 ///
 /// To adjust batch sending delay, use `OTEL_BSP_SCHEDULE_DELAY`:
 /// DATABEND_JAEGER_AGENT_ENDPOINT=localhost:6831 RUST_LOG=trace OTEL_BSP_SCHEDULE_DELAY=1 cargo test
-// TODO(xp): use DATABEND_JAEGER_AGENT_ENDPOINT to assign jaeger server address.
-pub fn init_logging(name: &str, cfg: &Config, enable_tracing_log: bool) -> Vec<WorkerGuard> {
+/// TODO(xp): use DATABEND_JAEGER_AGENT_ENDPOINT to assign jaeger server address.
+///
+/// # Notes to implementation
+///
+/// Registry is composed by generic type parameters.
+///
+/// To make rust happy, we need to push `Option<Layer>` into it.
+pub fn init_logging(name: &str, cfg: &Config) -> Vec<WorkerGuard> {
     let mut guards = vec![];
 
     let subscriber = Registry::default();
 
     // File Layer
-    let file_layer = if cfg.file.on {
+    let subscriber = if cfg.file.on {
         let rolling_appender = RollingFileAppender::new(Rotation::HOURLY, &cfg.file.dir, name);
         let (rolling_writer, rolling_writer_guard) =
             tracing_appender::non_blocking(rolling_appender);
-
-        let file_logging_layer = BunyanFormattingLayer::new(name.to_string(), rolling_writer);
-
-        let filter = EnvFilter::new(&cfg.file.level);
-        let file = file_logging_layer.with_filter(filter);
-
         guards.push(rolling_writer_guard);
 
-        Some(file)
+        let filter = EnvFilter::new(&cfg.file.level);
+
+        match cfg.file.format.to_lowercase().as_str() {
+            "text" => {
+                let layer = fmt::layer()
+                    .with_writer(rolling_writer)
+                    .event_format(format().with_ansi(false))
+                    .with_filter(filter);
+                subscriber.with(Some(layer)).with(None)
+            }
+            "json" => {
+                let layer = fmt::layer()
+                    .with_writer(rolling_writer)
+                    .fmt_fields(fmt::format::JsonFields::default())
+                    .event_format(format().json())
+                    .with_filter(filter);
+                subscriber.with(None).with(Some(layer))
+            }
+            v => {
+                unreachable!("file logging format {v} is not supported");
+            }
+        }
     } else {
-        None
+        subscriber.with(None).with(None)
     };
-    let subscriber = subscriber.with(file_layer);
 
     // Stderr (Console) Layer
     let rust_log = env::var(EnvFilter::DEFAULT_ENV);
-    let stderr_layer = if cfg.stderr.on || rust_log.is_ok() {
+    let subscriber = if cfg.stderr.on || rust_log.is_ok() {
         // Use env RUST_LOG to initialize log if present.
         // Otherwise, use the specified level.
         let directives = rust_log.unwrap_or_else(|_| cfg.stderr.level.to_string());
         let env_filter = EnvFilter::new(directives);
 
-        let stderr = fmt::layer().with_writer(io::stderr).with_filter(env_filter);
-
-        Some(stderr)
+        match cfg.stderr.format.to_lowercase().as_str() {
+            "text" => {
+                let layer = fmt::layer()
+                    .with_writer(io::stderr)
+                    .event_format(format().pretty())
+                    .with_filter(env_filter);
+                subscriber.with(Some(layer)).with(None)
+            }
+            "json" => {
+                let layer = fmt::layer()
+                    .with_writer(io::stderr)
+                    .fmt_fields(fmt::format::JsonFields::default())
+                    .event_format(format().json())
+                    .with_filter(env_filter);
+                subscriber.with(None).with(Some(layer))
+            }
+            v => {
+                unreachable!("file logging format {v} is not supported");
+            }
+        }
     } else {
-        None
+        subscriber.with(None).with(None)
     };
-    let subscriber = subscriber.with(stderr_layer);
 
     // Jaeger layer.
     // TODO: we should support config this in the future.
@@ -124,12 +160,9 @@ pub fn init_logging(name: &str, cfg: &Config, enable_tracing_log: bool) -> Vec<W
     }
     let subscriber = subscriber.with(jaeger_layer);
 
-    let tracing_layer = if enable_tracing_log {
-        let span_rolling_appender = RollingFileAppender::new(
-            Rotation::HOURLY,
-            &cfg.file.dir,
-            &format!("{}-tracing", name),
-        );
+    let tracing_layer = if env::var("DATABEND_TRACING_LOG_ENABLED").is_ok() {
+        let span_rolling_appender =
+            RollingFileAppender::new(Rotation::HOURLY, format!("{}/tracing", cfg.file.dir), name);
         let (writer, writer_guard) = tracing_appender::non_blocking(span_rolling_appender);
         guards.push(writer_guard);
 
@@ -227,7 +260,7 @@ impl QueryLogger {
         v: Singleton<Arc<QueryLogger>>,
     ) -> Result<()> {
         let app_name = format!("databend-query-{}", app_name_shuffle);
-        let mut _log_guards = init_logging(app_name.as_str(), config, false);
+        let mut _log_guards = init_logging(app_name.as_str(), config);
         let query_detail_dir = format!("{}/query-detail", config.file.dir);
 
         v.init(match config.file.on {

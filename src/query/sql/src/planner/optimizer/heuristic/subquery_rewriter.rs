@@ -22,8 +22,6 @@ use common_datavalues::UInt64Type;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
-use common_planner::IndexType;
-use common_planner::MetadataRef;
 
 use crate::binder::ColumnBinding;
 use crate::binder::Visibility;
@@ -49,6 +47,8 @@ use crate::plans::Scalar;
 use crate::plans::ScalarItem;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
+use crate::IndexType;
+use crate::MetadataRef;
 use crate::ScalarExpr;
 
 #[allow(clippy::enum_variant_names)]
@@ -360,7 +360,7 @@ impl SubqueryRewriter {
                 let join_plan = LogicalInnerJoin {
                     left_conditions: vec![],
                     right_conditions: vec![],
-                    other_conditions: vec![],
+                    non_equi_conditions: vec![],
                     join_type: JoinType::Single,
                     marker_index: None,
                     from_correlated_subquery: false,
@@ -450,7 +450,7 @@ impl SubqueryRewriter {
                 let cross_join = LogicalInnerJoin {
                     left_conditions: vec![],
                     right_conditions: vec![],
-                    other_conditions: vec![],
+                    non_equi_conditions: vec![],
                     join_type: JoinType::Cross,
                     marker_index: None,
                     from_correlated_subquery: false,
@@ -476,19 +476,20 @@ impl SubqueryRewriter {
                 });
                 let child_expr = *subquery.child_expr.as_ref().unwrap().clone();
                 let op = subquery.compare_op.as_ref().unwrap().clone();
-                let (right_condition, is_other_condition) =
+                let (right_condition, is_non_equi_condition) =
                     check_child_expr_in_subquery(&child_expr, &op)?;
-                let (left_conditions, right_conditions, other_conditions) = if !is_other_condition {
-                    (vec![left_condition], vec![right_condition], vec![])
-                } else {
-                    let other_condition = Scalar::ComparisonExpr(ComparisonExpr {
-                        op,
-                        left: Box::new(right_condition),
-                        right: Box::new(left_condition),
-                        return_type: Box::new(NullableType::new_impl(BooleanType::new_impl())),
-                    });
-                    (vec![], vec![], vec![other_condition])
-                };
+                let (left_conditions, right_conditions, non_equi_conditions) =
+                    if !is_non_equi_condition {
+                        (vec![left_condition], vec![right_condition], vec![])
+                    } else {
+                        let other_condition = Scalar::ComparisonExpr(ComparisonExpr {
+                            op,
+                            left: Box::new(right_condition),
+                            right: Box::new(left_condition),
+                            return_type: Box::new(NullableType::new_impl(BooleanType::new_impl())),
+                        });
+                        (vec![], vec![], vec![other_condition])
+                    };
                 // Add a marker column to save comparison result.
                 // The column is Nullable(Boolean), the data value is TRUE, FALSE, or NULL.
                 // If subquery contains NULL, the comparison result is TRUE or NULL.
@@ -505,21 +506,20 @@ impl SubqueryRewriter {
                     )
                 };
                 // Consider the sql: select * from t1 where t1.a = any(select t2.a from t2);
-                // Will be transferred to:select t1.a, t2.a, marker_index from t2, t1 where t2.a = t1.a;
-                // Note that subquery is the left table, and it'll be the probe side.
+                // Will be transferred to:select t1.a, t2.a, marker_index from t1, t2 where t2.a = t1.a;
+                // Note that subquery is the right table, and it'll be the build side.
                 let mark_join = LogicalInnerJoin {
-                    left_conditions,
-                    right_conditions,
-                    other_conditions,
-                    join_type: JoinType::LeftMark,
+                    left_conditions: right_conditions,
+                    right_conditions: left_conditions,
+                    non_equi_conditions,
+                    join_type: JoinType::RightMark,
                     marker_index: Some(marker_index),
                     from_correlated_subquery: false,
                 }
                 .into();
-                Ok((
-                    SExpr::create_binary(mark_join, *subquery.subquery.clone(), left.clone()),
-                    UnnestResult::MarkJoin { marker_index },
-                ))
+                let s_expr =
+                    SExpr::create_binary(mark_join, left.clone(), *subquery.subquery.clone());
+                Ok((s_expr, UnnestResult::MarkJoin { marker_index }))
             }
             _ => unreachable!(),
         }
@@ -535,8 +535,8 @@ pub fn check_child_expr_in_subquery(
         Scalar::ConstantExpr(_) => Ok((child_expr.clone(), true)),
         Scalar::CastExpr(cast) => {
             let arg = &cast.argument;
-            let (_, is_other_condition) = check_child_expr_in_subquery(arg, op)?;
-            Ok((child_expr.clone(), is_other_condition))
+            let (_, is_non_equi_condition) = check_child_expr_in_subquery(arg, op)?;
+            Ok((child_expr.clone(), is_non_equi_condition))
         }
         other => Err(ErrorCode::LogicalError(format!(
             "Invalid child expr in subquery: {:?}",

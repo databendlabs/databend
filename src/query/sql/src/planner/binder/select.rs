@@ -30,8 +30,8 @@ use common_datavalues::type_coercion::compare_coercion;
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::IndexType;
 
+use crate::binder::join::JoinConditions;
 use crate::binder::scalar_common::split_conjunctions;
 use crate::binder::CteInfo;
 use crate::binder::Visibility;
@@ -48,6 +48,7 @@ use crate::plans::Scalar;
 use crate::plans::ScalarItem;
 use crate::plans::UnionAll;
 use crate::ColumnBinding;
+use crate::IndexType;
 
 // A normalized IR for `SELECT` clause.
 #[derive(Debug, Default)]
@@ -210,7 +211,7 @@ impl<'a> Binder {
                 ctes_map.insert(table_name, cte_info);
             }
         }
-        let (mut s_expr, mut bind_context) = match query.body {
+        let (mut s_expr, bind_context) = match query.body {
             SetExpr::Select(_) | SetExpr::Query(_) => {
                 self.bind_set_expr(bind_context, &query.body, &query.order_by)
                     .await?
@@ -246,10 +247,6 @@ impl<'a> Binder {
             s_expr = self
                 .bind_limit(&bind_context, s_expr, None, &query.offset)
                 .await?;
-        }
-
-        if let Some(format) = &query.format {
-            bind_context.resolve_format(format.clone())?
         }
 
         Ok((s_expr, bind_context))
@@ -435,14 +432,13 @@ impl<'a> Binder {
                 .into(),
             );
         }
-        let s_expr = self.bind_join_with_type(
-            join_type,
+        let join_conditions = JoinConditions {
             left_conditions,
             right_conditions,
-            vec![],
-            left_expr,
-            right_expr,
-        )?;
+            non_equi_conditions: vec![],
+            other_conditions: vec![],
+        };
+        let s_expr = self.bind_join_with_type(join_type, join_conditions, left_expr, right_expr)?;
         Ok((s_expr, left_context))
     }
 

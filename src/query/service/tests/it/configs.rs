@@ -85,10 +85,12 @@ query_enabled = false
 on = true
 level = "INFO"
 dir = "./.databend/logs"
+format = "json"
 
 [log.stderr]
 on = false
 level = "INFO"
+format = "text"
 
 [meta]
 embedded_dir = "./.databend/meta_embedded"

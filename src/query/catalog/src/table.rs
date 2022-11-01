@@ -20,18 +20,16 @@ use chrono::DateTime;
 use chrono::Utc;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
-use common_expression::DataSchema;
 use common_expression::Scalar;
-use common_legacy_expression::LegacyExpression;
-use common_legacy_planners::DeletePlan;
-use common_legacy_planners::Extras;
-use common_legacy_planners::Partitions;
-use common_legacy_planners::ReadDataSourcePlan;
-use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::MetaId;
 use common_pipeline_core::Pipeline;
+use common_planner::extras::Extras;
+use common_planner::extras::Statistics;
+use common_planner::plans::DeletePlan;
+use common_planner::Expression;
+use common_planner::Partitions;
+use common_planner::ReadDataSourcePlan;
 use common_storage::StorageMetrics;
 
 use crate::table::column_stats_provider_impls::DummyColumnStatisticsProvider;
@@ -89,7 +87,7 @@ pub trait Table: Sync + Send {
         false
     }
 
-    fn cluster_keys(&self) -> Vec<LegacyExpression> {
+    fn cluster_keys(&self) -> Vec<Expression> {
         vec![]
     }
 
@@ -135,7 +133,7 @@ pub trait Table: Sync + Send {
         )))
     }
 
-    fn table_args(&self) -> Option<Vec<LegacyExpression>> {
+    fn table_args(&self) -> Option<Vec<Scalar>> {
         None
     }
 
@@ -225,9 +223,10 @@ pub trait Table: Sync + Send {
         &self,
         ctx: Arc<dyn TableContext>,
         target: CompactTarget,
+        limit: Option<usize>,
         pipeline: &mut Pipeline,
     ) -> Result<Option<Box<dyn TableMutator>>> {
-        let (_, _, _) = (ctx, target, pipeline);
+        let (_, _, _, _) = (ctx, target, limit, pipeline);
 
         Err(ErrorCode::UnImplement(format!(
             "table {},  of engine type {}, does not support compact",

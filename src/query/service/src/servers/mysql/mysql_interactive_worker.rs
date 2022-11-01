@@ -66,6 +66,7 @@ fn has_result_set_by_plan(plan: &Plan) -> bool {
             | Plan::Call(_)
             | Plan::ShowCreateDatabase(_)
             | Plan::ShowCreateTable(_)
+            | Plan::ShowRoles(_)
             | Plan::DescShare(_)
             | Plan::ShowShares(_)
             | Plan::ShowObjectGrantPrivileges(_)
@@ -270,7 +271,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
 
         let authed = user_info.auth_info.auth_mysql(&info.user_password, salt)?;
         if authed {
-            self.session.set_current_user(user_info);
+            self.session.set_authed_user(user_info, None).await?;
         }
         Ok(authed)
     }
@@ -324,6 +325,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
                     None,
                     has_result,
                     schema,
+                    false,
                 ))
             }
             None => {
@@ -332,6 +334,12 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
 
                 let mut planner = Planner::new(context.clone());
                 let (plan, _, _) = planner.plan_sql(query).await?;
+
+                let ignore_result = if let Plan::Query { ignore_result, .. } = plan {
+                    ignore_result
+                } else {
+                    false
+                };
 
                 context.attach_query_str(plan.to_string(), query);
                 let interpreter = InterpreterFactory::get(context.clone(), &plan).await;
@@ -347,6 +355,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
                             extra_info,
                             has_result_set,
                             schema,
+                            ignore_result,
                         ))
                     }
                     Err(e) => {

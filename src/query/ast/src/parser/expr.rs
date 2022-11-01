@@ -671,7 +671,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     );
     let substring = map(
         rule! {
-            SUBSTRING
+            ( SUBSTRING | SUBSTR )
             ~ ^"("
             ~ ^#subexpr(0)
             ~ ( FROM | "," )

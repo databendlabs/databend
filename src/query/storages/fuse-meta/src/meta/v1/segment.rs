@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use common_expression::Chunk;
 use serde::Deserialize;
@@ -34,7 +35,7 @@ pub struct SegmentInfo {
     /// format version
     format_version: FormatVersion,
     /// blocks belong to this segment
-    pub blocks: Vec<BlockMeta>,
+    pub blocks: Vec<Arc<BlockMeta>>,
     /// summary statistics
     pub summary: Statistics,
 }
@@ -99,7 +100,7 @@ impl BlockMeta {
 }
 
 impl SegmentInfo {
-    pub fn new(blocks: Vec<BlockMeta>, summary: Statistics) -> Self {
+    pub fn new(blocks: Vec<Arc<BlockMeta>>, summary: Statistics) -> Self {
         Self {
             format_version: SegmentInfo::VERSION,
             blocks,
@@ -118,7 +119,11 @@ impl From<v0::SegmentInfo> for SegmentInfo {
     fn from(s: v0::SegmentInfo) -> Self {
         Self {
             format_version: SegmentInfo::VERSION,
-            blocks: s.blocks.into_iter().map(|b| b.into()).collect::<_>(),
+            blocks: s
+                .blocks
+                .into_iter()
+                .map(|b| Arc::new(b.into()))
+                .collect::<_>(),
             summary: s.summary,
         }
     }

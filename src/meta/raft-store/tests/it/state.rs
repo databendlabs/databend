@@ -19,13 +19,14 @@ use openraft::storage::HardState;
 use crate::init_raft_store_ut;
 use crate::testing::new_raft_test_context;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[async_entry::test(
+    worker_threads = 3,
+    init = "init_raft_store_ut!()",
+    tracing_span = "debug"
+)]
 async fn test_raft_state_create() -> anyhow::Result<()> {
     // - create a raft state
     // - creating another raft state in the same sled db should fail
-
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
 
     let mut tc = new_raft_test_context();
     let db = &tc.db;
@@ -54,13 +55,14 @@ async fn test_raft_state_create() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[async_entry::test(
+    worker_threads = 3,
+    init = "init_raft_store_ut!()",
+    tracing_span = "debug"
+)]
 async fn test_raft_state_open() -> anyhow::Result<()> {
     // - create a raft state
     // - open it.
-
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
 
     let mut tc = new_raft_test_context();
     let db = &tc.db;
@@ -79,11 +81,12 @@ async fn test_raft_state_open() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[async_entry::test(
+    worker_threads = 3,
+    init = "init_raft_store_ut!()",
+    tracing_span = "debug"
+)]
 async fn test_raft_state_open_or_create() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
-
     let mut tc = new_raft_test_context();
     let db = &tc.db;
     tc.raft_config.id = 3;
@@ -96,12 +99,14 @@ async fn test_raft_state_open_or_create() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[async_entry::test(
+    worker_threads = 3,
+    init = "init_raft_store_ut!()",
+    tracing_span = "debug"
+)]
 async fn test_raft_state_write_read_hard_state() -> anyhow::Result<()> {
     // - create a raft state
     // - write hard_state and the read it.
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
 
     let mut tc = new_raft_test_context();
     let db = &tc.db;
@@ -131,12 +136,14 @@ async fn test_raft_state_write_read_hard_state() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[async_entry::test(
+    worker_threads = 3,
+    init = "init_raft_store_ut!()",
+    tracing_span = "debug"
+)]
 async fn test_raft_state_write_read_state_machine_id() -> anyhow::Result<()> {
     // - create a raft state
     // - write state machine id and the read it.
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
 
     let mut tc = new_raft_test_context();
     let db = &tc.db;
