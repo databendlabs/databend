@@ -84,7 +84,6 @@ build_exceptions! {
     BadBytes(1046),
     InitPrometheusFailure(1047),
     Overflow(1049),
-    InvalidMetaBinaryFormat(1050),
     AuthenticateFailure(1051),
     TLSConfigurationFailure(1052),
     UnknownSession(1053),
