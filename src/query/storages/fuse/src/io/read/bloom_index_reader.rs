@@ -141,13 +141,13 @@ mod util_v1 {
                     .meta_data
                     .as_ref()
                     .ok_or_else(|| {
-                        ErrorCode::InternalError(format!("column meta is none, idx {}", col_idx))
+                        ErrorCode::Internal(format!("column meta is none, idx {}", col_idx))
                     })?
                     .codec;
 
                 // TODO(xuanwo): return a understandable error code to user
                 let compression = Compression::try_from(compression_codec).map_err(|e| {
-                    ErrorCode::InternalError(format!("unrecognized compression: {} ", e))
+                    ErrorCode::Internal(format!("unrecognized compression: {} ", e))
                 })?;
                 let descriptor = file_meta.schema_descr.columns()[col_idx].descriptor.clone();
 
@@ -182,7 +182,7 @@ mod util_v1 {
         let next = tracing::debug_span!("deserializer_next").in_scope(|| deserializer.next());
 
         match next {
-            None => Err(ErrorCode::InternalError(
+            None => Err(ErrorCode::Internal(
                 "deserialize row group: fail to get a chunk",
             )),
             Some(Err(cause)) => Err(ErrorCode::from(cause)),
@@ -257,7 +257,7 @@ mod util_v1 {
                 Ok((bytes, idx))
             }
         } else {
-            Err(ErrorCode::InternalError(format!(
+            Err(ErrorCode::Internal(format!(
                 "failed to find bloom index column. no such column {col_name}"
             )))
         }

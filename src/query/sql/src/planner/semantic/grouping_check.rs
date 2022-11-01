@@ -139,7 +139,7 @@ impl<'a> GroupingChecker<'a> {
                     }
                     .into());
                 }
-                Err(ErrorCode::InternalError("Invalid aggregate function"))
+                Err(ErrorCode::Internal("Invalid aggregate function"))
             }
         }
     }

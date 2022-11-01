@@ -60,15 +60,15 @@ impl TryFrom<ast::WindowFrame> for WindowFrame {
             .map_or(WindowFrameBound::CurrentRow, WindowFrameBound::from);
 
         if let WindowFrameBound::Following(None) = start_bound {
-            Err(ErrorCode::InternalError(
+            Err(ErrorCode::Internal(
                 "Invalid window frame: start bound cannot be unbounded following".to_owned(),
             ))
         } else if let WindowFrameBound::Preceding(None) = end_bound {
-            Err(ErrorCode::InternalError(
+            Err(ErrorCode::Internal(
                 "Invalid window frame: end bound cannot be unbounded preceding".to_owned(),
             ))
         } else if start_bound > end_bound {
-            Err(ErrorCode::InternalError(format!(
+            Err(ErrorCode::Internal(format!(
                 "Invalid window frame: start bound ({}) cannot be larger than end bound ({})",
                 start_bound, end_bound
             )))

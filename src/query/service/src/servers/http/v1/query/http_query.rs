@@ -189,7 +189,7 @@ impl HttpQuery {
                 tokio::time::sleep(Duration::from_millis(1)).await;
                 n += 1;
                 if n > 10 {
-                    return Err(ErrorCode::InternalError("last query stop but not released"));
+                    return Err(ErrorCode::Internal("last query stop but not released"));
                 }
             }
             session

@@ -49,7 +49,7 @@ impl AsyncSink for UnionReceiveSink {
     async fn consume(&mut self, data_block: DataBlock) -> Result<()> {
         if let Some(sender) = self.sender.as_ref() {
             if sender.send(data_block).await.is_err() {
-                return Err(ErrorCode::InternalError("UnionReceiveSink sender failed"));
+                return Err(ErrorCode::Internal("UnionReceiveSink sender failed"));
             };
         }
         Ok(())

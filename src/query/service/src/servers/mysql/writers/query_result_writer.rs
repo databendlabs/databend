@@ -135,7 +135,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                 TypeID::Variant => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 TypeID::VariantArray => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 TypeID::VariantObject => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
-                _ => Err(ErrorCode::UnImplement(format!(
+                _ => Err(ErrorCode::Unimplemented(format!(
                     "Unsupported column type:{:?}",
                     field.data_type()
                 ))),

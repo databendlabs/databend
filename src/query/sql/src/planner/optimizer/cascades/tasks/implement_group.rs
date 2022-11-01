@@ -105,7 +105,7 @@ impl ImplementGroupTask {
                 self.state = ImplementGroupState::Implemented
             }
             _ => {
-                return Err(ErrorCode::InternalError(format!(
+                return Err(ErrorCode::Internal(format!(
                     "Cannot transition state {:?} with event {:?}",
                     &self.state, &event
                 )));

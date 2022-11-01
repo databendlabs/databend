@@ -34,7 +34,7 @@ impl PipelineCompleteExecutor {
         settings: ExecutorSettings,
     ) -> Result<PipelineCompleteExecutor> {
         if !pipeline.is_complete_pipeline()? {
-            return Err(ErrorCode::InternalError(
+            return Err(ErrorCode::Internal(
                 "Logical error, PipelineCompleteExecutor can only work on complete pipeline.",
             ));
         }
@@ -49,7 +49,7 @@ impl PipelineCompleteExecutor {
     ) -> Result<Arc<PipelineCompleteExecutor>> {
         for pipeline in &pipelines {
             if !pipeline.is_complete_pipeline()? {
-                return Err(ErrorCode::InternalError(
+                return Err(ErrorCode::Internal(
                     "Logical error, PipelineCompleteExecutor can only work on complete pipeline.",
                 ));
             }

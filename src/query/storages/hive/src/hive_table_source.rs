@@ -169,7 +169,7 @@ impl Processor for HiveTableSource {
             State::ReadMeta(_) => Ok(Event::Async),
             State::ReadData(_) => Ok(Event::Async),
             State::Deserialize(_, _) => Ok(Event::Sync),
-            State::Generated(_, _, _) => Err(ErrorCode::InternalError("It's a bug.")),
+            State::Generated(_, _, _) => Err(ErrorCode::Internal("It's a bug.")),
         }
     }
 
@@ -183,7 +183,7 @@ impl Processor for HiveTableSource {
                 self.state = State::Generated(hive_blocks, rowgroup_deserializer, data_block);
                 Ok(())
             }
-            _ => Err(ErrorCode::InternalError("It's a bug.")),
+            _ => Err(ErrorCode::Internal("It's a bug.")),
         }
     }
 
@@ -226,7 +226,7 @@ impl Processor for HiveTableSource {
                 self.state = State::Deserialize(hive_blocks, rowgroup_deserializer);
                 Ok(())
             }
-            _ => Err(ErrorCode::InternalError("It's a bug.")),
+            _ => Err(ErrorCode::Internal("It's a bug.")),
         }
     }
 }

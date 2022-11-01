@@ -160,7 +160,7 @@ where
                 check_timestamp(x.to_owned_scalar())?;
             }
         } else {
-            return Err(ErrorCode::InternalError(
+            return Err(ErrorCode::Internal(
                 "LogicalDateType only contains Date/Timestamp",
             ));
         }

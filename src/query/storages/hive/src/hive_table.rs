@@ -243,7 +243,7 @@ impl HiveTable {
         {
             match prj {
                 Projection::Columns(indices) => Ok(indices.clone()),
-                Projection::InnerColumns(_) => Err(ErrorCode::UnImplement(
+                Projection::InnerColumns(_) => Err(ErrorCode::Unimplemented(
                     "does not support projection inner columns",
                 )),
             }
@@ -492,7 +492,7 @@ impl Table for HiveTable {
         _operations: Vec<DataBlock>,
         _overwrite: bool,
     ) -> Result<()> {
-        Err(ErrorCode::UnImplement(format!(
+        Err(ErrorCode::Unimplemented(format!(
             "commit_insertion operation for table {} is not implemented, table engine is {}",
             self.name(),
             self.get_table_info().meta.engine
@@ -500,7 +500,7 @@ impl Table for HiveTable {
     }
 
     async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: bool) -> Result<()> {
-        Err(ErrorCode::UnImplement(format!(
+        Err(ErrorCode::Unimplemented(format!(
             "truncate for table {} is not implemented",
             self.name()
         )))

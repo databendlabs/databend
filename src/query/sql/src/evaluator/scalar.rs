@@ -126,12 +126,12 @@ impl Evaluator {
                 })
             }
 
-            Scalar::SubqueryExpr(_) => Err(ErrorCode::InternalError(
-                "Cannot evaluate subquery expression",
-            )),
-            Scalar::AggregateFunction(_) => Err(ErrorCode::InternalError(
-                "Cannot evaluate aggregate function",
-            )),
+            Scalar::SubqueryExpr(_) => {
+                Err(ErrorCode::Internal("Cannot evaluate subquery expression"))
+            }
+            Scalar::AggregateFunction(_) => {
+                Err(ErrorCode::Internal("Cannot evaluate aggregate function"))
+            }
         }
     }
 }

@@ -216,7 +216,7 @@ impl QueryContextShared {
                 .tables_refs
                 .lock()
                 .get(&table_meta_key)
-                .ok_or_else(|| ErrorCode::InternalError("Logical error, it's a bug."))?
+                .ok_or_else(|| ErrorCode::Internal("Logical error, it's a bug."))?
                 .clone()),
         }
     }

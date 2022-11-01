@@ -59,7 +59,7 @@ impl MExpr {
 
     pub fn child_group<'a>(&'a self, memo: &'a Memo, child_index: usize) -> Result<&'a Group> {
         let group_index = self.children.get(child_index).ok_or_else(|| {
-            ErrorCode::InternalError(format!(
+            ErrorCode::Internal(format!(
                 "child_index {} is out of bound {}",
                 child_index,
                 self.children.len()

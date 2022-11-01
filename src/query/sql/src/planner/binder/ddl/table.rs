@@ -583,7 +583,7 @@ impl<'a> Binder {
                 normalize_identifier(table, &self.name_resolution_ctx).name,
             )
         } else {
-            return Err(ErrorCode::InternalError(
+            return Err(ErrorCode::Internal(
                 "should not happen, parser should have report error already",
             ));
         };

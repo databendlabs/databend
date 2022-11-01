@@ -111,7 +111,7 @@ impl PageManager {
             Ok(self
                 .last_page
                 .as_ref()
-                .ok_or_else(|| ErrorCode::InternalError("last_page is None"))?
+                .ok_or_else(|| ErrorCode::Internal("last_page is None"))?
                 .clone())
         } else {
             let message = format!("wrong page number {}", page_no,);

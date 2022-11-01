@@ -403,7 +403,7 @@ impl BlockReader {
 
     fn try_next_block(&self, deserializer: &mut RowGroupDeserializer) -> Result<DataBlock> {
         match deserializer.next() {
-            None => Err(ErrorCode::InternalError(
+            None => Err(ErrorCode::Internal(
                 "deserializer from row group: fail to get a chunk",
             )),
             Some(Err(cause)) => Err(ErrorCode::from(cause)),

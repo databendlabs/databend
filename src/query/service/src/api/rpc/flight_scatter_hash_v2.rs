@@ -69,7 +69,7 @@ impl HashFlightScatterV2 {
         num_rows: usize,
     ) -> Result<Vec<u64>> {
         if self.hash_functions.len() != hash_keys.len() {
-            return Err(ErrorCode::InternalError(
+            return Err(ErrorCode::Internal(
                 "Hash keys and hash functions must be the same length.",
             ));
         }
@@ -108,7 +108,7 @@ impl HashFlightScatterV2 {
         } else if let Ok(column) = Series::check_get::<ConstColumn>(column) {
             Self::get_hash_values(&column.convert_full_column())
         } else {
-            Err(ErrorCode::InternalError("Hash keys must be of type u64."))
+            Err(ErrorCode::Internal("Hash keys must be of type u64."))
         }
     }
 }
@@ -174,7 +174,7 @@ impl OneHashKeyFlightScatter {
         } else if let Ok(column) = Series::check_get::<ConstColumn>(column) {
             Self::get_hash_values(&column.convert_full_column())
         } else {
-            Err(ErrorCode::InternalError("Hash keys must be of type u64."))
+            Err(ErrorCode::Internal("Hash keys must be of type u64."))
         }
     }
 }

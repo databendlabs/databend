@@ -244,7 +244,7 @@ impl CopyInterpreterV2 {
                 }
                 Ok(())
             }
-            other => Err(ErrorCode::InternalError(format!(
+            other => Err(ErrorCode::Internal(format!(
                 "Cannot list files for the source info: {:?}",
                 other
             ))),
@@ -489,7 +489,7 @@ impl Interpreter for CopyInterpreterV2 {
                     )
                     .await
                 }
-                other => Err(ErrorCode::InternalError(format!(
+                other => Err(ErrorCode::Internal(format!(
                     "Cannot list files for the source info: {:?}",
                     other
                 ))),

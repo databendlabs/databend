@@ -57,7 +57,7 @@ fn to_format_tree(plan: &PhysicalPlan, metadata: &MetadataRef) -> Result<FormatT
         PhysicalPlan::ExchangeSource(_)
         | PhysicalPlan::ExchangeSink(_)
         | PhysicalPlan::DistributedInsertSelect(_) => {
-            Err(ErrorCode::InternalError("Invalid physical plan"))
+            Err(ErrorCode::Internal("Invalid physical plan"))
         }
     }
 }

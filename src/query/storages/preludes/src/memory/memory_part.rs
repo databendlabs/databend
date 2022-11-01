@@ -53,7 +53,7 @@ impl MemoryPartInfo {
     pub fn from_part(info: &PartInfoPtr) -> Result<&MemoryPartInfo> {
         match info.as_any().downcast_ref::<MemoryPartInfo>() {
             Some(part_ref) => Ok(part_ref),
-            None => Err(ErrorCode::InternalError(
+            None => Err(ErrorCode::Internal(
                 "Cannot downcast from PartInfo to MemoryPartInfo.",
             )),
         }

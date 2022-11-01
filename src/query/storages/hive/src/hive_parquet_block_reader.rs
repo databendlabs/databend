@@ -239,7 +239,7 @@ impl HiveParquetBlockReader {
         row_group: &RowGroupMetaData,
     ) -> Result<DataBlockDeserializer> {
         if self.projection.len() != chunks.len() {
-            return Err(ErrorCode::InternalError(
+            return Err(ErrorCode::Internal(
                 "Columns chunk len must be equals projections len.",
             ));
         }

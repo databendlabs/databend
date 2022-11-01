@@ -63,7 +63,7 @@ impl Interpreter for DescribeTableInterpreter {
                 let (plan, _, _) = planner.plan_sql(query).await?;
                 plan.schema()
             } else {
-                return Err(ErrorCode::InternalError(
+                return Err(ErrorCode::Internal(
                     "Logical error, View Table must have a SelectQuery inside.",
                 ));
             }

@@ -104,7 +104,7 @@ impl JoinHashTable {
             }
 
             if self.hash_join_desc.join_type == JoinType::Single && probed_rows.len() > 1 {
-                return Err(ErrorCode::InternalError(
+                return Err(ErrorCode::Internal(
                     "Scalar subquery can't return more than one row",
                 ));
             }

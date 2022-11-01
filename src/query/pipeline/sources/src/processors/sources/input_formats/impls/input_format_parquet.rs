@@ -278,7 +278,7 @@ impl RowGroupInMemory {
             column_chunks.push(array_iters);
         }
         match RowGroupDeserializer::new(column_chunks, self.meta.num_rows(), None).next() {
-            None => Err(ErrorCode::InternalError(
+            None => Err(ErrorCode::Internal(
                 "deserialize from raw group: fail to get a chunk",
             )),
             Some(Ok(chunk)) => Ok(chunk),
@@ -406,7 +406,7 @@ fn get_fields(file_meta: &FileMetaData, schema: &DataSchemaRef) -> Result<Vec<Fi
                 let pair = (f, m);
                 let diff = pair.make_diff("expected_field", "infer_field");
                 // TODO(xuanwo): return a more accurate error code here.
-                return Err(ErrorCode::InternalError(format!(
+                return Err(ErrorCode::Internal(format!(
                     "parquet schema mismatch, differ: {}",
                     diff
                 )));
@@ -415,7 +415,7 @@ fn get_fields(file_meta: &FileMetaData, schema: &DataSchemaRef) -> Result<Vec<Fi
             read_fields.push(m.clone());
         } else {
             // TODO(xuanwo): return a more accurate error code here.
-            return Err(ErrorCode::InternalError(format!(
+            return Err(ErrorCode::Internal(format!(
                 "schema field size mismatch, expected to find column: {}",
                 f.name()
             )));

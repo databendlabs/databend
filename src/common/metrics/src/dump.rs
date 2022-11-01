@@ -91,9 +91,7 @@ pub fn dump_metric_samples(handle: PrometheusHandle) -> Result<Vec<MetricSample>
     let text = handle.render();
     let lines = text.lines().map(|s| Ok(s.to_owned()));
     let samples = prometheus_parse::Scrape::parse(lines)
-        .map_err(|err| {
-            ErrorCode::InternalError(format!("Dump prometheus metrics failed: {:?}", err))
-        })?
+        .map_err(|err| ErrorCode::Internal(format!("Dump prometheus metrics failed: {:?}", err)))?
         .samples
         .into_iter()
         .map(|s| {

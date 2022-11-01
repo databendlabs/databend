@@ -100,7 +100,7 @@ impl PipelineBuilder {
 
         for source_pipeline in &self.pipelines {
             if !source_pipeline.is_complete_pipeline()? {
-                return Err(ErrorCode::InternalError(
+                return Err(ErrorCode::Internal(
                     "Source pipeline must be complete pipeline.",
                 ));
             }
@@ -129,7 +129,7 @@ impl PipelineBuilder {
             PhysicalPlan::DistributedInsertSelect(insert_select) => {
                 self.build_distributed_insert_select(insert_select)
             }
-            PhysicalPlan::Exchange(_) => Err(ErrorCode::InternalError(
+            PhysicalPlan::Exchange(_) => Err(ErrorCode::Internal(
                 "Invalid physical plan with PhysicalPlan::Exchange",
             )),
         }
@@ -256,7 +256,7 @@ impl PipelineBuilder {
         self.build_pipeline(&filter.input)?;
 
         if filter.predicates.is_empty() {
-            return Err(ErrorCode::InternalError(
+            return Err(ErrorCode::Internal(
                 "Invalid empty predicate list".to_string(),
             ));
         }

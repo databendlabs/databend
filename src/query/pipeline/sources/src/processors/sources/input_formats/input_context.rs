@@ -55,7 +55,7 @@ impl InputPlan {
     pub fn as_stream(&self) -> Result<&StreamPlan> {
         match self {
             InputPlan::StreamingLoad(p) => Ok(p),
-            _ => Err(ErrorCode::InternalError("expect StreamingLoad")),
+            _ => Err(ErrorCode::Internal("expect StreamingLoad")),
         }
     }
 }
@@ -81,7 +81,7 @@ pub enum InputSource {
 impl InputSource {
     pub fn take_receiver(&self) -> Result<Receiver<Result<StreamingReadBatch>>> {
         match &self {
-            InputSource::Operator(_) => Err(ErrorCode::InternalError(
+            InputSource::Operator(_) => Err(ErrorCode::Internal(
                 "should not happen: copy with streaming source",
             )),
             InputSource::Stream(i) => {
@@ -96,7 +96,7 @@ impl InputSource {
     pub fn get_operator(&self) -> Result<Operator> {
         match self {
             InputSource::Operator(op) => Ok(op.clone()),
-            InputSource::Stream(_) => Err(ErrorCode::InternalError(
+            InputSource::Stream(_) => Err(ErrorCode::Internal(
                 "should not happen: copy with streaming source",
             )),
         }
@@ -150,7 +150,7 @@ impl InputContext {
                 Ok(Arc::new(InputFormatText::<InputFormatNDJson>::create()))
             }
             StageFileFormatType::Parquet => Ok(Arc::new(InputFormatParquet {})),
-            format => Err(ErrorCode::InternalError(format!(
+            format => Err(ErrorCode::Internal(format!(
                 "Unsupported file format: {:?}",
                 format
             ))),
@@ -300,10 +300,12 @@ impl InputContext {
             StageFileCompression::RawDeflate => Some(CompressAlgorithm::Deflate),
             StageFileCompression::Xz => Some(CompressAlgorithm::Xz),
             StageFileCompression::Lzo => {
-                return Err(ErrorCode::UnImplement("compress type lzo is unimplemented"));
+                return Err(ErrorCode::Unimplemented(
+                    "compress type lzo is unimplemented",
+                ));
             }
             StageFileCompression::Snappy => {
-                return Err(ErrorCode::UnImplement(
+                return Err(ErrorCode::Unimplemented(
                     "compress type snappy is unimplemented",
                 ));
             }

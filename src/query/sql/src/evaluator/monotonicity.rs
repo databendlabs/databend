@@ -77,7 +77,7 @@ impl ExpressionMonotonicityVisitor {
                 let (_, monotonic) = self.stack.remove(0);
                 Ok(monotonic)
             }
-            _ => Err(ErrorCode::InternalError(
+            _ => Err(ErrorCode::Internal(
                 "Stack has too many elements in ExpressionMonotonicityVisitor::finalize",
             )),
         }
@@ -112,7 +112,7 @@ impl ExpressionMonotonicityVisitor {
         for index in 0..args_size {
             match self.stack.pop() {
                 None => {
-                    return Err(ErrorCode::InternalError(format!(
+                    return Err(ErrorCode::Internal(format!(
                         "Expected {} arguments, actual {}.",
                         args_size, index
                     )));

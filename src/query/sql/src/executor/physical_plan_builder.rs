@@ -273,7 +273,7 @@ impl PhysicalPlanBuilder {
                                             if let Scalar::BoundColumnRef(col) = arg {
                                                 input_schema.index_of(&col.column.index.to_string())
                                             } else {
-                                                Err(ErrorCode::InternalError(
+                                                Err(ErrorCode::Internal(
                                                     "Aggregate function argument must be a BoundColumnRef".to_string()
                                                 ))
                                             }
@@ -282,14 +282,14 @@ impl PhysicalPlanBuilder {
                                             if let Scalar::BoundColumnRef(col) = arg {
                                                 Ok(col.column.index)
                                             } else {
-                                                Err(ErrorCode::InternalError(
+                                                Err(ErrorCode::Internal(
                                                     "Aggregate function argument must be a BoundColumnRef".to_string()
                                                 ))
                                             }
                                         }).collect::<Result<_>>()?,
                                     })
                                 } else {
-                                    Err(ErrorCode::InternalError("Expected aggregate function".to_string()))
+                                    Err(ErrorCode::Internal("Expected aggregate function".to_string()))
                                 }
                             }).collect::<Result<_>>()?;
 
@@ -356,7 +356,7 @@ impl PhysicalPlanBuilder {
                                         if let Scalar::BoundColumnRef(col) = arg {
                                             input_schema.index_of(&col.column.index.to_string())
                                         } else {
-                                            Err(ErrorCode::InternalError(
+                                            Err(ErrorCode::Internal(
                                                 "Aggregate function argument must be a BoundColumnRef".to_string()
                                             ))
                                         }
@@ -365,14 +365,14 @@ impl PhysicalPlanBuilder {
                                         if let Scalar::BoundColumnRef(col) = arg {
                                             Ok(col.column.index)
                                         } else {
-                                            Err(ErrorCode::InternalError(
+                                            Err(ErrorCode::Internal(
                                                 "Aggregate function argument must be a BoundColumnRef".to_string()
                                             ))
                                         }
                                     }).collect::<Result<_>>()?,
                                 })
                             } else {
-                                Err(ErrorCode::InternalError("Expected aggregate function".to_string()))
+                                Err(ErrorCode::Internal("Expected aggregate function".to_string()))
                             }
                         }).collect::<Result<_>>()?;
 
@@ -466,7 +466,7 @@ impl PhysicalPlanBuilder {
                     schema: DataSchemaRefExt::create(fields),
                 }))
             }
-            _ => Err(ErrorCode::InternalError(format!(
+            _ => Err(ErrorCode::Internal(format!(
                 "Unsupported physical plan: {:?}",
                 s_expr.plan()
             ))),
@@ -667,7 +667,7 @@ impl<'a> PhysicalScalarBuilder<'a> {
                 target: *cast.target_type.clone(),
             }),
 
-            _ => Err(ErrorCode::InternalError(format!(
+            _ => Err(ErrorCode::Internal(format!(
                 "Unsupported physical scalar: {:?}",
                 scalar
             ))),

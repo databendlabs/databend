@@ -53,7 +53,7 @@ impl NumbersPartInfo {
     pub fn from_part(info: &PartInfoPtr) -> Result<&NumbersPartInfo> {
         match info.as_any().downcast_ref::<NumbersPartInfo>() {
             Some(part_ref) => Ok(part_ref),
-            None => Err(ErrorCode::InternalError(
+            None => Err(ErrorCode::Internal(
                 "Cannot downcast from PartInfo to NumbersPartInfo.",
             )),
         }

@@ -193,7 +193,7 @@ impl Table for StageTable {
 
     // Truncate the stage file.
     async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: bool) -> Result<()> {
-        Err(ErrorCode::UnImplement(
+        Err(ErrorCode::Unimplemented(
             "S3 external table truncate() unimplemented yet!",
         ))
     }

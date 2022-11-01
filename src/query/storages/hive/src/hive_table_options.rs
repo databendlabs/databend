@@ -59,7 +59,7 @@ impl TryFrom<&BTreeMap<String, String>> for HiveTableOptions {
 
         let location = options
             .get(LOCATION)
-            .ok_or_else(|| ErrorCode::InternalError("Hive engine table missing location key"))?
+            .ok_or_else(|| ErrorCode::Internal("Hive engine table missing location key"))?
             .clone();
         let options = HiveTableOptions {
             partition_keys,

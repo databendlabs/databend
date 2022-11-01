@@ -188,7 +188,7 @@ impl UnusedColumnPruner {
                             .take(1)
                             .next()
                             .ok_or_else(|| {
-                                ErrorCode::InternalError("Invalid children without output column")
+                                ErrorCode::Internal("Invalid children without output column")
                             })?,
                     );
                 }
@@ -224,7 +224,7 @@ impl UnusedColumnPruner {
 
             RelOperator::DummyTableScan(_) | RelOperator::UnionAll(_) => Ok(expr.clone()),
 
-            _ => Err(ErrorCode::InternalError(
+            _ => Err(ErrorCode::Internal(
                 "Attempting to prune columns of a physical plan is not allowed",
             )),
         }

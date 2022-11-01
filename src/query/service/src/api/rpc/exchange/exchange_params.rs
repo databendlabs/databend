@@ -80,7 +80,7 @@ impl ShuffleExchangeParams {
             }
         }
 
-        Err(ErrorCode::InternalError("Not found local executor."))
+        Err(ErrorCode::Internal("Not found local executor."))
     }
 }
 

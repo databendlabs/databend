@@ -61,7 +61,7 @@ impl TryFrom<&DataBlock> for AppendOperationLogEntry {
     fn try_from(block: &DataBlock) -> Result<Self, Self::Error> {
         // check schema
         if block.schema() != &AppendOperationLogEntry::schema() {
-            return Err(ErrorCode::InternalError(format!(
+            return Err(ErrorCode::Internal(format!(
                 "invalid data block of AppendOperation log, {:?}",
                 block.schema()
             )));
@@ -83,7 +83,7 @@ impl AppendOperationLogEntry {
         if let DataValue::String(v) = col {
             Ok(String::from_utf8(v.clone())?)
         } else {
-            Err(ErrorCode::InternalError(format!(
+            Err(ErrorCode::Internal(format!(
                 "can not extract string value from data block as \
                  a column of Append Operation log (col: {})",
                 idx

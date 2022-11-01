@@ -79,7 +79,7 @@ impl PipelineExecutor {
         settings: ExecutorSettings,
     ) -> Result<Arc<PipelineExecutor>> {
         if pipelines.is_empty() {
-            return Err(ErrorCode::InternalError("Executor Pipelines is empty."));
+            return Err(ErrorCode::Internal("Executor Pipelines is empty."));
         }
 
         let threads_num = pipelines

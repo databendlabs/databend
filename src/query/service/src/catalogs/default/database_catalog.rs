@@ -395,7 +395,7 @@ impl Catalog for DatabaseCatalog {
                 .exists_database(req.tenant(), &req.new_db_name)
                 .await?
         {
-            return Err(ErrorCode::UnImplement(
+            return Err(ErrorCode::Unimplemented(
                 "Cannot rename table from(to) system databases",
             ));
         }

@@ -93,7 +93,7 @@ impl MetricsTable {
 
     fn display_sample_labels(&self, labels: &HashMap<String, String>) -> Result<String> {
         serde_json::to_string(labels).map_err(|err| {
-            ErrorCode::InternalError(format!(
+            ErrorCode::Internal(format!(
                 "Dump prometheus metrics on display labels: {}",
                 err
             ))
@@ -109,7 +109,7 @@ impl MetricsTable {
             MetricValue::Summary(v) => serde_json::to_string(v),
         }
         .map_err(|err| {
-            ErrorCode::InternalError(format!(
+            ErrorCode::Internal(format!(
                 "Dump prometheus metrics failed on display values: {}",
                 err
             ))

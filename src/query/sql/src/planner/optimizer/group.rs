@@ -87,12 +87,12 @@ impl Group {
     pub fn m_expr(&self, index: IndexType) -> Result<&MExpr> {
         self.m_exprs
             .get(index)
-            .ok_or_else(|| ErrorCode::InternalError(format!("MExpr index {} not found", index)))
+            .ok_or_else(|| ErrorCode::Internal(format!("MExpr index {} not found", index)))
     }
 
     pub fn m_expr_mut(&mut self, index: IndexType) -> Result<&mut MExpr> {
         self.m_exprs
             .get_mut(index)
-            .ok_or_else(|| ErrorCode::InternalError(format!("MExpr index {} not found", index)))
+            .ok_or_else(|| ErrorCode::Internal(format!("MExpr index {} not found", index)))
     }
 }

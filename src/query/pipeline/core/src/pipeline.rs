@@ -70,7 +70,7 @@ impl Pipeline {
     pub fn is_pushing_pipeline(&self) -> Result<bool> {
         match self.pipes.first() {
             Some(pipe) => Ok(pipe.input_size() != 0),
-            None => Err(ErrorCode::InternalError(
+            None => Err(ErrorCode::Internal(
                 "Logical error, call is_pushing on empty pipeline.",
             )),
         }
@@ -80,7 +80,7 @@ impl Pipeline {
     pub fn is_pulling_pipeline(&self) -> Result<bool> {
         match self.pipes.last() {
             Some(pipe) => Ok(pipe.output_size() != 0),
-            None => Err(ErrorCode::InternalError(
+            None => Err(ErrorCode::Internal(
                 "Logical error, call is_pulling on empty pipeline.",
             )),
         }
@@ -148,7 +148,7 @@ impl Pipeline {
     pub fn add_source<F>(&mut self, f: F, numbers: usize) -> Result<()>
     where F: Fn(Arc<OutputPort>) -> Result<ProcessorPtr> {
         if numbers == 0 {
-            return Err(ErrorCode::InternalError(
+            return Err(ErrorCode::Internal(
                 "Source output port numbers cannot be zero.",
             ));
         }
@@ -177,9 +177,9 @@ impl Pipeline {
     /// Add a ResizePipe to pipes
     pub fn resize(&mut self, new_size: usize) -> Result<()> {
         match self.pipes.last() {
-            None => Err(ErrorCode::InternalError("Cannot resize empty pipe.")),
+            None => Err(ErrorCode::Internal("Cannot resize empty pipe.")),
             Some(pipe) if pipe.output_size() == 0 => {
-                Err(ErrorCode::InternalError("Cannot resize empty pipe."))
+                Err(ErrorCode::Internal("Cannot resize empty pipe."))
             }
             Some(pipe) if pipe.output_size() == new_size => Ok(()),
             Some(pipe) => {

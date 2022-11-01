@@ -148,7 +148,7 @@ impl Xor8CodecError {
 
 impl From<Xor8CodecError> for ErrorCode {
     fn from(e: Xor8CodecError) -> Self {
-        ErrorCode::InternalError(e.to_string())
+        ErrorCode::Internal(e.to_string())
     }
 }
 
@@ -162,6 +162,6 @@ impl Xor8BuildingError {
 
 impl From<Xor8BuildingError> for ErrorCode {
     fn from(e: Xor8BuildingError) -> Self {
-        ErrorCode::InternalError(e.to_string())
+        ErrorCode::Internal(e.to_string())
     }
 }

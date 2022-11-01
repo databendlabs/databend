@@ -101,7 +101,7 @@ impl<T: Compactor + Send + 'static> TransformCompact<T> {
             return Ok(Event::NeedData);
         }
 
-        Err(ErrorCode::InternalError("It's a bug"))
+        Err(ErrorCode::Internal("It's a bug"))
     }
 }
 
@@ -119,7 +119,7 @@ impl<T: Compactor + Send + 'static> Processor for TransformCompact<T> {
         match &mut self.state {
             ProcessorState::Finished => Ok(Event::Finished),
             ProcessorState::Consume(_) => self.consume_event(),
-            ProcessorState::Compacting(_) => Err(ErrorCode::InternalError("It's a bug.")),
+            ProcessorState::Compacting(_) => Err(ErrorCode::Internal("It's a bug.")),
             ProcessorState::Compacted(state) => {
                 if state.output_port.is_finished() {
                     state.input_port.finish();
@@ -170,7 +170,7 @@ impl<T: Compactor + Send + 'static> Processor for TransformCompact<T> {
                 debug_assert!(matches!(temp_state, ProcessorState::Finished));
                 Ok(())
             }
-            _ => Err(ErrorCode::InternalError("State invalid. it's a bug.")),
+            _ => Err(ErrorCode::Internal("State invalid. it's a bug.")),
         }
     }
 }
@@ -210,9 +210,7 @@ impl ProcessorState {
                 output_port: state.output_port,
                 blocks: state.input_data_blocks,
             })),
-            _ => Err(ErrorCode::InternalError(
-                "State invalid, must be consume state",
-            )),
+            _ => Err(ErrorCode::Internal("State invalid, must be consume state")),
         }
     }
 
@@ -227,7 +225,7 @@ impl ProcessorState {
                     compacted_blocks,
                 }))
             }
-            _ => Err(ErrorCode::InternalError(
+            _ => Err(ErrorCode::Internal(
                 "State invalid, must be compacted state",
             )),
         }

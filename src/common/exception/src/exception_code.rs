@@ -57,7 +57,7 @@ macro_rules! build_exceptions {
 build_exceptions! {
     Ok(0),
 
-    /// InternalError means this is the internal error that no action
+    /// Internal means this is the internal error that no action
     /// can be taken by neither developers or users.
     /// In most of the time, they are code bugs.
     ///
@@ -69,11 +69,20 @@ build_exceptions! {
     /// This error should never be used to for error checking. An error
     /// that returns as internal error could be assigned a seperate error
     /// code at anytime.
-    InternalError(1001),
+    Internal(1001),
+
+    /// Unimplemented means the error indicates this is a not implemented feature.
+    ///
+    /// Deveopers could implement this at anytime.
+    ///
+    /// # Notes
+    ///
+    /// It's OK to use this error code for not implemetned feature in
+    /// our dependences. For example, in arrow.
+    Unimplemented(1002),
 
     // Legacy error codes, we will refactor them one by one.
 
-    UnImplement(1002),
     UnknownDatabase(1003),
     UnknownDatabaseId(1004),
     SyntaxException(1005),
@@ -130,7 +139,7 @@ build_exceptions! {
     TableInfoError(1106),
     ReadTableDataError(1107),
 
-    // Parquet Related Errors
+    /// Related Errors
 
     /// ParquetFileInvalid is used when given parquet file is invalid.
     ParquetFileInvalid(1201),

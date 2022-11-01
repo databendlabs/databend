@@ -665,7 +665,7 @@ impl SubqueryRewriter {
             | RelOperator::LogicalGet(_)
             | RelOperator::PhysicalScan(_)
             | RelOperator::DummyTableScan(_)
-            | RelOperator::PhysicalHashJoin(_) => Err(ErrorCode::InternalError(
+            | RelOperator::PhysicalHashJoin(_) => Err(ErrorCode::Internal(
                 "Invalid plan type for flattening subquery",
             )),
         }
@@ -757,7 +757,7 @@ impl SubqueryRewriter {
                     target_type: cast_expr.target_type.clone(),
                 }))
             }
-            _ => Err(ErrorCode::InternalError(
+            _ => Err(ErrorCode::Internal(
                 "Invalid scalar for flattening subquery",
             )),
         }

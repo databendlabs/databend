@@ -58,7 +58,7 @@ impl QueryFragmentsPlanPacket {
 impl Packet for QueryFragmentsPlanPacket {
     async fn commit(&self, config: &Config, timeout: u64) -> Result<()> {
         if !self.executors_info.contains_key(&self.executor) {
-            return Err(ErrorCode::InternalError(format!(
+            return Err(ErrorCode::Internal(format!(
                 "Not found {} node in cluster",
                 &self.executor
             )));

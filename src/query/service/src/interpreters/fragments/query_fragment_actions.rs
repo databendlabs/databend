@@ -132,7 +132,7 @@ impl QueryFragmentsActions {
 
     pub fn get_root_actions(&self) -> Result<&QueryFragmentActions> {
         match self.fragments_actions.last() {
-            None => Err(ErrorCode::InternalError(
+            None => Err(ErrorCode::Internal(
                 "Logical error, call get_root_actions in empty QueryFragmentsActions",
             )),
             Some(entity) => Ok(entity),
@@ -158,7 +158,7 @@ impl QueryFragmentsActions {
 
     pub fn update_root_fragment_actions(&mut self, actions: QueryFragmentActions) -> Result<()> {
         if self.fragments_actions.is_empty() {
-            return Err(ErrorCode::InternalError(
+            return Err(ErrorCode::Internal(
                 "Logical error, cannot update last element for empty actions.",
             ));
         }

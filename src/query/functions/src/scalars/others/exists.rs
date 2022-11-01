@@ -64,17 +64,17 @@ impl Function for ExistsFunction {
                         let c = Series::from_data(vec![!values.is_empty()]);
                         Ok(ConstColumn::new(c, input_rows).arc())
                     } else {
-                        Err(ErrorCode::InternalError(
+                        Err(ErrorCode::Internal(
                             "Logical error: subquery result set must be Struct(List(Some)).",
                         ))
                     }
                 }
-                _ => Err(ErrorCode::InternalError(
+                _ => Err(ErrorCode::Internal(
                     "Logical error: subquery result set must be List(Some) or Struct(List(Some)).",
                 )),
             }
         } else {
-            Err(ErrorCode::InternalError(
+            Err(ErrorCode::Internal(
                 "Logical error: subquery result set must be const.",
             ))
         }

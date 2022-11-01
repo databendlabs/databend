@@ -40,9 +40,7 @@ impl HashFlightScatter {
         num: usize,
     ) -> Result<Self> {
         match expr {
-            None => Err(ErrorCode::InternalError(
-                "Hash flight scatter need expression.",
-            )),
+            None => Err(ErrorCode::Internal("Hash flight scatter need expression.")),
             Some(expr) => HashFlightScatter::try_create_impl(schema, num, expr, ctx),
         }
     }

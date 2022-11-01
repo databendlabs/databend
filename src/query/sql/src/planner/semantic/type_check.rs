@@ -131,7 +131,7 @@ impl<'a> TypeChecker<'a> {
             if scalar.is_deterministic() {
                 evaluator.try_eval_const(&func_ctx)
             } else {
-                Err(ErrorCode::InternalError(
+                Err(ErrorCode::Internal(
                     "Constant folding requires the function deterministic",
                 ))
             }

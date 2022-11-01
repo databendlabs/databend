@@ -84,7 +84,7 @@ impl RangeFilter {
 
     pub fn try_eval_const(&self) -> Result<bool> {
         if !self.stat_columns.is_empty() {
-            return Err(ErrorCode::InternalError(
+            return Err(ErrorCode::Internal(
                 "Constant folding requires the args are constant",
             ));
         }
