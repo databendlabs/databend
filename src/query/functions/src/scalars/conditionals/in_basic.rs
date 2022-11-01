@@ -77,7 +77,7 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
         _columns: &ColumnsWithField,
         _input_rows: usize,
     ) -> Result<ColumnRef> {
-        Result::Err(ErrorCode::LogicalError("Should use in_evaulator"))
+        Result::Err(ErrorCode::InternalError("Should use in_evaulator"))
     }
 }
 

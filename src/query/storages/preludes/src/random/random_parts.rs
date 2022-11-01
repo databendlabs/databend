@@ -47,7 +47,7 @@ impl RandomPartInfo {
     pub fn from_part(info: &PartInfoPtr) -> Result<&RandomPartInfo> {
         match info.as_any().downcast_ref::<RandomPartInfo>() {
             Some(part_ref) => Ok(part_ref),
-            None => Err(ErrorCode::LogicalError(
+            None => Err(ErrorCode::InternalError(
                 "Cannot downcast from PartInfo to RandomPartInfo.",
             )),
         }

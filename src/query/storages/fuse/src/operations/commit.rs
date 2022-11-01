@@ -463,7 +463,7 @@ impl FuseTable {
                             .read_table_snapshot()
                             .await?
                             .ok_or_else(|| {
-                                ErrorCode::LogicalError(
+                                ErrorCode::InternalError(
                                     "mutation meets empty snapshot during conflict reconciliation",
                                 )
                             })?;

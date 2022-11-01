@@ -231,7 +231,9 @@ impl Processor for FuseTableSink {
                 self.ctx.push_precommit_block(data_block);
             }
             _state => {
-                return Err(ErrorCode::LogicalError("Unknown state for fuse table sink"));
+                return Err(ErrorCode::InternalError(
+                    "Unknown state for fuse table sink",
+                ));
             }
         }
 
@@ -286,7 +288,7 @@ impl Processor for FuseTableSink {
                 self.state = State::PreCommitSegment { location, segment };
             }
             _state => {
-                return Err(ErrorCode::LogicalError(
+                return Err(ErrorCode::InternalError(
                     "Unknown state for fuse table sink.",
                 ));
             }

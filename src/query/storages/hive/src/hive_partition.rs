@@ -72,7 +72,7 @@ impl HivePartInfo {
     pub fn from_part(info: &PartInfoPtr) -> Result<&HivePartInfo> {
         match info.as_any().downcast_ref::<HivePartInfo>() {
             Some(part_ref) => Ok(part_ref),
-            None => Err(ErrorCode::LogicalError(
+            None => Err(ErrorCode::InternalError(
                 "Cannot downcast from PartInfo to HivePartInfo.",
             )),
         }

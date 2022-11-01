@@ -252,7 +252,7 @@ impl Processor for StageTableSink {
                 }
             }
             _state => {
-                return Err(ErrorCode::LogicalError(
+                return Err(ErrorCode::InternalError(
                     "Unknown state for stage table sink.",
                 ));
             }
@@ -291,7 +291,7 @@ impl Processor for StageTableSink {
                 Ok(())
             }
             _state => {
-                return Err(ErrorCode::LogicalError(
+                return Err(ErrorCode::InternalError(
                     "Unknown state for stage table sink.",
                 ));
             }

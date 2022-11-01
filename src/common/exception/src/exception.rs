@@ -184,9 +184,10 @@ impl Display for ErrorCode {
 }
 
 impl ErrorCode {
+    /// All std error will be converted to InternalError
     pub fn from_std_error<T: std::error::Error>(error: T) -> Self {
         ErrorCode {
-            code: 1002,
+            code: 1001,
             display_text: error.to_string(),
             cause: None,
             backtrace: Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::capture()))),

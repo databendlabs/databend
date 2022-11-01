@@ -78,7 +78,7 @@ impl CascadesOptimizer {
             .memo
             .root()
             .ok_or_else(|| {
-                ErrorCode::LogicalError("Root group cannot be None after initialization")
+                ErrorCode::InternalError("Root group cannot be None after initialization")
             })?
             .group_index;
 
@@ -113,11 +113,11 @@ impl CascadesOptimizer {
     fn find_optimal_plan(&self, group_index: IndexType) -> Result<SExpr> {
         let group = self.memo.group(group_index)?;
         let cost_context = self.best_cost_map.get(&group_index).ok_or_else(|| {
-            ErrorCode::LogicalError(format!("Cannot find CostContext of group: {group_index}"))
+            ErrorCode::InternalError(format!("Cannot find CostContext of group: {group_index}"))
         })?;
 
         let m_expr = group.m_exprs.get(cost_context.expr_index).ok_or_else(|| {
-            ErrorCode::LogicalError(format!(
+            ErrorCode::InternalError(format!(
                 "Cannot find best expression of group: {group_index}"
             ))
         })?;

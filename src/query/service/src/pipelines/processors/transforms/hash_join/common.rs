@@ -105,7 +105,7 @@ impl JoinHashTable {
                 .hash_join_desc
                 .marker_join_desc
                 .marker_index
-                .ok_or_else(|| ErrorCode::LogicalError("Invalid mark join"))?
+                .ok_or_else(|| ErrorCode::InternalError("Invalid mark join"))?
                 .to_string(),
             NullableType::new_impl(BooleanType::new_impl()),
         )]);

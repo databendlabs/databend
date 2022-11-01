@@ -56,7 +56,7 @@ impl<'a> Binder {
             )
         } else {
             // we do not support USING clause yet
-            return Err(ErrorCode::LogicalError(
+            return Err(ErrorCode::InternalError(
                 "should not happen, parser should have report error already",
             ));
         };

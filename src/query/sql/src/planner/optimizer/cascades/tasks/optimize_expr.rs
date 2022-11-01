@@ -153,7 +153,7 @@ impl OptimizeExprTask {
         let mut cost = Cost::from(0);
         for child in m_expr.children.iter() {
             let cost_context = optimizer.best_cost_map.get(child).ok_or_else(|| {
-                ErrorCode::LogicalError(format!("Cannot find CostContext of group: {child}"))
+                ErrorCode::InternalError(format!("Cannot find CostContext of group: {child}"))
             })?;
 
             cost = cost + cost_context.cost;

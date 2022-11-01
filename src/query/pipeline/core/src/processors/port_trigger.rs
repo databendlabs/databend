@@ -50,7 +50,7 @@ impl DirectedEdge {
         match self {
             DirectedEdge::Source(edge_index) => match graph.edge_endpoints(*edge_index) {
                 Some((_source, target)) => Ok(target),
-                None => Err(ErrorCode::LogicalError(format!(
+                None => Err(ErrorCode::InternalError(format!(
                     "Cannot found edge in graph, edge_index: {:?}, graph: {:?}",
                     edge_index,
                     Dot::with_config(graph, &[Config::NodeIndexLabel, Config::EdgeIndexLabel])
@@ -58,7 +58,7 @@ impl DirectedEdge {
             },
             DirectedEdge::Target(edge_index) => match graph.edge_endpoints(*edge_index) {
                 Some((target, _source)) => Ok(target),
-                None => Err(ErrorCode::LogicalError(format!(
+                None => Err(ErrorCode::InternalError(format!(
                     "Cannot found edge in graph, edge_index: {:?}, graph: {:?}",
                     edge_index,
                     Dot::with_config(graph, &[Config::NodeIndexLabel, Config::EdgeIndexLabel])

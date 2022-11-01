@@ -282,7 +282,7 @@ impl<TAggregator: Aggregator + 'static> AggregatorTransform<TAggregator> {
                     output_data_block: None,
                 }))
             }
-            _ => Err(ErrorCode::LogicalError("")),
+            _ => Err(ErrorCode::InternalError("")),
         }
     }
 }
@@ -342,7 +342,7 @@ impl<TAggregator: Aggregator + 'static> AggregatorTransform<TAggregator> {
             };
         }
 
-        Err(ErrorCode::LogicalError("It's a bug"))
+        Err(ErrorCode::InternalError("It's a bug"))
     }
 
     #[inline(always)]
@@ -376,7 +376,7 @@ impl<TAggregator: Aggregator + 'static> AggregatorTransform<TAggregator> {
             return Ok(Event::Sync);
         }
 
-        Err(ErrorCode::LogicalError("It's a bug"))
+        Err(ErrorCode::InternalError("It's a bug"))
     }
 }
 

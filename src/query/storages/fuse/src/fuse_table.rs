@@ -139,7 +139,7 @@ impl FuseTable {
             .options()
             .get(OPT_KEY_DATABASE_ID)
             .ok_or_else(|| {
-                ErrorCode::LogicalError(format!(
+                ErrorCode::InternalError(format!(
                     "Invalid fuse table, table option {} not found",
                     OPT_KEY_DATABASE_ID
                 ))
@@ -191,7 +191,7 @@ impl FuseTable {
 
     pub fn try_from_table(tbl: &dyn Table) -> Result<&FuseTable> {
         tbl.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
-            ErrorCode::LogicalError(format!(
+            ErrorCode::InternalError(format!(
                 "expects table of engine FUSE, but got {}",
                 tbl.engine()
             ))

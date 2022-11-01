@@ -120,7 +120,7 @@ impl PlanFragment {
     /// Redistribute partitions of current source fragment to executors.
     fn redistribute_source_fragment(&self, ctx: Arc<QueryContext>) -> Result<QueryFragmentActions> {
         if self.fragment_type != FragmentType::Source {
-            return Err(ErrorCode::LogicalError(
+            return Err(ErrorCode::InternalError(
                 "Cannot redistribute a non-source fragment".to_string(),
             ));
         }
@@ -166,7 +166,7 @@ impl PlanFragment {
 
     fn get_read_source(&self) -> Result<ReadDataSourcePlan> {
         if self.fragment_type != FragmentType::Source {
-            return Err(ErrorCode::LogicalError(
+            return Err(ErrorCode::InternalError(
                 "Cannot get read source from a non-source fragment".to_string(),
             ));
         }
@@ -187,7 +187,7 @@ impl PlanFragment {
         );
 
         if source.len() != 1 {
-            Err(ErrorCode::LogicalError(
+            Err(ErrorCode::InternalError(
                 "Invalid source fragment with multiple table scan".to_string(),
             ))
         } else {

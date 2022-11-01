@@ -58,7 +58,7 @@ impl Memo {
 
     pub fn set_group_state(&mut self, group_index: IndexType, state: GroupState) -> Result<()> {
         let group = self.groups.get_mut(group_index).ok_or_else(|| {
-            ErrorCode::LogicalError(format!("Group index {} not found", group_index))
+            ErrorCode::InternalError(format!("Group index {} not found", group_index))
         })?;
         group.state = state;
         Ok(())
@@ -117,7 +117,7 @@ impl Memo {
     pub fn group(&self, index: IndexType) -> Result<&Group> {
         self.groups
             .get(index)
-            .ok_or_else(|| ErrorCode::LogicalError(format!("Group index {} not found", index)))
+            .ok_or_else(|| ErrorCode::InternalError(format!("Group index {} not found", index)))
     }
 
     pub fn insert_m_expr(&mut self, group_index: IndexType, m_expr: MExpr) -> Result<()> {
@@ -131,7 +131,7 @@ impl Memo {
     pub fn group_mut(&mut self, index: IndexType) -> Result<&mut Group> {
         self.groups
             .get_mut(index)
-            .ok_or_else(|| ErrorCode::LogicalError(format!("Group index {} not found", index)))
+            .ok_or_else(|| ErrorCode::InternalError(format!("Group index {} not found", index)))
     }
 
     fn add_group(&mut self, relational_prop: RelationalProperty) -> IndexType {

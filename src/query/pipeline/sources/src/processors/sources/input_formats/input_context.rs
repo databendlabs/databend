@@ -150,7 +150,7 @@ impl InputContext {
                 Ok(Arc::new(InputFormatText::<InputFormatNDJson>::create()))
             }
             StageFileFormatType::Parquet => Ok(Arc::new(InputFormatParquet {})),
-            format => Err(ErrorCode::LogicalError(format!(
+            format => Err(ErrorCode::InternalError(format!(
                 "Unsupported file format: {:?}",
                 format
             ))),

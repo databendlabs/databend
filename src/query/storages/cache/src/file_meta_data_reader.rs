@@ -48,8 +48,8 @@ impl Loader<FileMetaData> for Operator {
         } else {
             object.seekable_reader(..)
         };
-        read_metadata_async(&mut reader)
-            .await
-            .map_err(|err| ErrorCode::ParquetError(format!("read meta failed, {}, {:?}", key, err)))
+        read_metadata_async(&mut reader).await.map_err(|err| {
+            ErrorCode::InternalError(format!("read file meta failed, {}, {:?}", key, err))
+        })
     }
 }

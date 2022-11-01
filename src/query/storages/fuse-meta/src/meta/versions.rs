@@ -85,7 +85,7 @@ mod converters {
                     ver_eq::<_, 0>(PhantomData),
                 )),
                 1 => Ok(SegmentInfoVersion::V1(ver_eq::<_, 1>(PhantomData))),
-                _ => Err(ErrorCode::LogicalError(format!(
+                _ => Err(ErrorCode::InternalError(format!(
                     "unknown segment version {value}, versions supported: 0, 1"
                 ))),
             }
@@ -98,7 +98,7 @@ mod converters {
             match value {
                 0 => Ok(SnapshotVersion::V0(ver_eq::<_, 0>(PhantomData))),
                 1 => Ok(SnapshotVersion::V1(ver_eq::<_, 1>(PhantomData))),
-                _ => Err(ErrorCode::LogicalError(format!(
+                _ => Err(ErrorCode::InternalError(format!(
                     "unknown snapshot segment version {value}, versions supported: 0, 1"
                 ))),
             }
@@ -115,7 +115,7 @@ mod converters {
                 2 => Ok(BlockBloomFilterIndexVersion::V2(ver_eq::<_, 2>(
                     PhantomData,
                 ))),
-                _ => Err(ErrorCode::LogicalError(format!(
+                _ => Err(ErrorCode::InternalError(format!(
                     "unknown block bloom filer index version {value}, versions supported: 1"
                 ))),
             }

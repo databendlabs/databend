@@ -24,7 +24,7 @@ pub static ABORT_SESSION: u16 = 1042;
 pub static ABORT_QUERY: u16 = 1043;
 
 macro_rules! build_exceptions {
-    ($($body:ident($code:expr)),*$(,)*) => {
+    ($($(#[$meta:meta])* $body:ident($code:expr)),*$(,)*) => {
             impl ErrorCode {
                 $(
                 pub fn $body(display_text: impl Into<String>) -> ErrorCode {
@@ -53,6 +53,14 @@ macro_rules! build_exceptions {
 // Internal errors [0, 2000].
 build_exceptions! {
     Ok(0),
+
+    /// InternalError means this is the internal error that no action
+    /// can be taken by neither developers or users.
+    /// In most of the time, they are code bugs.
+    InternalError(1001),
+
+    // Legacy error codes, we will refactor them one by one.
+
     UnImplement(1002),
     UnknownDatabase(1003),
     UnknownDatabaseId(1004),
@@ -61,14 +69,10 @@ build_exceptions! {
     IllegalDataType(1007),
     UnknownFunction(1008),
     BadDataValueType(1010),
-    IllegalPipelineState(1012),
-    LogicalError(1015),
     EmptyData(1016),
     DataStructMissMatch(1017),
     BadDataArrayLength(1018),
     UnknownTableId(1020),
-    BadOption(1022),
-    ParquetError(1024),
     UnknownTable(1025),
     UnknownAggregateFunction(1027),
     NumberArgumentsNotMatch(1028),
@@ -96,37 +100,34 @@ build_exceptions! {
     PermissionDenied(1063),
     UnmarshalError(1064),
     SemanticError(1065),
-
-    // Uncategorized error codes.
     UnknownException(1067),
     TokioError(1068),
-
-    // Http query error codes.
     HttpNotFound(1072),
-
     UnknownFormat(1074),
     UnknownCompressionType(1075),
     InvalidCompressionData(1076),
-
     InvalidAuthInfo(1077),
     InvalidTimezone(1078),
     InvalidDate(1079),
     InvalidTimestamp(1080),
     InvalidClusterKeys(1081),
     UnknownFragmentExchange(1082),
-    InternalError(1083),
-
-    // Tenant error codes.
     TenantIsEmpty(1101),
     IndexOutOfBounds(1102),
-
-    // Layout error code.
     LayoutError(1103),
-
     PanicError(1104),
-
     TableInfoError(1106),
     ReadTableDataError(1107),
+
+    // Parquet Related Errors
+
+    /// ParquetFileInvalid is used when given parquet file is invalid.
+    ParquetFileInvalid(1201),
+
+    // Table related errors starts here.
+
+    /// TableOptionInvalid is used when users input an invalid option.
+    TableOptionInvalid(1301),
 }
 
 // Metasvr errors [2001, 3000].
