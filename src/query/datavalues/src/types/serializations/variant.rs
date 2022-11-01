@@ -20,7 +20,8 @@ use serde_json;
 use serde_json::Value;
 
 use crate::prelude::*;
-use crate::serializations::{write_csv_string, write_escaped_string};
+use crate::serializations::write_csv_string;
+use crate::serializations::write_escaped_string;
 use crate::serializations::write_json_string;
 
 #[derive(Debug, Clone)]
