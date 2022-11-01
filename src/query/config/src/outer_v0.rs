@@ -150,6 +150,7 @@ impl From<InnerConfig> for Config {
             log: inner.log.into(),
             meta: inner.meta.into(),
             storage: inner.storage.into(),
+
             catalog: inner.catalog.into(),
         }
     }
