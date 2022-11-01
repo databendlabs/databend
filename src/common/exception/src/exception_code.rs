@@ -101,8 +101,6 @@ build_exceptions! {
     UnknownException(1067),
     TokioError(1068),
 
-    // Pipeline executor error codes.
-    PipelineUnInitialized(1071),
 
     // Http query error codes.
     HttpNotFound(1072),
