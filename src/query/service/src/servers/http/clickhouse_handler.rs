@@ -52,7 +52,7 @@ use tracing::info;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterPtr;
 use crate::servers::http::v1::HttpQueryContext;
-use crate::servers::http::CLickHouseFederated;
+use crate::servers::http::ClickHouseFederated;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
 use crate::sessions::TableContext;
@@ -189,7 +189,7 @@ pub async fn clickhouse_handler_get(
 
     let default_format = get_default_format(&params, headers).map_err(BadRequest)?;
     let sql = params.query();
-    if let Some(block) = CLickHouseFederated::check(&sql) {
+    if let Some(block) = ClickHouseFederated::check(&sql) {
         return serialize_one_block(context.clone(), block, &sql, &params, default_format)
             .map_err(InternalServerError);
     }
@@ -244,7 +244,7 @@ pub async fn clickhouse_handler_post(
     };
     info!("receive clickhouse http post, (query + body) = {}", &msg);
 
-    if let Some(block) = CLickHouseFederated::check(&sql) {
+    if let Some(block) = ClickHouseFederated::check(&sql) {
         return serialize_one_block(ctx.clone(), block, &sql, &params, default_format)
             .map_err(InternalServerError);
     }
@@ -356,7 +356,7 @@ fn serialize_one_block(
     default_format: OutputFormatType,
 ) -> Result<WithContentType<Body>> {
     let format_setting = ctx.get_format_settings()?;
-    let fmt = match CLickHouseFederated::get_format(sql) {
+    let fmt = match ClickHouseFederated::get_format(sql) {
         Some(format) => OutputFormatType::from_str(format.as_str())?,
         None => default_format,
     };

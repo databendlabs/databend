@@ -22,12 +22,12 @@ use crate::servers::federated_helper::FederatedHelper;
 
 const CLICKHOUSE_VERSION: &str = "8.12.14";
 
-pub struct CLickHouseFederated {}
+pub struct ClickHouseFederated {}
 
 static FORMAT_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r".*(?i)FORMAT\s*([[:alpha:]]*)\s*;?$").unwrap());
 
-impl CLickHouseFederated {
+impl ClickHouseFederated {
     // Build block for select function.
     // Format:
     // |function_name()|

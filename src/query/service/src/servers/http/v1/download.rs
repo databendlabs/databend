@@ -32,7 +32,7 @@ pub type SendableVu8Stream =
     std::pin::Pin<Box<dyn futures::stream::Stream<Item = Result<Vec<u8>>> + Send>>;
 
 #[async_trait::async_trait]
-pub trait Dowloader {
+pub trait Downloader {
     async fn download(
         &self,
         ctx: Arc<QueryContext>,
@@ -42,7 +42,7 @@ pub trait Dowloader {
 }
 
 #[async_trait::async_trait]
-impl Dowloader for ResultTable {
+impl Downloader for ResultTable {
     async fn download(
         &self,
         ctx: Arc<QueryContext>,
