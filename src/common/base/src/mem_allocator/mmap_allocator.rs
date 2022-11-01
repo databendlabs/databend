@@ -258,17 +258,28 @@ pub mod linux {
             let mut uname = unsafe { std::mem::zeroed::<libc::utsname>() };
             assert_ne!(-1, unsafe { libc::uname(&mut uname) });
             let mut length = 0usize;
-            while length < uname.release.len() && uname.release[length] != 0 {
+
+            // refer: https://semver.org/
+            while length < uname.release.len()
+                && uname.release[length] != 0
+                && uname.release[length] != b'_' as i8
+            {
                 length += 1;
             }
+            // fallback to (5.13.0)
+            let fallback_version = 5u32 << 16 | 13u32 << 8;
             let slice = unsafe { &*(&uname.release[..length] as *const _ as *const [u8]) };
-            let ver = std::str::from_utf8(slice).unwrap();
-            let semver = semver::Version::parse(ver).unwrap();
-            let result = (semver.major.min(65535) as u32) << 16
-                | (semver.minor.min(255) as u32) << 8
-                | (semver.patch.min(255) as u32);
-            CACHE.store(result, Ordering::Relaxed);
-            result
+            match std::str::from_utf8(slice) {
+                Ok(ver) => match semver::Version::parse(ver) {
+                    Ok(semver) => {
+                        (semver.major.min(65535) as u32) << 16
+                            | (semver.minor.min(255) as u32) << 8
+                            | (semver.patch.min(255) as u32)
+                    }
+                    Err(_) => fallback_version,
+                },
+                Err(_) => fallback_version,
+            }
         } else {
             fetch
         };
@@ -331,5 +342,32 @@ pub mod fallback {
         ) -> Result<NonNull<[u8]>, AllocError> {
             self.allocator.shrink(ptr, old_layout, new_layout)
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+
+    #[test]
+    fn test_semver() {
+        let uname_release: Vec<u8> =
+            "4.18.0-2.4.3.xyz.x86_64.fdsf.fdsfsdfsdf.fdsafdsf\0\0\0cxzcxzcxzc"
+                .as_bytes()
+                .to_vec();
+        let mut length = 0;
+        while length < uname_release.len()
+            && uname_release[length] != 0
+            && uname_release[length] != b'_'
+        {
+            length += 1;
+        }
+        let slice = unsafe { &*(&uname_release[..length] as *const _ as *const [u8]) };
+        let ver = std::str::from_utf8(slice).unwrap();
+        let version = semver::Version::parse(ver);
+        assert!(version.is_ok());
+        let version = version.unwrap();
+        assert_eq!(version.major, 4);
+        assert_eq!(version.minor, 18);
+        assert_eq!(version.patch, 0);
     }
 }
