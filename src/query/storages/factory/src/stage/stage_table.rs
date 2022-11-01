@@ -35,7 +35,7 @@ use common_storage::init_operator;
 use opendal::layers::SubdirLayer;
 use opendal::Operator;
 use parking_lot::Mutex;
-use tracing::info;
+use tracing::debug;
 
 use super::stage_table_sink::StageTableSink;
 use crate::Table;
@@ -105,7 +105,7 @@ impl Table for StageTable {
             )
             .await?,
         );
-        info!("copy into {:?}", input_ctx);
+        debug!("copy into {:?}", input_ctx);
         let mut guard = self.input_context.lock();
         *guard = Some(input_ctx);
         Ok((Statistics::default(), vec![]))
