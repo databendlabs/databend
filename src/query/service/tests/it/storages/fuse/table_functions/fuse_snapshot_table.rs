@@ -178,7 +178,7 @@ async fn test_fuse_snapshot_table_read() -> Result<()> {
         let output_stream = execute_query(ctx.clone(), qry.as_str()).await?;
         expects_err(
             "unsupported_table_engine",
-            ErrorCode::logical_error_code(),
+            ErrorCode::internal_error_code(),
             output_stream.collect::<Result<Vec<DataBlock>>>().await,
         );
     }
