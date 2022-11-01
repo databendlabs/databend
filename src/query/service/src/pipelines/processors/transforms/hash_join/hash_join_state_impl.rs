@@ -428,10 +428,20 @@ impl HashJoinState for JoinHashTable {
     }
 
     fn left_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
+        if self.hash_join_desc.join_type == JoinType::Full
+            && self.hash_join_desc.other_predicate.is_none()
+        {
+            let rest_build_indexes = self.hash_join_desc.join_state.rest_build_indexes.read();
+            let mut build_indexes = self.hash_join_desc.join_state.build_indexes.write();
+            build_indexes.extend((*rest_build_indexes).clone());
+        }
         // Get rest blocks
         let mut input_blocks = blocks.to_vec();
         let mut rest_block = self.rest_block()?;
-        if self.hash_join_desc.other_predicate.is_none() || rest_block.is_empty() {
+        if rest_block.is_empty() {
+            return Ok(input_blocks);
+        }
+        if self.hash_join_desc.other_predicate.is_none() {
             input_blocks.push(rest_block);
             return Ok(input_blocks);
         }

@@ -70,7 +70,7 @@ impl JoinHashTable {
         let dummy_probed_rows = vec![RowPtr {
             row_index: 0,
             chunk_index: 0,
-            marker: None,
+            marker: Some(MarkerKind::False),
         }];
 
         // Start to probe hash table
@@ -84,19 +84,6 @@ impl JoinHashTable {
                 None => (false, &dummy_probed_rows),
                 Some(v) => (true, v.get()),
             };
-
-            if self.hash_join_desc.join_type == JoinType::Full {
-                if probe_result_ptr.is_none() {
-                    // dummy row ptr
-                    // here assume there is no RowPtr, which chunk_index is usize::MAX and row_index is usize::MAX
-                    let mut build_indexes = self.hash_join_desc.join_state.build_indexes.write();
-                    build_indexes.push(RowPtr {
-                        chunk_index: usize::MAX,
-                        row_index: usize::MAX,
-                        marker: Some(MarkerKind::False),
-                    });
-                }
-            }
 
             if self.hash_join_desc.join_type == JoinType::Single && probed_rows.len() > 1 {
                 return Err(ErrorCode::LogicalError(
@@ -208,7 +195,6 @@ impl JoinHashTable {
                         let mut merged_block =
                             self.merge_eq_block(&nullable_build_block, &probe_block)?;
 
-
                         if !merged_block.is_empty() {
                             if WITH_OTHER_CONJUNCT {
                                 merged_block = self.non_equi_conditions_for_left_join(
@@ -219,6 +205,12 @@ impl JoinHashTable {
                                 )?;
                             }
                             probed_blocks.push(merged_block);
+                        }
+
+                        if !WITH_OTHER_CONJUNCT && self.hash_join_desc.join_type == JoinType::Full {
+                            let mut build_indexes =
+                                self.hash_join_desc.join_state.build_indexes.write();
+                            build_indexes.extend(local_build_indexes.clone())
                         }
 
                         index = new_index;
