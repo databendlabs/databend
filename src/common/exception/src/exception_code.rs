@@ -53,7 +53,6 @@ macro_rules! build_exceptions {
 // Internal errors [0, 2000].
 build_exceptions! {
     Ok(0),
-    UnknownTypeOfQuery(1001),
     UnImplement(1002),
     UnknownDatabase(1003),
     UnknownDatabaseId(1004),
