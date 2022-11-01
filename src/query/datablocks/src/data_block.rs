@@ -211,12 +211,17 @@ impl DataBlock {
     }
 
     #[inline]
-    pub fn add_meta(self, meta: Option<MetaInfoPtr>) -> Result<Self> {
+    pub fn set_meta(self, meta: Option<MetaInfoPtr>) -> Result<Self> {
         Ok(Self {
             columns: self.columns.clone(),
             schema: self.schema.clone(),
             meta,
         })
+    }
+
+    #[inline]
+    pub fn get_meta(&self) -> &Option<MetaInfoPtr> {
+        &self.meta
     }
 
     #[inline]

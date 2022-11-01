@@ -27,6 +27,7 @@ mod stoppable;
 mod string_func;
 mod thread;
 mod uniq_id;
+mod thread_pool;
 
 pub use catch_unwind::catch_unwind;
 pub use global_runtime::GlobalIORuntime;
@@ -60,3 +61,5 @@ pub use tokio;
 pub use uniq_id::GlobalSequence;
 pub use uniq_id::GlobalUniqName;
 pub use uuid;
+pub use thread_pool::ThreadPool;
+pub use thread_pool::TaskJoinHandler;

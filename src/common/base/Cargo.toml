@@ -44,6 +44,7 @@ tikv-jemalloc-sys = "0.4.3"
 tokio = { version = "1.21.1", features = ["full"] }
 tracing = "0.1.36"
 uuid = { version = "1.1.2", features = ["serde", "v4"] }
+async-channel = "1.7.1"
 
 [dev-dependencies]
 anyhow = { workspace = true }

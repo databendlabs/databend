@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod aggregate_info;
 mod aggregator_final;
 mod aggregator_params;
 mod aggregator_partial;
 mod aggregator_single_key;
+mod aggregator_final_parallel;
 
 pub use aggregator_final::FinalAggregator;
 pub use aggregator_final::KeysU128FinalAggregator;
