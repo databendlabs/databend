@@ -125,9 +125,6 @@ build_exceptions! {
 
     PanicError(1104),
 
-    // Async insert error codes
-    AsyncInsertTimeoutError(1105),
-
     TableInfoError(1106),
     ReadTableDataError(1107),
 }
