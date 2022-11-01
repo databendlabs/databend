@@ -67,7 +67,6 @@ build_exceptions! {
     DataStructMissMatch(1017),
     BadDataArrayLength(1018),
     UnknownTableId(1020),
-    UnknownTableFunction(1021),
     BadOption(1022),
     CannotReadFile(1023),
     ParquetError(1024),
