@@ -269,7 +269,7 @@ pub mod linux {
             // fallback to (5.13.0)
             let fallback_version = 5u32 << 16 | 13u32 << 8;
             let slice = unsafe { &*(&uname.release[..length] as *const _ as *const [u8]) };
-            match std::str::from_utf8(slice) {
+            let result = match std::str::from_utf8(slice) {
                 Ok(ver) => match semver::Version::parse(ver) {
                     Ok(semver) => {
                         (semver.major.min(65535) as u32) << 16
@@ -279,7 +279,10 @@ pub mod linux {
                     Err(_) => fallback_version,
                 },
                 Err(_) => fallback_version,
-            }
+            };
+
+            CACHE.store(result, Ordering::Relaxed);
+            result
         } else {
             fetch
         };
