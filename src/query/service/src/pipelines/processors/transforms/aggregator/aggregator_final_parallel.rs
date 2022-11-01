@@ -1,28 +1,53 @@
+use std::borrow::BorrowMut;
 use std::sync::Arc;
+
 use common_base::base::ThreadPool;
-use common_datablocks::{DataBlock, HashMethod};
-use common_functions::aggregates::StateAddr;
-use crate::pipelines::processors::AggregatorParams;
-use crate::pipelines::processors::transforms::group_by::{AggregatorState, PolymorphicKeysHelper};
-use crate::pipelines::processors::transforms::transform_aggregator::Aggregator;
+use common_datablocks::DataBlock;
+use common_datablocks::HashMethod;
+use common_datavalues::DataType;
+use common_datavalues::MutableColumn;
+use common_datavalues::ScalarColumn;
+use common_datavalues::Series;
+use common_datavalues::StringColumn;
 use common_exception::Result;
+use common_functions::aggregates::StateAddr;
+use common_functions::aggregates::StateAddrs;
+
 use crate::pipelines::processors::transforms::aggregator::aggregate_info::AggregateInfo;
 use crate::pipelines::processors::transforms::aggregator::FinalAggregator;
+use crate::pipelines::processors::transforms::group_by::AggregatorState;
+use crate::pipelines::processors::transforms::group_by::GroupColumnsBuilder;
+use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
+use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
+use crate::pipelines::processors::transforms::group_by::StateEntityMutRef;
+use crate::pipelines::processors::transforms::group_by::StateEntityRef;
+use crate::pipelines::processors::transforms::transform_aggregator::Aggregator;
+use crate::pipelines::processors::AggregatorParams;
 
 pub struct ParallelFinalAggregator<const HAS_AGG: bool, Method>
-    where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
+where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
 {
     is_generated: bool,
     method: Arc<Method>,
-    // state: Method::State,
     params: Arc<AggregatorParams>,
-    // used for deserialization only, so we can reuse it during the loop
-    // temp_place: Option<StateAddr>,
     buckets_blocks: Vec<Vec<DataBlock>>,
 }
 
+impl<Method, const HAS_AGG: bool> ParallelFinalAggregator<HAS_AGG, Method>
+where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
+{
+    pub fn create(method: Method, params: Arc<AggregatorParams>) -> Result<Self> {
+        Ok(Self {
+            params,
+            is_generated: false,
+            method: Arc::new(method),
+            buckets_blocks: vec![vec![]; 256],
+        })
+    }
+}
+
 impl<Method, const HAS_AGG: bool> Aggregator for ParallelFinalAggregator<HAS_AGG, Method>
-    where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
+where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
 {
     const NAME: &'static str = "GroupByFinalTransform";
 
@@ -42,22 +67,35 @@ impl<Method, const HAS_AGG: bool> Aggregator for ParallelFinalAggregator<HAS_AGG
         if !self.is_generated {
             self.is_generated = true;
 
-            let mut thread_pool = ThreadPool::create(8)?;
+            let thread_pool = ThreadPool::create(8)?;
             let mut join_handles = Vec::with_capacity(self.buckets_blocks.len());
 
             for bucket_blocks in std::mem::take(&mut self.buckets_blocks) {
                 if !bucket_blocks.is_empty() {
                     let method = self.method.clone();
                     let params = self.params.clone();
-                    let mut bucket_aggregator = BucketAggregator::<HAS_AGG, Method>::create(method, params)?;
-                    join_handles.push(thread_pool.execute(move || bucket_aggregator.merge_blocks(bucket_blocks)));
+                    let mut bucket_aggregator =
+                        BucketAggregator::<HAS_AGG, Method>::create(method, params)?;
+                    join_handles.push(
+                        thread_pool.execute(move || bucket_aggregator.merge_blocks(bucket_blocks)),
+                    );
                 }
             }
 
             for join_handle in join_handles {
-                let aggregated_blocks = join_handle.join()?;
+                self.buckets_blocks.push(join_handle.join()?);
             }
-            // TODO: get group by blocks;
+        }
+
+        while let Some(bucket_blocks) = self.buckets_blocks.last_mut() {
+            match bucket_blocks.pop() {
+                None => {
+                    self.buckets_blocks.pop();
+                }
+                Some(block) => {
+                    return Ok(Some(block));
+                }
+            }
         }
 
         Ok(None)
@@ -65,7 +103,7 @@ impl<Method, const HAS_AGG: bool> Aggregator for ParallelFinalAggregator<HAS_AGG
 }
 
 struct BucketAggregator<const HAS_AGG: bool, Method>
-    where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
+where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
 {
     states_dropped: bool,
 
@@ -78,7 +116,7 @@ struct BucketAggregator<const HAS_AGG: bool, Method>
 }
 
 impl<const HAS_AGG: bool, Method> BucketAggregator<HAS_AGG, Method>
-    where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
+where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
 {
     pub fn create(method: Arc<Method>, params: Arc<AggregatorParams>) -> Result<Self> {
         let state = method.aggregate_state();
@@ -86,7 +124,6 @@ impl<const HAS_AGG: bool, Method> BucketAggregator<HAS_AGG, Method>
             true => None,
             false => state.alloc_layout(&params),
         };
-
 
         Ok(Self {
             method,
@@ -98,15 +135,131 @@ impl<const HAS_AGG: bool, Method> BucketAggregator<HAS_AGG, Method>
     }
 
     pub fn merge_blocks(&mut self, blocks: Vec<DataBlock>) -> Result<Vec<DataBlock>> {
-        // TODO:
         for data_block in blocks {
             // 1.1 and 1.2.
             let aggregate_function_len = self.params.aggregate_functions.len();
             let keys_column = data_block.column(aggregate_function_len);
-            // let s = self.method;
             let keys_iter = self.method.keys_iter_from_column(keys_column)?;
+
+            if !HAS_AGG {
+                let mut inserted = true;
+                for keys_ref in keys_iter.get_slice() {
+                    self.aggregator_state
+                        .entity_by_key(*keys_ref, &mut inserted);
+                }
+            } else {
+                // first state places of current block
+                let places = self.lookup_state(keys_iter.get_slice());
+
+                let states_columns = (0..aggregate_function_len)
+                    .map(|i| data_block.column(i))
+                    .collect::<Vec<_>>();
+                let mut states_binary_columns = Vec::with_capacity(states_columns.len());
+
+                for agg in states_columns.iter().take(aggregate_function_len) {
+                    let aggr_column: &StringColumn = Series::check_get(agg)?;
+                    states_binary_columns.push(aggr_column);
+                }
+
+                let aggregate_functions = &self.params.aggregate_functions;
+                let offsets_aggregate_states = &self.params.offsets_aggregate_states;
+                if let Some(temp_place) = self.temp_place {
+                    for (row, place) in places.iter().enumerate() {
+                        for (idx, aggregate_function) in aggregate_functions.iter().enumerate() {
+                            let final_place = place.next(offsets_aggregate_states[idx]);
+                            let state_place = temp_place.next(offsets_aggregate_states[idx]);
+
+                            let mut data = states_binary_columns[idx].get_data(row);
+                            aggregate_function.deserialize(state_place, &mut data)?;
+                            aggregate_function.merge(final_place, state_place)?;
+                        }
+                    }
+                }
+            }
         }
 
-        unimplemented!()
+        let mut group_columns_builder = self
+            .method
+            .group_columns_builder(self.aggregator_state.len(), &self.params);
+
+        if !HAS_AGG {
+            for group_entity in self.aggregator_state.iter() {
+                group_columns_builder.append_value(group_entity.get_state_key());
+            }
+
+            let columns = group_columns_builder.finish()?;
+            Ok(vec![DataBlock::create(
+                self.params.output_schema.clone(),
+                columns,
+            )])
+        } else {
+            let aggregate_functions = &self.params.aggregate_functions;
+            let offsets_aggregate_states = &self.params.offsets_aggregate_states;
+
+            let mut aggregates_column_builder: Vec<Box<dyn MutableColumn>> = {
+                let mut values = vec![];
+                for aggregate_function in aggregate_functions {
+                    let builder = aggregate_function.return_type()?.create_mutable(1024);
+                    values.push(builder)
+                }
+                values
+            };
+
+            for group_entity in self.aggregator_state.iter() {
+                let place: StateAddr = group_entity.get_state_value().into();
+
+                for (idx, aggregate_function) in aggregate_functions.iter().enumerate() {
+                    let arg_place = place.next(offsets_aggregate_states[idx]);
+                    let builder: &mut dyn MutableColumn =
+                        aggregates_column_builder[idx].borrow_mut();
+                    aggregate_function.merge_result(arg_place, builder)?;
+                }
+
+                group_columns_builder.append_value(group_entity.get_state_key());
+            }
+
+            // Build final state block.
+            let fields_len = self.params.output_schema.fields().len();
+            let mut columns = Vec::with_capacity(fields_len);
+
+            for mut array in aggregates_column_builder {
+                columns.push(array.to_column());
+            }
+
+            columns.extend_from_slice(&group_columns_builder.finish()?);
+            Ok(vec![DataBlock::create(
+                self.params.output_schema.clone(),
+                columns,
+            )])
+        }
+    }
+
+    /// Allocate aggregation function state for each key(the same key can always get the same state)
+    #[inline(always)]
+    fn lookup_state(
+        &mut self,
+        keys: &[<Method::State as AggregatorState<Method>>::KeyRef<'_>],
+    ) -> StateAddrs {
+        let mut places = Vec::with_capacity(keys.len());
+
+        let mut inserted = true;
+        let unsafe_state = &mut self.aggregator_state as *mut Method::State;
+        for key in keys {
+            let mut entity = unsafe { (*unsafe_state).entity_by_key(*key, &mut inserted) };
+
+            match inserted {
+                true => {
+                    if let Some(place) = unsafe { (*unsafe_state).alloc_layout(&self.params) } {
+                        places.push(place);
+                        entity.set_state_value(place.addr());
+                    }
+                }
+                false => {
+                    let place: StateAddr = entity.get_state_value().into();
+                    places.push(place);
+                }
+            }
+        }
+        places
     }
 }

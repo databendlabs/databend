@@ -34,6 +34,7 @@ use common_exception::Result;
 use common_functions::aggregates::StateAddr;
 use common_functions::aggregates::StateAddrs;
 
+use crate::pipelines::processors::transforms::aggregator::aggregator_final_parallel::ParallelFinalAggregator;
 use crate::pipelines::processors::transforms::group_by::AggregatorState;
 use crate::pipelines::processors::transforms::group_by::GroupColumnsBuilder;
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
@@ -45,19 +46,23 @@ use crate::pipelines::processors::AggregatorParams;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
-pub type KeysU8FinalAggregator<const HAS_AGG: bool> = FinalAggregator<HAS_AGG, HashMethodKeysU8>;
-pub type KeysU16FinalAggregator<const HAS_AGG: bool> = FinalAggregator<HAS_AGG, HashMethodKeysU16>;
-pub type KeysU32FinalAggregator<const HAS_AGG: bool> = FinalAggregator<HAS_AGG, HashMethodKeysU32>;
-pub type KeysU64FinalAggregator<const HAS_AGG: bool> = FinalAggregator<HAS_AGG, HashMethodKeysU64>;
+pub type KeysU8FinalAggregator<const HAS_AGG: bool> =
+    ParallelFinalAggregator<HAS_AGG, HashMethodKeysU8>;
+pub type KeysU16FinalAggregator<const HAS_AGG: bool> =
+    ParallelFinalAggregator<HAS_AGG, HashMethodKeysU16>;
+pub type KeysU32FinalAggregator<const HAS_AGG: bool> =
+    ParallelFinalAggregator<HAS_AGG, HashMethodKeysU32>;
+pub type KeysU64FinalAggregator<const HAS_AGG: bool> =
+    ParallelFinalAggregator<HAS_AGG, HashMethodKeysU64>;
 pub type KeysU128FinalAggregator<const HAS_AGG: bool> =
-FinalAggregator<HAS_AGG, HashMethodKeysU128>;
+    ParallelFinalAggregator<HAS_AGG, HashMethodKeysU128>;
 pub type KeysU256FinalAggregator<const HAS_AGG: bool> =
-FinalAggregator<HAS_AGG, HashMethodKeysU256>;
+    ParallelFinalAggregator<HAS_AGG, HashMethodKeysU256>;
 pub type KeysU512FinalAggregator<const HAS_AGG: bool> =
-FinalAggregator<HAS_AGG, HashMethodKeysU512>;
+    ParallelFinalAggregator<HAS_AGG, HashMethodKeysU512>;
 
 pub type SerializerFinalAggregator<const HAS_AGG: bool> =
-FinalAggregator<HAS_AGG, HashMethodSerializer>;
+    ParallelFinalAggregator<HAS_AGG, HashMethodSerializer>;
 
 pub struct FinalAggregator<
     const HAS_AGG: bool,
@@ -74,7 +79,9 @@ pub struct FinalAggregator<
     ctx: Arc<QueryContext>,
 }
 
-impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send> FinalAggregator<HAS_AGG, Method> {
+impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send>
+    FinalAggregator<HAS_AGG, Method>
+{
     pub fn create(
         ctx: Arc<QueryContext>,
         method: Method,
@@ -131,7 +138,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> FinalAggregator<
 }
 
 impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
-for FinalAggregator<true, Method>
+    for FinalAggregator<true, Method>
 {
     const NAME: &'static str = "GroupByFinalTransform";
 
@@ -233,7 +240,7 @@ for FinalAggregator<true, Method>
 }
 
 impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
-for FinalAggregator<false, Method>
+    for FinalAggregator<false, Method>
 {
     const NAME: &'static str = "GroupByFinalTransform";
 
@@ -278,7 +285,7 @@ for FinalAggregator<false, Method>
 }
 
 impl<const FINAL: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send>
-FinalAggregator<FINAL, Method>
+    FinalAggregator<FINAL, Method>
 {
     fn drop_states(&mut self) {
         if !self.states_dropped {
@@ -318,7 +325,7 @@ FinalAggregator<FINAL, Method>
 }
 
 impl<const FINAL: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Drop
-for FinalAggregator<FINAL, Method>
+    for FinalAggregator<FINAL, Method>
 {
     fn drop(&mut self) {
         self.drop_states();

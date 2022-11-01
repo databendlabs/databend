@@ -1,6 +1,9 @@
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use std::time::Instant;
+
 use common_base::base::ThreadPool;
 use common_exception::Result;
 
