@@ -138,7 +138,7 @@ impl Session {
 
     pub fn get_format_settings(&self) -> Result<FormatSettings> {
         let settings = &self.session_ctx.get_settings();
-        let quote_char = settings.get_format_quote_char()?.into_bytes();
+        let quote_char = settings.get_format_quote()?.into_bytes();
         if quote_char.len() != 1 {
             return Err(ErrorCode::InvalidArgument(
                 "quote_char can only contain one char",
