@@ -32,9 +32,7 @@ use common_datavalues::NullableType;
 use common_datavalues::Series;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_hashtable::HashMap;
-use common_hashtable::HashTableKeyable;
-use common_hashtable::KeyValueEntity;
+use common_hashtable::HashtableLike;
 
 use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
@@ -62,15 +60,15 @@ impl JoinHashTable {
     }
 
     #[inline]
-    pub(crate) fn probe_key<Key: HashTableKeyable>(
+    pub(crate) fn probe_key<'a, H: HashtableLike<Value = Vec<RowPtr>>>(
         &self,
-        hash_table: &HashMap<Key, Vec<RowPtr>>,
-        key: Key,
+        hash_table: &'a H,
+        key: H::KeyRef<'_>,
         valids: &Option<Bitmap>,
         i: usize,
-    ) -> Option<*mut KeyValueEntity<Key, Vec<RowPtr>>> {
+    ) -> Option<H::EntryRef<'a>> {
         if valids.as_ref().map_or(true, |v| v.get_bit(i)) {
-            return hash_table.find_key(&key);
+            return hash_table.entry(key);
         }
         None
     }
@@ -276,5 +274,25 @@ impl JoinHashTable {
             row_state[row_ptr.chunk_index][row_ptr.row_index] += 1;
         }
         Ok(row_state)
+    }
+
+    pub(crate) fn rest_block_for_right_join(&self, blocks: &[DataBlock]) -> Result<DataBlock> {
+        let rest_probe_blocks = self.hash_join_desc.right_join_desc.rest_probe_blocks.read();
+        if rest_probe_blocks.is_empty() {
+            return if !blocks.is_empty() {
+                DataBlock::concat_blocks(blocks)
+            } else {
+                Ok(DataBlock::empty())
+            };
+        }
+        let probe_block = DataBlock::concat_blocks(&rest_probe_blocks)?;
+        let rest_build_indexes = self
+            .hash_join_desc
+            .right_join_desc
+            .rest_build_indexes
+            .read();
+        let build_block = self.row_space.gather(&rest_build_indexes)?;
+        let rest_block = self.merge_eq_block(&build_block, &probe_block)?;
+        DataBlock::concat_blocks(&[blocks, &[rest_block]].concat())
     }
 }

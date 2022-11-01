@@ -17,10 +17,10 @@ use std::sync::Arc;
 use common_catalog::table::CompactTarget;
 use common_exception::Result;
 use common_fuse_meta::meta::TableSnapshot;
-use common_legacy_planners::ReadDataSourcePlan;
-use common_legacy_planners::SourceInfo;
 use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
+use common_planner::ReadDataSourcePlan;
+use common_planner::SourceInfo;
 
 use super::FuseTableSink;
 use crate::operations::mutation::SegmentCompactMutator;
@@ -139,10 +139,10 @@ impl FuseTable {
         };
 
         ctx.try_set_partitions(plan.parts.clone())?;
-        self.do_read_data(ctx.clone(), &plan, pipeline)?;
 
+        // It's easy to OOM if we set the max_io_request more than the max threads.
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        pipeline.resize(max_threads)?;
+        self.do_read_data(ctx.clone(), &plan, pipeline, max_threads)?;
 
         pipeline.add_transform(|transform_input_port, transform_output_port| {
             TransformCompact::try_create(

@@ -15,9 +15,11 @@
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
+use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
-use common_planner::IndexType;
+use common_sql::executor::PhysicalScalar;
+use common_sql::IndexType;
 use parking_lot::RwLock;
 
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
@@ -25,7 +27,6 @@ use crate::sessions::QueryContext;
 use crate::sql::evaluator::EvalNode;
 use crate::sql::evaluator::Evaluator;
 use crate::sql::executor::HashJoin;
-use crate::sql::executor::PhysicalScalar;
 use crate::sql::plans::JoinType;
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug, Hash)]
@@ -44,6 +45,8 @@ pub struct RightJoinDesc {
     /// Record rows in build side that are matched with rows in probe side.
     /// It's order-sensitive, aligned with the order of rows in merged block.
     pub(crate) build_indexes: RwLock<Vec<RowPtr>>,
+    pub(crate) rest_build_indexes: RwLock<Vec<RowPtr>>,
+    pub(crate) rest_probe_blocks: RwLock<Vec<DataBlock>>,
 }
 
 impl RightJoinDesc {
@@ -51,6 +54,8 @@ impl RightJoinDesc {
         let max_block_size = ctx.get_settings().get_max_block_size()? as usize;
         Ok(RightJoinDesc {
             build_indexes: RwLock::new(Vec::with_capacity(max_block_size)),
+            rest_build_indexes: RwLock::new(Vec::with_capacity(max_block_size)),
+            rest_probe_blocks: RwLock::new(Vec::with_capacity(max_block_size)),
         })
     }
 }
@@ -101,10 +106,7 @@ impl HashJoinDesc {
             let func = FunctionFactory::instance().get("and", &data_types)?;
             condition = PhysicalScalar::Function {
                 name: "and".to_string(),
-                args: vec![
-                    (condition, left_type),
-                    (other_condition.clone(), right_type),
-                ],
+                args: vec![condition, other_condition.clone()],
                 return_type: func.return_type(),
             };
         }

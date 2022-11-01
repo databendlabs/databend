@@ -22,12 +22,13 @@ use common_datablocks::DataBlock;
 use common_datavalues::ColumnRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::PartInfoPtr;
+use common_functions::scalars::FunctionContext;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
-use common_pipeline_transforms::processors::ExpressionExecutor;
+use common_planner::PartInfoPtr;
+use common_sql::evaluator::EvalNode;
 
 use crate::io::BlockReader;
 use crate::operations::State::Generated;
@@ -56,8 +57,10 @@ pub struct FuseTableSource {
     output_reader: Arc<BlockReader>,
 
     prewhere_reader: Arc<BlockReader>,
-    prewhere_filter: Arc<Option<ExpressionExecutor>>,
+    prewhere_filter: Arc<Option<EvalNode>>,
     remain_reader: Arc<Option<BlockReader>>,
+
+    support_blocking: bool,
 }
 
 impl FuseTableSource {
@@ -66,10 +69,11 @@ impl FuseTableSource {
         output: Arc<OutputPort>,
         output_reader: Arc<BlockReader>,
         prewhere_reader: Arc<BlockReader>,
-        prewhere_filter: Arc<Option<ExpressionExecutor>>,
+        prewhere_filter: Arc<Option<EvalNode>>,
         remain_reader: Arc<Option<BlockReader>>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
+        let support_blocking = prewhere_reader.support_blocking_api();
         Ok(ProcessorPtr::create(Box::new(FuseTableSource {
             ctx,
             output,
@@ -79,6 +83,7 @@ impl FuseTableSource {
             prewhere_reader,
             prewhere_filter,
             remain_reader,
+            support_blocking,
         })))
     }
 
@@ -143,8 +148,20 @@ impl Processor for FuseTableSource {
 
         match self.state {
             State::Finish => Ok(Event::Finished),
-            State::ReadDataPrewhere(_) => Ok(Event::Async),
-            State::ReadDataRemain(_, _) => Ok(Event::Async),
+            State::ReadDataPrewhere(_) => {
+                if self.support_blocking {
+                    Ok(Event::Sync)
+                } else {
+                    Ok(Event::Async)
+                }
+            }
+            State::ReadDataRemain(_, _) => {
+                if self.support_blocking {
+                    Ok(Event::Sync)
+                } else {
+                    Ok(Event::Async)
+                }
+            }
             State::PrewhereFilter(_, _) => Ok(Event::Sync),
             State::Deserialize(_, _, _) => Ok(Event::Sync),
             State::Generated(_, _) => Err(ErrorCode::LogicalError("It's a bug.")),
@@ -201,8 +218,10 @@ impl Processor for FuseTableSource {
                 let data_block = self.prewhere_reader.deserialize(part.clone(), chunks)?;
                 if let Some(filter) = self.prewhere_filter.as_ref() {
                     // do filter
-                    let res = filter.execute(&data_block)?;
-                    let filter = DataBlock::cast_to_nonull_boolean(res.column(0))?;
+                    let res = filter
+                        .eval(&FunctionContext::default(), &data_block)?
+                        .vector;
+                    let filter = DataBlock::cast_to_nonull_boolean(&res)?;
                     // shortcut, if predicates is const boolean (or can be cast to boolean)
                     if !DataBlock::filter_exists(&filter)? {
                         // all rows in this block are filtered out
@@ -235,6 +254,27 @@ impl Processor for FuseTableSource {
                     ))
                 }
             }
+
+            State::ReadDataPrewhere(Some(part)) => {
+                let chunks = self.prewhere_reader.sync_read_columns_data(part.clone())?;
+
+                if self.prewhere_filter.is_some() {
+                    self.state = State::PrewhereFilter(part, chunks);
+                } else {
+                    // all needed columns are read.
+                    self.state = State::Deserialize(part, chunks, None)
+                }
+                Ok(())
+            }
+            State::ReadDataRemain(part, prewhere_data) => {
+                if let Some(remain_reader) = self.remain_reader.as_ref() {
+                    let chunks = remain_reader.sync_read_columns_data(part.clone())?;
+                    self.state = State::Deserialize(part, chunks, Some(prewhere_data));
+                    Ok(())
+                } else {
+                    Err(ErrorCode::LogicalError("It's a bug. No remain reader"))
+                }
+            }
             _ => Err(ErrorCode::LogicalError("It's a bug.")),
         }
     }
@@ -258,7 +298,7 @@ impl Processor for FuseTableSource {
                     self.state = State::Deserialize(part, chunks, Some(prewhere_data));
                     Ok(())
                 } else {
-                    return Err(ErrorCode::LogicalError("It's a bug. No remain reader"));
+                    Err(ErrorCode::LogicalError("It's a bug. No remain reader"))
                 }
             }
             _ => Err(ErrorCode::LogicalError("It's a bug.")),

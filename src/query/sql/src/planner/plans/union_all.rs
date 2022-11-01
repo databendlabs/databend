@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_planner::IndexType;
 
 use crate::optimizer::ColumnSet;
 use crate::optimizer::Distribution;
@@ -25,6 +24,7 @@ use crate::plans::LogicalOperator;
 use crate::plans::Operator;
 use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
+use crate::IndexType;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct UnionAll {
@@ -81,9 +81,15 @@ impl LogicalOperator for UnionAll {
                 .map(|right_cardinality| left_cardinality + right_cardinality)
         });
 
+        // Derive used columns
+        let mut used_columns = self.used_columns()?;
+        used_columns.extend(left_prop.used_columns);
+        used_columns.extend(right_prop.used_columns);
+
         Ok(RelationalProperty {
             output_columns,
             outer_columns,
+            used_columns,
             cardinality,
             precise_cardinality,
 

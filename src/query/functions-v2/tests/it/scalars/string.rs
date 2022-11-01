@@ -809,6 +809,9 @@ fn test_substr(file: &mut impl Write) {
     run_ast(file, "mid('1234567890', -3, 3)", &[]);
     run_ast(file, "mid('1234567890', -3)", &[]);
     run_ast(file, "substring('', 0, 1)", &[]);
+    run_ast(file, "substr('Sakila' from -4 for 2)", &[]);
+    run_ast(file, "substr('sakila' FROM -4)", &[]);
+    run_ast(file, "substr('abc',2)", &[]);
     run_ast(file, "substr('abc', pos, len)", &[
         (
             "pos",

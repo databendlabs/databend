@@ -18,7 +18,6 @@ common-datablocks = { path = "../../datablocks" }
 common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
 common-functions = { path = "../../functions" }
-common-legacy-planners = { path = "../../legacy-planners" }
 common-meta-app = { path = "../../../meta/app" }
 common-meta-types = { path = "../../../meta/types" }
 common-metrics = { path = "../../../common/metrics" }
@@ -26,6 +25,7 @@ common-pipeline-core = { path = "../../pipeline/core" }
 common-pipeline-sinks = { path = "../../pipeline/sinks" }
 common-pipeline-sources = { path = "../../pipeline/sources" }
 common-pipeline-transforms = { path = "../../pipeline/transforms" }
+common-planner = { path = "../../planner" }
 common-storage = { path = "../../../common/storage" }
 common-users = { path = "../../users" }
 

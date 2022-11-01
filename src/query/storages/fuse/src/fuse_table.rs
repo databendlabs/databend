@@ -33,15 +33,15 @@ use common_fuse_meta::meta::ColumnStatistics as FuseColumnStatistics;
 use common_fuse_meta::meta::Statistics as FuseStatistics;
 use common_fuse_meta::meta::TableSnapshot;
 use common_fuse_meta::meta::Versioned;
-use common_legacy_expression::LegacyExpression;
-use common_legacy_parser::ExpressionParser;
-use common_legacy_planners::DeletePlan;
-use common_legacy_planners::Extras;
-use common_legacy_planners::Partitions;
-use common_legacy_planners::ReadDataSourcePlan;
-use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
+use common_planner::extras::Extras;
+use common_planner::extras::Statistics;
+use common_planner::plans::DeletePlan;
+use common_planner::Expression;
+use common_planner::Partitions;
+use common_planner::ReadDataSourcePlan;
 use common_sharing::create_share_table_operator;
+use common_sql::ExpressionParser;
 use common_storage::init_operator;
 use common_storage::DataOperator;
 use common_storage::ShareTableConfig;
@@ -73,7 +73,6 @@ pub struct FuseTable {
     pub(crate) table_info: TableInfo,
     pub(crate) meta_location_generator: TableMetaLocationGenerator,
 
-    pub(crate) cluster_keys: Vec<LegacyExpression>,
     pub(crate) cluster_key_meta: Option<ClusterKey>,
     pub(crate) read_only: bool,
 
@@ -87,8 +86,10 @@ impl FuseTable {
         Ok(r)
     }
 
-    fn init_operator(table_info: &TableInfo) -> Result<Operator> {
-        let operator = match table_info.from_share {
+    pub fn do_create(table_info: TableInfo, read_only: bool) -> Result<Box<FuseTable>> {
+        let storage_prefix = Self::parse_storage_prefix(&table_info)?;
+        let cluster_key_meta = table_info.meta.cluster_key();
+        let mut operator = match table_info.from_share {
             Some(ref from_share) => create_share_table_operator(
                 ShareTableConfig::share_endpoint_address(),
                 &table_info.tenant,
@@ -107,32 +108,13 @@ impl FuseTable {
                 }
             }
         };
-        Ok(operator)
-    }
-
-    pub fn do_create(table_info: TableInfo, read_only: bool) -> Result<Box<FuseTable>> {
-        let operator = Self::init_operator(&table_info)?;
-        Self::do_create_with_operator(table_info, operator, read_only)
-    }
-
-    pub fn do_create_with_operator(
-        table_info: TableInfo,
-        operator: Operator,
-        read_only: bool,
-    ) -> Result<Box<FuseTable>> {
-        let storage_prefix = Self::parse_storage_prefix(&table_info)?;
-        let cluster_key_meta = table_info.meta.cluster_key();
-        let mut cluster_keys = Vec::new();
-        if let Some((_, order)) = &cluster_key_meta {
-            cluster_keys = ExpressionParser::parse_exprs(order)?;
-        }
         let data_metrics = Arc::new(StorageMetrics::default());
-        let operator = operator.layer(StorageMetricsLayer::new(data_metrics.clone()));
+        operator = operator.layer(StorageMetricsLayer::new(data_metrics.clone()));
+
         Ok(Box::new(FuseTable {
             table_info,
-            cluster_keys,
-            cluster_key_meta,
             meta_location_generator: TableMetaLocationGenerator::with_prefix(storage_prefix),
+            cluster_key_meta,
             read_only,
             operator,
             data_metrics,
@@ -264,8 +246,13 @@ impl Table for FuseTable {
         true
     }
 
-    fn cluster_keys(&self) -> Vec<LegacyExpression> {
-        self.cluster_keys.clone()
+    fn cluster_keys(&self) -> Vec<Expression> {
+        let table_meta = Arc::new(self.clone());
+        if let Some((_, order)) = &self.cluster_key_meta {
+            let cluster_keys = ExpressionParser::parse_exprs(table_meta, order).unwrap();
+            return cluster_keys;
+        }
+        vec![]
     }
 
     fn support_prewhere(&self) -> bool {
@@ -379,7 +366,8 @@ impl Table for FuseTable {
         plan: &ReadDataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        self.do_read_data(ctx, plan, pipeline)
+        let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
+        self.do_read_data(ctx, plan, pipeline, max_io_requests)
     }
 
     fn append_data(

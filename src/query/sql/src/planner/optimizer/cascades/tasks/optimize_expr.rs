@@ -17,7 +17,6 @@ use std::rc::Rc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::IndexType;
 
 use super::optimize_group::OptimizeGroupTask;
 use super::Task;
@@ -26,6 +25,7 @@ use crate::optimizer::cascades::tasks::SharedCounter;
 use crate::optimizer::cascades::CascadesOptimizer;
 use crate::optimizer::cost::Cost;
 use crate::optimizer::cost::CostContext;
+use crate::IndexType;
 
 #[derive(Clone, Copy, Debug)]
 pub enum OptimizeExprState {

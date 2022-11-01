@@ -27,8 +27,6 @@ use common_base::base::tokio::time::Duration;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures_util::StreamExt;
-use tonic::metadata::MetadataKey;
-use tonic::metadata::MetadataValue;
 use tonic::transport::channel::Channel;
 use tonic::Request;
 use tonic::Status;
@@ -36,7 +34,6 @@ use tonic::Streaming;
 
 use crate::api::rpc::flight_actions::FlightAction;
 use crate::api::rpc::packets::DataPacket;
-use crate::api::rpc::packets::DataPacketStream;
 use crate::api::rpc::request_builder::RequestBuilder;
 
 pub struct FlightClient {
@@ -50,37 +47,24 @@ impl FlightClient {
     }
 
     pub async fn execute_action(&mut self, action: FlightAction, timeout: u64) -> Result<()> {
-        self.do_action(action, timeout).await?;
-        Ok(())
-    }
-
-    fn set_metadata<T>(request: &mut Request<T>, name: &'static str, value: &str) -> Result<()> {
-        match MetadataValue::try_from(value) {
-            Ok(metadata_value) => {
-                let metadata_key = MetadataKey::from_static(name);
-                request.metadata_mut().insert(metadata_key, metadata_value);
-                Ok(())
-            }
-            Err(cause) => Err(ErrorCode::BadBytes(format!(
-                "Cannot parse query id to MetadataValue, {:?}",
-                cause
-            ))),
+        if let Err(cause) = self.do_action(action, timeout).await {
+            return Err(cause.add_message_back("(while in query flight)"));
         }
+
+        Ok(())
     }
 
     pub async fn request_server_exchange(&mut self, query_id: &str) -> Result<FlightExchange> {
         let (tx, rx) = async_channel::unbounded();
         Ok(FlightExchange::from_client(
             tx,
-            self.inner
-                .do_exchange(
-                    RequestBuilder::create(Box::pin(rx))
-                        .with_metadata("x-type", "request_server_exchange")?
-                        .with_metadata("x-query-id", query_id)?
-                        .build(),
-                )
-                .await?
-                .into_inner(),
+            self.exchange_streaming(
+                RequestBuilder::create(Box::pin(rx))
+                    .with_metadata("x-type", "request_server_exchange")?
+                    .with_metadata("x-query-id", query_id)?
+                    .build(),
+            )
+            .await?,
         ))
     }
 
@@ -93,32 +77,26 @@ impl FlightClient {
         let (tx, rx) = async_channel::unbounded();
         Ok(FlightExchange::from_client(
             tx,
-            self.inner
-                .do_exchange(
-                    RequestBuilder::create(Box::pin(rx))
-                        .with_metadata("x-type", "exchange_fragment")?
-                        .with_metadata("x-source", source)?
-                        .with_metadata("x-query-id", query_id)?
-                        .with_metadata("x-fragment-id", &fragment_id.to_string())?
-                        .build(),
-                )
-                .await?
-                .into_inner(),
+            self.exchange_streaming(
+                RequestBuilder::create(Box::pin(rx))
+                    .with_metadata("x-type", "exchange_fragment")?
+                    .with_metadata("x-source", source)?
+                    .with_metadata("x-query-id", query_id)?
+                    .with_metadata("x-fragment-id", &fragment_id.to_string())?
+                    .build(),
+            )
+            .await?,
         ))
     }
 
-    pub async fn do_put(
+    async fn exchange_streaming(
         &mut self,
-        query_id: &str,
-        source: &str,
-        rx: Receiver<DataPacket>,
-    ) -> Result<()> {
-        let mut request = Request::new(Box::pin(DataPacketStream::create(rx)));
-
-        Self::set_metadata(&mut request, "x-source", source)?;
-        Self::set_metadata(&mut request, "x-query-id", query_id)?;
-        self.inner.do_put(request).await?;
-        Ok(())
+        request: impl tonic::IntoStreamingRequest<Message = FlightData>,
+    ) -> Result<Streaming<FlightData>> {
+        match self.inner.do_exchange(request).await {
+            Ok(res) => Ok(res.into_inner()),
+            Err(status) => Err(ErrorCode::from(status).add_message_back("(while in query flight)")),
+        }
     }
 
     // Execute do_action.

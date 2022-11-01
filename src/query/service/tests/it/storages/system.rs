@@ -27,6 +27,7 @@ use common_meta_types::UserInfo;
 use common_meta_types::UserOption;
 use common_meta_types::UserQuota;
 use common_metrics::init_default_metrics_recorder;
+use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_storage::StorageParams;
 use common_storage::StorageS3Config;
 use common_storages_factory::system::CatalogsTable;
@@ -47,7 +48,6 @@ use databend_query::storages::system::SettingsTable;
 use databend_query::storages::system::TablesTableWithoutHistory;
 use databend_query::storages::system::TracingTable;
 use databend_query::storages::system::UsersTable;
-use databend_query::storages::ToReadDataSourcePlan;
 use databend_query::stream::DataBlockStream;
 use futures::TryStreamExt;
 use goldenfile::Mint;
@@ -73,13 +73,27 @@ async fn test_system_tables() -> Result<()> {
     test_users_table(file).await.unwrap();
 
     // with assert_eq
-    test_clusters_table().await.unwrap();
-    test_contributors_table().await.unwrap();
-    test_credits_table().await.unwrap();
-    test_functions_table().await.unwrap();
-    test_metrics_table().await.unwrap();
-    test_tables_table().await.unwrap();
-    test_tracing_table().await.unwrap();
+    test_clusters_table()
+        .await
+        .expect("test_clusters_table must succeed");
+    test_contributors_table()
+        .await
+        .expect("test_contributors_table must succeed");
+    test_credits_table()
+        .await
+        .expect("test_credits_table must succeed");
+    test_functions_table()
+        .await
+        .expect("test_functions_table must succeed");
+    test_metrics_table()
+        .await
+        .expect("test_metrics_table must succeed");
+    test_tables_table()
+        .await
+        .expect("test_tables_table must succeed");
+    test_tracing_table()
+        .await
+        .expect("test_tracing_table must succeed");
     Ok(())
 }
 
@@ -329,11 +343,11 @@ async fn test_tables_table() -> Result<()> {
         r"\+--------------------\+---------------------\+--------------------\+------------\+-------------------------------\+----------\+-----------\+----------------------\+------------\+",
         r"\| database           \| name                \| engine             \| cluster_by \| created_on                    \| num_rows \| data_size \| data_compressed_size \| index_size \|",
         r"\+--------------------\+---------------------\+--------------------\+------------\+-------------------------------\+----------\+-----------\+----------------------\+------------\+",
-        r"\| INFORMATION_SCHEMA \| COLUMNS             \| VIEW               \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| INFORMATION_SCHEMA \| KEYWORDS            \| VIEW               \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| INFORMATION_SCHEMA \| SCHEMATA            \| VIEW               \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| INFORMATION_SCHEMA \| TABLES              \| VIEW               \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| INFORMATION_SCHEMA \| VIEWS               \| VIEW               \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| information_schema \| columns             \| VIEW               \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| information_schema \| keywords            \| VIEW               \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| information_schema \| schemata            \| VIEW               \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| information_schema \| tables              \| VIEW               \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| information_schema \| views               \| VIEW               \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
         r"\| system             \| catalogs            \| SystemCatalogs     \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
         r"\| system             \| clustering_history  \| SystemLogTable     \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
         r"\| system             \| clusters            \| SystemClusters     \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
@@ -371,7 +385,7 @@ async fn test_tracing_table() -> Result<()> {
     let stream = table.read_data_block_stream(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
-    assert_eq!(block.num_columns(), 7);
+    assert_eq!(block.num_columns(), 1);
     assert!(block.num_rows() > 0);
 
     Ok(())

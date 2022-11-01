@@ -218,4 +218,3 @@ Databend is licensed under [Apache 2.0](LICENSE).
 - Databend's computing model is based on [Arrow2](https://github.com/jorgecarleitao/arrow2), Arrow2 is a faster and safer implementation of the Apache Arrow Columnar Format.
 - The [documentation website](https://databend.rs) is hosted by [Vercel](https://vercel.com/?utm_source=databend&utm_campaign=oss).
 - Thanks to [Mergify](https://mergify.com/) for sponsoring advanced features like Batch Merge.
-- Thanks to [QingCloud](https://qingcloud.com) for sponsoring CI resources.

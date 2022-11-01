@@ -21,12 +21,12 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::TableSnapshot;
-use common_legacy_expression::add;
-use common_legacy_expression::col;
-use common_legacy_expression::lit;
-use common_legacy_expression::sub;
-use common_legacy_expression::LegacyExpression;
-use common_legacy_planners::Extras;
+use common_planner::extras::Extras;
+use common_sql::executor::add;
+use common_sql::executor::col;
+use common_sql::executor::lit;
+use common_sql::executor::sub;
+use common_sql::executor::ExpressionOp;
 use common_storages_fuse::FuseTable;
 use databend_query::interpreters::CreateTableInterpreterV2;
 use databend_query::interpreters::Interpreter;
@@ -49,7 +49,7 @@ async fn apply_block_pruning(
     push_down: &Option<Extras>,
     ctx: Arc<QueryContext>,
     op: Operator,
-) -> Result<Vec<BlockMeta>> {
+) -> Result<Vec<Arc<BlockMeta>>> {
     let ctx: Arc<dyn TableContext> = ctx;
     let segment_locs = table_snapshot.segments.clone();
     BlockPruner::prune(&ctx, op, schema, push_down, segment_locs)
@@ -153,32 +153,26 @@ async fn test_block_pruner() -> Result<()> {
 
     // nothing is pruned
     let mut e1 = Extras::default();
-    e1.filters = vec![col("a").gt(lit(30u64))];
+    e1.filters = vec![col("a", u64::to_data_type()).gt(&lit(30u64))?];
 
     // some blocks pruned
     let mut e2 = Extras::default();
     let max_val_of_b = 6u64;
-    e2.filters = vec![col("a").gt(lit(0u64)).and(col("b").gt(lit(max_val_of_b)))];
+    e2.filters = vec![
+        col("a", u64::to_data_type())
+            .gt(&lit(0u64))?
+            .and(&col("b", u64::to_data_type()).gt(&lit(max_val_of_b))?)?,
+    ];
     let b2 = num_blocks - max_val_of_b as usize - 1;
 
     // Sort asc Limit
     let mut e3 = Extras::default();
-    e3.order_by = vec![LegacyExpression::Sort {
-        expr: Box::new(col("b")),
-        asc: true,
-        nulls_first: false,
-        origin_expr: Box::new(col("b")),
-    }];
+    e3.order_by = vec![(col("b", u64::to_data_type()), true, false)];
     e3.limit = Some(3);
 
     // Sort desc Limit
     let mut e4 = Extras::default();
-    e4.order_by = vec![LegacyExpression::Sort {
-        expr: Box::new(col("b")),
-        asc: false,
-        nulls_first: false,
-        origin_expr: Box::new(col("b")),
-    }];
+    e4.order_by = vec![(col("b", u64::to_data_type()), false, false)];
     e4.limit = Some(4);
 
     let extras = vec![
@@ -298,7 +292,7 @@ async fn test_block_pruner_monotonic() -> Result<()> {
 
     // a + b > 20; some blocks pruned
     let mut extra = Extras::default();
-    let pred = add(col("a"), col("b")).gt(lit(20u64));
+    let pred = add(col("a", u64::to_data_type()), col("b", u64::to_data_type())).gt(&lit(20u64))?;
     extra.filters = vec![pred];
 
     let blocks = apply_block_pruning(
@@ -314,7 +308,7 @@ async fn test_block_pruner_monotonic() -> Result<()> {
 
     // b - a < 20; nothing will be pruned.
     let mut extra = Extras::default();
-    let pred = sub(col("b"), col("a")).lt(lit(20u64));
+    let pred = sub(col("b", u64::to_data_type()), col("a", u64::to_data_type())).lt(&lit(20u64))?;
     extra.filters = vec![pred];
 
     let blocks = apply_block_pruning(

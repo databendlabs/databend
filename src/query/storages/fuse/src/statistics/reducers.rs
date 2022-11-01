@@ -61,9 +61,6 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
 
             // TODO:
 
-            // for some data types, we shall balance the accuracy and the length
-            // e.g. for a string col, which max value is "abcdef....", we record the max as something like "b"
-
             // In accumulator.rs, we use aggregation functions to get the min/max of `DataValue`s,
             // like this:
             //   `let maxs = eval_aggr("max", vec![], &[column_field], rows)?`
@@ -104,6 +101,16 @@ pub fn merge_statistics(l: &Statistics, r: &Statistics) -> Result<Statistics> {
     Ok(s)
 }
 
+pub fn merge_statistics_mut(l: &mut Statistics, r: &Statistics) -> Result<()> {
+    l.row_count += r.row_count;
+    l.block_count += r.block_count;
+    l.uncompressed_byte_size += r.uncompressed_byte_size;
+    l.compressed_byte_size += r.compressed_byte_size;
+    l.index_size += r.index_size;
+    l.col_stats = reduce_block_statistics(&[&l.col_stats, &r.col_stats])?;
+    Ok(())
+}
+
 pub fn reduce_statistics<T: Borrow<Statistics>>(stats: &[T]) -> Result<Statistics> {
     let mut statistics = Statistics::default();
     for item in stats {
@@ -125,7 +132,7 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(block_metas: &[T]) -> Result<Sta
         block_count += 1;
         uncompressed_byte_size += b.block_size;
         compressed_byte_size += b.file_size;
-        index_size = b.bloom_filter_index_size;
+        index_size += b.bloom_filter_index_size;
     });
 
     let stats = block_metas

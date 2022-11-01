@@ -14,7 +14,6 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::MetadataRef;
 use itertools::Itertools;
 
 use crate::optimizer::ColumnSet;
@@ -24,6 +23,7 @@ use crate::plans::Aggregate;
 use crate::plans::EvalScalar;
 use crate::plans::LogicalGet;
 use crate::plans::RelOperator;
+use crate::MetadataRef;
 use crate::ScalarExpr;
 
 pub struct UnusedColumnPruner {
@@ -173,10 +173,11 @@ impl UnusedColumnPruner {
                 // aggregate to prevent empty input `DataBlock`.
                 let rel_expr = RelExpr::with_s_expr(expr.child(0)?);
                 let rel_prop = rel_expr.derive_relational_prop()?;
-                if required
-                    .intersection(&rel_prop.output_columns)
-                    .next()
-                    .is_none()
+                if rel_prop.used_columns.is_empty()
+                    && required
+                        .intersection(&rel_prop.output_columns)
+                        .next()
+                        .is_none()
                     && p.group_items.is_empty()
                 {
                     required.insert(

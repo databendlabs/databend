@@ -48,6 +48,14 @@ impl Interpreter for CreateUserStageInterpreter {
         let plan = self.plan.clone();
         let user_mgr = UserApiProvider::instance();
         let user_stage = plan.user_stage_info;
+
+        // Check user stage.
+        if user_stage.stage_type == StageType::User {
+            return Err(ErrorCode::StagePermissionDenied(
+                "user stage is not allowed to be created",
+            ));
+        }
+
         let quota_api = user_mgr.get_tenant_quota_api_client(&plan.tenant)?;
         let quota = quota_api.get_quota(None).await?.data;
         let stages = user_mgr.get_stages(&plan.tenant).await?;
@@ -58,10 +66,9 @@ impl Interpreter for CreateUserStageInterpreter {
             )));
         };
 
-        if user_stage.stage_type == StageType::Internal {
-            let prefix = format!("stage/{}/", user_stage.stage_name);
+        if user_stage.stage_type != StageType::External {
             let op = self.ctx.get_data_operator()?.operator();
-            op.object(&prefix).create().await?
+            op.object(&user_stage.stage_prefix()).create().await?
         }
 
         let mut user_stage = user_stage;

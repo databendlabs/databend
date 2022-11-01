@@ -16,7 +16,6 @@ use std::collections::HashMap;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::IndexType;
 
 use super::group::GroupState;
 use super::RelExpr;
@@ -25,6 +24,7 @@ use crate::optimizer::group::Group;
 use crate::optimizer::m_expr::MExpr;
 use crate::optimizer::s_expr::SExpr;
 use crate::plans::RelOperator;
+use crate::IndexType;
 
 /// `Memo` is a search space which memoize possible plans of a query.
 /// The plans inside `Memo` are organized with `Group`s.

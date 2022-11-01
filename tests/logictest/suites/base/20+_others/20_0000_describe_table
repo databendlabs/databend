@@ -79,6 +79,7 @@ collation_name NULL NO NULL
 domain_catalog NULL NO NULL 
 domain_schema NULL NO NULL 
 domain_name NULL NO NULL 
+extra  NULL  NO  NULL 
 
 statement ok
 DROP TABLE IF EXISTS t;

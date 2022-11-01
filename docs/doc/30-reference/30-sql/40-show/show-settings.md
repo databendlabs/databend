@@ -36,7 +36,7 @@ SHOW SETTINGS;
 | max_execute_time               | 0          | 0          | SESSION | The maximum query execution time. it means no limit if the value is zero. default value: 0         | UInt64 |
 | max_threads                    | 10         | 16         | SESSION | The maximum number of threads to execute the request. By default, it is determined automatically.  | UInt64 |
 | quoted_ident_case_sensitive    | 1          | 1          | SESSION | Case sensitivity of quoted identifiers, default value: 1 (aka case-sensitive)                      | UInt64 |
-| sql_dialect                    | PostgreSQL | PostgreSQL | SESSION | SQL dialect, support "PostgreSQL" and "MySQL", default value: "PostgreSQL"                         | String |
+| sql_dialect                    | PostgreSQL | PostgreSQL | SESSION | SQL dialect, support "PostgreSQL" "MySQL" and "Hive", default value: "PostgreSQL"                         | String |
 | storage_read_buffer_size       | 1048576    | 1048576    | SESSION | The size of buffer in bytes for buffered reader of dal. By default, it is 1MB.                     | UInt64 |
 | timezone                       | UTC        | UTC        | SESSION | Timezone, default value: UTC,                                                                      | String |
 | unquoted_ident_case_sensitive  | 0          | 0          | SESSION | Case sensitivity of unquoted identifiers, default value: 0 (aka case-insensitive)                  | UInt64 |

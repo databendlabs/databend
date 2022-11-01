@@ -19,12 +19,11 @@ use common_ast::ast::Expr;
 use common_ast::ast::Join;
 use common_ast::ast::JoinCondition;
 use common_ast::ast::JoinOperator;
+use common_catalog::table_context::TableContext;
 use common_datavalues::type_coercion::compare_coercion;
 use common_datavalues::wrap_nullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::MetadataRef;
-use common_storages_fuse::TableContext;
 
 use crate::binder::scalar_common::split_conjunctions;
 use crate::binder::scalar_common::split_equivalent_predicate;
@@ -45,6 +44,7 @@ use crate::plans::LogicalInnerJoin;
 use crate::plans::Scalar;
 use crate::plans::ScalarExpr;
 use crate::BindContext;
+use crate::MetadataRef;
 
 pub struct JoinConditions {
     pub(crate) left_conditions: Vec<Scalar>,

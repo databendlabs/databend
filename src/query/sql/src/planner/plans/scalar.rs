@@ -22,11 +22,11 @@ use common_datavalues::NullableType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
-use common_planner::IndexType;
 
 use crate::binder::ColumnBinding;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::SExpr;
+use crate::IndexType;
 
 pub trait ScalarExpr {
     /// Get return type and nullability

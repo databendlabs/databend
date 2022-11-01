@@ -30,10 +30,12 @@ impl Config {
                 on: true,
                 level: "DEBUG".to_string(),
                 dir: "./.databend/logs".to_string(),
+                format: "text".to_string(),
             },
             stderr: StderrConfig {
                 on: true,
                 level: "DEBUG".to_string(),
+                format: "text".to_string(),
             },
         }
     }
@@ -44,16 +46,15 @@ pub struct FileConfig {
     pub on: bool,
     pub level: String,
     pub dir: String,
-    // TODO: Add format support in the future, before that we use `json`
-    // pub format: String,
+    pub format: String,
 }
 
 impl Display for FileConfig {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "enabled={}, level={}, dir={}",
-            self.on, self.level, self.dir
+            "enabled={}, level={}, dir={}, format={}",
+            self.on, self.level, self.dir, self.format
         )
     }
 }
@@ -64,6 +65,7 @@ impl Default for FileConfig {
             on: true,
             level: "INFO".to_string(),
             dir: "./.databend/logs".to_string(),
+            format: "json".to_string(),
         }
     }
 }
@@ -72,15 +74,14 @@ impl Default for FileConfig {
 pub struct StderrConfig {
     pub on: bool,
     pub level: String,
-    // TODO: Add format support in the future, before that we use `text`
-    // pub format: String,
+    pub format: String,
 }
 
 impl Display for StderrConfig {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "enabled={}{}, level={}",
+            "enabled={}{}, level={}, format={}",
             self.on,
             if !self.on {
                 "(To enable: LOG_STDERR_ON=true or RUST_LOG=info)"
@@ -88,6 +89,7 @@ impl Display for StderrConfig {
                 ""
             },
             self.level,
+            self.format,
         )
     }
 }
@@ -97,6 +99,7 @@ impl Default for StderrConfig {
         Self {
             on: false,
             level: "INFO".to_string(),
+            format: "text".to_string(),
         }
     }
 }

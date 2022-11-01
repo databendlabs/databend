@@ -13,7 +13,6 @@
 // limitations under the License.#[derive(Clone, Debug)]
 
 use common_exception::Result;
-use common_planner::IndexType;
 
 use crate::optimizer::ColumnSet;
 use crate::optimizer::PhysicalProperty;
@@ -26,6 +25,7 @@ use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 use crate::plans::Scalar;
 use crate::plans::ScalarExpr;
+use crate::IndexType;
 
 /// Evaluate scalar expression
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -102,9 +102,14 @@ impl LogicalOperator for EvalScalar {
         let cardinality = input_prop.cardinality;
         let precise_cardinality = input_prop.precise_cardinality;
 
+        // Derive used columns
+        let mut used_columns = self.used_columns()?;
+        used_columns.extend(input_prop.used_columns);
+
         Ok(RelationalProperty {
             output_columns,
             outer_columns,
+            used_columns,
             cardinality,
             precise_cardinality,
 

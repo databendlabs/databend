@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
@@ -20,12 +21,18 @@ use common_exception::Result;
 use common_functions::scalars::in_evaluator;
 use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
+use common_planner::Expression;
 
 use crate::evaluator::eval_node::EvalNode;
 use crate::evaluator::Evaluator;
 use crate::executor::PhysicalScalar;
 
 impl Evaluator {
+    pub fn eval_expression(expression: &Expression, schema: &DataSchema) -> Result<EvalNode> {
+        let physical_scalar = PhysicalScalar::from_expression(expression, schema)?;
+        Self::eval_physical_scalar(&physical_scalar)
+    }
+
     pub fn eval_physical_scalars(physical_scalars: &[PhysicalScalar]) -> Result<Vec<EvalNode>> {
         physical_scalars
             .iter()
@@ -42,7 +49,7 @@ impl Evaluator {
             PhysicalScalar::Function { name, args, .. } => {
                 let eval_args: Vec<EvalNode> = args
                     .iter()
-                    .map(|(v, _)| Self::eval_physical_scalar(v))
+                    .map(Self::eval_physical_scalar)
                     .collect::<Result<_>>()?;
 
                 // special case for in function
@@ -54,9 +61,9 @@ impl Evaluator {
                     } = &eval_args[1]
                     {
                         let func = if name_lower.as_str() == "not_in" {
-                            in_evaluator::create_by_values::<true>(args[0].1.clone(), vs.clone())
+                            in_evaluator::create_by_values::<true>(args[0].data_type(), vs.clone())
                         } else {
-                            in_evaluator::create_by_values::<false>(args[0].1.clone(), vs.clone())
+                            in_evaluator::create_by_values::<false>(args[0].data_type(), vs.clone())
                         }?;
 
                         return Ok(EvalNode::Function {
@@ -70,7 +77,8 @@ impl Evaluator {
                     }
                 }
 
-                let data_types: Vec<&DataTypeImpl> = args.iter().map(|(_, v)| v).collect();
+                let data_types: Vec<DataTypeImpl> = args.iter().map(|v| v.data_type()).collect();
+                let data_types: Vec<&DataTypeImpl> = data_types.iter().collect();
                 let func = FunctionFactory::instance().get(name, &data_types)?;
                 Ok(EvalNode::Function {
                     func,

@@ -15,7 +15,7 @@
 use std::ops::Range;
 use std::sync::Arc;
 
-use common_legacy_planners::PartInfo;
+use common_planner::PartInfo;
 
 use crate::HiveFileInfo;
 use crate::HivePartInfo;
@@ -59,6 +59,7 @@ impl HiveFileSplitter {
                     hive_file_info.filename.clone(),
                     hive_file_info.partition.clone(),
                     r,
+                    hive_file_info.length,
                 )
             })
             .collect()

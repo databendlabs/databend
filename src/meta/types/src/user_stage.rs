@@ -50,15 +50,29 @@ use crate::UserIdentity;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum StageType {
-    Internal,
+    /// LegacyInternal will be depracated.
+    ///
+    /// Please never use this variant except in `proto_conv`. We keep this
+    /// stage type for backword compatible.
+    ///
+    /// TODO(xuanwo): remove this when we are releasing v0.9.
+    LegacyInternal,
     External,
+    Internal,
+    /// User Stage is the stage for every sql user.
+    ///
+    /// This is a stage that just in memory. We will not persist in metasrv
+    User,
 }
 
 impl fmt::Display for StageType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let name = match self {
-            StageType::Internal => "Internal",
+            // LegacyInternal will print the same name as Internal, this is by design.
+            StageType::LegacyInternal => "Internal",
             StageType::External => "External",
+            StageType::Internal => "Internal",
+            StageType::User => "User",
         };
         write!(f, "{}", name)
     }
@@ -156,6 +170,7 @@ pub struct FileFormatOptions {
     pub skip_header: u64,
     pub field_delimiter: String,
     pub record_delimiter: String,
+    pub escape: String,
     pub compression: StageFileCompression,
 }
 
@@ -166,6 +181,7 @@ impl Default for FileFormatOptions {
             record_delimiter: "\n".to_string(),
             field_delimiter: ",".to_string(),
             skip_header: 0,
+            escape: "".to_string(),
             compression: StageFileCompression::default(),
         }
     }
@@ -234,17 +250,60 @@ pub struct UserStageInfo {
     pub file_format_options: FileFormatOptions,
     pub copy_options: CopyOptions,
     pub comment: String,
+    /// TODO(xuanwo): stage doesn't have this info anymore, remove it.
     pub number_of_files: u64,
     pub creator: Option<UserIdentity>,
 }
 
 impl UserStageInfo {
+    /// Create a new internal stage.
+    pub fn new_internal_stage(name: &str) -> UserStageInfo {
+        UserStageInfo {
+            stage_name: name.to_string(),
+            stage_type: StageType::Internal,
+            ..Default::default()
+        }
+    }
+
     pub fn new_external_stage(storage: StorageParams, path: &str) -> UserStageInfo {
         UserStageInfo {
             stage_name: format!("{storage},path={path}"),
             stage_type: StageType::External,
             stage_params: StageParams { storage },
             ..Default::default()
+        }
+    }
+
+    /// Create a new user stage.
+    pub fn new_user_stage(user: &str) -> UserStageInfo {
+        UserStageInfo {
+            stage_name: user.to_string(),
+            stage_type: StageType::User,
+            ..Default::default()
+        }
+    }
+
+    /// Update user stage with stage name.
+    pub fn with_stage_name(mut self, name: &str) -> UserStageInfo {
+        self.stage_name = name.to_string();
+        self
+    }
+
+    /// Get the prefix of stage.
+    ///
+    /// Use this function to get the prefix of this stage in the data operator.
+    ///
+    /// # Notes
+    ///
+    /// This function should never be called on external stage because it's meanless. Something must be wrong.
+    pub fn stage_prefix(&self) -> String {
+        match self.stage_type {
+            StageType::LegacyInternal => format!("/stage/{}/", self.stage_name),
+            StageType::External => {
+                unreachable!("stage_prefix should never be called on external stage, must be a bug")
+            }
+            StageType::Internal => format!("/stage/internal/{}/", self.stage_name),
+            StageType::User => format!("/stage/user/{}/", self.stage_name),
         }
     }
 }

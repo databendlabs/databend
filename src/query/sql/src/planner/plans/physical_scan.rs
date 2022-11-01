@@ -15,7 +15,6 @@
 use std::hash::Hash;
 
 use common_exception::Result;
-use common_planner::IndexType;
 use itertools::Itertools;
 
 use super::logical_get::Prewhere;
@@ -30,6 +29,7 @@ use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 use crate::plans::Scalar;
 use crate::plans::SortItem;
+use crate::IndexType;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PhysicalScan {

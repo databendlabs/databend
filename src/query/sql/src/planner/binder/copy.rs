@@ -28,12 +28,12 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::parse_escape_string;
-use common_legacy_planners::ReadDataSourcePlan;
-use common_legacy_planners::SourceInfo;
-use common_legacy_planners::StageTableInfo;
 use common_meta_types::FileFormatOptions;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::UserStageInfo;
+use common_planner::stage_table::StageTableInfo;
+use common_planner::ReadDataSourcePlan;
+use common_planner::SourceInfo;
 use common_storage::parse_uri_location;
 use common_storage::UriLocation;
 use common_users::UserApiProvider;
@@ -545,9 +545,14 @@ pub async fn parse_stage_location(
     let s: Vec<&str> = location.split('@').collect();
     // @my_ext_stage/abc/
     let names: Vec<&str> = s[1].splitn(2, '/').filter(|v| !v.is_empty()).collect();
-    let stage = UserApiProvider::instance()
-        .get_stage(&ctx.get_tenant(), names[0])
-        .await?;
+
+    let stage = if names[0] == "~" {
+        UserStageInfo::new_user_stage(&ctx.get_current_user()?.name)
+    } else {
+        UserApiProvider::instance()
+            .get_stage(&ctx.get_tenant(), names[0])
+            .await?
+    };
 
     let path = names.get(1).unwrap_or(&"").trim_start_matches('/');
 
@@ -566,9 +571,13 @@ pub async fn parse_stage_location_v2(
     name: &str,
     path: &str,
 ) -> Result<(UserStageInfo, String)> {
-    let stage = UserApiProvider::instance()
-        .get_stage(&ctx.get_tenant(), name)
-        .await?;
+    let stage = if name == "~" {
+        UserStageInfo::new_user_stage(&ctx.get_current_user()?.name)
+    } else {
+        UserApiProvider::instance()
+            .get_stage(&ctx.get_tenant(), name)
+            .await?
+    };
 
     // prefix must be endswith `/`, so we should trim path here.
     let relative_path = path.trim_start_matches('/').to_string();
@@ -610,6 +619,14 @@ pub fn parse_copy_file_format_options(
             .as_bytes(),
     );
 
+    // Escape
+    let escape = parse_escape_string(
+        file_format_options
+            .get("escape")
+            .unwrap_or(&"".to_string())
+            .as_bytes(),
+    );
+
     // Compression delimiter.
     let compression = parse_escape_string(
         file_format_options
@@ -625,6 +642,7 @@ pub fn parse_copy_file_format_options(
         skip_header,
         field_delimiter,
         record_delimiter,
+        escape,
         compression,
     })
 }

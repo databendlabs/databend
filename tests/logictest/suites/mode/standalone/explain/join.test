@@ -100,29 +100,6 @@ Filter
         ├── partitions scanned: 1
         └── push downs: [filters: [], limit: NONE]
 
-statement query T
-explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = cast(t1.number as string);
-
-----
-HashJoin
-├── join type: INNER
-├── build keys: [CAST(CAST(t1.number (#1) AS VARCHAR) AS DOUBLE)]
-├── probe keys: [CAST(t.number (#0) AS DOUBLE)]
-├── filters: []
-├── TableScan(Build)
-│   ├── table: default.system.numbers
-│   ├── read rows: 1
-│   ├── read bytes: 8
-│   ├── partitions total: 1
-│   ├── partitions scanned: 1
-│   └── push downs: [filters: [], limit: NONE]
-└── TableScan(Probe)
-    ├── table: default.system.numbers
-    ├── read rows: 1
-    ├── read bytes: 8
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    └── push downs: [filters: [], limit: NONE]
 
 statement query T
 explain select t.number from numbers(1) as t, numbers(1) as t1, numbers(1) as t2 where t1.number = t2.number and t.number = 1;

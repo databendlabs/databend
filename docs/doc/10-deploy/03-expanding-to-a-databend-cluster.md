@@ -15,7 +15,7 @@ In this topic, we will add a new Query node to an existing standalone Databend.
 Follow [Deploying with Self-Hosted Object Storage](./02-deploying-databend.md) to deploy a local standalone Databend with MinIO.
 
 ### Deploying a New Query Node
-1. Make a copy of the file `databend-meta-node.toml` in the folder `/usr/local/databend/etc`, paste it to the same folder with a name `databend-query-node2.toml`.
+1. Make a copy of the file `databend-query-node.toml` in the folder `/usr/local/databend/etc`, paste it to the same folder with a name `databend-query-node2.toml`.
 
 2. Open the file `databend-query-node2.toml`, modify the values for the parameters as below:
 

@@ -1223,6 +1223,7 @@ dependencies = [
  "once_cell",
  "pprof",
  "rand 0.8.5",
+ "semver 1.0.14",
  "serde",
  "tikv-jemalloc-ctl",
  "tikv-jemalloc-sys",
@@ -1264,11 +1265,10 @@ dependencies = [
  "common-exception",
  "common-functions",
  "common-io",
- "common-legacy-expression",
- "common-legacy-planners",
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
+ "common-planner",
  "common-settings",
  "common-storage",
  "dyn-clone",
@@ -1521,10 +1521,14 @@ name = "common-hashtable"
 version = "0.1.0"
 dependencies = [
  "ahash 0.8.0",
+ "bumpalo",
+ "cfg-if",
  "common-base",
+ "libc",
  "ordered-float 3.3.0",
  "primitive-types",
  "rand 0.8.5",
+ "semver 1.0.14",
 ]
 
 [[package]]
@@ -1571,46 +1575,6 @@ dependencies = [
  "byteorder",
  "fast-float",
  "ordered-float 3.3.0",
-]
-
-[[package]]
-name = "common-legacy-expression"
-version = "0.1.0"
-dependencies = [
- "common-datavalues",
- "common-exception",
- "common-functions",
- "once_cell",
- "serde",
-]
-
-[[package]]
-name = "common-legacy-parser"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "common-datavalues",
- "common-exception",
- "common-functions",
- "common-legacy-expression",
- "sqlparser",
- "unicode-segmentation",
-]
-
-[[package]]
-name = "common-legacy-planners"
-version = "0.1.0"
-dependencies = [
- "common-datavalues",
- "common-exception",
- "common-legacy-expression",
- "common-meta-app",
- "common-meta-types",
- "once_cell",
- "pretty_assertions",
- "serde",
- "serde_json",
- "typetag",
 ]
 
 [[package]]
@@ -1728,7 +1692,10 @@ name = "common-meta-raft-store"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-entry",
  "async-trait",
+ "byteorder",
+ "chrono",
  "common-base",
  "common-exception",
  "common-grpc",
@@ -1906,24 +1873,24 @@ name = "common-pipeline-transforms"
 version = "0.1.0"
 dependencies = [
  "async-trait-fn",
- "common-catalog",
  "common-datablocks",
- "common-datavalues",
  "common-exception",
- "common-legacy-expression",
  "common-pipeline-core",
- "tracing",
 ]
 
 [[package]]
 name = "common-planner"
 version = "0.1.0"
 dependencies = [
- "common-catalog",
  "common-datavalues",
+ "common-exception",
  "common-meta-app",
  "common-meta-types",
+ "once_cell",
  "parking_lot 0.12.1",
+ "serde",
+ "serde_json",
+ "typetag",
 ]
 
 [[package]]
@@ -2005,7 +1972,6 @@ dependencies = [
  "bytes",
  "chrono",
  "chrono-tz",
- "common-arrow",
  "common-ast",
  "common-base",
  "common-catalog",
@@ -2017,13 +1983,9 @@ dependencies = [
  "common-functions",
  "common-fuse-meta",
  "common-grpc",
- "common-hashtable",
  "common-hive-meta-store",
  "common-http",
  "common-io",
- "common-legacy-expression",
- "common-legacy-parser",
- "common-legacy-planners",
  "common-management",
  "common-meta-api",
  "common-meta-app",
@@ -2031,20 +1993,13 @@ dependencies = [
  "common-meta-types",
  "common-metrics",
  "common-pipeline-core",
- "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
  "common-planner",
  "common-settings",
  "common-storage",
  "common-storages-constants",
- "common-storages-factory",
- "common-storages-fuse",
- "common-storages-hive",
- "common-storages-index",
  "common-storages-preludes",
- "common-storages-share",
- "common-streams",
  "common-tracing",
  "common-users",
  "futures",
@@ -2129,12 +2084,12 @@ dependencies = [
  "common-exception",
  "common-formats",
  "common-fuse-meta",
- "common-legacy-planners",
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
  "common-pipeline-sources",
  "common-pipeline-transforms",
+ "common-planner",
  "common-storage",
  "common-storages-fuse",
  "common-storages-index",
@@ -2166,15 +2121,14 @@ dependencies = [
  "common-exception",
  "common-functions",
  "common-fuse-meta",
- "common-legacy-expression",
- "common-legacy-parser",
- "common-legacy-planners",
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
  "common-pipeline-sources",
  "common-pipeline-transforms",
+ "common-planner",
  "common-sharing",
+ "common-sql",
  "common-storage",
  "common-storages-cache",
  "common-storages-constants",
@@ -2205,12 +2159,11 @@ dependencies = [
  "common-exception",
  "common-fuse-meta",
  "common-hive-meta-store",
- "common-legacy-expression",
- "common-legacy-planners",
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
  "common-pipeline-sources",
+ "common-planner",
  "common-storage",
  "common-storages-cache",
  "common-storages-index",
@@ -2234,8 +2187,8 @@ dependencies = [
  "common-exception",
  "common-functions",
  "common-fuse-meta",
- "common-legacy-expression",
- "common-pipeline-transforms",
+ "common-planner",
+ "common-sql",
  "criterion",
  "rand 0.8.5",
  "serde",
@@ -2257,7 +2210,6 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
- "common-legacy-planners",
  "common-meta-app",
  "common-meta-types",
  "common-metrics",
@@ -2265,6 +2217,7 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
+ "common-planner",
  "common-storage",
  "common-users",
  "futures",
@@ -2323,7 +2276,6 @@ dependencies = [
  "tonic",
  "tracing",
  "tracing-appender",
- "tracing-bunyan-formatter",
  "tracing-log",
  "tracing-opentelemetry",
  "tracing-subscriber",
@@ -2802,6 +2754,7 @@ dependencies = [
  "common-tracing",
  "databend-meta",
  "databend-query",
+ "limits-rs",
  "openraft",
  "sentry",
  "serde",
@@ -2895,9 +2848,6 @@ dependencies = [
  "common-hive-meta-store",
  "common-http",
  "common-io",
- "common-legacy-expression",
- "common-legacy-parser",
- "common-legacy-planners",
  "common-management",
  "common-meta-api",
  "common-meta-app",
@@ -2964,6 +2914,7 @@ dependencies = [
  "tonic",
  "tracing",
  "typetag",
+ "unicode-segmentation",
  "url",
  "uuid",
  "walkdir",
@@ -3336,6 +3287,28 @@ name = "event-listener"
 version = "2.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
+
+[[package]]
+name = "failure"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d32e9bd16cc02eae7db7ef620b392808b89f6a5e16bb3497d159c6b92a0f4f86"
+dependencies = [
+ "backtrace",
+ "failure_derive",
+]
+
+[[package]]
+name = "failure_derive"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aa4da3c766cd7a0db8242e326e9e4e081edd567072893ed320008189715366a4"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+ "synstructure",
+]
 
 [[package]]
 name = "fallible-streaming-iterator"
@@ -3715,16 +3688,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fdbd3cdc1856ca7736763d2784671c2c9b0093f0ee47e2bed0059feed6afca89"
 dependencies = [
  "lazy_static",
-]
-
-[[package]]
-name = "gethostname"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1ebd34e35c46e00bb73e81363248d627782724609fe1b6396f553f68fe3862e"
-dependencies = [
- "libc",
- "winapi",
 ]
 
 [[package]]
@@ -4687,6 +4650,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "limits-rs"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c638280de57bc448272ca1738a4b0380a50d05bf562de14ff557d9db4c4c2b8b"
+dependencies = [
+ "failure",
+ "failure_derive",
+]
+
+[[package]]
 name = "link-cplusplus"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5418,9 +5391,9 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 
 [[package]]
 name = "opendal"
-version = "0.19.5"
+version = "0.19.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7121d718f1bf72ae023fa6447507ef27a052c590aeb5e1d0a2c0592c74db722b"
+checksum = "35096e9c11c30efb0edf3598bed2275b8d62876ee108ffd4385ecc7cb77f08af"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -7206,9 +7179,9 @@ dependencies = [
 
 [[package]]
 name = "serde-env"
-version = "0.0.2"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e03cfb2aa71df46bc21892a343552041c8712e97ace1a535e7f7e6eabeca6c0"
+checksum = "9f31ed60434054f2e2fceeba651f4e8ec2bb89269828323c1673a31606ac35db"
 dependencies = [
  "anyhow",
  "log",
@@ -7274,9 +7247,9 @@ dependencies = [
 
 [[package]]
 name = "serfig"
-version = "0.0.2"
+version = "0.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "782e2265bd0b75de9d0934d412ced9b790b1290f59c9ac2e56b859d69d210f18"
+checksum = "e56ca578e3bed3843488231c20a76f4dc227a713942f1a74b23a499879e887fc"
 dependencies = [
  "anyhow",
  "indexmap",
@@ -7700,6 +7673,18 @@ name = "sync_wrapper"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20518fe4a4c9acf048008599e464deb21beeae3d3578418951a189c235a7a9a8"
+
+[[package]]
+name = "synstructure"
+version = "0.12.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f36bdaa60a83aca3921b5259d5400cbf5e90fc51931376a9bd4a0eb79aa7210f"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+ "unicode-xid",
+]
 
 [[package]]
 name = "sysinfo"
@@ -8168,23 +8153,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tracing-bunyan-formatter"
-version = "0.3.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2445962f94a813b2aaea29ceeccb6dce9fd3aa5b1cb45595cde755b00d021ad"
-dependencies = [
- "gethostname",
- "log",
- "serde",
- "serde_json",
- "time 0.3.15",
- "tracing",
- "tracing-core",
- "tracing-log",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "tracing-core"
 version = "0.1.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8230,6 +8198,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "tracing-serde"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc6b213177105856957181934e4920de57730fc69bf42c37ee5bb664d406d9e1"
+dependencies = [
+ "serde",
+ "tracing-core",
+ "valuable",
+ "valuable-serde",
+]
+
+[[package]]
 name = "tracing-subscriber"
 version = "0.3.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8239,12 +8219,17 @@ dependencies = [
  "nu-ansi-term",
  "once_cell",
  "regex",
+ "serde",
+ "serde_json",
  "sharded-slab",
  "smallvec",
  "thread_local",
  "tracing",
  "tracing-core",
  "tracing-log",
+ "tracing-serde",
+ "valuable",
+ "valuable-serde",
 ]
 
 [[package]]
@@ -8469,6 +8454,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c0edd1e5b14653f783770bce4a4dabb4a5108a5370a5f5d8cfe8710c361f6c8b"
 
 [[package]]
+name = "unicode-xid"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f962df74c8c05a667b5ee8bcf162993134c104e96440b663c8daa176dc772d8c"
+
+[[package]]
 name = "unicode_categories"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8531,6 +8522,16 @@ name = "valuable"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "830b7e5d4d90034032940e4ace0d9a9a057e7a45cd94e6c007832e39edb82f6d"
+
+[[package]]
+name = "valuable-serde"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5285cfff30cdabe26626736a54d989687dd9cab84f51f4048b61d6d0ae8b0907"
+dependencies = [
+ "serde",
+ "valuable",
+]
 
 [[package]]
 name = "value-bag"
@@ -8948,7 +8949,7 @@ dependencies = [
 [[package]]
 name = "xorfilter-rs"
 version = "0.5.1"
-source = "git+https://github.com/datafuse-extras/xorfilter?rev=008ca3#008ca3ccdf8b13b2b123749d56d6179c4aac33f1"
+source = "git+https://github.com/datafuse-extras/xorfilter?tag=databend-alpha.1#008ca3ccdf8b13b2b123749d56d6179c4aac33f1"
 dependencies = [
  "cbordata",
 ]

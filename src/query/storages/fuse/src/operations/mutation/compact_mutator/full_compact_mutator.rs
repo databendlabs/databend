@@ -27,6 +27,8 @@ use crate::io::BlockCompactor;
 use crate::io::SegmentWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
+use crate::metrics::metrics_set_segments_memory_usage;
+use crate::metrics::metrics_set_selected_blocks_memory_usage;
 use crate::operations::mutation::AbortOperation;
 use crate::operations::AppendOperationLogEntry;
 use crate::operations::CompactOptions;
@@ -43,7 +45,7 @@ pub struct FullCompactMutator {
     data_accessor: Operator,
     block_compactor: BlockCompactor,
     location_generator: TableMetaLocationGenerator,
-    selected_blocks: Vec<BlockMeta>,
+    selected_blocks: Vec<Arc<BlockMeta>>,
     // summarised statistics of all the accumulated segments(segment compacted, and unchanged)
     merged_segment_statistics: Statistics,
     // locations all the accumulated segments(segment compacted, and unchanged)
@@ -81,7 +83,7 @@ impl FullCompactMutator {
         self.compact_params.base_snapshot.summary.block_count as usize
     }
 
-    pub fn selected_blocks(&self) -> Vec<BlockMeta> {
+    pub fn selected_blocks(&self) -> Vec<Arc<BlockMeta>> {
         self.selected_blocks.clone()
     }
 
@@ -96,8 +98,6 @@ impl TableMutator for FullCompactMutator {
         let snapshot = self.compact_params.base_snapshot.clone();
         let segment_locations = &snapshot.segments;
 
-        // Blocks that need to be reorganized into new segments.
-        let mut remain_blocks = Vec::new();
         // Read all segments information in parallel.
         let segments_io = SegmentsIO::create(self.ctx.clone(), self.data_accessor.clone());
         let segments = segments_io
@@ -105,60 +105,78 @@ impl TableMutator for FullCompactMutator {
             .await?
             .into_iter()
             .collect::<Result<Vec<_>>>()?;
+        let number_segments = segments.len();
 
-        let limit = self.compact_params.limit.unwrap_or(segments.len());
-        if limit < segments.len() {
-            for i in limit..segments.len() {
-                self.merged_segments_locations
-                    .push(segment_locations[i].clone());
-                self.merged_segment_statistics =
-                    merge_statistics(&self.merged_segment_statistics, &segments[i].summary)?;
-            }
-        }
+        // todo: add real metrics
+        metrics_set_segments_memory_usage(0.0);
 
-        for (idx, segment) in segments.iter().take(limit).enumerate() {
-            let mut need_merge = false;
-            let mut remains = Vec::new();
-
-            segment.blocks.iter().for_each(|b| {
-                if self.is_cluster
-                    || self
-                        .block_compactor
-                        .check_perfect_block(b.row_count as usize, b.block_size as usize)
-                {
-                    remains.push(b.clone());
-                } else {
-                    self.selected_blocks.push(b.clone());
-                    need_merge = true;
-                }
-            });
-
-            // If the number of blocks of segment meets block_per_seg, and the blocks in segments donot need to be compacted,
-            // then record the segment information.
-            if !need_merge && segment.blocks.len() == self.compact_params.block_per_seg {
-                self.merged_segments_locations
-                    .push(segment_locations[idx].clone());
-                self.merged_segment_statistics =
-                    merge_statistics(&self.merged_segment_statistics, &segment.summary)?;
-                continue;
-            }
-
-            remain_blocks.append(&mut remains);
-        }
+        let limit = self.compact_params.limit.unwrap_or(number_segments);
 
         let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
-        // Because the pipeline is used, a threshold for the number of blocks is added to resolve
-        // https://github.com/datafuselabs/databend/issues/8316
-        if self.selected_blocks.len() < max_threads * 2 {
-            remain_blocks.append(&mut self.selected_blocks);
-            self.selected_blocks.clear();
-        }
 
-        if self.selected_blocks.is_empty()
-            && (remain_blocks.is_empty()
-                || snapshot.segments.len() - self.merged_segments_locations.len() <= 1)
-        {
-            return Ok(false);
+        let mut unchanged_segment_locations = Vec::with_capacity(limit / 2);
+
+        let mut unchanged_segment_statistics = Statistics::default();
+
+        let mut start = 0;
+        // Blocks that need to be reorganized into new segments.
+        let mut remain_blocks = Vec::new();
+        loop {
+            let end = std::cmp::min(start + limit, number_segments);
+            for i in start..end {
+                let mut need_merge = false;
+                let mut remains = Vec::new();
+
+                segments[i].blocks.iter().for_each(|b| {
+                    if self.is_cluster
+                        || self
+                            .block_compactor
+                            .check_perfect_block(b.row_count as usize, b.block_size as usize)
+                    {
+                        remains.push(b.clone());
+                    } else {
+                        self.selected_blocks.push(b.clone());
+                        need_merge = true;
+                    }
+                });
+
+                // todo: add real metrics
+                metrics_set_selected_blocks_memory_usage(0.0);
+
+                // If the number of blocks of segment meets block_per_seg, and the blocks in segments donot need to be compacted,
+                // then record the segment information.
+                if !need_merge && segments[i].blocks.len() >= self.compact_params.block_per_seg {
+                    unchanged_segment_locations.push(segment_locations[i].clone());
+                    unchanged_segment_statistics =
+                        merge_statistics(&unchanged_segment_statistics, &segments[i].summary)?;
+                    continue;
+                }
+
+                remain_blocks.append(&mut remains);
+            }
+
+            // Because the pipeline is used, a threshold for the number of blocks is added to resolve
+            // https://github.com/datafuselabs/databend/issues/8316
+            if self.selected_blocks.len() >= max_threads * 2 {
+                if end < number_segments {
+                    self.merged_segments_locations = segment_locations[end..].to_vec();
+                    for segment in &segments[end..] {
+                        unchanged_segment_statistics =
+                            merge_statistics(&unchanged_segment_statistics, &segment.summary)?;
+                    }
+                }
+
+                self.merged_segments_locations
+                    .extend(unchanged_segment_locations.into_iter());
+                self.merged_segment_statistics = unchanged_segment_statistics;
+                break;
+            }
+
+            if end == number_segments {
+                self.selected_blocks.clear();
+                return Ok(false);
+            }
+            start = end;
         }
 
         // Create new segments.

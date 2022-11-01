@@ -172,12 +172,17 @@ impl<T: ComparisonImpl> ComparisonFunctionCreator<T> {
             });
         }
 
-        let mut least_supertype = compare_coercion(args[0], args[1])?;
-        if display_name == "=" && (lhs_id.is_string() && rhs_id.is_numeric())
+        if (lhs_id.is_string() && rhs_id.is_numeric())
             || (rhs_id.is_string() && lhs_id.is_numeric())
         {
-            least_supertype = Vu8::to_data_type();
+            return Err(ErrorCode::IllegalDataType(format!(
+                "Can not compare {:?} with {:?}",
+                args[0].data_type_id(),
+                args[1].data_type_id()
+            )));
         }
+
+        let least_supertype = compare_coercion(args[0], args[1])?;
 
         with_match_physical_primitive_type!(least_supertype.data_type_id().to_physical_type(), |$T| {
             let func = Arc::new(ComparisonPrimitiveImpl::<$T, _>::new(least_supertype, true, T::eval_simd::<$T>));
@@ -194,7 +199,7 @@ impl<T: ComparisonImpl> ComparisonFunctionCreator<T> {
                 },
                 _ => Err(ErrorCode::IllegalDataType(format!(
                     "Can not compare {:?} with {:?}",
-                    args[0], args[1]
+                    args[0].data_type_id(), args[1].data_type_id()
                 ))),
             }
         })

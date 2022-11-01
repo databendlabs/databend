@@ -43,9 +43,6 @@ common-hashtable = { path = "../../common/hashtable" }
 common-hive-meta-store = { path = "../storages/hive-meta-store", optional = true }
 common-http = { path = "../../common/http" }
 common-io = { path = "../../common/io" }
-common-legacy-expression = { path = "../legacy-expression" }
-common-legacy-parser = { path = "../legacy-parser" }
-common-legacy-planners = { path = "../legacy-planners" }
 common-management = { path = "../management" }
 common-meta-api = { path = "../../meta/api" }
 common-meta-app = { path = "../../meta/app" }
@@ -116,6 +113,7 @@ tokio-stream = { version = "0.1.10", features = ["net"] }
 tonic = "0.8.1"
 tracing = "0.1.36"
 typetag = "0.2.3"
+unicode-segmentation = "1.10.0"
 uuid = { version = "1.1.2", features = ["serde", "v4"] }
 
 [dev-dependencies]

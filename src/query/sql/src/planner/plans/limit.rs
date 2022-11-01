@@ -77,6 +77,7 @@ impl LogicalOperator for Limit {
         Ok(RelationalProperty {
             output_columns: input_prop.output_columns,
             outer_columns: input_prop.outer_columns,
+            used_columns: input_prop.used_columns,
             cardinality: match self.limit {
                 Some(limit) if (limit as f64) < input_prop.cardinality => limit as f64,
                 _ => input_prop.cardinality,

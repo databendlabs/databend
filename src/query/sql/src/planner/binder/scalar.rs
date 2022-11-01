@@ -15,15 +15,15 @@
 use std::sync::Arc;
 
 use common_ast::ast::Expr;
+use common_catalog::table_context::TableContext;
 use common_datavalues::DataTypeImpl;
 use common_exception::Result;
-use common_planner::MetadataRef;
-use common_storages_fuse::TableContext;
 
 use crate::planner::binder::BindContext;
 use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::Scalar;
+use crate::MetadataRef;
 
 /// Helper for binding scalar expression with `BindContext`.
 pub struct ScalarBinder<'a> {

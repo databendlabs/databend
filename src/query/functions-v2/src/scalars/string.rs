@@ -441,7 +441,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| None,
         vectorize_string_to_string_2_arg(
             |col, _| col.data.len(),
-            |val, trim_str, output, _| {
+            |val, trim_str, _, output| {
                 let chunk_size = trim_str.len();
                 let pos = val.chunks(chunk_size).position(|chunk| chunk != trim_str);
                 if let Some(idx) = pos {
@@ -459,7 +459,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| None,
         vectorize_string_to_string_2_arg(
             |col, _| col.data.len(),
-            |val, trim_str, output, _| {
+            |val, trim_str, _, output| {
                 let chunk_size = trim_str.len();
                 let pos = val.rchunks(chunk_size).position(|chunk| chunk != trim_str);
                 if let Some(idx) = pos {
@@ -477,7 +477,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| None,
         vectorize_string_to_string_2_arg(
             |col, _| col.data.len(),
-            |val, trim_str, output, _| {
+            |val, trim_str, _, output| {
                 let chunk_size = trim_str.len();
                 let start_pos = val.chunks(chunk_size).position(|chunk| chunk != trim_str);
 
@@ -830,7 +830,7 @@ fn vectorize_string_to_string(
 /// (String, String) to String scalar function with estimiated ouput column capacity.
 fn vectorize_string_to_string_2_arg(
     estimate_bytes: impl Fn(&StringColumn, &StringColumn) -> usize + Copy,
-    func: impl Fn(&[u8], &[u8], &mut StringColumnBuilder, FunctionContext) -> Result<(), String> + Copy,
+    func: impl Fn(&[u8], &[u8], FunctionContext, &mut StringColumnBuilder) -> Result<(), String> + Copy,
 ) -> impl Fn(
     ValueRef<StringType>,
     ValueRef<StringType>,
@@ -840,7 +840,7 @@ fn vectorize_string_to_string_2_arg(
     move |arg1, arg2, ctx| match (arg1, arg2) {
         (ValueRef::Scalar(arg1), ValueRef::Scalar(arg2)) => {
             let mut builder = StringColumnBuilder::with_capacity(1, 0);
-            func(arg1, arg2, &mut builder, ctx)?;
+            func(arg1, arg2, ctx, &mut builder)?;
             Ok(Value::Scalar(builder.build_scalar()))
         }
         (ValueRef::Scalar(arg1), ValueRef::Column(arg2)) => {
@@ -848,7 +848,7 @@ fn vectorize_string_to_string_2_arg(
                 estimate_bytes(&StringColumnBuilder::repeat(arg1, 1).build(), &arg2);
             let mut builder = StringColumnBuilder::with_capacity(arg2.len(), data_capacity);
             for val in arg2.iter() {
-                func(arg1, val, &mut builder, ctx)?;
+                func(arg1, val, ctx, &mut builder)?;
             }
             Ok(Value::Column(builder.build()))
         }
@@ -857,7 +857,7 @@ fn vectorize_string_to_string_2_arg(
                 estimate_bytes(&arg1, &StringColumnBuilder::repeat(arg2, 1).build());
             let mut builder = StringColumnBuilder::with_capacity(arg1.len(), data_capacity);
             for val in arg1.iter() {
-                func(val, arg2, &mut builder, ctx)?;
+                func(val, arg2, ctx, &mut builder)?;
             }
             Ok(Value::Column(builder.build()))
         }
@@ -866,7 +866,7 @@ fn vectorize_string_to_string_2_arg(
             let mut builder = StringColumnBuilder::with_capacity(arg1.len(), data_capacity);
             let iter = arg1.iter().zip(arg2.iter());
             for (val1, val2) in iter {
-                func(val1, val2, &mut builder, ctx)?;
+                func(val1, val2, ctx, &mut builder)?;
             }
             Ok(Value::Column(builder.build()))
         }

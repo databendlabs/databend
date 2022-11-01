@@ -49,6 +49,10 @@ use uuid::Uuid;
 use crate::io::write_meta;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
+use crate::metrics::metrics_inc_commit_mutation_resolvable_conflict;
+use crate::metrics::metrics_inc_commit_mutation_retry;
+use crate::metrics::metrics_inc_commit_mutation_success;
+use crate::metrics::metrics_inc_commit_mutation_unresolvable_conflict;
 use crate::operations::mutation::AbortOperation;
 use crate::operations::AppendOperationLogEntry;
 use crate::operations::TableOperationLog;
@@ -474,26 +478,26 @@ impl FuseTable {
                             abort_operation
                                 .abort(ctx.clone(), self.operator.clone())
                                 .await?;
-                            metrics::counter!("fuse_commit_mutation_unresolvable_conflict", 1);
+                            metrics_inc_commit_mutation_unresolvable_conflict();
                             return Err(ErrorCode::StorageOther(
                                 "mutation conflicts, concurrent mutation detected while committing segment compaction operation",
                             ));
                         }
                         Conflict::ResolvableAppend(range_of_newly_append) => {
                             info!("resolvable conflicts detected");
-                            metrics::counter!("fuse_commit_mutation_resolvable_conflict", 1);
+                            metrics_inc_commit_mutation_resolvable_conflict();
                             concurrently_appended_segment_locations =
                                 &latest_snapshot.segments[range_of_newly_append];
                         }
                     }
 
                     retries += 1;
-                    metrics::counter!("fuse_commit_mutation_retry", 1);
+                    metrics_inc_commit_mutation_retry();
                 }
                 Err(e) => return Err(e),
                 Ok(_) => {
                     return {
-                        metrics::counter!("fuse_commit_mutation_success", 1);
+                        metrics_inc_commit_mutation_success();
                         Ok(())
                     };
                 }
@@ -576,13 +580,14 @@ mod utils {
     use std::collections::BTreeMap;
 
     use super::*;
+    use crate::metrics::metrics_inc_commit_mutation_aborts;
 
     #[inline]
     pub async fn abort_operations(
         operator: Operator,
         operation_log: TableOperationLog,
     ) -> Result<()> {
-        metrics::counter!("fuse_commit_mutation_aborts", 1);
+        metrics_inc_commit_mutation_aborts();
         for entry in operation_log {
             for block in &entry.segment_info.blocks {
                 let block_location = &block.location.0;

@@ -18,7 +18,6 @@ use common_ast::ast::CreateStageStmt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::OnErrorMode;
-use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
 use common_planner::plans::CreateStagePlan;
 use common_planner::plans::ListPlan;
@@ -80,10 +79,13 @@ impl<'a> Binder {
         } = stmt;
 
         let mut stage_info = match location {
-            None => UserStageInfo {
-                stage_type: StageType::Internal,
-                ..Default::default()
-            },
+            None => {
+                if stage_name == "~" {
+                    UserStageInfo::new_user_stage(&self.ctx.get_current_user()?.name)
+                } else {
+                    UserStageInfo::new_internal_stage(stage_name)
+                }
+            }
             Some(uri) => {
                 let uri = UriLocation {
                     protocol: uri.protocol.clone(),
@@ -92,23 +94,11 @@ impl<'a> Binder {
                     connection: uri.connection.clone(),
                 };
 
-                // Make sure the behavior under older planner is the same
-                // with before which always use the same endpoint with config.
-                //
-                // TODO: remove me while removing old planner
-                // if self.ctx.get_settings().get_enable_planner_v2()? == 0 {
-                //     if let StorageParams::S3(v) = self.ctx.get_config().storage.params {
-                //         uri.connection
-                //             .insert("endpoint_url".to_string(), v.endpoint_url);
-                //     }
-                // }
-
                 let (stage_storage, path) = parse_uri_location(&uri)?;
 
-                UserStageInfo::new_external_stage(stage_storage, &path)
+                UserStageInfo::new_external_stage(stage_storage, &path).with_stage_name(stage_name)
             }
         };
-        stage_info.stage_name = stage_name.clone();
 
         if !file_format_options.is_empty() {
             stage_info.file_format_options = parse_copy_file_format_options(file_format_options)?;

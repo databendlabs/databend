@@ -18,16 +18,17 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_expression::LegacyExpression;
+use common_functions::scalars::FunctionContext;
+use common_sql::evaluator::EvalNode;
+use common_sql::evaluator::Evaluator;
+use common_sql::executor::PhysicalScalar;
 
 use crate::api::rpc::flight_scatter::FlightScatter;
-use crate::pipelines::processors::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
 
 #[derive(Clone)]
 pub struct HashFlightScatter {
-    scatter_expression_executor: Arc<ExpressionExecutor>,
-    scatter_expression_name: String,
+    scatter_expression_executor: Arc<EvalNode>,
     scattered_size: usize,
 }
 
@@ -35,7 +36,7 @@ impl HashFlightScatter {
     pub fn try_create(
         ctx: Arc<QueryContext>,
         schema: DataSchemaRef,
-        expr: Option<LegacyExpression>,
+        expr: Option<PhysicalScalar>,
         num: usize,
     ) -> Result<Self> {
         match expr {
@@ -50,10 +51,11 @@ impl HashFlightScatter {
 impl FlightScatter for HashFlightScatter {
     fn execute(&self, data_block: &DataBlock, _num: usize) -> Result<Vec<DataBlock>> {
         let expression_executor = self.scatter_expression_executor.clone();
-        let evaluated_data_block = expression_executor.execute(data_block)?;
-        let indices = evaluated_data_block.try_column_by_name(&self.scatter_expression_name)?;
+        let indices = expression_executor
+            .eval(&FunctionContext::default(), data_block)?
+            .vector;
 
-        let col: &PrimitiveColumn<u64> = Series::check_get(indices)?;
+        let col: &PrimitiveColumn<u64> = Series::check_get(&indices)?;
         let indices: Vec<usize> = col.iter().map(|c| *c as usize).collect();
         DataBlock::scatter_block(data_block, &indices, self.scattered_size)
     }
@@ -61,55 +63,34 @@ impl FlightScatter for HashFlightScatter {
 
 impl HashFlightScatter {
     fn try_create_impl(
-        schema: DataSchemaRef,
+        _schema: DataSchemaRef,
         num: usize,
-        expr: LegacyExpression,
-        ctx: Arc<QueryContext>,
+        expr: PhysicalScalar,
+        _ctx: Arc<QueryContext>,
     ) -> Result<Self> {
         let expression = Self::expr_action(num, expr);
-        let indices_expr_executor = Self::expr_executor(ctx, schema, &expression)?;
-        indices_expr_executor.validate()?;
+        let indices_expr_executor = Evaluator::eval_physical_scalar(&expression)?;
 
         Ok(HashFlightScatter {
             scatter_expression_executor: Arc::new(indices_expr_executor),
-            scatter_expression_name: expression.column_name(),
             scattered_size: num,
         })
     }
 
-    fn indices_expr_schema(output_name: &str) -> DataSchemaRef {
-        DataSchemaRefExt::create(vec![DataField::new(output_name, u64::to_data_type())])
-    }
-
-    fn expr_executor(
-        ctx: Arc<QueryContext>,
-        schema: DataSchemaRef,
-        expr: &LegacyExpression,
-    ) -> Result<ExpressionExecutor> {
-        ExpressionExecutor::try_create(
-            ctx,
-            "indices expression in FlightScatterByHash",
-            schema,
-            Self::indices_expr_schema(&expr.column_name()),
-            vec![expr.clone()],
-            false,
-        )
-    }
-
-    fn expr_action(num: usize, expr: LegacyExpression) -> LegacyExpression {
-        LegacyExpression::ScalarFunction {
-            op: String::from("modulo"),
+    fn expr_action(num: usize, expr: PhysicalScalar) -> PhysicalScalar {
+        PhysicalScalar::Function {
+            name: String::from("modulo"),
             args: vec![
-                LegacyExpression::Cast {
-                    expr: Box::new(expr),
-                    data_type: u64::to_data_type(),
-                    pg_style: false,
+                PhysicalScalar::Cast {
+                    input: Box::new(expr),
+                    target: u64::to_data_type(),
                 },
-                LegacyExpression::create_literal_with_type(
-                    DataValue::UInt64(num as u64),
-                    u64::to_data_type(),
-                ),
+                PhysicalScalar::Constant {
+                    value: DataValue::UInt64(num as u64),
+                    data_type: u64::to_data_type(),
+                },
             ],
+            return_type: u64::to_data_type(),
         }
     }
 }

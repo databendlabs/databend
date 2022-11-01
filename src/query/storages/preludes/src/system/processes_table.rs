@@ -126,7 +126,7 @@ impl ProcessesTable {
             DataField::new("type", Vu8::to_data_type()),
             DataField::new_nullable("host", Vu8::to_data_type()),
             DataField::new("user", Vu8::to_data_type()),
-            DataField::new("state", Vu8::to_data_type()),
+            DataField::new("command", Vu8::to_data_type()),
             DataField::new("database", Vu8::to_data_type()),
             DataField::new("extra_info", Vu8::to_data_type()),
             DataField::new("memory_usage", i64::to_data_type()),

@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 
 use common_exception::Result;
-use common_planner::IndexType;
 
 use crate::binder::Binder;
 use crate::binder::ColumnBinding;
@@ -28,6 +27,7 @@ use crate::plans::EvalScalar;
 use crate::plans::Scalar;
 use crate::plans::ScalarItem;
 use crate::BindContext;
+use crate::IndexType;
 
 impl Binder {
     pub(super) fn bind_distinct(

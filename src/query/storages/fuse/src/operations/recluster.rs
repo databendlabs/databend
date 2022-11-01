@@ -20,14 +20,14 @@ use common_catalog::table_context::TableContext;
 use common_datablocks::SortColumnDescription;
 use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
-use common_legacy_planners::Extras;
-use common_legacy_planners::ReadDataSourcePlan;
-use common_legacy_planners::SourceInfo;
 use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::SortMergeCompactor;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_pipeline_transforms::processors::transforms::TransformSortMerge;
 use common_pipeline_transforms::processors::transforms::TransformSortPartial;
+use common_planner::extras::Extras;
+use common_planner::ReadDataSourcePlan;
+use common_planner::SourceInfo;
 
 use crate::operations::FuseTableSink;
 use crate::operations::ReclusterMutator;
@@ -70,7 +70,7 @@ impl FuseTable {
         .await?;
 
         let default_cluster_key_id = self.cluster_key_meta.clone().unwrap().0;
-        let mut blocks_map: BTreeMap<i32, Vec<(usize, BlockMeta)>> = BTreeMap::new();
+        let mut blocks_map: BTreeMap<i32, Vec<(usize, Arc<BlockMeta>)>> = BTreeMap::new();
         block_metas.iter().for_each(|(idx, b)| {
             if let Some(stats) = &b.cluster_stats {
                 if stats.cluster_key_id == default_cluster_key_id && stats.level >= 0 {
@@ -132,7 +132,10 @@ impl FuseTable {
         };
 
         ctx.try_set_partitions(plan.parts.clone())?;
-        self.do_read_data(ctx.clone(), &plan, pipeline)?;
+
+        // It's easy to OOM if we set the max_io_request more than the max threads.
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        self.do_read_data(ctx.clone(), &plan, pipeline, max_threads)?;
 
         let cluster_stats_gen = self.get_cluster_stats_gen(
             ctx.clone(),
@@ -143,7 +146,7 @@ impl FuseTable {
 
         // sort
         let sort_descs: Vec<SortColumnDescription> = self
-            .cluster_keys
+            .cluster_keys()
             .iter()
             .map(|expr| SortColumnDescription {
                 column_name: expr.column_name(),
@@ -151,6 +154,7 @@ impl FuseTable {
                 nulls_first: false,
             })
             .collect();
+
         pipeline.add_transform(|transform_input_port, transform_output_port| {
             TransformSortPartial::try_create(
                 transform_input_port,
