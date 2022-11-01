@@ -66,7 +66,6 @@ build_exceptions! {
     EmptyData(1016),
     DataStructMissMatch(1017),
     BadDataArrayLength(1018),
-    UnknownContextID(1019),
     UnknownTableId(1020),
     UnknownTableFunction(1021),
     BadOption(1022),
