@@ -45,14 +45,14 @@ impl<'a> TypeSerializer<'a> for StringSerializer<'a> {
     ) {
         if in_nested {
             buf.push(format.nested.quote_char);
-        }
-        write_escaped_string(
-            unsafe { self.column.value_unchecked(row_index) },
-            buf,
-            format.nested.quote_char,
-        );
-        if in_nested {
+            write_escaped_string(
+                unsafe { self.column.value_unchecked(row_index) },
+                buf,
+                format.nested.quote_char,
+            );
             buf.push(format.nested.quote_char);
+        } else {
+            buf.extend_from_slice(unsafe { self.column.value_unchecked(row_index) });
         }
     }
 
