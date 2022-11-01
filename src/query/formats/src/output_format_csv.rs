@@ -64,12 +64,7 @@ impl<const TSV: bool, const WITH_NAMES: bool, const WITH_TYPES: bool>
             };
         }
 
-        let rd = if TSV {
-            ROW_DELIMITER
-        } else {
-            format.record_delimiter[0]
-        };
-        buf.push(rd);
+        buf.push(format.record_delimiter[0]);
         buf
     }
 }

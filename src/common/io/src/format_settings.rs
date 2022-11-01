@@ -34,8 +34,8 @@ pub struct NestedFormatSettings {
 impl Default for NestedFormatSettings {
     fn default() -> Self {
         NestedFormatSettings {
-            true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
-            false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
+            true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
+            false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
             null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
             nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
             inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
