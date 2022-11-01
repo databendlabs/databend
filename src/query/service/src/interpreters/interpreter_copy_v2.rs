@@ -32,7 +32,7 @@ use regex::Regex;
 use super::append2table;
 use crate::catalogs::Catalog;
 use crate::interpreters::interpreter_common::list_files;
-use crate::interpreters::interpreter_common::stat_file;
+use crate::interpreters::interpreter_common::stat_files;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreterV2;
 use crate::pipelines::PipelineBuildResult;
@@ -55,7 +55,7 @@ impl CopyInterpreterV2 {
         Ok(CopyInterpreterV2 { ctx, plan })
     }
 
-    async fn do_query_copied_files_info(
+    async fn get_copied_files_info(
         &self,
         catalog_name: String,
         database_name: String,
@@ -121,7 +121,7 @@ impl CopyInterpreterV2 {
             let mut file_info = BTreeMap::new();
 
             for query_copied_files in files.chunks(MAX_QUERY_COPIED_FILES_NUM) {
-                self.do_query_copied_files_info(
+                self.get_copied_files_info(
                     catalog_name.to_string(),
                     database_name.to_string(),
                     table_id,
@@ -131,26 +131,28 @@ impl CopyInterpreterV2 {
                 .await?;
             }
 
-            for file in files.iter() {
-                let stage_file = stat_file(&self.ctx, &table_info.stage_info, file).await?;
-
-                if let Some(file_info) = file_info.get(file) {
-                    match &file_info.etag {
+            let stat_infos = stat_files(&self.ctx, &table_info.stage_info, files).await?;
+            for stat_info in stat_infos.into_iter().flatten() {
+                if let Some(copied_file_info) = file_info.get(&stat_info.path) {
+                    match &copied_file_info.etag {
                         Some(_etag) => {
                             // No need to copy the file again if etag is_some and match.
-                            if stage_file.etag == file_info.etag {
-                                tracing::warn!("ignore copy file {:?} matched by etag", file);
+                            if stat_info.etag == copied_file_info.etag {
+                                tracing::warn!(
+                                    "ignore copy file {:?} matched by etag",
+                                    copied_file_info
+                                );
                                 continue;
                             }
                         }
                         None => {
                             // etag is none, compare with content_length and last_modified.
-                            if file_info.content_length == stage_file.size
-                                && file_info.last_modified == Some(stage_file.last_modified)
+                            if copied_file_info.content_length == stat_info.size
+                                && copied_file_info.last_modified == Some(stat_info.last_modified)
                             {
                                 tracing::warn!(
                                     "ignore copy file {:?} matched by content_length and last_modified",
-                                    file
+                                    copied_file_info
                                 );
                                 continue;
                             }
@@ -159,21 +161,20 @@ impl CopyInterpreterV2 {
                 }
 
                 // unmatch case: insert into file map for copy.
-                file_map.insert(file.clone(), TableCopiedFileInfo {
-                    etag: stage_file.etag.clone(),
-                    content_length: stage_file.size,
-                    last_modified: Some(stage_file.last_modified),
+                file_map.insert(stat_info.path.clone(), TableCopiedFileInfo {
+                    etag: stat_info.etag.clone(),
+                    content_length: stat_info.size,
+                    last_modified: Some(stat_info.last_modified),
                 });
             }
         } else {
             // if force is true, copy all the file.
-            for file in files.iter() {
-                let stage_file = stat_file(&self.ctx, &table_info.stage_info, file).await?;
-
-                file_map.insert(file.clone(), TableCopiedFileInfo {
-                    etag: stage_file.etag.clone(),
-                    content_length: stage_file.size,
-                    last_modified: Some(stage_file.last_modified),
+            let stat_infos = stat_files(&self.ctx, &table_info.stage_info, files).await?;
+            for stat_info in stat_infos.into_iter().flatten() {
+                file_map.insert(stat_info.path, TableCopiedFileInfo {
+                    etag: stat_info.etag.clone(),
+                    content_length: stat_info.size,
+                    last_modified: Some(stat_info.last_modified),
                 });
             }
         }
