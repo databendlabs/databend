@@ -40,7 +40,7 @@ async fn test_dump_metric_samples() -> common_exception::Result<()> {
 
     let summaries = match &samples.get("test_test_query_usedtime").unwrap().value {
         MetricValue::Summary(summaries) => summaries,
-        _ => return Err(ErrorCode::UnexpectedError("test failed")),
+        _ => return Err(ErrorCode::InternalError("test failed")),
     };
     assert_eq!(7, summaries.len());
 

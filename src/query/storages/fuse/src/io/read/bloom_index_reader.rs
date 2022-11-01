@@ -141,7 +141,7 @@ mod util_v1 {
                     .meta_data
                     .as_ref()
                     .ok_or_else(|| {
-                        ErrorCode::UnexpectedError(format!("column meta is none, idx {}", col_idx))
+                        ErrorCode::InternalError(format!("column meta is none, idx {}", col_idx))
                     })?
                     .codec;
 

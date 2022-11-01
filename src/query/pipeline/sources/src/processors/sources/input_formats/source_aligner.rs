@@ -144,7 +144,7 @@ impl<I: InputFormatPipe> Processor for Aligner<I> {
                 self.ctx.scan_progress.incr(&process_values);
                 Ok(())
             }
-            _ => Err(ErrorCode::UnexpectedError("Aligner process state is none")),
+            _ => Err(ErrorCode::InternalError("Aligner process state is none")),
         }
     }
 

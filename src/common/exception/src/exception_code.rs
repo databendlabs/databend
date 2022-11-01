@@ -57,6 +57,9 @@ build_exceptions! {
     /// InternalError means this is the internal error that no action
     /// can be taken by neither developers or users.
     /// In most of the time, they are code bugs.
+    ///
+    /// If there is an error that are unexpected and no other actions
+    /// to taken, please use this error code.
     InternalError(1001),
 
     // Legacy error codes, we will refactor them one by one.
@@ -91,7 +94,6 @@ build_exceptions! {
     AuthenticateFailure(1051),
     TLSConfigurationFailure(1052),
     UnknownSession(1053),
-    UnexpectedError(1054),
     SHA1CheckFailed(1057),
     UnknownColumn(1058),
     StrParseError(1060),

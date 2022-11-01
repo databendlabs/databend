@@ -77,7 +77,7 @@ impl Function for UnhexFunction {
                 match hex::decode_to_slice(val, buffer) {
                     Ok(()) => builder.append(buffer),
                     Err(err) => {
-                        return Err(ErrorCode::UnexpectedError(format!(
+                        return Err(ErrorCode::InternalError(format!(
                             "{} can not unhex because: {}",
                             String::from_utf8_lossy(val),
                             err
@@ -85,7 +85,7 @@ impl Function for UnhexFunction {
                     }
                 }
             } else {
-                return Err(ErrorCode::UnexpectedError(format!(
+                return Err(ErrorCode::InternalError(format!(
                     "{} is too long than buffer size",
                     String::from_utf8_lossy(val)
                 )));

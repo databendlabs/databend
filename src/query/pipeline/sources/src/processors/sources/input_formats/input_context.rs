@@ -55,7 +55,7 @@ impl InputPlan {
     pub fn as_stream(&self) -> Result<&StreamPlan> {
         match self {
             InputPlan::StreamingLoad(p) => Ok(p),
-            _ => Err(ErrorCode::UnexpectedError("expect StreamingLoad")),
+            _ => Err(ErrorCode::InternalError("expect StreamingLoad")),
         }
     }
 }
@@ -81,7 +81,7 @@ pub enum InputSource {
 impl InputSource {
     pub fn take_receiver(&self) -> Result<Receiver<Result<StreamingReadBatch>>> {
         match &self {
-            InputSource::Operator(_) => Err(ErrorCode::UnexpectedError(
+            InputSource::Operator(_) => Err(ErrorCode::InternalError(
                 "should not happen: copy with streaming source",
             )),
             InputSource::Stream(i) => {
@@ -96,7 +96,7 @@ impl InputSource {
     pub fn get_operator(&self) -> Result<Operator> {
         match self {
             InputSource::Operator(op) => Ok(op.clone()),
-            InputSource::Stream(_) => Err(ErrorCode::UnexpectedError(
+            InputSource::Stream(_) => Err(ErrorCode::InternalError(
                 "should not happen: copy with streaming source",
             )),
         }
