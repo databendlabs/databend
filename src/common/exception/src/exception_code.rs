@@ -98,7 +98,6 @@ build_exceptions! {
     SemanticError(1065),
 
     // Uncategorized error codes.
-    UnexpectedResponseType(1066),
     UnknownException(1067),
     TokioError(1068),
 
