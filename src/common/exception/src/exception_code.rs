@@ -77,7 +77,6 @@ build_exceptions! {
     BadAddressFormat(1036),
     DnsParseError(1037),
     CannotConnectNode(1038),
-    Timeout(1040),
     TooManyUserConnections(1041),
     AbortedSession(ABORT_SESSION),
     AbortedQuery(ABORT_QUERY),
