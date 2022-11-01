@@ -19,7 +19,6 @@ mod aggregator_params;
 mod aggregator_partial;
 mod aggregator_single_key;
 
-pub use aggregator_final::FinalAggregator;
 pub use aggregator_final::KeysU128FinalAggregator;
 pub use aggregator_final::KeysU16FinalAggregator;
 pub use aggregator_final::KeysU256FinalAggregator;

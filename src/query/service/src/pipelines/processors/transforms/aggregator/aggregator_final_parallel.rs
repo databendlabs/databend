@@ -1,4 +1,6 @@
 use std::borrow::BorrowMut;
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_base::base::ThreadPool;
@@ -14,7 +16,6 @@ use common_functions::aggregates::StateAddr;
 use common_functions::aggregates::StateAddrs;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_info::AggregateInfo;
-use crate::pipelines::processors::transforms::aggregator::FinalAggregator;
 use crate::pipelines::processors::transforms::group_by::AggregatorState;
 use crate::pipelines::processors::transforms::group_by::GroupColumnsBuilder;
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
@@ -30,7 +31,8 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
     is_generated: bool,
     method: Arc<Method>,
     params: Arc<AggregatorParams>,
-    buckets_blocks: Vec<Vec<DataBlock>>,
+    buckets_blocks: HashMap<usize, Vec<DataBlock>>,
+    generate_blocks: Vec<DataBlock>,
 }
 
 impl<Method, const HAS_AGG: bool> ParallelFinalAggregator<HAS_AGG, Method>
@@ -41,7 +43,8 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
             params,
             is_generated: false,
             method: Arc::new(method),
-            buckets_blocks: vec![vec![]; 256],
+            buckets_blocks: HashMap::new(),
+            generate_blocks: vec![],
         })
     }
 }
@@ -59,19 +62,37 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
             }
         }
 
-        self.buckets_blocks[bucket].push(block);
-        Ok(())
+        match self.buckets_blocks.entry(bucket) {
+            Entry::Vacant(v) => {
+                v.insert(vec![block]);
+                Ok(())
+            }
+            Entry::Occupied(mut v) => {
+                v.get_mut().push(block);
+                Ok(())
+            }
+        }
     }
 
     fn generate(&mut self) -> Result<Option<DataBlock>> {
         if !self.is_generated {
             self.is_generated = true;
 
-            let thread_pool = ThreadPool::create(8)?;
-            let mut join_handles = Vec::with_capacity(self.buckets_blocks.len());
+            if self.buckets_blocks.len() == 1 {
+                for (_, bucket_blocks) in std::mem::take(&mut self.buckets_blocks) {
+                    let method = self.method.clone();
+                    let params = self.params.clone();
+                    let mut bucket_aggregator =
+                        BucketAggregator::<HAS_AGG, Method>::create(method, params)?;
+                    self.generate_blocks
+                        .extend(bucket_aggregator.merge_blocks(bucket_blocks)?);
+                }
+            } else if self.buckets_blocks.len() > 1 {
+                // TODO: threads should ref max_threads settings
+                let thread_pool = ThreadPool::create(8)?;
+                let mut join_handles = Vec::with_capacity(self.buckets_blocks.len());
 
-            for bucket_blocks in std::mem::take(&mut self.buckets_blocks) {
-                if !bucket_blocks.is_empty() {
+                for (_, bucket_blocks) in std::mem::take(&mut self.buckets_blocks) {
                     let method = self.method.clone();
                     let params = self.params.clone();
                     let mut bucket_aggregator =
@@ -80,33 +101,21 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
                         thread_pool.execute(move || bucket_aggregator.merge_blocks(bucket_blocks)),
                     );
                 }
-            }
 
-            for join_handle in join_handles {
-                self.buckets_blocks.push(join_handle.join()?);
-            }
-        }
-
-        while let Some(bucket_blocks) = self.buckets_blocks.last_mut() {
-            match bucket_blocks.pop() {
-                None => {
-                    self.buckets_blocks.pop();
-                }
-                Some(block) => {
-                    return Ok(Some(block));
+                self.generate_blocks.reserve(join_handles.len());
+                for join_handle in join_handles {
+                    self.generate_blocks.extend(join_handle.join()?);
                 }
             }
         }
 
-        Ok(None)
+        Ok(self.generate_blocks.pop())
     }
 }
 
 struct BucketAggregator<const HAS_AGG: bool, Method>
 where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
 {
-    states_dropped: bool,
-
     method: Arc<Method>,
     params: Arc<AggregatorParams>,
     aggregator_state: Method::State,
@@ -129,7 +138,6 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
             method,
             params,
             temp_place,
-            states_dropped: false,
             aggregator_state: state,
         })
     }
@@ -261,5 +269,42 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
             }
         }
         places
+    }
+}
+
+impl<const HAS_AGG: bool, Method> Drop for BucketAggregator<HAS_AGG, Method>
+where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
+{
+    fn drop(&mut self) {
+        let aggregator_params = self.params.as_ref();
+        let aggregate_functions = &aggregator_params.aggregate_functions;
+        let offsets_aggregate_states = &aggregator_params.offsets_aggregate_states;
+
+        let functions = aggregate_functions
+            .iter()
+            .filter(|p| p.need_manual_drop_state())
+            .collect::<Vec<_>>();
+
+        let state_offsets = offsets_aggregate_states
+            .iter()
+            .enumerate()
+            .filter(|(idx, _)| aggregate_functions[*idx].need_manual_drop_state())
+            .map(|(_, s)| *s)
+            .collect::<Vec<_>>();
+
+        for group_entity in self.aggregator_state.iter() {
+            let place: StateAddr = group_entity.get_state_value().into();
+
+            for (function, state_offset) in functions.iter().zip(state_offsets.iter()) {
+                unsafe { function.drop_state(place.next(*state_offset)) }
+            }
+        }
+
+        if let Some(temp_place) = self.temp_place {
+            for (state_offset, function) in state_offsets.iter().zip(functions.iter()) {
+                let place = temp_place.next(*state_offset);
+                unsafe { function.drop_state(place) }
+            }
+        }
     }
 }
