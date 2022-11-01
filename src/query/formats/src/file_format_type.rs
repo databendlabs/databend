@@ -49,12 +49,12 @@ pub trait FileFormatTypeExt {
 
 #[derive(Clone, Debug)]
 pub struct FileFormatOptionsExt {
-    stage: FileFormatOptions,
-    quote: u8,
-    ident_case_sensitive: bool,
-    headers: usize,
-    json_compact: bool,
-    json_strings: bool,
+    pub stage: FileFormatOptions,
+    pub quote: u8,
+    pub ident_case_sensitive: bool,
+    pub headers: usize,
+    pub json_compact: bool,
+    pub json_strings: bool,
 }
 
 impl FileFormatOptionsExt {
