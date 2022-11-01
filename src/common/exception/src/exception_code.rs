@@ -221,13 +221,6 @@ build_exceptions! {
     StorageOther(4000),
 }
 
-// Cache errors [4001, 5000].
-build_exceptions! {
-    DiskCacheIOError(4001),
-    DiskCacheFileTooLarge(4002),
-    DiskCacheFileNotInCache(4003),
-}
-
 // Service errors [5001,6000].
 build_exceptions! {
     // A task that already stopped and can not stop twice.
