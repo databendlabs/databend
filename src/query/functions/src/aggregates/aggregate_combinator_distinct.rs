@@ -21,7 +21,6 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_hashtable::KeysRef;
-use common_io::prelude::*;
 use ordered_float::OrderedFloat;
 
 use super::aggregate_distinct_state::AggregateDistinctPrimitiveState;
@@ -91,7 +90,7 @@ where
         state.add(columns, row)
     }
 
-    fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
+    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<State>();
         state.serialize(writer)
     }
