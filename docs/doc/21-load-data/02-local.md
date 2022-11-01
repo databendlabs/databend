@@ -60,7 +60,7 @@ allow_insecure = true
 ```
 
 :::caution
-For security purposes, Databend does NOT recommend insecure protocols for data loading. DO NOT set `allow_insecure` to `true` in any production environment. 
+For security reasons, Databend does NOT recommend insecure protocols for data loading. DO NOT set `allow_insecure` to `true` in any production environment. 
 :::
 
 ## Tutorial 1 - Load from a CSV File
