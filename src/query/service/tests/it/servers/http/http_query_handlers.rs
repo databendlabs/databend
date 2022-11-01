@@ -1139,7 +1139,6 @@ async fn test_download() -> Result<()> {
             "ndjson",
             "{\"number\":0,\"number + 1\":1}\n{\"number\":1,\"number + 1\":2}\n",
         ),
-        ("values", "(0,1),(1,2)"),
     ] {
         let uri = format!("/v1/query/{}/download?format={}", query_id, fmt);
         let resp = get_uri(&ep, &uri).await;

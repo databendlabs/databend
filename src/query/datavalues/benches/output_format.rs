@@ -39,7 +39,7 @@ pub fn write_csv(cols: &[ColumnRef]) -> Vec<u8> {
     let f = &FormatSettings::default();
     for row in 0..rows {
         for s in &ss {
-            s.write_field_values(row, &mut buf, f);
+            s.write_field_values(row, &mut buf, f, false);
         }
     }
     buf

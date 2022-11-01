@@ -15,16 +15,16 @@
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_io::prelude::FormatSettings;
+use common_settings::Settings;
 use pretty_assertions::assert_eq;
 
 use crate::get_output_format_clickhouse;
+use crate::get_output_format_clickhouse_with_setting;
 use crate::output_format_utils::get_simple_block;
 
 fn test_data_block(is_nullable: bool) -> Result<()> {
     let block = get_simple_block(is_nullable)?;
     let schema = block.schema().clone();
-    let mut format_setting = FormatSettings::default();
 
     {
         let mut formatter = get_output_format_clickhouse("tsv", schema.clone())?;
@@ -56,16 +56,19 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
     }
 
     {
-        format_setting.record_delimiter = vec![b'%'];
-        format_setting.field_delimiter = vec![b'$'];
+        let settings = Settings::default_settings("default");
+        settings.set_settings(
+            "format_record_delimiter".to_string(),
+            "%".to_string(),
+            false,
+        )?;
+        settings.set_settings("format_field_delimiter".to_string(), "$".to_string(), false)?;
 
-        let mut formatter = get_output_format_clickhouse("csv", schema)?;
+        let mut formatter = get_output_format_clickhouse_with_setting("csv", schema, &settings)?;
         let buffer = formatter.serialize_block(&block)?;
 
         let csv_block = String::from_utf8(buffer)?;
-        let expect = "1$\"a\"$1$1.1$\"1970-01-02\"%\
-                            2$\"b\\\"\"$1$2.2$\"1970-01-03\"%\
-                            3$\"c'\"$0$3.3$\"1970-01-04\"%";
+        let expect = r#"1$"a"$true$1.1$"1970-01-02"%2$"b"""$true$2.2$"1970-01-03"%3$"c'"$false$3.3$"1970-01-04"%"#;
         assert_eq!(&csv_block, expect);
     }
     Ok(())

@@ -112,6 +112,6 @@ fn test_csv_string() {
         let s = "a\"\nb";
         let mut buf = vec![];
         write_csv_string(s.as_bytes(), &mut buf, b'"');
-        assert_eq!(&buf, b"a\"\"\nb")
+        assert_eq!(&buf, b"\"a\"\"\nb\"")
     }
 }

@@ -19,6 +19,7 @@ use common_io::prelude::*;
 fn test_read_csv_string() -> Result<()> {
     let settings = FormatSettings {
         record_delimiter: Vec::new(),
+        field_delimiter: vec![b','],
         ..FormatSettings::default()
     };
     let s = "1,a,2\n3\r\n\"4\",\"\"\"5\",\"{\\\"\"second\\\"\" : 33}\",";
