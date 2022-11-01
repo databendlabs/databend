@@ -53,7 +53,6 @@ macro_rules! build_exceptions {
 // Internal errors [0, 2000].
 build_exceptions! {
     Ok(0),
-    UnknownTypeOfQuery(1001),
     UnImplement(1002),
     UnknownDatabase(1003),
     UnknownDatabaseId(1004),
@@ -61,57 +60,36 @@ build_exceptions! {
     BadArguments(1006),
     IllegalDataType(1007),
     UnknownFunction(1008),
-    IllegalFunctionState(1009),
     BadDataValueType(1010),
-    UnknownPlan(1011),
     IllegalPipelineState(1012),
-    BadTransformType(1013),
-    IllegalTransformConnectionState(1014),
     LogicalError(1015),
     EmptyData(1016),
     DataStructMissMatch(1017),
     BadDataArrayLength(1018),
-    UnknownContextID(1019),
     UnknownTableId(1020),
-    UnknownTableFunction(1021),
     BadOption(1022),
-    CannotReadFile(1023),
     ParquetError(1024),
     UnknownTable(1025),
-    IllegalAggregateExp(1026),
     UnknownAggregateFunction(1027),
     NumberArgumentsNotMatch(1028),
-    NotFoundStream(1029),
     EmptyDataFromServer(1030),
-    NotFoundLocalNode(1031),
-    PlanScheduleError(1032),
-    BadPlanInputs(1033),
-    DuplicateClusterNode(1034),
     NotFoundClusterNode(1035),
     BadAddressFormat(1036),
     DnsParseError(1037),
     CannotConnectNode(1038),
-    DuplicateGetStream(1039),
-    Timeout(1040),
     TooManyUserConnections(1041),
     AbortedSession(ABORT_SESSION),
     AbortedQuery(ABORT_QUERY),
-    NotFoundSession(1044),
     CannotListenerPort(1045),
     BadBytes(1046),
     InitPrometheusFailure(1047),
-    ScalarSubqueryBadRows(1048),
     Overflow(1049),
-    InvalidMetaBinaryFormat(1050),
     AuthenticateFailure(1051),
     TLSConfigurationFailure(1052),
     UnknownSession(1053),
     UnexpectedError(1054),
-    DateTimeParseError(1055),
-    BadPredicateRows(1056),
     SHA1CheckFailed(1057),
     UnknownColumn(1058),
-    InvalidSourceFormat(1059),
     StrParseError(1060),
     IllegalGrant(1061),
     ManagementModePermissionDenied(1062),
@@ -120,20 +98,11 @@ build_exceptions! {
     SemanticError(1065),
 
     // Uncategorized error codes.
-    UnexpectedResponseType(1066),
     UnknownException(1067),
     TokioError(1068),
 
-    // Pipeline executor error codes.
-    PipelineAreadlyStarted(1069),
-    PipelineNotStarted(1070),
-    PipelineUnInitialized(1071),
-
     // Http query error codes.
     HttpNotFound(1072),
-
-    // Network error codes.
-    NetworkRequestError(1073),
 
     UnknownFormat(1074),
     UnknownCompressionType(1075),
@@ -155,9 +124,6 @@ build_exceptions! {
     LayoutError(1103),
 
     PanicError(1104),
-
-    // Async insert error codes
-    AsyncInsertTimeoutError(1105),
 
     TableInfoError(1106),
     ReadTableDataError(1107),
@@ -183,14 +149,11 @@ build_exceptions! {
     UserAlreadyExists(2202),
     IllegalUserInfoFormat(2203),
     UnknownRole(2204),
-    IllegalUserSettingFormat(2205),
     InvalidRole(2206),
 
     // Meta api error codes.
     DatabaseAlreadyExists(2301),
     TableAlreadyExists(2302),
-    IllegalMetaState(2304),
-    MetaNodeInternalError(2305),
     ViewAlreadyExists(2306),
     CreateTableWithDropTime(2307),
     UndropTableAlreadyExists(2308),
@@ -259,18 +222,8 @@ build_exceptions! {
     StorageOther(4000),
 }
 
-// Cache errors [4001, 5000].
-build_exceptions! {
-    DiskCacheIOError(4001),
-    DiskCacheFileTooLarge(4002),
-    DiskCacheFileNotInCache(4003),
-}
-
 // Service errors [5001,6000].
 build_exceptions! {
-    // A task that already stopped and can not stop twice.
-    AlreadyStarted(5001),
-
-    // A task that already started and can not start twice.
+    // A task that already stopped and can not stopped twice.
     AlreadyStopped(5002),
 }
