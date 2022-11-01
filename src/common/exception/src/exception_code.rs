@@ -68,7 +68,6 @@ build_exceptions! {
     BadDataArrayLength(1018),
     UnknownTableId(1020),
     BadOption(1022),
-    CannotReadFile(1023),
     ParquetError(1024),
     UnknownTable(1025),
     IllegalAggregateExp(1026),
