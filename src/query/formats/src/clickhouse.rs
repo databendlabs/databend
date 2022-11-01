@@ -75,7 +75,7 @@ impl ClickhouseFormatType {
             if base != "json" {
                 return Err(ErrorCode::UnknownFormat(name));
             } else {
-                if json.is_compact && suffixes.headers != 0 {
+                if !json.is_compact && suffixes.headers != 0 {
                     return Err(ErrorCode::UnknownFormat(name));
                 }
                 if json.is_eachrow {
