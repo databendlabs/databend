@@ -102,7 +102,6 @@ build_exceptions! {
     TokioError(1068),
 
     // Pipeline executor error codes.
-    PipelineNotStarted(1070),
     PipelineUnInitialized(1071),
 
     // Http query error codes.
