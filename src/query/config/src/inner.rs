@@ -29,6 +29,7 @@ use common_tracing::Config as LogConfig;
 use common_users::idm_config::IDMConfig;
 
 use super::outer_v0::Config as OuterV0Config;
+use super::outer_v0::MetaType;
 
 /// Inner config for query.
 ///
@@ -275,6 +276,7 @@ pub struct MetaConfig {
     /// Certificate for client to identify meta rpc serve
     pub rpc_tls_meta_server_root_ca_cert: String,
     pub rpc_tls_meta_service_domain_name: String,
+    pub meta_type: String,
 }
 
 impl Default for MetaConfig {
@@ -289,11 +291,22 @@ impl Default for MetaConfig {
             auto_sync_interval: 10,
             rpc_tls_meta_server_root_ca_cert: "".to_string(),
             rpc_tls_meta_service_domain_name: "localhost".to_string(),
+            meta_type: MetaType::Remote.to_str().to_string(),
         }
     }
 }
 
 impl MetaConfig {
+    pub fn is_embedded_meta(&self) -> Result<bool> {
+        let t = MetaType::from_str(&self.meta_type)?;
+        if t == MetaType::Embedded && self.embedded_dir.is_empty() {
+            return Err(ErrorCode::InvalidConfig(
+                "Embedded Meta but embedded_dir is empty",
+            ));
+        }
+        Ok(t == MetaType::Embedded)
+    }
+
     pub fn is_tls_enabled(&self) -> bool {
         !self.rpc_tls_meta_server_root_ca_cert.is_empty()
             && !self.rpc_tls_meta_service_domain_name.is_empty()

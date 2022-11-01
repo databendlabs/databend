@@ -29,5 +29,6 @@ mod version;
 
 pub use inner::Config;
 pub use inner::QueryConfig;
+pub use outer_v0::MetaType;
 pub use version::DATABEND_COMMIT_VERSION;
 pub use version::QUERY_SEMVER;

@@ -1258,6 +1258,36 @@ impl From<InnerHiveCatalogConfig> for HiveCatalogConfig {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum MetaType {
+    Remote,
+    Embedded,
+}
+
+impl MetaType {
+    pub fn to_str(&self) -> &str {
+        match self {
+            Self::Remote => "remote",
+            Self::Embedded => "embedded",
+        }
+    }
+}
+
+impl FromStr for MetaType {
+    type Err = ErrorCode;
+
+    fn from_str(s: &str) -> Result<Self> {
+        let s = s.to_lowercase();
+        match s.as_str() {
+            "remote" => Ok(Self::Remote),
+            "embedded" => Ok(Self::Embedded),
+            _ => Err(ErrorCode::InvalidConfig(String::from(
+                "invalid MetaType, MUST be 'remote' or 'embedded'",
+            ))),
+        }
+    }
+}
+
 /// Meta config group.
 /// TODO(xuanwo): All meta_xxx should be rename to xxx.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Args)]
@@ -1306,6 +1336,11 @@ pub struct MetaConfig {
 
     #[clap(long = "meta-rpc-tls-meta-service-domain-name", default_value_t)]
     pub rpc_tls_meta_service_domain_name: String,
+
+    /// MetaStore type: remote or embedded
+    #[clap(long = "meta-type", default_value = MetaType::Remote.to_str())]
+    #[serde(alias = "meta_type")]
+    pub meta_type: String,
 }
 
 impl Default for MetaConfig {
@@ -1328,6 +1363,7 @@ impl TryInto<InnerMetaConfig> for MetaConfig {
             auto_sync_interval: self.auto_sync_interval,
             rpc_tls_meta_server_root_ca_cert: self.rpc_tls_meta_server_root_ca_cert,
             rpc_tls_meta_service_domain_name: self.rpc_tls_meta_service_domain_name,
+            meta_type: self.meta_type,
         })
     }
 }
@@ -1344,6 +1380,7 @@ impl From<InnerMetaConfig> for MetaConfig {
             auto_sync_interval: inner.auto_sync_interval,
             rpc_tls_meta_server_root_ca_cert: inner.rpc_tls_meta_server_root_ca_cert,
             rpc_tls_meta_service_domain_name: inner.rpc_tls_meta_service_domain_name,
+            meta_type: inner.meta_type,
         }
     }
 }
@@ -1366,6 +1403,7 @@ impl Debug for MetaConfig {
                 "rpc_tls_meta_service_domain_name",
                 &self.rpc_tls_meta_service_domain_name,
             )
+            .field("meta_type", &self.meta_type)
             .finish()
     }
 }
