@@ -25,8 +25,11 @@ pub static ABORT_QUERY: u16 = 1043;
 
 macro_rules! build_exceptions {
     ($($(#[$meta:meta])* $body:ident($code:expr)),*$(,)*) => {
-            impl ErrorCode {
+        impl ErrorCode {
+            $(
                 $(
+                    #[$meta]
+                )*
                 pub fn $body(display_text: impl Into<String>) -> ErrorCode {
                     let bt = Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::capture())));
                     ErrorCode::create(
@@ -45,8 +48,8 @@ macro_rules! build_exceptions {
                         $code
                     }
                 }
-                )*
-            }
+            )*
+        }
     }
 }
 
