@@ -73,7 +73,6 @@ build_exceptions! {
     UnknownAggregateFunction(1027),
     NumberArgumentsNotMatch(1028),
     EmptyDataFromServer(1030),
-    NotFoundLocalNode(1031),
     PlanScheduleError(1032),
     BadPlanInputs(1033),
     DuplicateClusterNode(1034),
