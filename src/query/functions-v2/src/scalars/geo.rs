@@ -104,17 +104,6 @@ pub fn geo_dist_init() {
         .unwrap();
 }
 
-#[allow(dead_code)]
-#[inline(always)]
-fn sqrf64(v: f64) -> f64 {
-    v * v
-}
-
-#[inline(always)]
-fn sqrf32(v: f32) -> f32 {
-    v * v
-}
-
 #[inline(always)]
 fn geodist_deg_diff(mut f: f32) -> f32 {
     f = f.abs();
@@ -190,10 +179,10 @@ fn distance(lon1deg: f32, lat1deg: f32, lon2deg: f32, lat2deg: f32) -> f32 {
 
         (k_lat * lat_diff * lat_diff + k_lon * lon_diff * lon_diff).sqrt()
     } else {
-        let a: f32 = sqrf32(geodist_fast_sin(lat_diff * RAD_IN_DEG_HALF))
+        let a: f32 = (geodist_fast_sin(lat_diff * RAD_IN_DEG_HALF)).powi(2)
             + geodist_fast_cos(lat1deg * RAD_IN_DEG)
                 * geodist_fast_cos(lat2deg * RAD_IN_DEG)
-                * sqrf32(geodist_fast_sin(lon_diff * RAD_IN_DEG_HALF));
+                * (geodist_fast_sin(lon_diff * RAD_IN_DEG_HALF)).powi(2);
 
         EARTH_DIAMETER * geodist_fast_asin_sqrt(a)
     }
