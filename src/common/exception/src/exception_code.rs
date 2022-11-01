@@ -146,6 +146,10 @@ build_exceptions! {
     ///
     /// For example: drop on `view` engine.
     TableEngineNotSupported(1302),
+    /// TableSchemaMismatch is used when table's schema is not match with input
+    ///
+    /// For example: try to with 3 columns into a table with 4 columns.
+    TableSchemaMismatch(1303),
 }
 
 // Metasvr errors [2001, 3000].
