@@ -90,7 +90,6 @@ build_exceptions! {
     UnexpectedError(1054),
     SHA1CheckFailed(1057),
     UnknownColumn(1058),
-    InvalidSourceFormat(1059),
     StrParseError(1060),
     IllegalGrant(1061),
     ManagementModePermissionDenied(1062),
