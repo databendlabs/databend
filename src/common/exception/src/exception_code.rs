@@ -154,7 +154,6 @@ build_exceptions! {
     // Meta api error codes.
     DatabaseAlreadyExists(2301),
     TableAlreadyExists(2302),
-    IllegalMetaState(2304),
     MetaNodeInternalError(2305),
     ViewAlreadyExists(2306),
     CreateTableWithDropTime(2307),
