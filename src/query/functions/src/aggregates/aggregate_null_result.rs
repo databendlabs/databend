@@ -16,7 +16,6 @@ use std::alloc::Layout;
 use std::fmt;
 use std::sync::Arc;
 
-use bytes::BytesMut;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -74,7 +73,7 @@ impl AggregateFunction for AggregateNullResultFunction {
         Ok(())
     }
 
-    fn serialize(&self, _place: StateAddr, _writer: &mut BytesMut) -> Result<()> {
+    fn serialize(&self, _place: StateAddr, _writer: &mut Vec<u8>) -> Result<()> {
         Ok(())
     }
 
