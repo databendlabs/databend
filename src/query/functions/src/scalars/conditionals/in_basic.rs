@@ -33,7 +33,7 @@ impl<const NEGATED: bool> InFunction<NEGATED> {
     pub fn try_create(_display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         let type_id = remove_nullable(args[0]).data_type_id();
         if type_id.is_interval() || type_id.is_array() || type_id.is_struct() {
-            return Err(ErrorCode::UnexpectedError(format!(
+            return Err(ErrorCode::Internal(format!(
                 "{} type is not supported for IN now",
                 type_id
             )));
@@ -77,7 +77,7 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
         _columns: &ColumnsWithField,
         _input_rows: usize,
     ) -> Result<ColumnRef> {
-        Result::Err(ErrorCode::LogicalError("Should use in_evaulator"))
+        Result::Err(ErrorCode::Internal("Should use in_evaulator"))
     }
 }
 

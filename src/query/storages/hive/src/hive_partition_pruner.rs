@@ -69,7 +69,7 @@ impl HivePartitionPruner {
                         DataValue::Float64(kv[1].parse::<f64>().unwrap())
                     }
                     _ => {
-                        return Err(ErrorCode::UnImplement(format!(
+                        return Err(ErrorCode::Unimplemented(format!(
                             "unsupported partition type, {:?}",
                             field
                         )));

@@ -134,7 +134,7 @@ impl<'a> Binder {
                         let query = table_meta
                             .options()
                             .get(QUERY)
-                            .ok_or_else(|| ErrorCode::LogicalError("Invalid VIEW object"))?;
+                            .ok_or_else(|| ErrorCode::Internal("Invalid VIEW object"))?;
                         let tokens = tokenize_sql(query.as_str())?;
                         let backtrace = Backtrace::new();
                         let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace)?;
@@ -156,7 +156,7 @@ impl<'a> Binder {
                             }
                             Ok((s_expr, bind_context))
                         } else {
-                            Err(ErrorCode::LogicalError(format!(
+                            Err(ErrorCode::Internal(format!(
                                 "Invalid VIEW object: {}",
                                 table_meta.name()
                             )))
@@ -199,7 +199,7 @@ impl<'a> Binder {
                     .into_iter()
                     .map(|(scalar, _)| match scalar {
                         Scalar::ConstantExpr(ConstantExpr { value, .. }) => Ok(value),
-                        _ => Err(ErrorCode::UnImplement(format!(
+                        _ => Err(ErrorCode::Unimplemented(format!(
                             "Unsupported table argument type: {:?}",
                             scalar
                         ))),

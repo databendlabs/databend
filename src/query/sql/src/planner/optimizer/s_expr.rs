@@ -90,7 +90,7 @@ impl SExpr {
     pub fn child(&self, n: usize) -> Result<&SExpr> {
         self.children
             .get(n)
-            .ok_or_else(|| ErrorCode::LogicalError(format!("Invalid children index: {}", n)))
+            .ok_or_else(|| ErrorCode::Internal(format!("Invalid children index: {}", n)))
     }
 
     pub fn arity(&self) -> usize {

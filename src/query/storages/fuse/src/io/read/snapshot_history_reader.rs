@@ -47,7 +47,7 @@ impl SnapshotHistoryReader for TableSnapshotReader {
                     let snapshot = match reader.read(loc, None, ver).await {
                         Ok(s) => Ok(Some(s)),
                         Err(e) => {
-                            if e.code() == ErrorCode::storage_not_found_code() {
+                            if e.code() == ErrorCode::STORAGE_NOT_FOUND {
                                 Ok(None)
                             } else {
                                 Err(e)

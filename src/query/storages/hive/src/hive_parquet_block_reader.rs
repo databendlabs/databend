@@ -161,12 +161,12 @@ impl HiveParquetBlockReader {
             })
             .collect();
         if column_meta.is_empty() {
-            return Err(ErrorCode::ParquetError(format!(
+            return Err(ErrorCode::ParquetFileInvalid(format!(
                 "couldn't find column:{} in parquet file",
                 field_name
             )));
         } else if column_meta.len() > 1 {
-            return Err(ErrorCode::ParquetError(format!(
+            return Err(ErrorCode::ParquetFileInvalid(format!(
                 "find multi column:{} in parquet file",
                 field_name
             )));
@@ -239,7 +239,7 @@ impl HiveParquetBlockReader {
         row_group: &RowGroupMetaData,
     ) -> Result<DataBlockDeserializer> {
         if self.projection.len() != chunks.len() {
-            return Err(ErrorCode::LogicalError(
+            return Err(ErrorCode::Internal(
                 "Columns chunk len must be equals projections len.",
             ));
         }

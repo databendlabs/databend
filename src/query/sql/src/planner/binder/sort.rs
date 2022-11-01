@@ -138,7 +138,7 @@ impl<'a> Binder {
                             });
                         }
                         NameResolutionResult::Alias { .. } => {
-                            return Err(ErrorCode::LogicalError("Invalid name resolution result"));
+                            return Err(ErrorCode::Internal("Invalid name resolution result"));
                         }
                     }
                 }
@@ -320,7 +320,7 @@ impl<'a> Binder {
                             order_by_items.push(order_by_item);
                         }
                         _ => {
-                            return Err(ErrorCode::LogicalError("scalar should be BoundColumnRef"));
+                            return Err(ErrorCode::Internal("scalar should be BoundColumnRef"));
                         }
                     }
                 }

@@ -111,11 +111,11 @@ impl TypeDeserializer for StructDeserializer {
         _reader: &mut NestedCheckpointReader<R>,
         _format: &FormatSettings,
     ) -> Result<()> {
-        Err(ErrorCode::UnImplement("Unimplement error"))
+        Err(ErrorCode::Unimplemented("Unimplement error"))
     }
 
     fn de_whole_text(&mut self, _reader: &[u8], _format: &FormatSettings) -> Result<()> {
-        Err(ErrorCode::UnImplement("Unimplement error"))
+        Err(ErrorCode::Unimplemented("Unimplement error"))
     }
 
     fn append_data_value(&mut self, value: DataValue, _format: &FormatSettings) -> Result<()> {

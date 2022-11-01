@@ -108,13 +108,13 @@ impl<'a> ClusteringInformation<'a> {
     fn get_min_max_stats(&self, block: &BlockMeta) -> Result<(Vec<DataValue>, Vec<DataValue>)> {
         if self.table.cluster_keys() != self.cluster_keys || block.cluster_stats.is_none() {
             // Todo(zhyass): support manually specifying the cluster key.
-            return Err(ErrorCode::UnImplement("Unimplemented"));
+            return Err(ErrorCode::Unimplemented("Unimplemented"));
         }
 
         let cluster_key_id = block.cluster_stats.clone().unwrap().cluster_key_id;
         let default_cluster_key_id = self.table.cluster_key_meta.clone().unwrap().0;
         if cluster_key_id != default_cluster_key_id {
-            return Err(ErrorCode::UnImplement("Unimplemented"));
+            return Err(ErrorCode::Unimplemented("Unimplemented"));
         }
 
         let cluster_stats = block.cluster_stats.clone().unwrap();

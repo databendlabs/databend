@@ -20,13 +20,20 @@ use std::sync::Arc;
 use crate::exception::ErrorCodeBacktrace;
 use crate::ErrorCode;
 
-pub static ABORT_SESSION: u16 = 1042;
-pub static ABORT_QUERY: u16 = 1043;
-
 macro_rules! build_exceptions {
-    ($($body:ident($code:expr)),*$(,)*) => {
-            impl ErrorCode {
+    ($($(#[$meta:meta])* $body:ident($code:expr)),*$(,)*) => {
+        impl ErrorCode {
+            $(
+
+                paste::item! {
+                    $(
+                        #[$meta]
+                    )*
+                    pub const [< $body:snake:upper >]: u16 = $code;
+                }
                 $(
+                    #[$meta]
+                )*
                 pub fn $body(display_text: impl Into<String>) -> ErrorCode {
                     let bt = Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::capture())));
                     ErrorCode::create(
@@ -36,24 +43,41 @@ macro_rules! build_exceptions {
                         bt,
                     )
                 }
-                paste::item! {
-                    pub fn [< $body:snake _ code >] ()  -> u16{
-                        $code
-                    }
-
-                    pub fn [< $body  Code >] ()  -> u16{
-                        $code
-                    }
-                }
-                )*
-            }
+            )*
+        }
     }
 }
 
 // Internal errors [0, 2000].
 build_exceptions! {
     Ok(0),
-    UnImplement(1002),
+
+    /// Internal means this is the internal error that no action
+    /// can be taken by neither developers or users.
+    /// In most of the time, they are code bugs.
+    ///
+    /// If there is an error that are unexpected and no other actions
+    /// to taken, please use this error code.
+    ///
+    /// # Notes
+    ///
+    /// This error should never be used to for error checking. An error
+    /// that returns as internal error could be assigned a seperate error
+    /// code at anytime.
+    Internal(1001),
+
+    /// Unimplemented means this is a not implemented feature.
+    ///
+    /// Deveopers could implement the feature to resolve this error at anytime,
+    ///
+    /// # Notes
+    ///
+    /// It's OK to use this error code for not implemetned feature in
+    /// our dependences. For example, in arrow.
+    Unimplemented(1002),
+
+    // Legacy error codes, we will refactor them one by one.
+
     UnknownDatabase(1003),
     UnknownDatabaseId(1004),
     SyntaxException(1005),
@@ -61,14 +85,10 @@ build_exceptions! {
     IllegalDataType(1007),
     UnknownFunction(1008),
     BadDataValueType(1010),
-    IllegalPipelineState(1012),
-    LogicalError(1015),
     EmptyData(1016),
     DataStructMissMatch(1017),
     BadDataArrayLength(1018),
     UnknownTableId(1020),
-    BadOption(1022),
-    ParquetError(1024),
     UnknownTable(1025),
     UnknownAggregateFunction(1027),
     NumberArgumentsNotMatch(1028),
@@ -78,8 +98,8 @@ build_exceptions! {
     DnsParseError(1037),
     CannotConnectNode(1038),
     TooManyUserConnections(1041),
-    AbortedSession(ABORT_SESSION),
-    AbortedQuery(ABORT_QUERY),
+    AbortedSession(1042),
+    AbortedQuery(1043),
     CannotListenerPort(1045),
     BadBytes(1046),
     InitPrometheusFailure(1047),
@@ -87,7 +107,6 @@ build_exceptions! {
     AuthenticateFailure(1051),
     TLSConfigurationFailure(1052),
     UnknownSession(1053),
-    UnexpectedError(1054),
     SHA1CheckFailed(1057),
     UnknownColumn(1058),
     StrParseError(1060),
@@ -96,37 +115,45 @@ build_exceptions! {
     PermissionDenied(1063),
     UnmarshalError(1064),
     SemanticError(1065),
-
-    // Uncategorized error codes.
     UnknownException(1067),
     TokioError(1068),
-
-    // Http query error codes.
     HttpNotFound(1072),
-
     UnknownFormat(1074),
     UnknownCompressionType(1075),
     InvalidCompressionData(1076),
-
     InvalidAuthInfo(1077),
     InvalidTimezone(1078),
     InvalidDate(1079),
     InvalidTimestamp(1080),
     InvalidClusterKeys(1081),
     UnknownFragmentExchange(1082),
-    InternalError(1083),
-
-    // Tenant error codes.
     TenantIsEmpty(1101),
     IndexOutOfBounds(1102),
-
-    // Layout error code.
     LayoutError(1103),
-
     PanicError(1104),
-
     TableInfoError(1106),
     ReadTableDataError(1107),
+
+    // Data Related Errors
+
+    /// ParquetFileInvalid is used when given parquet file is invalid.
+    ParquetFileInvalid(1201),
+
+    // Table related errors starts here.
+
+    /// TableOptionInvalid is used when users input an invalid option.
+    ///
+    /// For example: try to set a reserved table option.
+    TableOptionInvalid(1301),
+    /// TableEngineMismatch is used when users try to do not supported
+    /// operations on specified engine.
+    ///
+    /// For example: drop on `view` engine.
+    TableEngineNotSupported(1302),
+    /// TableSchemaMismatch is used when table's schema is not match with input
+    ///
+    /// For example: try to with 3 columns into a table with 4 columns.
+    TableSchemaMismatch(1303),
 }
 
 // Metasvr errors [2001, 3000].
