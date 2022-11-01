@@ -23,8 +23,6 @@ use common_datavalues::DateConverter;
 use common_datavalues::TypeSerializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_exception::ABORT_QUERY;
-use common_exception::ABORT_SESSION;
 use common_io::prelude::FormatSettings;
 use common_streams::SendableDataBlockStream;
 use futures_util::StreamExt;
@@ -277,7 +275,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
     }
 
     async fn err(error: &ErrorCode, writer: QueryResultWriter<'a, W>) -> Result<()> {
-        if error.code() != ABORT_QUERY && error.code() != ABORT_SESSION {
+        if error.code() != ErrorCode::ABORTED_QUERY && error.code() != ErrorCode::ABORTED_SESSION {
             error!("OnQuery Error: {:?}", error);
             writer
                 .error(ErrorKind::ER_UNKNOWN_ERROR, error.to_string().as_bytes())

@@ -246,7 +246,7 @@ impl Catalog for DatabaseCatalog {
         match res {
             Ok(v) => Ok(v),
             Err(e) => {
-                if e.code() == ErrorCode::UnknownDatabaseCode() {
+                if e.code() == ErrorCode::unknown_database_code() {
                     self.mutable_catalog
                         .get_table(tenant, db_name, table_name)
                         .await
@@ -268,7 +268,7 @@ impl Catalog for DatabaseCatalog {
         match r {
             Ok(x) => Ok(x),
             Err(e) => {
-                if e.code() == ErrorCode::UnknownDatabaseCode() {
+                if e.code() == ErrorCode::unknown_database_code() {
                     self.mutable_catalog.list_tables(tenant, db_name).await
                 } else {
                     Err(e)
@@ -295,7 +295,7 @@ impl Catalog for DatabaseCatalog {
         match r {
             Ok(x) => Ok(x),
             Err(e) => {
-                if e.code() == ErrorCode::UnknownDatabaseCode() {
+                if e.code() == ErrorCode::unknown_database_code() {
                     self.mutable_catalog
                         .list_tables_history(tenant, db_name)
                         .await

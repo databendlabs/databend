@@ -337,7 +337,7 @@ impl Catalog for HiveCatalog {
         match self.get_table(tenant, db_name, table_name).await {
             Ok(_) => Ok(true),
             Err(err) => {
-                if err.code() == ErrorCode::UnknownTableCode() {
+                if err.code() == ErrorCode::unknown_table_code() {
                     Ok(false)
                 } else {
                     Err(err)

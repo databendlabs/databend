@@ -25,7 +25,6 @@ use common_base::base::ThreadJoinHandle;
 use common_base::base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_exception::ABORT_QUERY;
 use futures::future::select;
 use futures_util::future::Either;
 use parking_lot::Mutex;
@@ -184,7 +183,7 @@ impl PipelineExecutor {
             }
 
             // We will ignore the abort query error, because returned by finished_error if abort query.
-            if matches!(&thread_res, Err(error) if error.code() != ABORT_QUERY) {
+            if matches!(&thread_res, Err(error) if error.code() != ErrorCode::ABORTED_QUERY) {
                 let may_error = Some(thread_res.unwrap_err());
                 (self.on_finished_callback)(&may_error)?;
                 return Err(may_error.unwrap());

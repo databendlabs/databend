@@ -20,13 +20,17 @@ use std::sync::Arc;
 use crate::exception::ErrorCodeBacktrace;
 use crate::ErrorCode;
 
-pub static ABORT_SESSION: u16 = 1042;
-pub static ABORT_QUERY: u16 = 1043;
-
 macro_rules! build_exceptions {
     ($($(#[$meta:meta])* $body:ident($code:expr)),*$(,)*) => {
         impl ErrorCode {
             $(
+
+                paste::item! {
+                    $(
+                        #[$meta]
+                    )*
+                    pub const [< $body:snake:upper >]: u16 = $code;
+                }
                 $(
                     #[$meta]
                 )*
@@ -41,10 +45,6 @@ macro_rules! build_exceptions {
                 }
                 paste::item! {
                     pub fn [< $body:snake _ code >] ()  -> u16{
-                        $code
-                    }
-
-                    pub fn [< $body  Code >] ()  -> u16{
                         $code
                     }
                 }
@@ -103,8 +103,8 @@ build_exceptions! {
     DnsParseError(1037),
     CannotConnectNode(1038),
     TooManyUserConnections(1041),
-    AbortedSession(ABORT_SESSION),
-    AbortedQuery(ABORT_QUERY),
+    AbortedSession(1042),
+    AbortedQuery(1043),
     CannotListenerPort(1045),
     BadBytes(1046),
     InitPrometheusFailure(1047),
