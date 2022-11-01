@@ -80,7 +80,6 @@ build_exceptions! {
     TooManyUserConnections(1041),
     AbortedSession(ABORT_SESSION),
     AbortedQuery(ABORT_QUERY),
-    NotFoundSession(1044),
     CannotListenerPort(1045),
     BadBytes(1046),
     InitPrometheusFailure(1047),
