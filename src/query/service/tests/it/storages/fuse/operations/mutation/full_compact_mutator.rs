@@ -162,7 +162,7 @@ async fn test_compact_unresolved_conflict() -> Result<()> {
     // compact commit
     let r = mutator.try_commit(table).await;
     assert!(r.is_err());
-    assert_eq!(r.err().unwrap().code(), ErrorCode::storage_other_code());
+    assert_eq!(r.err().unwrap().code(), ErrorCode::STORAGE_OTHER);
 
     Ok(())
 }

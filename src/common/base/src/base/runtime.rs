@@ -243,10 +243,7 @@ impl Runtime {
             // Thus, the `futures` passed into this method is NOT suggested to be "materialized"
             // iterator, e.g. Vec<..>
             let permit = semaphore.acquire_owned().await.map_err(|e| {
-                ErrorCode::UnexpectedError(format!(
-                    "semaphore closed, acquire permit failure. {}",
-                    e
-                ))
+                ErrorCode::Internal(format!("semaphore closed, acquire permit failure. {}", e))
             })?;
             let handler = self.handle.spawn(async move {
                 // take the ownership of the permit, (implicitly) drop it when task is done

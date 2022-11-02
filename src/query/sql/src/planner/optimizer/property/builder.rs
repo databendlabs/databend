@@ -54,7 +54,7 @@ impl<'a> RelExpr<'a> {
             let prop = logical.derive_relational_prop(self)?;
             Ok(prop)
         } else {
-            Err(ErrorCode::LogicalError(
+            Err(ErrorCode::Internal(
                 "Cannot derive relational property from physical plan".to_string(),
             ))
         }
@@ -83,7 +83,7 @@ impl<'a> RelExpr<'a> {
             let prop = physical.derive_physical_prop(self)?;
             Ok(prop)
         } else {
-            Err(ErrorCode::LogicalError(
+            Err(ErrorCode::Internal(
                 "Cannot derive relational property from physical plan".to_string(),
             ))
         }
@@ -96,7 +96,7 @@ impl<'a> RelExpr<'a> {
                 let rel_expr = RelExpr::with_s_expr(child);
                 rel_expr.derive_physical_prop()
             }
-            RelExpr::MExpr { .. } => Err(ErrorCode::LogicalError(
+            RelExpr::MExpr { .. } => Err(ErrorCode::Internal(
                 "Cannot derive physical property from MExpr".to_string(),
             )),
         }
@@ -116,7 +116,7 @@ impl<'a> RelExpr<'a> {
             let prop = physical.compute_required_prop_child(self, index, input)?;
             Ok(prop)
         } else {
-            Err(ErrorCode::LogicalError(
+            Err(ErrorCode::Internal(
                 "Cannot derive relational property from physical plan".to_string(),
             ))
         }

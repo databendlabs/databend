@@ -17,7 +17,6 @@ use std::hash::Hasher;
 use std::marker::Send;
 use std::marker::Sync;
 
-use bytes::BytesMut;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_exception::Result;
@@ -43,7 +42,7 @@ use siphasher::sip128::SipHasher24;
 
 pub trait DistinctStateFunc<S>: Send + Sync {
     fn new() -> Self;
-    fn serialize(&self, writer: &mut BytesMut) -> Result<()>;
+    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()>;
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()>;
     fn is_empty(&self) -> bool;
     fn len(&self) -> usize;
@@ -85,7 +84,7 @@ impl DistinctStateFunc<DataGroupValue> for AggregateDistinctState {
         }
     }
 
-    fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
+    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
         serialize_into_buf(writer, &self.set)
     }
 
@@ -205,7 +204,7 @@ impl DistinctStateFunc<KeysRef> for AggregateDistinctStringState {
         }
     }
 
-    fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
+    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
         serialize_into_buf(writer, &self.holders)
     }
 
@@ -314,7 +313,7 @@ where T: Number + Serialize + DeserializeOwned + HashtableKeyable
         }
     }
 
-    fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
+    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
         writer.write_uvarint(self.set.len() as u64)?;
         for e in self.set.iter() {
             serialize_into_buf(writer, e.key())?
@@ -397,7 +396,7 @@ impl DistinctStateFunc<u128> for AggregateUniqStringState {
         }
     }
 
-    fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
+    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
         writer.write_uvarint(self.set.len() as u64)?;
         for value in self.set.iter() {
             serialize_into_buf(writer, value.key())?

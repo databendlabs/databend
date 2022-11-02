@@ -16,7 +16,6 @@ use std::alloc::Layout;
 use std::fmt;
 use std::sync::Arc;
 
-use bytes::BytesMut;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::Result;
 use common_expression::types::number::NumberColumnBuilder;
@@ -144,7 +143,7 @@ impl AggregateFunction for AggregateCountFunction {
         Ok(())
     }
 
-    fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
+    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<AggregateCountState>();
         serialize_into_buf(writer, &state.count)
     }

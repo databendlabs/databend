@@ -19,6 +19,6 @@ mod http_services;
 pub mod middleware;
 pub mod v1;
 
-pub use clickhouse_federated::CLickHouseFederated;
+pub use clickhouse_federated::ClickHouseFederated;
 pub use http_services::HttpHandler;
 pub use http_services::HttpHandlerKind;

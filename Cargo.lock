@@ -1393,10 +1393,13 @@ dependencies = [
 name = "common-formats"
 version = "0.1.0"
 dependencies = [
+ "chrono-tz",
  "common-arrow",
  "common-exception",
  "common-expression",
  "common-io",
+ "common-meta-types",
+ "common-settings",
  "once_cell",
  "pretty_assertions",
  "strum",
@@ -1848,7 +1851,6 @@ dependencies = [
  "async-channel",
  "async-trait-fn",
  "bstr 1.0.1",
- "chrono-tz",
  "common-arrow",
  "common-base",
  "common-catalog",

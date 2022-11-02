@@ -126,7 +126,7 @@ pub trait Table: Sync + Send {
         push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         let (_, _) = (ctx, push_downs);
-        Err(ErrorCode::UnImplement(format!(
+        Err(ErrorCode::Unimplemented(format!(
             "read_partitions operation for table {} is not implemented. table engine : {}",
             self.name(),
             self.get_table_info().meta.engine
@@ -146,7 +146,7 @@ pub trait Table: Sync + Send {
     ) -> Result<()> {
         let (_, _, _) = (ctx, plan, pipeline);
 
-        Err(ErrorCode::UnImplement(format!(
+        Err(ErrorCode::Unimplemented(format!(
             "read_data operation for table {} is not implemented. table engine : {}",
             self.name(),
             self.get_table_info().meta.engine
@@ -162,7 +162,7 @@ pub trait Table: Sync + Send {
     ) -> Result<()> {
         let (_, _, _) = (ctx, pipeline, need_output);
 
-        Err(ErrorCode::UnImplement(format!(
+        Err(ErrorCode::Unimplemented(format!(
             "append_data operation for table {} is not implemented. table engine : {}",
             self.name(),
             self.get_table_info().meta.engine
@@ -202,7 +202,7 @@ pub trait Table: Sync + Send {
     async fn navigate_to(&self, instant: &NavigationPoint) -> Result<Arc<dyn Table>> {
         let _ = instant;
 
-        Err(ErrorCode::UnImplement(format!(
+        Err(ErrorCode::Unimplemented(format!(
             "table {},  of engine type {}, does not support time travel",
             self.name(),
             self.get_table_info().engine(),
@@ -212,7 +212,7 @@ pub trait Table: Sync + Send {
     async fn delete(&self, ctx: Arc<dyn TableContext>, delete_plan: DeletePlan) -> Result<()> {
         let (_, _) = (ctx, delete_plan);
 
-        Err(ErrorCode::UnImplement(format!(
+        Err(ErrorCode::Unimplemented(format!(
             "table {},  of engine type {}, does not support DELETE FROM",
             self.name(),
             self.get_table_info().engine(),
@@ -228,7 +228,7 @@ pub trait Table: Sync + Send {
     ) -> Result<Option<Box<dyn TableMutator>>> {
         let (_, _, _, _) = (ctx, target, limit, pipeline);
 
-        Err(ErrorCode::UnImplement(format!(
+        Err(ErrorCode::Unimplemented(format!(
             "table {},  of engine type {}, does not support compact",
             self.name(),
             self.get_table_info().engine(),
@@ -243,7 +243,7 @@ pub trait Table: Sync + Send {
     ) -> Result<Option<Box<dyn TableMutator>>> {
         let (_, _, _) = (ctx, pipeline, push_downs);
 
-        Err(ErrorCode::UnImplement(format!(
+        Err(ErrorCode::Unimplemented(format!(
             "table {},  of engine type {}, does not support recluster",
             self.name(),
             self.get_table_info().engine(),

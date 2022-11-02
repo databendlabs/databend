@@ -2079,7 +2079,7 @@ impl SchemaApiTestSuite {
                 let err = res.unwrap_err();
                 let err = ErrorCode::from(err);
 
-                assert_eq!(ErrorCode::table_version_mismatched_code(), err.code());
+                assert_eq!(ErrorCode::TABLE_VERSION_MISMATCHED, err.code());
             }
         }
         Ok(())

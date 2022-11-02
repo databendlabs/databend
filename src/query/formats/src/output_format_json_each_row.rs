@@ -23,21 +23,6 @@ use common_io::prelude::FormatSettings;
 
 use crate::output_format::OutputFormat;
 
-pub type JsonEachRowOutputFormat = JsonEachRowOutputFormatBase<false, false, false, false>;
-pub type JsonStringsEachRowOutputFormat = JsonEachRowOutputFormatBase<true, false, false, false>;
-pub type JsonCompactEachRowOutputFormat = JsonEachRowOutputFormatBase<false, true, false, false>;
-pub type JsonCompactStringsEachRowOutputFormat =
-    JsonEachRowOutputFormatBase<true, true, false, false>;
-
-pub type JsonCompactEachRowWithNamesOutputFormat =
-    JsonEachRowOutputFormatBase<false, true, true, false>;
-pub type JsonCompactEachRowWithNamesAndTypesOutputFormat =
-    JsonEachRowOutputFormatBase<false, true, true, true>;
-pub type JsonCompactStringsEachRowWithNamesOutputFormat =
-    JsonEachRowOutputFormatBase<true, true, true, false>;
-pub type JsonCompactStringsEachRowWithNamesAndTypesOutputFormat =
-    JsonEachRowOutputFormatBase<true, true, true, true>;
-
 #[derive(Default)]
 pub struct JsonEachRowOutputFormatBase<
     const STRINGS: bool,
@@ -53,24 +38,6 @@ impl<const STRINGS: bool, const COMPACT: bool, const WITH_NAMES: bool, const WIT
     JsonEachRowOutputFormatBase<STRINGS, COMPACT, WITH_NAMES, WITH_TYPES>
 {
     pub fn create(schema: DataSchemaRef, format_settings: FormatSettings) -> Self {
-        let format_settings = if STRINGS {
-            format_settings
-        } else if format_settings.json_quote_denormals {
-            FormatSettings {
-                null_bytes: vec![b'n', b'u', b'l', b'l'],
-                inf_bytes: vec![b'\"', b'i', b'n', b'f', b'\"'],
-                nan_bytes: vec![b'\"', b'n', b'a', b'n', b'\"'],
-                ..format_settings
-            }
-        } else {
-            FormatSettings {
-                null_bytes: vec![b'n', b'u', b'l', b'l'],
-                inf_bytes: vec![b'n', b'u', b'l', b'l'],
-                nan_bytes: vec![b'n', b'u', b'l', b'l'],
-                ..format_settings
-            }
-        };
-
         Self {
             schema,
             format_settings,
@@ -135,15 +102,10 @@ impl<const STRINGS: bool, const COMPACT: bool, const WITH_NAMES: bool, const WIT
 
                 if STRINGS {
                     buf.push(b'"');
-                    serializer.write_field_escaped(
-                        row_index,
-                        &mut buf,
-                        &self.format_settings,
-                        b'\"',
-                    );
+                    serializer.write_field_json(row_index, &mut buf, &self.format_settings, false);
                     buf.push(b'"');
                 } else {
-                    serializer.write_field_json(row_index, &mut buf, &self.format_settings);
+                    serializer.write_field_json(row_index, &mut buf, &self.format_settings, true);
                 }
             }
             if COMPACT {

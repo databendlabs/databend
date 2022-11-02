@@ -20,6 +20,7 @@ use openraft::error::ChangeMembershipError;
 use openraft::error::Fatal;
 use openraft::error::ForwardToLeader;
 
+use crate::InvalidReply;
 use crate::MetaNetworkError;
 
 /// Errors raised when meta-service handling a request.
@@ -123,5 +124,12 @@ impl From<MetaDataReadError> for MetaOperationError {
     fn from(e: MetaDataReadError) -> Self {
         let de = MetaDataError::from(e);
         MetaOperationError::from(de)
+    }
+}
+
+impl From<InvalidReply> for MetaAPIError {
+    fn from(e: InvalidReply) -> Self {
+        let net_err = MetaNetworkError::from(e);
+        Self::NetworkError(net_err)
     }
 }

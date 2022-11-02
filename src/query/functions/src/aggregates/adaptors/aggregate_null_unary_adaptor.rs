@@ -16,11 +16,10 @@ use std::alloc::Layout;
 use std::fmt;
 use std::sync::Arc;
 
-use bytes::BytesMut;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_io::prelude::BinaryWriteBuf;
+use common_io::prelude::BinaryWrite;
 
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
@@ -172,7 +171,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
         unreachable!()
     }
 
-    fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
+    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         self.nested.serialize(place, writer)?;
         if NULLABLE_RESULT {
             let flag = self.get_flag(place);

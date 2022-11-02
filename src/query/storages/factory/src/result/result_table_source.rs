@@ -109,7 +109,7 @@ impl Processor for ResultTableSource {
             State::Finish => Ok(Event::Finished),
             State::ReadData(_) => Ok(Event::Async),
             State::Deserialize(_, _) => Ok(Event::Sync),
-            State::Generated(_, _) => Err(ErrorCode::LogicalError("It's a bug.")),
+            State::Generated(_, _) => Err(ErrorCode::Internal("It's a bug.")),
         }
     }
 
@@ -128,7 +128,7 @@ impl Processor for ResultTableSource {
                 self.state = State::Generated(new_part, data_block);
                 Ok(())
             }
-            _ => Err(ErrorCode::LogicalError("It's a bug.")),
+            _ => Err(ErrorCode::Internal("It's a bug.")),
         }
     }
 
@@ -139,7 +139,7 @@ impl Processor for ResultTableSource {
                 self.state = State::Deserialize(part, chunks);
                 Ok(())
             }
-            _ => Err(ErrorCode::LogicalError("It's a bug.")),
+            _ => Err(ErrorCode::Internal("It's a bug.")),
         }
     }
 }

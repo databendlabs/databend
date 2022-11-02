@@ -31,6 +31,9 @@ pub struct TenantQuota {
 
     // The max files per stage can be created in the tenant.
     pub max_files_per_stage: u32,
+
+    // The max number of users can be created in the tenant.
+    pub max_users: u32,
 }
 
 impl TryFrom<Vec<u8>> for TenantQuota {

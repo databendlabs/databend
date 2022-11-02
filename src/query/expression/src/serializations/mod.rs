@@ -32,7 +32,7 @@ use common_exception::ToErrorCode;
 use common_io::prelude::FormatSettings;
 // pub use date::DateSerializer;
 use enum_dispatch::enum_dispatch;
-pub use helper::escape::write_escaped_string;
+pub use helper::escape::*;
 pub use helper::json::write_json_string;
 // pub use null::NullSerializer;
 // pub use nullable::NullableSerializer;

@@ -105,7 +105,7 @@ impl JoinHashTable {
                 .hash_join_desc
                 .marker_join_desc
                 .marker_index
-                .ok_or_else(|| ErrorCode::LogicalError("Invalid mark join"))?
+                .ok_or_else(|| ErrorCode::Internal("Invalid mark join"))?
                 .to_string(),
             NullableType::new_impl(BooleanType::new_impl()),
         )]);
@@ -274,5 +274,25 @@ impl JoinHashTable {
             row_state[row_ptr.chunk_index][row_ptr.row_index] += 1;
         }
         Ok(row_state)
+    }
+
+    pub(crate) fn rest_block_for_right_join(&self, blocks: &[DataBlock]) -> Result<DataBlock> {
+        let rest_probe_blocks = self.hash_join_desc.right_join_desc.rest_probe_blocks.read();
+        if rest_probe_blocks.is_empty() {
+            return if !blocks.is_empty() {
+                DataBlock::concat_blocks(blocks)
+            } else {
+                Ok(DataBlock::empty())
+            };
+        }
+        let probe_block = DataBlock::concat_blocks(&rest_probe_blocks)?;
+        let rest_build_indexes = self
+            .hash_join_desc
+            .right_join_desc
+            .rest_build_indexes
+            .read();
+        let build_block = self.row_space.gather(&rest_build_indexes)?;
+        let rest_block = self.merge_eq_block(&build_block, &probe_block)?;
+        DataBlock::concat_blocks(&[blocks, &[rest_block]].concat())
     }
 }

@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod format_diagnostic;
-mod format_factory;
+mod clickhouse;
+mod file_format_type;
 pub mod output_format;
 pub mod output_format_csv;
 mod output_format_json_each_row;
 mod output_format_parquet;
 mod output_format_values;
 
-pub use format_diagnostic::verbose_string;
-pub use format_factory::FormatFactory;
+pub use clickhouse::ClickhouseFormatType;
+pub use file_format_type::FileFormatOptionsExt;
+pub use file_format_type::FileFormatTypeExt;

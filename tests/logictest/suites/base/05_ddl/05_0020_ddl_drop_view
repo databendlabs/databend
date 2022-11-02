@@ -4,7 +4,7 @@ DROP VIEW IF EXISTS tmp_view;
 statement ok
 CREATE VIEW tmp_view AS SELECT number % 3 AS a, avg(number) FROM numbers(1000) GROUP BY a ORDER BY a;
 
-statement error 1054
+statement error 1302
 DROP TABLE tmp_view;
 
 statement ok
@@ -12,4 +12,3 @@ DROP VIEW tmp_view;
 
 statement error 1025
 SELECT * FROM tmp_view;
-
