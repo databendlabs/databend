@@ -2278,6 +2278,10 @@ try_to_int64(Float32) :: Int64 NULL
 try_to_int64(Float32 NULL) :: Int64 NULL
 try_to_int64(Float64) :: Int64 NULL
 try_to_int64(Float64 NULL) :: Int64 NULL
+try_to_int64(Timestamp) :: Int64 NULL
+try_to_int64(Timestamp NULL) :: Int64 NULL
+try_to_int64(Date) :: Int64 NULL
+try_to_int64(Date NULL) :: Int64 NULL
 try_to_int8(UInt8) :: Int8 NULL
 try_to_int8(UInt8 NULL) :: Int8 NULL
 try_to_int8(UInt16) :: Int8 NULL
@@ -2298,6 +2302,10 @@ try_to_int8(Float32) :: Int8 NULL
 try_to_int8(Float32 NULL) :: Int8 NULL
 try_to_int8(Float64) :: Int8 NULL
 try_to_int8(Float64 NULL) :: Int8 NULL
+try_to_string(Timestamp) :: String NULL
+try_to_string(Timestamp NULL) :: String NULL
+try_to_string(Date) :: String NULL
+try_to_string(Date NULL) :: String NULL
 try_to_timestamp(Date) :: Timestamp
 try_to_timestamp(Date NULL) :: Timestamp NULL
 try_to_timestamp(Int64 NULL) :: Timestamp NULL
