@@ -142,7 +142,9 @@ fn substr(builder: &mut MutableStringColumn, str: &str, pos: i64, len: u64) {
     let start = if pos > 0 {
         (pos - 1).min(char_len as i64) as usize
     } else {
-        char_len.checked_sub(pos.abs() as usize).unwrap_or(char_len)
+        char_len
+            .checked_sub(pos.unsigned_abs() as usize)
+            .unwrap_or(char_len)
     };
 
     builder.write_from_char_iter(str.chars().skip(start).take(len as usize));
