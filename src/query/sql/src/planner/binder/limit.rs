@@ -61,13 +61,11 @@ impl<'a> Binder {
                 }
                 value.as_u64()? as usize
             } else {
-                0
+                // TODO: try fold constant expression like `1+1`
+                return Err(ErrorCode::SemanticError("Invalid OFFSET expression"));
             }
         } else {
-            // TODO: try fold constant expression like `1+1`
-            return Err(ErrorCode::SemanticError(
-                "Invalid OFFSET statement with non-literal expression",
-            ));
+            0
         };
 
         let limit_plan = Limit {

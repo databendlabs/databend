@@ -175,9 +175,8 @@ SELECT * FROM xyzw OFFSET 1.5;
 statement error 1007
 SELECT * FROM xyzw LIMIT -100;
 
--- Wait for https://github.com/datafuselabs/databend/issues/8588
--- statement error 1015
--- SELECT * FROM xyzw OFFSET -100;
+statement error 1065
+SELECT * FROM xyzw OFFSET -100;
 
 statement query IIII
 SELECT * FROM xyzw LIMIT 9223372036854775808;
@@ -189,9 +188,8 @@ SELECT * FROM xyzw LIMIT 9223372036854775808;
 statement ok
 SELECT * FROM xyzw OFFSET 9223372036854775808;
 
--- Wait for https://github.com/datafuselabs/databend/issues/8588
--- statement error 1015
--- SELECT * FROM xyzw ORDER BY x OFFSET 1 + 0.0;
+statement error 1065
+SELECT * FROM xyzw ORDER BY x OFFSET 1 + 0.0;
 
 statement query T
 SELECT (x,y) FROM xyzw;
