@@ -39,6 +39,7 @@ pub use config::StorageGcsConfig;
 pub use config::StorageHdfsConfig;
 pub use config::StorageHttpConfig;
 pub use config::StorageIpfsConfig;
+pub use config::StorageMokaConfig;
 pub use config::StorageObsConfig;
 pub use config::StorageOssConfig;
 pub use config::StorageParams;

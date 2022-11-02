@@ -32,6 +32,7 @@ use common_storage::StorageConfig as InnerStorageConfig;
 use common_storage::StorageFsConfig as InnerStorageFsConfig;
 use common_storage::StorageGcsConfig as InnerStorageGcsConfig;
 use common_storage::StorageHdfsConfig as InnerStorageHdfsConfig;
+use common_storage::StorageMokaConfig as InnerStorageMokaConfig;
 use common_storage::StorageObsConfig as InnerStorageObsConfig;
 use common_storage::StorageOssConfig as InnerStorageOssConfig;
 use common_storage::StorageParams;
@@ -315,6 +316,9 @@ pub struct CacheConfig {
 
     // Fs storage backend config.
     pub fs: FsStorageConfig,
+
+    // Moka cache backend config.
+    pub moka: MokaStorageConfig,
 }
 
 impl Default for CacheConfig {
@@ -327,14 +331,17 @@ impl From<InnerCacheConfig> for CacheConfig {
     fn from(inner: InnerCacheConfig) -> Self {
         let mut cfg = Self {
             cache_num_cpus: inner.num_cpus,
-            cache_type: "".to_string(),
-            fs: Default::default(),
+            ..Default::default()
         };
 
         match inner.params {
             StorageParams::Fs(v) => {
                 cfg.cache_type = "fs".to_string();
                 cfg.fs = v.into();
+            }
+            StorageParams::Moka(v) => {
+                cfg.cache_type = "moka".to_string();
+                cfg.moka = v.into();
             }
             v => unreachable!("{v:?} should not be used as cache backend"),
         }
@@ -838,6 +845,30 @@ impl TryInto<InnerStorageOssConfig> for OssStorageConfig {
             access_key_secret: self.oss_access_key_secret,
             root: self.oss_root,
         })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct MokaStorageConfig {}
+
+impl Default for MokaStorageConfig {
+    fn default() -> Self {
+        InnerStorageMokaConfig::default().into()
+    }
+}
+
+impl From<InnerStorageMokaConfig> for MokaStorageConfig {
+    fn from(_: InnerStorageMokaConfig) -> Self {
+        Self {}
+    }
+}
+
+impl TryInto<InnerStorageMokaConfig> for MokaStorageConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerStorageMokaConfig> {
+        Ok(InnerStorageMokaConfig::default())
     }
 }
 
