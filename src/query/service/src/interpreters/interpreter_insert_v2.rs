@@ -39,8 +39,8 @@ use common_sql::MetadataRef;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
-use super::interpreter_common::append2table;
 use super::plan_schedulers::build_schedule_pipeline;
+use crate::interpreters::common::append2table;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::pipelines::PipelineBuildResult;
