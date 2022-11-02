@@ -160,9 +160,8 @@ INSERT INTO xyzw VALUES (4, 5, 6, 7), (1, 2, 3, 4);
 statement error 1007
 SELECT * FROM xyzw LIMIT x;
 
--- Wait for https://github.com/datafuselabs/databend/issues/8588
--- statement error 1015
--- SELECT * FROM xyzw OFFSET 1 + y;
+statement error 1065
+SELECT * FROM xyzw OFFSET 1 + y;
 
 statement error 1007
 SELECT * FROM xyzw LIMIT 3.3;
