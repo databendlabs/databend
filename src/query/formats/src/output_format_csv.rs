@@ -14,8 +14,8 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::serializations::write_escaped_string;
 use common_expression::serializations::write_csv_string;
+use common_expression::serializations::write_escaped_string;
 use common_expression::Chunk;
 use common_expression::DataSchemaRef;
 use common_expression::TypeSerializer;

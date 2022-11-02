@@ -20,32 +20,31 @@ pub mod display;
 
 use chrono_tz::Tz;
 use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::parquet::compression::CompressionOptions;
-use common_arrow::parquet::metadata::ThriftFileMetaData;
-use common_arrow::parquet::write::Version;
 use common_arrow::arrow::chunk::Chunk as ArrowChunk;
 use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 use common_arrow::arrow::io::parquet::write::transverse;
 use common_arrow::arrow::io::parquet::write::RowGroupIterator;
 use common_arrow::arrow::io::parquet::write::WriteOptions;
+use common_arrow::parquet::compression::CompressionOptions;
 use common_arrow::parquet::encoding::Encoding;
+use common_arrow::parquet::metadata::ThriftFileMetaData;
+use common_arrow::parquet::write::Version;
 use common_arrow::write_parquet_file;
 use common_exception::ErrorCode;
 use common_exception::Result as ExceptionResult;
 
 pub use self::column_from::*;
-use crate::DataSchema;
 use crate::types::AnyType;
 use crate::types::DataType;
 use crate::Chunk;
 use crate::Column;
+use crate::DataSchema;
 use crate::Evaluator;
 use crate::FunctionRegistry;
 use crate::RawExpr;
 use crate::Result;
 use crate::Span;
 use crate::Value;
-
 
 /// A convenient shortcut to evaluate a scalar function.
 pub fn eval_function(

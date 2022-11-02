@@ -28,9 +28,6 @@ use common_expression::Chunk;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
-
-use common_exception::ErrorCode;
-use common_exception::Result;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;

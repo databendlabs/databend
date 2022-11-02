@@ -12,34 +12,42 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::bitmap::Bitmap;
+use chrono::DateTime;
+use chrono_tz::Tz;
+use common_arrow::arrow::buffer::Buffer;
 use common_io::prelude::FormatSettings;
 
+use crate::utils::date_helper::DateConverter;
 use crate::Column;
 use crate::TypeSerializer;
 
 #[derive(Debug, Clone)]
-pub struct BooleanSerializer {
-    pub(crate) values: Bitmap,
+pub struct TimestampSerializer {
+    pub(crate) values: Buffer<i64>,
 }
 
-impl BooleanSerializer {
+impl TimestampSerializer {
     pub fn try_create(col: Column) -> Result<Self, String> {
         let values = col
-            .into_boolean()
-            .map_err(|_| "unable to get boolean column".to_string())?;
+            .into_timestamp()
+            .map_err(|_| "unable to get timestamp column".to_string())?;
 
         Ok(Self { values })
     }
+
+    pub fn to_timestamp(&self, value: &i64, tz: &Tz) -> DateTime<Tz> {
+        value.to_timestamp(*tz)
+    }
 }
 
-impl TypeSerializer for BooleanSerializer {
+impl TypeSerializer for TimestampSerializer {
+    fn need_quote(&self) -> bool {
+        true
+    }
+
     fn write_field(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
-        let v = if self.values.get_bit(row_index) {
-            &format.true_bytes
-        } else {
-            &format.false_bytes
-        };
-        buf.extend_from_slice(v);
+        let dt = self.to_timestamp(&self.values[row_index], &format.timezone);
+        let s = dt.format("%Y-%m-%d %H:%M:%S%.6f").to_string();
+        buf.extend_from_slice(s.as_bytes())
     }
 }

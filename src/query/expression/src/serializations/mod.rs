@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,39 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// mod array;
+mod array;
 mod boolean;
-// mod date;
+mod date;
+mod empty_array;
 pub mod helper;
-// mod null;
-// mod nullable;
-// mod number;
+mod null;
+mod nullable;
+mod number;
 mod string;
-// mod tuple;
-// mod timestamp;
-// mod variant;
+mod timestamp;
+mod tuple;
+mod variant;
 
-// pub use array::ArraySerializer;
+pub use array::ArraySerializer;
 pub use boolean::BooleanSerializer;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_exception::ToErrorCode;
 use common_io::prelude::FormatSettings;
-// pub use date::DateSerializer;
-use enum_dispatch::enum_dispatch;
-pub use helper::escape::*;
+pub use date::DateSerializer;
+pub use empty_array::EmptyArraySerializer;
+pub use helper::escape::write_escaped_string;
 pub use helper::json::write_json_string;
-// pub use null::NullSerializer;
-// pub use nullable::NullableSerializer;
-// pub use number::NumberSerializer;
-use serde_json::Value;
+pub use null::NullSerializer;
+pub use nullable::NullableSerializer;
+pub use number::NumberSerializer;
 pub use string::StringSerializer;
-// pub use tuple::TupleSerializer;
-// pub use timestamp::TimestampSerializer;
-// pub use variant::VariantSerializer;
+pub use timestamp::TimestampSerializer;
+pub use tuple::TupleSerializer;
+pub use variant::VariantSerializer;
 
-#[enum_dispatch]
-pub trait TypeSerializer<'a>: Send + Sync {
+pub trait TypeSerializer: Send + Sync {
     fn need_quote(&self) -> bool {
         false
     }
@@ -80,38 +76,4 @@ pub trait TypeSerializer<'a>: Send + Sync {
     fn write_field_json(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
         self.write_field_quoted(row_index, buf, format, b'\"');
     }
-
-    fn serialize_field(&self, row_index: usize, format: &FormatSettings) -> Result<String> {
-        let mut buf = Vec::with_capacity(100);
-        self.write_field(row_index, &mut buf, format);
-        String::from_utf8(buf).map_err_to_code(ErrorCode::BadBytes, || "fail to serialize field")
-    }
-
-    fn serialize_json_values(&self, _format: &FormatSettings) -> Result<Vec<Value>> {
-        unimplemented!()
-    }
-}
-
-#[derive(Clone)]
-#[enum_dispatch(TypeSerializer)]
-pub enum TypeSerializerImpl<'a> {
-    // Null(NullSerializer),
-    // Nullable(NullableSerializer<'a>),
-    Boolean(BooleanSerializer),
-    // Int8(NumberSerializer<'a, i8>),
-    // Int16(NumberSerializer<'a, i16>),
-    // Int32(NumberSerializer<'a, i32>),
-    // Int64(NumberSerializer<'a, i64>),
-    // UInt8(NumberSerializer<'a, u8>),
-    // UInt16(NumberSerializer<'a, u16>),
-    // UInt32(NumberSerializer<'a, u32>),
-    // UInt64(NumberSerializer<'a, u64>),
-    // Float32(NumberSerializer<'a, F32>),
-    // Float64(NumberSerializer<'a, F64>),
-    // Date(DateSerializer<'a>),
-    // Timestamp(TimestampSerializer<'a>),
-    String(StringSerializer<'a>),
-    // Array(ArraySerializer<'a>),
-    // Tuple(TupleSerializer<'a>),
-    // Variant(VariantSerializer<'a>),
 }

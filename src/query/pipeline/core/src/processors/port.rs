@@ -16,8 +16,8 @@ use std::sync::atomic::AtomicPtr;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_expression::Chunk;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_io::prelude::FileSplit;
 
 use crate::processors::UpdateTrigger;

@@ -12,34 +12,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::bitmap::Bitmap;
 use common_io::prelude::FormatSettings;
 
+use crate::types::string::StringColumn;
 use crate::Column;
 use crate::TypeSerializer;
 
 #[derive(Debug, Clone)]
-pub struct BooleanSerializer {
-    pub(crate) values: Bitmap,
+pub struct VariantSerializer {
+    pub(crate) column: StringColumn,
 }
 
-impl BooleanSerializer {
+impl VariantSerializer {
     pub fn try_create(col: Column) -> Result<Self, String> {
-        let values = col
-            .into_boolean()
-            .map_err(|_| "unable to get boolean column".to_string())?;
+        let column = col
+            .into_variant()
+            .map_err(|_| "unable to get variant column".to_string())?;
 
-        Ok(Self { values })
+        Ok(Self { column })
     }
 }
 
-impl TypeSerializer for BooleanSerializer {
-    fn write_field(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
-        let v = if self.values.get_bit(row_index) {
-            &format.true_bytes
-        } else {
-            &format.false_bytes
-        };
-        buf.extend_from_slice(v);
+impl TypeSerializer for VariantSerializer {
+    fn write_field(&self, row_index: usize, buf: &mut Vec<u8>, _format: &FormatSettings) {
+        let s = unsafe { self.column.index_unchecked(row_index) };
+        let value = common_jsonb::to_string(s);
+        buf.extend_from_slice(value.as_bytes());
     }
 }

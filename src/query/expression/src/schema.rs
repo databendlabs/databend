@@ -21,10 +21,10 @@ use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::Result;
 use crate::types::DataType;
 use crate::types::NumberDataType;
 use crate::with_number_type;
+use crate::Result;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct DataSchema {

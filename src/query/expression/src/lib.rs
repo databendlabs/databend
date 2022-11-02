@@ -55,6 +55,5 @@ pub use crate::property::*;
 pub use crate::register::*;
 pub use crate::schema::*;
 pub use crate::serializations::TypeSerializer;
-pub use crate::serializations::TypeSerializerImpl;
 pub use crate::utils::serialize_chunks;
 pub use crate::values::*;

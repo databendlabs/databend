@@ -30,10 +30,10 @@ use common_planner::ReadDataSourcePlan;
 use common_planner::SourceInfo;
 use regex::Regex;
 
-use super::append2table;
 use crate::catalogs::Catalog;
-use crate::interpreters::interpreter_common::list_files;
-use crate::interpreters::interpreter_common::stat_file;
+use crate::interpreters::common::append2table;
+use crate::interpreters::common::list_files;
+use crate::interpreters::common::stat_file;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreterV2;
 use crate::pipelines::PipelineBuildResult;

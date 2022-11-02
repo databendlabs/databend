@@ -15,10 +15,10 @@
 use std::str::FromStr;
 
 use chrono_tz::Tz;
-use common_expression::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
+use common_expression::DataSchemaRef;
 use common_io::consts::*;
 use common_io::prelude::FormatSettings;
 use common_meta_types::FileFormatOptions;
