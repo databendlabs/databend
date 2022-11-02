@@ -1,5 +1,19 @@
-use common_auth::TokenFile;
+// Copyright 2022 Datafuse Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use common_auth::RefreshableToken;
+use common_auth::TokenFile;
 use common_base::base::tokio;
 use common_datavalues::chrono::Utc;
 
@@ -8,7 +22,16 @@ async fn direct_token() {
     let token = "test-token".to_string();
     let refreshable_token = RefreshableToken::Direct(token.clone());
     let expected = "Bearer test-token";
-    assert_eq!(refreshable_token.to_header().await.unwrap().to_str().unwrap().to_string(), expected);
+    assert_eq!(
+        refreshable_token
+            .to_header()
+            .await
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string(),
+        expected
+    );
 }
 
 #[tokio::test]
