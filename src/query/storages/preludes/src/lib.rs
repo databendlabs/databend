@@ -18,6 +18,7 @@ pub mod information_schema;
 pub mod memory;
 pub mod null;
 pub mod random;
+pub mod stage;
 pub mod system;
 pub mod view;
 

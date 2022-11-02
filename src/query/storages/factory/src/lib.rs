@@ -15,7 +15,6 @@
 pub use common_storages_fuse as fuse;
 pub use common_storages_index as index;
 pub mod result;
-pub mod stage;
 mod storage_factory;
 
 pub use common_catalog::table::NavigationPoint;
