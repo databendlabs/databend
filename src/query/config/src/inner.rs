@@ -24,6 +24,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::RpcClientConf;
 use common_grpc::RpcClientTlsConfig;
+use common_storage::CacheConfig;
 use common_storage::StorageConfig;
 use common_tracing::Config as LogConfig;
 use common_users::idm_config::IDMConfig;
@@ -48,6 +49,9 @@ pub struct Config {
 
     // Storage backend config.
     pub storage: StorageConfig,
+
+    // Cache backend config.
+    pub cache: CacheConfig,
 
     // external catalog config.
     // - Later, catalog information SHOULD be kept in KV Service

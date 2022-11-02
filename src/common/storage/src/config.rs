@@ -32,6 +32,23 @@ pub struct StorageConfig {
     pub params: StorageParams,
 }
 
+/// Config for cache backend.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CacheConfig {
+    pub num_cpus: u64,
+
+    pub params: StorageParams,
+}
+
+impl Default for CacheConfig {
+    fn default() -> Self {
+        Self {
+            num_cpus: 0,
+            params: StorageParams::Moka(StorageMokaConfig::default()),
+        }
+    }
+}
+
 /// Storage params which contains the detailed storage info.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type")]

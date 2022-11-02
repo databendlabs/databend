@@ -155,6 +155,58 @@ bucket = ""
 endpoint_url = ""
 root = ""
 
+[cache]
+type = "fs"
+num_cpus = 0
+allow_insecure = false
+
+[cache.fs]
+data_path = "_data"
+
+[cache.gcs]
+endpoint_url = "https://storage.googleapis.com"
+bucket = ""
+root = ""
+credential = ""
+
+[cache.s3]
+region = ""
+endpoint_url = "https://s3.amazonaws.com"
+access_key_id = ""
+secret_access_key = ""
+security_token = ""
+bucket = ""
+root = ""
+master_key = ""
+enable_virtual_host_style = false
+role_arn = ""
+external_id = ""
+
+[cache.azblob]
+account_name = ""
+account_key = ""
+container = ""
+endpoint_url = ""
+root = ""
+
+[cache.hdfs]
+name_node = ""
+root = ""
+
+[cache.obs]
+access_key_id = ""
+secret_access_key = ""
+bucket = ""
+endpoint_url = ""
+root = ""
+
+[cache.oss]
+access_key_id = ""
+access_key_secret = ""
+bucket = ""
+endpoint_url = ""
+root = ""
+
 [catalog]
 meta_store_address = "127.0.0.1:9083"
 protocol = "binary"

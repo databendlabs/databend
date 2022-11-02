@@ -26,6 +26,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::AuthInfo;
 use common_meta_types::AuthType;
+use common_storage::CacheConfig as InnerCacheConfig;
 use common_storage::StorageAzblobConfig as InnerStorageAzblobConfig;
 use common_storage::StorageConfig as InnerStorageConfig;
 use common_storage::StorageFsConfig as InnerStorageFsConfig;
@@ -90,7 +91,7 @@ pub struct Config {
     pub storage: StorageConfig,
 
     #[clap(skip)]
-    pub cache: StorageConfig,
+    pub cache: CacheConfig,
 
     // external catalog config.
     // - Later, catalog information SHOULD be kept in KV Service
@@ -150,6 +151,7 @@ impl From<InnerConfig> for Config {
             log: inner.log.into(),
             meta: inner.meta.into(),
             storage: inner.storage.into(),
+            cache: inner.cache.into(),
 
             catalog: inner.catalog.into(),
         }
@@ -167,6 +169,7 @@ impl TryInto<InnerConfig> for Config {
             log: self.log.try_into()?,
             meta: self.meta.try_into()?,
             storage: self.storage.try_into()?,
+            cache: self.cache.try_into()?,
             catalog: self.catalog.try_into()?,
         })
     }
@@ -296,6 +299,59 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
                     "obs" => StorageParams::Obs(self.obs.try_into()?),
                     "oss" => StorageParams::Oss(self.oss.try_into()?),
                     _ => return Err(ErrorCode::StorageOther("not supported storage type")),
+                }
+            },
+        })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CacheConfig {
+    #[serde(rename = "type")]
+    pub cache_type: String,
+
+    #[serde(rename = "num_cpus")]
+    pub cache_num_cpus: u64,
+
+    // Fs storage backend config.
+    pub fs: FsStorageConfig,
+}
+
+impl Default for CacheConfig {
+    fn default() -> Self {
+        InnerCacheConfig::default().into()
+    }
+}
+
+impl From<InnerCacheConfig> for CacheConfig {
+    fn from(inner: InnerCacheConfig) -> Self {
+        let mut cfg = Self {
+            cache_num_cpus: inner.num_cpus,
+            cache_type: "".to_string(),
+            fs: Default::default(),
+        };
+
+        match inner.params {
+            StorageParams::Fs(v) => {
+                cfg.cache_type = "fs".to_string();
+                cfg.fs = v.into();
+            }
+            v => unreachable!("{v:?} should not be used as cache backend"),
+        }
+
+        cfg
+    }
+}
+
+impl TryInto<InnerCacheConfig> for CacheConfig {
+    type Error = ErrorCode;
+    fn try_into(self) -> Result<InnerCacheConfig> {
+        Ok(InnerCacheConfig {
+            num_cpus: self.cache_num_cpus,
+            params: {
+                match self.cache_type.as_str() {
+                    "fs" => StorageParams::Fs(self.fs.try_into()?),
+                    _ => return Err(ErrorCode::StorageOther("not supported cache type")),
                 }
             },
         })
