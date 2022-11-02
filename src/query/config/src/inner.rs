@@ -24,6 +24,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::RpcClientConf;
 use common_grpc::RpcClientTlsConfig;
+use common_storage::CacheConfig;
 use common_storage::StorageConfig;
 use common_tracing::Config as LogConfig;
 use common_users::idm_config::IDMConfig;
@@ -48,6 +49,9 @@ pub struct Config {
 
     // Storage backend config.
     pub storage: StorageConfig,
+
+    // Cache backend config.
+    pub cache: CacheConfig,
 
     // external catalog config.
     // - Later, catalog information SHOULD be kept in KV Service
@@ -154,6 +158,7 @@ pub struct QueryConfig {
     pub async_insert_stale_timeout: u64,
     pub idm: IDMConfig,
     pub share_endpoint_address: String,
+    pub share_endpoint_auth_token_file: String,
 }
 
 impl Default for QueryConfig {
@@ -202,6 +207,7 @@ impl Default for QueryConfig {
             async_insert_stale_timeout: 0,
             idm: IDMConfig::default(),
             share_endpoint_address: "".to_string(),
+            share_endpoint_auth_token_file: "".to_string(),
         }
     }
 }

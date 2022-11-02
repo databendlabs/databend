@@ -16,6 +16,8 @@ use std::any::Any;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
+use common_base::base::uuid;
+use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
@@ -37,8 +39,7 @@ use opendal::Operator;
 use parking_lot::Mutex;
 use tracing::debug;
 
-use super::stage_table_sink::StageTableSink;
-use crate::Table;
+use crate::stage::stage_table_sink::StageTableSink;
 
 /// TODO: we need to track the data metrics in stage table.
 pub struct StageTable {

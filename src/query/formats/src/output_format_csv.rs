@@ -97,7 +97,7 @@ impl<const TSV: bool, const WITH_NAMES: bool, const WITH_TYPES: bool> OutputForm
                     buf.push(fd);
                 }
                 if TSV {
-                    serializer.write_field_tsv(row_index, &mut buf, &self.format_settings);
+                    serializer.write_field_tsv(row_index, &mut buf, &self.format_settings, false);
                 } else {
                     serializer.write_field_csv(row_index, &mut buf, &self.format_settings)
                 };

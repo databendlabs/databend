@@ -28,6 +28,7 @@ use common_meta_types::UserStageInfo;
 use common_planner::stage_table::StageTableInfo;
 use common_planner::ReadDataSourcePlan;
 use common_planner::SourceInfo;
+use common_storages_preludes::stage::StageTable;
 use regex::Regex;
 
 use crate::catalogs::Catalog;
@@ -41,7 +42,6 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::CopyPlanV2;
 use crate::sql::plans::Plan;
-use crate::storages::stage::StageTable;
 
 const MAX_QUERY_COPIED_FILES_NUM: usize = 50;
 const TABLE_COPIED_FILE_KEY_EXPIRE_AFTER_DAYS: Option<u64> = Some(7);
