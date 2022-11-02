@@ -1402,8 +1402,6 @@ dependencies = [
  "common-settings",
  "once_cell",
  "pretty_assertions",
- "strum",
- "strum_macros",
 ]
 
 [[package]]
