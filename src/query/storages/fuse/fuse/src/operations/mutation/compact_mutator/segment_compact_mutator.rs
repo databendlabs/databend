@@ -181,7 +181,7 @@ impl<'a> SegmentAccumulator<'a> {
             return Ok(());
         }
 
-        if num_blocks_current_segment < self.threshold {
+        if num_blocks_current_segment <= self.threshold {
             let s = self.accumulated_num_blocks + num_blocks_current_segment;
             if s < self.threshold {
                 // not enough blocks yet, just keep this segment

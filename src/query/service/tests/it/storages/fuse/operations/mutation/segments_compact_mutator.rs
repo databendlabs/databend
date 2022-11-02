@@ -21,10 +21,13 @@ use common_catalog::table::TableExt;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::Statistics;
+use common_fuse_meta::meta::Versioned;
 use common_storage::DataOperator;
 use common_storages_fuse::io::BlockWriter;
+use common_storages_fuse::io::MetaReaders;
 use common_storages_fuse::io::SegmentWriter;
 use common_storages_fuse::io::TableMetaLocationGenerator;
 use common_storages_fuse::operations::SegmentAccumulator;
@@ -219,26 +222,29 @@ async fn test_segment_accumulator() -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
     let data_accessor = ctx.get_data_operator()?;
-    let location_gen = TableMetaLocationGenerator::with_prefix("test/".to_owned());
+    let location_gen = TableMetaLocationGenerator::with_prefix("./test/".to_owned());
     let block_per_seg = 10;
-    let block_writer = BlockWriter::new(&data_accessor, &location_gen);
+
+    let segment_reader = MetaReaders::segment_info_reader(ctx.get_data_operator()?.operator());
 
     {
+        // case: highly fragmented segments
+
+        let num_block_of_segments = vec![2, 2, 2, 2];
         // settings:
         // - block_per_seg is 10
         // - 4 segments, each of them have 2 blocks
         // expects:
         // - all the segments should be merged into one
-        let num_block_of_segments = vec![2, 2, 2, 2];
 
-        // setup
+        // setup & run
         let mut case = CompactCase::try_new(&ctx, block_per_seg)?;
         let seg_acc = case.run(&num_block_of_segments).await?;
 
         // verify that:
         // - one newly generated segment
         assert_eq!(seg_acc.new_segments.len(), 1);
-        // - totally one segment
+        // - totally one segment collected
         assert_eq!(seg_acc.segment_locations.len(), 1);
         // - number of blocks should not change
         assert_eq!(
@@ -248,27 +254,28 @@ async fn test_segment_accumulator() -> Result<()> {
     }
 
     {
+        // case: fragmented segments
+
+        let num_block_of_segments = vec![2, 3, 6, 5];
+
         // settings:
         // - block_per_seg is 10
         // - 4 segments
         // expects:
         // - the first 3 segments should be merged
+        //   segment of size [0, 2N] is allowed, to avoid the ripple effects
         // - the last segment will be kept and unchanged
-        //   different from block compact, we do not generate segment of size [2N, 3N), where N is the threshold
-        let num_block_of_segments = vec![2, 3, 6, 5];
+        //   different from block compact:
+        //   segment of size (2N..) is NOT allowed, where N is the threshold
 
-        let segment_writer = SegmentWriter::new(&data_accessor, &location_gen, &None);
-        let block_per_seg = 10;
-        let mut seg_acc = SegmentAccumulator::new(block_per_seg, segment_writer);
-        let block_writer = BlockWriter::new(&data_accessor, &location_gen);
+        // setup & run
+        let mut case = CompactCase::try_new(&ctx, block_per_seg)?;
+        let seg_acc = case.run(&num_block_of_segments).await?;
 
-        let segments = gen_segments(&block_writer, &num_block_of_segments).await?;
-        for seg in &segments {
-            seg_acc.add(seg, ("".to_owned(), 1)).await?;
-        }
-        seg_acc.finalize().await?;
-
+        // verify that:
+        // - one newly generated segment
         assert_eq!(seg_acc.new_segments.len(), 1);
+        // - totally two segments collected
         assert_eq!(seg_acc.segment_locations.len(), 2);
         // number of blocks should not change
         assert_eq!(
@@ -278,50 +285,35 @@ async fn test_segment_accumulator() -> Result<()> {
     }
 
     {
-        let segment_writer = SegmentWriter::new(&data_accessor, &location_gen, &None);
+        // case: fragmented segments, not so greedy
 
-        let block_per_seg = 3;
-        let mut seg_acc = SegmentAccumulator::new(block_per_seg, segment_writer);
-        let block_writer = BlockWriter::new(&data_accessor, &location_gen);
+        let num_block_of_segments = vec![2, 8, 1, 8];
 
-        // in this case,
-        // - the first 3 segments should be merged
-        // - the last segment will be kept and unchanged
-        let num_block_of_segments = vec![1, 1, 1, 1];
+        // settings:
+        // - block_per_seg is 10
+        // - 4 segments
+        // expects:
+        // - the first 2 segments should be merged
+        // - the last 2 segments should be merged
 
-        let segments = gen_segments(&block_writer, &num_block_of_segments).await?;
-        for seg in &segments {
-            seg_acc.add(seg, ("".to_owned(), 1)).await?;
+        let expected_block_of_segments = vec![10, 9];
+
+        // setup & run
+        let mut case = CompactCase::try_new(&ctx, block_per_seg)?;
+        let seg_acc = case.run(&num_block_of_segments).await?;
+
+        for (idx, x) in seg_acc.new_segments.iter().enumerate() {
+            let seg = segment_reader.read(x, None, SegmentInfo::VERSION).await?;
+            assert_eq!(seg.blocks.len(), expected_block_of_segments[idx]);
         }
-        seg_acc.finalize().await?;
 
-        assert_eq!(seg_acc.new_segments.len(), 1);
-        assert_eq!(seg_acc.segment_locations.len(), 2);
-        assert_eq!(
-            seg_acc.merged_statistics.block_count as usize,
-            num_block_of_segments.into_iter().sum::<usize>()
-        );
-    }
-
-    {
-        let segment_writer = SegmentWriter::new(&data_accessor, &location_gen, &None);
-
-        let block_per_seg = 3;
-        let mut seg_acc = SegmentAccumulator::new(block_per_seg, segment_writer);
-        let block_writer = BlockWriter::new(&data_accessor, &location_gen);
-
-        // in this case,
-        // - the first 3 segments should be merged
-        // - the last segment will be kept and unchanged
-        let num_block_of_segments = vec![2, 1, 2, 1];
-
-        let segments = gen_segments(&block_writer, &num_block_of_segments).await?;
-        for seg in &segments {
-            seg_acc.add(seg, ("".to_owned(), 1)).await?;
-        }
-        seg_acc.finalize().await?;
-
+        // verify that:
+        // - one newly generated segment
         assert_eq!(seg_acc.new_segments.len(), 2);
+        // - totally two segments collected
+        assert_eq!(seg_acc.segment_locations.len(), 2);
+
+        // number of blocks should not change
         assert_eq!(
             seg_acc.merged_statistics.block_count as usize,
             num_block_of_segments.into_iter().sum::<usize>()
@@ -329,25 +321,35 @@ async fn test_segment_accumulator() -> Result<()> {
     }
 
     {
-        let segment_writer = SegmentWriter::new(&data_accessor, &location_gen, &None);
+        // case: fragmented segments, greedy if ...
 
-        let block_per_seg = 10;
-        let mut seg_acc = SegmentAccumulator::new(block_per_seg, segment_writer);
-        let block_writer = BlockWriter::new(&data_accessor, &location_gen);
+        let num_block_of_segments = vec![2, 10, 6, 8];
 
-        // in this case,
-        // - the first 3 segments should be merged
-        // - the last segment will be kept and unchanged
-        let num_block_of_segments = vec![8, 3, 1];
+        // settings:
+        // - block_per_seg is 10
+        // - 4 segments
+        // expects:
+        // - the first 2 segments should be merged
+        // - the last 2 segments should be merged
+        // thus:
+        let expected_num_block_of_new_segments = vec![12, 14];
 
-        let segments = gen_segments(&block_writer, &num_block_of_segments).await?;
-        for seg in &segments {
-            seg_acc.add(seg, ("".to_owned(), 1)).await?;
+        // setup & run
+        let mut case = CompactCase::try_new(&ctx, block_per_seg)?;
+        let seg_acc = case.run(&num_block_of_segments).await?;
+
+        for (idx, x) in seg_acc.new_segments.iter().enumerate() {
+            let seg = segment_reader.read(x, None, SegmentInfo::VERSION).await?;
+            assert_eq!(seg.blocks.len(), expected_num_block_of_new_segments[idx]);
         }
-        seg_acc.finalize().await?;
 
-        assert_eq!(seg_acc.new_segments.len(), 1);
+        // verify that:
+        // - 2 newly generated segment;
+        assert_eq!(seg_acc.new_segments.len(), 2);
+        // - totally two segments collected
         assert_eq!(seg_acc.segment_locations.len(), 2);
+
+        // number of blocks should not change
         assert_eq!(
             seg_acc.merged_statistics.block_count as usize,
             num_block_of_segments.into_iter().sum::<usize>()
@@ -367,9 +369,12 @@ async fn test_segment_accumulator() -> Result<()> {
     Ok(())
 }
 
-async fn gen_segments(block_writer: &BlockWriter<'_>, sizes: &[usize]) -> Result<Vec<SegmentInfo>> {
+async fn gen_segments(
+    block_writer: &BlockWriter<'_>,
+    sizes: &[usize],
+) -> Result<Vec<(SegmentInfo, Location)>> {
     let mut segments = vec![];
-    for num_blocks in sizes {
+    for (idx, num_blocks) in sizes.iter().enumerate() {
         let blocks = TestFixture::gen_sample_blocks_ex(*num_blocks, 1, 1);
         let mut stats_acc = StatisticsAccumulator::new();
         for block in blocks {
@@ -387,7 +392,7 @@ async fn gen_segments(block_writer: &BlockWriter<'_>, sizes: &[usize]) -> Result
             index_size: stats_acc.index_size,
             col_stats,
         });
-        segments.push(segment_info);
+        segments.push((segment_info, (format!("seg_{}", idx), SegmentInfo::VERSION)));
     }
 
     Ok(segments)
@@ -397,7 +402,7 @@ struct CompactCase {
     block_per_seg: u64,
     data_accessor: DataOperator,
     location_gen: TableMetaLocationGenerator,
-    segments: Vec<SegmentInfo>,
+    segments: Vec<(SegmentInfo, Location)>,
 }
 
 impl CompactCase {
@@ -419,8 +424,8 @@ impl CompactCase {
         let segment_writer = SegmentWriter::new(data_accessor, location_gen, &None);
         let mut seg_acc = SegmentAccumulator::new(block_per_seg, segment_writer);
         self.segments = gen_segments(&block_writer, num_block_of_segments).await?;
-        for seg in &self.segments {
-            seg_acc.add(seg, ("".to_owned(), 1)).await?;
+        for (seg, location) in &self.segments {
+            seg_acc.add(seg, location.clone()).await?;
         }
         seg_acc.finalize().await?;
         Ok(seg_acc)
