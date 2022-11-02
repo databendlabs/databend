@@ -67,7 +67,7 @@ impl SegmentCompactMutator {
     }
 
     fn need_compaction(&self) -> bool {
-        !self.merged_segments_locations.is_empty()
+        !self.new_segment_paths.is_empty()
     }
 }
 
@@ -262,7 +262,7 @@ impl<'a> SegmentAccumulator<'a> {
     }
 
     pub async fn finalize(&mut self) -> Result<()> {
-        if self.fragmented_segments.is_empty() {
+        if !self.fragmented_segments.is_empty() {
             // some fragments left, compact them with the last compacted segment
             self.compact_fragments().await?;
         }
