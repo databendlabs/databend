@@ -291,7 +291,7 @@ impl Default for MetaConfig {
             auto_sync_interval: 10,
             rpc_tls_meta_server_root_ca_cert: "".to_string(),
             rpc_tls_meta_service_domain_name: "localhost".to_string(),
-            meta_type: serde_json::to_string(&MetaType::Embedded).unwrap(),
+            meta_type: MetaType::Embedded.to_string(),
         }
     }
 }

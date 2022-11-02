@@ -1258,7 +1258,15 @@ impl From<InnerHiveCatalogConfig> for HiveCatalogConfig {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, strum_macros::EnumString)]
+#[derive(
+    serde::Serialize,
+    serde::Deserialize,
+    Debug,
+    PartialEq,
+    Eq,
+    strum_macros::EnumString,
+    strum_macros::Display,
+)]
 #[strum(serialize_all = "camelCase")]
 pub enum MetaType {
     Remote,
