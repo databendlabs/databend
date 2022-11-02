@@ -35,6 +35,7 @@ use common_io::prelude::FormatSettings;
 pub use const_::ConstSerializer;
 pub use date::DateSerializer;
 use enum_dispatch::enum_dispatch;
+pub use helper::csv::write_csv_string;
 pub use helper::escape::write_escaped_string;
 pub use helper::json::write_json_string;
 pub use null::NullSerializer;
@@ -48,51 +49,39 @@ pub use variant::VariantSerializer;
 
 #[enum_dispatch]
 pub trait TypeSerializer<'a>: Send + Sync {
-    fn need_quote(&self) -> bool {
-        false
-    }
-    fn write_field(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings);
-
-    fn write_field_escaped(
+    // values and nested
+    fn write_field_values(
         &self,
         row_index: usize,
         buf: &mut Vec<u8>,
         format: &FormatSettings,
-        _quote: u8,
-    ) {
-        self.write_field(row_index, buf, format);
+        in_nested: bool,
+    );
+
+    fn to_vec_values(&self, row_index: usize, format: &FormatSettings) -> Vec<u8> {
+        let mut buf = Vec::with_capacity(64);
+        self.write_field_values(row_index, &mut buf, format, false);
+        buf
     }
 
-    fn write_field_quoted(
-        &self,
-        row_index: usize,
-        buf: &mut Vec<u8>,
-        format: &FormatSettings,
-        quote: u8,
-    ) {
-        let need_quote = self.need_quote();
-        if need_quote {
-            buf.push(quote);
-            self.write_field_escaped(row_index, buf, format, quote);
-            buf.push(quote);
-        } else {
-            self.write_field(row_index, buf, format);
-        }
-    }
-
-    fn write_field_json(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
-        self.write_field_quoted(row_index, buf, format, b'\"');
-    }
-
-    fn serialize_field(&self, row_index: usize, format: &FormatSettings) -> Result<String> {
-        let mut buf = Vec::with_capacity(100);
-        self.write_field(row_index, &mut buf, format);
+    fn to_string_values(&self, row_index: usize, format: &FormatSettings) -> Result<String> {
+        let buf = self.to_vec_values(row_index, format);
         String::from_utf8(buf).map_err_to_code(ErrorCode::BadBytes, || "fail to serialize field")
     }
 
-    fn serialize_json_values(&self, _format: &FormatSettings) -> Result<Vec<Value>> {
-        unimplemented!()
-    }
+    // row based formats
+    fn write_field_tsv(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings);
+    fn write_field_csv(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings);
+    fn write_field_json(
+        &self,
+        row_index: usize,
+        buf: &mut Vec<u8>,
+        format: &FormatSettings,
+        quote: bool,
+    );
+
+    // nested json
+    fn serialize_json_values(&self, _format: &FormatSettings) -> Result<Vec<Value>>;
 
     fn serialize_json_object(
         &self,

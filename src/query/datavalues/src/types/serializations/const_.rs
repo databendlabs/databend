@@ -35,12 +35,32 @@ impl<'a> ConstSerializer<'a> {
     }
 }
 impl<'a> TypeSerializer<'a> for ConstSerializer<'a> {
-    fn need_quote(&self) -> bool {
-        self.inner.need_quote()
+    fn write_field_values(
+        &self,
+        _row_index: usize,
+        buf: &mut Vec<u8>,
+        format: &FormatSettings,
+        in_nested: bool,
+    ) {
+        self.inner.write_field_values(0, buf, format, in_nested)
     }
 
-    fn write_field(&self, _row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
-        self.inner.write_field(0, buf, format)
+    fn write_field_tsv(&self, _row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
+        self.inner.write_field_tsv(0, buf, format)
+    }
+
+    fn write_field_csv(&self, _row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
+        self.inner.write_field_csv(0, buf, format)
+    }
+
+    fn write_field_json(
+        &self,
+        _row_index: usize,
+        buf: &mut Vec<u8>,
+        format: &FormatSettings,
+        quote: bool,
+    ) {
+        self.inner.write_field_json(0, buf, format, quote)
     }
 
     fn serialize_json_values(&self, format: &FormatSettings) -> Result<Vec<Value>> {

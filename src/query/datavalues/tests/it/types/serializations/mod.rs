@@ -139,12 +139,12 @@ fn test_serializers() -> Result<()> {
     let format = FormatSettings::default();
     for test in tests {
         let serializer = test.data_type.create_serializer(&test.column)?;
-        let val_res = serializer.serialize_field(0, &format)?;
+        let val_res = serializer.to_string_values(0, &format)?;
         assert_eq!(&val_res, test.val_str, "case: {:#?}", test.name);
 
         let mut col_res = vec![];
         for i in 0..test.column.len() {
-            col_res.push(serializer.serialize_field(i, &format)?);
+            col_res.push(serializer.to_string_values(i, &format)?);
         }
         assert_eq!(col_res, test.col_str, "case: {:#?}", test.name);
     }
@@ -174,7 +174,7 @@ fn test_serializers() -> Result<()> {
             DataTypeImpl::Struct(data_type),
         ));
         let serializer = column.data_type().create_serializer(&column)?;
-        let result = serializer.serialize_field(0, &format)?;
+        let result = serializer.to_string_values(0, &format)?;
         let expect = "(1.2, 'hello', 1, '2021-08-30')";
         assert_eq!(&result, expect);
     }

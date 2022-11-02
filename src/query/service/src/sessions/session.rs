@@ -136,29 +136,17 @@ impl Session {
         Ok(QueryContext::create_from_shared(shared))
     }
 
+    // only used for values and mysql output
     pub fn get_format_settings(&self) -> Result<FormatSettings> {
         let settings = &self.session_ctx.get_settings();
-        let quote_char = settings.get_format_quote_char()?.into_bytes();
-        if quote_char.len() != 1 {
-            return Err(ErrorCode::InvalidArgument(
-                "quote_char can only contain one char",
-            ));
-        }
-
-        let mut format = FormatSettings {
-            record_delimiter: settings.get_format_record_delimiter()?.into_bytes(),
-            field_delimiter: settings.get_format_field_delimiter()?.into_bytes(),
-            empty_as_default: settings.get_format_empty_as_default()? > 0,
-            quote_char: quote_char[0],
-            ..Default::default()
-        };
-
         let tz = settings.get_timezone()?;
-        format.timezone = tz.parse::<Tz>().map_err(|_| {
+        let timezone = tz.parse::<Tz>().map_err(|_| {
             ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
         })?;
-
-        format.ident_case_sensitive = settings.get_unquoted_ident_case_sensitive()?;
+        let format = FormatSettings {
+            timezone,
+            ..Default::default()
+        };
         Ok(format)
     }
 
