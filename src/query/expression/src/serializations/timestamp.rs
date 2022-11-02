@@ -36,7 +36,7 @@ impl TimestampSerializer {
     }
 
     pub fn to_timestamp(&self, value: &i64, tz: &Tz) -> DateTime<Tz> {
-        value.to_timestamp(tz)
+        value.to_timestamp(*tz)
     }
 }
 
