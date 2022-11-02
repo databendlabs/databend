@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_io::prelude::FormatSettings;
-use serde_json::Value;
 
 pub use super::helper::json::write_json_string;
 use crate::serializations::helper::escape::write_escaped_string;
@@ -67,14 +66,5 @@ impl TypeSerializer for StringSerializer {
             format,
         );
         buf.push(b'\"');
-    }
-
-    fn serialize_json_values(&self, _format: &FormatSettings) -> Result<Vec<Value>, String> {
-        let result: Vec<Value> = self
-            .column
-            .iter()
-            .map(|x| serde_json::to_value(String::from_utf8_lossy(x).to_string()).unwrap())
-            .collect();
-        Ok(result)
     }
 }

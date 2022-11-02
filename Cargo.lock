@@ -1374,7 +1374,6 @@ dependencies = [
  "common-jsonb",
  "educe",
  "enum-as-inner 0.5.1",
- "enum_dispatch",
  "goldenfile",
  "hex",
  "itertools",

@@ -16,13 +16,10 @@ use chrono::DateTime;
 use chrono_tz::Tz;
 use common_arrow::arrow::buffer::Buffer;
 use common_io::prelude::FormatSettings;
-use serde_json::Value;
 
 use crate::utils::date_helper::DateConverter;
 use crate::Column;
 use crate::TypeSerializer;
-
-const TIME_FMT: &str = "%Y-%m-%d %H:%M:%S";
 
 #[derive(Debug, Clone)]
 pub struct TimestampSerializer {
@@ -52,17 +49,5 @@ impl TypeSerializer for TimestampSerializer {
         let dt = self.to_timestamp(&self.values[row_index], &format.timezone);
         let s = dt.format("%Y-%m-%d %H:%M:%S%.6f").to_string();
         buf.extend_from_slice(s.as_bytes())
-    }
-
-    fn serialize_json_values(&self, format: &FormatSettings) -> Result<Vec<Value>, String> {
-        let result: Vec<Value> = self
-            .values
-            .iter()
-            .map(|v| {
-                let dt = self.to_timestamp(v, &format.timezone);
-                serde_json::to_value(dt.format(TIME_FMT).to_string()).unwrap()
-            })
-            .collect();
-        Ok(result)
     }
 }

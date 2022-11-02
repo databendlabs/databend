@@ -13,22 +13,18 @@
 // limitations under the License.
 
 use common_io::prelude::FormatSettings;
-use serde_json::Value;
 
 use crate::types::DataType;
 use crate::Column;
 use crate::TypeSerializer;
-use crate::TypeSerializerImpl;
 
-#[derive(Clone)]
 pub struct TupleSerializer {
-    pub(crate) inners: Vec<TypeSerializerImpl>,
-    pub(crate) len: usize,
+    pub(crate) inners: Vec<Box<dyn TypeSerializer>>,
 }
 
 impl TupleSerializer {
     pub fn try_create(col: Column, inner_tys: &[DataType]) -> Result<Self, String> {
-        let (columns, len) = col
+        let (columns, _) = col
             .into_tuple()
             .map_err(|_| "unable to get tuple column".to_string())?;
 
@@ -38,7 +34,7 @@ impl TupleSerializer {
             inners.push(inner);
         }
 
-        Ok(Self { inners, len })
+        Ok(Self { inners })
     }
 }
 
@@ -52,26 +48,5 @@ impl TypeSerializer for TupleSerializer {
             inner.write_field_quoted(row_index, buf, format, b'\'');
         }
         buf.push(b')');
-    }
-
-    fn serialize_json_values(&self, format: &FormatSettings) -> Result<Vec<Value>, String> {
-        let mut values = Vec::with_capacity(self.len);
-        for _ in 0..self.len {
-            let value = Vec::with_capacity(self.inners.len());
-            values.push(value);
-        }
-        for inner in &self.inners {
-            let mut inner_value = inner.serialize_json_values(format)?;
-            for i in (0..self.len).rev() {
-                let value = values.get_mut(i).unwrap();
-                value.push(inner_value.pop().unwrap());
-            }
-        }
-        let mut result = Vec::with_capacity(self.len);
-        for value in values {
-            result.push(Value::Array(value));
-        }
-
-        Ok(result)
     }
 }

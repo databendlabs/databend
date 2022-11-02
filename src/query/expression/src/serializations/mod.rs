@@ -30,22 +30,16 @@ pub use boolean::BooleanSerializer;
 use common_io::prelude::FormatSettings;
 pub use date::DateSerializer;
 pub use empty_array::EmptyArraySerializer;
-use enum_dispatch::enum_dispatch;
 pub use helper::escape::write_escaped_string;
 pub use helper::json::write_json_string;
 pub use null::NullSerializer;
 pub use nullable::NullableSerializer;
 pub use number::NumberSerializer;
-use serde_json::Value;
 pub use string::StringSerializer;
 pub use timestamp::TimestampSerializer;
 pub use tuple::TupleSerializer;
 pub use variant::VariantSerializer;
 
-use crate::types::number::F32;
-use crate::types::number::F64;
-
-#[enum_dispatch]
 pub trait TypeSerializer: Send + Sync {
     fn need_quote(&self) -> bool {
         false
@@ -82,39 +76,4 @@ pub trait TypeSerializer: Send + Sync {
     fn write_field_json(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
         self.write_field_quoted(row_index, buf, format, b'\"');
     }
-
-    fn serialize_field(&self, row_index: usize, format: &FormatSettings) -> Result<String, String> {
-        let mut buf = Vec::with_capacity(100);
-        self.write_field(row_index, &mut buf, format);
-        String::from_utf8(buf).map_err(|_| "fail to serialize field".to_string())
-    }
-
-    fn serialize_json_values(&self, _format: &FormatSettings) -> Result<Vec<Value>, String> {
-        unimplemented!()
-    }
-}
-
-#[derive(Clone)]
-#[enum_dispatch(TypeSerializer)]
-pub enum TypeSerializerImpl {
-    Null(NullSerializer),
-    Nullable(NullableSerializer),
-    Boolean(BooleanSerializer),
-    Int8(NumberSerializer<i8>),
-    Int16(NumberSerializer<i16>),
-    Int32(NumberSerializer<i32>),
-    Int64(NumberSerializer<i64>),
-    UInt8(NumberSerializer<u8>),
-    UInt16(NumberSerializer<u16>),
-    UInt32(NumberSerializer<u32>),
-    UInt64(NumberSerializer<u64>),
-    Float32(NumberSerializer<F32>),
-    Float64(NumberSerializer<F64>),
-    Date(DateSerializer),
-    Timestamp(TimestampSerializer),
-    String(StringSerializer),
-    Array(ArraySerializer),
-    EmptyArray(EmptyArraySerializer),
-    Tuple(TupleSerializer),
-    Variant(VariantSerializer),
 }

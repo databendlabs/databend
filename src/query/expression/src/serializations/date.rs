@@ -19,7 +19,6 @@ use chrono::NaiveDate;
 use common_arrow::arrow::buffer::Buffer;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
-use serde_json::Value;
 
 use crate::Column;
 use crate::TypeSerializer;
@@ -56,15 +55,5 @@ impl TypeSerializer for DateSerializer {
     fn write_field(&self, row_index: usize, buf: &mut Vec<u8>, _format: &FormatSettings) {
         let s = self.to_date(&self.values[row_index]);
         buf.extend_from_slice(s.as_bytes())
-    }
-
-    fn serialize_json_values(&self, _format: &FormatSettings) -> Result<Vec<Value>, String> {
-        let result: Vec<Value> = (0..self.values.len())
-            .map(|row_index| {
-                let s = self.to_date(&self.values[row_index]);
-                serde_json::to_value(s).unwrap()
-            })
-            .collect();
-        Ok(result)
     }
 }

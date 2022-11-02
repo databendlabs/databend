@@ -14,7 +14,6 @@
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_io::prelude::FormatSettings;
-use serde_json::Value;
 
 use crate::Column;
 use crate::TypeSerializer;
@@ -42,14 +41,5 @@ impl TypeSerializer for BooleanSerializer {
             &format.false_bytes
         };
         buf.extend_from_slice(v);
-    }
-
-    fn serialize_json_values(&self, _format: &FormatSettings) -> Result<Vec<Value>, String> {
-        let result: Vec<Value> = self
-            .values
-            .iter()
-            .map(|v| serde_json::to_value(v).unwrap())
-            .collect();
-        Ok(result)
     }
 }

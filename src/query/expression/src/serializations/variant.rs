@@ -13,8 +13,6 @@
 // limitations under the License.
 
 use common_io::prelude::FormatSettings;
-use serde_json;
-use serde_json::Value;
 
 use crate::types::string::StringColumn;
 use crate::Column;
@@ -40,27 +38,5 @@ impl TypeSerializer for VariantSerializer {
         let s = unsafe { self.column.index_unchecked(row_index) };
         let value = common_jsonb::to_string(s);
         buf.extend_from_slice(value.as_bytes());
-    }
-
-    fn serialize_field(
-        &self,
-        row_index: usize,
-        _format: &FormatSettings,
-    ) -> Result<String, String> {
-        let s = unsafe { self.column.index_unchecked(row_index) };
-        let value = common_jsonb::to_string(s);
-        Ok(value)
-    }
-
-    fn serialize_json_values(&self, _format: &FormatSettings) -> Result<Vec<Value>, String> {
-        let result: Vec<Value> = self
-            .column
-            .iter()
-            .map(|x| {
-                let value = common_jsonb::from_slice(x).unwrap();
-                value.into()
-            })
-            .collect();
-        Ok(result)
     }
 }

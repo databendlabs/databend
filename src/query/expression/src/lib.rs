@@ -53,5 +53,4 @@ pub use crate::kernels::*;
 pub use crate::property::*;
 pub use crate::register::*;
 pub use crate::serializations::TypeSerializer;
-pub use crate::serializations::TypeSerializerImpl;
 pub use crate::values::*;

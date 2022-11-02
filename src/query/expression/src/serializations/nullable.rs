@@ -14,17 +14,14 @@
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_io::prelude::FormatSettings;
-use serde_json::Value;
 
 use crate::types::DataType;
 use crate::Column;
 use crate::TypeSerializer;
-use crate::TypeSerializerImpl;
 
-#[derive(Clone)]
 pub struct NullableSerializer {
     pub validity: Bitmap,
-    pub inner: Box<TypeSerializerImpl>,
+    pub inner: Box<dyn TypeSerializer>,
 }
 
 impl NullableSerializer {
@@ -36,7 +33,7 @@ impl NullableSerializer {
         let inner = inner_ty.create_serializer(column.column)?;
         Ok(Self {
             validity: column.validity,
-            inner: Box::new(inner),
+            inner,
         })
     }
 }
@@ -81,17 +78,5 @@ impl TypeSerializer for NullableSerializer {
         } else {
             self.inner.write_field_quoted(row_index, buf, format, quote)
         }
-    }
-
-    fn serialize_json_values(&self, format: &FormatSettings) -> Result<Vec<Value>, String> {
-        let mut res = self.inner.serialize_json_values(format)?;
-        let validity = &self.validity;
-
-        (0..validity.len()).for_each(|row| {
-            if !validity.get_bit(row) {
-                res[row] = Value::Null;
-            }
-        });
-        Ok(res)
     }
 }

@@ -45,8 +45,6 @@ pub use self::null::NullType;
 pub use self::nullable::NullableType;
 pub use self::number::NumberDataType;
 pub use self::number::NumberType;
-use self::number::F32;
-use self::number::F64;
 pub use self::string::StringType;
 pub use self::timestamp::TimestampType;
 pub use self::variant::VariantType;
@@ -61,11 +59,12 @@ use crate::serializations::NumberSerializer;
 use crate::serializations::StringSerializer;
 use crate::serializations::TimestampSerializer;
 use crate::serializations::TupleSerializer;
-use crate::serializations::TypeSerializerImpl;
+use crate::serializations::TypeSerializer;
 use crate::serializations::VariantSerializer;
 use crate::utils::concat_array;
 use crate::values::Column;
 use crate::values::Scalar;
+use crate::with_number_mapped_type;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
 
@@ -119,90 +118,31 @@ impl DataType {
         !self.is_nullable_or_null()
     }
 
-    pub fn create_serializer(&self, column: Column) -> Result<TypeSerializerImpl, String> {
+    pub fn create_serializer(&self, column: Column) -> Result<Box<dyn TypeSerializer>, String> {
         match self {
-            DataType::Null => {
-                let serializer = NullSerializer::try_create(column)?;
-                Ok(TypeSerializerImpl::Null(serializer))
+            DataType::Null => Ok(Box::new(NullSerializer::try_create(column)?)),
+            DataType::Boolean => Ok(Box::new(BooleanSerializer::try_create(column)?)),
+            DataType::String => Ok(Box::new(StringSerializer::try_create(column)?)),
+            DataType::Number(num_ty) => {
+                with_number_mapped_type!(|NUM_TYPE| match num_ty {
+                    NumberDataType::NUM_TYPE => Ok(Box::new(
+                        NumberSerializer::<NUM_TYPE>::try_create(column).unwrap()
+                    )),
+                })
             }
-            DataType::Boolean => {
-                let serializer = BooleanSerializer::try_create(column)?;
-                Ok(TypeSerializerImpl::Boolean(serializer))
-            }
-            DataType::Number(num_ty) => match num_ty {
-                NumberDataType::UInt8 => {
-                    let serializer = NumberSerializer::<u8>::try_create(column)?;
-                    Ok(TypeSerializerImpl::UInt8(serializer))
-                }
-                NumberDataType::UInt16 => {
-                    let serializer = NumberSerializer::<u16>::try_create(column)?;
-                    Ok(TypeSerializerImpl::UInt16(serializer))
-                }
-                NumberDataType::UInt32 => {
-                    let serializer = NumberSerializer::<u32>::try_create(column)?;
-                    Ok(TypeSerializerImpl::UInt32(serializer))
-                }
-                NumberDataType::UInt64 => {
-                    let serializer = NumberSerializer::<u64>::try_create(column)?;
-                    Ok(TypeSerializerImpl::UInt64(serializer))
-                }
-                NumberDataType::Int8 => {
-                    let serializer = NumberSerializer::<i8>::try_create(column)?;
-                    Ok(TypeSerializerImpl::Int8(serializer))
-                }
-                NumberDataType::Int16 => {
-                    let serializer = NumberSerializer::<i16>::try_create(column)?;
-                    Ok(TypeSerializerImpl::Int16(serializer))
-                }
-                NumberDataType::Int32 => {
-                    let serializer = NumberSerializer::<i32>::try_create(column)?;
-                    Ok(TypeSerializerImpl::Int32(serializer))
-                }
-                NumberDataType::Int64 => {
-                    let serializer = NumberSerializer::<i64>::try_create(column)?;
-                    Ok(TypeSerializerImpl::Int64(serializer))
-                }
-                NumberDataType::Float32 => {
-                    let serializer = NumberSerializer::<F32>::try_create(column)?;
-                    Ok(TypeSerializerImpl::Float32(serializer))
-                }
-                NumberDataType::Float64 => {
-                    let serializer = NumberSerializer::<F64>::try_create(column)?;
-                    Ok(TypeSerializerImpl::Float64(serializer))
-                }
-            },
-            DataType::String => {
-                let serializer = StringSerializer::try_create(column)?;
-                Ok(TypeSerializerImpl::String(serializer))
-            }
-            DataType::Date => {
-                let serializer = DateSerializer::try_create(column)?;
-                Ok(TypeSerializerImpl::Date(serializer))
-            }
-            DataType::Timestamp => {
-                let serializer = TimestampSerializer::try_create(column)?;
-                Ok(TypeSerializerImpl::Timestamp(serializer))
-            }
+            DataType::Date => Ok(Box::new(DateSerializer::try_create(column)?)),
+            DataType::Timestamp => Ok(Box::new(TimestampSerializer::try_create(column)?)),
             DataType::Nullable(inner_ty) => {
-                let serializer = NullableSerializer::try_create(column, inner_ty)?;
-                Ok(TypeSerializerImpl::Nullable(serializer))
+                Ok(Box::new(NullableSerializer::try_create(column, inner_ty)?))
             }
             DataType::Array(inner_ty) => {
-                let serializer = ArraySerializer::try_create(column, inner_ty)?;
-                Ok(TypeSerializerImpl::Array(serializer))
+                Ok(Box::new(ArraySerializer::try_create(column, inner_ty)?))
             }
-            DataType::EmptyArray => {
-                let serializer = EmptyArraySerializer::try_create(column)?;
-                Ok(TypeSerializerImpl::EmptyArray(serializer))
-            }
+            DataType::EmptyArray => Ok(Box::new(EmptyArraySerializer::try_create(column)?)),
             DataType::Tuple(inner_tys) => {
-                let serializer = TupleSerializer::try_create(column, inner_tys)?;
-                Ok(TypeSerializerImpl::Tuple(serializer))
+                Ok(Box::new(TupleSerializer::try_create(column, inner_tys)?))
             }
-            DataType::Variant => {
-                let serializer = VariantSerializer::try_create(column)?;
-                Ok(TypeSerializerImpl::Variant(serializer))
-            }
+            DataType::Variant => Ok(Box::new(VariantSerializer::try_create(column)?)),
             _ => unreachable!(),
         }
     }

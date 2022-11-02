@@ -16,7 +16,6 @@ use std::num::FpCategory;
 
 use common_arrow::arrow::buffer::Buffer;
 use common_io::prelude::FormatSettings;
-use serde_json::Value;
 
 use crate::types::number::Number;
 use crate::types::number::F32;
@@ -46,11 +45,6 @@ where T: Number + PrimitiveWithFormat
     fn write_field(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
         self.values[row_index].write_field(buf, format)
     }
-
-    fn serialize_json_values(&self, _format: &FormatSettings) -> Result<Vec<Value>, String> {
-        let result: Vec<Value> = self.values.iter().map(|x| x.to_value()).collect();
-        Ok(result)
-    }
 }
 
 // 30% faster lexical_core::write to tmp buf and extend_from_slice
@@ -68,7 +62,6 @@ pub fn extend_lexical<N: lexical_core::ToLexical>(n: N, buf: &mut Vec<u8>) {
 
 trait PrimitiveWithFormat {
     fn write_field(self, buf: &mut Vec<u8>, _format: &FormatSettings);
-    fn to_value(self) -> Value;
 }
 
 macro_rules! impl_float {
@@ -88,10 +81,6 @@ macro_rules! impl_float {
                     }
                 }
             }
-
-            fn to_value(self: $ty) -> Value {
-                serde_json::to_value(self.0).unwrap()
-            }
         }
     };
 }
@@ -101,10 +90,6 @@ macro_rules! impl_int {
         impl PrimitiveWithFormat for $ty {
             fn write_field(self: $ty, buf: &mut Vec<u8>, _format: &FormatSettings) {
                 extend_lexical(self, buf);
-            }
-
-            fn to_value(self: $ty) -> Value {
-                serde_json::to_value(self).unwrap()
             }
         }
     };

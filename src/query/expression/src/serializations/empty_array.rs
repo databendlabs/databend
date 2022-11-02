@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_io::prelude::FormatSettings;
-use serde_json::Value;
 
 use crate::Column;
 use crate::TypeSerializer;
@@ -37,13 +36,5 @@ impl TypeSerializer for EmptyArraySerializer {
     fn write_field(&self, _row_index: usize, buf: &mut Vec<u8>, _format: &FormatSettings) {
         buf.push(b'[');
         buf.push(b']');
-    }
-
-    fn serialize_json_values(&self, _format: &FormatSettings) -> Result<Vec<Value>, String> {
-        let mut result = Vec::with_capacity(self.size);
-        for _ in 0..self.size {
-            result.push(Value::Array(vec![]));
-        }
-        Ok(result)
     }
 }

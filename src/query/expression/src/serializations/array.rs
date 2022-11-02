@@ -15,17 +15,14 @@
 use common_arrow::arrow::buffer::Buffer;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
-use serde_json::Value;
 
 use crate::types::DataType;
 use crate::Column;
 use crate::TypeSerializer;
-use crate::TypeSerializerImpl;
 
-#[derive(Clone)]
 pub struct ArraySerializer {
     pub(crate) offsets: Buffer<u64>,
-    pub(crate) inner: Box<TypeSerializerImpl>,
+    pub(crate) inner: Box<dyn TypeSerializer>,
 }
 
 impl ArraySerializer {
@@ -37,7 +34,7 @@ impl ArraySerializer {
         let inner = inner_ty.create_serializer(column.values)?;
         Ok(Self {
             offsets: column.offsets,
-            inner: Box::new(inner),
+            inner,
         })
     }
 }
@@ -55,18 +52,5 @@ impl TypeSerializer for ArraySerializer {
             inner.write_field_quoted(i, buf, format, b'\'');
         }
         buf.push(b']');
-    }
-
-    fn serialize_json_values(&self, format: &FormatSettings) -> Result<Vec<Value>, String> {
-        let size = self.offsets.len() - 1;
-        let mut result = Vec::with_capacity(size);
-        let inner = self.inner.serialize_json_values(format)?;
-        let mut iter = inner.into_iter();
-        for i in 0..size {
-            let len = (self.offsets[i + 1] - self.offsets[i]) as usize;
-            let value = iter.by_ref().take(len).collect();
-            result.push(Value::Array(value))
-        }
-        Ok(result)
     }
 }

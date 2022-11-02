@@ -18,7 +18,7 @@ use crate::types::AnyType;
 use crate::types::DataType;
 use crate::ColumnBuilder;
 use crate::Domain;
-use crate::TypeSerializerImpl;
+use crate::TypeSerializer;
 use crate::Value;
 
 /// Chunk is a lightweight container for a group of columns.
@@ -116,7 +116,7 @@ impl Chunk {
         }
     }
 
-    pub fn get_serializers(&self) -> Result<Vec<TypeSerializerImpl>, String> {
+    pub fn get_serializers(&self) -> Result<Vec<Box<dyn TypeSerializer>>, String> {
         let mut serializers = Vec::with_capacity(self.num_columns());
         for (value, data_type) in self.columns() {
             let column = match value {

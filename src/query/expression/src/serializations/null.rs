@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_io::prelude::FormatSettings;
-use serde_json::Value;
 
 use crate::Column;
 use crate::TypeSerializer;
@@ -36,19 +35,5 @@ impl NullSerializer {
 impl TypeSerializer for NullSerializer {
     fn write_field(&self, _row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
         buf.extend_from_slice(&format.null_bytes);
-    }
-
-    fn serialize_field(
-        &self,
-        _row_index: usize,
-        format: &FormatSettings,
-    ) -> Result<String, String> {
-        Ok(unsafe { String::from_utf8_unchecked(format.null_bytes.clone()) })
-    }
-
-    fn serialize_json_values(&self, _format: &FormatSettings) -> Result<Vec<Value>, String> {
-        let null = Value::Null;
-        let result: Vec<Value> = vec![null; self.size];
-        Ok(result)
     }
 }

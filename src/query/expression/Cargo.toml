@@ -26,7 +26,6 @@ comfy-table = "6"
 common-jsonb = { path = "../../common/jsonb" }
 educe = "0.4"
 enum-as-inner = "0.5"
-enum_dispatch = "0.3.8"
 hex = "0.4.3"
 itertools = "0.10"
 lexical-core = "0.8.5"
