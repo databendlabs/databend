@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_base::base::ThreadPool;
+use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datavalues::DataType;
@@ -14,6 +15,7 @@ use common_datavalues::StringColumn;
 use common_exception::Result;
 use common_functions::aggregates::StateAddr;
 use common_functions::aggregates::StateAddrs;
+use tracing::info;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_info::AggregateInfo;
 use crate::pipelines::processors::transforms::group_by::AggregatorState;
@@ -24,12 +26,14 @@ use crate::pipelines::processors::transforms::group_by::StateEntityMutRef;
 use crate::pipelines::processors::transforms::group_by::StateEntityRef;
 use crate::pipelines::processors::transforms::transform_aggregator::Aggregator;
 use crate::pipelines::processors::AggregatorParams;
+use crate::sessions::QueryContext;
 
 pub struct ParallelFinalAggregator<const HAS_AGG: bool, Method>
 where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
 {
     is_generated: bool,
     method: Arc<Method>,
+    query_ctx: Arc<QueryContext>,
     params: Arc<AggregatorParams>,
     buckets_blocks: HashMap<isize, Vec<DataBlock>>,
     generate_blocks: Vec<DataBlock>,
@@ -38,9 +42,14 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
 impl<Method, const HAS_AGG: bool> ParallelFinalAggregator<HAS_AGG, Method>
 where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
 {
-    pub fn create(method: Method, params: Arc<AggregatorParams>) -> Result<Self> {
+    pub fn create(
+        ctx: Arc<QueryContext>,
+        method: Method,
+        params: Arc<AggregatorParams>,
+    ) -> Result<Self> {
         Ok(Self {
             params,
+            query_ctx: ctx,
             is_generated: false,
             method: Arc::new(method),
             buckets_blocks: HashMap::new(),
@@ -91,8 +100,11 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
                 self.generate_blocks
                     .extend(bucket_aggregator.merge_blocks(data_blocks)?);
             } else if self.buckets_blocks.len() > 1 {
-                // TODO: threads should ref max_threads settings
-                let thread_pool = ThreadPool::create(8)?;
+                info!("Merge to final state using a parallel algorithm.");
+
+                let settings = self.query_ctx.get_settings();
+                let max_threads = settings.get_max_threads()? as usize;
+                let thread_pool = ThreadPool::create(max_threads)?;
                 let mut join_handles = Vec::with_capacity(self.buckets_blocks.len());
 
                 for (_, bucket_blocks) in std::mem::take(&mut self.buckets_blocks) {
