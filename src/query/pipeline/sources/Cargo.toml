@@ -28,7 +28,6 @@ common-streams = { path = "../../streams" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 bstr = "1.0.1"
-chrono-tz = "0.6.3"
 crossbeam-channel = "0.5.6"
 csv-core = "0.1.10"
 futures = "0.3.24"

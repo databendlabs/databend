@@ -91,7 +91,7 @@ fn block_to_json_value_string_fields(
     for row_index in 0..rows_size {
         let mut row: Vec<JsonValue> = Vec::with_capacity(block.num_columns());
         for serializer in serializers.iter() {
-            let s = serializer.serialize_field(row_index, format)?;
+            let s = serializer.to_string_values(row_index, format)?;
             row.push(serde_json::to_value(s)?)
         }
         res.push(row)

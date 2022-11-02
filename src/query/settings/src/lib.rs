@@ -200,23 +200,23 @@ impl Settings {
                 possible_values: None,
             },
             SettingValue {
-                default_value: UserSettingValue::String("\n".to_owned()),
+                default_value: UserSettingValue::String("".to_owned()),
                 user_setting: UserSetting::create(
                     "format_record_delimiter",
-                    UserSettingValue::String("\n".to_owned()),
+                    UserSettingValue::String("".to_owned()),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Format record_delimiter, default value: \"\\n\".",
+                desc: "Format record_delimiter, default value is \"\": use default of the format.",
                 possible_values: None,
             },
             SettingValue {
-                default_value: UserSettingValue::String(",".to_owned()),
+                default_value: UserSettingValue::String("".to_owned()),
                 user_setting: UserSetting::create(
                     "format_field_delimiter",
-                    UserSettingValue::String(",".to_owned()),
+                    UserSettingValue::String("".to_owned()),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Format field delimiter, default value: \",\".",
+                desc: "Format field delimiter, default value is \"\": use default of the format.",
                 possible_values: None,
             },
             SettingValue {
@@ -260,13 +260,13 @@ impl Settings {
                 possible_values: None,
             },
             SettingValue {
-                default_value: UserSettingValue::String("\"".to_owned()),
+                default_value: UserSettingValue::String("".to_owned()),
                 user_setting: UserSetting::create(
-                    "format_quote_char",
-                    UserSettingValue::String("\"".to_owned()),
+                    "format_quote",
+                    UserSettingValue::String("".to_owned()),
                 ),
                 level: ScopeLevel::Session,
-                desc: "The quote char for CSV. default value: '\"'.",
+                desc: "The quote char for format. default value is \"\": use default of the format.",
                 possible_values: None,
             },
             SettingValue {
@@ -492,8 +492,8 @@ impl Settings {
             .and_then(|v| v.user_setting.value.as_string())
     }
 
-    pub fn get_format_quote_char(&self) -> Result<String> {
-        let key = "format_quote_char";
+    pub fn get_format_quote(&self) -> Result<String> {
+        let key = "format_quote";
         self.check_and_get_setting_value(key)
             .and_then(|v| v.user_setting.value.as_string())
     }

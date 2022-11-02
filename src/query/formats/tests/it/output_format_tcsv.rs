@@ -15,20 +15,19 @@
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_formats::output_format::OutputFormatType;
-use common_io::prelude::FormatSettings;
+use common_settings::Settings;
 use pretty_assertions::assert_eq;
 
+use crate::get_output_format_clickhouse;
+use crate::get_output_format_clickhouse_with_setting;
 use crate::output_format_utils::get_simple_block;
 
 fn test_data_block(is_nullable: bool) -> Result<()> {
     let block = get_simple_block(is_nullable)?;
     let schema = block.schema().clone();
-    let mut format_setting = FormatSettings::default();
 
     {
-        let fmt = OutputFormatType::TSV;
-        let mut formatter = fmt.create_format(schema.clone(), format_setting.clone());
+        let mut formatter = get_output_format_clickhouse("tsv", schema.clone())?;
         let buffer = formatter.serialize_block(&block)?;
 
         let tsv_block = String::from_utf8(buffer)?;
@@ -37,15 +36,13 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
                             3\tc\\'\t0\t3.3\t1970-01-04\n";
         assert_eq!(&tsv_block, expect);
 
-        let fmt = OutputFormatType::TSVWithNames;
-        let formatter = fmt.create_format(schema.clone(), format_setting.clone());
+        let formatter = get_output_format_clickhouse("TsvWithNames", schema.clone())?;
         let buffer = formatter.serialize_prefix()?;
         let tsv_block = String::from_utf8(buffer)?;
         let names = "c1\tc2\tc3\tc4\tc5\n".to_string();
         assert_eq!(tsv_block, names);
 
-        let fmt = OutputFormatType::TSVWithNamesAndTypes;
-        let formatter = fmt.create_format(schema.clone(), format_setting.clone());
+        let formatter = get_output_format_clickhouse("TsvWithNamesAndTypes", schema.clone())?;
         let buffer = formatter.serialize_prefix()?;
         let tsv_block = String::from_utf8(buffer)?;
 
@@ -59,17 +56,19 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
     }
 
     {
-        format_setting.record_delimiter = vec![b'%'];
-        format_setting.field_delimiter = vec![b'$'];
+        let settings = Settings::default_settings("default");
+        settings.set_settings(
+            "format_record_delimiter".to_string(),
+            "%".to_string(),
+            false,
+        )?;
+        settings.set_settings("format_field_delimiter".to_string(), "$".to_string(), false)?;
 
-        let fmt = OutputFormatType::CSV;
-        let mut formatter = fmt.create_format(schema, format_setting);
+        let mut formatter = get_output_format_clickhouse_with_setting("csv", schema, &settings)?;
         let buffer = formatter.serialize_block(&block)?;
 
         let csv_block = String::from_utf8(buffer)?;
-        let expect = "1$\"a\"$1$1.1$\"1970-01-02\"%\
-                            2$\"b\\\"\"$1$2.2$\"1970-01-03\"%\
-                            3$\"c'\"$0$3.3$\"1970-01-04\"%";
+        let expect = r#"1$"a"$true$1.1$"1970-01-02"%2$"b"""$true$2.2$"1970-01-03"%3$"c'"$false$3.3$"1970-01-04"%"#;
         assert_eq!(&csv_block, expect);
     }
     Ok(())
@@ -77,8 +76,6 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
 
 #[test]
 fn test_null() -> Result<()> {
-    let format_setting = FormatSettings::default();
-
     let schema = DataSchemaRefExt::create(vec![
         DataField::new_nullable("c1", i32::to_data_type()),
         DataField::new_nullable("c2", i32::to_data_type()),
@@ -92,8 +89,7 @@ fn test_null() -> Result<()> {
     let block = DataBlock::create(schema.clone(), columns);
 
     {
-        let fmt = OutputFormatType::TSV;
-        let mut formatter = fmt.create_format(schema, format_setting);
+        let mut formatter = get_output_format_clickhouse("tsv", schema)?;
         let buffer = formatter.serialize_block(&block)?;
 
         let tsv_block = String::from_utf8(buffer)?;
