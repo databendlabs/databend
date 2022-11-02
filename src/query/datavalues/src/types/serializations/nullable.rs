@@ -42,11 +42,18 @@ impl<'a> TypeSerializer<'a> for NullableSerializer<'a> {
         }
     }
 
-    fn write_field_tsv(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
+    fn write_field_tsv(
+        &self,
+        row_index: usize,
+        buf: &mut Vec<u8>,
+        format: &FormatSettings,
+        in_nested: bool,
+    ) {
         if !self.validity.get_bit(row_index) {
             buf.extend_from_slice(&format.null_bytes);
         } else {
-            self.inner.write_field_tsv(row_index, buf, format)
+            self.inner
+                .write_field_tsv(row_index, buf, format, in_nested)
         }
     }
 
