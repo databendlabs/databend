@@ -71,9 +71,21 @@ impl<'a> TypeSerializer<'a> for TimestampSerializer<'a> {
         }
     }
 
-    fn write_field_tsv(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
+    fn write_field_tsv(
+        &self,
+        row_index: usize,
+        buf: &mut Vec<u8>,
+        format: &FormatSettings,
+        in_nested: bool,
+    ) {
         let s = self.to_string_micro(row_index, &format.timezone);
+        if in_nested {
+            buf.push(format.quote_char);
+        }
         write_escaped_string(s.as_bytes(), buf, format.quote_char);
+        if in_nested {
+            buf.push(format.quote_char);
+        }
     }
 
     fn write_field_csv(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
