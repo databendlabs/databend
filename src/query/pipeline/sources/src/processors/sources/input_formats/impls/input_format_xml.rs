@@ -23,6 +23,7 @@ use common_exception::Result;
 use common_io::prelude::BufferReadExt;
 use common_io::prelude::FormatSettings;
 use common_io::prelude::NestedCheckpointReader;
+use common_meta_types::FileFormatOptions;
 use common_meta_types::StageFileFormatType;
 use common_settings::Settings;
 use xml::reader::XmlEvent;
@@ -93,11 +94,27 @@ impl InputFormatTextBase for InputFormatXML {
         StageFileFormatType::Xml
     }
 
-    fn get_format_settings(settings: &Arc<Settings>) -> Result<FormatSettings> {
+    fn get_format_settings_from_options(
+        settings: &Arc<Settings>,
+        options: &FileFormatOptions,
+    ) -> Result<FormatSettings> {
         let timezone = get_time_zone(settings)?;
+        if options.row_tag.is_empty() {}
+        let row_tag = FormatSettings::parse_row_tag(&options.row_tag)?;
         Ok(FormatSettings {
             ident_case_sensitive: settings.get_unquoted_ident_case_sensitive()?,
-            row_tag: settings.get_row_tag()?.into_bytes(),
+            row_tag,
+            timezone,
+            ..Default::default()
+        })
+    }
+
+    fn get_format_settings_from_settings(settings: &Arc<Settings>) -> Result<FormatSettings> {
+        let timezone = get_time_zone(settings)?;
+        let row_tag = FormatSettings::parse_row_tag(&settings.get_row_tag()?)?;
+        Ok(FormatSettings {
+            ident_case_sensitive: settings.get_unquoted_ident_case_sensitive()?,
+            row_tag,
             timezone,
             ..Default::default()
         })

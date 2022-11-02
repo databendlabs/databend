@@ -62,6 +62,13 @@ impl FormatSettings {
             Ok(option.as_bytes()[0])
         }
     }
+
+    pub fn parse_row_tag(option: &str) -> Result<Vec<u8>> {
+        if option.is_empty() {
+            return Ok(vec![b'r', b'o', b'w']);
+        }
+        Ok(Vec::from(option))
+    }
 }
 
 impl Default for FormatSettings {

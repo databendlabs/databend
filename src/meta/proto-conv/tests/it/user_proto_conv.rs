@@ -656,7 +656,7 @@ fn test_old_stage_file() -> anyhow::Result<()> {
     Ok(())
 }
 
-pub(crate) fn test_internal_stage_info_v17() -> mt::UserStageInfo {
+pub(crate) fn test_internal_stage_info_v18() -> mt::UserStageInfo {
     mt::UserStageInfo {
         stage_name: "fs://dir/to/files".to_string(),
         stage_type: mt::StageType::Internal,
@@ -672,6 +672,7 @@ pub(crate) fn test_internal_stage_info_v17() -> mt::UserStageInfo {
             record_delimiter: "//".to_string(),
             escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
+            row_tag: "".to_string(),
         },
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),
@@ -702,6 +703,7 @@ pub(crate) fn test_user_stage_info_v18() -> mt::UserStageInfo {
             record_delimiter: "//".to_string(),
             escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
+            row_tag: "".to_string(),
         },
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),

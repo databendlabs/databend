@@ -24,7 +24,7 @@ use common_storage::StorageS3Config;
 use crate::common;
 use crate::user_proto_conv::test_fs_stage_info;
 use crate::user_proto_conv::test_gcs_stage_info;
-use crate::user_proto_conv::test_internal_stage_info_v17;
+use crate::user_proto_conv::test_internal_stage_info_v18;
 use crate::user_proto_conv::test_oss_stage_info;
 use crate::user_proto_conv::test_s3_stage_info;
 use crate::user_proto_conv::test_user_stage_info_v18;
@@ -78,7 +78,6 @@ fn test_user_stage_fs_v18() -> anyhow::Result<()> {
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
-            compression: mt::StageFileCompression::Bz2,
             row_tag: "".to_string(),
             escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
@@ -95,7 +94,7 @@ fn test_user_stage_fs_v18() -> anyhow::Result<()> {
         ..Default::default()
     };
     common::test_load_old(func_name!(), user_stage_fs_v18.as_slice(), want)?;
-    
+
     Ok(())
 }
 
@@ -112,7 +111,7 @@ fn test_user_stage_fs_v17() -> anyhow::Result<()> {
     ];
     let want = mt::UserStageInfo {
         stage_name: "fs://dir/to/files".to_string(),
-        stage_type: mt::StageType::Internal,
+        stage_type: mt::StageType::LegacyInternal,
         stage_params: mt::StageParams {
             storage: StorageParams::Fs(StorageFsConfig {
                 root: "/dir/to/files".to_string(),
@@ -139,7 +138,7 @@ fn test_user_stage_fs_v17() -> anyhow::Result<()> {
         ..Default::default()
     };
     common::test_load_old(func_name!(), user_stage_fs_v17.as_slice(), want)?;
-    
+
     Ok(())
 }
 
@@ -867,12 +866,12 @@ fn test_user_stage_s3_v1() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_internal_stage_v17() -> anyhow::Result<()> {
-    common::test_pb_from_to("internal_stage_v17", test_internal_stage_info_v17())?;
+fn test_internal_stage_v18() -> anyhow::Result<()> {
+    common::test_pb_from_to("internal_stage_v18", test_internal_stage_info_v18())?;
 
-    // Encoded data of version v17 of internal:
+    // Encoded data of version v18 of internal:
     // It is generated with common::test_pb_from_to.
-    let internal_stage_v17 = vec![
+    let internal_stage_v18 = vec![
         10, 17, 102, 115, 58, 47, 47, 100, 105, 114, 47, 116, 111, 47, 102, 105, 108, 101, 115, 16,
         2, 26, 25, 10, 23, 18, 21, 10, 13, 47, 100, 105, 114, 47, 116, 111, 47, 102, 105, 108, 101,
         115, 160, 6, 17, 168, 6, 1, 34, 20, 8, 1, 16, 128, 8, 26, 1, 124, 34, 2, 47, 47, 40, 2,
@@ -895,6 +894,7 @@ fn test_internal_stage_v17() -> anyhow::Result<()> {
             record_delimiter: "//".to_string(),
             escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
+            row_tag: "".to_string(),
         },
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),
@@ -908,7 +908,7 @@ fn test_internal_stage_v17() -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    common::test_load_old(func_name!(), internal_stage_v17.as_slice(), want)?;
+    common::test_load_old(func_name!(), internal_stage_v18.as_slice(), want)?;
     Ok(())
 }
 
@@ -940,6 +940,7 @@ fn test_user_stage_v18() -> anyhow::Result<()> {
             record_delimiter: "//".to_string(),
             escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
+            row_tag: "".to_string(),
         },
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),

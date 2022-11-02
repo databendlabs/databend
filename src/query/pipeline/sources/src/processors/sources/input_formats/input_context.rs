@@ -152,7 +152,7 @@ impl InputContext {
             }
             StageFileFormatType::Parquet => Ok(Arc::new(InputFormatParquet {})),
             StageFileFormatType::Xml => Ok(Arc::new(InputFormatText::<InputFormatXML>::create())),
-            format => Err(ErrorCode::LogicalError(format!(
+            format => Err(ErrorCode::Internal(format!(
                 "Unsupported file format: {:?}",
                 format
             ))),
@@ -197,10 +197,6 @@ impl InputContext {
                 file_format_options.field_delimiter.as_bytes()[0]
             }
         };
-
-        if !file_format_options.row_tag.is_empty() {
-            settings.set_settings("row_tag".into(), file_format_options.row_tag.clone(), false)?;
-        }
 
         Ok(InputContext {
             format,
