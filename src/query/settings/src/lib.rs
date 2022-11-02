@@ -364,6 +364,16 @@ impl Settings {
                 desc: "The maximum query execution time. it means no limit if the value is zero. default value: 0.",
                 possible_values: None,
             },
+            SettingValue {
+                default_value: UserSettingValue::String("binary".to_owned()),
+                user_setting: UserSetting::create(
+                    "collation",
+                    UserSettingValue::String("binary".to_owned()),
+                ),
+                level: ScopeLevel::Session,
+                desc: "Char collation, support \"binary\" \"utf8\" default value: binary",
+                possible_values: Some(vec!["binary", "utf8"]),
+            },
             #[cfg(feature = "hive")]
             SettingValue {
                 default_value: UserSettingValue::UInt64(1),
@@ -614,6 +624,16 @@ impl Settings {
                 "mysql" => Dialect::MySQL,
                 "hive" => Dialect::Hive,
                 _ => Dialect::PostgreSQL,
+            })
+    }
+
+    pub fn get_collation(&self) -> Result<&str> {
+        let key = "collation";
+        self.check_and_get_setting_value(key)
+            .and_then(|v| v.user_setting.value.as_string())
+            .map(|v| match &*v.to_lowercase() {
+                "utf8" => "utf8",
+                _ => "binary",
             })
     }
 
