@@ -12,36 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod call;
-mod catalog;
-mod copy;
-mod database;
-mod explain;
-mod insert;
-mod kill;
-mod presign;
-mod share;
-mod show;
-mod stage;
-mod statement;
-mod table;
-mod update;
-mod user;
-mod view;
+use std::fmt::Display;
 
-pub use call::*;
-pub use catalog::*;
-pub use copy::*;
-pub use database::*;
-pub use explain::*;
-pub use insert::*;
-pub use kill::*;
-pub use presign::*;
-pub use share::*;
-pub use show::*;
-pub use stage::*;
-pub use statement::*;
-pub use table::*;
-pub use update::*;
-pub use user::*;
-pub use view::*;
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum CatalogType {
+    Default = 1,
+    Hive = 2,
+}
+
+impl Display for CatalogType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CatalogType::Default => write!(f, "DEFAULT"),
+            CatalogType::Hive => write!(f, "HIVE"),
+        }
+    }
+}

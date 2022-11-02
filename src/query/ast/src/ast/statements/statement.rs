@@ -74,6 +74,12 @@ pub enum Statement<'a> {
 
     Update(UpdateStmt<'a>),
 
+    // Catalogs
+    ShowCatalogs(ShowCatalogsStmt<'a>),
+    ShowCreateCatalog(ShowCreateCatalogStmt<'a>),
+    CreateCatalog(CreateCatalogStmt),
+    DropCatalog(DropCatalogStmt<'a>),
+
     // Databases
     ShowDatabases(ShowDatabasesStmt<'a>),
     ShowCreateDatabase(ShowCreateDatabaseStmt<'a>),
@@ -264,6 +270,10 @@ impl<'a> Display for Statement<'a> {
                     write!(f, "{role_name}")?;
                 }
             }
+            Statement::ShowCatalogs(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowCreateCatalog(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateCatalog(stmt) => write!(f, "{stmt}")?,
+            Statement::DropCatalog(stmt) => write!(f, "{stmt}")?,
             Statement::ShowDatabases(stmt) => write!(f, "{stmt}")?,
             Statement::ShowCreateDatabase(stmt) => write!(f, "{stmt}")?,
             Statement::CreateDatabase(stmt) => write!(f, "{stmt}")?,
