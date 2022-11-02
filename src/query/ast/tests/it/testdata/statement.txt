@@ -744,6 +744,24 @@ UseDatabase {
 
 
 ---------- Input ----------
+create catalog ctl type=hive connection=(url='<hive-meta-store>' thrift_protocol='binary');
+---------- Output ---------
+CREATE CATALOG ctl TYPE='HIVE'
+---------- AST ------------
+CreateCatalog(
+    CreateCatalogStmt {
+        if_not_exists: false,
+        catalog_name: "ctl",
+        catalog_type: Hive,
+        options: {
+            "thrift_protocol": "binary",
+            "url": "<hive-meta-store>",
+        },
+    },
+)
+
+
+---------- Input ----------
 create database if not exists a;
 ---------- Output ---------
 CREATE DATABASE IF NOT EXISTS a
