@@ -331,7 +331,9 @@ impl From<InnerCacheConfig> for CacheConfig {
     fn from(inner: InnerCacheConfig) -> Self {
         let mut cfg = Self {
             cache_num_cpus: inner.num_cpus,
-            ..Default::default()
+            cache_type: "".to_string(),
+            fs: FsStorageConfig::default(),
+            moka: MokaStorageConfig::default(),
         };
 
         match inner.params {
@@ -358,6 +360,7 @@ impl TryInto<InnerCacheConfig> for CacheConfig {
             params: {
                 match self.cache_type.as_str() {
                     "fs" => StorageParams::Fs(self.fs.try_into()?),
+                    "moka" => StorageParams::Moka(self.moka.try_into()?),
                     _ => return Err(ErrorCode::StorageOther("not supported cache type")),
                 }
             },
