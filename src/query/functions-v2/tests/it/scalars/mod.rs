@@ -218,6 +218,7 @@ fn list_all_builtin_functions() {
     }
 
     writeln!(file, "\nFactory functions:").unwrap();
+    
     for func_name in fn_registry.factories.keys().sorted() {
         writeln!(file, "{func_name}").unwrap();
     }
