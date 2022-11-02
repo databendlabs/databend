@@ -626,9 +626,9 @@ impl PipelineBuilder {
 
         // Fill missing columns.
         {
-            let target_schema = insert_schema;
-            let source_schema = &table.schema();
-            if target_schema != source_schema {
+            let source_schema = insert_schema;
+            let target_schema = &table.schema();
+            if source_schema != target_schema {
                 self.main_pipeline.add_transform(
                     |transform_input_port, transform_output_port| {
                         TransformAddOn::try_create(
