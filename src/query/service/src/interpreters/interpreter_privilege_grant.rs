@@ -21,7 +21,7 @@ use common_meta_types::UserPrivilegeSet;
 use common_planner::plans::GrantPrivilegePlan;
 use common_users::UserApiProvider;
 
-use crate::interpreters::interpreter_common::validate_grant_object_exists;
+use crate::interpreters::common::validate_grant_object_exists;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;

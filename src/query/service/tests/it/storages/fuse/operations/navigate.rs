@@ -116,7 +116,7 @@ async fn test_fuse_navigate() -> Result<()> {
     let res = fuse_table.navigate_to_time_point(instant).await;
     match res {
         Ok(_) => panic!("historical data should not exist"),
-        Err(e) => assert_eq!(e.code(), ErrorCode::table_historical_data_not_found_code()),
+        Err(e) => assert_eq!(e.code(), ErrorCode::TABLE_HISTORICAL_DATA_NOT_FOUND),
     };
     Ok(())
 }
@@ -179,7 +179,7 @@ fn assert_not_writable<T>(res: Result<T>, case_name: &str) {
         ),
         Err(e) => assert_eq!(
             e.code(),
-            ErrorCode::table_not_writable_code(),
+            ErrorCode::TABLE_NOT_WRITABLE,
             " case {}",
             case_name
         ),

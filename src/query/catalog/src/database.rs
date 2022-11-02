@@ -74,7 +74,7 @@ pub trait Database: DynClone + Sync + Send {
 
     // Build a `Arc<dyn Table>` from `TableInfo`.
     fn get_table_by_info(&self, _table_info: &TableInfo) -> Result<Arc<dyn Table>> {
-        Err(ErrorCode::UnImplement(format!(
+        Err(ErrorCode::Unimplemented(format!(
             "UnImplement get_table_by_info in {} Database",
             self.name()
         )))
@@ -82,49 +82,49 @@ pub trait Database: DynClone + Sync + Send {
 
     // Get one table by db and table name.
     async fn get_table(&self, _table_name: &str) -> Result<Arc<dyn Table>> {
-        Err(ErrorCode::UnImplement(format!(
+        Err(ErrorCode::Unimplemented(format!(
             "UnImplement get_table in {} Database",
             self.name()
         )))
     }
 
     async fn list_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
-        Err(ErrorCode::UnImplement(format!(
+        Err(ErrorCode::Unimplemented(format!(
             "UnImplement list_tables in {} Database",
             self.name()
         )))
     }
 
     async fn list_tables_history(&self) -> Result<Vec<Arc<dyn Table>>> {
-        Err(ErrorCode::UnImplement(format!(
+        Err(ErrorCode::Unimplemented(format!(
             "UnImplement list_tables_history in {} Database",
             self.name()
         )))
     }
 
     async fn create_table(&self, _req: CreateTableReq) -> Result<()> {
-        Err(ErrorCode::UnImplement(format!(
+        Err(ErrorCode::Unimplemented(format!(
             "UnImplement create_table in {} Database",
             self.name()
         )))
     }
 
     async fn drop_table(&self, _req: DropTableReq) -> Result<DropTableReply> {
-        Err(ErrorCode::UnImplement(format!(
+        Err(ErrorCode::Unimplemented(format!(
             "UnImplement drop_table in {} Database",
             self.name()
         )))
     }
 
     async fn undrop_table(&self, _req: UndropTableReq) -> Result<UndropTableReply> {
-        Err(ErrorCode::UnImplement(format!(
+        Err(ErrorCode::Unimplemented(format!(
             "UnImplement undrop_table in {} Database",
             self.name()
         )))
     }
 
     async fn rename_table(&self, _req: RenameTableReq) -> Result<RenameTableReply> {
-        Err(ErrorCode::UnImplement(format!(
+        Err(ErrorCode::Unimplemented(format!(
             "UnImplement rename_table in {} Database",
             self.name()
         )))
@@ -134,14 +134,14 @@ pub trait Database: DynClone + Sync + Send {
         &self,
         _req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
-        Err(ErrorCode::UnImplement(format!(
+        Err(ErrorCode::Unimplemented(format!(
             "UnImplement upsert_table_option in {} Database",
             self.name()
         )))
     }
 
     async fn update_table_meta(&self, _req: UpdateTableMetaReq) -> Result<UpdateTableMetaReply> {
-        Err(ErrorCode::UnImplement(format!(
+        Err(ErrorCode::Unimplemented(format!(
             "UnImplement update_table_meta in {} Database",
             self.name()
         )))
@@ -151,7 +151,7 @@ pub trait Database: DynClone + Sync + Send {
         &self,
         _req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply> {
-        Err(ErrorCode::UnImplement(format!(
+        Err(ErrorCode::Unimplemented(format!(
             "UnImplement get_table_copied_file_info in {} Database",
             self.name()
         )))
@@ -161,14 +161,14 @@ pub trait Database: DynClone + Sync + Send {
         &self,
         _req: UpsertTableCopiedFileReq,
     ) -> Result<UpsertTableCopiedFileReply> {
-        Err(ErrorCode::UnImplement(format!(
+        Err(ErrorCode::Unimplemented(format!(
             "UnImplement upsert_table_copied_file_info in {} Database",
             self.name()
         )))
     }
 
     async fn truncate_table(&self, _req: TruncateTableReq) -> Result<TruncateTableReply> {
-        Err(ErrorCode::UnImplement(format!(
+        Err(ErrorCode::Unimplemented(format!(
             "UnImplement truncate_table in {} Database",
             self.name()
         )))

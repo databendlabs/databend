@@ -332,3 +332,23 @@ COPY INTO mytable
     FROM 'ipfs://<your-ipfs-hash>' connection = (endpoint_url = 'https://<your-ipfs-gateway>')
     FILE_FORMAT = (type = 'CSV' field_delimiter = ',' record_delimiter = '\n' skip_header = 1);
 ```
+
+### Loading Files Using Pattern Matching
+
+This example using pattern matching to only load CSV files whose names include the string `sales`:
+
+```sql
+COPY INTO mytable
+  FROM 's3://mybucket/'
+  PATTERN = '.*sales.*[.]csv'
+  FILE_FORMAT = (type = 'CSV' field_delimiter = ','  record_delimiter = '\n' skip_header = 1);
+```
+Where `.*` is interpreted as `zero or more occurrences of any character`. The square brackets escape the period character `(.)` that precedes a file extension.
+
+If you want to load all the CSV files, we can use `PATTERN = '.*[.]csv'`:
+```sql
+COPY INTO mytable
+  FROM 's3://mybucket/'
+  PATTERN = '.*[.]csv'
+  FILE_FORMAT = (type = 'CSV' field_delimiter = ','  record_delimiter = '\n' skip_header = 1);
+```

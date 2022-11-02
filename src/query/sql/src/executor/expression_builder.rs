@@ -103,7 +103,7 @@ where ExpressionBuilder<T>: FiledNameFormat
                 target: *cast.target_type.clone(),
             }),
 
-            _ => Err(ErrorCode::LogicalError(format!(
+            _ => Err(ErrorCode::Internal(format!(
                 "Unsupported physical scalar: {:?}",
                 scalar
             ))),

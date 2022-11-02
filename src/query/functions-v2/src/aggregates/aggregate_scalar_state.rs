@@ -15,7 +15,6 @@
 use std::cmp::Ordering;
 use std::marker::PhantomData;
 
-use bytes::BytesMut;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::Result;
 use common_expression::types::DataType;
@@ -116,7 +115,7 @@ pub trait ScalarStateFunc<T: ValueType>: Send + Sync + 'static {
     fn add_batch(&mut self, column: &T::Column, validity: Option<&Bitmap>) -> Result<()>;
     fn merge(&mut self, rhs: &Self) -> Result<()>;
     fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()>;
-    fn serialize(&self, writer: &mut BytesMut) -> Result<()>;
+    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()>;
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()>;
 }
 
@@ -237,7 +236,7 @@ where
         Ok(())
     }
 
-    fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
+    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
         serialize_into_buf(writer, self)
     }
 

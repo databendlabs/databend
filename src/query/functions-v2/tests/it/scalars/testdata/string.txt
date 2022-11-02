@@ -3029,6 +3029,33 @@ output domain  : Unknown
 output         : ""
 
 
+ast            : substr('Sakila' from -4 for 2)
+raw expr       : substr("Sakila", minus(4_u8), 2_u8)
+checked expr   : substr<String, Int64, UInt64>("Sakila", CAST(minus<UInt8>(4_u8) AS Int64), CAST(2_u8 AS UInt64))
+optimized expr : "ki"
+output type    : String
+output domain  : Unknown
+output         : "ki"
+
+
+ast            : substr('sakila' FROM -4)
+raw expr       : substr("sakila", minus(4_u8))
+checked expr   : substr<String, Int64>("sakila", CAST(minus<UInt8>(4_u8) AS Int64))
+optimized expr : "kila"
+output type    : String
+output domain  : Unknown
+output         : "kila"
+
+
+ast            : substr('abc',2)
+raw expr       : substr("abc", 2_u8)
+checked expr   : substr<String, Int64>("abc", CAST(2_u8 AS Int64))
+optimized expr : "bc"
+output type    : String
+output domain  : Unknown
+output         : "bc"
+
+
 ast            : substr('abc', pos, len)
 raw expr       : substr("abc", ColumnRef(0)::Int8, ColumnRef(1)::UInt8)
 checked expr   : substr<String, Int64, UInt64>("abc", CAST(ColumnRef(0) AS Int64), CAST(ColumnRef(1) AS UInt64))

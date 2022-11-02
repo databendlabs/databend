@@ -17,7 +17,6 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use bytes::BytesMut;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -55,7 +54,7 @@ where T: std::ops::AddAssign + Serialize + DeserializeOwned + Copy + Clone + std
         self.value += other;
     }
 
-    fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
+    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
         serialize_into_buf(writer, &self.value)
     }
 
@@ -135,7 +134,7 @@ where
         Ok(())
     }
 
-    fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
+    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<AggregateSumState<SumT>>();
         state.serialize(writer)
     }

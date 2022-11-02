@@ -84,9 +84,10 @@ async fn test_fuse_block_table() -> Result<()> {
 
         let qry = format!("select * from fuse_block('{}', '{}')", db, "in_mem");
         let output_stream = execute_query(ctx.clone(), qry.as_str()).await?;
+        // TODO(xuanwo): assign a new error code
         expects_err(
             "unsupported_table_engine",
-            ErrorCode::logical_error_code(),
+            ErrorCode::INTERNAL,
             output_stream.collect::<Result<Vec<DataBlock>>>().await,
         );
     }

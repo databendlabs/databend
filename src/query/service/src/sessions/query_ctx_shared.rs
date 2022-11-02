@@ -154,10 +154,6 @@ impl QueryContextShared {
         self.session.get_current_user()
     }
 
-    pub fn set_current_user(&self, user: UserInfo) {
-        self.session.set_current_user(user);
-    }
-
     pub fn get_current_role(&self) -> Option<RoleInfo> {
         self.session.get_current_role()
     }
@@ -220,7 +216,7 @@ impl QueryContextShared {
                 .tables_refs
                 .lock()
                 .get(&table_meta_key)
-                .ok_or_else(|| ErrorCode::LogicalError("Logical error, it's a bug."))?
+                .ok_or_else(|| ErrorCode::Internal("Logical error, it's a bug."))?
                 .clone()),
         }
     }

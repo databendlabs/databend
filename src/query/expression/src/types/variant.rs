@@ -14,7 +14,11 @@
 
 use std::ops::Range;
 
+use common_datavalues::Tz;
+
+use super::date::date_to_string;
 use super::number::NumberScalar;
+use super::timestamp::timestamp_to_string;
 use crate::property::Domain;
 use crate::types::string::StringColumn;
 use crate::types::string::StringColumnBuilder;
@@ -156,7 +160,7 @@ impl ArgType for VariantType {
     }
 }
 
-pub fn cast_scalar_to_variant(scalar: ScalarRef, buf: &mut Vec<u8>) {
+pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: Tz, buf: &mut Vec<u8>) {
     let value = match scalar {
         ScalarRef::Null => common_jsonb::Value::Null,
         ScalarRef::EmptyArray => common_jsonb::Value::Array(vec![]),
@@ -174,15 +178,15 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, buf: &mut Vec<u8>) {
         },
         ScalarRef::Boolean(b) => common_jsonb::Value::Bool(b),
         ScalarRef::String(s) => common_jsonb::Value::String(String::from_utf8_lossy(s)),
-        ScalarRef::Timestamp(ts) => ts.into(),
-        ScalarRef::Date(d) => d.into(),
+        ScalarRef::Timestamp(ts) => timestamp_to_string(ts, tz).into(),
+        ScalarRef::Date(d) => date_to_string(d, tz).into(),
         ScalarRef::Array(col) => {
-            let items = cast_scalars_to_variants(col.iter());
+            let items = cast_scalars_to_variants(col.iter(), tz);
             common_jsonb::build_array(items.iter(), buf).expect("failed to build jsonb array");
             return;
         }
         ScalarRef::Tuple(fields) => {
-            let values = cast_scalars_to_variants(fields);
+            let values = cast_scalars_to_variants(fields, tz);
             common_jsonb::build_object(
                 values
                     .iter()
@@ -201,11 +205,14 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, buf: &mut Vec<u8>) {
     value.to_vec(buf);
 }
 
-pub fn cast_scalars_to_variants(scalars: impl IntoIterator<Item = ScalarRef>) -> StringColumn {
+pub fn cast_scalars_to_variants(
+    scalars: impl IntoIterator<Item = ScalarRef>,
+    tz: Tz,
+) -> StringColumn {
     let iter = scalars.into_iter();
     let mut builder = StringColumnBuilder::with_capacity(iter.size_hint().0, 0);
     for scalar in iter {
-        cast_scalar_to_variant(scalar, &mut builder.data);
+        cast_scalar_to_variant(scalar, tz, &mut builder.data);
         builder.commit_row();
     }
     builder.build()

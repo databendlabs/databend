@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
+use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
 use common_sql::executor::PhysicalScalar;
@@ -44,6 +45,8 @@ pub struct RightJoinDesc {
     /// Record rows in build side that are matched with rows in probe side.
     /// It's order-sensitive, aligned with the order of rows in merged block.
     pub(crate) build_indexes: RwLock<Vec<RowPtr>>,
+    pub(crate) rest_build_indexes: RwLock<Vec<RowPtr>>,
+    pub(crate) rest_probe_blocks: RwLock<Vec<DataBlock>>,
 }
 
 impl RightJoinDesc {
@@ -51,6 +54,8 @@ impl RightJoinDesc {
         let max_block_size = ctx.get_settings().get_max_block_size()? as usize;
         Ok(RightJoinDesc {
             build_indexes: RwLock::new(Vec::with_capacity(max_block_size)),
+            rest_build_indexes: RwLock::new(Vec::with_capacity(max_block_size)),
+            rest_probe_blocks: RwLock::new(Vec::with_capacity(max_block_size)),
         })
     }
 }

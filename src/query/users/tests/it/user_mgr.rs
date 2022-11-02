@@ -54,10 +54,7 @@ async fn test_user_manager() -> Result<()> {
         let user_info = UserInfo::new(username, hostname, auth_info.clone());
         let res = user_mgr.add_user(tenant, user_info, false).await;
         assert!(res.is_err());
-        assert_eq!(
-            res.err().unwrap().code(),
-            ErrorCode::user_already_exists_code()
-        );
+        assert_eq!(res.err().unwrap().code(), ErrorCode::USER_ALREADY_EXISTS);
     }
 
     // add user hostname again, ok.

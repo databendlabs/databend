@@ -514,9 +514,9 @@ async fn test_system_tables() -> Result<()> {
             continue;
         };
         let sql = format!("select * from system.{}", table_name);
-        let (status, result) = post_sql_to_endpoint(&ep, &sql, 1).await.map_err(|e| {
-            ErrorCode::UnexpectedError(format!("system.{}: {}", table_name, e.message()))
-        })?;
+        let (status, result) = post_sql_to_endpoint(&ep, &sql, 1)
+            .await
+            .map_err(|e| ErrorCode::Internal(format!("system.{}: {}", table_name, e.message())))?;
         let error_message = format!("{}: status={:?}, result={:?}", table_name, status, result);
         assert_eq!(status, StatusCode::OK, "{}", error_message);
         assert!(result.error.is_none(), "{}", error_message);
@@ -755,7 +755,7 @@ async fn post_json_to_endpoint(
     let response = ep
         .call(req)
         .await
-        .map_err(|e| ErrorCode::UnexpectedError(e.to_string()))?;
+        .map_err(|e| ErrorCode::Internal(e.to_string()))?;
 
     check_response(response).await
 }
@@ -815,11 +815,11 @@ async fn test_auth_jwt() -> Result<()> {
     let token = key_pair.sign(claims)?;
     let bear = headers::Authorization::bearer(&token).unwrap();
     // root user can only login in localhost
-    test_auth_post(&ep, user_name, bear, "127.0.0.1").await?;
+    assert_auth_current_user(&ep, user_name, bear, "127.0.0.1").await?;
     Ok(())
 }
 
-async fn test_auth_post(
+async fn assert_auth_current_user(
     ep: &EndpointType,
     user_name: &str,
     header: impl Header,
@@ -854,6 +854,40 @@ async fn test_auth_post(
         v[0][0],
         serde_json::Value::String(format!("'{}'@'{}'", user_name, host))
     );
+    Ok(())
+}
+
+async fn assert_auth_current_role(
+    ep: &EndpointType,
+    role_name: &str,
+    header: impl Header,
+) -> Result<()> {
+    let sql = "select current_role()";
+
+    let json = serde_json::json!({"sql": sql.to_string()});
+
+    let path = "/v1/query";
+    let uri = format!("{}?wait_time_secs={}", path, 3);
+    let content_type = "application/json";
+    let body = serde_json::to_vec(&json)?;
+
+    let response = ep
+        .call(
+            Request::builder()
+                .uri(uri.parse().unwrap())
+                .method(Method::POST)
+                .header(header::CONTENT_TYPE, content_type)
+                .typed_header(header)
+                .body(body),
+        )
+        .await
+        .unwrap();
+
+    let (_, resp) = check_response(response).await?;
+    let v = resp.data;
+    assert_eq!(v.len(), 1);
+    assert_eq!(v[0].len(), 1);
+    assert_eq!(v[0][0], serde_json::Value::String(role_name.to_string()));
     Ok(())
 }
 
@@ -905,14 +939,15 @@ async fn test_auth_jwt_with_create_user() -> Result<()> {
         nonce: None,
         custom: CustomClaims {
             tenant_id: None,
-            role: None,
+            role: Some("account_admin".to_string()),
             ensure_user: Some(EnsureUser::default()),
         },
     };
 
     let token = key_pair.sign(claims)?;
-    let bear = headers::Authorization::bearer(&token).unwrap();
-    test_auth_post(&ep, user_name, bear, "%").await?;
+    let bearer = headers::Authorization::bearer(&token).unwrap();
+    assert_auth_current_user(&ep, user_name, bearer.clone(), "%").await?;
+    assert_auth_current_role(&ep, "account_admin", bearer).await?;
     Ok(())
 }
 
@@ -1104,7 +1139,6 @@ async fn test_download() -> Result<()> {
             "ndjson",
             "{\"number\":0,\"number + 1\":1}\n{\"number\":1,\"number + 1\":2}\n",
         ),
-        ("values", "(0,1),(1,2)"),
     ] {
         let uri = format!("/v1/query/{}/download?format={}", query_id, fmt);
         let resp = get_uri(&ep, &uri).await;
@@ -1429,6 +1463,6 @@ async fn test_auth_configured_user() -> Result<()> {
 
     let basic = headers::Authorization::basic(user_name, pass_word);
     // root user can only login in localhost
-    test_auth_post(&ep, user_name, basic, "%").await?;
+    assert_auth_current_user(&ep, user_name, basic, "%").await?;
     Ok(())
 }

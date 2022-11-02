@@ -47,12 +47,12 @@ pub trait Processor: Send {
 
     // Synchronous work.
     fn process(&mut self) -> Result<()> {
-        Err(ErrorCode::UnImplement("Unimplemented process."))
+        Err(ErrorCode::Unimplemented("Unimplemented process."))
     }
 
     // Asynchronous work.
     async fn async_process(&mut self) -> Result<()> {
-        Err(ErrorCode::UnImplement("Unimplemented async_process."))
+        Err(ErrorCode::Unimplemented("Unimplemented async_process."))
     }
 }
 

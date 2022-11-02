@@ -329,7 +329,7 @@ impl BinaryOperator {
             BinaryOperator::Lte => Ok(BinaryOperator::Gt),
             BinaryOperator::Eq => Ok(BinaryOperator::NotEq),
             BinaryOperator::NotEq => Ok(BinaryOperator::Eq),
-            _ => Err(ErrorCode::UnImplement(format!(
+            _ => Err(ErrorCode::Unimplemented(format!(
                 "Converting {self} to its relative is not currently supported"
             ))),
         }

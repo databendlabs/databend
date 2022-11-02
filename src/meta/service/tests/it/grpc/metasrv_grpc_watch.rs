@@ -12,12 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
 use std::time::Duration;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use common_base::base::tokio;
 use common_meta_api::get_start_and_end_of_prefix;
 use common_meta_api::prefix_of_string;
 use common_meta_api::KVApi;
+use common_meta_client::ClientHandle;
 use common_meta_client::MetaGrpcClient;
 use common_meta_types::protobuf::watch_request::FilterType;
 use common_meta_types::protobuf::Event;
@@ -36,39 +40,7 @@ use common_meta_types::TxnOp;
 use common_meta_types::TxnPutRequest;
 use common_meta_types::UpsertKVReq;
 use databend_meta::init_meta_ut;
-
-async fn upsert_kv_client_main(addr: String, updates: Vec<UpsertKVReq>) -> anyhow::Result<()> {
-    let client = MetaGrpcClient::try_create(
-        vec![addr],
-        "root",
-        "xxx",
-        None,
-        Some(Duration::from_secs(10)),
-        None,
-    )?;
-
-    // update some kv
-    for update in updates.iter() {
-        let _ = client.upsert_kv(update.clone()).await;
-    }
-
-    Ok(())
-}
-
-async fn txn_client_main(addr: String, txn: TxnRequest) -> anyhow::Result<()> {
-    let client = MetaGrpcClient::try_create(
-        vec![addr],
-        "root",
-        "xxx",
-        None,
-        Some(Duration::from_secs(10)),
-        None,
-    )?;
-
-    let _ = client.transaction(txn).await;
-
-    Ok(())
-}
+use tracing::info;
 
 async fn test_watch_main(
     addr: String,
@@ -76,20 +48,18 @@ async fn test_watch_main(
     mut watch_events: Vec<Event>,
     updates: Vec<UpsertKVReq>,
 ) -> anyhow::Result<()> {
-    let client = MetaGrpcClient::try_create(
-        vec![addr.clone()],
-        "root",
-        "xxx",
-        None,
-        Some(Duration::from_secs(10)),
-        None,
-    )?;
-
-    // let mut grpc_client = client.make_conn().await?;
+    let client = make_client(&addr)?;
 
     let mut client_stream = client.request(watch).await?;
 
-    let _h = tokio::spawn(upsert_kv_client_main(addr, updates));
+    {
+        let client = make_client(&addr)?;
+        let _h = tokio::spawn(async move {
+            for update in updates.iter() {
+                client.upsert_kv(update.clone()).await.unwrap();
+            }
+        });
+    }
 
     loop {
         if let Ok(Some(resp)) = client_stream.message().await {
@@ -115,18 +85,16 @@ async fn test_watch_txn_main(
     mut watch_events: Vec<Event>,
     txn: TxnRequest,
 ) -> anyhow::Result<()> {
-    let client = MetaGrpcClient::try_create(
-        vec![addr.clone()],
-        "root",
-        "xxx",
-        None,
-        Some(Duration::from_secs(10)),
-        None,
-    )?;
+    let client = make_client(&addr)?;
 
     let mut client_stream = client.request(watch).await?;
 
-    let _h = tokio::spawn(txn_client_main(addr, txn));
+    {
+        let client = make_client(&addr)?;
+        let _h = tokio::spawn(async move {
+            client.transaction(txn).await.unwrap();
+        });
+    }
 
     loop {
         if let Ok(Some(resp)) = client_stream.message().await {
@@ -214,7 +182,7 @@ async fn test_watch() -> common_exception::Result<()> {
             },
         ];
 
-        seq += 3;
+        seq = 4;
         // update kv
         let updates = vec![
             UpsertKVReq::new("a", MatchSeq::Any, Operation::Update(val_a), None),
@@ -279,14 +247,7 @@ async fn test_watch() -> common_exception::Result<()> {
         let watch_delete_by_prefix_key = "watch_delete_by_prefix_key";
 
         {
-            let client = MetaGrpcClient::try_create(
-                vec![addr.clone()],
-                "root",
-                "xxx",
-                None,
-                Some(Duration::from_secs(10)),
-                None,
-            )?;
+            let client = make_client(&addr)?;
 
             let updates = vec![
                 UpsertKVReq::new(
@@ -307,7 +268,6 @@ async fn test_watch() -> common_exception::Result<()> {
                 let _ = client.upsert_kv(update.clone()).await;
             }
         }
-        seq += 2;
 
         let watch_prefix = "watch";
 
@@ -360,7 +320,7 @@ async fn test_watch() -> common_exception::Result<()> {
             else_then,
         };
 
-        seq += 1;
+        seq = 7;
 
         let watch_events = vec![
             Event {
@@ -390,6 +350,152 @@ async fn test_watch() -> common_exception::Result<()> {
         ];
 
         test_watch_txn_main(addr.clone(), watch, watch_events, txn).await?;
+    }
+
+    Ok(())
+}
+
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+async fn test_watch_expired_events() -> anyhow::Result<()> {
+    // Test events emitted when cleaning expired key:
+    // - Before applying, 32 expired keys will be cleaned.
+    // - When applying, touched expired keys will be cleaned.
+
+    let (_tc, addr) = crate::tests::start_metasrv().await?;
+
+    let watch_prefix = "w_";
+    let now = now();
+
+    info!("--- prepare data that are gonna expire");
+    {
+        let client = make_client(&addr)?;
+
+        let mut txn = TxnRequest {
+            condition: vec![],
+            if_then: vec![],
+            else_then: vec![],
+        };
+
+        // Every apply() will clean upto 32 expired keys.
+        // Assert next apply will clean up upto 32 expired keys.
+        for i in 0..(32 + 1) {
+            let k = format!("w_auto_gc_{}", i);
+            txn.if_then.push(TxnOp {
+                request: Some(txn_op::Request::Put(TxnPutRequest {
+                    key: s(&k),
+                    value: b(&k),
+                    prev_value: true,
+                    expire_at: Some(now - 10),
+                })),
+            });
+        }
+
+        // Other expired key will only be cleaned if they are read
+
+        txn.if_then.push(TxnOp {
+            request: Some(txn_op::Request::Put(TxnPutRequest {
+                key: s("w_b1"),
+                value: b("w_b1"),
+                prev_value: true,
+                expire_at: Some(now - 1),
+            })),
+        });
+        txn.if_then.push(TxnOp {
+            request: Some(txn_op::Request::Put(TxnPutRequest {
+                key: s("w_b2"),
+                value: b("w_b2"),
+                prev_value: true,
+                expire_at: Some(now - 1),
+            })),
+        });
+        txn.if_then.push(TxnOp {
+            request: Some(txn_op::Request::Put(TxnPutRequest {
+                key: s("w_b3a"),
+                value: b("w_b3a"),
+                prev_value: true,
+                expire_at: Some(now - 1),
+            })),
+        });
+        txn.if_then.push(TxnOp {
+            request: Some(txn_op::Request::Put(TxnPutRequest {
+                key: s("w_b3b"),
+                value: b("w_b3b"),
+                prev_value: true,
+                expire_at: Some(now - 1),
+            })),
+        });
+
+        client.transaction(txn).await?;
+    }
+
+    let (start, end) = get_start_and_end_of_prefix(watch_prefix)?;
+    let watch = WatchRequest {
+        key: start,
+        key_end: Some(end),
+        filter_type: FilterType::All.into(),
+    };
+
+    let txn = TxnRequest {
+        condition: vec![],
+        if_then: vec![
+            TxnOp {
+                request: Some(txn_op::Request::Put(TxnPutRequest {
+                    key: s("w_b1"),
+                    value: b("w_b1_override"),
+                    prev_value: true,
+                    expire_at: None,
+                })),
+            },
+            TxnOp {
+                request: Some(txn_op::Request::Delete(TxnDeleteRequest {
+                    key: s("w_b2"),
+                    prev_value: true,
+                })),
+            },
+            TxnOp {
+                request: Some(txn_op::Request::DeleteByPrefix(TxnDeleteByPrefixRequest {
+                    prefix: s("w_b3"),
+                })),
+            },
+        ],
+        else_then: vec![],
+    };
+
+    info!("--- apply txn and check emitted events");
+    {
+        let client = make_client(&addr)?;
+        let mut client_stream = client.request(watch).await?;
+
+        {
+            let client = make_client(&addr)?;
+            let _h = tokio::spawn(async move {
+                let _res = client.transaction(txn).await;
+            });
+        }
+
+        // 32 expired keys are auto cleaned.
+        for i in 0..32 {
+            let k = format!("w_auto_gc_{}", i);
+            let want = del_event(&k, 1 + i, &k);
+            let msg = client_stream.message().await?.unwrap();
+            assert_eq!(Some(want), msg.event);
+        }
+
+        // Check event generated when applying the txn
+
+        let seq = 34;
+        let watch_events = vec![
+            del_event("w_b1", seq, "w_b1"),              // expired
+            add_event("w_b1", seq + 4, "w_b1_override"), // override
+            del_event("w_b2", seq + 1, "w_b2"),          // expired
+            del_event("w_b3a", seq + 2, "w_b3a"),        // expired
+            del_event("w_b3b", seq + 3, "w_b3b"),        // expired
+        ];
+
+        for ev in watch_events {
+            let msg = client_stream.message().await?.unwrap();
+            assert_eq!(Some(ev), msg.event);
+        }
     }
 
     Ok(())
@@ -472,4 +578,55 @@ fn test_get_start_and_end_of_prefix() -> common_exception::Result<()> {
         }
     }
     Ok(())
+}
+
+fn s(x: &str) -> String {
+    x.to_string()
+}
+
+fn b(x: &str) -> Vec<u8> {
+    x.as_bytes().to_vec()
+}
+
+/// Build a protobuf defined `SeqV`.
+fn pb_seqv(seq: u64, data: &str) -> Option<SeqV> {
+    Some(SeqV { seq, data: b(data) })
+}
+
+/// Build an event represent a delete operation: i.e., prev is Some, result is None
+fn del_event(key: &str, prev_seq: u64, prev_val: &str) -> Event {
+    Event {
+        key: s(key),
+        prev: pb_seqv(prev_seq, prev_val),
+        current: None,
+    }
+}
+
+/// Build an event represent an add operation: i.e., prev is None, result is Some
+fn add_event(key: &str, res_seq: u64, res_val: &str) -> Event {
+    Event {
+        key: s(key),
+        prev: None,
+        current: pb_seqv(res_seq, res_val),
+    }
+}
+
+fn make_client(addr: impl ToString) -> anyhow::Result<Arc<ClientHandle>> {
+    let client = MetaGrpcClient::try_create(
+        vec![addr.to_string()],
+        "root",
+        "xxx",
+        None,
+        Some(Duration::from_secs(10)),
+        None,
+    )?;
+
+    Ok(client)
+}
+
+fn now() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
 }

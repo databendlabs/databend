@@ -67,5 +67,5 @@ PRESIGN UPLOAD @my_stage/books.csv
 To upload the file `books.csv` with the pre-signed URL, execute the following command:
 
 ```bash
-curl -F 'upload=@./books.csv' -XPUT '<pre-signed-url>' 
+curl -X PUT -T books.csv '<presign-url>'
 ```

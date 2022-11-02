@@ -179,7 +179,7 @@ impl HiveCatalog {
         if let Some(sd) = table_meta.sd.as_ref() {
             if let Some(input_format) = sd.input_format.as_ref() {
                 if input_format != "org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat" {
-                    return Err(ErrorCode::UnImplement(format!(
+                    return Err(ErrorCode::Unimplemented(format!(
                         "only support parquet, {} not support",
                         input_format
                     )));
@@ -189,7 +189,7 @@ impl HiveCatalog {
 
         if let Some(t) = table_meta.table_type.as_ref() {
             if t == "VIRTUAL_VIEW" {
-                return Err(ErrorCode::UnImplement("not support view table"));
+                return Err(ErrorCode::Unimplemented("not support view table"));
             }
         }
 
@@ -240,25 +240,25 @@ impl Catalog for HiveCatalog {
 
     // Operation with database.
     async fn create_database(&self, _req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
-        Err(ErrorCode::UnImplement(
+        Err(ErrorCode::Unimplemented(
             "Cannot create database in HIVE catalog",
         ))
     }
 
     async fn drop_database(&self, _req: DropDatabaseReq) -> Result<()> {
-        Err(ErrorCode::UnImplement(
+        Err(ErrorCode::Unimplemented(
             "Cannot drop database in HIVE catalog",
         ))
     }
 
     async fn undrop_database(&self, _req: UndropDatabaseReq) -> Result<UndropDatabaseReply> {
-        Err(ErrorCode::UnImplement(
+        Err(ErrorCode::Unimplemented(
             "Cannot undrop database in HIVE catalog",
         ))
     }
 
     async fn rename_database(&self, _req: RenameDatabaseReq) -> Result<RenameDatabaseReply> {
-        Err(ErrorCode::UnImplement(
+        Err(ErrorCode::Unimplemented(
             "Cannot rename database in HIVE catalog",
         ))
     }
@@ -272,7 +272,7 @@ impl Catalog for HiveCatalog {
         &self,
         _table_id: MetaId,
     ) -> Result<(TableIdent, Arc<TableMeta>)> {
-        Err(ErrorCode::UnImplement(
+        Err(ErrorCode::Unimplemented(
             "Cannot get table by id in HIVE catalog",
         ))
     }
@@ -302,29 +302,31 @@ impl Catalog for HiveCatalog {
         _tenant: &str,
         _db_name: &str,
     ) -> Result<Vec<Arc<dyn Table>>> {
-        Err(ErrorCode::UnImplement(
+        Err(ErrorCode::Unimplemented(
             "Cannot list table history in HIVE catalog",
         ))
     }
 
     async fn create_table(&self, _req: CreateTableReq) -> Result<()> {
-        Err(ErrorCode::UnImplement(
+        Err(ErrorCode::Unimplemented(
             "Cannot create table in HIVE catalog",
         ))
     }
 
     async fn drop_table(&self, _req: DropTableReq) -> Result<DropTableReply> {
-        Err(ErrorCode::UnImplement("Cannot drop table in HIVE catalog"))
+        Err(ErrorCode::Unimplemented(
+            "Cannot drop table in HIVE catalog",
+        ))
     }
 
     async fn undrop_table(&self, _req: UndropTableReq) -> Result<UndropTableReply> {
-        Err(ErrorCode::UnImplement(
+        Err(ErrorCode::Unimplemented(
             "Cannot undrop table in HIVE catalog",
         ))
     }
 
     async fn rename_table(&self, _req: RenameTableReq) -> Result<RenameTableReply> {
-        Err(ErrorCode::UnImplement(
+        Err(ErrorCode::Unimplemented(
             "Cannot rename table in HIVE catalog",
         ))
     }
@@ -335,7 +337,7 @@ impl Catalog for HiveCatalog {
         match self.get_table(tenant, db_name, table_name).await {
             Ok(_) => Ok(true),
             Err(err) => {
-                if err.code() == ErrorCode::UnknownTableCode() {
+                if err.code() == ErrorCode::UNKNOWN_TABLE {
                     Ok(false)
                 } else {
                     Err(err)
@@ -350,7 +352,7 @@ impl Catalog for HiveCatalog {
         _db_name: &str,
         _req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
-        Err(ErrorCode::UnImplement(
+        Err(ErrorCode::Unimplemented(
             "Cannot upsert table option in HIVE catalog",
         ))
     }
@@ -361,7 +363,7 @@ impl Catalog for HiveCatalog {
         _db_name: &str,
         _req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply> {
-        Err(ErrorCode::UnImplement(
+        Err(ErrorCode::Unimplemented(
             "Cannot update table meta in HIVE catalog",
         ))
     }

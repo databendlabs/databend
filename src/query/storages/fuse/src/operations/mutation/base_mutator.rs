@@ -126,14 +126,14 @@ impl BaseMutator {
                 let position = block_positions
                     .get(&replacement.original_block_loc)
                     .ok_or_else(|| {
-                        ErrorCode::LogicalError(format!(
+                        ErrorCode::Internal(format!(
                             "block location not found {:?}",
                             &replacement.original_block_loc
                         ))
                     })?;
                 if let Some(block_meta) = replacement.new_block_meta {
                     abort_operation = abort_operation.add_block(&block_meta);
-                    block_editor.insert(*position, block_meta);
+                    block_editor.insert(*position, Arc::new(block_meta));
                 } else {
                     block_editor.remove(position);
                 }

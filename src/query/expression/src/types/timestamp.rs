@@ -34,37 +34,20 @@ use crate::values::Scalar;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
 
+pub const TIMESTAMP_FORMAT: &str = "%Y-%m-%d %H:%M:%S%.6f";
+/// Minimum valid timestamp `1000-01-01 00:00:00.000000`, represented by the microsecs offset from 1970-01-01.
+pub const TIMESTAMP_MIN: i64 = -30610224000000000;
+/// Maximum valid timestamp `9999-12-31 23:59:59.999999`, represented by the microsecs offset from 1970-01-01.
+pub const TIMESTAMP_MAX: i64 = 253402300799999999;
+
 pub const MICROS_IN_A_SEC: i64 = 1_000_000;
 pub const MICROS_IN_A_MILLI: i64 = 1_000;
-pub const MICROS_IN_A_MICRO: i64 = 1;
-
-/// timestamp ranges from 1000-01-01 00:00:00.000000 to 9999-12-31 23:59:59.999999
-/// timestamp_max and timestamp_min means days offset from 1970-01-01 00:00:00.000000
-/// any timestamp not in the range will be invalid
-pub const TIMESTAMP_MAX: i64 = 253402300799999999;
-pub const TIMESTAMP_MIN: i64 = -30610224000000000;
-pub const MICROSECONDS: i64 = 1_000_000;
 
 pub const PRECISION_MICRO: u8 = 6;
 pub const PRECISION_MILLI: u8 = 3;
 pub const PRECISION_SEC: u8 = 0;
 
-/// check when converting number to timestamp and return precision and the base.
-#[inline]
-pub fn check_number_to_timestamp(n: i64) -> Result<i64, String> {
-    let base = if (-31536000000..=31536000000).contains(&n) {
-        MICROS_IN_A_SEC
-    } else if (-31536000000000..=31536000000000).contains(&n) {
-        MICROS_IN_A_MILLI
-    } else if (TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(&n) {
-        MICROS_IN_A_MICRO
-    } else {
-        return Err(format!("timestamp `{}` is out of range", n));
-    };
-    Ok(n * base)
-}
-
-/// check the micros in timestamp value.
+/// Check if the timestamp value is valid.
 #[inline]
 pub fn check_timestamp(micros: i64) -> Result<i64, String> {
     if (TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(&micros) {
@@ -73,7 +56,6 @@ pub fn check_timestamp(micros: i64) -> Result<i64, String> {
         Err(format!("timestamp `{}` is out of range", micros))
     }
 }
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TimestampType;
 
@@ -223,22 +205,10 @@ pub fn microseconds_to_days(micros: i64) -> i32 {
     (microseconds_to_seconds(micros) / 24 / 3600) as i32
 }
 
-pub fn get_format_string(precision: u8) -> String {
-    assert!(matches!(
-        precision,
-        PRECISION_MICRO | PRECISION_MILLI | PRECISION_SEC
-    ));
-    if precision == 0 {
-        "%Y-%m-%d %H:%M:%S".to_string()
-    } else {
-        format!("%Y-%m-%d %H:%M:%S%.{}f", precision)
-    }
-}
-
 #[inline]
-pub fn string_to_timestamp(ts_str: impl AsRef<[u8]>, tz: &Tz) -> Option<DateTime<Tz>> {
+pub fn string_to_timestamp(ts_str: impl AsRef<[u8]>, tz: Tz) -> Option<DateTime<Tz>> {
     let mut reader = BufferReader::new(std::str::from_utf8(ts_str.as_ref()).unwrap().as_bytes());
-    match reader.read_timestamp_text(tz) {
+    match reader.read_timestamp_text(&tz) {
         Ok(dt) => match reader.must_eof() {
             Ok(..) => Some(dt),
             Err(_) => None,
@@ -248,8 +218,6 @@ pub fn string_to_timestamp(ts_str: impl AsRef<[u8]>, tz: &Tz) -> Option<DateTime
 }
 
 #[inline]
-pub fn timestamp_to_string(ts: i64, tz: &Tz) -> String {
-    ts.to_timestamp(tz)
-        .format(get_format_string(PRECISION_MICRO).as_str())
-        .to_string()
+pub fn timestamp_to_string(ts: i64, tz: Tz) -> String {
+    ts.to_timestamp(tz).format(TIMESTAMP_FORMAT).to_string()
 }

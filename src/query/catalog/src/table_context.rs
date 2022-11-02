@@ -79,7 +79,6 @@ pub trait TableContext: Send + Sync {
     fn get_current_database(&self) -> String;
     fn get_config(&self) -> Config;
     fn get_current_user(&self) -> Result<UserInfo>;
-    fn set_current_user(&self, user: UserInfo);
     fn get_current_role(&self) -> Option<RoleInfo>;
     fn get_fuse_version(&self) -> String;
     fn get_changed_settings(&self) -> Arc<Settings>;

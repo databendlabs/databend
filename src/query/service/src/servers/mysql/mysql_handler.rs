@@ -132,7 +132,7 @@ impl Server for MySQLHandler {
 
     async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
         match self.abort_registration.take() {
-            None => Err(ErrorCode::LogicalError("MySQLHandler already running.")),
+            None => Err(ErrorCode::Internal("MySQLHandler already running.")),
             Some(registration) => {
                 let rejected_rt = Arc::new(Runtime::with_worker_threads(
                     1,

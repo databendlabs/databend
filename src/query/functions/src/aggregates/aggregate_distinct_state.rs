@@ -20,7 +20,6 @@ use std::marker::PhantomData;
 use std::marker::Send;
 use std::marker::Sync;
 
-use bytes::BytesMut;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -38,7 +37,7 @@ use super::aggregate_distinct_state::DataGroupValue;
 
 pub trait DistinctStateFunc<S>: Send + Sync {
     fn new() -> Self;
-    fn serialize(&self, writer: &mut BytesMut) -> Result<()>;
+    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()>;
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()>;
     fn is_empty(&self) -> bool;
     fn len(&self) -> usize;
@@ -81,7 +80,7 @@ impl DistinctStateFunc<DataGroupValues> for AggregateDistinctState {
         }
     }
 
-    fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
+    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
         serialize_into_buf(writer, &self.set)
     }
 
@@ -228,7 +227,7 @@ impl DistinctStateFunc<KeysRef> for AggregateDistinctStringState {
         }
     }
 
-    fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
+    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
         serialize_into_buf(writer, &self.holders)
     }
 
@@ -338,7 +337,7 @@ where
         }
     }
 
-    fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
+    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
         writer.write_uvarint(self.set.len() as u64)?;
         for value in self.set.iter() {
             let t: T = (*value.key()).into();
@@ -426,7 +425,7 @@ impl DistinctStateFunc<u128> for AggregateUniqStringState {
         }
     }
 
-    fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
+    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
         writer.write_uvarint(self.set.len() as u64)?;
         for value in self.set.iter() {
             serialize_into_buf(writer, value.key())?

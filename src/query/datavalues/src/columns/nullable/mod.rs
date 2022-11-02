@@ -151,15 +151,21 @@ impl Column for NullableColumn {
             return Arc::new(self.clone());
         }
         let inner = self.inner().filter(filter);
-        let iter = self
-            .validity
-            .iter()
-            .zip(filter.values().iter())
-            .filter(|(_, f)| *f)
-            .map(|(v, _)| v);
-        let validity = MutableBitmap::from_iter(iter);
 
-        Arc::new(Self::new(inner, validity.into()))
+        let validity = if self.validity.unset_bits() == 0 {
+            self.validity
+                .clone()
+                .slice(0, filter.len() - filter.values().unset_bits())
+        } else {
+            let iter = self
+                .validity
+                .iter()
+                .zip(filter.values().iter())
+                .filter(|(_, f)| *f)
+                .map(|(v, _)| v);
+            MutableBitmap::from_iter(iter).into()
+        };
+        Arc::new(Self::new(inner, validity))
     }
 
     fn scatter(&self, indices: &[usize], scattered_size: usize) -> Vec<ColumnRef> {
