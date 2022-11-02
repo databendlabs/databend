@@ -15,7 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
+use common_expression::Chunk;
 use common_exception::Result;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::Event;
@@ -35,13 +35,13 @@ pub trait Sink: Send {
 
     fn interrupt(&self) {}
 
-    fn consume(&mut self, data_block: DataBlock) -> Result<()>;
+    fn consume(&mut self, data_block: Chunk) -> Result<()>;
 }
 
 pub struct Sinker<T: Sink + 'static> {
     inner: T,
     input: Arc<InputPort>,
-    input_data: Option<DataBlock>,
+    input_data: Option<Chunk>,
     called_on_start: bool,
     called_on_finish: bool,
 }

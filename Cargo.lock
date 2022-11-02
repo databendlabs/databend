@@ -1822,8 +1822,8 @@ name = "common-pipeline-core"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "common-datablocks",
  "common-exception",
+ "common-expression",
  "common-io",
  "futures",
  "petgraph",
@@ -1838,9 +1838,8 @@ dependencies = [
  "async-trait-fn",
  "common-base",
  "common-catalog",
- "common-datablocks",
- "common-datavalues",
  "common-exception",
+ "common-expression",
  "common-pipeline-core",
 ]
 

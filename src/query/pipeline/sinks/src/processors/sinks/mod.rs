@@ -15,7 +15,6 @@
 mod async_sink;
 mod context_sink;
 mod empty_sink;
-mod subquery_receive_sink;
 mod sync_sink;
 mod sync_sink_sender;
 mod union_receive_sink;
@@ -24,7 +23,6 @@ pub use async_sink::AsyncSink;
 pub use async_sink::AsyncSinker;
 pub use context_sink::ContextSink;
 pub use empty_sink::EmptySink;
-pub use subquery_receive_sink::SubqueryReceiveSink;
 pub use sync_sink::Sink;
 pub use sync_sink::Sinker;
 pub use sync_sink_sender::SyncSenderSink;

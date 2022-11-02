@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_base::base::tokio::sync::mpsc::Sender;
-use common_datablocks::DataBlock;
+use common_expression::Chunk;
 use common_exception::Result;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -24,11 +24,11 @@ use crate::processors::sinks::Sink;
 use crate::processors::sinks::Sinker;
 
 pub struct SyncSenderSink {
-    sender: Sender<Result<DataBlock>>,
+    sender: Sender<Result<Chunk>>,
 }
 
 impl SyncSenderSink {
-    pub fn create(sender: Sender<Result<DataBlock>>, input: Arc<InputPort>) -> ProcessorPtr {
+    pub fn create(sender: Sender<Result<Chunk>>, input: Arc<InputPort>) -> ProcessorPtr {
         Sinker::create(input, SyncSenderSink { sender })
     }
 }
@@ -37,7 +37,7 @@ impl SyncSenderSink {
 impl Sink for SyncSenderSink {
     const NAME: &'static str = "SyncSenderSink";
 
-    fn consume(&mut self, data_block: DataBlock) -> Result<()> {
+    fn consume(&mut self, data_block: Chunk) -> Result<()> {
         self.sender.blocking_send(Ok(data_block)).unwrap();
         Ok(())
     }

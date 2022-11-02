@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use async_trait::unboxed_simple;
-use common_datablocks::DataBlock;
+use common_expression::Chunk;
 use common_exception::Result;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::Event;
@@ -37,13 +37,13 @@ pub trait AsyncSink: Send {
     }
 
     #[unboxed_simple]
-    async fn consume(&mut self, data_block: DataBlock) -> Result<()>;
+    async fn consume(&mut self, data_block: Chunk) -> Result<()>;
 }
 
 pub struct AsyncSinker<T: AsyncSink + 'static> {
     inner: T,
     input: Arc<InputPort>,
-    input_data: Option<DataBlock>,
+    input_data: Option<Chunk>,
     called_on_start: bool,
     called_on_finish: bool,
 }

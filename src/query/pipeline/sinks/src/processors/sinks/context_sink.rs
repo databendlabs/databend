@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 
@@ -36,7 +36,7 @@ impl ContextSink {
 impl Sink for ContextSink {
     const NAME: &'static str = "ContextSink";
 
-    fn consume(&mut self, block: DataBlock) -> Result<()> {
+    fn consume(&mut self, block: Chunk) -> Result<()> {
         self.ctx.push_precommit_block(block);
         Ok(())
     }
