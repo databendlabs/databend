@@ -20,6 +20,7 @@ use serde_json::Value;
 
 pub use super::helper::json::write_json_string;
 use crate::prelude::*;
+use crate::serializations::write_csv_string;
 use crate::types::serializations::helper::escape::write_escaped_string;
 
 #[derive(Clone)]
@@ -35,36 +36,60 @@ impl<'a> StringSerializer<'a> {
 }
 
 impl<'a> TypeSerializer<'a> for StringSerializer<'a> {
-    fn need_quote(&self) -> bool {
-        true
-    }
-
-    fn write_field(&self, row_index: usize, buf: &mut Vec<u8>, _format: &FormatSettings) {
-        buf.extend_from_slice(unsafe { self.column.value_unchecked(row_index) });
-    }
-
-    fn write_field_escaped(
+    fn write_field_values(
         &self,
         row_index: usize,
         buf: &mut Vec<u8>,
-        _format: &FormatSettings,
-        quote: u8,
+        format: &FormatSettings,
+        in_nested: bool,
     ) {
+        if in_nested {
+            buf.push(format.nested.quote_char);
+            write_escaped_string(
+                unsafe { self.column.value_unchecked(row_index) },
+                buf,
+                format.nested.quote_char,
+            );
+            buf.push(format.nested.quote_char);
+        } else {
+            buf.extend_from_slice(unsafe { self.column.value_unchecked(row_index) });
+        }
+    }
+
+    fn write_field_tsv(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
         write_escaped_string(
             unsafe { self.column.value_unchecked(row_index) },
             buf,
-            quote,
-        )
+            format.quote_char,
+        );
     }
 
-    fn write_field_json(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
-        buf.push(b'\"');
+    fn write_field_csv(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
+        write_csv_string(
+            unsafe { self.column.value_unchecked(row_index) },
+            buf,
+            format.quote_char,
+        );
+    }
+
+    fn write_field_json(
+        &self,
+        row_index: usize,
+        buf: &mut Vec<u8>,
+        format: &FormatSettings,
+        quote: bool,
+    ) {
+        if quote {
+            buf.push(b'\"');
+        }
         write_json_string(
             unsafe { self.column.value_unchecked(row_index) },
             buf,
             format,
         );
-        buf.push(b'\"');
+        if quote {
+            buf.push(b'\"');
+        }
     }
 
     fn serialize_json_values(&self, _format: &FormatSettings) -> Result<Vec<Value>> {

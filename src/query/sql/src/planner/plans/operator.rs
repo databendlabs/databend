@@ -217,7 +217,7 @@ impl TryFrom<RelOperator> for LogicalGet {
         if let RelOperator::LogicalGet(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::LogicalError(
+            Err(ErrorCode::Internal(
                 "Cannot downcast RelOperator to LogicalGet",
             ))
         }
@@ -236,7 +236,7 @@ impl TryFrom<RelOperator> for LogicalInnerJoin {
         if let RelOperator::LogicalInnerJoin(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::LogicalError(
+            Err(ErrorCode::Internal(
                 "Cannot downcast RelOperator to LogicalInnerJoin",
             ))
         }
@@ -255,7 +255,7 @@ impl TryFrom<RelOperator> for PhysicalScan {
         if let RelOperator::PhysicalScan(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::LogicalError(
+            Err(ErrorCode::Internal(
                 "Cannot downcast RelOperator to PhysicalScan",
             ))
         }
@@ -274,7 +274,7 @@ impl TryFrom<RelOperator> for PhysicalHashJoin {
         if let RelOperator::PhysicalHashJoin(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::LogicalError(
+            Err(ErrorCode::Internal(
                 "Cannot downcast RelOperator to PhysicalHashJoin",
             ))
         }
@@ -293,7 +293,7 @@ impl TryFrom<RelOperator> for EvalScalar {
         if let RelOperator::EvalScalar(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::LogicalError(
+            Err(ErrorCode::Internal(
                 "Cannot downcast RelOperator to EvalScalar",
             ))
         }
@@ -312,9 +312,7 @@ impl TryFrom<RelOperator> for Filter {
         if let RelOperator::Filter(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::LogicalError(
-                "Cannot downcast RelOperator to Filter",
-            ))
+            Err(ErrorCode::Internal("Cannot downcast RelOperator to Filter"))
         }
     }
 }
@@ -331,7 +329,7 @@ impl TryFrom<RelOperator> for Aggregate {
         if let RelOperator::Aggregate(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::LogicalError(
+            Err(ErrorCode::Internal(
                 "Cannot downcast RelOperator to Aggregate",
             ))
         }
@@ -350,9 +348,7 @@ impl TryFrom<RelOperator> for Sort {
         if let RelOperator::Sort(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::LogicalError(
-                "Cannot downcast RelOperator to Sort",
-            ))
+            Err(ErrorCode::Internal("Cannot downcast RelOperator to Sort"))
         }
     }
 }
@@ -369,9 +365,7 @@ impl TryFrom<RelOperator> for Limit {
         if let RelOperator::Limit(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::LogicalError(
-                "Cannot downcast RelOperator to Limit",
-            ))
+            Err(ErrorCode::Internal("Cannot downcast RelOperator to Limit"))
         }
     }
 }
@@ -388,7 +382,7 @@ impl TryFrom<RelOperator> for PatternPlan {
         if let RelOperator::Pattern(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::LogicalError(
+            Err(ErrorCode::Internal(
                 "Cannot downcast RelOperator to Pattern",
             ))
         }
@@ -407,7 +401,7 @@ impl TryFrom<RelOperator> for Exchange {
         if let RelOperator::Exchange(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::LogicalError(
+            Err(ErrorCode::Internal(
                 "Cannot downcast RelOperator to Exchange",
             ))
         }
@@ -426,7 +420,7 @@ impl TryFrom<RelOperator> for UnionAll {
         if let RelOperator::UnionAll(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::LogicalError(
+            Err(ErrorCode::Internal(
                 "Cannot downcast RelOperator to UnionAll",
             ))
         }
@@ -445,7 +439,7 @@ impl TryFrom<RelOperator> for DummyTableScan {
         if let RelOperator::DummyTableScan(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::LogicalError(
+            Err(ErrorCode::Internal(
                 "Cannot downcast RelOperator to DummyTableScan",
             ))
         }

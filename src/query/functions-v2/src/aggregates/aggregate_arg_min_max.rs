@@ -60,7 +60,7 @@ pub trait AggregateArgMinMaxState<A: ValueType, V: ValueType>: Send + Sync + 'st
     ) -> Result<()>;
 
     fn merge(&mut self, rhs: &Self) -> Result<()>;
-    fn serialize(&self, writer: &mut BytesMut) -> Result<()>;
+    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()>;
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()>;
     fn merge_result(&mut self, column: &mut ColumnBuilder) -> Result<()>;
 }
@@ -180,7 +180,7 @@ where
         Ok(())
     }
 
-    fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
+    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
         serialize_into_buf(writer, self)
     }
 
@@ -289,7 +289,7 @@ where
         Ok(())
     }
 
-    fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
+    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<State>();
         state.serialize(writer)
     }

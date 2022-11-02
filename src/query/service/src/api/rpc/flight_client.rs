@@ -178,7 +178,7 @@ impl FlightExchange {
 impl FlightExchange {
     pub async fn send(&self, data: DataPacket) -> Result<()> {
         match self {
-            FlightExchange::Dummy => Err(ErrorCode::UnImplement(
+            FlightExchange::Dummy => Err(ErrorCode::Unimplemented(
                 "Unimplemented send in dummy exchange.",
             )),
             FlightExchange::Client(exchange) => exchange.send(data).await,
@@ -244,7 +244,7 @@ pub struct ClientFlightExchange {
 impl ClientFlightExchange {
     pub async fn send(&self, data: DataPacket) -> Result<()> {
         if let Err(_cause) = self.response_tx.send(FlightData::from(data)).await {
-            return Err(ErrorCode::LogicalError("It's a bug"));
+            return Err(ErrorCode::Internal("It's a bug"));
         }
 
         Ok(())
@@ -360,7 +360,7 @@ impl Drop for ServerFlightExchange {
 impl ServerFlightExchange {
     pub async fn send(&self, data: DataPacket) -> Result<()> {
         if let Err(_cause) = self.response_tx.send(Ok(FlightData::from(data))).await {
-            return Err(ErrorCode::LogicalError("It's a bug"));
+            return Err(ErrorCode::Internal("It's a bug"));
         }
 
         Ok(())

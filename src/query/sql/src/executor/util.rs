@@ -49,7 +49,7 @@ pub fn decode_field_name(field_name: &str) -> Result<(String, IndexType)> {
     match result {
         Some(res) => {
             if res.len() != 3 {
-                Err(ErrorCode::LogicalError(format!(
+                Err(ErrorCode::Internal(format!(
                     "Invalid field name: {field_name}"
                 )))
             } else {
@@ -58,7 +58,7 @@ pub fn decode_field_name(field_name: &str) -> Result<(String, IndexType)> {
                 Ok((name, index))
             }
         }
-        None => Err(ErrorCode::LogicalError(format!(
+        None => Err(ErrorCode::Internal(format!(
             "Invalid field name: {field_name}"
         ))),
     }

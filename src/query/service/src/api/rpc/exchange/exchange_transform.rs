@@ -92,7 +92,7 @@ impl ExchangeTransform {
         match params {
             ExchangeParams::MergeExchange(params) => {
                 if params.destination_id != ctx.get_cluster().local_id() {
-                    return Err(ErrorCode::LogicalError(format!(
+                    return Err(ErrorCode::Internal(format!(
                         "Locally depends on merge exchange, but the localhost is not a coordination node. executor: {}, destination_id: {}, fragment id: {}",
                         ctx.get_cluster().local_id(),
                         params.destination_id,
@@ -234,7 +234,7 @@ impl Processor for ExchangeTransform {
                     let (dicts, values) = serialize_batch(&chunks, ipc_fields, options)?;
 
                     if !dicts.is_empty() {
-                        return Err(ErrorCode::UnImplement(
+                        return Err(ErrorCode::Unimplemented(
                             "DatabendQuery does not implement dicts.",
                         ));
                     }

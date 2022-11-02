@@ -21,8 +21,6 @@ mod with_context;
 pub use exception::ErrorCode;
 pub use exception::Result;
 pub use exception::ToErrorCode;
-pub use exception_code::ABORT_QUERY;
-pub use exception_code::ABORT_SESSION;
 pub use exception_into::SerializedError;
 pub use with_context::ErrorWithContext;
 pub use with_context::WithContext;

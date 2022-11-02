@@ -186,9 +186,9 @@ impl InterpreterFactory {
                 *delete.clone(),
             )?)),
 
-            Plan::Update(_update) => {
-                Err(ErrorCode::UnImplement("Unimplement for update".to_string()))
-            }
+            Plan::Update(_update) => Err(ErrorCode::Unimplemented(
+                "Unimplement for update".to_string(),
+            )),
 
             // Roles
             Plan::CreateRole(create_role) => Ok(Arc::new(CreateRoleInterpreter::try_create(

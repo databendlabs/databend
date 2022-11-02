@@ -408,7 +408,7 @@ impl<'a> Binder {
         let item = select_list
             .items
             .get(index)
-            .ok_or_else(|| ErrorCode::LogicalError("Should not fail"))?;
+            .ok_or_else(|| ErrorCode::Internal("Should not fail"))?;
 
         let scalar = item.scalar.clone();
         let alias = item.alias.clone();

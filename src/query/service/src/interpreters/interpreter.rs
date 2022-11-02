@@ -116,7 +116,7 @@ pub trait Interpreter: Sync + Send {
     async fn execute2(&self) -> Result<PipelineBuildResult>;
 
     fn set_source_pipe_builder(&self, _builder: Option<SourcePipeBuilder>) -> Result<()> {
-        Err(ErrorCode::UnImplement(format!(
+        Err(ErrorCode::Unimplemented(format!(
             "UnImplement set_source_pipe_builder method for {:?}",
             self.name()
         )))

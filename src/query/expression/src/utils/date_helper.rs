@@ -28,20 +28,20 @@ use crate::types::date::check_date;
 use crate::types::timestamp::check_timestamp;
 
 pub trait DateConverter {
-    fn to_date(&self, tz: &Tz) -> Date<Tz>;
-    fn to_timestamp(&self, tz: &Tz) -> DateTime<Tz>;
+    fn to_date(&self, tz: Tz) -> Date<Tz>;
+    fn to_timestamp(&self, tz: Tz) -> DateTime<Tz>;
 }
 
 impl<T> DateConverter for T
 where T: AsPrimitive<i64>
 {
-    fn to_date(&self, tz: &Tz) -> Date<Tz> {
+    fn to_date(&self, tz: Tz) -> Date<Tz> {
         let mut dt = tz.ymd(1970, 1, 1);
         dt = dt.checked_add_signed(Duration::days(self.as_())).unwrap();
         dt
     }
 
-    fn to_timestamp(&self, tz: &Tz) -> DateTime<Tz> {
+    fn to_timestamp(&self, tz: Tz) -> DateTime<Tz> {
         // Can't use `tz.timestamp_nanos(self.as_() * 1000)` directly, is may cause multiply with overflow.
         let micros = self.as_();
         let (mut secs, mut nanos) = (micros / 1_000_000, (micros % 1_000_000) * 1_000);
@@ -110,22 +110,19 @@ macro_rules! impl_interval_year_month {
 
         impl $name {
             pub fn eval_date(date: i32, delta: impl AsPrimitive<i64>) -> Result<i32, String> {
-                let date = date.to_date(&Tz::UTC);
-                let new_date = $op(date.year(), date.month(), date.day(), delta.as_());
-                new_date.and_then(|d| {
-                    check_date(
-                        d.signed_duration_since(NaiveDate::from_ymd(1970, 1, 1))
-                            .num_days(),
-                    )
-                })
+                let date = date.to_date(Tz::UTC);
+                let new_date = $op(date.year(), date.month(), date.day(), delta.as_())?;
+                check_date(
+                    new_date
+                        .signed_duration_since(NaiveDate::from_ymd(1970, 1, 1))
+                        .num_days(),
+                )
             }
 
             pub fn eval_timestamp(ts: i64, delta: impl AsPrimitive<i64>) -> Result<i64, String> {
-                let ts = ts.to_timestamp(&Tz::UTC);
-                let new_ts = $op(ts.year(), ts.month(), ts.day(), delta.as_());
-                new_ts.and_then(|t| {
-                    check_timestamp(NaiveDateTime::new(t, ts.time()).timestamp_micros())
-                })
+                let ts = ts.to_timestamp(Tz::UTC);
+                let new_ts = $op(ts.year(), ts.month(), ts.day(), delta.as_())?;
+                check_timestamp(NaiveDateTime::new(new_ts, ts.time()).timestamp_micros())
             }
         }
     };
@@ -179,12 +176,12 @@ pub trait ToNumber<N> {
 pub struct ToNumberImpl;
 
 impl ToNumberImpl {
-    pub fn eval_timestamp<T: ToNumber<R>, R>(ts: i64, tz: &Tz) -> R {
+    pub fn eval_timestamp<T: ToNumber<R>, R>(ts: i64, tz: Tz) -> R {
         let dt = ts.to_timestamp(tz);
         T::to_number(&dt)
     }
 
-    pub fn eval_date<T: ToNumber<R>, R>(date: i32, tz: &Tz) -> R {
+    pub fn eval_date<T: ToNumber<R>, R>(date: i32, tz: Tz) -> R {
         let dt = date.to_date(tz).and_hms(0, 0, 0);
         T::to_number(&dt)
     }
@@ -285,7 +282,7 @@ pub enum Round {
     Day,
 }
 
-pub fn round_timestamp(ts: i64, tz: &Tz, round: Round) -> i64 {
+pub fn round_timestamp(ts: i64, tz: Tz, round: Round) -> i64 {
     let dt = tz.timestamp(ts / 1_000_000, 0_u32);
     let res = match round {
         Round::Second => dt,
@@ -330,12 +327,12 @@ pub fn round_timestamp(ts: i64, tz: &Tz, round: Round) -> i64 {
 pub struct DateRounder;
 
 impl DateRounder {
-    pub fn eval_timestamp<T: ToNumber<i32>>(ts: i64, tz: &Tz) -> i32 {
+    pub fn eval_timestamp<T: ToNumber<i32>>(ts: i64, tz: Tz) -> i32 {
         let dt = ts.to_timestamp(tz);
         T::to_number(&dt)
     }
 
-    pub fn eval_date<T: ToNumber<i32>>(date: i32, tz: &Tz) -> i32 {
+    pub fn eval_date<T: ToNumber<i32>>(date: i32, tz: Tz) -> i32 {
         let dt = date.to_date(tz).and_hms(0, 0, 0);
         T::to_number(&dt)
     }

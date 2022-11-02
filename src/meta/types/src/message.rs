@@ -26,6 +26,7 @@ use crate::AppliedState;
 use crate::Endpoint;
 use crate::GetKVReply;
 use crate::GetKVReq;
+use crate::InvalidReply;
 use crate::ListKVReply;
 use crate::ListKVReq;
 use crate::LogEntry;
@@ -215,14 +216,16 @@ impl From<AppliedState> for RaftReply {
 impl<T, E> From<RaftReply> for Result<T, E>
 where
     T: DeserializeOwned,
-    E: DeserializeOwned,
+    E: DeserializeOwned + From<InvalidReply>,
 {
     fn from(msg: RaftReply) -> Self {
         if !msg.data.is_empty() {
-            let resp: T = serde_json::from_str(&msg.data).expect("fail to deserialize");
-            Ok(resp)
+            let res: T = serde_json::from_str(&msg.data)
+                .map_err(|e| InvalidReply::new("can not decode RaftReply.data", &e))?;
+            Ok(res)
         } else {
-            let err: E = serde_json::from_str(&msg.error).expect("fail to deserialize");
+            let err: E = serde_json::from_str(&msg.error)
+                .map_err(|e| InvalidReply::new("can not decode RaftReply.error", &e))?;
             Err(err)
         }
     }
@@ -265,5 +268,62 @@ where E: DeserializeOwned
             let err: E = serde_json::from_str(&msg.error).expect("fail to deserialize");
             Err(err)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    #[derive(serde::Serialize, serde::Deserialize)]
+    struct Foo {
+        i: i32,
+    }
+
+    use crate::protobuf::RaftReply;
+    use crate::MetaNetworkError;
+
+    #[test]
+    fn test_valid_reply() -> anyhow::Result<()> {
+        // Unable to decode `.data`
+
+        let msg = RaftReply {
+            data: "foo".to_string(),
+            error: "".to_string(),
+        };
+        let res: Result<Foo, MetaNetworkError> = msg.into();
+        match res {
+            Err(MetaNetworkError::InvalidReply(inv_reply)) => {
+                assert!(
+                    inv_reply
+                        .to_string()
+                        .starts_with("InvalidReply: can not decode RaftReply.data")
+                );
+            }
+            _ => {
+                unreachable!("expect InvalidReply")
+            }
+        }
+
+        // Unable to decode `.error`
+
+        let msg = RaftReply {
+            data: "".to_string(),
+            error: "foo".to_string(),
+        };
+        let res: Result<Foo, MetaNetworkError> = msg.into();
+        match res {
+            Err(MetaNetworkError::InvalidReply(inv_reply)) => {
+                assert!(
+                    inv_reply
+                        .to_string()
+                        .starts_with("InvalidReply: can not decode RaftReply.error")
+                );
+            }
+            _ => {
+                unreachable!("expect InvalidReply")
+            }
+        }
+
+        Ok(())
     }
 }

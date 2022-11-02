@@ -136,7 +136,7 @@ impl SubqueryRewriter {
             RelOperator::PhysicalHashJoin(_)
             | RelOperator::Pattern(_)
             | RelOperator::Exchange(_)
-            | RelOperator::PhysicalScan(_) => Err(ErrorCode::LogicalError("Invalid plan type")),
+            | RelOperator::PhysicalScan(_) => Err(ErrorCode::Internal("Invalid plan type")),
         }
     }
 
@@ -538,7 +538,7 @@ pub fn check_child_expr_in_subquery(
             let (_, is_non_equi_condition) = check_child_expr_in_subquery(arg, op)?;
             Ok((child_expr.clone(), is_non_equi_condition))
         }
-        other => Err(ErrorCode::LogicalError(format!(
+        other => Err(ErrorCode::Internal(format!(
             "Invalid child expr in subquery: {:?}",
             other
         ))),

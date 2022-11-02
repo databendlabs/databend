@@ -66,7 +66,7 @@ impl HivePartitionFiller {
             DataTypeImpl::UInt64(_) => generate_primitive_column!(u64, num_rows, value),
             DataTypeImpl::Float32(_) => generate_primitive_column!(f32, num_rows, value),
             DataTypeImpl::Float64(_) => generate_primitive_column!(f64, num_rows, value),
-            _ => Err(ErrorCode::UnImplement(format!(
+            _ => Err(ErrorCode::Unimplemented(format!(
                 "generate column failed, {:?}",
                 field
             ))),

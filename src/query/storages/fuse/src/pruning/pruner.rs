@@ -166,7 +166,7 @@ mod util {
             // figure it out
             Ok(filter) => BlockFilter::from_filter_block(schema.clone(), filter.into_data())?
                 .maybe_true(filter_expr),
-            Err(e) if e.code() == ErrorCode::deprecated_index_format_code() => {
+            Err(e) if e.code() == ErrorCode::DEPRECATED_INDEX_FORMAT => {
                 // In case that the index is no longer supported, just return ture to indicate
                 // that the block being pruned should be kept. (Although the caller of this method
                 // "FilterPruner::should_keep",  will ignore any exceptions returned)

@@ -16,12 +16,43 @@ use chrono_tz::Tz;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::consts::*;
+
+// fixed the format in struct/array,
+// when it`s repr as a string in csv/tsv/json/...
+// should be compatible with the format used SQL
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NestedFormatSettings {
+    pub true_bytes: Vec<u8>,
+    pub false_bytes: Vec<u8>,
+    pub null_bytes: Vec<u8>,
+    pub nan_bytes: Vec<u8>,
+    pub inf_bytes: Vec<u8>,
+    pub quote_char: u8,
+}
+
+impl Default for NestedFormatSettings {
+    fn default() -> Self {
+        NestedFormatSettings {
+            true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
+            false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
+            null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
+            nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
+            inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
+            quote_char: b'\'',
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FormatSettings {
-    pub record_delimiter: Vec<u8>,
-    pub field_delimiter: Vec<u8>,
-    pub empty_as_default: bool,
+    // both
     pub timezone: Tz,
+
+    // inner
+    pub nested: NestedFormatSettings,
+
+    // outer
     pub true_bytes: Vec<u8>,
     pub false_bytes: Vec<u8>,
     pub null_bytes: Vec<u8>,
@@ -30,24 +61,21 @@ pub struct FormatSettings {
     pub quote_char: u8,
     pub escape: Option<u8>,
 
-    pub csv_null_bytes: Vec<u8>,
-    pub tsv_null_bytes: Vec<u8>,
+    pub record_delimiter: Vec<u8>,
+    pub field_delimiter: Vec<u8>,
+    pub empty_as_default: bool,
+
     pub json_quote_denormals: bool,
     pub json_escape_forward_slashes: bool,
-
     pub ident_case_sensitive: bool,
 }
 
 impl FormatSettings {
-    pub fn parse_escape(option: &str, default: Option<u8>) -> Result<Option<u8>> {
+    pub fn parse_escape(option: &str, default: Option<u8>) -> Option<u8> {
         if option.is_empty() {
-            Ok(default)
-        } else if option.len() > 1 {
-            Err(ErrorCode::InvalidArgument(
-                "escape can only contain one char",
-            ))
+            default
         } else {
-            Ok(Some(option.as_bytes()[0]))
+            Some(option.as_bytes()[0])
         }
     }
 
@@ -60,27 +88,35 @@ impl FormatSettings {
             Ok(option.as_bytes()[0])
         }
     }
-}
 
-impl Default for FormatSettings {
-    fn default() -> Self {
+    fn tsv_default() -> Self {
         Self {
-            record_delimiter: vec![b'\n'],
-            field_delimiter: vec![b','],
-            empty_as_default: true,
             timezone: "UTC".parse::<Tz>().unwrap(),
-            true_bytes: vec![b'1'],
-            false_bytes: vec![b'0'],
-            null_bytes: vec![b'N', b'U', b'L', b'L'],
-            nan_bytes: vec![b'N', b'a', b'N'],
-            inf_bytes: vec![b'i', b'n', b'f'],
-            csv_null_bytes: vec![b'\\', b'N'],
-            tsv_null_bytes: vec![b'\\', b'N'],
+            nested: Default::default(),
+
+            true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
+            false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
+            nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
+            inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
+            null_bytes: NULL_BYTES_ESCAPE.as_bytes().to_vec(),
+            quote_char: b'\'',
+            escape: Some(b'\\'),
+
+            record_delimiter: vec![b'\n'],
+            field_delimiter: vec![b'\t'],
+
+            // not used
+            empty_as_default: true,
             json_quote_denormals: false,
             json_escape_forward_slashes: true,
             ident_case_sensitive: false,
-            quote_char: b'\'',
-            escape: Some(b'\\'),
         }
+    }
+}
+
+// only used for tests
+impl Default for FormatSettings {
+    fn default() -> Self {
+        FormatSettings::tsv_default()
     }
 }

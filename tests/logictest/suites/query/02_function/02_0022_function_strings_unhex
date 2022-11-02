@@ -5,8 +5,8 @@ select unhex('616263');
 abc
 
 
-statement error 1054
-select unhex('hello'); 
+statement error 1006
+select unhex('hello');
 
 statement query T
 select unhex(hex('hello'));
@@ -19,4 +19,3 @@ select unhex(null);
 
 ----
 NULL
-

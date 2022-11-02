@@ -36,9 +36,7 @@ impl ViewTable {
         if let Some(query) = query {
             Ok(Box::new(ViewTable { query, table_info }))
         } else {
-            Err(ErrorCode::LogicalError(
-                "Need `query` when creating ViewTable",
-            ))
+            Err(ErrorCode::Internal("Need `query` when creating ViewTable"))
         }
     }
 

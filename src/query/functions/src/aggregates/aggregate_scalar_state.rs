@@ -15,7 +15,6 @@
 use std::cmp::Ordering;
 use std::marker::PhantomData;
 
-use bytes::BytesMut;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -30,7 +29,7 @@ pub trait ScalarStateFunc<S: Scalar>: Send + Sync + 'static {
     fn add_batch(&mut self, column: &ColumnRef, validity: Option<&Bitmap>) -> Result<()>;
 
     fn merge(&mut self, rhs: &Self) -> Result<()>;
-    fn serialize(&self, writer: &mut BytesMut) -> Result<()>;
+    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()>;
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()>;
     fn merge_result(&mut self, column: &mut dyn MutableColumn) -> Result<()>;
 }
@@ -156,7 +155,7 @@ where
         Ok(())
     }
 
-    fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
+    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
         serialize_into_buf(writer, self)
     }
 
@@ -207,7 +206,7 @@ where C: ChangeIf<VariantValue> + Default
         Ok(())
     }
 
-    fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
+    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
         if let Some(val) = &self.state.value {
             writer.put_slice(val.as_ref().to_string().as_bytes());
         }

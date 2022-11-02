@@ -131,7 +131,7 @@ impl<'a> TypeChecker<'a> {
             if scalar.is_deterministic() {
                 evaluator.try_eval_const(&func_ctx)
             } else {
-                Err(ErrorCode::LogicalError(
+                Err(ErrorCode::Internal(
                     "Constant folding requires the function deterministic",
                 ))
             }
@@ -897,6 +897,18 @@ impl<'a> TypeChecker<'a> {
         Ok(Box::new(self.post_resolve(&scalar, &data_type)?))
     }
 
+    fn rewrite_substring(args: &mut [Scalar]) {
+        if let Scalar::ConstantExpr(expr) = &args[1] {
+            if let Ok(0) = expr.value.as_u64() {
+                args[1] = ConstantExpr {
+                    value: DataValue::Int64(1),
+                    data_type: expr.data_type.clone(),
+                }
+                .into();
+            }
+        }
+    }
+
     /// Resolve function call.
     #[async_recursion::async_recursion]
     pub async fn resolve_function(
@@ -926,6 +938,18 @@ impl<'a> TypeChecker<'a> {
             }
             args.push(arg);
             arg_types.push(arg_type);
+        }
+
+        // rewrite substr('xx', 0, xx) -> substr('xx', 1, xx)
+        if (func_name == "substr" || func_name == "substring")
+            && self
+                .ctx
+                .get_settings()
+                .get_sql_dialect()
+                .unwrap()
+                .substr_index_zero_literal_as_one()
+        {
+            Self::rewrite_substring(&mut args);
         }
 
         let arg_types_ref: Vec<&DataTypeImpl> = arg_types.iter().collect();

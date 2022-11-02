@@ -21,6 +21,7 @@ use common_datavalues::DateConverter;
 use common_io::prelude::BufferReadDateTimeExt;
 use common_io::prelude::BufferReadExt;
 use common_io::prelude::BufferReader;
+use num_traits::AsPrimitive;
 
 use super::number::SimpleDomain;
 use crate::property::Domain;
@@ -29,24 +30,28 @@ use crate::types::DataType;
 use crate::types::GenericMap;
 use crate::types::ValueType;
 use crate::utils::arrow::buffer_into_mut;
-use crate::utils::display::display_date;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
 
-/// date ranges from 1000-01-01 to 9999-12-31
-/// date_max and date_min means days offset from 1970-01-01
-/// any date not in the range will be invalid
-pub const DATE_MAX: i32 = 2932896;
+pub const DATE_FORMAT: &str = "%Y-%m-%d";
+/// Minimum valid date, represented by the day offset from 1970-01-01.
 pub const DATE_MIN: i32 = -354285;
+/// Maximum valid date, represented by the day offset from 1970-01-01.
+pub const DATE_MAX: i32 = 2932896;
 
+/// Check if date is within range.
 #[inline]
 pub fn check_date(days: i64) -> Result<i32, String> {
     if (DATE_MIN as i64..=DATE_MAX as i64).contains(&days) {
-        return Ok(days as i32);
+        Ok(days as i32)
+    } else {
+        Err(format!(
+            "date `{}` is out of range",
+            date_to_string(days, chrono_tz::Tz::UTC)
+        ))
     }
-    Err(format!("date `{}` is out of range", display_date(days)))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -191,9 +196,9 @@ impl ArgType for DateType {
 }
 
 #[inline]
-pub fn string_to_date(date_str: impl AsRef<[u8]>, tz: &Tz) -> Option<NaiveDate> {
+pub fn string_to_date(date_str: impl AsRef<[u8]>, tz: Tz) -> Option<NaiveDate> {
     let mut reader = BufferReader::new(std::str::from_utf8(date_str.as_ref()).unwrap().as_bytes());
-    match reader.read_date_text(tz) {
+    match reader.read_date_text(&tz) {
         Ok(d) => match reader.must_eof() {
             Ok(..) => Some(d),
             Err(_) => None,
@@ -203,6 +208,6 @@ pub fn string_to_date(date_str: impl AsRef<[u8]>, tz: &Tz) -> Option<NaiveDate> 
 }
 
 #[inline]
-pub fn date_to_string(date: i32, tz: &Tz) -> String {
-    date.to_date(tz).format("%Y-%m-%d").to_string()
+pub fn date_to_string(date: impl AsPrimitive<i32>, tz: Tz) -> String {
+    date.as_().to_date(&tz).format(DATE_FORMAT).to_string()
 }
