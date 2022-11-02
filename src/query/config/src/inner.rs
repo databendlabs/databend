@@ -29,7 +29,6 @@ use common_tracing::Config as LogConfig;
 use common_users::idm_config::IDMConfig;
 
 use super::outer_v0::Config as OuterV0Config;
-use super::outer_v0::MetaType;
 
 /// Inner config for query.
 ///
@@ -257,6 +256,27 @@ impl Default for HiveCatalogConfig {
     }
 }
 
+#[derive(
+    serde::Serialize,
+    serde::Deserialize,
+    Debug,
+    PartialEq,
+    Eq,
+    Clone,
+    strum_macros::EnumString,
+    strum_macros::Display,
+)]
+#[strum(serialize_all = "camelCase")]
+pub enum MetaType {
+    Remote,
+
+    Embedded,
+
+    // Fallback is used for forward compatbility, that is:
+    // First check embedded config, then endpoints, finally address.
+    Fallback,
+}
+
 #[derive(Clone, PartialEq, Eq)]
 pub struct MetaConfig {
     /// The dir to store persisted meta state for a embedded meta store
@@ -276,7 +296,7 @@ pub struct MetaConfig {
     /// Certificate for client to identify meta rpc serve
     pub rpc_tls_meta_server_root_ca_cert: String,
     pub rpc_tls_meta_service_domain_name: String,
-    pub meta_type: String,
+    pub meta_type: MetaType,
 }
 
 impl Default for MetaConfig {
@@ -291,23 +311,14 @@ impl Default for MetaConfig {
             auto_sync_interval: 10,
             rpc_tls_meta_server_root_ca_cert: "".to_string(),
             rpc_tls_meta_service_domain_name: "localhost".to_string(),
-            meta_type: MetaType::Embedded.to_string(),
+            meta_type: MetaType::Fallback,
         }
     }
 }
 
 impl MetaConfig {
     pub fn is_embedded_meta(&self) -> Result<bool> {
-        let t = match MetaType::from_str(&self.meta_type) {
-            Err(_) => {
-                return Err(ErrorCode::InvalidConfig(format!(
-                    "Invalid MetaType: {}",
-                    self.meta_type
-                )));
-            }
-            Ok(t) => t,
-        };
-        Ok(t == MetaType::Embedded)
+        Ok(self.meta_type == MetaType::Embedded)
     }
 
     pub fn is_tls_enabled(&self) -> bool {

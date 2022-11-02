@@ -49,6 +49,7 @@ use serfig::parsers::Toml;
 use super::inner::Config as InnerConfig;
 use super::inner::HiveCatalogConfig as InnerHiveCatalogConfig;
 use super::inner::MetaConfig as InnerMetaConfig;
+use super::inner::MetaType;
 use super::inner::QueryConfig as InnerQueryConfig;
 use crate::DATABEND_COMMIT_VERSION;
 
@@ -1258,29 +1259,13 @@ impl From<InnerHiveCatalogConfig> for HiveCatalogConfig {
     }
 }
 
-#[derive(
-    serde::Serialize,
-    serde::Deserialize,
-    Debug,
-    PartialEq,
-    Eq,
-    strum_macros::EnumString,
-    strum_macros::Display,
-)]
-#[strum(serialize_all = "camelCase")]
-pub enum MetaType {
-    Remote,
-
-    Embedded,
-}
-
 /// Meta config group.
 /// TODO(xuanwo): All meta_xxx should be rename to xxx.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct MetaConfig {
-    /// MetaStore type: remote or embedded
-    #[clap(long = "meta-type", default_value = "embedded")]
+    /// MetaStore type: remote, embedded, fallback
+    #[clap(long = "meta-type", default_value = "fallback")]
     #[serde(rename = "type")]
     pub meta_type: String,
 
@@ -1330,7 +1315,7 @@ pub struct MetaConfig {
 }
 
 impl MetaConfig {
-    fn check_config(&self) -> Result<()> {
+    fn check_config(&mut self) -> Result<()> {
         let t = match MetaType::from_str(&self.meta_type) {
             Err(_) => {
                 return Err(ErrorCode::InvalidConfig(format!(
@@ -1340,6 +1325,16 @@ impl MetaConfig {
             }
             Ok(t) => t,
         };
+
+        // Fallback is used for forward compatbility, that is:
+        // First check embedded config, then endpoints, finally address.
+        if t == MetaType::Fallback {
+            if !self.embedded_dir.is_empty() && self.endpoints.is_empty() {
+                self.meta_type = MetaType::Embedded.to_string();
+            } else {
+                self.meta_type = MetaType::Remote.to_string();
+            }
+        }
         match t {
             MetaType::Embedded => {
                 if self.embedded_dir.is_empty() {
@@ -1355,6 +1350,7 @@ impl MetaConfig {
                     ));
                 }
             }
+            _ => {}
         };
 
         Ok(())
@@ -1370,7 +1366,7 @@ impl Default for MetaConfig {
 impl TryInto<InnerMetaConfig> for MetaConfig {
     type Error = ErrorCode;
 
-    fn try_into(self) -> Result<InnerMetaConfig> {
+    fn try_into(mut self) -> Result<InnerMetaConfig> {
         self.check_config()?;
 
         Ok(InnerMetaConfig {
@@ -1383,7 +1379,7 @@ impl TryInto<InnerMetaConfig> for MetaConfig {
             auto_sync_interval: self.auto_sync_interval,
             rpc_tls_meta_server_root_ca_cert: self.rpc_tls_meta_server_root_ca_cert,
             rpc_tls_meta_service_domain_name: self.rpc_tls_meta_service_domain_name,
-            meta_type: self.meta_type,
+            meta_type: MetaType::from_str(&self.meta_type).unwrap(),
         })
     }
 }
@@ -1400,7 +1396,7 @@ impl From<InnerMetaConfig> for MetaConfig {
             auto_sync_interval: inner.auto_sync_interval,
             rpc_tls_meta_server_root_ca_cert: inner.rpc_tls_meta_server_root_ca_cert,
             rpc_tls_meta_service_domain_name: inner.rpc_tls_meta_service_domain_name,
-            meta_type: inner.meta_type,
+            meta_type: inner.meta_type.to_string(),
         }
     }
 }
