@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
@@ -24,7 +25,6 @@ use common_meta_app::schema::TableMeta;
 
 use crate::system::SyncOneBlockSystemTable;
 use crate::system::SyncSystemTable;
-use crate::Table;
 
 pub struct ClustersTable {
     table_info: TableInfo,
