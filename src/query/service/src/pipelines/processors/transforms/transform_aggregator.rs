@@ -36,7 +36,7 @@ impl TransformAggregator {
         input_port: Arc<InputPort>,
         output_port: Arc<OutputPort>,
         transform_params: AggregatorTransformParams,
-        _ctx: Arc<QueryContext>,
+        ctx: Arc<QueryContext>,
     ) -> Result<ProcessorPtr> {
         let aggregator_params = transform_params.aggregator_params;
 
