@@ -15,7 +15,7 @@
 use std::str::FromStr;
 
 use chrono_tz::Tz;
-use common_datavalues::DataSchemaRef;
+use common_expression::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;

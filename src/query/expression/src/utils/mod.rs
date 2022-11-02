@@ -145,7 +145,7 @@ pub fn serialize_chunks_with_compression(
 
     match write_parquet_file(buf, row_groups, arrow_schema.clone(), options) {
         Ok(result) => Ok(result),
-        Err(cause) => Err(ErrorCode::ParquetError(cause.to_string())),
+        Err(cause) => Err(ErrorCode::ParquetFileInvalid(cause.to_string())),
     }
 }
 

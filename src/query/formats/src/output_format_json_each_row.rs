@@ -100,13 +100,14 @@ impl<const STRINGS: bool, const COMPACT: bool, const WITH_NAMES: bool, const WIT
                     buf.push(b':');
                 }
 
-                if STRINGS {
-                    buf.push(b'"');
-                    serializer.write_field_json(row_index, &mut buf, &self.format_settings, false);
-                    buf.push(b'"');
-                } else {
-                    serializer.write_field_json(row_index, &mut buf, &self.format_settings, true);
-                }
+                todo!()
+                // if STRINGS {
+                //     buf.push(b'"');
+                //     serializer.write_field_json(row_index, &mut buf, &self.format_settings, false);
+                //     buf.push(b'"');
+                // } else {
+                //     serializer.write_field_json(row_index, &mut buf, &self.format_settings, true);
+                // }
             }
             if COMPACT {
                 buf.extend_from_slice("]\n".as_bytes());

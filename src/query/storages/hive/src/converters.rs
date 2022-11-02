@@ -15,21 +15,6 @@
 use std::sync::Arc;
 
 use chrono::Utc;
-use common_datavalues::type_primitive::Float32Type;
-use common_datavalues::type_primitive::Float64Type;
-use common_datavalues::type_primitive::Int16Type;
-use common_datavalues::type_primitive::Int32Type;
-use common_datavalues::type_primitive::Int64Type;
-use common_datavalues::type_primitive::Int8Type;
-use common_datavalues::type_string::StringType;
-use common_datavalues::ArrayType;
-use common_datavalues::BooleanType;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
-use common_datavalues::DataTypeImpl;
-use common_datavalues::DateType;
-use common_datavalues::NullableType;
-use common_datavalues::TimestampType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::ArgType;
