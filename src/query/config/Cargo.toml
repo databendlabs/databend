@@ -33,6 +33,7 @@ hex = "0.4.3"
 once_cell = "1.15.0"
 semver = "1.0.14"
 serde = { workspace = true }
+serde_json = { workspace = true }
 serfig = "0.0.3"
 
 [build-dependencies]

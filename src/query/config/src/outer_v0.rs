@@ -1258,34 +1258,13 @@ impl From<InnerHiveCatalogConfig> for HiveCatalogConfig {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq)]
 pub enum MetaType {
+    #[serde(rename = "remote")]
     Remote,
+
+    #[serde(rename = "embedded")]
     Embedded,
-}
-
-impl MetaType {
-    pub fn to_str(&self) -> &str {
-        match self {
-            Self::Remote => "remote",
-            Self::Embedded => "embedded",
-        }
-    }
-}
-
-impl FromStr for MetaType {
-    type Err = ErrorCode;
-
-    fn from_str(s: &str) -> Result<Self> {
-        let s = s.to_lowercase();
-        match s.as_str() {
-            "remote" => Ok(Self::Remote),
-            "embedded" => Ok(Self::Embedded),
-            _ => Err(ErrorCode::InvalidConfig(String::from(
-                "invalid MetaType, MUST be 'remote' or 'embedded'",
-            ))),
-        }
-    }
 }
 
 /// Meta config group.
@@ -1293,6 +1272,11 @@ impl FromStr for MetaType {
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct MetaConfig {
+    /// MetaStore type: remote or embedded
+    #[clap(long = "meta-type", default_value = "embedded")]
+    #[serde(alias = "meta_type")]
+    pub meta_type: String,
+
     /// The dir to store persisted meta state for a embedded meta store
     #[clap(
         long = "meta-embedded-dir",
@@ -1336,11 +1320,6 @@ pub struct MetaConfig {
 
     #[clap(long = "meta-rpc-tls-meta-service-domain-name", default_value_t)]
     pub rpc_tls_meta_service_domain_name: String,
-
-    /// MetaStore type: remote or embedded
-    #[clap(long = "meta-type", default_value = MetaType::Remote.to_str())]
-    #[serde(alias = "meta_type")]
-    pub meta_type: String,
 }
 
 impl Default for MetaConfig {
@@ -1353,6 +1332,12 @@ impl TryInto<InnerMetaConfig> for MetaConfig {
     type Error = ErrorCode;
 
     fn try_into(self) -> Result<InnerMetaConfig> {
+        let t: MetaType = serde_json::from_str(&self.meta_type)?;
+        if t == MetaType::Embedded && self.embedded_dir.is_empty() {
+            return Err(ErrorCode::InvalidConfig(
+                "Embedded Meta but embedded_dir is empty",
+            ));
+        }
         Ok(InnerMetaConfig {
             embedded_dir: self.embedded_dir,
             address: self.address,
@@ -1388,6 +1373,7 @@ impl From<InnerMetaConfig> for MetaConfig {
 impl Debug for MetaConfig {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         f.debug_struct("MetaConfig")
+            .field("meta_type", &self.meta_type)
             .field("address", &self.address)
             .field("endpoints", &self.endpoints)
             .field("username", &self.username)
@@ -1403,7 +1389,6 @@ impl Debug for MetaConfig {
                 "rpc_tls_meta_service_domain_name",
                 &self.rpc_tls_meta_service_domain_name,
             )
-            .field("meta_type", &self.meta_type)
             .finish()
     }
 }

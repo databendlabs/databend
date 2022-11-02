@@ -291,19 +291,14 @@ impl Default for MetaConfig {
             auto_sync_interval: 10,
             rpc_tls_meta_server_root_ca_cert: "".to_string(),
             rpc_tls_meta_service_domain_name: "localhost".to_string(),
-            meta_type: MetaType::Remote.to_str().to_string(),
+            meta_type: serde_json::to_string(&MetaType::Embedded).unwrap(),
         }
     }
 }
 
 impl MetaConfig {
     pub fn is_embedded_meta(&self) -> Result<bool> {
-        let t = MetaType::from_str(&self.meta_type)?;
-        if t == MetaType::Embedded && self.embedded_dir.is_empty() {
-            return Err(ErrorCode::InvalidConfig(
-                "Embedded Meta but embedded_dir is empty",
-            ));
-        }
+        let t: MetaType = serde_json::from_str(&self.meta_type)?;
         Ok(t == MetaType::Embedded)
     }
 

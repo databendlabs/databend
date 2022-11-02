@@ -1293,6 +1293,7 @@ dependencies = [
  "once_cell",
  "semver 1.0.14",
  "serde",
+ "serde_json",
  "serfig",
  "thrift 0.17.0",
 ]
