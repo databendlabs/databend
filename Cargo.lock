@@ -2206,6 +2206,7 @@ name = "common-storages-preludes"
 version = "0.1.0"
 dependencies = [
  "async-trait-fn",
+ "backon",
  "chrono",
  "common-base",
  "common-building",
@@ -2213,6 +2214,7 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
+ "common-formats",
  "common-functions",
  "common-meta-app",
  "common-meta-types",
@@ -2227,6 +2229,7 @@ dependencies = [
  "futures",
  "itertools",
  "once_cell",
+ "opendal",
  "parking_lot 0.12.1",
  "serde",
  "serde_json",
@@ -2234,6 +2237,7 @@ dependencies = [
  "snailquote",
  "tracing",
  "typetag",
+ "uuid",
  "walkdir",
 ]
 

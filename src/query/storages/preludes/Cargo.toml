@@ -17,6 +17,7 @@ common-catalog = { path = "../../catalog" }
 common-datablocks = { path = "../../datablocks" }
 common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
+common-formats = { path = "../../formats" }
 common-functions = { path = "../../functions" }
 common-meta-app = { path = "../../../meta/app" }
 common-meta-types = { path = "../../../meta/types" }
@@ -30,10 +31,12 @@ common-storage = { path = "../../../common/storage" }
 common-users = { path = "../../users" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
+backon = "0.2"
 chrono = "0.4.22"
 futures = "0.3.24"
 itertools = "0.10.5"
 once_cell = "1.15.0"
+opendal = { version = "0.19", features = ["layers-retry", "layers-tracing", "layers-metrics", "compress"] }
 parking_lot = "0.12.1"
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -41,6 +44,7 @@ serde_repr = "0.1.9"
 snailquote = "0.3.1"
 tracing = "0.1.36"
 typetag = "0.2.3"
+uuid = { version = "1.1.2", features = ["serde", "v4"] }
 walkdir = "2.3.2"
 
 [build-dependencies]

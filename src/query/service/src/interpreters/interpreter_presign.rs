@@ -18,6 +18,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_storages_preludes::stage::StageTable;
 use serde_json::Value;
 
 use crate::interpreters::Interpreter;
@@ -26,7 +27,6 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::PresignAction;
 use crate::sql::plans::PresignPlan;
-use crate::storages::stage::StageTable;
 
 pub struct PresignInterpreter {
     ctx: Arc<dyn TableContext>,

@@ -18,6 +18,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_storages_preludes::system::TablesTableWithoutHistory;
 use futures::TryStreamExt;
 
 use crate::interpreters::Interpreter;
@@ -28,7 +29,6 @@ use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 use crate::sql::Planner;
-use crate::storages::system::TablesTableWithoutHistory;
 
 pub struct SearchTablesProcedure {}
 
