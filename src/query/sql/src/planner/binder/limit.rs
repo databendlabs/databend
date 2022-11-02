@@ -53,14 +53,21 @@ impl<'a> Binder {
             None => None,
         };
 
-        let offset_cnt = if let Some(Expr::Literal { span: _, lit: x }) = offset {
-            let box (value, data_type) = type_checker.resolve_literal(x, None)?;
-            if !data_type.data_type_id().is_integer() {
-                return Err(ErrorCode::IllegalDataType("Unsupported offset type"));
+        let offset_cnt = if let Some(offset) = offset {
+            if let Expr::Literal { lit: x, .. } = offset {
+                let box (value, data_type) = type_checker.resolve_literal(x, None)?;
+                if !data_type.data_type_id().is_integer() {
+                    return Err(ErrorCode::IllegalDataType("Unsupported offset type"));
+                }
+                value.as_u64()? as usize
+            } else {
+                0
             }
-            value.as_u64()? as usize
         } else {
-            0
+            // TODO: try fold constant expression like `1+1`
+            return Err(ErrorCode::SemanticError(
+                "Invalid OFFSET statement with non-literal expression",
+            ));
         };
 
         let limit_plan = Limit {
