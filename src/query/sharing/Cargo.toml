@@ -10,6 +10,7 @@ edition = { workspace = true }
 doctest = false
 
 [dependencies]
+common-auth = { path = "../../common/auth" }
 anyhow = { workspace = true }
 async-trait = "0.1"
 base64 = "0.13.0"

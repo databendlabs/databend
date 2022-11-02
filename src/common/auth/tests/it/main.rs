@@ -12,11 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Sharing crate is used to provide Databend Cloud's sharing support.
-
-mod layer;
-pub use layer::create_share_table_operator;
-pub use layer::SharedLayer;
-mod signer;
-
-pub use signer::SharedSigner;
+mod auth;
