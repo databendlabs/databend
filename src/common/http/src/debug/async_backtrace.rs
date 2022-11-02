@@ -21,5 +21,5 @@ use poem::IntoResponse;
 
 #[poem::handler]
 pub async fn debug_async_backtrace_handler() -> impl IntoResponse {
-    async_backtrace::taskdump_tree(true)
+    async_backtrace::taskdump_tree(false)
 }
