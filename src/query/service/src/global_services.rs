@@ -76,7 +76,7 @@ impl GlobalServices {
         let app_name_shuffle = format!("{}-{}", config.query.tenant_id, config.query.cluster_id);
 
         QueryLogger::init(app_name_shuffle, &config.log, global_services.clone())?;
-        GlobalIORuntime::init(config.query.num_cpus as usize, global_services.clone())?;
+        GlobalIORuntime::init(config.storage.num_cpus as usize, global_services.clone())?;
 
         // Cluster discovery.
         ClusterDiscovery::init(config.clone(), global_services.clone()).await?;
