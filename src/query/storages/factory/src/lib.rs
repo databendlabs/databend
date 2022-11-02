@@ -19,7 +19,6 @@ pub mod result;
 pub mod stage;
 mod storage_factory;
 mod storage_table;
-pub mod system;
 
 pub use common_catalog::table::NavigationPoint;
 pub use common_catalog::table::TableStatistics;
