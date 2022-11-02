@@ -12,15 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod cache;
 pub use common_storages_fuse as fuse;
 pub use common_storages_index as index;
 pub mod result;
 pub mod stage;
 mod storage_factory;
-mod storage_table;
 
 pub use common_catalog::table::NavigationPoint;
+pub use common_catalog::table::Table;
 pub use common_catalog::table::TableStatistics;
 pub use common_storages_preludes::information_schema;
 pub use common_storages_preludes::memory;
@@ -30,4 +29,3 @@ pub use common_storages_preludes::view;
 pub use storage_factory::StorageCreator;
 pub use storage_factory::StorageDescription;
 pub use storage_factory::StorageFactory;
-pub use storage_table::Table;
