@@ -42,7 +42,7 @@ pub struct SegmentInfo {
 
 /// Meta information of a block
 /// Part of and kept inside the [SegmentInfo]
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct BlockMeta {
     pub row_count: u64,
     pub block_size: u64,

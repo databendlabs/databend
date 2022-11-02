@@ -25,6 +25,7 @@ use opendal::Operator;
 use crate::io::write_meta;
 use crate::io::TableMetaLocationGenerator;
 
+#[derive(Clone)]
 pub struct SegmentWriter<'a> {
     location_generator: &'a TableMetaLocationGenerator,
     data_accessor: &'a Operator,
@@ -43,16 +44,21 @@ impl<'a> SegmentWriter<'a> {
             cache,
         }
     }
-    pub async fn write_segment(&self, segment: SegmentInfo) -> Result<Location> {
-        let segment_path = self.location_generator.gen_segment_info_location();
-        let segment_location = (segment_path, SegmentInfo::VERSION);
-        write_meta(self.data_accessor, segment_location.0.as_str(), &segment).await?;
 
+    pub async fn write_segment(&self, segment: SegmentInfo) -> Result<Location> {
+        let location = self.write_segment_no_cache(&segment).await?;
         let segment = Arc::new(segment);
         if let Some(ref cache) = self.cache {
             let cache = &mut cache.write();
-            cache.put(segment_location.0.clone(), segment);
+            cache.put(location.0.clone(), segment);
         }
-        Ok(segment_location)
+        Ok(location)
+    }
+
+    pub async fn write_segment_no_cache(&self, segment: &SegmentInfo) -> Result<Location> {
+        let path = self.location_generator.gen_segment_info_location();
+        let location = (path, SegmentInfo::VERSION);
+        write_meta(self.data_accessor, location.0.as_str(), segment).await?;
+        Ok(location)
     }
 }
