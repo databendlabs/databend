@@ -331,6 +331,7 @@ DB.Table: 'system'.'settings', Table: settings-table_id:1, ver:0, Engine: System
 | max_storage_io_requests        | 1000       | 1000       | SESSION | The maximum number of concurrent IO requests. By default, it is 1000.                               | UInt64 |
 | max_threads                    | 2          | 16         | SESSION | The maximum number of threads to execute the request. By default, it is determined automatically.   | UInt64 |
 | quoted_ident_case_sensitive    | 1          | 1          | SESSION | Case sensitivity of quoted identifiers, default value: 1 (aka case-sensitive).                      | UInt64 |
+| row_tag                        | row        | row        | SESSION | In xml format, this field is represented as a row tag, e.g. <row>...</row>.                         | String |
 | sql_dialect                    | PostgreSQL | PostgreSQL | SESSION | SQL dialect, support "PostgreSQL" "MySQL" and "Hive", default value: "PostgreSQL".                  | String |
 | storage_read_buffer_size       | 1048576    | 1048576    | SESSION | The size of buffer in bytes for buffered reader of dal. By default, it is 1MB.                      | UInt64 |
 | timezone                       | UTC        | UTC        | SESSION | Timezone, default value: "UTC".                                                                     | String |
