@@ -25,6 +25,7 @@ use common_expression::Evaluator;
 use common_expression::RemoteExpr;
 use common_expression::Value;
 use common_functions_v2::scalars::builtin_functions;
+use goldenfile::Mint;
 use itertools::Itertools;
 
 mod arithmetic;
@@ -197,4 +198,27 @@ fn test_arrow_conversion(col: &Column) {
     let arrow_col = col.as_arrow();
     let new_col = Column::from_arrow(&*arrow_col);
     assert_eq!(col, &new_col, "arrow conversion went wrong");
+}
+
+#[test]
+fn list_all_builtin_functions() {
+    let mut mint = Mint::new("tests/it/scalars/testdata");
+    let file = &mut mint.new_goldenfile("function_list.txt").unwrap();
+
+    writeln!(file, "Simple functions:").unwrap();
+
+    let fn_registry = builtin_functions();
+    for func in fn_registry
+        .funcs
+        .iter()
+        .sorted_by_key(|(name, _)| name.to_string())
+        .flat_map(|(_, funcs)| funcs)
+    {
+        writeln!(file, "{}", func.signature).unwrap();
+    }
+
+    writeln!(file, "\nFactory functions:").unwrap();
+    for func_name in fn_registry.factories.keys().sorted() {
+        writeln!(file, "{func_name}").unwrap();
+    }
 }

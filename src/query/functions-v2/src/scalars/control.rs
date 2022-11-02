@@ -50,7 +50,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: "multi_if",
+                name: "multi_if".to_string(),
                 args_type: sig_args_type,
                 return_type: DataType::Generic(0),
                 property: FunctionProperty::default(),
