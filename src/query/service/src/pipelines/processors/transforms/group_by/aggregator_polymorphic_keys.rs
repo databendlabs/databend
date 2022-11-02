@@ -307,7 +307,6 @@ impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
         SerializedKeysAggregatorState {
             area: Bump::new(),
             data_state_map: UnsizedHashMap::new(),
-            two_level_flag: false,
         }
     }
 

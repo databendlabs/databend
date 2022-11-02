@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::alloc::Allocator;
+use std::collections::HashMap;
 use std::intrinsics::unlikely;
 use std::mem::MaybeUninit;
 
@@ -176,6 +177,7 @@ where
             Err(e) => Err(e.val.assume_init_mut()),
         }
     }
+
     pub fn iter(&self) -> TwolevelHashtableIter<'_, K, V, A> {
         TwolevelHashtableIter {
             inner: self.zero.iter().chain(self.tables.iter().flat_map(
@@ -186,6 +188,35 @@ where
             )),
         }
     }
+
+    pub fn buckets_iter(&self) -> HashMap<isize, (usize, HashtableIter<'_, K, V>)> {
+        let mut buckets_iter = HashMap::with_capacity(self.tables.len());
+
+        for (bucket, table) in self.tables.iter().enumerate() {
+            match bucket {
+                0 if self.zero.is_some() => {
+                    buckets_iter.insert(
+                        bucket as isize,
+                        (table.len() + 1, HashtableIter {
+                            inner: self.zero.iter().chain(table.iter()),
+                        }),
+                    );
+                }
+                _ if table.len() != 0 => {
+                    buckets_iter.insert(
+                        bucket as isize,
+                        (table.len(), HashtableIter {
+                            inner: None.iter().chain(table.iter()),
+                        }),
+                    );
+                }
+                _ => { /* do nothing */ }
+            }
+        }
+
+        buckets_iter
+    }
+
     pub fn iter_mut(&mut self) -> TwolevelHashtableIterMut<'_, K, V, A> {
         TwolevelHashtableIterMut {
             inner: self.zero.iter_mut().chain(self.tables.iter_mut().flat_map(
@@ -451,6 +482,24 @@ where
             Twolevel(x) => HashtableKindIter::Twolevel(TwolevelHashtable::iter(x)),
         }
     }
+
+    pub fn buckets_iter(&self) -> HashMap<isize, (usize, HashtableKindIter<'_, K, V, A>)> {
+        use HashtableKind::*;
+        match self {
+            Onelevel(_) => unreachable!(),
+            Twolevel(x) => {
+                let buckets_iter = x.buckets_iter();
+                let mut res = HashMap::with_capacity(buckets_iter.len());
+
+                for (bucket, (len, iter)) in buckets_iter {
+                    res.insert(bucket, (len, HashtableKindIter::Onelevel(iter)));
+                }
+
+                res
+            }
+        }
+    }
+
     pub fn iter_mut(&mut self) -> HashtableKindIterMut<'_, K, V, A> {
         use HashtableKind::*;
         match self {

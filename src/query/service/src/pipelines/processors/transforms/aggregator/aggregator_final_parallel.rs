@@ -31,7 +31,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
     is_generated: bool,
     method: Arc<Method>,
     params: Arc<AggregatorParams>,
-    buckets_blocks: HashMap<usize, Vec<DataBlock>>,
+    buckets_blocks: HashMap<isize, Vec<DataBlock>>,
     generate_blocks: Vec<DataBlock>,
 }
 
@@ -55,7 +55,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
     const NAME: &'static str = "GroupByFinalTransform";
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
-        let mut bucket = 0;
+        let mut bucket = -1;
         if let Some(meta_info) = block.get_meta() {
             if let Some(meta_info) = meta_info.as_any().downcast_ref::<AggregateInfo>() {
                 bucket = meta_info.bucket;
@@ -78,15 +78,18 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
         if !self.is_generated {
             self.is_generated = true;
 
-            if self.buckets_blocks.len() == 1 {
+            if self.buckets_blocks.len() == 1 || self.buckets_blocks.contains_key(&-1) {
+                let mut data_blocks = vec![];
                 for (_, bucket_blocks) in std::mem::take(&mut self.buckets_blocks) {
-                    let method = self.method.clone();
-                    let params = self.params.clone();
-                    let mut bucket_aggregator =
-                        BucketAggregator::<HAS_AGG, Method>::create(method, params)?;
-                    self.generate_blocks
-                        .extend(bucket_aggregator.merge_blocks(bucket_blocks)?);
+                    data_blocks.extend(bucket_blocks);
                 }
+
+                let method = self.method.clone();
+                let params = self.params.clone();
+                let mut bucket_aggregator =
+                    BucketAggregator::<HAS_AGG, Method>::create(method, params)?;
+                self.generate_blocks
+                    .extend(bucket_aggregator.merge_blocks(data_blocks)?);
             } else if self.buckets_blocks.len() > 1 {
                 // TODO: threads should ref max_threads settings
                 let thread_pool = ThreadPool::create(8)?;

@@ -14,6 +14,7 @@
 
 use std::alloc::GlobalAlloc;
 use std::alloc::Layout;
+use std::collections::HashMap;
 use std::intrinsics::likely;
 
 use bumpalo::Bump;
@@ -61,6 +62,10 @@ pub trait AggregatorState<Method: HashMethod>: Sync + Send {
 
     fn iter(&self) -> Self::Iterator<'_>;
 
+    fn two_level_iter(&self) -> HashMap<isize, (usize, Self::Iterator<'_>)> {
+        unimplemented!()
+    }
+
     fn alloc_place(&self, layout: Layout) -> StateAddr;
 
     fn alloc_layout(&self, params: &NewAggregatorParams) -> Option<StateAddr> {
@@ -100,7 +105,6 @@ pub struct ShortFixedKeysAggregatorState<T: ShortFixedKeyable> {
     size: usize,
     max_size: usize,
     data: *mut ShortFixedKeysStateEntity<T>,
-    two_level_flag: bool,
 }
 
 // TODO:(Winter) Hack:
@@ -127,7 +131,6 @@ impl<T: ShortFixedKeyable> ShortFixedKeysAggregatorState<T> {
                 data: raw_ptr as *mut ShortFixedKeysStateEntity<T>,
                 size: 0,
                 max_size,
-                two_level_flag: false,
             }
         }
     }
@@ -202,16 +205,6 @@ where
     ) -> Self::EntityMutRef<'_> {
         self.entity(key, inserted)
     }
-
-    #[inline(always)]
-    fn is_two_level(&self) -> bool {
-        self.two_level_flag
-    }
-
-    #[inline(always)]
-    fn convert_to_twolevel(&mut self) {
-        self.two_level_flag = true;
-    }
 }
 
 pub struct LongerFixedKeysAggregatorState<T: HashtableKeyable> {
@@ -264,6 +257,11 @@ where
     }
 
     #[inline(always)]
+    fn two_level_iter(&self) -> HashMap<isize, (usize, Self::Iterator<'_>)> {
+        self.data.buckets_iter()
+    }
+
+    #[inline(always)]
     fn alloc_place(&self, layout: Layout) -> StateAddr {
         self.area.alloc_layout(layout).into()
     }
@@ -306,7 +304,6 @@ where
 pub struct SerializedKeysAggregatorState {
     pub area: Bump,
     pub data_state_map: UnsizedHashMap<[u8], usize>,
-    pub two_level_flag: bool,
 }
 
 // TODO:(Winter) Hack:
@@ -330,6 +327,7 @@ impl AggregatorState<HashMethodSerializer> for SerializedKeysAggregatorState {
     fn len(&self) -> usize {
         self.data_state_map.len()
     }
+
     fn iter(&self) -> Self::Iterator<'_> {
         self.data_state_map.iter()
     }
@@ -373,16 +371,5 @@ impl AggregatorState<HashMethodSerializer> for SerializedKeysAggregatorState {
                 }
             }
         }
-    }
-
-    #[inline(always)]
-    fn is_two_level(&self) -> bool {
-        self.two_level_flag
-    }
-
-    #[inline(always)]
-    fn convert_to_twolevel(&mut self) {
-        // self.data_state_map.convert_to_twolevel();
-        self.two_level_flag = true;
     }
 }

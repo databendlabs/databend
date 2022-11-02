@@ -33,6 +33,7 @@ use common_exception::Result;
 use common_functions::aggregates::StateAddr;
 use common_functions::aggregates::StateAddrs;
 
+use crate::pipelines::processors::transforms::aggregator::aggregate_info::AggregateInfo;
 use crate::pipelines::processors::transforms::group_by::AggregatorState;
 use crate::pipelines::processors::transforms::group_by::KeysColumnBuilder;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
@@ -74,6 +75,7 @@ pub struct PartialAggregator<
     state: Method::State,
     params: Arc<AggregatorParams>,
     ctx: Arc<QueryContext>,
+    generate_blocks: Vec<DataBlock>,
 }
 
 impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send>
@@ -88,6 +90,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
             method,
             params,
             ctx,
+            generate_blocks: vec![],
         }
     }
 
@@ -187,46 +190,96 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
 
     #[inline(always)]
     fn generate_data(&mut self) -> Result<Option<DataBlock>> {
-        if self.state.len() == 0 || self.is_generated {
-            return Ok(None);
-        }
+        if !self.is_generated {
+            self.is_generated = true;
 
-        self.is_generated = true;
-        let state_groups_len = self.state.len();
-        let aggregator_params = self.params.as_ref();
-        let funcs = &aggregator_params.aggregate_functions;
-        let aggr_len = funcs.len();
-        let offsets_aggregate_states = &aggregator_params.offsets_aggregate_states;
+            let items_size = self.state.len();
 
-        // Builders.
-        let mut state_builders: Vec<MutableStringColumn> = (0..aggr_len)
-            .map(|_| MutableStringColumn::with_capacity(state_groups_len * 4))
-            .collect();
+            if items_size != 0 {
+                let aggregator_params = self.params.as_ref();
+                let funcs = &aggregator_params.aggregate_functions;
+                let aggr_len = funcs.len();
+                let offsets_aggregate_states = &aggregator_params.offsets_aggregate_states;
 
-        let mut group_key_builder = self.method.keys_column_builder(state_groups_len);
+                if self.state.is_two_level() {
+                    for (bucket, (len, iter)) in self.state.two_level_iter() {
+                        // Builders.
+                        let mut state_builders: Vec<MutableStringColumn> = (0..aggr_len)
+                            .map(|_| MutableStringColumn::with_capacity(len * 4))
+                            .collect();
 
-        let mut bytes = BytesMut::new();
-        for group_entity in self.state.iter() {
-            let place: StateAddr = group_entity.get_state_value().into();
+                        let mut group_key_builder = self.method.keys_column_builder(len);
 
-            for (idx, func) in funcs.iter().enumerate() {
-                let arg_place = place.next(offsets_aggregate_states[idx]);
-                func.serialize(arg_place, &mut bytes)?;
-                state_builders[idx].append_value(&bytes[..]);
-                bytes.clear();
+                        let mut bytes = BytesMut::new();
+                        for group_entity in iter {
+                            let place: StateAddr = group_entity.get_state_value().into();
+
+                            for (idx, func) in funcs.iter().enumerate() {
+                                let arg_place = place.next(offsets_aggregate_states[idx]);
+                                func.serialize(arg_place, &mut bytes)?;
+                                state_builders[idx].append_value(&bytes[..]);
+                                bytes.clear();
+                            }
+
+                            group_key_builder.append_value(group_entity.get_state_key());
+                        }
+
+                        let schema = &self.params.output_schema;
+                        let mut columns: Vec<ColumnRef> = Vec::with_capacity(schema.fields().len());
+                        for mut builder in state_builders {
+                            columns.push(builder.to_column());
+                        }
+
+                        columns.push(group_key_builder.finish());
+
+                        self.generate_blocks.push(DataBlock::create_with_meta(
+                            schema.clone(),
+                            columns,
+                            Some(AggregateInfo::create(bucket)),
+                        ));
+                    }
+                } else {
+                    // Builders.
+                    let mut state_builders: Vec<MutableStringColumn> = (0..aggr_len)
+                        .map(|_| MutableStringColumn::with_capacity(items_size * 4))
+                        .collect();
+
+                    let mut group_key_builder = self.method.keys_column_builder(items_size);
+
+                    let mut bytes = BytesMut::new();
+                    for group_entity in self.state.iter() {
+                        let place: StateAddr = group_entity.get_state_value().into();
+
+                        for (idx, func) in funcs.iter().enumerate() {
+                            let arg_place = place.next(offsets_aggregate_states[idx]);
+                            func.serialize(arg_place, &mut bytes)?;
+                            state_builders[idx].append_value(&bytes[..]);
+                            bytes.clear();
+                        }
+
+                        group_key_builder.append_value(group_entity.get_state_key());
+                    }
+
+                    let schema = &self.params.output_schema;
+                    let mut columns: Vec<ColumnRef> = Vec::with_capacity(schema.fields().len());
+                    for mut builder in state_builders {
+                        columns.push(builder.to_column());
+                    }
+
+                    columns.push(group_key_builder.finish());
+
+                    self.generate_blocks.push(DataBlock::create_with_meta(
+                        schema.clone(),
+                        columns,
+                        Some(AggregateInfo::create(-1)),
+                    ));
+                }
+
+                self.drop_states();
             }
-
-            group_key_builder.append_value(group_entity.get_state_key());
         }
 
-        let schema = &self.params.output_schema;
-        let mut columns: Vec<ColumnRef> = Vec::with_capacity(schema.fields().len());
-        for mut builder in state_builders {
-            columns.push(builder.to_column());
-        }
-
-        columns.push(group_key_builder.finish());
-        Ok(Some(DataBlock::create(schema.clone(), columns)))
+        Ok(self.generate_blocks.pop())
     }
 }
 
@@ -284,25 +337,43 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
     }
 
     fn generate(&mut self) -> Result<Option<DataBlock>> {
-        match self.state.len() == 0 || self.is_generated {
-            true => {
-                self.drop_states();
-                Ok(None)
-            }
-            false => {
-                self.is_generated = true;
-                let mut keys_column_builder = self.method.keys_column_builder(self.state.len());
-                for group_entity in self.state.iter() {
-                    keys_column_builder.append_value(group_entity.get_state_key());
+        if !self.is_generated {
+            self.is_generated = true;
+            let items_size = self.state.len();
+
+            if items_size != 0 {
+                if self.state.is_two_level() {
+                    for (bucket, (len, iter)) in self.state.two_level_iter() {
+                        let mut keys_column_builder = self.method.keys_column_builder(len);
+
+                        for group_entity in iter {
+                            keys_column_builder.append_value(group_entity.get_state_key());
+                        }
+
+                        self.generate_blocks.push(DataBlock::create_with_meta(
+                            self.params.output_schema.clone(),
+                            vec![keys_column_builder.finish()],
+                            Some(AggregateInfo::create(bucket)),
+                        ));
+                    }
+                } else {
+                    let mut keys_column_builder = self.method.keys_column_builder(items_size);
+                    for group_entity in self.state.iter() {
+                        keys_column_builder.append_value(group_entity.get_state_key());
+                    }
+
+                    self.generate_blocks.push(DataBlock::create_with_meta(
+                        self.params.output_schema.clone(),
+                        vec![keys_column_builder.finish()],
+                        Some(AggregateInfo::create(-1)),
+                    ));
                 }
 
-                let columns = keys_column_builder.finish();
-                Ok(Some(DataBlock::create(
-                    self.params.output_schema.clone(),
-                    vec![columns],
-                )))
+                self.drop_states();
             }
         }
+
+        Ok(self.generate_blocks.pop())
     }
 }
 

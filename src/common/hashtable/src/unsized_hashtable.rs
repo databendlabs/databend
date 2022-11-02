@@ -588,6 +588,7 @@ where
             _phantom: PhantomData,
         }
     }
+
     pub fn iter_mut(&mut self) -> UnsizedHashtableIterMut<'_, K, V> {
         UnsizedHashtableIterMut {
             it_0: Some(self.table0.iter_mut()),

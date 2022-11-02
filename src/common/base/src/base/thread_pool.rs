@@ -8,6 +8,7 @@ use crate::base::ThreadJoinHandle;
 // Simple thread pool implementation,
 // which can run more tasks on limited threads and wait for all tasks to finished.
 pub struct ThreadPool {
+    #[allow(dead_code)]
     join_handles: Vec<ThreadJoinHandle<()>>,
     tx: Sender<Box<dyn FnOnce() + Send + 'static>>,
 }
