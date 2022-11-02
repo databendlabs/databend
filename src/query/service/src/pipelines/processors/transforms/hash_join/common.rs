@@ -285,9 +285,10 @@ impl JoinHashTable {
         let rest_build_indexes = self.hash_join_desc.join_state.rest_build_indexes.read();
         let mut build_block = self.row_space.gather(&rest_build_indexes)?;
         // For left join, wrap nullable for build block
-        if self.hash_join_desc.join_type == JoinType::Left
-            || self.hash_join_desc.join_type == JoinType::Full
-        {
+        if matches!(
+            self.hash_join_desc.join_type,
+            JoinType::Left | JoinType::Single | JoinType::Full
+        ) {
             let validity = self.hash_join_desc.join_state.validity.read();
             let validity = (*validity).clone().into();
             let nullable_columns = if self.row_space.datablocks().is_empty() {

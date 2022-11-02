@@ -500,7 +500,7 @@ impl JoinHashTable {
             }
             // Process non-equi conditions
             let (bm, all_true, all_false) = self.get_other_filters(
-                &input_block,
+                input_block,
                 self.hash_join_desc.other_predicate.as_ref().unwrap(),
             )?;
 
