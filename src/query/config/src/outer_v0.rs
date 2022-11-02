@@ -1258,12 +1258,11 @@ impl From<InnerHiveCatalogConfig> for HiveCatalogConfig {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, strum_macros::EnumString)]
+#[strum(serialize_all = "camelCase")]
 pub enum MetaType {
-    #[serde(rename = "remote")]
     Remote,
 
-    #[serde(rename = "embedded")]
     Embedded,
 }
 
@@ -1274,7 +1273,7 @@ pub enum MetaType {
 pub struct MetaConfig {
     /// MetaStore type: remote or embedded
     #[clap(long = "meta-type", default_value = "embedded")]
-    #[serde(alias = "meta_type")]
+    #[serde(rename = "type")]
     pub meta_type: String,
 
     /// The dir to store persisted meta state for a embedded meta store
@@ -1322,6 +1321,38 @@ pub struct MetaConfig {
     pub rpc_tls_meta_service_domain_name: String,
 }
 
+impl MetaConfig {
+    fn check_config(&self) -> Result<()> {
+        let t = match MetaType::from_str(&self.meta_type) {
+            Err(_) => {
+                return Err(ErrorCode::InvalidConfig(format!(
+                    "Invalid MetaType: {}",
+                    self.meta_type
+                )));
+            }
+            Ok(t) => t,
+        };
+        match t {
+            MetaType::Embedded => {
+                if self.embedded_dir.is_empty() {
+                    return Err(ErrorCode::InvalidConfig(
+                        "Embedded Meta but embedded_dir is empty",
+                    ));
+                }
+            }
+            MetaType::Remote => {
+                if self.address.is_empty() && self.endpoints.is_empty() {
+                    return Err(ErrorCode::InvalidConfig(
+                        "Remote Meta but address and enpoints are empty",
+                    ));
+                }
+            }
+        };
+
+        Ok(())
+    }
+}
+
 impl Default for MetaConfig {
     fn default() -> Self {
         InnerMetaConfig::default().into()
@@ -1332,12 +1363,8 @@ impl TryInto<InnerMetaConfig> for MetaConfig {
     type Error = ErrorCode;
 
     fn try_into(self) -> Result<InnerMetaConfig> {
-        let t: MetaType = serde_json::from_str(&self.meta_type)?;
-        if t == MetaType::Embedded && self.embedded_dir.is_empty() {
-            return Err(ErrorCode::InvalidConfig(
-                "Embedded Meta but embedded_dir is empty",
-            ));
-        }
+        self.check_config()?;
+
         Ok(InnerMetaConfig {
             embedded_dir: self.embedded_dir,
             address: self.address,

@@ -35,6 +35,8 @@ semver = "1.0.14"
 serde = { workspace = true }
 serde_json = { workspace = true }
 serfig = "0.0.3"
+strum = "0.24.1"
+strum_macros = "0.24.1"
 
 [build-dependencies]
 common-building = { path = "../../common/building" }

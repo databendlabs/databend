@@ -1295,6 +1295,8 @@ dependencies = [
  "serde",
  "serde_json",
  "serfig",
+ "strum",
+ "strum_macros",
  "thrift 0.17.0",
 ]
 

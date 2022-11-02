@@ -298,7 +298,15 @@ impl Default for MetaConfig {
 
 impl MetaConfig {
     pub fn is_embedded_meta(&self) -> Result<bool> {
-        let t: MetaType = serde_json::from_str(&self.meta_type)?;
+        let t = match MetaType::from_str(&self.meta_type) {
+            Err(_) => {
+                return Err(ErrorCode::InvalidConfig(format!(
+                    "Invalid MetaType: {}",
+                    self.meta_type
+                )));
+            }
+            Ok(t) => t,
+        };
         Ok(t == MetaType::Embedded)
     }
 
