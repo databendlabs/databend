@@ -12,7 +12,7 @@ storage-hdfs = ["opendal/services-hdfs"]
 [dependencies]
 common-base = { path = "../base" }
 common-exception = { path = "../exception" }
-
+async-backtrace = "0.2"
 anyhow = { workspace = true }
 async-trait = "0.1"
 backon = "0.2"

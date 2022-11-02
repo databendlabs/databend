@@ -23,6 +23,7 @@ common-exception = { path = "../exception" }
 # Github dependencies
 
 # Crates.io dependencies
+async-backtrace = "0.2"
 futures = "0.3.24"
 poem = { version = "1", features = ["rustls"] }
 serde = { workspace = true }

@@ -69,6 +69,7 @@ impl Accessor for RuntimeAccessor {
         Some(self.inner.clone())
     }
 
+    #[async_backtrace::framed]
     async fn create(&self, path: &str, args: OpCreate) -> Result<()> {
         let op = self.inner.clone();
         let path = path.to_string();
@@ -78,6 +79,7 @@ impl Accessor for RuntimeAccessor {
             .expect("join must success")
     }
 
+    #[async_backtrace::framed]
     async fn read(&self, path: &str, args: OpRead) -> Result<BytesReader> {
         let op = self.inner.clone();
         let path = path.to_string();
@@ -87,6 +89,7 @@ impl Accessor for RuntimeAccessor {
             .expect("join must success")
     }
 
+    #[async_backtrace::framed]
     async fn write(&self, path: &str, args: OpWrite, r: BytesReader) -> Result<u64> {
         let op = self.inner.clone();
         let path = path.to_string();
@@ -96,6 +99,7 @@ impl Accessor for RuntimeAccessor {
             .expect("join must success")
     }
 
+    #[async_backtrace::framed]
     async fn stat(&self, path: &str, args: OpStat) -> Result<ObjectMetadata> {
         let op = self.inner.clone();
         let path = path.to_string();
@@ -105,6 +109,7 @@ impl Accessor for RuntimeAccessor {
             .expect("join must success")
     }
 
+    #[async_backtrace::framed]
     async fn delete(&self, path: &str, args: OpDelete) -> Result<()> {
         let op = self.inner.clone();
         let path = path.to_string();
@@ -114,6 +119,7 @@ impl Accessor for RuntimeAccessor {
             .expect("join must success")
     }
 
+    #[async_backtrace::framed]
     async fn list(&self, path: &str, args: OpList) -> Result<ObjectStreamer> {
         let op = self.inner.clone();
         let path = path.to_string();

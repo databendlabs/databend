@@ -17,6 +17,7 @@ use std::path::Path;
 
 use common_config::Config;
 use common_exception::Result;
+use common_http::async_backtrace::debug_async_backtrace_handler;
 use common_http::health_handler;
 use common_http::home::debug_home_handler;
 #[cfg(feature = "memory-profiling")]
@@ -65,7 +66,8 @@ impl HttpService {
                 get(super::http::v1::cluster::cluster_list_handler),
             )
             .at("/debug/home", get(debug_home_handler))
-            .at("/debug/pprof/profile", get(debug_pprof_handler));
+            .at("/debug/pprof/profile", get(debug_pprof_handler))
+            .at("/debug/async_backtrace", get(debug_async_backtrace_handler));
 
         if self.config.query.management_mode {
             route = route.at(

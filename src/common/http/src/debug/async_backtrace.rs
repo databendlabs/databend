@@ -12,10 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod async_backtrace;
-pub mod home;
-#[cfg(feature = "memory-profiling")]
-pub mod jeprof;
-pub mod pprof;
+use async_backtrace;
+use poem::IntoResponse;
 
-pub use home::PProfRequest;
+// run async-backtrace
+// example: /debug/async_backtrace
+// req query contains async_backtrace information
+
+#[poem::handler]
+pub async fn debug_async_backtrace_handler() -> impl IntoResponse {
+    async_backtrace::taskdump_tree(true)
+}
