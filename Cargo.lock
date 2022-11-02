@@ -164,7 +164,7 @@ dependencies = [
 [[package]]
 name = "arrow2"
 version = "0.14.2"
-source = "git+https://github.com/RinChanNOWWW/arrow2?rev=78c61d5#78c61d5f1ce43d7bdb13be35a834e585f57230fc"
+source = "git+https://github.com/RinChanNOWWW/arrow2?rev=8bd6417#8bd6417392a44496a2f9ca649f9cd2aa65dcc277"
 dependencies = [
  "ahash 0.7.6",
  "arrow-format",
@@ -190,6 +190,7 @@ dependencies = [
  "parquet2",
  "regex",
  "regex-syntax",
+ "rustc_version 0.4.0",
  "simdutf8",
  "streaming-iterator",
  "strength_reduce",

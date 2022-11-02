@@ -48,9 +48,9 @@ pub fn try_add_multi_sort_merge(
     sort_columns_descriptions: Vec<SortColumnDescription>,
 ) -> Result<()> {
     match pipeline.pipes.last() {
-        None => Err(ErrorCode::LogicalError("Cannot resize empty pipe.")),
+        None => Err(ErrorCode::Internal("Cannot resize empty pipe.")),
         Some(pipe) if pipe.output_size() == 0 => {
-            Err(ErrorCode::LogicalError("Cannot resize empty pipe."))
+            Err(ErrorCode::Internal("Cannot resize empty pipe."))
         }
         Some(pipe) if pipe.output_size() == 1 => Ok(()),
         Some(pipe) => {
@@ -93,7 +93,7 @@ impl Cursor {
         Cursor {
             input_index,
             row_index: 0,
-            num_rows: rows.num_rows(),
+            num_rows: rows.len(),
             rows,
         }
     }
@@ -456,7 +456,7 @@ impl Processor for MultiSortMergeProcessor {
                 }
             }
             ProcessorState::Output => Ok(Event::Sync),
-            _ => Err(ErrorCode::LogicalError("It's a bug.")),
+            _ => Err(ErrorCode::Internal("It's a bug.")),
         }
     }
 
@@ -488,7 +488,7 @@ impl Processor for MultiSortMergeProcessor {
                 self.state = ProcessorState::Generated(block);
                 Ok(())
             }
-            _ => Err(ErrorCode::LogicalError("It's a bug.")),
+            _ => Err(ErrorCode::Internal("It's a bug.")),
         }
     }
 }
