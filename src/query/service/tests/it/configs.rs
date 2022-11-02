@@ -155,13 +155,22 @@ bucket = ""
 endpoint_url = ""
 root = ""
 
+[cache]
+type = "moka"
+num_cpus = 0
+
+[cache.fs]
+data_path = "_data"
+
+[cache.moka]
+
 [catalog]
 meta_store_address = "127.0.0.1:9083"
 protocol = "binary"
 "#;
 
     let tom_actual = toml::to_string(&actual.into_outer()).unwrap();
-    assert_eq!(tom_actual, tom_expect);
+    assert_eq!(tom_expect, tom_actual);
     Ok(())
 }
 
