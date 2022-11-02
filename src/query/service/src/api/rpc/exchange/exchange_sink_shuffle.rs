@@ -127,7 +127,7 @@ impl Processor for ExchangePublisherSink {
                 let (dicts, values) = serialize_batch(&chunks, ipc_fields, options)?;
 
                 if !dicts.is_empty() {
-                    return Err(ErrorCode::UnImplement(
+                    return Err(ErrorCode::Unimplemented(
                         "DatabendQuery does not implement dicts.",
                     ));
                 }

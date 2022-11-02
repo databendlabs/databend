@@ -35,7 +35,7 @@ impl TransformLimit {
         output: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
         match (limit, offset) {
-            (None, 0) => Err(ErrorCode::LogicalError("It's a bug")),
+            (None, 0) => Err(ErrorCode::Internal("It's a bug")),
             (Some(_), 0) => OnlyLimitTransform::create(input, output, limit, offset),
             (None, _) => OnlyOffsetTransform::create(input, output, limit, offset),
             (Some(_), _) => OffsetAndLimitTransform::create(input, output, limit, offset),

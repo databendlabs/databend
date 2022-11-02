@@ -12,16 +12,20 @@ A Databend deployment includes two types of node, Meta and Query. The Meta node 
 When deploying Databend, you specify a deployment mode, standalone, or cluster. A standalone Databend allows for one Meta node and one Query node, and a Databend cluster can include multiple Meta(databend-meta) to archive high availability and Query(databend-query) nodes to enhance the computing capability.
 
 ### Supported Object Storage Solutions
-Databend works with self-hosted or cloud object storage solutions. You will need to prepare your own object storage before deploying Databend. The following is a list of compatible object storage solutions:
+Databend supports for self-hosted and cloud object storage solutions. Prepare your own object storage before deploying Databend. The following is a list of supported object storage solutions:
+
 - AWS S3 Compatible Services:
   - Amazon S3
   - MinIO
+  - Ceph
   - Wasabi
   - SeaweedFS
   - Tencent COS
   - Alibaba OSS
-  - QingCloud QingStore
+  - QingCloud QingStor
 - Azure Blob Storage
+- Google Cloud Storage
+- Huawei Cloud OBS
 
 ## Standalone Deployment
 This topic describes the standalone deployment architecture and environments.

@@ -71,7 +71,7 @@ impl Interpreter for ExplainInterpreterV2 {
                         .await?
                 }
                 _ => {
-                    return Err(ErrorCode::UnImplement("Unsupported EXPLAIN statement"));
+                    return Err(ErrorCode::Unimplemented("Unsupported EXPLAIN statement"));
                 }
             },
 
@@ -83,12 +83,14 @@ impl Interpreter for ExplainInterpreterV2 {
                         .await?
                 }
                 _ => {
-                    return Err(ErrorCode::UnImplement("Unsupported EXPLAIN statement"));
+                    return Err(ErrorCode::Unimplemented("Unsupported EXPLAIN statement"));
                 }
             },
 
             ExplainKind::Graph => {
-                return Err(ErrorCode::UnImplement("ExplainKind graph is unimplemented"));
+                return Err(ErrorCode::Unimplemented(
+                    "ExplainKind graph is unimplemented",
+                ));
             }
 
             ExplainKind::Ast(display_string)

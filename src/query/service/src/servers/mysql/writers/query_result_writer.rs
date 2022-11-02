@@ -23,8 +23,6 @@ use common_datavalues::DateConverter;
 use common_datavalues::TypeSerializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_exception::ABORT_QUERY;
-use common_exception::ABORT_SESSION;
 use common_io::prelude::FormatSettings;
 use common_streams::SendableDataBlockStream;
 use futures_util::StreamExt;
@@ -135,7 +133,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                 TypeID::Variant => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 TypeID::VariantArray => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 TypeID::VariantObject => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
-                _ => Err(ErrorCode::UnImplement(format!(
+                _ => Err(ErrorCode::Unimplemented(format!(
                     "Unsupported column type:{:?}",
                     field.data_type()
                 ))),
@@ -204,30 +202,30 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                                         }
                                         (TypeID::Timestamp, DataValue::Int64(_)) => row_writer
                                             .write_col(
-                                                serializer.serialize_field(row_index, format)?,
+                                                serializer.to_string_values(row_index, format)?,
                                             )?,
                                         (TypeID::String, DataValue::String(v)) => {
                                             row_writer.write_col(v)?
                                         }
                                         (TypeID::Array, DataValue::Array(_)) => row_writer
                                             .write_col(
-                                                serializer.serialize_field(row_index, format)?,
+                                                serializer.to_string_values(row_index, format)?,
                                             )?,
                                         (TypeID::Struct, DataValue::Struct(_)) => row_writer
                                             .write_col(
-                                                serializer.serialize_field(row_index, format)?,
+                                                serializer.to_string_values(row_index, format)?,
                                             )?,
                                         (TypeID::Variant, DataValue::Variant(_)) => row_writer
                                             .write_col(
-                                                serializer.serialize_field(row_index, format)?,
+                                                serializer.to_string_values(row_index, format)?,
                                             )?,
                                         (TypeID::VariantArray, DataValue::Variant(_)) => row_writer
                                             .write_col(
-                                                serializer.serialize_field(row_index, format)?,
+                                                serializer.to_string_values(row_index, format)?,
                                             )?,
                                         (TypeID::VariantObject, DataValue::Variant(_)) => {
                                             row_writer.write_col(
-                                                serializer.serialize_field(row_index, format)?,
+                                                serializer.to_string_values(row_index, format)?,
                                             )?
                                         }
                                         (_, DataValue::Int64(v)) => row_writer.write_col(v)?,
@@ -239,7 +237,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                                             // it use format!() to serialize number,
                                             // the result will be different with our serializer for floats
                                             .write_col(
-                                                serializer.serialize_field(row_index, format)?,
+                                                serializer.to_string_values(row_index, format)?,
                                             )?,
                                         (_, v) => {
                                             return Err(ErrorCode::BadDataValueType(format!(
@@ -277,7 +275,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
     }
 
     async fn err(error: &ErrorCode, writer: QueryResultWriter<'a, W>) -> Result<()> {
-        if error.code() != ABORT_QUERY && error.code() != ABORT_SESSION {
+        if error.code() != ErrorCode::ABORTED_QUERY && error.code() != ErrorCode::ABORTED_SESSION {
             error!("OnQuery Error: {:?}", error);
             writer
                 .error(ErrorKind::ER_UNKNOWN_ERROR, error.to_string().as_bytes())

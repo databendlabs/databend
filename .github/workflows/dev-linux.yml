@@ -165,7 +165,7 @@ jobs:
 
   test_stateful_standalone_linux:
     timeout-minutes: 20
-    runs-on: [ self-hosted, X64, Linux, development ]
+    runs-on: [self-hosted, X64, Linux, development]
     needs: build_gnu
     steps:
       - uses: actions/checkout@v3
@@ -173,7 +173,7 @@ jobs:
 
   test_stateful_cluster_linux:
     timeout-minutes: 20
-    runs-on: [ self-hosted, X64, Linux, development ]
+    runs-on: [self-hosted, X64, Linux, development]
     needs: build_gnu
     steps:
       - uses: actions/checkout@v3

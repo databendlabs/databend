@@ -24,7 +24,7 @@ pub fn column_metas(file_meta: &ThriftFileMetaData) -> Result<HashMap<ColumnId, 
     // currently we use one group only
     let num_row_groups = file_meta.row_groups.len();
     if num_row_groups != 1 {
-        return Err(ErrorCode::ParquetError(format!(
+        return Err(ErrorCode::ParquetFileInvalid(format!(
             "invalid parquet file, expects only one row group, but got {}",
             num_row_groups
         )));
@@ -53,7 +53,7 @@ pub fn column_metas(file_meta: &ThriftFileMetaData) -> Result<HashMap<ColumnId, 
                 col_metas.insert(idx as u32, res);
             }
             None => {
-                return Err(ErrorCode::ParquetError(format!(
+                return Err(ErrorCode::ParquetFileInvalid(format!(
                     "invalid parquet file, meta data of column idx {} is empty",
                     idx
                 )));

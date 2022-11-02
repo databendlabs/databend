@@ -103,4 +103,20 @@ impl Dialect {
             Dialect::PostgreSQL => c == '\'',
         }
     }
+
+    pub fn is_null_biggest(&self) -> bool {
+        match self {
+            Dialect::MySQL => false,
+            Dialect::Hive => false,
+            Dialect::PostgreSQL => true,
+        }
+    }
+
+    pub fn substr_index_zero_literal_as_one(&self) -> bool {
+        match self {
+            Dialect::MySQL => false,
+            Dialect::Hive => true,
+            Dialect::PostgreSQL => false,
+        }
+    }
 }

@@ -164,7 +164,7 @@ impl Processor for FuseTableSource {
             }
             State::PrewhereFilter(_, _) => Ok(Event::Sync),
             State::Deserialize(_, _, _) => Ok(Event::Sync),
-            State::Generated(_, _) => Err(ErrorCode::LogicalError("It's a bug.")),
+            State::Generated(_, _) => Err(ErrorCode::Internal("It's a bug.")),
         }
     }
 
@@ -190,7 +190,7 @@ impl Processor for FuseTableSource {
                         }
                         prewhere_blocks
                     } else {
-                        return Err(ErrorCode::LogicalError("It's a bug. Need remain reader"));
+                        return Err(ErrorCode::Internal("It's a bug. Need remain reader"));
                     };
                     // the last step of prewhere
                     let progress_values = ProgressValues {
@@ -249,7 +249,7 @@ impl Processor for FuseTableSource {
                     }
                     Ok(())
                 } else {
-                    Err(ErrorCode::LogicalError(
+                    Err(ErrorCode::Internal(
                         "It's a bug. No need to do prewhere filter",
                     ))
                 }
@@ -272,10 +272,10 @@ impl Processor for FuseTableSource {
                     self.state = State::Deserialize(part, chunks, Some(prewhere_data));
                     Ok(())
                 } else {
-                    Err(ErrorCode::LogicalError("It's a bug. No remain reader"))
+                    Err(ErrorCode::Internal("It's a bug. No remain reader"))
                 }
             }
-            _ => Err(ErrorCode::LogicalError("It's a bug.")),
+            _ => Err(ErrorCode::Internal("It's a bug.")),
         }
     }
 
@@ -298,10 +298,10 @@ impl Processor for FuseTableSource {
                     self.state = State::Deserialize(part, chunks, Some(prewhere_data));
                     Ok(())
                 } else {
-                    Err(ErrorCode::LogicalError("It's a bug. No remain reader"))
+                    Err(ErrorCode::Internal("It's a bug. No remain reader"))
                 }
             }
-            _ => Err(ErrorCode::LogicalError("It's a bug.")),
+            _ => Err(ErrorCode::Internal("It's a bug.")),
         }
     }
 }

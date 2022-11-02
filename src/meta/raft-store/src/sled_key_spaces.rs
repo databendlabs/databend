@@ -139,6 +139,10 @@ pub enum KeySpaceKV {
         key: <RaftStateKV as SledKeySpace>::K,
         value: <RaftStateKV as SledKeySpace>::V,
     },
+    Expire {
+        key: <Expire as SledKeySpace>::K,
+        value: <Expire as SledKeySpace>::V,
+    },
     GenericKV {
         key: <GenericKV as SledKeySpace>::K,
         value: <GenericKV as SledKeySpace>::V,
