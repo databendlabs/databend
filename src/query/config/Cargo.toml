@@ -14,7 +14,7 @@ storage-hdfs = ["common-storage/storage-hdfs"]
 hive = ["common-hive-meta-store", "thrift", "storage-hdfs"]
 
 [package.metadata.cargo-machete]
-ignored = ["thrift", "common-hive-meta-store"]
+ignored = ["thrift", "common-hive-meta-store", "strum"]
 
 [dependencies]
 common-base = { path = "../../common/base" }
