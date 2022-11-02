@@ -482,7 +482,11 @@ impl PipelineBuilder {
             )
         })?;
 
-        if join.join_type == JoinType::Left || join.join_type == JoinType::Full {
+        if (join.join_type == JoinType::Left
+            || join.join_type == JoinType::Full
+            || join.join_type == JoinType::Single)
+            && join.non_equi_conditions.is_empty()
+        {
             self.main_pipeline.resize(1)?;
             self.main_pipeline.add_transform(|input, output| {
                 TransformLeftJoin::try_create(

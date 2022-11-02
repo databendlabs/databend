@@ -49,8 +49,6 @@ pub struct JoinState {
     pub(crate) rest_build_indexes: RwLock<Vec<RowPtr>>,
     pub(crate) rest_probe_blocks: RwLock<Vec<DataBlock>>,
     pub(crate) validity: RwLock<MutableBitmap>,
-    pub(crate) row_state: RwLock<Vec<u32>>,
-    pub(crate) rest_probe_indexes: RwLock<Vec<u32>>,
 }
 
 impl JoinState {
@@ -61,8 +59,6 @@ impl JoinState {
             rest_build_indexes: RwLock::new(Vec::with_capacity(max_block_size)),
             rest_probe_blocks: RwLock::new(Vec::with_capacity(max_block_size)),
             validity: RwLock::new(MutableBitmap::with_capacity(max_block_size)),
-            row_state: RwLock::new(Vec::with_capacity(max_block_size)),
-            rest_probe_indexes: RwLock::new(Vec::with_capacity(max_block_size)),
         })
     }
 }

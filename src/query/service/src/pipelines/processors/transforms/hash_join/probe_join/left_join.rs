@@ -58,6 +58,7 @@ impl JoinHashTable {
         // The left join will return multiple data blocks of similar size
         let mut probed_blocks = vec![];
         let mut probe_indexes = Vec::with_capacity(block_size);
+        let mut probe_indexes_vec = Vec::new();
         // Collect each probe_indexes, used by non-equi conditions filter
         let mut local_build_indexes = Vec::with_capacity(block_size);
         let mut validity = MutableBitmap::with_capacity(block_size);
@@ -84,6 +85,20 @@ impl JoinHashTable {
                 None => (false, &dummy_probed_rows),
                 Some(v) => (true, v.get()),
             };
+
+            if self.hash_join_desc.join_type == JoinType::Full {
+                let mut build_indexes = self.hash_join_desc.join_state.build_indexes.write();
+                // dummy row ptr
+                // here assume there is no RowPtr, which chunk_index is usize::MAX and row_index is usize::MAX
+                match probe_result_ptr {
+                    None => build_indexes.push(RowPtr {
+                        chunk_index: usize::MAX,
+                        row_index: usize::MAX,
+                        marker: Some(MarkerKind::False),
+                    }),
+                    Some(_) => build_indexes.extend(probed_rows),
+                };
+            }
 
             if self.hash_join_desc.join_type == JoinType::Single && probed_rows.len() > 1 {
                 return Err(ErrorCode::LogicalError(
@@ -192,25 +207,12 @@ impl JoinHashTable {
                             );
                         }
 
-                        let mut merged_block =
+                        let merged_block =
                             self.merge_eq_block(&nullable_build_block, &probe_block)?;
 
                         if !merged_block.is_empty() {
-                            if WITH_OTHER_CONJUNCT {
-                                merged_block = self.non_equi_conditions_for_left_join(
-                                    &merged_block,
-                                    &mut local_build_indexes,
-                                    &mut row_state,
-                                    &probe_indexes,
-                                )?;
-                            }
+                            probe_indexes_vec.push(probe_indexes.clone());
                             probed_blocks.push(merged_block);
-                        }
-
-                        if !WITH_OTHER_CONJUNCT && self.hash_join_desc.join_type == JoinType::Full {
-                            let mut build_indexes =
-                                self.hash_join_desc.join_state.build_indexes.write();
-                            build_indexes.extend(local_build_indexes.clone())
                         }
 
                         index = new_index;
@@ -221,18 +223,6 @@ impl JoinHashTable {
                     }
                 }
             }
-        }
-
-        {
-            let validity: Bitmap = validity.into();
-            let mut validity_state = self.hash_join_desc.join_state.validity.write();
-            validity_state.extend_from_bitmap(&validity);
-
-            let mut rest_build_indexes = self.hash_join_desc.join_state.rest_build_indexes.write();
-            rest_build_indexes.extend(local_build_indexes);
-
-            let mut global_row_state = self.hash_join_desc.join_state.row_state.write();
-            global_row_state.extend(row_state);
         }
 
         // For full join, wrap nullable for probe block
@@ -251,13 +241,68 @@ impl JoinHashTable {
             probe_block = DataBlock::create(self.probe_schema.clone(), nullable_probe_columns);
         }
 
-        let mut rest_probe_blocks = self.hash_join_desc.join_state.rest_probe_blocks.write();
-        rest_probe_blocks.push(probe_block);
+        if !WITH_OTHER_CONJUNCT {
+            let mut rest_build_indexes = self.hash_join_desc.join_state.rest_build_indexes.write();
+            rest_build_indexes.extend(local_build_indexes);
+            let mut rest_probe_blocks = self.hash_join_desc.join_state.rest_probe_blocks.write();
+            rest_probe_blocks.push(probe_block);
+            let validity: Bitmap = validity.into();
+            let mut validity_state = self.hash_join_desc.join_state.validity.write();
+            validity_state.extend_from_bitmap(&validity);
+            return Ok(probed_blocks);
+        }
 
-        let mut rest_probe_indexes = self.hash_join_desc.join_state.rest_probe_indexes.write();
-        rest_probe_indexes.extend(probe_indexes);
+        let validity: Bitmap = validity.into();
+        let build_block = if !self.hash_join_desc.from_correlated_subquery
+            && self.hash_join_desc.join_type == JoinType::Single
+            && validity.unset_bits() == input.num_rows()
+        {
+            // Uncorrelated scalar subquery and no row was returned by subquery
+            // We just construct a block with NULLs
+            let build_data_schema = self.row_space.data_schema.clone();
+            let columns = build_data_schema
+                .fields()
+                .iter()
+                .map(|field| {
+                    let data_type = wrap_nullable(field.data_type());
+                    data_type.create_column(&vec![DataValue::Null; input.num_rows()])
+                })
+                .collect::<Result<Vec<ColumnRef>>>()?;
+            DataBlock::create(build_data_schema, columns)
+        } else {
+            self.row_space.gather(&local_build_indexes)?
+        };
 
-        return Ok(probed_blocks);
+        // For left join, wrap nullable for build block
+        let nullable_columns =
+            if self.row_space.datablocks().is_empty() && !local_build_indexes.is_empty() {
+                build_block
+                    .columns()
+                    .iter()
+                    .map(|c| {
+                        c.data_type()
+                            .create_constant_column(&DataValue::Null, local_build_indexes.len())
+                    })
+                    .collect::<Result<Vec<_>>>()?
+            } else {
+                build_block
+                    .columns()
+                    .iter()
+                    .map(|c| Self::set_validity(c, &validity))
+                    .collect::<Result<Vec<_>>>()?
+            };
+        let nullable_build_block =
+            DataBlock::create(self.row_space.data_schema.clone(), nullable_columns.clone());
+
+        // Process no-equi conditions
+        let merged_block = self.merge_eq_block(&nullable_build_block, &probe_block)?;
+
+        if !merged_block.is_empty() || probed_blocks.is_empty() {
+            probe_indexes_vec.push(probe_indexes.clone());
+            probed_blocks.push(merged_block);
+        }
+
+        self.non_equi_conditions_for_left_join(&probed_blocks, &probe_indexes_vec, &mut row_state)
     }
 
     // keep at least one index of the positive state and the null state
