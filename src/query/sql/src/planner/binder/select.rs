@@ -329,7 +329,7 @@ impl<'a> Binder {
                 right_expr,
                 true,
             ),
-            _ => Err(ErrorCode::UnImplement(
+            _ => Err(ErrorCode::Unimplemented(
                 "Unsupported query type, currently, databend only support intersect distinct and except distinct",
             )),
         }

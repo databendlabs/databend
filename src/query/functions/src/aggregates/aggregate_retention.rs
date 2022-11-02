@@ -16,7 +16,6 @@ use std::alloc::Layout;
 use std::fmt;
 use std::sync::Arc;
 
-use bytes::BytesMut;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -42,7 +41,7 @@ impl AggregateRetentionState {
         self.events |= other.events;
     }
 
-    fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
+    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
         serialize_into_buf(writer, &self.events)
     }
 
@@ -117,7 +116,7 @@ impl AggregateFunction for AggregateRetentionFunction {
         Ok(())
     }
 
-    fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
+    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<AggregateRetentionState>();
         state.serialize(writer)
     }

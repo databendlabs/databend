@@ -203,9 +203,7 @@ impl Processor for ResultTableSink {
                 self.state = State::SerializedMeta { data, location };
             }
             _state => {
-                return Err(ErrorCode::LogicalError(
-                    "Unknown state for result table sink",
-                ));
+                return Err(ErrorCode::Internal("Unknown state for result table sink"));
             }
         }
 
@@ -227,9 +225,7 @@ impl Processor for ResultTableSink {
                 self.state = State::Finished;
             }
             _state => {
-                return Err(ErrorCode::LogicalError(
-                    "Unknown state for result table sink.",
-                ));
+                return Err(ErrorCode::Internal("Unknown state for result table sink."));
             }
         }
 

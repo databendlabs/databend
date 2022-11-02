@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::StageType;
 use common_planner::plans::DropStagePlan;
@@ -49,6 +50,13 @@ impl Interpreter for DropUserStageInterpreter {
         let plan = self.plan.clone();
         let tenant = self.ctx.get_tenant();
         let user_mgr = UserApiProvider::instance();
+
+        // Check user stage.
+        if plan.name == "~" {
+            return Err(ErrorCode::StagePermissionDenied(
+                "user stage is not allowed to be dropped",
+            ));
+        }
 
         let stage = user_mgr.get_stage(&tenant, &plan.name).await;
         user_mgr

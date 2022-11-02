@@ -115,7 +115,7 @@ impl TryFrom<Scalar> for BoundColumnRef {
         if let Scalar::BoundColumnRef(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::LogicalError(
+            Err(ErrorCode::Internal(
                 "Cannot downcast Scalar to BoundColumnRef",
             ))
         }
@@ -134,7 +134,7 @@ impl TryFrom<Scalar> for ConstantExpr {
         if let Scalar::ConstantExpr(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::LogicalError(
+            Err(ErrorCode::Internal(
                 "Cannot downcast Scalar to ConstantExpr",
             ))
         }
@@ -153,7 +153,7 @@ impl TryFrom<Scalar> for AndExpr {
         if let Scalar::AndExpr(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::LogicalError("Cannot downcast Scalar to AndExpr"))
+            Err(ErrorCode::Internal("Cannot downcast Scalar to AndExpr"))
         }
     }
 }
@@ -170,7 +170,7 @@ impl TryFrom<Scalar> for OrExpr {
         if let Scalar::OrExpr(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::LogicalError("Cannot downcast Scalar to OrExpr"))
+            Err(ErrorCode::Internal("Cannot downcast Scalar to OrExpr"))
         }
     }
 }
@@ -187,7 +187,7 @@ impl TryFrom<Scalar> for ComparisonExpr {
         if let Scalar::ComparisonExpr(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::LogicalError(
+            Err(ErrorCode::Internal(
                 "Cannot downcast Scalar to ComparisonExpr",
             ))
         }
@@ -206,7 +206,7 @@ impl TryFrom<Scalar> for AggregateFunction {
         if let Scalar::AggregateFunction(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::LogicalError(
+            Err(ErrorCode::Internal(
                 "Cannot downcast Scalar to AggregateFunction",
             ))
         }
@@ -225,7 +225,7 @@ impl TryFrom<Scalar> for FunctionCall {
         if let Scalar::FunctionCall(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::LogicalError(
+            Err(ErrorCode::Internal(
                 "Cannot downcast Scalar to FunctionCall",
             ))
         }
@@ -244,9 +244,7 @@ impl TryFrom<Scalar> for CastExpr {
         if let Scalar::CastExpr(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::LogicalError(
-                "Cannot downcast Scalar to CastExpr",
-            ))
+            Err(ErrorCode::Internal("Cannot downcast Scalar to CastExpr"))
         }
     }
 }
@@ -263,7 +261,7 @@ impl TryFrom<Scalar> for SubqueryExpr {
         if let Scalar::SubqueryExpr(value) = value {
             Ok(value)
         } else {
-            Err(ErrorCode::LogicalError(
+            Err(ErrorCode::Internal(
                 "Cannot downcast Scalar to SubqueryExpr",
             ))
         }

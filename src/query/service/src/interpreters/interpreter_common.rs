@@ -153,7 +153,7 @@ pub async fn stat_file(
     let op = StageTable::get_op(&table_ctx, stage)?;
     let meta = op.object(path).metadata().await?;
     Ok(StageFile {
-        path: path.to_owned(),
+        path: path.to_string(),
         size: meta.content_length(),
         md5: meta.content_md5().map(str::to_string),
         last_modified: meta

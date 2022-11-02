@@ -100,7 +100,7 @@ impl PipelineBuilder {
 
         for source_pipeline in &self.pipelines {
             if !source_pipeline.is_complete_pipeline()? {
-                return Err(ErrorCode::IllegalPipelineState(
+                return Err(ErrorCode::Internal(
                     "Source pipeline must be complete pipeline.",
                 ));
             }
@@ -129,7 +129,7 @@ impl PipelineBuilder {
             PhysicalPlan::DistributedInsertSelect(insert_select) => {
                 self.build_distributed_insert_select(insert_select)
             }
-            PhysicalPlan::Exchange(_) => Err(ErrorCode::LogicalError(
+            PhysicalPlan::Exchange(_) => Err(ErrorCode::Internal(
                 "Invalid physical plan with PhysicalPlan::Exchange",
             )),
         }
@@ -221,6 +221,7 @@ impl PipelineBuilder {
         let table = self.ctx.build_table_from_source_plan(&scan.source)?;
         self.ctx.try_set_partitions(scan.source.parts.clone())?;
         table.read_data(self.ctx.clone(), &scan.source, &mut self.main_pipeline)?;
+
         let schema = scan.source.schema();
         let projections = scan
             .name_mapping
@@ -228,26 +229,22 @@ impl PipelineBuilder {
             .map(|(name, _)| schema.index_of(name.as_str()))
             .collect::<Result<Vec<usize>>>()?;
 
+        let ops = vec![
+            ChunkOperator::Project {
+                offsets: projections,
+            },
+            ChunkOperator::Rename {
+                output_schema: scan.output_schema()?,
+            },
+        ];
+
         let func_ctx = self.ctx.try_get_function_context()?;
         self.main_pipeline.add_transform(|input, output| {
             Ok(CompoundChunkOperator::create(
                 input,
                 output,
                 func_ctx.clone(),
-                vec![ChunkOperator::Project {
-                    offsets: projections.clone(),
-                }],
-            ))
-        })?;
-
-        self.main_pipeline.add_transform(|input, output| {
-            Ok(CompoundChunkOperator::create(
-                input,
-                output,
-                func_ctx.clone(),
-                vec![ChunkOperator::Rename {
-                    output_schema: scan.output_schema()?,
-                }],
+                ops.clone(),
             ))
         })
     }
@@ -256,7 +253,7 @@ impl PipelineBuilder {
         self.build_pipeline(&filter.input)?;
 
         if filter.predicates.is_empty() {
-            return Err(ErrorCode::LogicalError(
+            return Err(ErrorCode::Internal(
                 "Invalid empty predicate list".to_string(),
             ));
         }

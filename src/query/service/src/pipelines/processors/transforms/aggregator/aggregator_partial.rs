@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use bytes::BytesMut;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodKeysU128;
@@ -210,15 +209,13 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
 
                         let mut group_key_builder = self.method.keys_column_builder(len);
 
-                        let mut bytes = BytesMut::new();
                         for group_entity in iter {
                             let place: StateAddr = group_entity.get_state_value().into();
 
                             for (idx, func) in funcs.iter().enumerate() {
                                 let arg_place = place.next(offsets_aggregate_states[idx]);
-                                func.serialize(arg_place, &mut bytes)?;
-                                state_builders[idx].append_value(&bytes[..]);
-                                bytes.clear();
+                                func.serialize(arg_place, state_builders[idx].values_mut())?;
+                                state_builders[idx].commit_row();
                             }
 
                             group_key_builder.append_value(group_entity.get_state_key());
@@ -246,15 +243,13 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
 
                     let mut group_key_builder = self.method.keys_column_builder(items_size);
 
-                    let mut bytes = BytesMut::new();
                     for group_entity in self.state.iter() {
                         let place: StateAddr = group_entity.get_state_value().into();
 
                         for (idx, func) in funcs.iter().enumerate() {
                             let arg_place = place.next(offsets_aggregate_states[idx]);
-                            func.serialize(arg_place, &mut bytes)?;
-                            state_builders[idx].append_value(&bytes[..]);
-                            bytes.clear();
+                            func.serialize(arg_place, state_builders[idx].values_mut())?;
+                            state_builders[idx].commit_row();
                         }
 
                         group_key_builder.append_value(group_entity.get_state_key());

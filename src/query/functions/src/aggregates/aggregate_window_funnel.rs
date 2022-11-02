@@ -19,7 +19,6 @@ use std::marker::PhantomData;
 use std::ops::Sub;
 use std::sync::Arc;
 
-use bytes::BytesMut;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -135,7 +134,7 @@ where T: Ord
         }
     }
 
-    fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
+    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
         serialize_into_buf(writer, self)
     }
 
@@ -258,7 +257,7 @@ where
         Ok(())
     }
 
-    fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
+    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<AggregateWindowFunnelState<T>>();
         AggregateWindowFunnelState::<T>::serialize(state, writer)
     }

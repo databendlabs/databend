@@ -109,15 +109,15 @@ impl Catalog for ImmutableCatalog {
     }
 
     async fn create_database(&self, _req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
-        Err(ErrorCode::UnImplement("Cannot create system database"))
+        Err(ErrorCode::Unimplemented("Cannot create system database"))
     }
 
     async fn drop_database(&self, _req: DropDatabaseReq) -> Result<()> {
-        Err(ErrorCode::UnImplement("Cannot drop system database"))
+        Err(ErrorCode::Unimplemented("Cannot drop system database"))
     }
 
     async fn rename_database(&self, _req: RenameDatabaseReq) -> Result<RenameDatabaseReply> {
-        Err(ErrorCode::UnImplement("Cannot rename system database"))
+        Err(ErrorCode::Unimplemented("Cannot rename system database"))
     }
 
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
@@ -163,37 +163,37 @@ impl Catalog for ImmutableCatalog {
     }
 
     async fn create_table(&self, _req: CreateTableReq) -> Result<()> {
-        Err(ErrorCode::UnImplement(
+        Err(ErrorCode::Unimplemented(
             "Cannot create table in system database",
         ))
     }
 
     async fn drop_table(&self, _req: DropTableReq) -> Result<DropTableReply> {
-        Err(ErrorCode::UnImplement(
+        Err(ErrorCode::Unimplemented(
             "Cannot drop table in system database",
         ))
     }
 
     async fn undrop_table(&self, _req: UndropTableReq) -> Result<UndropTableReply> {
-        Err(ErrorCode::UnImplement(
+        Err(ErrorCode::Unimplemented(
             "Cannot undrop table in system database",
         ))
     }
 
     async fn undrop_database(&self, _req: UndropDatabaseReq) -> Result<UndropDatabaseReply> {
-        Err(ErrorCode::UnImplement(
+        Err(ErrorCode::Unimplemented(
             "Cannot undrop database in system database",
         ))
     }
 
     async fn rename_table(&self, _req: RenameTableReq) -> Result<RenameTableReply> {
-        Err(ErrorCode::UnImplement(
+        Err(ErrorCode::Unimplemented(
             "Cannot rename table in system database",
         ))
     }
 
     async fn count_tables(&self, _req: CountTablesReq) -> Result<CountTablesReply> {
-        Err(ErrorCode::UnImplement(
+        Err(ErrorCode::Unimplemented(
             "Cannot count tables in system database",
         ))
     }
@@ -204,7 +204,7 @@ impl Catalog for ImmutableCatalog {
         _db_name: &str,
         req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply> {
-        Err(ErrorCode::UnImplement(format!(
+        Err(ErrorCode::Unimplemented(format!(
             "get_table_copied_file_info not allowed for system database {:?}",
             req
         )))
@@ -216,7 +216,7 @@ impl Catalog for ImmutableCatalog {
         _db_name: &str,
         req: UpsertTableCopiedFileReq,
     ) -> Result<UpsertTableCopiedFileReply> {
-        Err(ErrorCode::UnImplement(format!(
+        Err(ErrorCode::Unimplemented(format!(
             "upsert_table_copied_file_info not allowed for system database {:?}",
             req
         )))
@@ -228,7 +228,7 @@ impl Catalog for ImmutableCatalog {
         _db_name: &str,
         req: TruncateTableReq,
     ) -> Result<TruncateTableReply> {
-        Err(ErrorCode::UnImplement(format!(
+        Err(ErrorCode::Unimplemented(format!(
             "truncate_table not allowed for system database {:?}",
             req
         )))
@@ -240,7 +240,7 @@ impl Catalog for ImmutableCatalog {
         _db_name: &str,
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
-        Err(ErrorCode::UnImplement(format!(
+        Err(ErrorCode::Unimplemented(format!(
             "upsert table option not allowed for system database {:?}",
             req
         )))
@@ -252,7 +252,7 @@ impl Catalog for ImmutableCatalog {
         _db_name: &str,
         req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply> {
-        Err(ErrorCode::UnImplement(format!(
+        Err(ErrorCode::Unimplemented(format!(
             "update table meta not allowed for system database {:?}",
             req
         )))

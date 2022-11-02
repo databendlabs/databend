@@ -32,6 +32,7 @@ use crate::function::FunctionSignature;
 use crate::property::Domain;
 use crate::property::FunctionProperty;
 use crate::types::boolean::BooleanDomain;
+use crate::types::date::date_to_string;
 use crate::types::nullable::NullableDomain;
 use crate::types::number::NumberColumn;
 use crate::types::number::NumberDataType;
@@ -40,10 +41,10 @@ use crate::types::number::NumberScalar;
 use crate::types::number::SimpleDomain;
 use crate::types::string::StringColumn;
 use crate::types::string::StringDomain;
+use crate::types::timestamp::timestamp_to_string;
 use crate::types::AnyType;
 use crate::types::DataType;
 use crate::types::ValueType;
-use crate::utils::date_helper::DateConverter;
 use crate::values::ScalarRef;
 use crate::values::Value;
 use crate::values::ValueRef;
@@ -146,8 +147,8 @@ impl<'a> Display for ScalarRef<'a> {
             ScalarRef::Number(val) => write!(f, "{val}"),
             ScalarRef::Boolean(val) => write!(f, "{val}"),
             ScalarRef::String(s) => write!(f, "{:?}", String::from_utf8_lossy(s)),
-            ScalarRef::Timestamp(t) => write!(f, "{}", display_timestamp(*t)),
-            ScalarRef::Date(d) => write!(f, "{}", display_date(*d as i64)),
+            ScalarRef::Timestamp(t) => write!(f, "{}", timestamp_to_string(*t, chrono_tz::Tz::UTC)),
+            ScalarRef::Date(d) => write!(f, "{}", date_to_string(*d as i64, chrono_tz::Tz::UTC)),
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
             ScalarRef::Tuple(fields) => {
                 write!(f, "(")?;
@@ -589,16 +590,4 @@ impl Display for Domain {
             Domain::Undefined => write!(f, "Undefined"),
         }
     }
-}
-
-pub fn display_timestamp(ts: i64) -> String {
-    ts.to_timestamp(&chrono_tz::Tz::UTC)
-        .format("%Y-%m-%d %H:%M:%S%.6f")
-        .to_string()
-}
-
-pub fn display_date(d: i64) -> String {
-    d.to_date(&chrono_tz::Tz::UTC)
-        .format("%Y-%m-%d")
-        .to_string()
 }

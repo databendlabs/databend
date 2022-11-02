@@ -126,7 +126,7 @@ impl BaseMutator {
                 let position = block_positions
                     .get(&replacement.original_block_loc)
                     .ok_or_else(|| {
-                        ErrorCode::LogicalError(format!(
+                        ErrorCode::Internal(format!(
                             "block location not found {:?}",
                             &replacement.original_block_loc
                         ))

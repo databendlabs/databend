@@ -51,7 +51,7 @@ impl From<std::net::AddrParseError> for ErrorCode {
 
 impl From<std::str::Utf8Error> for ErrorCode {
     fn from(error: std::str::Utf8Error) -> Self {
-        ErrorCode::InternalError(format!("Invalid Utf8, cause: {}", error))
+        ErrorCode::Internal(format!("Invalid Utf8, cause: {}", error))
     }
 }
 
@@ -97,6 +97,16 @@ impl From<std::num::TryFromIntError> for ErrorCode {
 
 impl From<common_arrow::arrow::error::Error> for ErrorCode {
     fn from(error: common_arrow::arrow::error::Error) -> Self {
+        use common_arrow::arrow::error::Error;
+        match error {
+            Error::NotYetImplemented(v) => ErrorCode::Unimplemented(format!("arrow: {v}")),
+            v => ErrorCode::from_std_error(v),
+        }
+    }
+}
+
+impl From<common_arrow::parquet::error::Error> for ErrorCode {
+    fn from(error: common_arrow::parquet::error::Error) -> Self {
         ErrorCode::from_std_error(error)
     }
 }
@@ -253,7 +263,7 @@ impl From<tonic::Status> for ErrorCode {
                     },
                 }
             }
-            _ => ErrorCode::UnImplement(status.to_string()),
+            _ => ErrorCode::Unimplemented(status.to_string()),
         }
     }
 }

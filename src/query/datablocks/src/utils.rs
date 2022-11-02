@@ -72,7 +72,10 @@ pub fn serialize_data_blocks_with_compression(
 
     match write_parquet_file(buf, row_groups, arrow_schema.clone(), options) {
         Ok(result) => Ok(result),
-        Err(cause) => Err(ErrorCode::ParquetError(cause.to_string())),
+        Err(cause) => Err(ErrorCode::Internal(format!(
+            "write_parquet_file: {:?}",
+            cause,
+        ))),
     }
 }
 

@@ -28,39 +28,39 @@ async fn test_fuse_snapshot_table_args() -> Result<()> {
     let (_guard, query_ctx) = crate::tests::create_query_context().await?;
     expects_err(
         "db_not_exist",
-        ErrorCode::unknown_database_code(),
+        ErrorCode::UNKNOWN_DATABASE,
         test_drive(query_ctx.clone(), Some(test_db), Some(test_tbl)).await,
     );
 
     expects_err(
         "table_not_exist",
-        ErrorCode::unknown_table_code(),
+        ErrorCode::UNKNOWN_TABLE,
         test_drive(query_ctx.clone(), Some("default"), Some(test_tbl)).await,
     );
 
     expects_err(
         "bad argument (None)",
-        ErrorCode::bad_arguments_code(),
+        ErrorCode::BAD_ARGUMENTS,
         test_drive_with_args(query_ctx.clone(), None).await,
     );
 
     expects_err(
         "bad argument (empty arg vec)",
-        ErrorCode::bad_arguments_code(),
+        ErrorCode::BAD_ARGUMENTS,
         test_drive_with_args(query_ctx.clone(), Some(vec![])).await,
     );
 
     let arg_db = DataValue::String(test_db.as_bytes().to_vec());
     expects_err(
         "bad argument (no table)",
-        ErrorCode::bad_arguments_code(),
+        ErrorCode::BAD_ARGUMENTS,
         test_drive_with_args(query_ctx.clone(), Some(vec![arg_db])).await,
     );
 
     let arg_db = DataValue::String(test_db.as_bytes().to_vec());
     expects_err(
         "bad argument (too many args)",
-        ErrorCode::bad_arguments_code(),
+        ErrorCode::BAD_ARGUMENTS,
         test_drive_with_args(
             query_ctx.clone(),
             Some(vec![arg_db.clone(), arg_db.clone(), arg_db]),
@@ -176,9 +176,10 @@ async fn test_fuse_snapshot_table_read() -> Result<()> {
 
         let qry = format!("select * from fuse_snapshot('{}', '{}')", db, "in_mem");
         let output_stream = execute_query(ctx.clone(), qry.as_str()).await?;
+        // TODO(xuanwo): assign a new error code
         expects_err(
             "unsupported_table_engine",
-            ErrorCode::logical_error_code(),
+            ErrorCode::INTERNAL,
             output_stream.collect::<Result<Vec<DataBlock>>>().await,
         );
     }

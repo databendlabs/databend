@@ -138,7 +138,7 @@ impl<'a> Binder {
                             });
                         }
                         NameResolutionResult::Alias { .. } => {
-                            return Err(ErrorCode::LogicalError("Invalid name resolution result"));
+                            return Err(ErrorCode::Internal("Invalid name resolution result"));
                         }
                     }
                 }
@@ -259,11 +259,21 @@ impl<'a> Binder {
                     scalars.push(ScalarItem { scalar, index });
                 }
             }
+
+            // null is the largest value in databend, smallest in hive
+            // todo: rewrite after https://github.com/jorgecarleitao/arrow2/pull/1286 is merged
+            let default_nulls_first = !self
+                .ctx
+                .get_settings()
+                .get_sql_dialect()
+                .unwrap()
+                .is_null_biggest();
             let order_by_item = SortItem {
                 index: order.index,
                 asc: order.expr.asc.unwrap_or(true),
-                nulls_first: order.expr.nulls_first.unwrap_or(false),
+                nulls_first: order.expr.nulls_first.unwrap_or(default_nulls_first),
             };
+
             order_by_items.push(order_by_item);
         }
 
@@ -310,7 +320,7 @@ impl<'a> Binder {
                             order_by_items.push(order_by_item);
                         }
                         _ => {
-                            return Err(ErrorCode::LogicalError("scalar should be BoundColumnRef"));
+                            return Err(ErrorCode::Internal("scalar should be BoundColumnRef"));
                         }
                     }
                 }
