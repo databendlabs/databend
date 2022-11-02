@@ -1210,6 +1210,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-auth"
+version = "0.1.0"
+dependencies = [
+ "common-base",
+ "common-datavalues",
+ "http",
+ "tempfile",
+]
+
+[[package]]
 name = "common-base"
 version = "0.1.0"
 dependencies = [
@@ -1952,6 +1962,7 @@ dependencies = [
  "async-trait",
  "base64",
  "bytes",
+ "common-auth",
  "http",
  "moka",
  "opendal",
@@ -2045,6 +2056,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "backon",
+ "common-auth",
  "common-base",
  "common-exception",
  "globiter",

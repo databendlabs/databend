@@ -158,6 +158,7 @@ pub struct QueryConfig {
     pub async_insert_stale_timeout: u64,
     pub idm: IDMConfig,
     pub share_endpoint_address: String,
+    pub share_endpoint_auth_token_file: String,
 }
 
 impl Default for QueryConfig {
@@ -206,6 +207,7 @@ impl Default for QueryConfig {
             async_insert_stale_timeout: 0,
             idm: IDMConfig::default(),
             share_endpoint_address: "".to_string(),
+            share_endpoint_auth_token_file: "".to_string(),
         }
     }
 }

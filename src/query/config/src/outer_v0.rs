@@ -1038,6 +1038,9 @@ pub struct QueryConfig {
 
     #[clap(long, default_value = "")]
     pub share_endpoint_address: String,
+
+    #[clap(long, default_value = "")]
+    pub share_endpoint_auth_token_file: String,
 }
 
 impl Default for QueryConfig {
@@ -1096,6 +1099,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
                 users: users_to_inner(self.users)?,
             },
             share_endpoint_address: self.share_endpoint_address,
+            share_endpoint_auth_token_file: self.share_endpoint_auth_token_file,
         })
     }
 }
@@ -1153,6 +1157,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             async_insert_stale_timeout: inner.async_insert_stale_timeout,
             users: users_from_inner(inner.idm.users),
             share_endpoint_address: inner.share_endpoint_address,
+            share_endpoint_auth_token_file: inner.share_endpoint_auth_token_file,
         }
     }
 }
