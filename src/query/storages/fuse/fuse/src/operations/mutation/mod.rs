@@ -25,5 +25,6 @@ pub use block_filter::delete_from_block;
 pub use compact_mutator::FullCompactMutator;
 pub use compact_mutator::SegmentAccumulator;
 pub use compact_mutator::SegmentCompactMutator;
+pub use compact_mutator::SegmentCompactionState;
 pub use deletion_mutator::DeletionMutator;
 pub use recluster_mutator::ReclusterMutator;

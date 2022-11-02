@@ -33,6 +33,7 @@ use common_storages_fuse::io::SegmentInfoReader;
 use common_storages_fuse::io::SegmentWriter;
 use common_storages_fuse::io::TableMetaLocationGenerator;
 use common_storages_fuse::operations::SegmentAccumulator;
+use common_storages_fuse::operations::SegmentCompactionState;
 use common_storages_fuse::statistics::BlockStatistics;
 use common_storages_fuse::statistics::StatisticsAccumulator;
 use common_storages_fuse::FuseTable;
@@ -242,21 +243,22 @@ async fn test_segment_accumulator() -> Result<()> {
         // setup & run
         let mut case = CompactSegmentTestFixture::try_new(&ctx, block_per_seg)?;
         let seg_acc = case.run(&num_block_of_segments).await?;
+        let state = seg_acc.finalize().await?;
 
         // verify that:
         // - one newly generated segment
-        assert_eq!(seg_acc.new_segments.len(), 1);
+        assert_eq!(state.new_segment_paths.len(), 1);
         // - totally one segment collected
-        assert_eq!(seg_acc.segment_locations.len(), 1);
+        assert_eq!(state.segments_locations.len(), 1);
         // - number of blocks should not change
         assert_eq!(
-            seg_acc.merged_statistics.block_count as usize,
+            state.statistics.block_count as usize,
             num_block_of_segments.into_iter().sum::<usize>()
         );
     }
 
     {
-        // case: fragmented segments
+        // case: fragmented segments, greedy, no barrier
 
         let num_block_of_segments = vec![2, 3, 6, 5];
 
@@ -273,22 +275,13 @@ async fn test_segment_accumulator() -> Result<()> {
         // setup & run
         let mut case_fixture = CompactSegmentTestFixture::try_new(&ctx, block_per_seg)?;
         let seg_acc = case_fixture.run(&num_block_of_segments).await?;
-
-        let merged_statistics = seg_acc.merged_statistics;
-        let segment_locations = seg_acc.segment_locations;
-        // locations of newly generated segments, need this do undo the operation
-        let new_segments = seg_acc.new_segments;
-        let compacted_state = CompactedState {
-            merged_statistics,
-            segment_locations,
-            new_segments,
-        };
+        let compacted_state = seg_acc.finalize().await?;
 
         // verify that:
         // - one newly generated segment
-        assert_eq!(compacted_state.new_segments.len(), 1);
+        assert_eq!(compacted_state.new_segment_paths.len(), 1);
         // - totally two segments collected
-        assert_eq!(compacted_state.segment_locations.len(), 2);
+        assert_eq!(compacted_state.segments_locations.len(), 2);
 
         // - verify general invariants
         case_fixture
@@ -306,34 +299,41 @@ async fn test_segment_accumulator() -> Result<()> {
         // - 4 segments
         // expects:
         // - the first 2 segments should be merged
+        //   THE THIRD SEGMENT SHOULD NOT BE MERGED
         // - the last 2 segments should be merged
 
         let expected_block_of_segments = vec![10, 9];
 
         // setup & run
-        let mut case = CompactSegmentTestFixture::try_new(&ctx, block_per_seg)?;
-        let seg_acc = case.run(&num_block_of_segments).await?;
+        let mut case_fixture = CompactSegmentTestFixture::try_new(&ctx, block_per_seg)?;
+        let seg_acc = case_fixture.run(&num_block_of_segments).await?;
+        let r = seg_acc.finalize().await?;
 
-        for (idx, x) in seg_acc.new_segments.iter().enumerate() {
+        for (idx, x) in r.new_segment_paths.iter().enumerate() {
             let seg = segment_reader.read(x, None, SegmentInfo::VERSION).await?;
             assert_eq!(seg.blocks.len(), expected_block_of_segments[idx]);
         }
 
         // verify that:
-        // - one newly generated segment
-        assert_eq!(seg_acc.new_segments.len(), 2);
+        // - 2 newly generated segment;
+        assert_eq!(r.new_segment_paths.len(), 2);
         // - totally two segments collected
-        assert_eq!(seg_acc.segment_locations.len(), 2);
+        assert_eq!(r.segments_locations.len(), 2);
 
         // number of blocks should not change
         assert_eq!(
-            seg_acc.merged_statistics.block_count as usize,
+            r.statistics.block_count as usize,
             num_block_of_segments.into_iter().sum::<usize>()
         );
+
+        // - verify general invariants
+        case_fixture
+            .verify_general_invariants("greedy", &r, &segment_reader)
+            .await?;
     }
 
     {
-        // case: fragmented segments, greedy if ...
+        // case: fragmented segments, with barrier
 
         let num_block_of_segments = vec![2, 10, 6, 8];
 
@@ -347,25 +347,32 @@ async fn test_segment_accumulator() -> Result<()> {
         let expected_num_block_of_new_segments = vec![12, 14];
 
         // setup & run
-        let mut case = CompactSegmentTestFixture::try_new(&ctx, block_per_seg)?;
-        let seg_acc = case.run(&num_block_of_segments).await?;
+        let mut case_fixture = CompactSegmentTestFixture::try_new(&ctx, block_per_seg)?;
+        let seg_acc = case_fixture.run(&num_block_of_segments).await?;
+        let r = seg_acc.finalize().await?;
 
-        for (idx, x) in seg_acc.new_segments.iter().enumerate() {
+        // TODO refactor this
+        for (idx, x) in r.new_segment_paths.iter().enumerate() {
             let seg = segment_reader.read(x, None, SegmentInfo::VERSION).await?;
             assert_eq!(seg.blocks.len(), expected_num_block_of_new_segments[idx]);
         }
 
         // verify that:
         // - 2 newly generated segment;
-        assert_eq!(seg_acc.new_segments.len(), 2);
+        assert_eq!(r.new_segment_paths.len(), 2);
         // - totally two segments collected
-        assert_eq!(seg_acc.segment_locations.len(), 2);
+        assert_eq!(r.segments_locations.len(), 2);
 
         // number of blocks should not change
         assert_eq!(
-            seg_acc.merged_statistics.block_count as usize,
+            r.statistics.block_count as usize,
             num_block_of_segments.into_iter().sum::<usize>()
         );
+
+        // - verify general invariants
+        case_fixture
+            .verify_general_invariants("greedy", &r, &segment_reader)
+            .await?;
     }
 
     // empty segment will be dropped
@@ -374,8 +381,8 @@ async fn test_segment_accumulator() -> Result<()> {
         let mut accumulator = SegmentAccumulator::new(block_per_seg, segment_writer);
         let seg = SegmentInfo::new(vec![], Statistics::default());
         accumulator.add(&seg, ("test".to_owned(), 1)).await?;
-        accumulator.finalize().await?;
-        assert_eq!(accumulator.new_segments.len(), 0);
+        let r = accumulator.finalize().await?;
+        assert_eq!(r.new_segment_paths.len(), 0);
     }
 
     Ok(())
@@ -421,7 +428,7 @@ impl CompactSegmentTestFixture {
         for (seg, location) in &self.segments {
             seg_acc.add(seg, location.clone()).await?;
         }
-        seg_acc.finalize().await?;
+        // TODO should finalize here
         Ok(seg_acc)
     }
 
@@ -464,11 +471,11 @@ impl CompactSegmentTestFixture {
     pub async fn verify_general_invariants(
         &self,
         case_name: &str,
-        accumulated_state: &CompactedState,
+        accumulated_state: &SegmentCompactionState,
         segment_reader: &SegmentInfoReader,
     ) -> Result<()> {
         // - blocks should be there and in the original order
-        let segments_after_compaction = &accumulated_state.segment_locations;
+        let segments_after_compaction = &accumulated_state.segments_locations;
         let mut idx = 0;
         for location in segments_after_compaction {
             let segment = segment_reader.read(&location.0, None, location.1).await?;
@@ -480,12 +487,4 @@ impl CompactSegmentTestFixture {
         }
         Ok(())
     }
-}
-
-struct CompactedState {
-    pub merged_statistics: Statistics,
-    // locations of compacted segments (merged and unchanged segments)
-    pub segment_locations: Vec<Location>,
-    // locations of newly generated segments, need this do undo the operation
-    pub new_segments: Vec<String>,
 }

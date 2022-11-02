@@ -34,18 +34,23 @@ use crate::FuseTable;
 use crate::TableContext;
 use crate::TableMutator;
 
+#[derive(Default)]
+pub struct SegmentCompactionState {
+    // summarised statistics of all the accumulated segments(compacted, and unchanged)
+    pub statistics: Statistics,
+    // locations all the accumulated segments(compacted, and unchanged)
+    pub segments_locations: Vec<Location>,
+    // paths all the newly created segments (which are compacted), need this for abortion
+    pub new_segment_paths: Vec<String>,
+}
+
 pub struct SegmentCompactMutator {
     ctx: Arc<dyn TableContext>,
     compact_params: CompactOptions,
     data_accessor: Operator,
     location_generator: TableMetaLocationGenerator,
 
-    // summarised statistics of all the accumulated segments(compacted, and unchanged)
-    merged_segment_statistics: Statistics,
-    // locations all the accumulated segments(compacted, and unchanged)
-    merged_segments_locations: Vec<Location>,
-    // paths all the newly created segments (which are compacted)
-    new_segment_paths: Vec<String>,
+    compacted: SegmentCompactionState,
 }
 
 impl SegmentCompactMutator {
@@ -60,14 +65,12 @@ impl SegmentCompactMutator {
             compact_params,
             data_accessor: operator,
             location_generator,
-            merged_segment_statistics: Statistics::default(),
-            merged_segments_locations: vec![],
-            new_segment_paths: vec![],
+            compacted: Default::default(),
         })
     }
 
     fn need_compaction(&self) -> bool {
-        !self.new_segment_paths.is_empty()
+        !self.compacted.new_segment_paths.is_empty()
     }
 }
 
@@ -109,12 +112,10 @@ impl TableMutator for SegmentCompactMutator {
                 break;
             }
         }
-        accumulator.finalize().await?;
+        let compacted_state = accumulator.finalize().await?;
 
         // gather the results
-        self.new_segment_paths = accumulator.new_segments;
-        self.merged_segment_statistics = accumulator.merged_statistics;
-        self.merged_segments_locations = accumulator.segment_locations;
+        self.compacted = compacted_state;
 
         gauge!(
             "fuse_compact_segments_select_duration_second",
@@ -130,7 +131,7 @@ impl TableMutator for SegmentCompactMutator {
         }
 
         let abort_action = AbortOperation {
-            segments: self.new_segment_paths,
+            segments: self.compacted.new_segment_paths,
             ..Default::default()
         };
 
@@ -139,8 +140,8 @@ impl TableMutator for SegmentCompactMutator {
             .commit_mutation(
                 &self.ctx,
                 self.compact_params.base_snapshot,
-                self.merged_segments_locations,
-                self.merged_segment_statistics,
+                self.compacted.segments_locations,
+                self.compacted.statistics,
                 abort_action,
             )
             .await
@@ -148,12 +149,7 @@ impl TableMutator for SegmentCompactMutator {
 }
 
 pub struct SegmentAccumulator<'a> {
-    // summary statistics of compacted segments (merged and unchanged segments)
-    pub merged_statistics: Statistics,
-    // locations of compacted segments (merged and unchanged segments)
-    pub segment_locations: Vec<Location>,
-    // locations of newly generated segments, need this do undo the operation
-    pub new_segments: Vec<String>,
+    compacted_state: SegmentCompactionState,
     threshold: u64,
     accumulated_num_blocks: u64,
     fragmented_segments: Vec<(&'a SegmentInfo, Location)>,
@@ -163,12 +159,10 @@ pub struct SegmentAccumulator<'a> {
 impl<'a> SegmentAccumulator<'a> {
     pub fn new(threshold: u64, segment_writer: SegmentWriter<'a>) -> Self {
         Self {
+            compacted_state: Default::default(),
             threshold,
             accumulated_num_blocks: 0,
-            merged_statistics: Statistics::default(),
-            segment_locations: vec![],
             fragmented_segments: vec![],
-            new_segments: vec![],
             segment_writer,
         }
     }
@@ -212,8 +206,10 @@ impl<'a> SegmentAccumulator<'a> {
 
         if fragments.len() == 1 {
             let (segment, location) = &fragments[0];
-            merge_statistics_mut(&mut self.merged_statistics, &segment.summary)?;
-            self.segment_locations.push(location.clone());
+            merge_statistics_mut(&mut self.compacted_state.statistics, &segment.summary)?;
+            self.compacted_state
+                .segments_locations
+                .push(location.clone());
             return Ok(());
         }
 
@@ -224,13 +220,15 @@ impl<'a> SegmentAccumulator<'a> {
             merge_statistics_mut(&mut new_statistics, &segment.summary)?;
             blocks.append(&mut segment.blocks.clone());
         }
-        merge_statistics_mut(&mut self.merged_statistics, &new_statistics)?;
+        merge_statistics_mut(&mut self.compacted_state.statistics, &new_statistics)?;
 
         // 2.2 write down new segment
         let new_segment = SegmentInfo::new(blocks, new_statistics);
         let location = self.segment_writer.write_segment(new_segment).await?;
-        self.new_segments.push(location.0.clone());
-        self.segment_locations.push(location);
+        self.compacted_state
+            .new_segment_paths
+            .push(location.0.clone());
+        self.compacted_state.segments_locations.push(location);
         Ok(())
     }
 
@@ -242,8 +240,8 @@ impl<'a> SegmentAccumulator<'a> {
         let num_block = segment_info.blocks.len() as u64;
         if self.accumulated_num_blocks + num_block < 2 * self.threshold {
             // TODO doc why we need this branch
-            merge_statistics_mut(&mut self.merged_statistics, &segment_info.summary)?;
-            self.segment_locations.push(location);
+            merge_statistics_mut(&mut self.compacted_state.statistics, &segment_info.summary)?;
+            self.compacted_state.segments_locations.push(location);
             self.compact_fragments().await?;
         } else {
             // we have no choice but to compact the fragmented segments collected so far,
@@ -254,18 +252,18 @@ impl<'a> SegmentAccumulator<'a> {
             self.compact_fragments().await?;
             // after compaction, we keep this segment directly as compacted, since
             // it is large enough
-            merge_statistics_mut(&mut self.merged_statistics, &segment_info.summary)?;
-            self.segment_locations.push(location);
+            merge_statistics_mut(&mut self.compacted_state.statistics, &segment_info.summary)?;
+            self.compacted_state.segments_locations.push(location);
         }
 
         Ok(())
     }
 
-    pub async fn finalize(&mut self) -> Result<()> {
+    pub async fn finalize(mut self) -> Result<SegmentCompactionState> {
         if !self.fragmented_segments.is_empty() {
             // some fragments left, compact them with the last compacted segment
             self.compact_fragments().await?;
         }
-        Ok(())
+        Ok(self.compacted_state)
     }
 }

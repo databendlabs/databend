@@ -39,6 +39,7 @@ pub use mutation::FullCompactMutator;
 pub use mutation::ReclusterMutator;
 pub use mutation::SegmentAccumulator;
 pub use mutation::SegmentCompactMutator;
+pub use mutation::SegmentCompactionState;
 pub use operation_log::AppendOperationLogEntry;
 pub use operation_log::TableOperationLog;
 pub use util::column_metas;
