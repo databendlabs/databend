@@ -22,6 +22,9 @@ use lexical_core::ToLexical;
 use num::cast::AsPrimitive;
 use serde_json::Value;
 
+use crate::serializations::write_csv_string;
+use crate::serializations::write_escaped_string;
+use crate::serializations::write_json_string;
 use crate::serializations::TypeSerializer;
 use crate::ColumnRef;
 use crate::PrimitiveColumn;
@@ -49,18 +52,57 @@ impl<'a, T: PrimitiveType + AsPrimitive<i64> + ToLexical> DateSerializer<'a, T> 
             values: col.values(),
         })
     }
+
+    fn fmt(&self, row_index: usize) -> String {
+        v_to_string(&self.values[row_index].as_i64())
+    }
 }
 
 impl<'a, T: PrimitiveType + AsPrimitive<i64> + ToLexical> TypeSerializer<'a>
     for DateSerializer<'a, T>
 {
-    fn need_quote(&self) -> bool {
-        true
+    fn write_field_values(
+        &self,
+        row_index: usize,
+        buf: &mut Vec<u8>,
+        format: &FormatSettings,
+        in_nested: bool,
+    ) {
+        let s = self.fmt(row_index);
+        if in_nested {
+            buf.push(format.nested.quote_char);
+        }
+        write_escaped_string(s.as_bytes(), buf, format.nested.quote_char);
+        if in_nested {
+            buf.push(format.nested.quote_char);
+        }
     }
 
-    fn write_field(&self, row_index: usize, buf: &mut Vec<u8>, _format: &FormatSettings) {
-        let s = v_to_string(&self.values[row_index].as_i64());
-        buf.extend_from_slice(s.as_bytes())
+    fn write_field_tsv(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
+        let s = self.fmt(row_index);
+        write_escaped_string(s.as_bytes(), buf, format.quote_char);
+    }
+
+    fn write_field_csv(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
+        let s = self.fmt(row_index);
+        write_csv_string(s.as_bytes(), buf, format.quote_char);
+    }
+
+    fn write_field_json(
+        &self,
+        row_index: usize,
+        buf: &mut Vec<u8>,
+        format: &FormatSettings,
+        quote: bool,
+    ) {
+        let s = self.fmt(row_index);
+        if quote {
+            buf.push(b'\"');
+        }
+        write_json_string(s.as_bytes(), buf, format);
+        if quote {
+            buf.push(b'\"');
+        }
     }
 
     fn serialize_json_values(&self, _format: &FormatSettings) -> Result<Vec<Value>> {

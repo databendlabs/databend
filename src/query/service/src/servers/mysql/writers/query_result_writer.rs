@@ -202,30 +202,30 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                                         }
                                         (TypeID::Timestamp, DataValue::Int64(_)) => row_writer
                                             .write_col(
-                                                serializer.serialize_field(row_index, format)?,
+                                                serializer.to_string_values(row_index, format)?,
                                             )?,
                                         (TypeID::String, DataValue::String(v)) => {
                                             row_writer.write_col(v)?
                                         }
                                         (TypeID::Array, DataValue::Array(_)) => row_writer
                                             .write_col(
-                                                serializer.serialize_field(row_index, format)?,
+                                                serializer.to_string_values(row_index, format)?,
                                             )?,
                                         (TypeID::Struct, DataValue::Struct(_)) => row_writer
                                             .write_col(
-                                                serializer.serialize_field(row_index, format)?,
+                                                serializer.to_string_values(row_index, format)?,
                                             )?,
                                         (TypeID::Variant, DataValue::Variant(_)) => row_writer
                                             .write_col(
-                                                serializer.serialize_field(row_index, format)?,
+                                                serializer.to_string_values(row_index, format)?,
                                             )?,
                                         (TypeID::VariantArray, DataValue::Variant(_)) => row_writer
                                             .write_col(
-                                                serializer.serialize_field(row_index, format)?,
+                                                serializer.to_string_values(row_index, format)?,
                                             )?,
                                         (TypeID::VariantObject, DataValue::Variant(_)) => {
                                             row_writer.write_col(
-                                                serializer.serialize_field(row_index, format)?,
+                                                serializer.to_string_values(row_index, format)?,
                                             )?
                                         }
                                         (_, DataValue::Int64(v)) => row_writer.write_col(v)?,
@@ -237,7 +237,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                                             // it use format!() to serialize number,
                                             // the result will be different with our serializer for floats
                                             .write_col(
-                                                serializer.serialize_field(row_index, format)?,
+                                                serializer.to_string_values(row_index, format)?,
                                             )?,
                                         (_, v) => {
                                             return Err(ErrorCode::BadDataValueType(format!(
