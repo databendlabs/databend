@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_datablocks::DataBlock;
+use common_datavalues::serializations::write_csv_string;
 use common_datavalues::serializations::write_escaped_string;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
@@ -42,15 +43,6 @@ impl<const TSV: bool, const WITH_NAMES: bool, const WITH_TYPES: bool>
     TCSVOutputFormat<TSV, WITH_NAMES, WITH_TYPES>
 {
     pub fn create(schema: DataSchemaRef, format_settings: FormatSettings) -> Self {
-        let null_bytes = if TSV {
-            format_settings.tsv_null_bytes.clone()
-        } else {
-            format_settings.csv_null_bytes.clone()
-        };
-        let format_settings = FormatSettings {
-            null_bytes,
-            ..format_settings
-        };
         Self {
             schema,
             format_settings,
@@ -59,11 +51,7 @@ impl<const TSV: bool, const WITH_NAMES: bool, const WITH_TYPES: bool>
 
     fn serialize_strings(&self, values: Vec<String>, format: &FormatSettings) -> Vec<u8> {
         let mut buf = vec![];
-        let fd = if TSV {
-            FIELD_DELIMITER
-        } else {
-            format.field_delimiter[0]
-        };
+        let fd = format.field_delimiter[0];
 
         for (col_index, v) in values.iter().enumerate() {
             if col_index != 0 {
@@ -72,18 +60,11 @@ impl<const TSV: bool, const WITH_NAMES: bool, const WITH_TYPES: bool>
             if TSV {
                 write_escaped_string(v.as_bytes(), &mut buf, b'\'');
             } else {
-                buf.push(b'\"');
-                write_escaped_string(v.as_bytes(), &mut buf, b'\"');
-                buf.push(b'\"');
+                write_csv_string(v.as_bytes(), &mut buf, b'\"');
             };
         }
 
-        let rd = if TSV {
-            ROW_DELIMITER
-        } else {
-            format.record_delimiter[0]
-        };
-        buf.push(rd);
+        buf.push(format.record_delimiter[0]);
         buf
     }
 }
@@ -116,14 +97,9 @@ impl<const TSV: bool, const WITH_NAMES: bool, const WITH_TYPES: bool> OutputForm
                     buf.push(fd);
                 }
                 if TSV {
-                    serializer.write_field_escaped(
-                        row_index,
-                        &mut buf,
-                        &self.format_settings,
-                        b'\'',
-                    );
+                    serializer.write_field_tsv(row_index, &mut buf, &self.format_settings);
                 } else {
-                    serializer.write_field_quoted(row_index, &mut buf, &self.format_settings, b'\"')
+                    serializer.write_field_csv(row_index, &mut buf, &self.format_settings)
                 };
             }
             buf.push(rd)

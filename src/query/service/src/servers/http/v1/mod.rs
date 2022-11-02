@@ -19,7 +19,7 @@ mod load;
 mod query;
 mod stage;
 
-pub(crate) use download::Dowloader;
+pub(crate) use download::Downloader;
 pub use http_query_handlers::make_final_uri;
 pub use http_query_handlers::make_page_uri;
 pub use http_query_handlers::make_state_uri;
